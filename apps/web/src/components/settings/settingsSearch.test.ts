@@ -131,6 +131,15 @@ describe("searchSettings", () => {
     });
   });
 
+  it.each([
+    ["Git 工作树位置", "storage-worktrees-location"],
+    ["闲置工作树", "storage-worktrees"],
+    ["轮转日志", "storage-artifacts"],
+  ])("finds the storage setting for %s", async (query, id) => {
+    await changeLanguage("zh");
+    expect(searchSettings(query)[0]).toMatchObject({ id, to: "/settings/storage" });
+  });
+
   it("returns no results for an empty query", () => {
     expect(searchSettings("   ", ITEMS)).toEqual([]);
   });

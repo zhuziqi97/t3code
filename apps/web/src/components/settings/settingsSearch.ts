@@ -162,26 +162,39 @@ const KEYBINDING_SEARCH_ITEMS = STATIC_KEYBINDING_COMMANDS.toSorted((left, right
 export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "storage-worktrees",
-    title: "Worktree cleanup",
+    get title() {
+      return i18n.t("settings.search.storage-worktrees.title");
+    },
     to: "/settings/storage",
     scope: "project-defaults",
     searchTerms: [
       "disk storage delete deleted archived threads old inactive merged unchanged worktrees retention days project inherit off custom",
+      "Git 工作树清理 删除会话 闲置 已合并 无新提交 保留天数 继承 自定义 闲置工作树 合并工作树",
     ],
   },
   {
     id: "storage-worktrees-location",
-    title: "Worktree location",
+    get title() {
+      return i18n.t("settings.search.storage-worktrees-location.title");
+    },
     to: "/settings/storage",
     scope: "environment-defaults",
-    searchTerms: ["worktree location folder directory path drive external disk"],
+    searchTerms: [
+      "worktree location folder directory path drive external disk",
+      "Git 工作树位置 目录 磁盘 存放路径",
+    ],
   },
   {
     id: "storage-artifacts",
-    title: "Artifacts and logs",
+    get title() {
+      return i18n.t("settings.search.storage-artifacts.title");
+    },
     to: "/settings/storage",
     scope: "environment-defaults",
-    searchTerms: ["disk storage browser screenshots captures rotated logs cleanup retention"],
+    searchTerms: [
+      "disk storage browser screenshots captures rotated logs cleanup retention",
+      "产物 日志 浏览器采集 浏览器产物 截图 录屏 轮转日志 清理 保留天数",
+    ],
   },
   {
     id: "project-defaults",

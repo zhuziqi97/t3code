@@ -3545,6 +3545,51 @@ export const en = {
   "setup.codex.notUsed": "Not used",
   "setup.codex.signedOutLocally": "Signed out locally.{{detail}}",
   "setup.account.defaultName": "Personal",
+
+  "storage.directoryDescription":
+    "Folder where new worktrees are created, on any drive, such as D:\\worktrees or ~/worktrees. Existing worktrees stay where they are. Leave empty to use the T3 home folder.",
+  "storage.directoryReset": "worktree location",
+  "storage.mixed": "Mixed",
+  "storage.default": "Default",
+  "storage.decrease": "Decrease {{label}}",
+  "storage.retentionDays": "{{label}} in days",
+  "storage.increase": "Increase {{label}}",
+  "storage.days_one": "day",
+  "storage.days_other": "days",
+  "storage.off": "Off",
+  "storage.mixedMachines": "Mixed across selected machines",
+  "storage.projectUpgrade": "Update the selected machines to configure project worktree cleanup.",
+  "storage.upgrade":
+    "Update the selected environments to use storage cleanup, or choose a machine that supports it.",
+  "storage.worktrees": "Worktrees",
+  "storage.automatic": "Automatic worktree cleanup",
+  "storage.projectOff": "Keep this project's worktrees until you delete them manually.",
+  "storage.projectCustom": "Use these rules for this project.",
+  "storage.projectInherit": "Use each machine's worktree cleanup settings.",
+  "storage.inherit": "Inherit",
+  "storage.custom": "Custom",
+  "storage.onDelete": "Delete worktrees with deleted threads",
+  "storage.onDeleteDescription":
+    "Remove unused worktrees when active or archived threads are deleted. Worktrees with local changes are kept.",
+  "storage.inactive": "Delete inactive worktrees",
+  "storage.inactiveDescription":
+    "Remove worktrees after their threads have been inactive for this many days. Branches and thread history are kept.",
+  "storage.merged": "Delete merged worktrees",
+  "storage.mergedDescription":
+    "Remove worktrees whose pull request is merged and whose commits are included in the default branch.",
+  "storage.unchanged": "Delete unchanged worktrees",
+  "storage.unchangedDescription": "Remove worktrees with no commits beyond the default branch.",
+  "storage.browserArtifacts": "Delete old browser artifacts",
+  "storage.browserArtifactsDescription":
+    "Delete saved browser captures after this many days. Older capture links will no longer open.",
+  "storage.logs": "Delete old rotated logs",
+  "storage.logsDescription":
+    "Delete inactive rotated log files after this many days. Current logs are kept.",
+  "settings.search.storage-worktrees.title": "Worktree cleanup",
+  "settings.search.storage-worktrees-location.title": "Worktree location",
+  "settings.search.storage-artifacts.title": "Artifacts and logs",
+
+  "scope.openAllEnvironments": "Open all environments",
 } as const;
 
 export type MessageKey = keyof typeof en;
