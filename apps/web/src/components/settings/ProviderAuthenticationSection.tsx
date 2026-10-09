@@ -1,3 +1,6 @@
+import { Trans } from "react-i18next";
+
+import { useTranslate } from "../../i18n";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -41,6 +44,7 @@ export function ProviderAuthenticationSection({
   readonly provider: ServerProvider;
   readonly readOnly: boolean;
 }) {
+  const t = useTranslate();
   const target = { environmentId, input: { instanceId } };
   const query = useEnvironmentQuery(serverEnvironment.providerAuthState(target));
   const commands = { reportFailure: false, reportDefect: false };
@@ -51,7 +55,7 @@ export function ProviderAuthenticationSection({
   const logout = useAtomCommand(serverEnvironment.logoutProviderAuth, commands);
   const [methodId, setMethodId] = useState("");
   const [draft, setDraft] = useState({ id: "", values: {} as Record<string, string> });
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | { readonly key: string } | null>(null);
   const [pending, setPending] = useState(false);
   const pendingRef = useRef(false);
   const terminalQueue = useRef<ProviderAuthRespondInput[]>([]);
@@ -76,21 +80,21 @@ export function ProviderAuthenticationSection({
       (provider.driver === "acpRegistry" && auth?.methods?.length === 0));
   const accountDescription = active
     ? auth?.phase === "starting"
-      ? "Starting sign-in…"
+      ? t("provider.setup.startingSignIn")
       : auth?.phase === "verifying"
-        ? "Checking your account…"
+        ? t("provider.setup.checkingAccount")
         : interaction?.type === "terminal"
-          ? "Complete sign-in in the terminal below."
+          ? t("provider.setup.terminalSignIn")
           : interaction?.type === "credentials"
-            ? "Enter your credentials below."
-            : "Finish signing in in your browser."
+            ? t("provider.setup.enterCredentials")
+            : t("provider.setup.browserSignIn")
     : signedIn
-      ? "Signed in."
+      ? t("provider.setup.signedIn")
       : isDiscovering
-        ? "Discovering sign-in methods…"
+        ? t("provider.setup.discoveringSignIn")
         : needsExternalSetup
-          ? "No in-app sign-in advertised. Follow the provider's docs to finish setup."
-          : `Sign in on ${environmentLabel}.`;
+          ? t("provider.setup.externalSetup")
+          : t("provider.setup.signInOn", { environment: environmentLabel });
   const statusMessage = auth?.phase === "failed" ? auth.message : null;
   const disabled = readOnly || pending || query.error !== null || isDiscovering;
   const draftId = `${auth?.flowId ?? ""}:${interaction?.id ?? ""}`;
@@ -112,11 +116,11 @@ export function ProviderAuthenticationSection({
       else if (!isAtomCommandInterrupted(result)) {
         const failure = squashAtomCommandFailure(result);
         setError(
-          failure instanceof Error ? failure.message : "Provider sign-in failed. Try again.",
+          failure instanceof Error ? failure.message : { key: "provider.setup.signInFailed" },
         );
       }
     } catch {
-      setError("Provider sign-in failed. Try again.");
+      setError({ key: "provider.setup.signInFailed" });
     }
     pendingRef.current = false;
     setPending(false);
@@ -151,7 +155,7 @@ export function ProviderAuthenticationSection({
       setError(null);
     } catch {
       pending?.close();
-      setError("Could not open the sign-in page. Copy the link and open it in your browser.");
+      setError({ key: "provider.setup.openSignInFailed" });
     }
   }
 
@@ -161,20 +165,25 @@ export function ProviderAuthenticationSection({
 
   return (
     <SettingsRow
-      title="Account"
+      title={t("provider.setup.account")}
       description={
         signedIn && !active && provider.auth.email?.trim() ? (
-          <span>
-            Signed in as{" "}
-            <RedactedSensitiveText
-              key={provider.auth.email}
-              value={provider.auth.email}
-              ariaLabel="Toggle account email visibility"
-              revealTooltip="Click to reveal email"
-              hideTooltip="Click to hide email"
-              className="max-w-full truncate"
-            />
-          </span>
+          <Trans
+            t={t}
+            i18nKey="provider.setup.signedInAccount"
+            components={{
+              account: (
+                <RedactedSensitiveText
+                  key={provider.auth.email}
+                  value={provider.auth.email}
+                  ariaLabel={t("provider.setup.toggleEmail")}
+                  revealTooltip={t("provider.setup.revealEmail")}
+                  hideTooltip={t("provider.setup.hideEmail")}
+                  className="max-w-full truncate"
+                />
+              ),
+            }}
+          />
         ) : (
           <span role="status">{accountDescription}</span>
         )
@@ -194,14 +203,18 @@ export function ProviderAuthenticationSection({
               disabled={disabled}
               onValueChange={(value) => setMethodId(value ?? "")}
             >
-              <SelectTrigger size="sm" aria-label="Sign-in method" className="w-44">
+              <SelectTrigger
+                size="sm"
+                aria-label={t("provider.setup.signInMethod")}
+                className="w-44"
+              >
                 <SelectValue>
                   {auth?.methods?.find((method) => method.id === methodId)?.name ??
-                    "Provider default"}
+                    t("provider.setup.providerDefault")}
                 </SelectValue>
               </SelectTrigger>
               <SelectPopup>
-                <SelectItem value="">Provider default</SelectItem>
+                <SelectItem value="">{t("provider.setup.providerDefault")}</SelectItem>
                 {auth?.methods?.map((method) => (
                   <SelectItem key={method.id} value={method.id}>
                     {method.name}
@@ -218,32 +231,32 @@ export function ProviderAuthenticationSection({
                 disabled={disabled}
                 onClick={() => void openBrowser()}
               >
-                Open browser
+                {t("provider.setup.openBrowser")}
               </Button>
               <Tooltip>
                 <TooltipTrigger
                   render={
                     <Button
-                      aria-label="Copy sign-in link"
+                      aria-label={t("provider.setup.copySignInLink")}
                       size="icon-sm"
                       variant="ghost-muted"
                       disabled={disabled}
                       onClick={() => {
                         // Copy inside the click so the clipboard keeps the user
                         // activation; the link only works once consent is recorded.
-                        const copied = writeTextToClipboard(url, "Provider sign-in link");
+                        const copied = writeTextToClipboard(url, t("provider.setup.signInLink"));
                         void (async () => {
                           await copied;
                           if (interaction?.type === "browser" && interaction.requiresConsent)
                             await send({ type: "browser", action: "accept" });
-                        })().catch(() => setError("Could not copy the sign-in link."));
+                        })().catch(() => setError({ key: "provider.setup.copySignInFailed" }));
                       }}
                     >
                       <CopyIcon />
                     </Button>
                   }
                 />
-                <TooltipPopup>Copy sign-in link</TooltipPopup>
+                <TooltipPopup>{t("provider.setup.copySignInLink")}</TooltipPopup>
               </Tooltip>
             </>
           ) : null}
@@ -256,13 +269,13 @@ export function ProviderAuthenticationSection({
                   <a href={provider.setup.documentationUrl} target="_blank" rel="noreferrer" />
                 }
               >
-                Open docs
+                {t("provider.setup.openDocs")}
               </Button>
             ) : active && auth?.flowId ? (
               <Button
                 size="sm"
                 variant="ghost-muted"
-                aria-label="Cancel sign-in"
+                aria-label={t("provider.setup.cancelSignIn")}
                 disabled={disabled}
                 onClick={() =>
                   void run(() =>
@@ -270,7 +283,7 @@ export function ProviderAuthenticationSection({
                   )
                 }
               >
-                Cancel
+                {t("provider.setup.cancel")}
               </Button>
             ) : !active && !needsExternalSetup && provider.setup?.canAuthenticate !== false ? (
               <Button
@@ -292,10 +305,10 @@ export function ProviderAuthenticationSection({
                 }
               >
                 {signedIn
-                  ? "Change account"
+                  ? t("provider.setup.changeAccount")
                   : auth?.phase === "failed" || auth?.phase === "cancelled"
-                    ? "Retry sign-in"
-                    : "Sign in"}
+                    ? t("provider.setup.retrySignIn")
+                    : t("provider.setup.signIn")}
               </Button>
             ) : null}
             {!active && signedIn && (provider.auth.canLogout ?? provider.setup?.canAuthenticate) ? (
@@ -306,14 +319,17 @@ export function ProviderAuthenticationSection({
                 onClick={() => {
                   void ensureLocalApi()
                     .dialogs.confirm(
-                      `Sign out of ${provider.displayName ?? provider.driver} on ${environmentLabel}? This stops running threads that share this sign-in. Thread history is kept.`,
+                      t("provider.setup.signOutQuestion", {
+                        provider: provider.displayName ?? provider.driver,
+                        environment: environmentLabel,
+                      }),
                     )
                     .then((confirmed) => {
                       if (confirmed) void run(() => logout(target));
                     });
                 }}
               >
-                Sign out
+                {t("provider.setup.signOut")}
               </Button>
             ) : null}
           </>
@@ -329,16 +345,21 @@ export function ProviderAuthenticationSection({
         <>
           {interaction?.type === "deviceCode" ? (
             <p className="py-2 text-sm text-muted-foreground">
-              Enter code{" "}
-              <code className="select-all font-mono text-foreground">{interaction.userCode}</code>{" "}
-              in your browser.
+              <Trans
+                t={t}
+                i18nKey="provider.setup.deviceCode"
+                values={{ code: interaction.userCode }}
+                components={{ code: <code className="select-all font-mono text-foreground" /> }}
+              />
             </p>
           ) : null}
           {interaction?.type === "terminal" ? (
             <div className="py-2">
               <Suspense
                 fallback={
-                  <p className="text-xs text-muted-foreground">Loading sign-in terminal…</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t("provider.setup.loadingTerminal")}
+                  </p>
                 }
               >
                 <ProviderAuthTerminal
@@ -371,14 +392,14 @@ export function ProviderAuthenticationSection({
                         if (result._tag !== "Success") {
                           terminalQueue.current = [];
                           if (!isAtomCommandInterrupted(result))
-                            setError("The provider sign-in terminal is no longer available.");
+                            setError({ key: "provider.setup.terminalGone" });
                           break;
                         }
                       }
                     })()
                       .catch(() => {
                         terminalQueue.current = [];
-                        setError("Could not send input to the provider sign-in terminal.");
+                        setError({ key: "provider.setup.terminalInputFailed" });
                       })
                       .finally(() => {
                         terminalSending.current = false;
@@ -419,7 +440,7 @@ export function ProviderAuthenticationSection({
                 className="w-fit"
                 disabled={disabled}
               >
-                Connect
+                {t("provider.setup.connect")}
               </Button>
             </form>
           ) : null}
@@ -440,7 +461,7 @@ export function ProviderAuthenticationSection({
               }}
             >
               <label className="grid gap-1">
-                If the final localhost page does not load, paste its full URL here.
+                {t("provider.setup.callbackHint")}
                 <Input
                   size="sm"
                   id={`provider-callback-${instanceId}`}
@@ -459,13 +480,13 @@ export function ProviderAuthenticationSection({
                 className="w-fit"
                 disabled={disabled || !values.callback?.trim()}
               >
-                Continue
+                {t("provider.setup.continue")}
               </Button>
             </form>
           ) : null}
           {error || query.error ? (
             <p role="alert" className="py-2 text-xs text-destructive">
-              {error ?? query.error}
+              {typeof error === "object" && error !== null ? t(error.key) : (error ?? query.error)}
             </p>
           ) : null}
         </>

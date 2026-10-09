@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import type { ProviderAuthResponse } from "@t3tools/contracts";
 import { useEffect, useRef, useState } from "react";
 import { GhosttyTerminalSurface } from "../../terminal/ghostty/surface";
@@ -14,6 +15,7 @@ export default function ProviderAuthTerminal({
   readonly outputOffset?: number | undefined;
   readonly onResponse: (response: Extract<ProviderAuthResponse, { type: "terminal" }>) => void;
 }) {
+  const t = useTranslate();
   const mount = useRef<HTMLDivElement>(null);
   const surface = useRef<GhosttyTerminalSurface | null>(null);
   const latest = useRef({ output, offset: outputOffset ?? output.length, onResponse });
@@ -44,7 +46,7 @@ export default function ProviderAuthTerminal({
         if (/^https?:\/\//i.test(url))
           void ensureLocalApi()
             .shell.openExternal(url)
-            .catch(() => setError("Could not open the provider link."));
+            .catch(() => setError("provider.setup.openProviderLinkFailed"));
       },
     })
       .then((terminal) => {
@@ -56,7 +58,7 @@ export default function ProviderAuthTerminal({
         terminal.write(latest.current.output);
         written.current = latest.current.offset;
       })
-      .catch(() => setError("Could not load the sign-in terminal. Cancel and retry sign-in."));
+      .catch(() => setError("provider.setup.terminalLoadFailed"));
     return () => {
       disposed = true;
       surface.current?.dispose();
@@ -67,12 +69,12 @@ export default function ProviderAuthTerminal({
     <>
       <div
         ref={mount}
-        aria-label="Provider sign-in terminal"
+        aria-label={t("provider.setup.signInTerminal")}
         className="relative h-64 overflow-hidden rounded-md border border-border"
       />
       {error ? (
         <p role="alert" className="text-destructive">
-          {error}
+          {t(error)}
         </p>
       ) : null}
     </>
