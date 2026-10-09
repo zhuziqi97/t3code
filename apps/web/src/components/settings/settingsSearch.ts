@@ -797,6 +797,8 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [
       "Diagnostics 诊断",
       "logs traces processes resource history failures spans cpu memory",
+      "日志 追踪 进程树 资源历史 失败 跨度 CPU 内存 诊断访问权限",
+      "资源监控 资源遥测 主机状态 采集状态 温度 电源 读取吞吐量 写入吞吐量",
     ],
   },
   {

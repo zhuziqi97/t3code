@@ -808,3 +808,23 @@ it("finds snapshot settings using Chinese and English without changing destinati
     expect.objectContaining({ id: "snap-shot-shortcut" }),
   );
 });
+
+it("finds diagnostic flows by Chinese names in either language without changing the settings entry", async () => {
+  for (const language of ["zh", "en"] as const) {
+    await changeLanguage(language);
+    for (const query of [
+      "进程树",
+      "资源历史",
+      "追踪",
+      "日志",
+      "采集状态",
+      "资源遥测",
+      "温度",
+      "诊断访问权限",
+    ]) {
+      const result = searchSettings(query).find((item) => item.id === "diagnostics");
+      expect(result?.to).toBe("/settings/general");
+      expect(result?.id).toBe("diagnostics");
+    }
+  }
+});
