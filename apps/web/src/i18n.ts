@@ -12,7 +12,27 @@ import { initReactI18next, useTranslation } from "react-i18next";
 import { createI18n } from "@t3tools/client-runtime/i18n";
 import type { SupportedLanguage } from "@t3tools/client-runtime/i18n";
 
-export const i18n = createI18n({ plugins: [initReactI18next] });
+const preservedInstance = import.meta.hot?.data?.i18n as ReturnType<typeof createI18n> | undefined;
+export const i18n = preservedInstance ?? createI18n({ plugins: [initReactI18next] });
+
+if (import.meta.hot?.data) {
+  import.meta.hot.accept();
+  // Catalog edits replace this module too. Keep React's instance and the active
+  // language, otherwise unchanged language preferences never reapply after HMR.
+  import.meta.hot.dispose((data) => {
+    data.i18n = i18n;
+  });
+  if (preservedInstance) {
+    const updatedCatalogs = createI18n();
+    for (const [language, namespaces] of Object.entries(updatedCatalogs.store.data)) {
+      for (const [namespace, messages] of Object.entries(namespaces)) {
+        i18n.removeResourceBundle(language, namespace);
+        i18n.addResourceBundle(language, namespace, messages);
+      }
+    }
+    void i18n.changeLanguage(i18n.language);
+  }
+}
 
 /**
  * Switch the interface language.
