@@ -116,6 +116,26 @@ describe("environmentBootstrap", () => {
     expect(testApi.calls.descriptor).toBe(1);
   });
 
+  it("keeps mounted Web HTTP and WebSocket routes on the same native environment", () => {
+    vi.stubGlobal("window", {
+      location: {
+        origin: "https://convene.test",
+        href: "https://convene.test/deploy/client-web/one/env/thread",
+      },
+      __T3_BASE_PATH__: "/deploy/client-web/one",
+    });
+    expect(readPrimaryEnvironmentTarget()?.target).toEqual({
+      httpBaseUrl: "https://convene.test/deploy/client-web/one/",
+      wsBaseUrl: "wss://convene.test/deploy/client-web/one/ws",
+    });
+    expect(resolvePrimaryEnvironmentHttpUrl("/api/auth/session")).toBe(
+      "https://convene.test/deploy/client-web/one/api/auth/session",
+    );
+    expect(resolvePrimaryEnvironmentHttpUrl("/.well-known/t3/environment")).toBe(
+      "https://convene.test/deploy/client-web/one/.well-known/t3/environment",
+    );
+  });
+
   it("uses https descriptor urls when the primary environment uses wss", async () => {
     vi.stubEnv("VITE_HTTP_URL", "https://remote.example.com");
     vi.stubEnv("VITE_WS_URL", "wss://remote.example.com");

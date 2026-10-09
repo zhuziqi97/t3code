@@ -46,6 +46,7 @@ import { ProjectActionsSettings } from "./ProjectActionsSettings";
 import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
 import { projectGroupTitleNeedsUpdate } from "./ProjectSettingsPanel.logic";
 import { useSettingsProjectGroups } from "./useSettingsProjectGroups";
+import { openConveneProjectConfiguration } from "../convene/ConveneProjectDialog";
 
 const ProjectIconPickerDialog = lazy(() =>
   import("./ProjectIconPickerDialog").then((module) => ({
@@ -455,6 +456,30 @@ function ProjectDetail({
           </AlertDescription>
         </Alert>
         <SettingsSection id="project-overview" title="Project" hideTitle>
+          <SettingsRow
+            title="Convene project"
+            description="Execution associations and independent MCP access belong to each native project and environment."
+            control={
+              <div className="flex flex-wrap gap-2">
+                {group.memberProjects.map((member) => (
+                  <Button
+                    key={memberKey(member)}
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      openConveneProjectConfiguration({
+                        environmentId: member.environmentId,
+                        projectId: member.id,
+                      })
+                    }
+                  >
+                    Configure Convene
+                    {group.memberProjects.length > 1 ? ` · ${member.workspaceRoot}` : ""}
+                  </Button>
+                ))}
+              </div>
+            }
+          />
           {!canEditGroup ? (
             <p className="px-3 py-2 text-sm text-muted-foreground sm:px-4">
               {group.memberProjects.length > 1

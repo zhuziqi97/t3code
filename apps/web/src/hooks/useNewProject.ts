@@ -13,6 +13,7 @@ import { projectEnvironment } from "~/state/projects";
 import { sourceControlEnvironment } from "~/state/sourceControl";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { useNewThreadHandler } from "./useHandleNewThread";
+import { openConveneProjectConfiguration } from "~/components/convene/ConveneProjectDialog";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error && error.message.trim().length > 0
@@ -97,6 +98,7 @@ export function useNewProject() {
       }
 
       const { projectId, workspaceRoot, commitError } = result.value;
+      openConveneProjectConfiguration({ environmentId: input.environmentId, projectId });
       // The folder sits in T3 Code's data directory, so always say where.
       toastManager.add(
         stackedThreadToast(

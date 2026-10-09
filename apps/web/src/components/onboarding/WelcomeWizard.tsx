@@ -1,3 +1,4 @@
+import { openConveneProjectConfiguration } from "../convene/ConveneProjectDialog";
 import { useAuth } from "@clerk/react";
 import { useAtomValue } from "@effect/atom-react";
 import type {
@@ -32,7 +33,7 @@ import {
   MonitorIcon,
   TerminalIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { TYPOGRAPHY_ADVANCED_STORAGE_KEY } from "../../appearanceFonts";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
@@ -108,11 +109,11 @@ import { formatRelativeTime } from "../../timestampFormat";
  * re-runnable by clearing the flag.
  */
 
-type WizardStep = "connection" | "agents" | "import";
+type WizardStep = "connection" | "agents" | "convene" | "import";
 const NO_ENVIRONMENTS: readonly EnvironmentId[] = [];
 
 const AGENT_ONBOARDING_THREAD_ID = ThreadId.make("onboarding-agent-setup");
-const ONBOARDING_STAGES = ["Connect", "Agents", "Projects"] as const;
+const ONBOARDING_STAGES = ["Connect", "Agents", "Convene", "Projects"] as const;
 const SCAN_LIMIT_MESSAGE = "Scan limit reached. Some projects or conversations may be missing.";
 
 export function WelcomeWizard({
@@ -168,7 +169,7 @@ export function WelcomeWizard({
     setSetupIds(ids);
     setStep("agents");
   };
-  const stageIndex = step === "agents" ? 1 : step === "import" ? 2 : 0;
+  const stageIndex = step === "agents" ? 1 : step === "convene" ? 2 : step === "import" ? 3 : 0;
   const finish = useCallback(
     (projectRef?: ScopedProjectRef, importWarning?: string, importedThreadCount = 0) => {
       if (finishingPromiseRef.current !== null) return finishingPromiseRef.current;
@@ -248,7 +249,15 @@ export function WelcomeWizard({
             isStepDisabled={(index) => isImporting || index >= stageIndex}
             onStepChange={(index) => {
               if (isImporting || index > stageIndex) return;
-              setStep(index === 0 ? "connection" : "agents");
+              setStep(
+                index === 0
+                  ? "connection"
+                  : index === 1
+                    ? "agents"
+                    : index === 2
+                      ? "convene"
+                      : "import",
+              );
             }}
           />
         </WizardHeader>
@@ -276,7 +285,9 @@ export function WelcomeWizard({
               }}
             />
           ) : step === "agents" ? (
-            <AgentsStep environmentIds={setupIds} onContinue={() => setStep("import")} />
+            <AgentsStep environmentIds={setupIds} onContinue={() => setStep("convene")} />
+          ) : step === "convene" ? (
+            <ConveneOnboarding environmentIds={setupIds} onContinue={() => setStep("import")} />
           ) : (
             <ImportStep
               scans={scans}
@@ -293,6 +304,33 @@ export function WelcomeWizard({
 }
 
 // ── Step 1: connection choice ────────────────────────────────
+
+function ConveneOnboarding({
+  environmentIds,
+  onContinue,
+}: {
+  environmentIds: readonly EnvironmentId[];
+  onContinue: () => void;
+}) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold">Connect Convene</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Optional. You can also connect later from Settings → Convene.
+        </p>
+      </div>
+      <Suspense fallback={<p role="status">Loading Convene connection…</p>}>
+        {environmentIds.map((environmentId) => (
+          <ConveneConnectionPanel key={environmentId} environmentId={environmentId} />
+        ))}
+      </Suspense>
+      <div className="flex justify-end">
+        <Button onClick={onContinue}>Continue to projects</Button>
+      </div>
+    </div>
+  );
+}
 
 function ConnectionStep({
   autoSelectedComputers,
@@ -1379,6 +1417,7 @@ function ImportStep({
           }
           continue;
         }
+        openConveneProjectConfiguration({ environmentId, projectId });
       }
 
       if (!hasAccess()) {
@@ -1806,3 +1845,8 @@ function StepShell({
     </>
   );
 }
+const ConveneConnectionPanel = lazy(() =>
+  import("../convene/ConveneConnectionPanel").then((module) => ({
+    default: module.ConveneConnectionPanel,
+  })),
+);

@@ -1,4 +1,5 @@
-"use client";
+import { openConveneProjectConfiguration } from "./convene/ConveneProjectDialog";
+("use client");
 
 import { threadPullRequestLinkMode } from "@t3tools/client-runtime/thread-pull-request-compatibility";
 import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
@@ -2486,6 +2487,7 @@ function OpenCommandPaletteDialog(props: {
         return;
       }
 
+      openConveneProjectConfiguration({ environmentId: input.environmentId, projectId });
       const navigationResult = await settlePromise(() =>
         handleNewThread(scopeProjectRef(input.environmentId, projectId)),
       );
@@ -2754,6 +2756,10 @@ function OpenCommandPaletteDialog(props: {
     }
     setOpen(false);
     const projectRef = scopeProjectRef(addProjectCloneFlow.environmentId, projectId);
+    openConveneProjectConfiguration({
+      environmentId: addProjectCloneFlow.environmentId,
+      projectId,
+    });
     // The create event usually lands before this call returns; give the shell
     // stream a moment so the draft opens with its project resolved instead of
     // flashing the project picker.

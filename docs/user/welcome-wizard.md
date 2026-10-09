@@ -47,6 +47,8 @@ terminal metadata while the terminal process can use them.
 
 ## Import your projects
 
+The optional **Convene** step appears after agent setup. Approve a pairing code to connect the selected environment, or continue without it. You can manage the connection later in **Settings → Convene**. See [Convene](convene.md) for project associations and independent MCP access.
+
 T3 Code finds directories that Claude Code or Codex has used. Git repositories
 are listed first, newest activity on top. When the remote is on GitHub, the
 group shows the repository as `owner/name`. Clones with the same remote share

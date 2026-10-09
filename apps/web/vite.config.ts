@@ -226,6 +226,13 @@ export default defineConfig(() => {
     },
     experimental: {
       bundledDev,
+      renderBuiltUrl(filename, { hostType }) {
+        if (hostType === "js")
+          return {
+            runtime: `(window.__T3_BASE_PATH__ ?? "") + ${JSON.stringify("/" + filename)}`,
+          };
+        return hostType === "css" ? { relative: true } : "/" + filename;
+      },
     },
     server: {
       host,

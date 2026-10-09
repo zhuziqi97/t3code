@@ -50,7 +50,9 @@ function IndexDraftLanding() {
   const mostRecentProject = useMemo(
     () =>
       bootstrapped
-        ? (sortScopedProjectsForSidebar(projects, threads, "updated_at")[0] ?? null)
+        ? (projects.find((project) => project.id === window.__T3_INITIAL_PROJECT_ID__) ??
+          sortScopedProjectsForSidebar(projects, threads, "updated_at")[0] ??
+          null)
         : null,
     [bootstrapped, projects, threads],
   );

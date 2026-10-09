@@ -23,6 +23,7 @@ export type SettingsPath =
   | "/settings/source-control"
   | "/settings/storage"
   | "/settings/connections"
+  | "/settings/convene"
   | "/settings/archived";
 
 /**
@@ -98,6 +99,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/source-control": "Source Control",
   "/settings/storage": "Storage",
   "/settings/connections": "Connections",
+  "/settings/convene": "Convene",
   "/settings/archived": "Archive",
 };
 
@@ -134,6 +136,12 @@ const KEYBINDING_SEARCH_ITEMS = STATIC_KEYBINDING_COMMANDS.toSorted((left, right
  * that may not be mounted point at their nearest stable section instead.
  */
 export const SETTINGS_SEARCH_ITEMS = [
+  {
+    id: "convene-connection",
+    title: "Convene connection",
+    to: "/settings/convene",
+    searchTerms: ["convene pairing modules MCP client activation"],
+  },
   {
     id: "storage-worktrees",
     title: "Worktree cleanup",
@@ -505,7 +513,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "cli-command",
-    title: "t3 command",
+    title: "t3code-convene command",
     to: "/settings/general",
     searchTerms: ["cli terminal shell path install command line"],
     desktopOnly: true,
@@ -940,6 +948,7 @@ const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScop
   "/settings/source-control": "environment-defaults",
   "/settings/storage": "project-defaults",
   "/settings/connections": "connections",
+  "/settings/convene": null,
   "/settings/scheduled-tasks": null,
   "/settings/archived": "project-defaults",
 };

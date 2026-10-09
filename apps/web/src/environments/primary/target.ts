@@ -2,6 +2,7 @@ import { PRIMARY_LOCAL_ENVIRONMENT_ID, type DesktopEnvironmentBootstrap } from "
 import * as Schema from "effect/Schema";
 
 import { isLocalEnvironmentDisabled } from "../../localEnvironment";
+import { webBasePath } from "../../webBasePath";
 
 const PrimaryEnvironmentTargetSource = Schema.Literals([
   "configured",
@@ -244,8 +245,8 @@ function resolveWindowOriginPrimaryTarget(): PrimaryEnvironmentTarget {
   return {
     source: "window-origin",
     target: {
-      httpBaseUrl,
-      wsBaseUrl: url.toString(),
+      httpBaseUrl: new URL(webBasePath() + "/", httpBaseUrl).toString(),
+      wsBaseUrl: webBasePath() ? new URL(webBasePath() + "/ws", url).toString() : url.toString(),
     },
   };
 }
@@ -296,7 +297,7 @@ export function resolvePrimaryEnvironmentHttpUrl(
     source: primaryTarget.source,
     urlKind: "http-base-url",
   });
-  url.pathname = pathname;
+  url.pathname = url.pathname.replace(/\/+$/, "") + "/" + pathname.replace(/^\/+/, "");
   if (searchParams) {
     url.search = new URLSearchParams(searchParams).toString();
   }
