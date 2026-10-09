@@ -1017,19 +1017,27 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "github-accounts",
-    title: "GitHub accounts and token",
+    get title() {
+      return i18n.t("settings.search.github-accounts.title");
+    },
     to: "/settings/source-control",
     searchTerms: [
       "github gh account login user host enterprise ghes switch multiple accounts disable sign in token personal access token pat api key credential",
+      "GitHub 账户 令牌 登录 主机 凭据 当前账户 企业版",
     ],
     environmentOnly: true,
     scope: "environment-defaults",
   },
   {
     id: "bitbucket-credentials",
-    title: "Bitbucket credentials",
+    get title() {
+      return i18n.t("settings.search.bitbucket-credentials.title");
+    },
     to: "/settings/source-control",
-    searchTerms: ["bitbucket atlassian access token api token email credentials sign in"],
+    searchTerms: [
+      "bitbucket atlassian access token api token email credentials sign in",
+      "Bitbucket 凭据 访问令牌 API 令牌 Atlassian 账户邮箱 登录",
+    ],
     environmentOnly: true,
     scope: "environment-defaults",
   },

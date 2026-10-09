@@ -3670,6 +3670,54 @@ export const en = {
   "settings.search.source-control-writing-style.title": "Source control writing style",
   "settings.search.follow-change-request-templates.title": "Follow change request templates",
   "settings.search.source-control-writer-model.title": "Source control writer model",
+
+  "common.save": "Save",
+  "sourceControl.secretStored": "Stored secret, enter a new value to replace",
+  "sourceControl.host": "Host",
+  "sourceControl.token": "Token",
+  "sourceControl.github.hiddenAccount": "Hidden account",
+  "sourceControl.github.saveAccounts": "save GitHub account settings",
+  "sourceControl.github.hideAccounts": "Hide GitHub accounts",
+  "sourceControl.github.revealAccounts": "Reveal GitHub accounts",
+  "sourceControl.github.signedIn": "Signed in as",
+  "sourceControl.github.account": "Account",
+  "sourceControl.github.activeAccount": "Active gh account",
+  "sourceControl.github.stalePin":
+    "The chosen login is no longer signed in, so the active gh login is used.",
+  "sourceControl.github.useActive": "Use active login",
+  "sourceControl.github.invalidDetail": "gh reports this login as invalid.",
+  "sourceControl.github.invalidLogin": "can't be used: {{error}}",
+  "sourceControl.github.accountNumber": "Account {{number}}",
+  "sourceControl.github.useHost": "Use GitHub on {{host}}",
+  "sourceControl.github.hostAccount": "GitHub account for {{host}}",
+  "sourceControl.github.environmentOverride":
+    "{{variable}} is set on the server, so it overrides the account chosen here until it is unset.",
+  "sourceControl.github.signInHint":
+    "Sign in with <command>gh auth login</command> on the server host, then rescan to choose accounts here.",
+  "sourceControl.github.chooseHint":
+    "Choose which <command>gh</command> login each GitHub host uses, or turn a host off.",
+  "sourceControl.github.saveToken": "save GitHub token",
+  "sourceControl.github.createToken": "Create a token",
+  "sourceControl.github.tokenHint":
+    "A token saved here is used before <variable>GH_TOKEN</variable> and the <command>gh</command> login, so GitHub works without the GitHub CLI. Give it read and write access to pull requests and contents.",
+  "sourceControl.github.noToken": "No token saved; the server uses GH_TOKEN or the gh login.",
+  "sourceControl.github.savedHosts": "Saved for {{hosts}}.",
+  "sourceControl.bitbucket.accessToken": "Access token",
+  "sourceControl.bitbucket.accessDescription":
+    "Scoped to one repository, project, or workspace. Create it in that item's Bitbucket settings.",
+  "sourceControl.bitbucket.learnMore": "Learn more",
+  "sourceControl.bitbucket.apiToken": "API token",
+  "sourceControl.bitbucket.apiDescription":
+    "Uses your Atlassian account, so it reaches every repository you can. Give it read and write access to repositories and pull requests, and read:user:bitbucket.",
+  "sourceControl.bitbucket.createApiToken": "Create an API token",
+  "sourceControl.bitbucket.saveCredentials": "save Bitbucket credentials",
+  "sourceControl.bitbucket.method": "Bitbucket sign-in method",
+  "sourceControl.bitbucket.email": "Atlassian account email",
+  "sourceControl.bitbucket.noToken":
+    "Without a saved token, the server falls back to its T3CODE_BITBUCKET_* environment variables.",
+  "sourceControl.bitbucket.replaces": "Saving replaces your {{method}}.",
+  "settings.search.github-accounts.title": "GitHub accounts and token",
+  "settings.search.bitbucket-credentials.title": "Bitbucket credentials",
 } as const;
 
 export type MessageKey = keyof typeof en;

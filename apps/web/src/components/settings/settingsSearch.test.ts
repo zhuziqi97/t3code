@@ -644,3 +644,21 @@ it("finds source control writing and branch naming by Chinese terms without chan
     "source-control-writing-style",
   );
 });
+
+it("finds hosting credentials by Chinese terms while keeping environment-only destinations", async () => {
+  await changeLanguage("zh");
+  for (const [query, id] of [
+    ["当前账户", "github-accounts"],
+    ["Atlassian 账户邮箱", "bitbucket-credentials"],
+  ]) {
+    expect(
+      searchSettings(query!).find((item) => item.id === id),
+      query,
+    ).toMatchObject({
+      id,
+      to: "/settings/source-control",
+      environmentOnly: true,
+      scope: "environment-defaults",
+    });
+  }
+});
