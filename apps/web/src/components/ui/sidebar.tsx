@@ -20,7 +20,14 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { useResizeDrag } from "~/hooks/useResizeDrag";
 import { useIsMobile } from "~/hooks/useMediaQuery";
 import { getLocalStorageItem, setLocalStorageItem } from "~/hooks/useLocalStorage";
-import { resolveSidebarState, type ResponsiveSidebarState } from "./sidebarState";
+import { resolveSidebarState } from "./sidebarState";
+import {
+  SidebarContext,
+  SidebarInstanceContext,
+  type SidebarContextProps,
+  type SidebarInstanceContextProps,
+  type SidebarResolvedResizableOptions,
+} from "./sidebarContext";
 import * as Schema from "effect/Schema";
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
@@ -29,16 +36,6 @@ const SIDEBAR_WIDTH = "16rem";
 const SIDEBAR_WIDTH_MOBILE = "calc(100vw - var(--spacing(3)))";
 const SIDEBAR_WIDTH_ICON = "3rem";
 const SIDEBAR_RESIZE_DEFAULT_MIN_WIDTH = 16 * 16;
-
-type SidebarContextProps = {
-  state: ResponsiveSidebarState;
-  open: boolean;
-  setOpen: (open: boolean) => void;
-  openMobile: boolean;
-  setOpenMobile: (open: boolean) => void;
-  isMobile: boolean;
-  toggleSidebar: () => void;
-};
 
 type SidebarResizableOptions = {
   maxWidth?: number;
@@ -54,29 +51,6 @@ type SidebarResizableOptions = {
   }) => boolean;
   storageKey?: string;
 };
-
-type SidebarResolvedResizableOptions = {
-  maxWidth: number;
-  minWidth: number;
-  onResize?: (width: number) => void;
-  shouldAcceptWidth?: (context: {
-    currentWidth: number;
-    nextWidth: number;
-    rail: HTMLButtonElement;
-    side: "left" | "right";
-    sidebarRoot: HTMLElement;
-    wrapper: HTMLElement;
-  }) => boolean;
-  storageKey: string | null;
-};
-
-type SidebarInstanceContextProps = {
-  resizable: SidebarResolvedResizableOptions | null;
-  side: "left" | "right";
-};
-
-const SidebarContext = React.createContext<SidebarContextProps | null>(null);
-const SidebarInstanceContext = React.createContext<SidebarInstanceContextProps | null>(null);
 
 function useSidebar() {
   const context = React.use(SidebarContext);
