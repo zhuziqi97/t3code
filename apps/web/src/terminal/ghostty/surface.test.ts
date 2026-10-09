@@ -99,7 +99,13 @@ describe("GhosttyTerminalSurface visibility", () => {
       value = "";
       private readonly captures = new Set<number>();
 
-      setAttribute() {}
+      private readonly attributes = new Map<string, string>();
+      setAttribute(name: string, value: string) {
+        this.attributes.set(name, value);
+      }
+      getAttribute(name: string) {
+        return this.attributes.get(name) ?? null;
+      }
       append(...children: TerminalTestElement[]) {
         for (const child of children) child.parentElement = this;
       }
@@ -248,6 +254,28 @@ describe("GhosttyTerminalSurface visibility", () => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it("updates accessible labels without replacing terminal input or changing scrollback", async () => {
+    const harness = createHarness();
+    const surface = await harness.create({ beforeKey: () => true });
+    const input = surface.input;
+    input.value = "npm run dev -- --host";
+    surface.write(Array.from({ length: 20 }, (_, index) => `raw line ${index}`).join("\r\n"));
+    harness.flushFrame();
+    key(surface, "PageUp", "PageUp", { shiftKey: true });
+    harness.flushFrame();
+    const visibleText = harness.renderedSnapshot.rowData[0]?.text;
+    expect(surface.isAtBottom()).toBe(false);
+
+    surface.setAccessibleLabels("终端输入", "终端历史输出");
+    harness.flushFrame();
+    expect(surface.input).toBe(input);
+    expect(surface.input.value).toBe("npm run dev -- --host");
+    expect(surface.input.getAttribute("aria-label")).toBe("终端输入");
+    expect(harness.renderedSnapshot.rowData[0]?.text).toBe(visibleText);
+    expect(surface.isAtBottom()).toBe(false);
+    expect(harness.onData).not.toHaveBeenCalled();
   });
 
   it.each([

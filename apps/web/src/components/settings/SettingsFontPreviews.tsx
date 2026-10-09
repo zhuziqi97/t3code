@@ -1,3 +1,4 @@
+import { i18n, useTranslate } from "../../i18n";
 import { preloadPatchFile } from "@pierre/diffs/ssr";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ComposerPromptEditor, type ComposerPromptEditorHandle } from "../ComposerPromptEditor";
@@ -180,9 +181,16 @@ function previewTerminalFont(family: string, size: number): { family?: string; s
  * terminal drawer uses.
  */
 export function TerminalFontPreview({ family, size }: { family: string; size: number }) {
+  const t = useTranslate();
   const mountRef = useRef<HTMLDivElement>(null);
   const surfaceRef = useRef<GhosttyTerminalSurface | null>(null);
   const fontRef = useRef({ family, size });
+  useEffect(() => {
+    surfaceRef.current?.setAccessibleLabels(
+      t("terminal.inputLabel"),
+      t("terminal.scrollbackLabel"),
+    );
+  }, [t]);
   const { theme, resolvedTheme } = useTheme();
 
   useEffect(() => {
@@ -236,6 +244,10 @@ export function TerminalFontPreview({ family, size }: { family: string; size: nu
 
     void GhosttyTerminalSurface.create(mount, {
       theme: terminalThemeFromApp(mount),
+      accessibleLabels: {
+        input: i18n.t("terminal.inputLabel"),
+        scrollback: i18n.t("terminal.scrollbackLabel"),
+      },
       font: previewTerminalFont(fontRef.current.family, fontRef.current.size),
       onData: echo,
       onResize: noop,
@@ -249,6 +261,10 @@ export function TerminalFontPreview({ family, size }: { family: string; size: nu
         return;
       }
       surfaceRef.current = surface;
+      surface.setAccessibleLabels(
+        i18n.t("terminal.inputLabel"),
+        i18n.t("terminal.scrollbackLabel"),
+      );
       // The theme and font may both have changed while the WASM surface loaded.
       surface.setTheme(terminalThemeFromApp(mount));
       const font = fontRef.current;
@@ -267,7 +283,7 @@ export function TerminalFontPreview({ family, size }: { family: string; size: nu
     <div
       ref={mountRef}
       className="relative mt-1 mb-2 h-52 overflow-hidden rounded-lg border border-border"
-      aria-label="Terminal font preview"
+      aria-label={t("terminal.fontPreview")}
     />
   );
 }

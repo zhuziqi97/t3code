@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { i18n } from "../i18n";
 import {
   applyTerminalAttachStreamEvent,
   combineTerminalSessionState,
@@ -18,6 +19,22 @@ import {
 } from "./ThreadTerminalDrawer";
 
 describe("terminal selection menus", () => {
+  it("translates native menu labels while retaining action IDs and read-only restrictions", () => {
+    const items = terminalContextMenuItems(
+      { hasSelection: false, canAddToChat: false, readOnly: true },
+      i18n.getFixedT("zh"),
+    );
+    expect(items).toEqual([
+      { id: "copy", label: "复制", disabled: true },
+      { id: "paste", label: "粘贴", disabled: true },
+      { id: "select-all", label: "全选" },
+      { id: "scroll-to-bottom", label: "跳到最新输出" },
+    ]);
+    expect(terminalSelectionMenuItems(undefined, i18n.getFixedT("zh"))).toEqual([
+      { id: "add-to-chat", label: "添加到聊天" },
+      { id: "copy", label: "复制" },
+    ]);
+  });
   it("omits Add to chat when the terminal has no chat target", () => {
     expect(terminalSelectionMenuItems().map(({ id }) => id)).toEqual(["add-to-chat", "copy"]);
     expect(terminalContextMenuItems({ hasSelection: true }).map(({ id }) => id)).toEqual([
