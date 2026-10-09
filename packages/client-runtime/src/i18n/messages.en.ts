@@ -5235,6 +5235,19 @@ export const en = {
   "diagnostics.access.denied": "This connection does not have access to diagnostics and usage.",
   "diagnostics.monitor.no-environment": "No environment is selected.",
   "diagnostics.monitor.access-denied": "This connection cannot restart the resource monitor.",
+
+  "restore.theme": "Theme",
+  "restore.followSystem": "Follow system",
+  "restore.themeMix": "Theme mix",
+  "restore.visibleThreads": "Visible threads",
+  "restore.browserViewport": "Browser viewport",
+  "restore.browserZoom": "Browser zoom",
+  "restore.browserAppearance": "Browser appearance",
+  "restore.browserFrameRate": "Recording frame rate",
+  "restore.browserKeys": "Recording key presses",
+  "restore.browserMouse": "Recording mouse presses",
+  "restore.browserLinks": "Open links in",
+  "restore.browserFloating": "Floating preview",
 } as const;
 
 export type MessageKey = keyof typeof en;

@@ -10,14 +10,17 @@ const state = vi.hoisted(() => ({
   settings: null as UnifiedSettings | null,
   update: vi.fn(),
   confirm: vi.fn(),
+  theme: "system",
+  followSystem: true,
+  themeHalves: null as { light: string; dark: string } | null,
 }));
 
 vi.mock("../../hooks/useTheme", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../hooks/useTheme")>()),
   useTheme: () => ({
-    theme: "system",
-    followSystem: true,
-    themeHalves: null,
+    theme: state.theme,
+    followSystem: state.followSystem,
+    themeHalves: state.themeHalves,
     setTheme: vi.fn(),
     setFollowSystem: vi.fn(),
     setThemeHalf: vi.fn(),
@@ -71,6 +74,9 @@ beforeEach(async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   await changeLanguage("en");
   state.settings = { ...DEFAULT_UNIFIED_SETTINGS };
+  state.theme = "system";
+  state.followSystem = true;
+  state.themeHalves = null;
   state.confirm.mockResolvedValue(true);
   container = document.createElement("div");
   document.body.append(container);
@@ -120,4 +126,35 @@ describe("restoring V2 settings", () => {
     expect(state.confirm).toHaveBeenCalledOnce();
     expect(state.update).not.toHaveBeenCalled();
   });
+});
+
+it("translates dirty theme and browser defaults in the confirmation and preserves them when cancelled", async () => {
+  state.theme = "raw-custom-theme";
+  state.followSystem = false;
+  state.themeHalves = { light: "raw-light", dark: "raw-dark" };
+  state.settings = {
+    ...DEFAULT_UNIFIED_SETTINGS,
+    sidebarThreadPreviewCount: DEFAULT_UNIFIED_SETTINGS.sidebarThreadPreviewCount + 1,
+    browserDefaultViewport: { _tag: "freeform", width: 900, height: 600 },
+    browserDefaultZoomFactor: 1.5,
+    browserDefaultAppearance: "dark",
+    browserRecordingFrameRate: 60,
+    browserRecordingShowKeyPresses: true,
+    browserRecordingShowMousePresses: true,
+    browserLinkTarget: "app",
+    browserAutoShowFloatingPreview: !DEFAULT_UNIFIED_SETTINGS.browserAutoShowFloatingPreview,
+  };
+  state.confirm.mockResolvedValue(false);
+  await renderRestore();
+  await act(async () => changeLanguage("zh"));
+  await clickRestore();
+  expect(state.confirm).toHaveBeenCalledExactlyOnceWith(
+    "恢复默认设置？\n以下设置将被重置：主题、跟随系统、主题混合、可见会话数量、浏览器视口、浏览器缩放、浏览器外观、录制帧率、录制按键、录制鼠标点击、链接打开位置、悬浮预览。",
+    { variant: "destructive" },
+  );
+  expect(state.update).not.toHaveBeenCalled();
+  expect(state.theme).toBe("raw-custom-theme");
+  await act(async () => changeLanguage("en"));
+  expect(container.querySelector("p")!.textContent).toContain("Browser viewport");
+  expect(state.confirm).toHaveBeenCalledOnce();
 });

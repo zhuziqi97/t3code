@@ -554,9 +554,9 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.languagePreference !== DEFAULT_UNIFIED_SETTINGS.languagePreference
       ? [t("settings.language.title")]
       : []),
-    ...(theme !== "system" ? ["Theme"] : []),
-    ...(!followSystem ? ["Follow system"] : []),
-    ...(themeHalves !== null ? ["Theme mix"] : []),
+    ...(theme !== "system" ? [t("restore.theme")] : []),
+    ...(!followSystem ? [t("restore.followSystem")] : []),
+    ...(themeHalves !== null ? [t("restore.themeMix")] : []),
     ...(settings.appearanceContrast !== DEFAULT_UNIFIED_SETTINGS.appearanceContrast
       ? [t("settings.search.setting-appearance-contrast.title")]
       : []),
@@ -586,7 +586,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       ? [t("settings.search.in-app-notifications.title")]
       : []),
     ...(settings.sidebarThreadPreviewCount !== DEFAULT_UNIFIED_SETTINGS.sidebarThreadPreviewCount
-      ? ["Visible threads"]
+      ? [t("restore.visibleThreads")]
       : []),
     ...(settings.sidebarProjectGroupingMode !== DEFAULT_UNIFIED_SETTINGS.sidebarProjectGroupingMode
       ? [t("settings.search.project-grouping.title")]
@@ -681,7 +681,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       ? [t("settings.search.quit-confirmation.title")]
       : []),
     ...(isTextGenerationModelDirty ? [t("settings.search.text-generation-model.title")] : []),
-    ...getChangedBrowserSettingLabels(settings),
+    ...getChangedBrowserSettingLabels(settings, t),
     ...(settings.enableAgentBrowserAccess !== DEFAULT_UNIFIED_SETTINGS.enableAgentBrowserAccess
       ? [t("defaults.browser.title")]
       : []),
