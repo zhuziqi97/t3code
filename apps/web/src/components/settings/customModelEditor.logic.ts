@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next";
+
 import {
   type ModelCapabilities,
   ProviderDriverKind,
@@ -208,23 +210,40 @@ export function descriptorsFromCapabilities(
  * Validate the draft before saving. Returns the first problem in reading
  * order so the message is actionable, or `null` when the draft is sound.
  */
-export function validateDraft(draft: CustomModelDraft): string | null {
+export function validateDraft(draft: CustomModelDraft, t?: TFunction): string | null {
   const seenIds = new Set<string>();
   for (const [index, descriptor] of draft.descriptors.entries()) {
     const position = `Option ${index + 1}`;
     const id = descriptor.id.trim();
-    if (!id) return `${position} needs an id.`;
-    if (seenIds.has(id)) return `${position}: id "${id}" is used twice.`;
+    if (!id)
+      return t
+        ? t("provider.modelEditor.needsId", { index: index + 1 })
+        : `${position} needs an id.`;
+    if (seenIds.has(id))
+      return t
+        ? t("provider.modelEditor.duplicateId", { index: index + 1, id: id })
+        : `${position}: id "${id}" is used twice.`;
     seenIds.add(id);
-    if (!descriptor.label.trim()) return `${position} needs a label.`;
+    if (!descriptor.label.trim())
+      return t
+        ? t("provider.modelEditor.needsLabel", { index: index + 1 })
+        : `${position} needs a label.`;
     if (descriptor.type !== "select") continue;
-    if (descriptor.choices.length === 0) return `${position} needs at least one choice.`;
+    if (descriptor.choices.length === 0)
+      return t
+        ? t("provider.modelEditor.needsChoice", { index: index + 1 })
+        : `${position} needs at least one choice.`;
     const seenChoices = new Set<string>();
     for (const choice of descriptor.choices) {
       const choiceId = choice.id.trim();
-      if (!choiceId) return `${position} has a choice without a value.`;
+      if (!choiceId)
+        return t
+          ? t("provider.modelEditor.needsValue", { index: index + 1 })
+          : `${position} has a choice without a value.`;
       if (seenChoices.has(choiceId)) {
-        return `${position}: choice "${choiceId}" is used twice.`;
+        return t
+          ? t("provider.modelEditor.duplicateChoice", { index: index + 1, id: choiceId })
+          : `${position}: choice "${choiceId}" is used twice.`;
       }
       seenChoices.add(choiceId);
     }
