@@ -4,7 +4,7 @@ import { parseT3ProjectFile } from "@t3tools/shared/t3ProjectFile";
 import { useAtomValue } from "@effect/atom-react";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/reactivity";
-import { createContext, type ReactNode, useContext, useMemo } from "react";
+import { type ReactNode, useContext, useMemo } from "react";
 
 import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
 import { getProjectFileQueryAtom, optimisticFileAtom } from "../files/projectFilesQueryState";
@@ -12,6 +12,7 @@ import { useSettingsProjectGroups } from "./useSettingsProjectGroups";
 import { resolveScopedSettingsTargets, selectScopedSettingsEnvironments } from "./scopedSettings";
 import { resolveSettingsScope, type SettingsScopeSearch } from "./settingsScope";
 import { selectSingleEnvironmentScope } from "./settingsScopeAxis";
+import { SettingsScopeContext } from "./settingsScopeContextValue";
 
 /**
  * Each member's decoded t3.json, so file-backed settings show the file as a
@@ -100,14 +101,11 @@ function useResolvedSettingsScope(rawSearch: SettingsScopeSearch, singleEnvironm
   }, [availableEnvironments, groups, primaryEnvironmentId, projectFiles, scope, search]);
 }
 
-const SettingsScopeContext = createContext<
-  | (ReturnType<typeof useResolvedSettingsScope> & {
-      singleEnvironment: boolean;
-      search: SettingsScopeSearch;
-      selectScope: (next: SettingsScopeSearch) => void;
-    })
-  | null
->(null);
+export type SettingsScopeContextValue = ReturnType<typeof useResolvedSettingsScope> & {
+  singleEnvironment: boolean;
+  search: SettingsScopeSearch;
+  selectScope: (next: SettingsScopeSearch) => void;
+};
 
 export function SettingsScopeProvider({
   search,
