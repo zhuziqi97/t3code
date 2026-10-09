@@ -760,3 +760,25 @@ it("finds browser integration settings in either language without changing their
     expect.objectContaining({ id: "browser-default-viewport" }),
   );
 });
+
+it("finds device integration destinations using either language and keeps scope and target ids", async () => {
+  await changeLanguage("zh");
+  for (const [query, id, title] of [
+    ["设备主机", "device-hosts", "设备主机"],
+    ["智能体设备访问", "agent-device-access", "智能体设备访问"],
+    ["设备中心", "device-hub", "设备中心"],
+    ["模拟器支持", "device-platform-support", "模拟器支持"],
+  ]) {
+    expect(searchSettings(query!)).toContainEqual(
+      expect.objectContaining({ id, title, to: "/settings/integrations" }),
+    );
+    expect(SETTINGS_SEARCH_ITEMS.find((item) => item.id === id)?.title).toBe(title);
+  }
+  await changeLanguage("en");
+  expect(searchSettings("设备中心")).toContainEqual(
+    expect.objectContaining({ id: "device-hub", title: "Device hub", targetId: "devices" }),
+  );
+  expect(searchSettings("SSH identity key")).toContainEqual(
+    expect.objectContaining({ id: "device-hosts" }),
+  );
+});

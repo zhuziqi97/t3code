@@ -941,30 +941,54 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "device-hosts",
-    title: "Device hosts",
+    get title() {
+      return i18n.t("device.hosts.title");
+    },
     to: "/settings/integrations",
-    searchTerms: ["ssh remote simulator emulator ios android mac mini identity key connection"],
+    searchTerms: [
+      "Device hosts 设备主机",
+      "设备主机 远程主机 SSH 连接 身份文件 密钥 端口",
+      "ssh remote simulator emulator ios android mac mini identity key connection",
+    ],
   },
   {
     id: "agent-device-access",
-    title: "Agent device access",
+    get title() {
+      return i18n.t("device.agent.access");
+    },
     to: "/settings/integrations",
     targetId: "devices",
-    searchTerms: ["allow simulator emulator ios android drive tools sessions"],
+    searchTerms: [
+      "Agent device access 智能体设备访问",
+      "智能体设备访问 权限 控制 设备工具",
+      "allow simulator emulator ios android drive tools sessions",
+    ],
   },
   {
     id: "device-hub",
-    title: "Device hub",
+    get title() {
+      return i18n.t("device.hub.title");
+    },
     to: "/settings/integrations",
     targetId: "devices",
-    searchTerms: ["simulator emulator ios android install start"],
+    searchTerms: [
+      "Device hub 设备中心",
+      "设备中心 模拟器 安装 启动",
+      "simulator emulator ios android install start",
+    ],
   },
   {
     id: "device-platform-support",
-    title: "Simulator support",
+    get title() {
+      return i18n.t("device.platform.title");
+    },
     to: "/settings/integrations",
     targetId: "devices",
-    searchTerms: ["xcode android studio sdk avd runtime"],
+    searchTerms: [
+      "Simulator support 模拟器支持",
+      "模拟器支持 运行时 安卓 苹果",
+      "xcode android studio sdk avd runtime",
+    ],
   },
   {
     id: "browser-profiles",
