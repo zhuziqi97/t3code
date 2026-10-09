@@ -1,5 +1,7 @@
 "use client";
 
+import type { TFunction } from "i18next";
+import { useTranslate } from "../../i18n";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -79,6 +81,7 @@ function readFieldBooleanDefault(
 export function deriveProviderSettingsFields(
   definition: ProviderClientDefinition,
   value?: unknown,
+  t?: TFunction,
 ): ReadonlyArray<ProviderSettingsFieldModel> {
   const isLocalAcp =
     definition.driverKind === "acpRegistry" &&
@@ -132,6 +135,29 @@ export function deriveProviderSettingsFields(
             : {}),
         } satisfies ProviderSettingsFieldModel,
       ];
+    })
+    .map((field) => {
+      if (!t) return field;
+      const key = isLocalAcp && field.key === "commandPath" ? "localExecutable" : field.key;
+      const prefix = `provider.fields.${definition.driverKind}.${key}`;
+      return {
+        ...field,
+        label: t(`${prefix}.label`, { defaultValue: field.label }),
+        ...(field.description !== undefined
+          ? { description: t(`${prefix}.description`, { defaultValue: field.description }) }
+          : {}),
+        ...(field.placeholder !== undefined
+          ? { placeholder: t(`${prefix}.placeholder`, { defaultValue: field.placeholder }) }
+          : {}),
+        ...(field.options !== undefined
+          ? {
+              options: field.options.map((option) => ({
+                ...option,
+                label: t(`${prefix}.options.${option.value}`, { defaultValue: option.label }),
+              })),
+            }
+          : {}),
+      };
     });
 }
 
@@ -149,6 +175,7 @@ function ProviderCommandArguments({
   value,
   onChange,
 }: Pick<ProviderSettingsFormProps, "value" | "onChange">) {
+  const t = useTranslate();
   const args = useMemo(() => {
     const configured =
       value !== null && typeof value === "object"
@@ -190,8 +217,8 @@ function ProviderCommandArguments({
 
   return (
     <SettingsRow
-      title="Arguments"
-      description="One literal argument per row, in launch order."
+      title={t("provider.arguments.title")}
+      description={t("provider.arguments.description")}
       control={
         <Button
           type="button"
@@ -200,7 +227,7 @@ function ProviderCommandArguments({
           onClick={() => updateArguments([...rowsRef.current, makeCommandArgumentDraftRow("")])}
         >
           <PlusIcon />
-          Add argument
+          {t("provider.arguments.add")}
         </Button>
       }
     >
@@ -219,7 +246,7 @@ function ProviderCommandArguments({
                     ),
                   )
                 }
-                aria-label={`Argument ${index + 1}`}
+                aria-label={t("provider.arguments.input", { index: index + 1 })}
                 spellCheck={false}
               />
               <Button
@@ -229,7 +256,7 @@ function ProviderCommandArguments({
                 onClick={() =>
                   updateArguments(rowsRef.current.filter((current) => current.id !== argument.id))
                 }
-                aria-label={`Remove argument ${index + 1}`}
+                aria-label={t("provider.arguments.remove", { index: index + 1 })}
               >
                 <XIcon />
               </Button>
@@ -533,9 +560,10 @@ export function ProviderSettingsForm({
   variant,
   onChange,
 }: ProviderSettingsFormProps) {
+  const t = useTranslate();
   const fields = useMemo(
-    () => deriveProviderSettingsFields(definition, value),
-    [definition, value],
+    () => deriveProviderSettingsFields(definition, value, t),
+    [definition, value, t],
   );
   const isLocalAcp =
     definition.driverKind === "acpRegistry" &&

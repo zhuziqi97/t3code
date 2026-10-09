@@ -111,10 +111,10 @@ export function getProviderVersionLabel(version: string | null | undefined) {
   return /^\d/.test(version) ? `v${version}` : version;
 }
 
-const COMPATIBILITY_TITLES = {
-  graceful: "Limited support",
-  unsupported: "Unsupported version",
-  broken: "Known broken version",
+const COMPATIBILITY_TITLE_KEYS = {
+  graceful: "provider.version.graceful",
+  unsupported: "provider.version.unsupported",
+  broken: "provider.version.broken",
 } as const;
 
 /** Compatibility guidance shares the version popover, with safe install actions. */
@@ -122,6 +122,7 @@ export function getProviderVersionAdvisoryPresentation(
   advisory: ServerProviderVersionAdvisory | undefined,
   compatibility?: ServerProviderCompatibilityAdvisory | undefined,
   showCompatibility = true,
+  translate: TFunction = i18n.t,
 ): {
   readonly title: string;
   readonly detail: string;
@@ -142,10 +143,12 @@ export function getProviderVersionAdvisoryPresentation(
     const targetVersion = compatibility.recommendedVersion;
     const recommendation = getProviderVersionLabel(targetVersion) ?? compatibility.recommendedRange;
     return {
-      title: COMPATIBILITY_TITLES[compatibility.status],
+      title: translate(COMPATIBILITY_TITLE_KEYS[compatibility.status]),
       detail:
         compatibility.message ??
-        (recommendation ? `Use ${recommendation} for full support.` : "Update for full support."),
+        (recommendation
+          ? translate("provider.version.recommended", { version: recommendation })
+          : translate("provider.version.updateSupport")),
       updateCommand:
         targetVersion || latestIsIncompatible ? null : (advisory?.updateCommand ?? null),
       emphasis: compatibility.status === "graceful" ? "normal" : "strong",
@@ -161,7 +164,7 @@ export function getProviderVersionAdvisoryPresentation(
     return null;
   }
 
-  const label = "Update available";
+  const label = translate("provider.version.available");
   const version = advisory.latestVersion;
   const versionLabel = getProviderVersionLabel(version);
 
@@ -170,8 +173,8 @@ export function getProviderVersionAdvisoryPresentation(
     detail:
       advisory.message ??
       (versionLabel
-        ? `${label}: install ${versionLabel}.`
-        : `${label}: install the latest provider version.`),
+        ? translate("provider.version.installVersion", { version: versionLabel })
+        : translate("provider.version.installLatest")),
     updateCommand: advisory.updateCommand,
     emphasis: "normal" as const,
     targetVersion: null,

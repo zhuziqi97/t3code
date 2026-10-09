@@ -18,6 +18,7 @@ vi.mock("../ui/tooltip", () => ({
 
 import { ProviderAccentColorPicker } from "./ProviderAccentColorPicker";
 import { ThemeColorField } from "./ThemeColorPicker";
+import { changeLanguage } from "../../i18n";
 
 let renderer: ReactTestRenderer | undefined;
 let nextFrameId = 0;
@@ -38,6 +39,7 @@ afterEach(async () => {
   frames.clear();
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  await changeLanguage("en");
 });
 
 function slider(label: string) {
@@ -81,6 +83,36 @@ async function frame() {
 }
 
 describe("shared color controls in settings", () => {
+  it("keeps a provider color through a language switch and operates its translated controls", async () => {
+    const onCommit = vi.fn();
+    await act(async () => {
+      renderer = create(
+        <ProviderAccentColorPicker
+          displayName="User provider"
+          value="#ff0000"
+          onCommit={onCommit}
+        />,
+      );
+    });
+    await key("Accent color hue", "ArrowRight", true);
+    expect(onCommit).toHaveBeenLastCalledWith("#ff2a00");
+    onCommit.mockClear();
+    await act(async () => changeLanguage("zh"));
+    expect(onCommit).not.toHaveBeenCalled();
+    await key("强调色色相", "ArrowRight", true);
+    expect(onCommit).toHaveBeenLastCalledWith("#ff5500");
+    await key("强调色亮度", "ArrowDown", true);
+    expect(onCommit).toHaveBeenLastCalledWith("#e64c00");
+    const clear = renderer!.root.find(
+      (node) =>
+        node.type === "button" &&
+        Array.isArray(node.props.children) &&
+        node.props.children.includes("清除颜色"),
+    );
+    await act(async () => clear.props.onClick());
+    expect(onCommit).toHaveBeenLastCalledWith("");
+  });
+
   it("adjusts each provider color axis independently and reports the value being changed", async () => {
     const onCommit = vi.fn();
     await act(async () => {
