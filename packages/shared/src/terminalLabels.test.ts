@@ -26,6 +26,13 @@ describe("getTerminalLabel", () => {
 });
 
 describe("resolveTerminalSessionLabel", () => {
+  it("localizes generated labels while preserving a custom session name and raw id", () => {
+    expect(resolveTerminalSessionLabel("term-2", null, "终端")).toBe("终端 2");
+    expect(resolveTerminalSessionLabel("term-2", { label: "User's Terminal 2" }, "终端")).toBe(
+      "User's Terminal 2",
+    );
+    expect(resolveTerminalSessionLabel("custom-session", undefined, "终端")).toBe("custom-session");
+  });
   it("prefers a non-empty summary label", () => {
     const summary = { label: "  bun  " } as Pick<TerminalSummary, "label">;
     expect(resolveTerminalSessionLabel("term-1", summary)).toBe("bun");

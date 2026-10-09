@@ -1,3 +1,4 @@
+import { useTranslate } from "../i18n";
 import { useAtomValue } from "@effect/atom-react";
 import {
   isAtomCommandInterrupted,
@@ -1174,6 +1175,7 @@ export default function ThreadTerminalDrawer({
   terminalLabelsById,
   terminalLaunchLocationsById,
 }: ThreadTerminalDrawerProps) {
+  const t = useTranslate();
   const canOperateTerminal = useEnvironmentScope(threadRef.environmentId, AuthTerminalOperateScope);
   const isPanel = mode === "panel";
   const [advancedTypography] = useLocalStorage(
@@ -1333,10 +1335,13 @@ export default function ThreadTerminalDrawer({
   const terminalLabelById = useMemo(() => {
     const next = new Map<string, string>();
     for (const terminalId of normalizedTerminalIds) {
-      next.set(terminalId, terminalLabelsById?.get(terminalId) ?? getTerminalLabel(terminalId));
+      next.set(
+        terminalId,
+        terminalLabelsById?.get(terminalId) ?? getTerminalLabel(terminalId, t("panels.terminal")),
+      );
     }
     return next;
-  }, [normalizedTerminalIds, terminalLabelsById]);
+  }, [normalizedTerminalIds, terminalLabelsById, t]);
   const resolveTerminalLaunchLocation = useCallback(
     (terminalId: string): TerminalLaunchLocation => {
       return (
@@ -1380,14 +1385,15 @@ export default function ThreadTerminalDrawer({
   const confirmCloseTerminal = useCallback(
     (terminalId: string) => {
       if (!canOperateTerminal) return;
-      const label = terminalLabelById.get(terminalId) ?? getTerminalLabel(terminalId);
+      const label =
+        terminalLabelById.get(terminalId) ?? getTerminalLabel(terminalId, t("panels.terminal"));
       void confirmTerminalClose([label]).then((confirmed) => {
         if (confirmed && readEnvironmentScope(threadRef.environmentId, AuthTerminalOperateScope)) {
           onCloseTerminal(terminalId);
         }
       });
     },
-    [canOperateTerminal, onCloseTerminal, terminalLabelById, threadRef.environmentId],
+    [canOperateTerminal, onCloseTerminal, terminalLabelById, threadRef.environmentId, t],
   );
 
   useEffect(() => {
@@ -1646,7 +1652,7 @@ export default function ThreadTerminalDrawer({
                           threadRef={threadRef}
                           threadId={threadId}
                           terminalId={terminalId}
-                          terminalLabel={terminalLabelById.get(terminalId) ?? "Terminal"}
+                          terminalLabel={terminalLabelById.get(terminalId) ?? t("panels.terminal")}
                           cwd={terminalLaunchLocation.cwd}
                           {...(terminalLaunchLocation.worktreePath !== undefined
                             ? { worktreePath: terminalLaunchLocation.worktreePath }
@@ -1787,7 +1793,8 @@ export default function ThreadTerminalDrawer({
                       <div className="flex flex-col gap-0.5">
                         {terminalGroup.terminalIds.map((terminalId) => {
                           const isActive = terminalId === resolvedActiveTerminalId;
-                          const terminalLabel = terminalLabelById.get(terminalId) ?? "Terminal";
+                          const terminalLabel =
+                            terminalLabelById.get(terminalId) ?? t("panels.terminal");
                           const closeTerminalLabel = `Close ${terminalLabel}${
                             isActive && closeShortcutLabel ? ` (${closeShortcutLabel})` : ""
                           }`;

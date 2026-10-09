@@ -988,6 +988,7 @@ const PersistentThreadTerminalDrawer = memo(function PersistentThreadTerminalDra
   keybindings,
   onAddTerminalContext,
 }: PersistentThreadTerminalDrawerProps) {
+  const t = useTranslate();
   const canOperateTerminal = useEnvironmentScope(threadRef.environmentId, AuthTerminalOperateScope);
   const hasTerminalWriteAccess = useCallback(
     () => readEnvironmentScope(threadRef.environmentId, AuthTerminalOperateScope),
@@ -1036,11 +1037,15 @@ const PersistentThreadTerminalDrawer = memo(function PersistentThreadTerminalDra
     for (const session of drawerTerminalSessions) {
       next.set(
         session.target.terminalId,
-        resolveTerminalSessionLabel(session.target.terminalId, session.state.summary),
+        resolveTerminalSessionLabel(
+          session.target.terminalId,
+          session.state.summary,
+          t("panels.terminal"),
+        ),
       );
     }
     return next;
-  }, [drawerTerminalSessions]);
+  }, [drawerTerminalSessions, t]);
   const terminalLaunchLocationsById = useMemo(() => {
     const next = new Map<
       string,
@@ -1400,6 +1405,7 @@ const PersistentThreadTerminalPanel = memo(function PersistentThreadTerminalPane
   newShortcutLabel,
   closeShortcutLabel,
 }: PersistentThreadTerminalPanelProps) {
+  const t = useTranslate();
   const serverThread = useThreadShell(threadRef);
   const draftThread = useComposerDraftStore((store) => store.getDraftThreadByRef(threadRef));
   const projectRef = serverThread
@@ -1446,10 +1452,13 @@ const PersistentThreadTerminalPanel = memo(function PersistentThreadTerminalPane
       const summary =
         knownTerminalSessions?.find((session) => session.target.terminalId === terminalId)?.state
           .summary ?? null;
-      labels.set(terminalId, resolveTerminalSessionLabel(terminalId, summary));
+      labels.set(
+        terminalId,
+        resolveTerminalSessionLabel(terminalId, summary, t("panels.terminal")),
+      );
     }
     return labels;
-  }, [knownTerminalSessions, surface.terminalIds]);
+  }, [knownTerminalSessions, surface.terminalIds, t]);
   const terminalLaunchLocationsById = useMemo(() => {
     const locations = new Map<
       string,
@@ -2244,11 +2253,15 @@ export default function ChatView(props: ChatViewProps) {
     for (const session of activeThreadKnownSessions) {
       labels.set(
         session.target.terminalId,
-        resolveTerminalSessionLabel(session.target.terminalId, session.state.summary),
+        resolveTerminalSessionLabel(
+          session.target.terminalId,
+          session.state.summary,
+          t("panels.terminal"),
+        ),
       );
     }
     return labels;
-  }, [activeThreadKnownSessions]);
+  }, [activeThreadKnownSessions, t]);
   const activeThreadRef = useActiveThreadRef(activeThread);
   const activeThreadKey = activeThreadRef ? scopedThreadKey(activeThreadRef) : null;
   const activeEnvironmentServerBrowser = useEnvironmentSupportsServerBrowser(
@@ -6048,26 +6061,30 @@ export default function ChatView(props: ChatViewProps) {
   const requestCloseTerminal = useCallback(
     (terminalId: string) => {
       if (!hasTerminalWriteAccess()) return;
-      const label = activeTerminalLabelsById.get(terminalId) ?? getTerminalLabel(terminalId);
+      const label =
+        activeTerminalLabelsById.get(terminalId) ??
+        getTerminalLabel(terminalId, t("panels.terminal"));
       void confirmTerminalClose([label]).then((confirmed) => {
         if (confirmed && readEnvironmentScope(environmentId, AuthTerminalOperateScope)) {
           closeTerminal(terminalId);
         }
       });
     },
-    [hasTerminalWriteAccess, activeTerminalLabelsById, closeTerminal, environmentId],
+    [hasTerminalWriteAccess, activeTerminalLabelsById, closeTerminal, environmentId, t],
   );
   const requestClosePanelTerminal = useCallback(
     (terminalId: string) => {
       if (!hasTerminalWriteAccess()) return;
-      const label = activeTerminalLabelsById.get(terminalId) ?? getTerminalLabel(terminalId);
+      const label =
+        activeTerminalLabelsById.get(terminalId) ??
+        getTerminalLabel(terminalId, t("panels.terminal"));
       void confirmTerminalClose([label]).then((confirmed) => {
         if (confirmed && readEnvironmentScope(environmentId, AuthTerminalOperateScope)) {
           closePanelTerminal(terminalId);
         }
       });
     },
-    [hasTerminalWriteAccess, activeTerminalLabelsById, closePanelTerminal, environmentId],
+    [hasTerminalWriteAccess, activeTerminalLabelsById, closePanelTerminal, environmentId, t],
   );
   const activateRightPanelSurface = useCallback(
     (surface: RightPanelSurface) => {
@@ -6208,11 +6225,13 @@ export default function ChatView(props: ChatViewProps) {
       }
       const activeLabel =
         activeTerminalLabelsById.get(surface.activeTerminalId) ??
-        getTerminalLabel(surface.activeTerminalId);
+        getTerminalLabel(surface.activeTerminalId, t("panels.terminal"));
       const otherLabels = surface.terminalIds
         .filter((terminalId) => terminalId !== surface.activeTerminalId)
         .map(
-          (terminalId) => activeTerminalLabelsById.get(terminalId) ?? getTerminalLabel(terminalId),
+          (terminalId) =>
+            activeTerminalLabelsById.get(terminalId) ??
+            getTerminalLabel(terminalId, t("panels.terminal")),
         );
       void confirmTerminalClose([activeLabel, ...otherLabels]).then((confirmed) => {
         if (confirmed) {
@@ -6225,6 +6244,7 @@ export default function ChatView(props: ChatViewProps) {
       activeTerminalLabelsById,
       closeAfterAgentBrowserConfirmation,
       finishRightPanelSurfaceClose,
+      t,
     ],
   );
   const closeOtherRightPanelSurfaces = useCallback(

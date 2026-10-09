@@ -20,12 +20,13 @@ export function getTerminalLabel(terminalId: string, label = "Terminal"): string
 export function resolveTerminalSessionLabel(
   terminalId: string,
   summary: Pick<TerminalSummary, "label"> | null | undefined,
+  label = "Terminal",
 ): string {
   const trimmed = summary?.label?.trim();
   if (trimmed && trimmed.length > 0) {
     return trimmed;
   }
-  return getTerminalLabel(terminalId);
+  return getTerminalLabel(terminalId, label);
 }
 
 /**
