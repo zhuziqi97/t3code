@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next";
+import { useTranslate } from "../../i18n";
 import { Spinner } from "~/components/ui/spinner";
 import { useNavigate } from "@tanstack/react-router";
 import { useAtomValue } from "@effect/atom-react";
@@ -11,6 +13,10 @@ import {
   type ProviderUpdateSidebarPillView,
 } from "../ProviderUpdateLaunchNotification.logic";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+
+type LocalizedPillView = ProviderUpdateSidebarPillView & {
+  readonly resolveText: (t: TFunction) => ProviderUpdateSidebarPillView | null;
+};
 
 const PROVIDER_UPDATE_PILL_STYLES = {
   loading:
@@ -40,21 +46,25 @@ function latestProviderCheckedAt(
 }
 
 export function SidebarProviderUpdatePill() {
+  const t = useTranslate();
   const navigate = useNavigate();
   const providers = useAtomValue(primaryServerProvidersAtom);
   const [dismissedKeys, setDismissedKeys] = useState<ReadonlySet<string>>(() => new Set());
-  const [renderedView, setRenderedView] = useState<ProviderUpdateSidebarPillView | null>(null);
-  const [pendingView, setPendingView] = useState<ProviderUpdateSidebarPillView | null>(null);
+  const [renderedView, setRenderedView] = useState<LocalizedPillView | null>(null);
+  const [pendingView, setPendingView] = useState<LocalizedPillView | null>(null);
   const [exitingKey, setExitingKey] = useState<string | null>(null);
   const [dismissAfterExitKey, setDismissAfterExitKey] = useState<string | null>(null);
   const [visibleAfterIso, setVisibleAfterIso] = useState<string | undefined>();
   const effectiveVisibleAfterIso = visibleAfterIso ?? latestProviderCheckedAt(providers);
-  const view = getProviderUpdateSidebarPillView(providers, {
-    ...(effectiveVisibleAfterIso !== undefined
-      ? { visibleAfterIso: effectiveVisibleAfterIso }
-      : {}),
-    dismissedKeys,
-  });
+  const resolveText = (translate: TFunction) =>
+    getProviderUpdateSidebarPillView(providers, translate, {
+      ...(effectiveVisibleAfterIso !== undefined
+        ? { visibleAfterIso: effectiveVisibleAfterIso }
+        : {}),
+      dismissedKeys,
+    });
+  const baseView = resolveText(t);
+  const view: LocalizedPillView | null = baseView ? { ...baseView, resolveText } : null;
 
   useEffect(() => {
     if (visibleAfterIso === undefined && effectiveVisibleAfterIso !== undefined) {
@@ -74,7 +84,7 @@ export function SidebarProviderUpdatePill() {
     exitingKey !== viewKey;
 
   const startExit = useCallback(
-    (key: string, nextView: ProviderUpdateSidebarPillView | null, dismissKey?: string) => {
+    (key: string, nextView: LocalizedPillView | null, dismissKey?: string) => {
       if (exitingKey === key) {
         return;
       }
@@ -123,6 +133,8 @@ export function SidebarProviderUpdatePill() {
     return null;
   }
 
+  const displayedText = displayedView.resolveText(t) ?? displayedView;
+
   return (
     <div
       className={`group/provider-update relative flex min-h-7 w-full shrink-0 items-center overflow-hidden rounded-lg text-2xs leading-4 font-medium transform-gpu transition-all duration-180 ease-drawer will-change-transform ${
@@ -168,7 +180,7 @@ export function SidebarProviderUpdatePill() {
           render={
             <button
               type="button"
-              aria-label={displayedView.description}
+              aria-label={displayedText.description}
               data-provider-update-main
               className="relative z-[1] flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
               onClick={openProviderSettings}
@@ -182,11 +194,11 @@ export function SidebarProviderUpdatePill() {
               ) : (
                 <DownloadIcon className="size-3.5 shrink-0" />
               )}
-              <span className="min-w-0 wrap-break-word">{displayedView.title}</span>
+              <span className="min-w-0 wrap-break-word">{displayedText.title}</span>
             </button>
           }
         />
-        <TooltipPopup side="top">{displayedView.description}</TooltipPopup>
+        <TooltipPopup side="top">{displayedText.description}</TooltipPopup>
       </Tooltip>
       {displayedView.dismissible && (
         <Tooltip>
@@ -194,7 +206,7 @@ export function SidebarProviderUpdatePill() {
             render={
               <button
                 type="button"
-                aria-label="Dismiss provider update notice"
+                aria-label={t("providerUpdate.dismiss.label")}
                 className="relative z-[1] mr-1 flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-md opacity-70 outline-none hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={() => startExit(displayedView.key, null, displayedView.key)}
               >
@@ -202,7 +214,7 @@ export function SidebarProviderUpdatePill() {
               </button>
             }
           />
-          <TooltipPopup side="top">Dismiss until provider status changes</TooltipPopup>
+          <TooltipPopup side="top">{t("providerUpdate.dismiss.tooltip")}</TooltipPopup>
         </Tooltip>
       )}
     </div>

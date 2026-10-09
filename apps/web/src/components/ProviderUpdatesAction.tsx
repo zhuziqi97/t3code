@@ -1,3 +1,5 @@
+import { i18n, useTranslate } from "../i18n";
+import { ProviderUpdateText } from "./ProviderUpdateText";
 import { PROVIDER_DISPLAY_NAMES } from "@t3tools/contracts";
 import { useMemo, useRef, useState } from "react";
 
@@ -22,6 +24,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
  * it. Renders nothing when no machine has a one-click update.
  */
 export function ProviderUpdatesAction() {
+  const t = useTranslate();
   const { environments } = useEnvironments();
   const updateProvider = useAtomCommand(serverEnvironment.updateProvider, {
     reportFailure: false,
@@ -68,12 +71,25 @@ export function ProviderUpdatesAction() {
           })),
         ),
       );
-      const view = getProviderUpdateRunToastView(runs);
+      const view = getProviderUpdateRunToastView(runs, i18n.t);
       if (view) {
         toastManager.add(
           stackedThreadToast({
             ...view,
-            description: <span className="whitespace-pre-line">{view.description}</span>,
+            title: (
+              <ProviderUpdateText
+                render={(t) => getProviderUpdateRunToastView(runs, t)?.title ?? view.title}
+              />
+            ),
+            description: (
+              <span className="whitespace-pre-line">
+                <ProviderUpdateText
+                  render={(t) =>
+                    getProviderUpdateRunToastView(runs, t)?.description ?? view.description
+                  }
+                />
+              </span>
+            ),
           }),
         );
       }
@@ -93,7 +109,7 @@ export function ProviderUpdatesAction() {
             disabled={isPending}
             onClick={() => void handleUpdate()}
           >
-            {isPending ? "Updating…" : "Update all"}
+            {isPending ? t("providerUpdate.row.updating") : t("providerUpdate.action.all")}
           </Button>
         }
       />
@@ -103,7 +119,7 @@ export function ProviderUpdatesAction() {
             {machine.label}:{" "}
             {machine.candidates
               .map((candidate) => PROVIDER_DISPLAY_NAMES[candidate.driver] ?? candidate.driver)
-              .join(", ")}
+              .join(t("providerUpdate.list.separator"))}
           </div>
         ))}
       </TooltipPopup>

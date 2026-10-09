@@ -1,3 +1,6 @@
+import type { TFunction } from "i18next";
+import { i18n } from "../i18n";
+import { ProviderUpdateText } from "./ProviderUpdateText";
 import { useNavigate } from "@tanstack/react-router";
 import { useAtomValue } from "@effect/atom-react";
 import { DownloadIcon } from "lucide-react";
@@ -62,20 +65,23 @@ function ProviderUpdateToastIcon({ provider }: { provider: ServerProvider }) {
 }
 
 function addProviderUpdateToast(input: {
-  readonly view: ProviderUpdateToastView;
+  readonly resolveView: (t: TFunction) => ProviderUpdateToastView;
   readonly openSettings: (toastId: ProviderUpdateToastId) => void;
 }) {
-  if (input.view.type === "loading" || input.view.type === "success") {
+  const view = input.resolveView(i18n.t);
+  const title = <ProviderUpdateText render={(t) => input.resolveView(t).title} />;
+  const description = <ProviderUpdateText render={(t) => input.resolveView(t).description} />;
+  if (view.type === "loading" || view.type === "success") {
     return toastManager.add({
-      type: input.view.type,
-      title: input.view.title,
-      description: input.view.description,
+      type: view.type,
+      title,
+      description,
       timeout: 0,
       actionProps: hiddenToastActionProps,
       data: {
         hideCopyButton: true,
-        ...(input.view.dismissAfterVisibleMs !== undefined
-          ? { dismissAfterVisibleMs: input.view.dismissAfterVisibleMs }
+        ...(view.dismissAfterVisibleMs !== undefined
+          ? { dismissAfterVisibleMs: view.dismissAfterVisibleMs }
           : {}),
       },
     });
@@ -84,12 +90,12 @@ function addProviderUpdateToast(input: {
   let toastId!: ProviderUpdateToastId;
   toastId = toastManager.add(
     stackedThreadToast({
-      type: input.view.type,
-      title: input.view.title,
-      description: input.view.description,
+      type: view.type,
+      title,
+      description,
       timeout: 0,
       actionProps: {
-        children: "Settings",
+        children: <ProviderUpdateText render={(t) => t("providerUpdate.action.settings")} />,
         onClick: () => input.openSettings(toastId),
       },
       actionVariant: "outline",
@@ -173,15 +179,25 @@ export function ProviderUpdatePrimaryNotification() {
     const activeProviders = providers.filter((provider) =>
       activeToast.providerInstanceIds.has(provider.instanceId),
     );
-    const view = getProviderUpdateProgressToastView({
-      providers: activeProviders,
-      providerCount: activeToast.providerCount,
-    });
+    const view = getProviderUpdateProgressToastView(
+      {
+        providers: activeProviders,
+        providerCount: activeToast.providerCount,
+      },
+      i18n.t,
+    );
     if (!shouldShowPrimaryProviderUpdateToast(view)) {
       return;
     }
 
-    addProviderUpdateToast({ view, openSettings: openProviderSettings });
+    addProviderUpdateToast({
+      resolveView: (t) =>
+        getProviderUpdateProgressToastView(
+          { providers: activeProviders, providerCount: activeToast.providerCount },
+          t,
+        ),
+      openSettings: openProviderSettings,
+    });
     activeToastRef.current = null;
   }, [providers, openProviderSettings]);
 
@@ -207,7 +223,9 @@ export function ProviderUpdatePrimaryNotification() {
 
     seenProviderUpdateNotificationKeys.add(notificationKey);
 
-    const initialView = getProviderUpdateInitialToastView({ updateProviders, oneClickProviders });
+    const resolveInitialView = (t: TFunction) =>
+      getProviderUpdateInitialToastView({ updateProviders, oneClickProviders }, t);
+    const initialView = resolveInitialView(i18n.t);
 
     let toastId!: ProviderUpdateToastId;
     let updateStarted = false;
@@ -245,10 +263,12 @@ export function ProviderUpdatePrimaryNotification() {
           if (!readEnvironmentScope(primaryEnvironment.environmentId, AuthProvidersManageScope)) {
             if (activeToastRef.current === activeUpdate) {
               addProviderUpdateToast({
-                view: getProviderUpdateRejectedToastView(
-                  providerCount,
-                  "This connection cannot manage provider accounts.",
-                ),
+                resolveView: (t) =>
+                  getProviderUpdateRejectedToastView(
+                    providerCount,
+                    "This connection cannot manage provider accounts.",
+                    t,
+                  ),
                 openSettings: openProviderSettings,
               });
               activeToastRef.current = null;
@@ -274,7 +294,7 @@ export function ProviderUpdatePrimaryNotification() {
         const failedMessage = firstFailedProviderUpdateMessage(results);
         if (failedMessage) {
           addProviderUpdateToast({
-            view: getProviderUpdateRejectedToastView(providerCount, failedMessage),
+            resolveView: (t) => getProviderUpdateRejectedToastView(providerCount, failedMessage, t),
             openSettings: openProviderSettings,
           });
           activeToastRef.current = null;
@@ -285,12 +305,22 @@ export function ProviderUpdatePrimaryNotification() {
           results,
           providerInstanceIds,
         });
-        const view = getProviderUpdateProgressToastView({
-          providers: updatedProviderSnapshots,
-          providerCount,
-        });
+        const view = getProviderUpdateProgressToastView(
+          {
+            providers: updatedProviderSnapshots,
+            providerCount,
+          },
+          i18n.t,
+        );
         if (shouldShowPrimaryProviderUpdateToast(view)) {
-          addProviderUpdateToast({ view, openSettings: openProviderSettings });
+          addProviderUpdateToast({
+            resolveView: (t) =>
+              getProviderUpdateProgressToastView(
+                { providers: updatedProviderSnapshots, providerCount },
+                t,
+              ),
+            openSettings: openProviderSettings,
+          });
           activeToastRef.current = null;
         }
       })();
@@ -298,20 +328,26 @@ export function ProviderUpdatePrimaryNotification() {
 
     const toastOptions = stackedThreadToast({
       type: initialView.type,
-      title: initialView.title,
-      description: canManageProviders
-        ? initialView.description
-        : "This connection cannot manage provider accounts. View provider settings for update details.",
+      title: <ProviderUpdateText render={(t) => resolveInitialView(t).title} />,
+      description: (
+        <ProviderUpdateText
+          render={(t) =>
+            canManageProviders
+              ? resolveInitialView(t).description
+              : t("providerUpdate.access.details")
+          }
+        />
+      ),
       timeout: 0,
       actionProps:
         oneClickProviders.length > 0
           ? {
-              children: "Update",
+              children: <ProviderUpdateText render={(t) => t("providerUpdate.action.update")} />,
               disabled: !canManageProviders,
               onClick: runUpdates,
             }
           : {
-              children: "Settings",
+              children: <ProviderUpdateText render={(t) => t("providerUpdate.action.settings")} />,
               onClick: openSettings,
             },
       actionVariant: "outline",
@@ -325,7 +361,9 @@ export function ProviderUpdatePrimaryNotification() {
         ...(oneClickProviders.length > 0
           ? {
               secondaryActionProps: {
-                children: "Settings",
+                children: (
+                  <ProviderUpdateText render={(t) => t("providerUpdate.action.settings")} />
+                ),
                 onClick: openSettings,
               },
               secondaryActionVariant: "outline" as const,

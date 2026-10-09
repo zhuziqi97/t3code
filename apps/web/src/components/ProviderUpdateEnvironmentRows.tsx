@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next";
+import { i18n, useTranslate } from "../i18n";
 import { CheckIcon } from "lucide-react";
 import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import {
@@ -120,6 +122,7 @@ function EnvironmentUpdateRow({
   readonly status: ProviderUpdateRowStatus;
   readonly onUpdate: () => void;
 }) {
+  const t = useTranslate();
   const canManageProviders = useEnvironmentScope(group.environmentId, AuthProvidersManageScope);
   let trailing: ReactNode;
   switch (status.kind) {
@@ -133,14 +136,14 @@ function EnvironmentUpdateRow({
     case "unchanged":
       trailing = (
         <Button size="xs" variant="outline" disabled={!canManageProviders} onClick={onUpdate}>
-          Retry
+          {t("providerUpdate.action.retry")}
         </Button>
       );
       break;
     default:
       trailing = (
         <Button size="xs" variant="outline" disabled={!canManageProviders} onClick={onUpdate}>
-          Update
+          {t("providerUpdate.action.update")}
         </Button>
       );
       break;
@@ -152,9 +155,7 @@ function EnvironmentUpdateRow({
         <span className="truncate font-medium text-foreground">{group.label}</span>
         <span className={cn("truncate text-xs", rowToneClass(status.kind))}>{status.text}</span>
         {!canManageProviders ? (
-          <span className="text-xs text-muted-foreground">
-            This connection cannot manage provider accounts.
-          </span>
+          <span className="text-xs text-muted-foreground">{t("providerUpdate.access.denied")}</span>
         ) : null}
       </div>
       <div className="shrink-0">{trailing}</div>
@@ -173,6 +174,7 @@ export function ProviderUpdateEnvironmentRows({
   /** Called the first time the user triggers an update, so the host can stop refreshing the prompt. */
   readonly onInteract?: () => void;
 }) {
+  const t = useTranslate();
   const { groups } = useLocalEnvironmentUpdateGroups();
   const updateProvider = useAtomCommand(serverEnvironment.updateProvider, {
     reportFailure: false,
@@ -206,7 +208,7 @@ export function ProviderUpdateEnvironmentRows({
     () => new Map(),
   );
   const [resultByEnvironment, setResultByEnvironment] = useState<
-    ReadonlyMap<EnvironmentId, ProviderUpdateToastView>
+    ReadonlyMap<EnvironmentId, (t: TFunction) => ProviderUpdateToastView>
   >(() => new Map());
 
   const clearPending = useCallback((environmentId: EnvironmentId) => {
@@ -332,10 +334,10 @@ export function ProviderUpdateEnvironmentRows({
           );
           return;
         }
-        const view = getProviderUpdateProgressToastView({
-          providers: collectProviderUpdateOutcomeSnapshots(results),
-          providerCount,
-        });
+        const providers = collectProviderUpdateOutcomeSnapshots(results);
+        const resolveView = (translate: TFunction) =>
+          getProviderUpdateProgressToastView({ providers, providerCount }, translate);
+        const view = resolveView(i18n.t);
         // Only persist a terminal outcome. A non-terminal ("running"/"initial")
         // view means this dispatch could not confirm completion — e.g. a snapshot
         // came back without its targeted instance (collectProviderUpdateOutcome-
@@ -346,7 +348,7 @@ export function ProviderUpdateEnvironmentRows({
         // the live per-environment provider state (pill) plus the pending expiry
         // drive the row, so it self-heals to whatever the backend actually did.
         if (isTerminalProviderUpdatePhase(view.phase)) {
-          setResultByEnvironment((previous) => new Map(previous).set(environmentId, view));
+          setResultByEnvironment((previous) => new Map(previous).set(environmentId, resolveView));
         }
       } catch (error) {
         if (isCurrentRequest()) {
@@ -373,20 +375,23 @@ export function ProviderUpdateEnvironmentRows({
   const rows = groups
     .map((group) => ({
       group,
-      status: resolveEnvironmentUpdateRowStatus({
-        group,
-        error: errorByEnvironment.get(group.environmentId),
-        result: resultByEnvironment.get(group.environmentId),
-        // Derive the live pill from the candidates this row is actually
-        // tracking, not every provider in the environment. Otherwise an
-        // unrelated provider's recent success (or one candidate succeeding while
-        // another was interrupted) makes the pill report success and hides the
-        // Update action for candidates that are still outdated.
-        pill: getProviderUpdateSidebarPillView(group.candidates, {
-          visibleAfterIso: visibleAfterIsoRef.current,
-        }),
-        isPending: pendingEnvironments.has(group.environmentId),
-      }),
+      status: resolveEnvironmentUpdateRowStatus(
+        {
+          group,
+          error: errorByEnvironment.get(group.environmentId),
+          result: resultByEnvironment.get(group.environmentId)?.(t),
+          // Derive the live pill from the candidates this row is actually
+          // tracking, not every provider in the environment. Otherwise an
+          // unrelated provider's recent success (or one candidate succeeding while
+          // another was interrupted) makes the pill report success and hides the
+          // Update action for candidates that are still outdated.
+          pill: getProviderUpdateSidebarPillView(group.candidates, t, {
+            visibleAfterIso: visibleAfterIsoRef.current,
+          }),
+          isPending: pendingEnvironments.has(group.environmentId),
+        },
+        t,
+      ),
     }))
     .filter(({ group, status }) => group.candidates.length > 0 || status.kind !== "idle");
 
