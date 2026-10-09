@@ -594,6 +594,8 @@ it("finds provider setup and background checks by their Chinese actions", async 
     ["身份验证", "providers"],
     ["安装", "providers"],
     ["环境变量", "providers"],
+    ["强调色", "providers"],
+    ["本地命令", "providers"],
     ["状态检查", "provider-health-check-interval"],
   ]) {
     expect(

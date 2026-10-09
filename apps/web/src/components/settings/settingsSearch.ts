@@ -808,6 +808,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [
       "agents cli codex claude cursor grok opencode antigravity google sign in sign out install subscription instances authentication api key models configuration binary path config directory endpoint arguments environment variables display name accent color custom favorite hidden auto compact",
       "智能体 提供方 安装 更新 登录 退出 身份验证 实例 模型 环境变量 配置",
+      "ACP 注册表 本地命令 实例 ID 强调色 颜色 参数 可执行文件 原生会话 导入",
     ],
   },
   {
