@@ -1,3 +1,4 @@
+import { i18n, useTranslate } from "../i18n";
 import {
   AuthOrchestrationOperateScope,
   type EditorId,
@@ -21,12 +22,15 @@ export function KeybindingsConfigWarning({
   configPath: string | null;
   availableEditors: readonly EditorId[];
 }) {
+  const t = useTranslate();
   const canOpenEditor = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
   const openInEditor = useOpenInPreferredEditor(environmentId, availableEditors);
 
   return (
     <>
-      {message}
+      {message === "Invalid keybindings configuration."
+        ? t("keybindings.invalid-config-detail")
+        : message}
       <span className="mt-2 flex justify-end">
         <Button
           size="xs"
@@ -40,13 +44,14 @@ export function KeybindingsConfigWarning({
             toastManager.add(
               stackedThreadToast({
                 type: "error",
-                title: "Unable to open keybindings file",
-                description: error instanceof Error ? error.message : "Unknown error opening file.",
+                title: i18n.t("keybindings.open-failed"),
+                description:
+                  error instanceof Error ? error.message : i18n.t("keybindings.unknown-open-error"),
               }),
             );
           }}
         >
-          Open keybindings.json
+          {t("keybindings.open-file")}
         </Button>
       </span>
     </>

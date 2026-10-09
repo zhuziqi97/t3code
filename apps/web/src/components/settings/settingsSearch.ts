@@ -139,16 +139,23 @@ export function keybindingSearchAnchorId<Command extends KeybindingCommand>(comm
  * points at the section instead.
  */
 const KEYBINDING_SEARCH_ITEMS = STATIC_KEYBINDING_COMMANDS.toSorted((left, right) =>
-  commandLabel(left).localeCompare(commandLabel(right)),
+  commandLabel(left, i18n.getFixedT("en")).localeCompare(commandLabel(right, i18n.getFixedT("en"))),
 ).map((command) => {
   const defaultKeys = DEFAULT_KEYBINDINGS.filter((binding) => binding.command === command).map(
     (binding) => binding.key,
   );
   return {
     id: keybindingSearchAnchorId(command),
-    title: commandLabel(command),
+    get title() {
+      return commandLabel(command, i18n.t);
+    },
     to: "/settings/keybindings" as const,
-    searchTerms: [command, ...defaultKeys],
+    searchTerms: [
+      command,
+      commandLabel(command, i18n.getFixedT("en")),
+      commandLabel(command, i18n.getFixedT("zh")),
+      ...defaultKeys,
+    ],
     secondary: true,
     ...(defaultKeys.length === 0 ? { targetId: "keybindings" } : {}),
   };
@@ -829,9 +836,14 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "keybindings",
-    title: "Keybindings",
+    get title() {
+      return i18n.t("settings.search.keybindings.title");
+    },
     to: "/settings/keybindings",
-    searchTerms: ["keyboard shortcuts hotkeys commands bindings json"],
+    searchTerms: [
+      "Keybindings 快捷键 键盘 按键 动作 默认 自定义 项目",
+      "keyboard shortcuts hotkeys commands bindings json",
+    ],
   },
   ...KEYBINDING_SEARCH_ITEMS,
   {

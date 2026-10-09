@@ -12,6 +12,11 @@ const state = vi.hoisted(() => ({
   remove: vi.fn(),
 }));
 
+vi.mock("../../i18n", async (original) => {
+  const actual = await original<typeof import("../../i18n")>();
+  return { ...actual, useTranslate: () => actual.i18n.getFixedT("en") };
+});
+
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   const { reactHookHarness } = await import("../../test/reactHookHarness");

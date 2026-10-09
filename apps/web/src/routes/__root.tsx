@@ -497,6 +497,7 @@ function EventRouter({
 }: {
   readonly skipInitialBootstrapNavigation: boolean;
 }) {
+  const t = useTranslate();
   const navigate = useNavigate();
   const pathname = useLocation({ select: (loc) => loc.pathname });
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
@@ -567,8 +568,8 @@ function EventRouter({
     if (decision._tag === "Success") {
       toastManager.add({
         type: "success",
-        title: "Keybindings updated",
-        description: "Keybindings configuration reloaded successfully.",
+        title: t("keybindings.updated"),
+        description: t("keybindings.reloaded"),
       });
       return;
     }
@@ -576,7 +577,7 @@ function EventRouter({
     toastManager.add(
       stackedThreadToast({
         type: "warning",
-        title: "Invalid keybindings configuration",
+        title: t("keybindings.invalid-config"),
         description: (
           <KeybindingsConfigWarning
             message={decision.message}

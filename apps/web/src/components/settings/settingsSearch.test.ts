@@ -715,3 +715,22 @@ it("finds appearance and typography controls by Chinese terms with their existin
     searchSettings("环境标识").find((item) => item.id === "environment-identification"),
   ).toMatchObject({ targetId: "appearance-interface" });
 });
+
+it("retranslates command results and keeps bilingual and native searches at the same destinations", async () => {
+  await changeLanguage("zh");
+  for (const query of ["复制链接", "copy link", "thread.copyReference"]) {
+    expect(searchSettings(query)).toContainEqual(
+      expect.objectContaining({
+        id: "keybinding-thread.copyReference",
+        title: "拉取请求：复制链接或会话 ID",
+        to: "/settings/keybindings",
+      }),
+    );
+  }
+  expect(searchableSetting("keybindings").title).toBe("快捷键");
+  const item = SETTINGS_SEARCH_ITEMS.find((item) => item.id === "keybinding-thread.copyReference")!;
+  await changeLanguage("en");
+  expect(item.title).toBe("Pull Request: Copy Link or Thread ID");
+  expect(searchSettings("复制链接")).toContainEqual(item);
+  expect(searchSettings("快捷键").map((item) => item.id)).toContain("keybindings");
+});

@@ -41,6 +41,7 @@ vi.mock("./ui/toast", () => ({
   stackedThreadToast: (value: unknown) => value,
 }));
 
+import { changeLanguage } from "../i18n";
 import { KeybindingsConfigWarning } from "./KeybindingsConfigWarning";
 
 const environmentId = EnvironmentId.make("warning-environment");
@@ -56,7 +57,8 @@ const session = (scopes: readonly AuthEnvironmentScope[]): AuthSessionState => (
   },
 });
 
-beforeEach(() => {
+beforeEach(async () => {
+  await changeLanguage("en");
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   state.registry = AtomRegistry.make();
   state.sessions.set(
@@ -72,6 +74,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => renderer?.unmount());
   renderer = undefined;
+  await changeLanguage("en");
   state.registry?.dispose();
   state.sessions.clear();
   vi.unstubAllGlobals();
@@ -91,6 +94,12 @@ it("updates a visible warning on revocation and blocks its retained action until
     );
   });
   const open = renderer!.root.findByType("button").props.onClick;
+  await act(async () => {
+    await changeLanguage("zh");
+  });
+  expect(renderer!.root.findByType("button").children).toEqual(["打开 keybindings.json"]);
+  expect(renderer!.root.children[0]).toBe("Invalid shortcut");
+  expect(state.run).not.toHaveBeenCalled();
   expect(renderer!.root.findByType("button").props.disabled).toBe(false);
   await act(async () => {
     state.registry!.set(state.sessions.get(environmentId)!, AsyncResult.success(session([])));
@@ -100,7 +109,7 @@ it("updates a visible warning on revocation and blocks its retained action until
   expect(state.run).not.toHaveBeenCalled();
   expect(state.toast).toHaveBeenCalledWith(
     expect.objectContaining({
-      title: "Unable to open keybindings file",
+      title: "无法打开快捷键文件",
     }),
   );
 
