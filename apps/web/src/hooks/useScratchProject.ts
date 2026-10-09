@@ -1,3 +1,4 @@
+import { i18n, useTranslate } from "../i18n";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { availableScratchWorkspaceRoot } from "@t3tools/client-runtime/operations/projects";
 import {
@@ -19,7 +20,7 @@ function reportScratchFailure(title: string, error: unknown) {
     stackedThreadToast({
       type: "error",
       title,
-      description: error instanceof Error ? error.message : "An error occurred.",
+      description: error instanceof Error ? error.message : i18n.t("common.error"),
     }),
   );
 }
@@ -31,6 +32,7 @@ function reportScratchFailure(title: string, error: unknown) {
  * non-git path, and each thread gets its own subfolder.
  */
 export function useScratchProject() {
+  const t = useTranslate();
   const { environments } = useEnvironments();
   const openScratch = useAtomCommand(projectEnvironment.openScratch, { reportFailure: false });
   const handleNewThread = useNewThreadHandler();
@@ -65,7 +67,7 @@ export function useScratchProject() {
   const openScratchProject = useCallback(
     async (
       environmentId: EnvironmentId,
-      failureTitle = "Could not start without a project",
+      failureTitle = t("project.scratch.startFailed"),
     ): Promise<EnvironmentProject | null> => {
       const result = await openScratch({ environmentId, input: {} });
       if (result._tag === "Success") return result.value;
@@ -74,7 +76,7 @@ export function useScratchProject() {
       }
       return null;
     },
-    [openScratch],
+    [openScratch, t],
   );
 
   const startScratchThread = useCallback(
@@ -82,11 +84,11 @@ export function useScratchProject() {
       const project = await openScratchProject(environmentId);
       if (project) {
         await handleNewThread(scopeProjectRef(project.environmentId, project.id)).catch(
-          (error: unknown) => reportScratchFailure("Could not start without a project", error),
+          (error: unknown) => reportScratchFailure(t("project.scratch.startFailed"), error),
         );
       }
     },
-    [handleNewThread, openScratchProject],
+    [handleNewThread, openScratchProject, t],
   );
 
   return { scratchWorkspaceRootFor, scratchEnvironmentId, openScratchProject, startScratchThread };

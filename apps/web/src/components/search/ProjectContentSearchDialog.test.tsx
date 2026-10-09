@@ -1,3 +1,4 @@
+vi.mock("~/hooks/useSettings", () => ({ useClientSettings: () => undefined }));
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { AuthFilesystemReadScope, EnvironmentId, ThreadId } from "@t3tools/contracts";
 import type { ReactNode } from "react";

@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import { memo } from "react";
 import { type PendingApproval } from "../../session-logic";
 import { cn } from "~/lib/utils";
@@ -13,27 +14,28 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
   pendingCount,
   className,
 }: ComposerPendingApprovalPanelProps) {
+  const t = useTranslate();
   const Detail = approval.requestKind === "mcp-elicitation" ? "span" : "code";
   const fallbackLabel =
     approval.requestKind === "mcp-elicitation"
-      ? "App access approval"
+      ? t("approval.kind.app")
       : approval.requestKind === "command"
-        ? "Command approval"
+        ? t("approval.kind.command")
         : approval.requestKind === "file-read"
-          ? "File read approval"
+          ? t("approval.kind.read")
           : approval.requestKind === "permission"
-            ? "App permission approval"
-            : "File change approval";
+            ? t("approval.kind.permission")
+            : t("approval.kind.change");
   const detailAriaLabel =
     approval.requestKind === "mcp-elicitation"
-      ? "App access request"
+      ? t("approval.detail.app")
       : approval.requestKind === "command"
-        ? "Command"
+        ? t("approval.detail.command")
         : approval.requestKind === "file-read"
-          ? "File to read"
+          ? t("approval.detail.read")
           : approval.requestKind === "permission"
-            ? "Permission request"
-            : "File change";
+            ? t("approval.detail.permission")
+            : t("approval.detail.change");
 
   return (
     <span
@@ -60,7 +62,7 @@ export const ComposerPendingApprovalPanel = memo(function ComposerPendingApprova
         tabIndex={0}
       >
         {approval.responseCapability === "not_resumable"
-          ? "Provider process is gone — interrupt or restart the run to respond."
+          ? t("approval.notResumable")
           : approval.detail || fallbackLabel}
       </Detail>
     </span>

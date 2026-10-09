@@ -1,3 +1,4 @@
+vi.mock("~/hooks/useSettings", () => ({ useClientSettings: () => undefined }));
 import {
   AuthOrchestrationOperateScope,
   AuthSettingsWriteScope,
