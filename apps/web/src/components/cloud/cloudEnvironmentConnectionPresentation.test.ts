@@ -1,7 +1,13 @@
 import type { EnvironmentConnectionPresentation } from "@t3tools/client-runtime/connection";
-import { describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { presentSavedCloudEnvironmentConnection } from "./cloudEnvironmentConnectionPresentation";
+
+import { changeLanguage } from "../../i18n";
+
+afterEach(async () => {
+  await changeLanguage("en");
+});
 
 function connection(
   phase: EnvironmentConnectionPresentation["phase"],
@@ -53,4 +59,26 @@ describe("saved cloud environment connection presentation", () => {
       ).toEqual({ buttonLabel, statusText, tone });
     },
   );
+});
+
+it("keeps all seven connection phases distinct in Chinese and preserves the failure reason", async () => {
+  await changeLanguage("zh");
+  for (const [phase, label, tone] of [
+    ["connected", "已连接", "connected"],
+    ["connecting", "正在连接…", "connecting"],
+    ["reconnecting", "正在重新连接…", "connecting"],
+    ["unsupported", "此客户端不受支持", "idle"],
+    ["error", "连接失败", "error"],
+    ["offline", "离线", "idle"],
+    ["available", "尚未连接", "idle"],
+  ] as const) {
+    expect(presentSavedCloudEnvironmentConnection(connection(phase))).toMatchObject({
+      buttonLabel: label,
+      tone,
+    });
+  }
+  expect(
+    presentSavedCloudEnvironmentConnection(connection("reconnecting", "Relay endpoint unavailable"))
+      .statusText,
+  ).toBe("连接失败，正在重新连接… 原因：Relay endpoint unavailable");
 });

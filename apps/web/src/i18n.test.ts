@@ -1,7 +1,15 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { changeLanguage, i18n } from "./i18n";
+import { act, createElement } from "react";
+import { createRoot } from "react-dom/client";
+
+const settings = vi.hoisted(() => ({ languagePreference: "system" as "system" | "en" | "zh" }));
+vi.mock("./hooks/useSettings", () => ({
+  useClientSettings: (select: (value: typeof settings) => unknown) => select(settings),
+}));
+
+import { LanguageSync, useTranslate, changeLanguage, i18n } from "./i18n";
 
 /**
  * The web binding initializes i18next at module load, then registers the React
@@ -28,18 +36,38 @@ describe("web i18n binding", () => {
   });
 });
 
-describe("LanguageSync placement", () => {
-  it("is rendered above the router, so every route tree resolves it", async () => {
-    // `__root` returns three separate trees (pair/connect, welcome, app shell)
-    // and its branches do not share a component list. Language resolution must
-    // therefore live outside it; while it lived in the app-shell branch only,
-    // the welcome wizard rendered in English while Settings rendered in Chinese.
-    const [appRootSource, rootSource] = await Promise.all([
-      import("./AppRoot.tsx?raw").then((module) => module.default as string),
-      import("./routes/__root.tsx?raw").then((module) => module.default as string),
-    ]);
-
-    expect(appRootSource).toContain("<LanguageSync />");
-    expect(rootSource).not.toContain("LanguageSync");
+describe("LanguageSync", () => {
+  it("resolves the system locale for onboarding, then follows explicit preferences", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    vi.spyOn(navigator, "languages", "get").mockReturnValue(["zh-CN"]);
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    function Screen() {
+      const t = useTranslate();
+      return createElement(
+        "div",
+        null,
+        createElement(LanguageSync),
+        createElement("button", null, t("wizard.continue")),
+      );
+    }
+    try {
+      settings.languagePreference = "system";
+      await act(async () => root.render(createElement(Screen)));
+      expect(container.textContent).toBe("继续");
+      expect(document.documentElement.lang).toBe("zh");
+      settings.languagePreference = "en";
+      await act(async () => root.render(createElement(Screen)));
+      expect(container.textContent).toBe("Continue");
+      expect(document.documentElement.lang).toBe("en");
+    } finally {
+      await act(async () => root.unmount());
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+    }
   });
+});
+
+afterEach(async () => {
+  await changeLanguage("en");
 });

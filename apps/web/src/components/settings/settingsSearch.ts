@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next";
+import { i18n } from "../../i18n";
 import { isElectron } from "~/env";
 import { isMacPlatform, isWindowsPlatform, normalizeSearchText } from "~/lib/utils";
 import { STATIC_KEYBINDING_COMMANDS, type KeybindingCommand } from "@t3tools/contracts";
@@ -87,18 +89,42 @@ export interface SettingsSearchAvailability {
  * subtitles both render from this record, so each label exists once.
  */
 export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
-  "/settings/projects": "Project",
-  "/settings/general": "General",
-  "/settings/appearance": "Appearance",
-  "/settings/keybindings": "Keybindings",
-  "/settings/snap-shot": "SnapShots",
-  "/settings/providers": "Providers",
-  "/settings/integrations": "Integrations",
-  "/settings/scheduled-tasks": "Scheduled Tasks",
-  "/settings/source-control": "Source Control",
-  "/settings/storage": "Storage",
-  "/settings/connections": "Connections",
-  "/settings/archived": "Archive",
+  get "/settings/projects"() {
+    return i18n.t("settings.sections.projects");
+  },
+  get "/settings/general"() {
+    return i18n.t("settings.sections.general");
+  },
+  get "/settings/appearance"() {
+    return i18n.t("settings.sections.appearance");
+  },
+  get "/settings/keybindings"() {
+    return i18n.t("settings.sections.keybindings");
+  },
+  get "/settings/snap-shot"() {
+    return i18n.t("settings.sections.snap-shot");
+  },
+  get "/settings/providers"() {
+    return i18n.t("settings.sections.providers");
+  },
+  get "/settings/integrations"() {
+    return i18n.t("settings.sections.integrations");
+  },
+  get "/settings/scheduled-tasks"() {
+    return i18n.t("settings.sections.scheduled-tasks");
+  },
+  get "/settings/source-control"() {
+    return i18n.t("settings.sections.source-control");
+  },
+  get "/settings/storage"() {
+    return i18n.t("settings.sections.storage");
+  },
+  get "/settings/connections"() {
+    return i18n.t("settings.sections.connections");
+  },
+  get "/settings/archived"() {
+    return i18n.t("settings.sections.archived");
+  },
 };
 
 /** Anchor id of the first row bound to `command` on the Keybindings page. */
@@ -159,10 +185,15 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "project-defaults",
-    title: "Project defaults and overrides",
+    get title() {
+      return i18n.t("settings.search.project-defaults.title");
+    },
     to: "/settings/general",
     scope: "project-defaults",
-    searchTerms: ["model workspace environments projects inheritance checkout"],
+    searchTerms: [
+      "Project defaults and overrides 项目默认值与覆盖设置",
+      "model workspace environments projects inheritance checkout",
+    ],
   },
   {
     id: "project-overview",
@@ -172,17 +203,22 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "default-model",
-    title: "Default model",
+    get title() {
+      return i18n.t("settings.search.default-model.title");
+    },
     to: "/settings/general",
     scope: "project-defaults",
-    searchTerms: ["new thread project provider reasoning effort"],
+    searchTerms: ["Default model 默认模型", "new thread project provider reasoning effort"],
   },
   {
     id: "default-permissions",
-    title: "Permissions",
+    get title() {
+      return i18n.t("settings.search.default-permissions.title");
+    },
     to: "/settings/general",
     scope: "project-defaults",
     searchTerms: [
+      "Permissions 权限",
       "new thread default runtime mode supervised approvals auto accept edits full access",
     ],
   },
@@ -286,272 +322,438 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "project-grouping",
-    title: "Project grouping",
+    get title() {
+      return i18n.t("settings.search.project-grouping.title");
+    },
     to: "/settings/general",
-    searchTerms: ["combine matching repositories environments sidebar"],
+    searchTerms: [
+      "Project grouping 项目分组",
+      "combine matching repositories environments sidebar",
+    ],
   },
   {
     id: "project-order",
-    title: "Project order",
+    get title() {
+      return i18n.t("settings.search.project-order.title");
+    },
     to: "/settings/general",
-    searchTerms: ["sort projects sidebar manual created recent"],
+    searchTerms: ["Project order 项目顺序", "sort projects sidebar manual created recent"],
   },
   {
     id: "snooze-limited-threads",
-    title: "Snooze limited threads",
+    get title() {
+      return i18n.t("settings.search.snooze-limited-threads.title");
+    },
     to: "/settings/general",
-    searchTerms: ["usage quota rate limit reset wake recover continue"],
+    searchTerms: [
+      "Snooze limited threads 暂缓受用量限制的会话",
+      "usage quota rate limit reset wake recover continue",
+    ],
   },
   {
     id: "auto-resume-limited-threads",
-    title: "Auto-resume limited threads",
+    get title() {
+      return i18n.t("settings.search.auto-resume-limited-threads.title");
+    },
     to: "/settings/general",
-    searchTerms: ["usage quota rate limit reset recover continue"],
+    searchTerms: [
+      "Auto-resume limited threads 额度重置后自动继续会话",
+      "usage quota rate limit reset recover continue",
+    ],
   },
   {
     id: "working-shelf",
-    title: "Working section (beta)",
+    get title() {
+      return i18n.t("settings.search.working-shelf.title");
+    },
     to: "/settings/general",
-    searchTerms: ["hide fold running monitoring threads inbox sidebar shelf"],
+    searchTerms: [
+      "Working section (beta) “进行中”分区（测试版）",
+      "hide fold running monitoring threads inbox sidebar shelf",
+    ],
   },
   {
     id: "auto-settle-inactive-threads",
-    title: "Auto-settle inactive threads",
+    get title() {
+      return i18n.t("settings.search.auto-settle-inactive-threads.title");
+    },
     to: "/settings/general",
-    searchTerms: ["sidebar inactivity days no activity automatically"],
+    searchTerms: [
+      "Auto-settle inactive threads 自动完成不活跃会话",
+      "sidebar inactivity days no activity automatically",
+    ],
     requiresThreadAutoSettlement: true,
     scope: "project-defaults",
   },
   {
     id: "auto-settle-merged-threads",
-    title: "Auto-settle merged threads",
+    get title() {
+      return i18n.t("settings.search.auto-settle-merged-threads.title");
+    },
     to: "/settings/general",
-    searchTerms: ["pull request merge closed automatically sidebar"],
+    searchTerms: [
+      "Auto-settle merged threads 合并后自动完成会话",
+      "pull request merge closed automatically sidebar",
+    ],
     requiresThreadAutoSettlement: true,
     scope: "project-defaults",
   },
   {
     id: "days-before-auto-settle",
-    title: "Days of inactivity before auto-settle",
+    get title() {
+      return i18n.t("settings.search.days-before-auto-settle.title");
+    },
     to: "/settings/general",
     targetId: "auto-settle-inactive-threads",
-    searchTerms: ["thread timeout activity sidebar"],
+    searchTerms: [
+      "Days of inactivity before auto-settle 自动完成前的无活动天数",
+      "thread timeout activity sidebar",
+    ],
     requiresThreadAutoSettlement: true,
     scope: "project-defaults",
   },
   {
     id: "thread-notifications",
-    title: "Thread notifications",
+    get title() {
+      return i18n.t("settings.search.thread-notifications.title");
+    },
     to: "/settings/general",
-    searchTerms: ["notification sound alert completion input approval desktop"],
+    searchTerms: [
+      "Thread notifications 会话通知",
+      "notification sound alert completion input approval desktop",
+    ],
   },
   {
     id: "in-app-notifications",
-    title: "In-app notifications",
+    get title() {
+      return i18n.t("settings.search.in-app-notifications.title");
+    },
     to: "/settings/general",
-    searchTerms: ["notification toast popup completion input approval failure"],
+    searchTerms: [
+      "In-app notifications 应用内通知",
+      "notification toast popup completion input approval failure",
+    ],
   },
   {
     id: "time-format",
-    title: "Time format",
+    get title() {
+      return i18n.t("settings.search.time-format.title");
+    },
     to: "/settings/general",
-    searchTerms: ["timestamp clock locale system browser os 12 hour 24 hour"],
+    searchTerms: [
+      "Time format 时间格式",
+      "timestamp clock locale system browser os 12 hour 24 hour",
+    ],
   },
   {
     id: "language",
-    title: "Language",
+    get title() {
+      return i18n.t("settings.search.language.title");
+    },
     to: "/settings/general",
     // Includes the native names so someone searching in their own language
     // finds the row before it is translated.
-    searchTerms: ["language locale translation english chinese 语言 中文"],
+    searchTerms: ["Language 语言", "language locale translation english chinese 语言 中文"],
   },
   {
     id: "response-streaming",
-    title: "Response streaming",
+    get title() {
+      return i18n.t("settings.search.response-streaming.title");
+    },
     to: "/settings/general",
     scope: "project-defaults",
-    searchTerms: ["output token paragraph buffered wait turn legacy"],
+    searchTerms: [
+      "Response streaming 响应显示方式",
+      "output token paragraph buffered wait turn legacy",
+    ],
   },
   {
     id: "hide-whitespace-changes",
-    title: "Hide whitespace changes",
+    get title() {
+      return i18n.t("settings.search.hide-whitespace-changes.title");
+    },
     to: "/settings/general",
-    searchTerms: ["diff ignore spaces edits default"],
+    searchTerms: ["Hide whitespace changes 隐藏空白字符变化", "diff ignore spaces edits default"],
   },
   {
     id: "default-diff-file-state",
-    title: "Default diff file state",
+    get title() {
+      return i18n.t("settings.search.default-diff-file-state.title");
+    },
     to: "/settings/general",
-    searchTerms: ["collapsed expanded collapse expand files pull request pr code tab"],
+    searchTerms: [
+      "Default diff file state 差异文件默认状态",
+      "collapsed expanded collapse expand files pull request pr code tab",
+    ],
   },
   {
     id: "diff-layout",
-    title: "Diff layout",
+    get title() {
+      return i18n.t("settings.search.diff-layout.title");
+    },
     to: "/settings/general",
-    searchTerms: ["stacked split side by side unified inline view"],
+    searchTerms: ["Diff layout 差异布局", "stacked split side by side unified inline view"],
   },
   {
     id: "proactive-panels",
-    title: "Proactive panels",
+    get title() {
+      return i18n.t("settings.search.proactive-panels.title");
+    },
     to: "/settings/general",
-    searchTerms: ["automatically open diff pull request pr right panel agent completion"],
+    searchTerms: [
+      "Proactive panels 自动打开相关面板",
+      "automatically open diff pull request pr right panel agent completion",
+    ],
   },
   {
     id: "skills-in-slash-menu",
-    title: "Show skills in slash menu",
+    get title() {
+      return i18n.t("settings.search.skills-in-slash-menu.title");
+    },
     to: "/settings/general",
-    searchTerms: ["command menu dollar $ slash /"],
+    searchTerms: [
+      "Show skills in slash menu 在斜杠菜单中显示技能",
+      "command menu dollar $ slash /",
+    ],
   },
   {
     id: "composer-rich-text",
-    title: "Rich text composer",
+    get title() {
+      return i18n.t("settings.search.composer-rich-text.title");
+    },
     to: "/settings/general",
-    searchTerms: ["composer rich text tiptap bold italic markdown styled wysiwyg"],
+    searchTerms: [
+      "Rich text composer 富文本输入框",
+      "composer rich text tiptap bold italic markdown styled wysiwyg",
+    ],
   },
   {
     id: "composer-collapse",
-    title: "Collapse composer on scroll",
+    get title() {
+      return i18n.t("settings.search.composer-collapse.title");
+    },
     to: "/settings/general",
-    searchTerms: ["composer rest resting scroll wheel conversation timeline shrink minimize"],
+    searchTerms: [
+      "Collapse composer on scroll 滚动时收起输入框",
+      "composer rest resting scroll wheel conversation timeline shrink minimize",
+    ],
   },
   {
     id: "send-shortcut",
-    title: "Send shortcut",
+    get title() {
+      return i18n.t("settings.search.send-shortcut.title");
+    },
     to: "/settings/general",
-    searchTerms: ["enter return command ctrl multiline prompt new line composer"],
+    searchTerms: [
+      "Send shortcut 发送快捷键",
+      "enter return command ctrl multiline prompt new line composer",
+    ],
   },
   {
     id: "follow-up-behavior",
-    title: "Follow-up behavior",
+    get title() {
+      return i18n.t("settings.search.follow-up-behavior.title");
+    },
     to: "/settings/general",
-    searchTerms: ["queue steer running turn send default behavior composer"],
+    searchTerms: [
+      "Follow-up behavior 后续消息处理方式",
+      "queue steer running turn send default behavior composer",
+    ],
   },
   {
     id: "provider-update-checks",
-    title: "Provider update checks",
+    get title() {
+      return i18n.t("settings.search.provider-update-checks.title");
+    },
     to: "/settings/general",
-    searchTerms: ["installed cli versions newer available codex claude cursor grok opencode"],
+    searchTerms: [
+      "Provider update checks 智能体提供方版本检查",
+      "installed cli versions newer available codex claude cursor grok opencode",
+    ],
     scope: "environment-defaults",
   },
   {
     id: "continue-threads-after-server-update",
-    title: "Continue threads after restarts",
+    get title() {
+      return i18n.t("settings.search.continue-threads-after-server-update.title");
+    },
     to: "/settings/general",
     scope: "project-defaults",
     searchTerms: [
+      "Continue threads after restarts 重启后继续会话",
       "resume running active interrupted work restart reboot machine crash desktop update automatically",
     ],
   },
   {
     id: "background-activity",
-    title: "Background activity",
+    get title() {
+      return i18n.t("settings.search.background-activity.title");
+    },
     to: "/settings/general",
     scope: "environment-defaults",
     searchTerms: [
+      "Background activity 后台活动",
       "balanced performance battery saver advanced git fetch provider health refresh host power monitor idle policy",
     ],
   },
   {
     id: "new-threads",
-    title: "New threads",
+    get title() {
+      return i18n.t("settings.search.new-threads.title");
+    },
     to: "/settings/general",
     scope: "project-defaults",
-    searchTerms: ["default workspace mode draft local worktree"],
+    searchTerms: ["New threads 新会话", "default workspace mode draft local worktree"],
   },
   {
     id: "worktree-submodules",
-    title: "Submodules",
+    get title() {
+      return i18n.t("settings.search.worktree-submodules.title");
+    },
     to: "/settings/general",
     scope: "project-defaults",
-    searchTerms: ["git submodule init recursive top-level none worktree t3.json"],
+    searchTerms: [
+      "Submodules 子模块",
+      "git submodule init recursive top-level none worktree t3.json",
+    ],
   },
   {
     id: "start-from-origin",
-    title: "Start from origin",
+    get title() {
+      return i18n.t("settings.search.start-from-origin.title");
+    },
     to: "/settings/general",
     scope: "project-defaults",
-    searchTerms: ["new worktrees latest matching remote branch local"],
+    searchTerms: [
+      "Start from origin 从 origin 创建",
+      "new worktrees latest matching remote branch local",
+    ],
   },
   {
     id: "add-project-starts-in",
-    title: "Add project starts in",
+    get title() {
+      return i18n.t("settings.search.add-project-starts-in.title");
+    },
     to: "/settings/general",
     scope: "environment-defaults",
-    searchTerms: ["base directory folder browser path home"],
+    searchTerms: [
+      "Add project starts in 添加项目的起始目录",
+      "base directory folder browser path home",
+    ],
   },
   {
     id: "unpin-confirmation",
-    title: "Unpin confirmation",
+    get title() {
+      return i18n.t("settings.search.unpin-confirmation.title");
+    },
     to: "/settings/general",
-    searchTerms: ["ask before thread pinned section"],
+    searchTerms: ["Unpin confirmation 取消置顶确认", "ask before thread pinned section"],
   },
   {
     id: "archive-confirmation",
-    title: "Archive confirmation",
+    get title() {
+      return i18n.t("settings.search.archive-confirmation.title");
+    },
     to: "/settings/general",
-    searchTerms: ["ask before thread second click inline action"],
+    searchTerms: ["Archive confirmation 归档确认", "ask before thread second click inline action"],
   },
   {
     id: "delete-confirmation",
-    title: "Delete confirmation",
+    get title() {
+      return i18n.t("settings.search.delete-confirmation.title");
+    },
     to: "/settings/general",
-    searchTerms: ["ask before thread chat history"],
+    searchTerms: ["Delete confirmation 删除确认", "ask before thread chat history"],
   },
   {
     id: "quit-confirmation",
-    title: "Quit shortcut",
+    get title() {
+      return i18n.t("settings.search.quit-confirmation.title");
+    },
     to: "/settings/general",
-    searchTerms: ["confirmation desktop app exit direct hold double click press twice"],
+    searchTerms: [
+      "Quit shortcut 退出快捷键",
+      "confirmation desktop app exit direct hold double click press twice",
+    ],
     desktopOnly: true,
   },
   {
     id: "text-generation-model",
-    title: "Text generation model",
+    get title() {
+      return i18n.t("settings.search.text-generation-model.title");
+    },
     to: "/settings/general",
     scope: "project-defaults",
-    searchTerms: ["generated thread titles source control content default provider"],
+    searchTerms: [
+      "Text generation model 文本生成模型",
+      "generated thread titles source control content default provider",
+    ],
   },
   {
     id: "cli-command",
-    title: "t3 command",
+    get title() {
+      return i18n.t("settings.search.cli-command.title");
+    },
     to: "/settings/general",
-    searchTerms: ["cli terminal shell path install command line"],
+    searchTerms: ["t3 command t3 命令", "cli terminal shell path install command line"],
     desktopOnly: true,
   },
   {
     id: "privacy-policy",
-    title: "Privacy policy",
+    get title() {
+      return i18n.t("settings.search.privacy-policy.title");
+    },
     to: "/settings/general",
-    searchTerms: ["telemetry analytics usage data tracking legal opt out"],
+    searchTerms: [
+      "Privacy policy 隐私政策",
+      "telemetry analytics usage data tracking legal opt out",
+    ],
   },
   {
     id: "diagnostics",
-    title: "Diagnostics",
+    get title() {
+      return i18n.t("settings.search.diagnostics.title");
+    },
     to: "/settings/general",
-    searchTerms: ["logs traces processes resource history failures spans cpu memory"],
+    searchTerms: [
+      "Diagnostics 诊断",
+      "logs traces processes resource history failures spans cpu memory",
+    ],
   },
   {
     id: "open-source-licenses",
-    title: "Open source licenses",
+    get title() {
+      return i18n.t("settings.search.open-source-licenses.title");
+    },
+    searchTerms: ["Open source licenses 开源许可证"],
     to: "/settings/general",
   },
   {
     id: "legacy-plan-mode",
-    title: "Plan mode (legacy)",
+    get title() {
+      return i18n.t("settings.search.legacy-plan-mode.title");
+    },
     to: "/settings/general",
-    searchTerms: ["build plan composer old"],
+    searchTerms: ["Plan mode (legacy) 计划模式（旧版）", "build plan composer old"],
   },
   {
     id: "legacy-context-window-indicator",
-    title: "Context window indicator (legacy)",
+    get title() {
+      return i18n.t("settings.search.legacy-context-window-indicator.title");
+    },
     to: "/settings/general",
-    searchTerms: ["composer meter usage tokens circle old"],
+    searchTerms: [
+      "Context window indicator (legacy) 上下文窗口指示器（旧版）",
+      "composer meter usage tokens circle old",
+    ],
   },
   {
     id: "legacy-sidebar",
-    title: "Sidebar (legacy)",
+    get title() {
+      return i18n.t("settings.search.legacy-sidebar.title");
+    },
     to: "/settings/general",
-    searchTerms: ["project thread tree old flat list"],
+    searchTerms: ["Sidebar (legacy) 侧边栏（旧版）", "project thread tree old flat list"],
   },
   {
     id: "keybindings",
@@ -733,17 +935,27 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "remove-agent-credits-on-merge",
-    title: "Remove agent credits when merging",
+    get title() {
+      return i18n.t("settings.search.remove-agent-credits-on-merge.title");
+    },
     to: "/settings/source-control",
     scope: "project-defaults",
-    searchTerms: ["pull request github squash co-authored-by attribution claude codex generated"],
+    searchTerms: [
+      "Remove agent credits when merging 合并时移除智能体署名",
+      "pull request github squash co-authored-by attribution claude codex generated",
+    ],
   },
   {
     id: "pull-request-merge-method",
-    title: "Default merge method",
+    get title() {
+      return i18n.t("settings.search.pull-request-merge-method.title");
+    },
     to: "/settings/source-control",
     scope: "project-defaults",
-    searchTerms: ["pull request merge squash rebase last selected"],
+    searchTerms: [
+      "Default merge method 默认合并方式",
+      "pull request merge squash rebase last selected",
+    ],
   },
   {
     id: "source-control",
@@ -756,9 +968,12 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "git-fetch-interval",
-    title: "Git fetch interval",
+    get title() {
+      return i18n.t("settings.search.git-fetch-interval.title");
+    },
     to: "/settings/source-control",
     searchTerms: [
+      "Git fetch interval Git fetch 间隔",
       "automatic remote branch refresh background credentials security keys seconds off",
     ],
     environmentOnly: true,
@@ -1047,12 +1262,26 @@ export function isSettingsOverviewVisible(search: SettingsScopeSearch): boolean 
  * spread (or pick from) this instead of restating the strings, so the catalog
  * and the rendered settings cannot drift apart.
  */
-export function searchableSetting(id: SettingsSearchItemId): {
+export function settingsSectionLabel(to: SettingsPath, translate: TFunction = i18n.t): string {
+  return translate(`settings.sections.${to.slice("/settings/".length)}`);
+}
+
+export function settingsSearchItemTitle(
+  item: SettingsSearchItem,
+  translate: TFunction = i18n.t,
+): string {
+  return translate(`settings.search.${item.id}.title`, { defaultValue: item.title });
+}
+
+export function searchableSetting(
+  id: SettingsSearchItemId,
+  translate: TFunction = i18n.t,
+): {
   readonly id: string;
   readonly title: string;
 } {
-  const { id: anchorId, title } = SEARCH_ITEMS_BY_ID.get(id)!;
-  return { id: anchorId, title };
+  const item = SEARCH_ITEMS_BY_ID.get(id)!;
+  return { id: item.id, title: settingsSearchItemTitle(item, translate) };
 }
 
 export function filterAvailableSettingsSearchItems(
@@ -1076,6 +1305,7 @@ export function filterAvailableSettingsSearchItems(
 export function searchSettings(
   query: string,
   items: ReadonlyArray<SettingsSearchItem> = SETTINGS_SEARCH_ITEMS,
+  translate: TFunction = i18n.t,
 ): ReadonlyArray<SettingsSearchItem> {
   const normalizedQuery = normalizeSearchText(query);
   if (normalizedQuery.length === 0) return [];
@@ -1088,10 +1318,10 @@ export function searchSettings(
       if (item.macOnly && !isMacPlatform(platform)) return [];
       if (item.windowsOnly && !isWindowsPlatform(platform)) return [];
 
-      const title = normalizeSearchText(item.title);
+      const title = normalizeSearchText(settingsSearchItemTitle(item, translate));
       const fields = [
         title,
-        normalizeSearchText(SETTINGS_SECTION_LABELS[item.to]),
+        normalizeSearchText(settingsSectionLabel(item.to, translate)),
         ...(item.searchTerms ?? []).map(normalizeSearchText),
       ];
       if (!queryTokens.every((token) => fields.some((field) => field.includes(token)))) return [];

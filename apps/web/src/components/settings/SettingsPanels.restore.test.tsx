@@ -1,28 +1,16 @@
+// @vitest-environment jsdom
 import { DEFAULT_UNIFIED_SETTINGS, type UnifiedSettings } from "@t3tools/contracts";
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { reactHookHarness as hooks } from "../../test/reactHookHarness";
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { changeLanguage } from "../../i18n";
 
 const state = vi.hoisted(() => ({
   settings: null as UnifiedSettings | null,
   update: vi.fn(),
   confirm: vi.fn(),
 }));
-
-vi.mock("react", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("react")>();
-  const { reactHookHarness } = await import("../../test/reactHookHarness");
-  return {
-    ...actual,
-    useCallback: reactHookHarness.useCallback,
-    useMemo: reactHookHarness.useMemo,
-  };
-});
-
-vi.mock("react/compiler-runtime", async () => {
-  const { reactHookHarness } = await import("../../test/reactHookHarness");
-  return { c: reactHookHarness.useMemoCache };
-});
 
 vi.mock("../../hooks/useTheme", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../hooks/useTheme")>()),
@@ -53,11 +41,47 @@ vi.mock("../../localApi", async (importOriginal) => ({
 
 import { useSettingsRestore } from "./SettingsPanels";
 
-beforeEach(() => {
-  hooks.reset();
+let root: Root;
+let container: HTMLDivElement;
+
+function RestoreSettings() {
+  const restore = useSettingsRestore();
+  return (
+    <>
+      <p>{restore.changedSettingLabels.join(", ")}</p>
+      <button
+        disabled={restore.changedSettingLabels.length === 0}
+        onClick={() => void restore.restoreDefaults()}
+      >
+        Restore
+      </button>
+    </>
+  );
+}
+
+async function renderRestore() {
+  await act(async () => root.render(<RestoreSettings />));
+}
+async function clickRestore() {
+  await act(async () => container.querySelector("button")!.click());
+}
+
+beforeEach(async () => {
   vi.clearAllMocks();
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  await changeLanguage("en");
   state.settings = { ...DEFAULT_UNIFIED_SETTINGS };
   state.confirm.mockResolvedValue(true);
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+});
+
+afterEach(async () => {
+  await act(async () => root.unmount());
+  container.remove();
+  await changeLanguage("en");
+  vi.unstubAllGlobals();
 });
 
 describe("restoring V2 settings", () => {
@@ -67,24 +91,32 @@ describe("restoring V2 settings", () => {
     ["snoozeLimitedThreads", "Snooze limited threads"],
   ] as const)("restores %s when it is the only changed setting", async (key, label) => {
     state.settings = { ...DEFAULT_UNIFIED_SETTINGS, [key]: true };
-    hooks.beginRender();
-    const restore = useSettingsRestore();
-
-    expect(restore.changedSettingLabels).toEqual([label]);
-    await restore.restoreDefaults();
-
+    await renderRestore();
+    expect(container.querySelector("p")!.textContent).toBe(label);
+    await clickRestore();
     expect(state.confirm.mock.calls[0]?.[0]).toContain(label);
     expect(state.update).toHaveBeenCalledOnce();
     expect(state.update.mock.calls[0]?.[0][key]).toBe(DEFAULT_UNIFIED_SETTINGS[key]);
   });
 
+  it("includes language in the confirmation and restores the system preference", async () => {
+    state.settings = { ...DEFAULT_UNIFIED_SETTINGS, languagePreference: "zh" };
+    await renderRestore();
+    expect(container.querySelector("p")!.textContent).toBe("Language");
+    await act(async () => {
+      await changeLanguage("zh");
+    });
+    expect(container.querySelector("p")!.textContent).toBe("语言");
+    await clickRestore();
+    expect(state.confirm.mock.calls[0]?.[0]).toBe("恢复默认设置？\n以下设置将被重置：语言。");
+    expect(state.update.mock.calls[0]?.[0].languagePreference).toBe("system");
+  });
+
   it("does not reset settings after cancellation", async () => {
     state.settings = { ...DEFAULT_UNIFIED_SETTINGS, autoResumeLimitedThreads: true };
     state.confirm.mockResolvedValue(false);
-    hooks.beginRender();
-
-    await useSettingsRestore().restoreDefaults();
-
+    await renderRestore();
+    await clickRestore();
     expect(state.confirm).toHaveBeenCalledOnce();
     expect(state.update).not.toHaveBeenCalled();
   });

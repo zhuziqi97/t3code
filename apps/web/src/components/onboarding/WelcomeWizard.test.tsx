@@ -171,6 +171,40 @@ it("updates the signed-out T3 Connect action when the language changes and still
   expect(mocks.openAuthPrompt).toHaveBeenCalledOnce();
 });
 
+it("updates connection status, linked privacy text and pairing instructions without changing commands", async () => {
+  await act(async () => root.render(<WelcomeWizard localAvailable onDone={vi.fn()} />));
+  const policy = document.querySelector<HTMLAnchorElement>('a[href*="privacy"]')!;
+  expect(policy.textContent).toBe("privacy policy");
+  const privacyUrl = policy.href;
+  await click("Add a computer");
+  await click("Need a pairing link?");
+  expect(document.body.textContent).toContain(
+    "Start T3 Code first, or run npx t3 serve. Add --tailscale to use your tailnet.",
+  );
+
+  await act(async () => {
+    await changeLanguage("zh");
+  });
+  expect(document.body.textContent).toContain("已连接");
+  expect(policy.textContent).toBe("隐私政策");
+  expect(policy.href).toBe(privacyUrl);
+  expect(document.body.textContent).toContain(
+    "请先启动 T3 Code，或运行 npx t3 serve。添加 --tailscale 参数即可使用你的 Tailscale 网络。",
+  );
+  expect([...document.body.querySelectorAll("code")].map((element) => element.textContent)).toEqual(
+    expect.arrayContaining(["npx t3 serve", "--tailscale"]),
+  );
+
+  await act(async () => {
+    await changeLanguage("en");
+  });
+  expect(document.body.textContent).toContain("Connected");
+  expect(policy.textContent).toBe("privacy policy");
+  expect(document.body.textContent).toContain(
+    "Start T3 Code first, or run npx t3 serve. Add --tailscale to use your tailnet.",
+  );
+});
+
 it("enters the workspace after a partial import and warns after navigation finishes", async () => {
   let finishNavigation = () => {};
   const navigation = new Promise<void>((resolve) => {

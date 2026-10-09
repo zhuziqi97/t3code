@@ -1,7 +1,6 @@
-import {
-  connectionStatusText,
-  type EnvironmentConnectionPresentation,
-} from "@t3tools/client-runtime/connection";
+import type { TFunction } from "i18next";
+import { type EnvironmentConnectionPresentation } from "@t3tools/client-runtime/connection";
+import { i18n } from "../../i18n";
 
 export interface SavedCloudEnvironmentConnectionPresentation {
   readonly buttonLabel: string;
@@ -16,49 +15,70 @@ export interface SavedCloudEnvironmentConnectionPresentation {
  */
 export function presentSavedCloudEnvironmentConnection(
   connection: EnvironmentConnectionPresentation,
+  translate: TFunction = i18n.t,
 ): SavedCloudEnvironmentConnectionPresentation {
+  const statusText =
+    connection.phase === "reconnecting"
+      ? translate(
+          connection.error
+            ? "connection.status.reconnectingReason"
+            : "connection.status.reconnecting",
+          { reason: connection.error },
+        )
+      : connection.phase === "error" && connection.error
+        ? translate("connection.status.failedReason", { reason: connection.error })
+        : translate(
+            {
+              connected: "connection.connected",
+              connecting: "connection.status.connecting",
+              unsupported: "connection.unsupported",
+              error: "connection.failed",
+              offline: "connection.offline",
+              available: "connection.status.available",
+            }[connection.phase],
+          );
   switch (connection.phase) {
     case "connected":
       return {
-        buttonLabel: "Connected",
-        statusText: connectionStatusText(connection),
+        buttonLabel: translate("connection.connected"),
+        statusText,
         tone: "connected",
       };
     case "connecting":
       return {
-        buttonLabel: "Connecting…",
-        statusText: connectionStatusText(connection),
+        buttonLabel: translate("connection.connecting"),
+        statusText,
         tone: "connecting",
       };
     case "reconnecting":
       return {
-        buttonLabel: "Reconnecting…",
-        statusText: connectionStatusText(connection),
+        buttonLabel: translate("connection.reconnecting"),
+        statusText,
         tone: "connecting",
       };
     // Not a failure: the machine is fine, this build just cannot talk to it.
     case "unsupported":
       return {
-        buttonLabel: "Client not supported",
-        statusText: connectionStatusText(connection),
+        buttonLabel: translate("connection.unsupported"),
+        statusText,
         tone: "idle",
       };
     case "error":
       return {
-        buttonLabel: "Connection failed",
-        statusText: connectionStatusText(connection),
+        buttonLabel: translate("connection.failed"),
+        statusText,
         tone: "error",
       };
     case "offline":
       return {
-        buttonLabel: "Offline",
-        statusText: connectionStatusText(connection),
+        buttonLabel: translate("connection.offline"),
+        statusText,
         tone: "idle",
       };
     case "available":
       return {
-        buttonLabel: "Not connected",
-        statusText: connectionStatusText(connection),
+        buttonLabel: translate("connection.notConnected"),
+        statusText,
         tone: "idle",
       };
   }

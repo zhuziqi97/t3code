@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import type { ProviderInstanceId, UnifiedSettings } from "@t3tools/contracts";
 import { useCallback } from "react";
 
@@ -20,6 +21,7 @@ export function useScopedModelDisabledReason(
   settings: UnifiedSettings,
   entries: readonly ProviderInstanceEntry[],
 ) {
+  const t = useTranslate();
   const { targets } = useSettingsScope();
   const { environments } = useEnvironments();
   return useCallback(
@@ -45,11 +47,13 @@ export function useScopedModelDisabledReason(
           entry.driverKind !== sourceEntry?.driverKind ||
           !options?.some((option) => option.slug === model && !option.isUnavailable)
         ) {
-          return `This model is unavailable on ${environment?.label ?? "a selected environment"}. Select that environment to choose its model separately.`;
+          return t("settings.modelUnavailable", {
+            environment: environment?.label ?? t("settings.selectedEnvironment"),
+          });
         }
       }
       return null;
     },
-    [entries, environments, settings, targets],
+    [entries, environments, settings, targets, t],
   );
 }

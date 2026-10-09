@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { EnvironmentId } from "@t3tools/contracts";
 
 import {
@@ -12,6 +12,12 @@ import {
   SETTINGS_SEARCH_ITEMS,
   type SettingsSearchItem,
 } from "./settingsSearch";
+
+import { changeLanguage } from "../../i18n";
+
+afterEach(async () => {
+  await changeLanguage("en");
+});
 
 const ITEMS: ReadonlyArray<SettingsSearchItem> = [
   {
@@ -551,4 +557,19 @@ describe("settings sidebar scope", () => {
     expect(isSettingsOverviewVisible({ project: "project" })).toBe(true);
     expect(isSettingsOverviewVisible({ project: "project", checkout: "checkout" })).toBe(true);
   });
+});
+
+it("finds Chinese settings with the same destination after a language switch", async () => {
+  const before = searchSettings("send shortcut").find((item) => item.id === "send-shortcut")!;
+  const destination = { id: before.id, to: before.to, targetId: before.targetId };
+  await changeLanguage("zh");
+  const after = searchSettings("发送快捷键")[0]!;
+  expect(after.title).toBe("发送快捷键");
+  expect({ id: after.id, to: after.to, targetId: after.targetId }).toEqual(destination);
+  expect(searchSettings("send shortcut").map((item) => item.id)).toContain("send-shortcut");
+  expect(searchSettings("中文").map((item) => item.id)).toContain("language");
+  expect(searchSettings("子模块")[0]?.id).toBe("worktree-submodules");
+  expect(searchableSetting("default-model").title).toBe("默认模型");
+  await changeLanguage("en");
+  expect(searchableSetting("default-model").title).toBe("Default model");
 });

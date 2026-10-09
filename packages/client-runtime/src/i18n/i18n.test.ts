@@ -137,3 +137,16 @@ describe("createI18n", () => {
     expect(join(createI18n({ lng: "zh" }))).toBe("已导入 28 条会话。有 1 条会话无法导入。");
   });
 });
+
+it("preserves the interpolation names and rich-text components in Chinese translations", () => {
+  const english = resources.en.translation;
+  for (const [key, value] of Object.entries(resources.zh.translation)) {
+    const source = english[key as keyof typeof english];
+    const placeholders = (text: string) =>
+      [...text.matchAll(/{{\s*([^}]+)\s*}}/g)].map((match) => match[1]!.trim()).sort();
+    const components = (text: string) =>
+      [...text.matchAll(/<([a-zA-Z][a-zA-Z0-9]*)[\s/>]/g)].map((match) => match[1]!).sort();
+    expect(placeholders(value), key).toEqual(placeholders(source));
+    expect(components(value), key).toEqual(components(source));
+  }
+});

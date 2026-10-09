@@ -1,3 +1,5 @@
+import { Trans } from "react-i18next";
+import { useTranslate } from "../../i18n";
 import { resolveEnvironmentMachineKind } from "@t3tools/contracts";
 import { useLocation } from "@tanstack/react-router";
 import { ChevronDownIcon, LayersIcon } from "lucide-react";
@@ -51,6 +53,7 @@ interface SettingsScopeMenuProps {
  * where a project override is written.
  */
 export function SettingsScopeSentence() {
+  const t = useTranslate();
   const scope = useOptionalSettingsScope();
   const pathname = useLocation({ select: (location) => location.pathname });
   const { environments } = useEnvironments();
@@ -64,18 +67,18 @@ export function SettingsScopeSentence() {
   };
   return (
     <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 px-3 text-base text-muted-foreground sm:px-4">
-      {/* Each connective stays with its picker so a wrap never strands "on". */}
-      <span className="flex min-w-0 items-center gap-1.5">
-        <span className="shrink-0">Applying settings for</span>
-        <ProjectScopeMenu {...props} />
-      </span>
-      <span className="flex min-w-0 items-center gap-1.5">
-        <span className="shrink-0">
-          {/* A legacy checkout link names one environment without `machine`. */}
-          {scope.search.machine || scope.scope.kind === "checkout" ? "on" : "across"}
-        </span>
-        <EnvironmentScopeMenu {...props} />
-      </span>
+      <Trans
+        t={t}
+        i18nKey={
+          scope.search.machine || scope.scope.kind === "checkout"
+            ? "scope.sentenceOn"
+            : "scope.sentenceAcross"
+        }
+        components={{
+          project: <ProjectScopeMenu {...props} />,
+          environment: <EnvironmentScopeMenu {...props} />,
+        }}
+      />
     </p>
   );
 }
@@ -91,10 +94,11 @@ function ScopeMenu({
   label: string;
   children: ReactNode;
 }) {
+  const t = useTranslate();
   return (
     <Menu>
       <MenuTrigger
-        aria-label={`${ariaLabel}: ${label}`}
+        aria-label={t("scope.menuLabel", { scope: ariaLabel, label })}
         render={<InlineButton tone="picker" />}
         className="min-w-0 max-w-72"
       >
@@ -114,6 +118,7 @@ function EnvironmentScopeMenu({
   onChange,
   singleEnvironment,
 }: SettingsScopeMenuProps) {
+  const t = useTranslate();
   const resolved = resolveSettingsScope(value, groups, environments);
   const environmentValue = environmentAxisValue(
     value,
@@ -124,7 +129,7 @@ function EnvironmentScopeMenu({
   );
   return (
     <ScopeMenu
-      ariaLabel="Environment scope"
+      ariaLabel={t("scope.environment")}
       icon={
         selected ? (
           <EnvironmentMachineIcon
@@ -138,10 +143,10 @@ function EnvironmentScopeMenu({
         selected
           ? settingsScopeEnvironmentLabel(selected, environments)
           : environmentValue !== ALL_ENVIRONMENTS_VALUE
-            ? "Unavailable environment"
+            ? t("scope.unavailableEnvironment")
             : singleEnvironment
-              ? "No environments"
-              : "All environments"
+              ? t("scope.noEnvironments")
+              : t("scope.allEnvironments")
       }
     >
       <MenuRadioGroup
@@ -155,7 +160,7 @@ function EnvironmentScopeMenu({
             <MenuRadioItem value={ALL_ENVIRONMENTS_VALUE}>
               <span className="flex min-w-0 items-center gap-2">
                 <LayersIcon aria-hidden className="size-3.5" />
-                <span className="min-w-0 flex-1 truncate">All environments</span>
+                <span className="min-w-0 flex-1 truncate">{t("scope.allEnvironments")}</span>
                 <MenuRadioItemIndicator />
               </span>
             </MenuRadioItem>
@@ -174,7 +179,7 @@ function EnvironmentScopeMenu({
                 {settingsScopeEnvironmentLabel(environment, environments)}
               </span>
               {environment.connection.phase === "connected" ? null : (
-                <span className="shrink-0 text-xs text-muted-foreground">Offline</span>
+                <span className="shrink-0 text-xs text-muted-foreground">{t("scope.offline")}</span>
               )}
               <MenuRadioItemIndicator />
             </span>
@@ -186,12 +191,16 @@ function EnvironmentScopeMenu({
 }
 
 function ProjectScopeMenu({ value, groups, onChange }: SettingsScopeMenuProps) {
+  const t = useTranslate();
   const selected = groups.find((group) => group.projectKey === value.project);
   return (
     <ScopeMenu
-      ariaLabel="Project scope"
+      ariaLabel={t("scope.project")}
       icon={selected ? <ProjectFavicon project={selected} className="size-3.5 shrink-0" /> : null}
-      label={selected?.displayName ?? (value.project ? "Unavailable project" : "All projects")}
+      label={
+        selected?.displayName ??
+        (value.project ? t("scope.unavailableProject") : t("scope.allProjects"))
+      }
     >
       <MenuRadioGroup
         value={projectAxisValue(value)}
@@ -201,7 +210,7 @@ function ProjectScopeMenu({ value, groups, onChange }: SettingsScopeMenuProps) {
       >
         <MenuRadioItem value={ALL_PROJECTS_VALUE}>
           <span className="flex min-w-0 items-center gap-2">
-            <span className="min-w-0 flex-1 truncate">All projects</span>
+            <span className="min-w-0 flex-1 truncate">{t("scope.allProjects")}</span>
             <MenuRadioItemIndicator />
           </span>
         </MenuRadioItem>

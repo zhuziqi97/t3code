@@ -37,6 +37,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TYPOGRAPHY_ADVANCED_STORAGE_KEY } from "../../appearanceFonts";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { useTranslate } from "../../i18n";
+import { Trans } from "react-i18next";
 import { hasCloudPublicConfig } from "../../cloud/publicConfig";
 import { PRIVACY_POLICY_URL } from "../../legalLinks";
 import { useT3ConnectAuthPrompt } from "../clerk/useT3ConnectAuthPrompt";
@@ -365,7 +366,7 @@ function ConnectionStep({
                     {environment.label}
                   </span>
                   <span className="shrink-0 text-xs text-muted-foreground">
-                    {presentSavedCloudEnvironmentConnection(environment.connection).buttonLabel}
+                    {presentSavedCloudEnvironmentConnection(environment.connection, t).buttonLabel}
                   </span>
                 </span>
                 {environment.displayUrl ? (
@@ -423,23 +424,28 @@ function ConnectionStep({
       </div>
       {skippedLabels.length > 0 ? (
         <p className="mt-4 text-xs text-muted-foreground">
-          Not connected, so setup skips {skippedLabels.join(", ")}. You can set{" "}
-          {skippedLabels.length === 1 ? "it" : "them"} up later from Settings.
+          {t("wizard.connection.skipped", {
+            computers: skippedLabels.join(", "),
+            count: skippedLabels.length,
+          })}
         </p>
       ) : null}
       <div className="mt-6 flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
         <p className="min-w-0 text-xs leading-relaxed text-muted-foreground">
-          T3 Code collects anonymous usage data to help us improve it. To read more about how your
-          data is used and how to opt out, see our{" "}
-          <a
-            className="underline underline-offset-2 hover:text-foreground"
-            href={PRIVACY_POLICY_URL}
-            target="_blank"
-            rel="noreferrer noopener"
-          >
-            privacy policy
-          </a>
-          .
+          <Trans
+            t={t}
+            i18nKey="wizard.connection.privacy"
+            components={{
+              policy: (
+                <a
+                  className="underline underline-offset-2 hover:text-foreground"
+                  href={PRIVACY_POLICY_URL}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                />
+              ),
+            }}
+          />
         </p>
         <Button
           className="shrink-0 self-end"
@@ -645,11 +651,14 @@ function PairingForm({
             </p>
             <CommandBlock command="npx t3 pair" className="mt-2" />
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              {t("wizard.connection.startFirstOrRun")}
-              <code className="font-mono">npx t3 serve</code>
-              {t("wizard.connection.addTailscale_before")}
-              <code className="font-mono">--tailscale</code>
-              {t("wizard.connection.tailnetSuffix")}
+              <Trans
+                t={t}
+                i18nKey="wizard.connection.serveInstructions"
+                components={{
+                  serve: <code className="font-mono" />,
+                  tailscale: <code className="font-mono" />,
+                }}
+              />
             </p>
           </CollapsiblePanel>
         </Collapsible>
@@ -719,6 +728,7 @@ function ConnectedAgentsStep({
   readonly environmentId: EnvironmentId;
   readonly machineLabel: string;
 }) {
+  const t = useTranslate();
   const providers = useAtomValue(serverEnvironment.providersValueAtom(environmentId));
   const refreshProviders = useAtomCommand(serverEnvironment.refreshProviders, {
     reportFailure: false,
@@ -767,7 +777,7 @@ function ConnectedAgentsStep({
       <h2 className="mb-2 text-sm font-medium">{machineLabel}</h2>
       {!canOperateTerminal ? (
         <p className="mb-2 text-sm text-muted-foreground">
-          This connection cannot control terminals.
+          {t("wizard.agents.terminalPermission")}
         </p>
       ) : null}
       <div className="space-y-1.5">
@@ -850,7 +860,7 @@ function ConnectedAgentsStep({
       ) ? (
         <div className="mt-3">
           <Button size="xs" variant="ghost-muted" onClick={() => setAddingAccount(true)}>
-            Connect another ChatGPT account
+            {t("wizard.connection.connectAnotherChatGpt")}
           </Button>
         </div>
       ) : null}
@@ -981,7 +991,7 @@ function AgentCard({
   // surrounding UI copy is.
   const displayName =
     provider?.displayName || (driver === "claudeAgent" ? "Claude Code" : (meta?.label ?? driver));
-  const summary = getProviderSummary(provider);
+  const summary = getProviderSummary(provider, t);
   const providerState = getOnboardingProviderState(provider);
 
   return (
@@ -1142,13 +1152,15 @@ function AgentInstallTerminal({
       <div className="flex items-center justify-between border-b border-border/60 bg-background/60 px-3 py-1.5">
         <span className="text-2xs font-medium text-muted-foreground">
           {!canOperateTerminal ? (
-            "This connection cannot control terminals."
+            t("wizard.agents.terminalPermission")
           ) : setupState === "writeFailed" ? (
-            <>
-              {t("wizard.runInTerminal_before")}
-              <code className="rounded bg-muted px-1 font-mono">{command}</code>
-              {t("wizard.runInTerminal_after")}
-            </>
+            <Trans
+              t={t}
+              i18nKey="wizard.runInTerminal"
+              components={{
+                command: <code className="rounded bg-muted px-1 font-mono">{command}</code>,
+              }}
+            />
           ) : setupState === "ready" ? (
             t("wizard.agents.reviewCommand")
           ) : setupState === "openFailed" ? (
@@ -1169,11 +1181,11 @@ function AgentInstallTerminal({
                 }
               }}
             >
-              Retry
+              {t("wizard.retry")}
             </Button>
           ) : null}
           <Button size="xs" variant="ghost-muted" onClick={onClose}>
-            Close
+            {t("wizard.close")}
           </Button>
         </div>
       </div>
@@ -1202,8 +1214,6 @@ function AgentInstallTerminal({
 }
 
 // ── Step 4: import ───────────────────────────────────────────
-
-const IMPORT_PERMISSION_MESSAGE = "This connection cannot import projects or thread history.";
 
 function ImportStep({
   scans,
@@ -1289,8 +1299,8 @@ function ImportStep({
   );
   const [importError, setImportError] = useState("");
   const visibleImportError = !canImport
-    ? IMPORT_PERMISSION_MESSAGE
-    : importError === IMPORT_PERMISSION_MESSAGE
+    ? t("wizard.import.permissionDenied")
+    : importError === t("wizard.import.permissionDenied")
       ? ""
       : importError;
 
@@ -1316,7 +1326,7 @@ function ImportStep({
       );
     const stopForDeniedAccess = () => {
       setIsImporting(false);
-      setImportError(IMPORT_PERMISSION_MESSAGE);
+      setImportError(t("wizard.import.permissionDenied"));
     };
     if (!hasAccess()) {
       stopForDeniedAccess();
@@ -1514,7 +1524,7 @@ function ImportStep({
             );
             const label =
               environments.find((environment) => environment.environmentId === scan.environmentId)
-                ?.label ?? "Computer";
+                ?.label ?? t("wizard.computer");
             return (
               <fieldset
                 key={scan.environmentId}
