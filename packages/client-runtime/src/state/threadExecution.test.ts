@@ -14,6 +14,7 @@ import {
 import * as DateTime from "effect/DateTime";
 import { usageLimitBlockedRun } from "@t3tools/shared/orchestrationV2ThreadError";
 import { describe, expect, it } from "vite-plus/test";
+import { createI18n } from "../i18n/index.ts";
 
 import { v2Projection } from "./orchestrationV2TestFixtures.ts";
 import {
@@ -451,6 +452,13 @@ describe("formatModelSelectionEffort", () => {
     expect(formatModelSelectionEffort(selection(), catalog({ currentValue: "medium" }))).toBe(
       "Medium",
     );
+  });
+
+  it("localizes the subagent effort display without changing its selected native value", () => {
+    const selected = selection([{ id: "effort", value: "xhigh" }]);
+    const t = createI18n().getFixedT("zh");
+    expect(formatModelSelectionEffort(selected, catalog({}), null, t)).toBe("超高");
+    expect(selected.options).toEqual([{ id: "effort", value: "xhigh" }]);
   });
 
   it("shows nothing for a model the catalog does not describe", () => {

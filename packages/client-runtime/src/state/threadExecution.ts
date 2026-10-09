@@ -1,4 +1,5 @@
 import type { TFunction } from "i18next";
+import { getLocalizedProviderOptionCurrentLabel } from "../providerOptionLabels.ts";
 import {
   latestRootProviderFailure,
   latestUnheldRun,
@@ -173,6 +174,7 @@ export function formatModelSelectionEffort(
   selection: ModelSelection,
   models: ReadonlyArray<ServerProviderModel> = [],
   reportedSelection?: ModelSelection | null,
+  t?: TFunction,
 ): string | null {
   const caps = models.find((model) => model.slug === selection.model)?.capabilities;
   if (!caps) return null;
@@ -180,7 +182,9 @@ export function formatModelSelectionEffort(
   for (const id of REASONING_EFFORT_OPTION_IDS) {
     const descriptor = descriptors.find((candidate) => candidate.id === id);
     if (descriptor?.type !== "select") continue;
-    const label = getProviderOptionCurrentLabel(descriptor, selection, reportedSelection);
+    const label = t
+      ? getLocalizedProviderOptionCurrentLabel(descriptor, t, selection, reportedSelection)
+      : getProviderOptionCurrentLabel(descriptor, selection, reportedSelection);
     if (label) return label;
   }
   return null;

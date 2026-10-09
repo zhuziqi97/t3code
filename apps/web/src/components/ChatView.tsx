@@ -4317,6 +4317,7 @@ export default function ChatView(props: ChatViewProps) {
           activeThread.modelSelection,
           providerSubagentModels,
           reportedModelSelection,
+          t,
         );
   const mountComposerContextStrip = shouldShowComposerContextStrip({
     isDraftHeroState,

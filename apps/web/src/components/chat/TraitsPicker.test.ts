@@ -1,10 +1,16 @@
+import { i18n } from "../../i18n";
 import { describe, expect, it } from "vite-plus/test";
 import {
   ProviderInstanceId,
   ProviderDriverKind,
   type ProviderOptionDescriptor,
 } from "@t3tools/contracts";
-import { buildTraitsTriggerDisplay, buildUnavailableModelOptionDescriptors } from "./TraitsPicker";
+import {
+  buildTraitsTriggerDisplay,
+  buildUnavailableModelOptionDescriptors,
+} from "./TraitsPicker.logic";
+
+const t = i18n.getFixedT("en");
 
 function selectDescriptor(
   id: string,
@@ -57,12 +63,15 @@ const CONTEXT_WINDOW = selectDescriptor(
 const CODEX = ProviderDriverKind.make("codex");
 
 function display(descriptors: ReadonlyArray<ProviderOptionDescriptor>) {
-  return buildTraitsTriggerDisplay({
-    provider: CODEX,
-    descriptors,
-    primarySelectDescriptorId: "reasoningEffort",
-    ultrathinkPromptControlled: false,
-  });
+  return buildTraitsTriggerDisplay(
+    {
+      provider: CODEX,
+      descriptors,
+      primarySelectDescriptorId: "reasoningEffort",
+      ultrathinkPromptControlled: false,
+    },
+    t,
+  );
 }
 
 describe("buildTraitsTriggerDisplay", () => {
@@ -86,42 +95,51 @@ describe("buildTraitsTriggerDisplay", () => {
     (id) => {
       for (const speed of [fastModeDescriptor(true), serviceTierDescriptor("priority")]) {
         expect(
-          buildTraitsTriggerDisplay({
-            provider: CODEX,
-            descriptors: [
-              selectDescriptor("profile", [{ id: "balanced", label: "Balanced" }], "balanced"),
-              CONTEXT_WINDOW,
-              { ...EFFORT, id },
-              speed,
-            ],
-            primarySelectDescriptorId: "profile",
-            ultrathinkPromptControlled: false,
-          }),
+          buildTraitsTriggerDisplay(
+            {
+              provider: CODEX,
+              descriptors: [
+                selectDescriptor("profile", [{ id: "balanced", label: "Balanced" }], "balanced"),
+                CONTEXT_WINDOW,
+                { ...EFFORT, id },
+                speed,
+              ],
+              primarySelectDescriptorId: "profile",
+              ultrathinkPromptControlled: false,
+            },
+            t,
+          ),
         ).toEqual({ label: "Balanced · 1M · High Fast" });
       }
       expect(
-        buildTraitsTriggerDisplay({
-          provider: CODEX,
-          descriptors: [CONTEXT_WINDOW, { ...EFFORT, id }, serviceTierDescriptor("ultrafast")],
-          primarySelectDescriptorId: CONTEXT_WINDOW.id,
-          ultrathinkPromptControlled: false,
-        }),
+        buildTraitsTriggerDisplay(
+          {
+            provider: CODEX,
+            descriptors: [CONTEXT_WINDOW, { ...EFFORT, id }, serviceTierDescriptor("ultrafast")],
+            primarySelectDescriptorId: CONTEXT_WINDOW.id,
+            ultrathinkPromptControlled: false,
+          },
+          t,
+        ),
       ).toEqual({ label: "1M · High Ultrafast" });
     },
   );
 
   it("pairs Cursor Fast with reasoning rather than the thinking toggle", () => {
     expect(
-      buildTraitsTriggerDisplay({
-        provider: ProviderDriverKind.make("cursor"),
-        descriptors: [
-          { ...EFFORT, id: "reasoning" },
-          fastModeDescriptor(true),
-          { id: "thinking", label: "Thinking", type: "boolean", currentValue: true },
-        ],
-        primarySelectDescriptorId: "reasoning",
-        ultrathinkPromptControlled: false,
-      }),
+      buildTraitsTriggerDisplay(
+        {
+          provider: ProviderDriverKind.make("cursor"),
+          descriptors: [
+            { ...EFFORT, id: "reasoning" },
+            fastModeDescriptor(true),
+            { id: "thinking", label: "Thinking", type: "boolean", currentValue: true },
+          ],
+          primarySelectDescriptorId: "reasoning",
+          ultrathinkPromptControlled: false,
+        },
+        t,
+      ),
     ).toEqual({ label: "High Fast · Thinking On" });
   });
 
@@ -149,15 +167,18 @@ describe("buildTraitsTriggerDisplay", () => {
     (label) => {
       for (const provider of ["codex", "claudeAgent", "cursor"]) {
         expect(
-          buildTraitsTriggerDisplay({
-            provider: ProviderDriverKind.make(provider),
-            descriptors: [
-              { ...EFFORT, options: [{ id: "effort", label }], currentValue: "effort" },
-              fastModeDescriptor(true),
-            ],
-            primarySelectDescriptorId: EFFORT.id,
-            ultrathinkPromptControlled: false,
-          }),
+          buildTraitsTriggerDisplay(
+            {
+              provider: ProviderDriverKind.make(provider),
+              descriptors: [
+                { ...EFFORT, options: [{ id: "effort", label }], currentValue: "effort" },
+                fastModeDescriptor(true),
+              ],
+              primarySelectDescriptorId: EFFORT.id,
+              ultrathinkPromptControlled: false,
+            },
+            t,
+          ),
         ).toEqual({ label: `${label} Fast` });
       }
     },
@@ -244,12 +265,15 @@ describe("buildTraitsTriggerDisplay", () => {
 
   it("still renders prompt-controlled ultrathink with Fast", () => {
     expect(
-      buildTraitsTriggerDisplay({
-        provider: CODEX,
-        descriptors: [EFFORT, fastModeDescriptor(true)],
-        primarySelectDescriptorId: "reasoningEffort",
-        ultrathinkPromptControlled: true,
-      }),
+      buildTraitsTriggerDisplay(
+        {
+          provider: CODEX,
+          descriptors: [EFFORT, fastModeDescriptor(true)],
+          primarySelectDescriptorId: "reasoningEffort",
+          ultrathinkPromptControlled: true,
+        },
+        t,
+      ),
     ).toEqual({ label: "Ultrathink Fast" });
   });
 });
@@ -309,11 +333,14 @@ it("shows Unknown until a matching provider report provides Default", () => {
     ultrathinkPromptControlled: false,
     modelSelection: selection,
   };
-  expect(buildTraitsTriggerDisplay(input).label).toBe("Unknown");
+  expect(buildTraitsTriggerDisplay(input, t).label).toBe("Unknown");
   expect(
-    buildTraitsTriggerDisplay({
-      ...input,
-      reportedModelSelection: { ...selection, options: [{ id: "variant", value: "default" }] },
-    }).label,
+    buildTraitsTriggerDisplay(
+      {
+        ...input,
+        reportedModelSelection: { ...selection, options: [{ id: "variant", value: "default" }] },
+      },
+      t,
+    ).label,
   ).toBe("Default");
 });

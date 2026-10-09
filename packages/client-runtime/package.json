@@ -103,6 +103,10 @@
       "types": "./src/providerSkills.ts",
       "default": "./src/providerSkills.ts"
     },
+    "./provider-option-labels": {
+      "types": "./src/providerOptionLabels.ts",
+      "default": "./src/providerOptionLabels.ts"
+    },
     "./providerUpdateRequiredModels": {
       "types": "./src/providerUpdateRequiredModels.ts",
       "default": "./src/providerUpdateRequiredModels.ts"
