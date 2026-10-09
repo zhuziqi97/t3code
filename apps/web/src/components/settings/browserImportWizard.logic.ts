@@ -1,4 +1,16 @@
 import type { BrowserImportFailureReason, BrowserImportSource } from "@t3tools/contracts";
+import { DEFAULT_BROWSER_PROFILE_ID, INCOGNITO_BROWSER_PROFILE_ID } from "@t3tools/contracts";
+import type { TFunction } from "i18next";
+import { i18n } from "../../i18n";
+
+export function browserProfileDisplayName(
+  profile: { readonly id: string; readonly name: string },
+  t: TFunction,
+): string {
+  if (profile.id === DEFAULT_BROWSER_PROFILE_ID) return t("integrations.profiles.default");
+  if (profile.id === INCOGNITO_BROWSER_PROFILE_ID) return t("integrations.profiles.incognito");
+  return profile.name;
+}
 
 export interface WizardTargetProfile {
   readonly id: string;
@@ -166,9 +178,20 @@ export function isRetryableReason(reason: BrowserImportFailureReason): boolean {
  * Names the sites whose cookies were skipped: "example.com and google.com",
  * or "a, b, c and 4 more" past a few, so the line stays short.
  */
-export function formatSkippedDomains(domains: ReadonlyArray<string>): string {
+export function formatSkippedDomains(
+  domains: ReadonlyArray<string>,
+  t: TFunction = i18n.t,
+): string {
   if (domains.length === 0) return "";
   if (domains.length === 1) return domains[0]!;
-  if (domains.length <= 3) return `${domains.slice(0, -1).join(", ")} and ${domains.at(-1)}`;
-  return `${domains.slice(0, 3).join(", ")} and ${domains.length - 3} more`;
+  if (domains.length <= 3)
+    return t("integrations.import.domains", {
+      first: domains.slice(0, -1).join(", "),
+      last: domains.at(-1),
+    });
+  return t("integrations.import.domains-more", {
+    domains: domains.slice(0, 3).join(", "),
+    count: domains.length - 3,
+    number: new Intl.NumberFormat(i18n.resolvedLanguage).format(domains.length - 3),
+  });
 }

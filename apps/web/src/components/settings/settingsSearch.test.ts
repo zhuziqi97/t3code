@@ -734,3 +734,29 @@ it("retranslates command results and keeps bilingual and native searches at the 
   expect(searchSettings("复制链接")).toContainEqual(item);
   expect(searchSettings("快捷键").map((item) => item.id)).toContain("keybindings");
 });
+
+it("finds browser integration settings in either language without changing their routes", async () => {
+  await changeLanguage("zh");
+  const queries = [
+    ["浏览器配置", "browser-profiles", "浏览器配置"],
+    ["默认浏览器视口", "browser-default-viewport", "默认浏览器视口"],
+    ["录制 帧率", "browser-recording-frame-rate", "浏览器录制帧率"],
+    ["链接 打开位置", "browser-link-target", "链接打开位置"],
+  ];
+  for (const [query, id, title] of queries) {
+    expect(searchSettings(query!)).toContainEqual(
+      expect.objectContaining({ id, title, to: "/settings/integrations" }),
+    );
+  }
+  await changeLanguage("en");
+  expect(searchSettings("默认浏览器视口")).toContainEqual(
+    expect.objectContaining({
+      id: "browser-default-viewport",
+      title: "Default browser viewport",
+      to: "/settings/integrations",
+    }),
+  );
+  expect(searchSettings("default browser viewport")).toContainEqual(
+    expect.objectContaining({ id: "browser-default-viewport" }),
+  );
+});

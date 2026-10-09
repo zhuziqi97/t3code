@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import { useEffect, useEffectEvent, useState } from "react";
 
 export function usePermissionStatus<Id extends string>(
@@ -5,8 +6,9 @@ export function usePermissionStatus<Id extends string>(
   initialStatus: Record<Id, boolean>,
   enabled = true,
 ) {
+  const t = useTranslate();
   const [status, setStatus] = useState(initialStatus);
-  const [error, setError] = useState<string | null>(null);
+  const [hasError, setHasError] = useState(false);
   const checkLatest = useEffectEvent(check);
   useEffect(() => {
     if (!enabled) return;
@@ -19,10 +21,10 @@ export function usePermissionStatus<Id extends string>(
         const next = await checkLatest();
         if (!disposed) {
           setStatus(next);
-          setError(null);
+          setHasError(false);
         }
       } catch {
-        if (!disposed) setError("Could not check permissions. We'll try again automatically.");
+        if (!disposed) setHasError(true);
       }
       checking = false;
     };
@@ -39,7 +41,7 @@ export function usePermissionStatus<Id extends string>(
   }, [enabled]);
   return {
     status,
-    error,
-    isReady: (required: readonly Id[]) => error === null && required.every((id) => status[id]),
+    error: hasError ? t("permissions.checkFailed") : null,
+    isReady: (required: readonly Id[]) => !hasError && required.every((id) => status[id]),
   };
 }

@@ -929,10 +929,15 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "agent-browser-access",
-    title: "Agent browser access",
+    get title() {
+      return i18n.t("defaults.browser.title");
+    },
     to: "/settings/integrations",
     scope: "project-defaults",
-    searchTerms: ["allow disable enable open drive preview tools sessions project override"],
+    searchTerms: [
+      "Agent browser access 智能体浏览器访问 浏览器权限 项目覆盖",
+      "allow disable enable open drive preview tools sessions project override",
+    ],
   },
   {
     id: "device-hosts",
@@ -963,62 +968,115 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "browser-profiles",
-    title: "Browser profiles",
+    get title() {
+      return i18n.t("settings.search.browser-profiles.title");
+    },
     to: "/settings/integrations",
     targetId: "browser",
+    searchTerms: [
+      "Browser profiles 浏览器配置",
+      "profiles cookies logins incognito import clear remove 浏览器配置 Cookie 登录 无痕 导入 清除 移除",
+    ],
   },
   {
     id: "browser-default-profile",
-    title: "Default browser profile",
+    get title() {
+      return i18n.t("settings.search.browser-default-profile.title");
+    },
     to: "/settings/integrations",
     targetId: "browser-profiles",
+    searchTerms: [
+      "Default browser profile 默认浏览器配置",
+      "default browser profile 默认浏览器配置",
+    ],
   },
   {
     id: "browser-default-viewport",
-    title: "Default browser viewport",
+    get title() {
+      return i18n.t("settings.search.browser-default-viewport.title");
+    },
     to: "/settings/integrations",
-    searchTerms: ["preview size width height device desktop mobile rotate"],
+    searchTerms: [
+      "Default browser viewport 默认浏览器视口",
+      "preview size width height device desktop mobile rotate 视口 尺寸 宽度 高度 设备 旋转 横向 纵向",
+    ],
   },
   {
     id: "browser-default-zoom",
-    title: "Default browser zoom",
+    get title() {
+      return i18n.t("settings.search.browser-default-zoom.title");
+    },
     to: "/settings/integrations",
-    searchTerms: ["preview page scale tabs percent"],
+    searchTerms: [
+      "Default browser zoom 默认浏览器缩放",
+      "preview page scale tabs percent 浏览器 页面 缩放 比例",
+    ],
   },
   {
     id: "browser-default-appearance",
-    title: "Default browser appearance",
+    get title() {
+      return i18n.t("settings.search.browser-default-appearance.title");
+    },
     to: "/settings/integrations",
-    searchTerms: ["preview color scheme light dark system os"],
+    searchTerms: [
+      "Default browser appearance 默认浏览器外观",
+      "preview color scheme light dark system os 浏览器 外观 配色 浅色 深色 跟随系统",
+    ],
   },
   {
     id: "browser-recording-frame-rate",
-    title: "Browser recording frame rate",
+    get title() {
+      return i18n.t("settings.search.browser-recording-frame-rate.title");
+    },
     to: "/settings/integrations",
+    searchTerms: [
+      "Browser recording frame rate 浏览器录制帧率",
+      "recording frame rate fps browser preview 录制 帧率",
+    ],
   },
   {
     id: "browser-recording-key-presses",
-    title: "Show key presses in recordings",
+    get title() {
+      return i18n.t("settings.search.browser-recording-key-presses.title");
+    },
     to: "/settings/integrations",
-    searchTerms: ["browser preview keyboard shortcuts keystrokes overlay capture"],
+    searchTerms: [
+      "Show key presses in recordings 在录制中显示按键",
+      "browser preview keyboard shortcuts keystrokes overlay capture 浏览器 录制 按键 快捷键",
+    ],
   },
   {
     id: "browser-recording-mouse-presses",
-    title: "Show mouse presses in recordings",
+    get title() {
+      return i18n.t("settings.search.browser-recording-mouse-presses.title");
+    },
     to: "/settings/integrations",
-    searchTerms: ["browser preview clicks buttons drag overlay capture"],
+    searchTerms: [
+      "Show mouse presses in recordings 在录制中显示鼠标点击",
+      "browser preview clicks buttons drag overlay capture 浏览器 录制 鼠标 点击 拖动",
+    ],
   },
   {
     id: "browser-link-target",
-    title: "Open links in",
+    get title() {
+      return i18n.t("settings.search.browser-link-target.title");
+    },
     to: "/settings/integrations",
-    searchTerms: ["links default browser in-app browser external open"],
+    searchTerms: [
+      "Open links in 链接打开位置",
+      "links default browser in-app browser external open 链接 打开位置 默认浏览器 应用内浏览器",
+    ],
   },
   {
     id: "browser-auto-show-floating-preview",
-    title: "Auto-show floating preview",
+    get title() {
+      return i18n.t("settings.search.browser-auto-show-floating-preview.title");
+    },
     to: "/settings/integrations",
-    searchTerms: ["agent opens browser device simulator pop into view hide"],
+    searchTerms: [
+      "Auto-show floating preview 自动显示悬浮预览",
+      "agent opens browser device simulator pop into view hide 智能体 浏览器 设备 悬浮预览 自动显示",
+    ],
   },
   {
     id: "automatic-pull",
