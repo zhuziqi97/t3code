@@ -22,7 +22,7 @@ import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import * as ProviderRegistryMock from "../provider/testUtils/providerRegistryMock.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterRegistry.ts";
-import type { ProviderAdapterV2Shape } from "@t3tools/provider-core/server/ProviderAdapter";
+import type { ProviderAdapterV2 } from "@t3tools/provider-core/server/ProviderAdapter";
 import { CodexProviderCapabilitiesV2 } from "../orchestration-v2/Adapters/CodexAdapterV2.ts";
 import * as ProviderReplayHarness from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
 import * as ConveneNative from "./ConveneNative.ts";
@@ -49,7 +49,7 @@ const provider: ServerProvider = {
   slashCommands: [],
   skills: [],
 };
-const adapter: ProviderAdapterV2Shape = {
+const adapter: ProviderAdapterV2["Service"] = {
   instanceId: modelSelection.instanceId,
   driver: provider.driver,
   getCapabilities: () => Effect.succeed(CodexProviderCapabilitiesV2),
