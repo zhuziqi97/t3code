@@ -3517,6 +3517,34 @@ export const en = {
   "terminal.inputLabel": "Terminal input",
   "terminal.scrollbackLabel": "Terminal scrollback",
   "terminal.fontPreview": "Terminal font preview",
+
+  "usageSettings.addTitle": "Add a CLIProxyAPI hub",
+  "usageSettings.addDescription":
+    "Show the quota of every account the hub pools, next to the providers on {{environment}}. The key stays on that server.",
+  "usageSettings.url": "Hub URL",
+  "usageSettings.key": "Management key",
+  "usageSettings.label": "Label (optional)",
+  "usageSettings.defaultLabel": "Defaults to the hub's host name",
+  "usageSettings.add": "Add hub",
+  "usageSettings.updateCursor": "update Cursor account usage",
+  "usageSettings.cursorDescription":
+    "Read your existing Cursor CLI login from macOS Keychain to show account history and monthly limits. macOS may ask you to allow access.",
+  "usageSettings.empty": "No hubs configured.",
+  "usageSettings.disabled": " · Disabled",
+  "usageSettings.removeTitle": "Remove {{label}}?",
+  "usageSettings.removeDescription":
+    "The hub's management key is deleted from this server. Its accounts leave the Limits view; the hub itself is untouched. Add it again with the URL and key to bring them back.",
+  "usageSettings.remove": "Remove hub",
+  "settings.search.usage-providers.title": "Usage providers",
+  "settings.search.cursor-keychain-usage.title": "Cursor account usage",
+  "setup.codex.callbackFailed":
+    "Could not finish sign-in on this computer. Try again or paste the redirect URL below.",
+  "setup.codex.setupStatusFailed": "Could not read setup status. Reconnect and try again.",
+  "setup.codex.runtimePathFailed": "Could not read runtime path",
+  "setup.codex.notInstalled": "Not installed",
+  "setup.codex.notUsed": "Not used",
+  "setup.codex.signedOutLocally": "Signed out locally.{{detail}}",
+  "setup.account.defaultName": "Personal",
 } as const;
 
 export type MessageKey = keyof typeof en;

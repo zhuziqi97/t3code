@@ -116,15 +116,20 @@ describe("searchSettings", () => {
     ]);
   });
 
-  it.each(["usage providers", "CLIProxyAPI", "CLI proxy hub", "management key"])(
-    "finds usage-provider management by %s",
-    (query) => {
-      expect(searchSettings(query)[0]).toMatchObject({
-        id: "usage-providers",
-        to: "/settings/providers",
-      });
-    },
-  );
+  it.each([
+    "usage providers",
+    "CLIProxyAPI",
+    "CLI proxy hub",
+    "management key",
+    "用量来源",
+    "管理密钥",
+    "添加服务",
+  ])("finds usage-provider management by %s", (query) => {
+    expect(searchSettings(query)[0]).toMatchObject({
+      id: "usage-providers",
+      to: "/settings/providers",
+    });
+  });
 
   it("returns no results for an empty query", () => {
     expect(searchSettings("   ", ITEMS)).toEqual([]);

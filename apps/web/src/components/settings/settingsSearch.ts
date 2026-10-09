@@ -813,16 +813,21 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "usage-providers",
-    title: "Usage providers",
+    get title() {
+      return i18n.t("settings.search.usage-providers.title");
+    },
     to: "/settings/providers",
     searchTerms: [
       "usage sources CLIProxyAPI CLI proxy hub quota subscription limits management key add remove",
+      "用量来源 用量服务 服务地址 管理密钥 额度 配额 添加服务 移除服务",
     ],
     providerSettingsOnly: true,
   },
   {
     id: "cursor-keychain-usage",
-    title: "Cursor account usage",
+    get title() {
+      return i18n.t("settings.search.cursor-keychain-usage.title");
+    },
     to: "/settings/providers",
     searchTerms: ["cursor macOS keychain usage tokens cost limits permission"],
     providerSettingsOnly: true,

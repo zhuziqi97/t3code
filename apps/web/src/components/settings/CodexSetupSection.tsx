@@ -283,7 +283,8 @@ function ManagedCodexSetup({
   const [pending, setPending] = useState(false);
   const [awaitingProvider, setAwaitingProvider] = useState<"sign-in" | "handoff" | null>(null);
   const pendingRef = useRef(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | { key: string } | null>(null);
+  const errorMessage = typeof error === "string" ? error : error ? t(error.key) : null;
   const continueWithSignIn = useRef<string | null>(null);
   const openRequested = useRef(false);
   const openedFlow = useRef<string | null>(null);
@@ -345,20 +346,20 @@ function ManagedCodexSetup({
         if (result._tag === "Failure") {
           if (!isAtomCommandInterrupted(result)) {
             const failure = squashAtomCommandFailure(result);
-            setError(failure instanceof Error ? failure.message : t("setup.codex.failure"));
+            setError(failure instanceof Error ? failure.message : { key: "setup.codex.failure" });
           }
         } else {
           succeeded = true;
           onSuccess?.(result.value);
         }
       } catch {
-        setError(t("setup.codex.failure"));
+        setError({ key: "setup.codex.failure" });
       }
       pendingRef.current = false;
       setPending(false);
       return succeeded;
     },
-    [t],
+    [],
   );
 
   const handoffId = useId();
@@ -394,12 +395,12 @@ function ManagedCodexSetup({
     ) {
       setError(
         handoffQuery.data?.phase === "auth"
-          ? (handoffQuery.data.state.message ?? t("setup.chatGpt.finishFailed"))
-          : t("setup.chatGpt.primaryInterrupted"),
+          ? (handoffQuery.data.state.message ?? { key: "setup.chatGpt.finishFailed" })
+          : { key: "setup.chatGpt.primaryInterrupted" },
       );
       setHandoff(null);
     }
-  }, [handoff, handoffQuery.data, handoffQuery.error, t]);
+  }, [handoff, handoffQuery.data, handoffQuery.error]);
   const cancelSignIn = useCallback(() => {
     setAwaitingProvider(null);
     if (handoff) {
@@ -550,9 +551,7 @@ function ManagedCodexSetup({
           await ensureLocalApi().shell.openExternal(authorizationUrl);
         }
       } catch {
-        setError(
-          "Could not finish sign-in on this computer. Try again or paste the redirect URL below.",
-        );
+        setError({ key: "setup.codex.callbackFailed" });
       }
     },
     [clientCallback, flowId, run, completeAuth, environmentId, instanceId],
@@ -788,14 +787,18 @@ function ManagedCodexSetup({
   );
 
   const logoutWarning =
-    auth?.phase === "idle" && auth.message?.startsWith("Signed out locally.") ? auth.message : null;
+    auth?.phase === "idle" && auth.message?.startsWith("Signed out locally.")
+      ? t("setup.codex.signedOutLocally", {
+          detail: auth.message.slice("Signed out locally.".length),
+        })
+      : null;
 
   if (presentation === "onboarding") {
     const setupError =
       logoutWarning ??
-      error ??
+      errorMessage ??
       (authQuery.error || installQuery.error
-        ? "Could not read setup status. Reconnect and try again."
+        ? t("setup.codex.setupStatusFailed")
         : installation?.phase === "failed"
           ? installation.message
           : null);
@@ -1039,7 +1042,7 @@ function ManagedCodexSetup({
       {callbackFallback ? <div className="px-3 py-3 sm:px-4">{callbackFallback}</div> : null}
       {error || authQuery.error || installQuery.error || installation?.phase === "failed" ? (
         <p role="alert" className="px-3 py-2 text-xs text-destructive sm:px-4">
-          {error ??
+          {errorMessage ??
             (installation?.phase === "failed"
               ? installation.message
               : t("setup.codex.couldNotReadStatus"))}
@@ -1078,7 +1081,11 @@ export function CodexManagedRuntimeFields({
               aria-label={t("setup.codex.binaryPathLabel")}
               value={executablePath}
               title={executablePath}
-              placeholder={installation.error ? "Could not read runtime path" : "Not installed"}
+              placeholder={
+                installation.error
+                  ? t("setup.codex.runtimePathFailed")
+                  : t("setup.codex.notInstalled")
+              }
               disabled
             />
           </div>
@@ -1112,7 +1119,9 @@ export function CodexManagedRuntimeFields({
               aria-label={t("setup.codex.shadowHomeLabel")}
               value={provider?.runtimePaths?.shadowHomePath ?? ""}
               title={provider?.runtimePaths?.shadowHomePath ?? undefined}
-              placeholder={provider?.runtimePaths ? "Not used" : t("common.unavailable")}
+              placeholder={
+                provider?.runtimePaths ? t("setup.codex.notUsed") : t("common.unavailable")
+              }
               disabled
             />
           </div>
