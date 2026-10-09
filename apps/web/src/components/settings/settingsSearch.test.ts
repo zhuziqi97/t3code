@@ -678,3 +678,28 @@ it("finds tool discovery and automatic fetching by Chinese terms", async () => {
     },
   );
 });
+
+it("finds appearance and typography controls by Chinese terms with their existing targets", async () => {
+  await changeLanguage("zh");
+  for (const [query, id] of [
+    ["玻璃效果", "setting-glass-opacity"],
+    ["版本标签", "environment-identification"],
+    ["蓝橙", "diff-color-scheme"],
+    ["全宽", "chat-width"],
+    ["动画时长", "panel-animations"],
+    ["等宽字体", "code-font"],
+    ["提示词字体", "prompt-font"],
+    ["自动换行", "word-wrap"],
+  ]) {
+    expect(
+      searchSettings(query!).find((item) => item.id === id),
+      query,
+    ).toMatchObject({ id, to: "/settings/appearance" });
+  }
+  expect(searchSettings("主题").find((item) => item.id === "theme")).toMatchObject({
+    targetId: "appearance",
+  });
+  expect(
+    searchSettings("环境标识").find((item) => item.id === "environment-identification"),
+  ).toMatchObject({ targetId: "appearance-interface" });
+});

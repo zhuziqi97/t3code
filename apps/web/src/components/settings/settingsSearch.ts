@@ -245,9 +245,11 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "theme",
-    title: "Themes",
+    get title() {
+      return i18n.t("settings.search.theme.title");
+    },
     to: "/settings/appearance",
-    searchTerms: ["appearance colors palette custom import"],
+    searchTerms: ["appearance colors palette custom import", "主题 外观 颜色 配色 自定义 导入"],
     // Theme cards live directly under the scheme tiles; the section is the
     // stable scroll destination for both.
     targetId: "appearance",
@@ -255,83 +257,132 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     // Prefixed because the slider control already owns the `appearance-contrast` id.
     id: "setting-appearance-contrast",
-    title: "Contrast",
+    get title() {
+      return i18n.t("settings.search.setting-appearance-contrast.title");
+    },
     to: "/settings/appearance",
-    searchTerms: ["colors borders interface"],
+    searchTerms: ["colors borders interface", "对比度 颜色 边框 界面"],
   },
   {
     // Prefixed because the slider control already owns the `glass-opacity` id.
     id: "setting-glass-opacity",
-    title: "Glass opacity",
+    get title() {
+      return i18n.t("settings.search.setting-glass-opacity.title");
+    },
     to: "/settings/appearance",
-    searchTerms: ["transparent transparency solid menus dialogs composer"],
+    searchTerms: [
+      "transparent transparency solid menus dialogs composer",
+      "玻璃效果 不透明度 透明度 菜单 对话框 输入框",
+    ],
   },
   {
     id: "diff-color-scheme",
-    title: "Diff colors",
+    get title() {
+      return i18n.t("settings.search.diff-color-scheme.title");
+    },
     to: "/settings/appearance",
-    searchTerms: ["red green blue orange additions deletions changes counts palette colorblind"],
+    searchTerms: [
+      "red green blue orange additions deletions changes counts palette colorblind",
+      "差异颜色 红绿 蓝橙 新增 删除 变更计数 色盲",
+    ],
   },
   {
     id: "chat-width",
-    title: "Chat width",
+    get title() {
+      return i18n.t("settings.search.chat-width.title");
+    },
     to: "/settings/appearance",
-    searchTerms: ["wide full width column layout messages composer monitor"],
+    searchTerms: [
+      "wide full width column layout messages composer monitor",
+      "聊天宽度 适中 全宽 大屏幕 消息 输入框",
+    ],
   },
   {
     id: "panel-animations",
-    title: "Panel animations",
+    get title() {
+      return i18n.t("settings.search.panel-animations.title");
+    },
     to: "/settings/appearance",
+    searchTerms: ["面板动画 展开 收起 动效 动画时长 毫秒"],
   },
   {
     id: "environment-identification",
-    title: "Environment identification",
+    get title() {
+      return i18n.t("settings.search.environment-identification.title");
+    },
     to: "/settings/appearance",
-    searchTerms: ["dev nightly artwork pill label hide none"],
+    searchTerms: [
+      "dev nightly artwork pill label hide none",
+      "环境标识 开发版 Nightly 图形标识 版本标签 不显示",
+    ],
     // The setting is stage-dependent, so its parent section is the stable destination.
     targetId: "appearance-interface",
   },
   {
     id: "interface-font",
-    title: "Interface font",
+    get title() {
+      return i18n.t("settings.search.interface-font.title");
+    },
     to: "/settings/appearance",
-    searchTerms: ["typography family size system sans"],
+    searchTerms: ["typography family size system sans", "界面字体 字体家族 字号 系统字体"],
   },
   {
     id: "prompt-font",
-    title: "Prompt font",
+    get title() {
+      return i18n.t("settings.search.prompt-font.title");
+    },
     to: "/settings/appearance",
-    searchTerms: ["typography family size composer input"],
+    searchTerms: ["typography family size composer input", "提示词字体 输入框字体 字号 等宽"],
   },
   {
     id: "code-font",
-    title: "Code font",
+    get title() {
+      return i18n.t("settings.search.code-font.title");
+    },
     to: "/settings/appearance",
-    searchTerms: ["typography family size monospace code blocks diffs file previews"],
+    searchTerms: [
+      "typography family size monospace code blocks diffs file previews",
+      "代码字体 等宽字体 字号 差异 文件预览",
+    ],
   },
   {
     id: "terminal-font",
-    title: "Terminal font",
+    get title() {
+      return i18n.t("settings.search.terminal-font.title");
+    },
     to: "/settings/appearance",
-    searchTerms: ["typography family size monospace output"],
+    searchTerms: ["typography family size monospace output", "终端字体 等宽字体 字号 输出"],
   },
   {
     id: "font-smoothing",
-    title: "Font smoothing",
+    get title() {
+      return i18n.t("settings.search.font-smoothing.title");
+    },
     to: "/settings/appearance",
-    searchTerms: ["typography text grayscale anti aliasing macos thin"],
+    searchTerms: [
+      "typography text grayscale anti aliasing macos thin",
+      "字体平滑 灰度 抗锯齿 macOS 纤细",
+    ],
     macOnly: true,
   },
   {
     id: "word-wrap",
-    title: "Word wrap",
+    get title() {
+      return i18n.t("settings.search.word-wrap.title");
+    },
     to: "/settings/appearance",
-    searchTerms: ["long lines code blocks tables diffs file previews"],
+    searchTerms: [
+      "long lines code blocks tables diffs file previews",
+      "自动换行 长行 代码 表格 差异 文件预览",
+    ],
   },
   {
     id: "composer-context",
-    title: "Composer context",
+    get title() {
+      return i18n.t("settings.search.composer-context.title");
+    },
     to: "/settings/appearance",
+    searchTerms: ["输入框上下文 分支 Git 工作树 控件 保留"],
   },
   {
     id: "project-grouping",

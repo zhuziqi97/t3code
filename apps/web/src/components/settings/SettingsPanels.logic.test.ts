@@ -1,5 +1,4 @@
 import {
-  DEFAULT_SERVER_SETTINGS,
   DEFAULT_UNIFIED_SETTINGS,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -19,16 +18,22 @@ import {
   projectGroupingModeFromToggle,
   resolveBackgroundActivityProfileOption,
 } from "./SettingsPanels.logic";
+import { createI18n } from "@t3tools/client-runtime/i18n";
+const translations = createI18n();
+const t = translations.getFixedT("en");
 
 describe("typography settings restore", () => {
   it("detects family and size changes by font row", () => {
-    expect(getChangedTypographySettingLabels(DEFAULT_UNIFIED_SETTINGS)).toEqual([]);
+    expect(getChangedTypographySettingLabels(DEFAULT_UNIFIED_SETTINGS, t)).toEqual([]);
     expect(
-      getChangedTypographySettingLabels({
-        ...DEFAULT_UNIFIED_SETTINGS,
-        fontSizeInterface: 18,
-        fontFamilyCode: "Fira Code",
-      }),
+      getChangedTypographySettingLabels(
+        {
+          ...DEFAULT_UNIFIED_SETTINGS,
+          fontSizeInterface: 18,
+          fontFamilyCode: "Fira Code",
+        },
+        t,
+      ),
     ).toEqual(["Interface font", "Code font"]);
   });
 });
