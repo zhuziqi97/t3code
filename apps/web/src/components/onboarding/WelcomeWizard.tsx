@@ -36,6 +36,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { TYPOGRAPHY_ADVANCED_STORAGE_KEY } from "../../appearanceFonts";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
+import { useTranslate } from "../../i18n";
 import { hasCloudPublicConfig } from "../../cloud/publicConfig";
 import { PRIVACY_POLICY_URL } from "../../legalLinks";
 import { useT3ConnectAuthPrompt } from "../clerk/useT3ConnectAuthPrompt";
@@ -112,8 +113,6 @@ type WizardStep = "connection" | "agents" | "import";
 const NO_ENVIRONMENTS: readonly EnvironmentId[] = [];
 
 const AGENT_ONBOARDING_THREAD_ID = ThreadId.make("onboarding-agent-setup");
-const ONBOARDING_STAGES = ["Connect", "Agents", "Projects"] as const;
-const SCAN_LIMIT_MESSAGE = "Scan limit reached. Some projects or conversations may be missing.";
 
 export function WelcomeWizard({
   localAvailable,
@@ -169,6 +168,7 @@ export function WelcomeWizard({
     setStep("agents");
   };
   const stageIndex = step === "agents" ? 1 : step === "import" ? 2 : 0;
+  const t = useTranslate();
   const finish = useCallback(
     (projectRef?: ScopedProjectRef, importWarning?: string, importedThreadCount = 0) => {
       if (finishingPromiseRef.current !== null) return finishingPromiseRef.current;
@@ -187,14 +187,14 @@ export function WelcomeWizard({
           if (importWarning) {
             toastManager.add({
               type: "warning",
-              title: "Some history was not imported",
+              title: t("wizard.import.someHistoryNotImported"),
               description: importWarning,
               timeout: 0,
             });
           } else if (importedThreadCount > 0) {
             toastManager.add({
               type: "success",
-              title: `Imported ${importedThreadCount} ${importedThreadCount === 1 ? "thread" : "threads"}`,
+              title: t("wizard.import.imported", { count: importedThreadCount }),
             });
           }
           return true;
@@ -202,8 +202,8 @@ export function WelcomeWizard({
         .catch(() => {
           const errorToast = {
             type: "error",
-            title: "Could not finish setup",
-            description: "Your settings could not be saved. Try again.",
+            title: t("wizard.completion.couldNotFinish"),
+            description: t("wizard.completion.settingsNotSaved"),
           } as const;
           if (completionErrorToastIdRef.current === null) {
             completionErrorToastIdRef.current = toastManager.add(errorToast);
@@ -220,7 +220,7 @@ export function WelcomeWizard({
       finishingPromiseRef.current = completion;
       return completion;
     },
-    [completeOnboarding, onDone],
+    [completeOnboarding, onDone, t],
   );
 
   return (
@@ -232,7 +232,7 @@ export function WelcomeWizard({
         initialFocus={() => document.getElementById("onboarding-pairing-url") ?? true}
       >
         <WizardHeader
-          title="Set up T3 Code"
+          title={t("wizard.header.title")}
           identity={
             <div className="flex items-baseline gap-1.5" role="img" aria-label="T3 Code">
               <T3Wordmark className="h-4 w-auto shrink-0" aria-hidden />
@@ -243,7 +243,7 @@ export function WelcomeWizard({
           }
         >
           <WizardSteps
-            steps={ONBOARDING_STAGES}
+            steps={[t("wizard.step.connect"), t("wizard.step.agents"), t("wizard.step.projects")]}
             currentStep={stageIndex}
             isStepDisabled={(index) => isImporting || index >= stageIndex}
             onStepChange={(index) => {
@@ -311,6 +311,7 @@ function ConnectionStep({
   readonly onContinue: () => void;
   readonly onPaired: (environmentId: EnvironmentId) => void;
 }) {
+  const t = useTranslate();
   const { environments } = useEnvironments();
   const cloudEnabled = hasCloudPublicConfig();
   const directEnvironments = environments.filter(
@@ -335,14 +336,14 @@ function ConnectionStep({
   return (
     <>
       <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-        Connect your computers
+        {t("wizard.connection.title")}
       </h1>
       <p className="mt-2.5 text-sm leading-relaxed text-muted-foreground">
-        Choose one or more computers. We’ll set up agents and projects on each.
+        {t("wizard.connection.description")}
       </p>
       {directEnvironments.length > 0 ? (
         <fieldset className="mt-5 space-y-2">
-          <legend className="sr-only">Computers to set up</legend>
+          <legend className="sr-only">{t("wizard.connection.computersToSetUp")}</legend>
           {directEnvironments.map((environment) => (
             <label
               key={environment.environmentId}
@@ -399,7 +400,7 @@ function ConnectionStep({
               }
             >
               <LinkIcon className="size-4 text-muted-foreground" />
-              <span className="flex-1 text-left">Add a computer</span>
+              <span className="flex-1 text-left">{t("wizard.connection.addComputer")}</span>
               <ChevronRightIcon
                 className={cn("size-4 text-muted-foreground", pairingOpen && "rotate-90")}
               />
@@ -447,7 +448,7 @@ function ConnectionStep({
           disabled={!ready || isPairing}
           onClick={onContinue}
         >
-          Continue
+          {t("wizard.continue")}
           <ArrowRightIcon className="size-3.5" />
         </Button>
       </div>
@@ -466,6 +467,7 @@ function ConnectAccountOption({
   readonly selectedIds: ReadonlySet<EnvironmentId>;
   readonly onToggleEnvironment: (environmentId: EnvironmentId, checked: boolean) => void;
 }) {
+  const t = useTranslate();
   const { environments } = useEnvironments();
   const { isLoaded, isSignedIn } = useAuth({ treatPendingAsSignedOut: false });
   const { openAuthPrompt } = useT3ConnectAuthPrompt();
@@ -490,14 +492,14 @@ function ConnectAccountOption({
           }
         >
           <CloudIcon className="size-4 text-muted-foreground" />
-          <span className="flex-1 text-left">T3 Connect</span>
+          <span className="flex-1 text-left">{t("wizard.connection.t3Connect")}</span>
           <span className="text-xs text-muted-foreground">
             {!isLoaded
-              ? "Loading sign-in…"
+              ? t("wizard.connection.loadingSignIn")
               : !isSignedIn
-                ? "Sign in"
+                ? t("wizard.connection.signIn")
                 : !discoveryReady
-                  ? "Loading computers…"
+                  ? t("wizard.connection.loadingComputers")
                   : null}
           </span>
           <ChevronRightIcon
@@ -516,17 +518,19 @@ function ConnectAccountOption({
                   selection={{ selectedIds, onChange: onToggleEnvironment, autoSelectedComputers }}
                   refreshWhileEmpty
                   empty={
-                    <p className="py-3 text-sm text-muted-foreground">No computers linked yet.</p>
+                    <p className="py-3 text-sm text-muted-foreground">
+                      {t("wizard.connection.noComputersLinked")}
+                    </p>
                   }
                 />
               ) : null}
             </div>
             <p className="text-sm text-muted-foreground">
-              Run this on each computer you want to connect.
+              {t("wizard.connection.runOnEachComputer")}
             </p>
             <CommandBlock command="npx t3 connect" className="mt-3" />
             <p className="mt-3 text-xs text-muted-foreground">
-              Keep T3 Code running. Select the computers you want to set up above.
+              {t("wizard.connection.keepRunning")}
             </p>
           </div>
         </CollapsiblePanel>
@@ -549,6 +553,7 @@ function PairingForm({
   readonly setIsPairing: (value: boolean) => void;
   readonly onPaired: (environmentId: EnvironmentId) => void;
 }) {
+  const t = useTranslate();
   const connectPairingEnvironment = useAtomCommand(connectPairing, { reportFailure: false });
   const [pairingUrl, setPairingUrl] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -574,7 +579,7 @@ function PairingForm({
     }
     if (isAtomCommandInterrupted(result)) return;
     const cause = squashAtomCommandFailure(result);
-    setErrorMessage(cause instanceof Error ? cause.message : "Pairing failed.");
+    setErrorMessage(cause instanceof Error ? cause.message : t("wizard.connection.pairingFailed"));
   };
 
   return (
@@ -588,7 +593,7 @@ function PairingForm({
       >
         <div>
           <label className="block text-sm text-muted-foreground" htmlFor="onboarding-pairing-url">
-            Pairing link
+            {t("wizard.connection.pairingLink")}
           </label>
           <Input
             id="onboarding-pairing-url"
@@ -628,20 +633,23 @@ function PairingForm({
               className="group flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
             >
               <ChevronRightIcon className="size-3.5 group-data-panel-open:rotate-90" />
-              Need a pairing link?
+              {t("wizard.connection.needPairingLink")}
             </CollapsibleTrigger>
             <Button type="submit" disabled={isPairing || pairingUrl.trim().length === 0}>
-              {isPairing ? "Pairing..." : "Pair"}
+              {isPairing ? t("wizard.connection.pairing") : t("wizard.connection.pair")}
             </Button>
           </div>
           <CollapsiblePanel>
             <p className="pt-3 text-sm text-muted-foreground">
-              Run this on the computer with your code.
+              {t("wizard.connection.runOnCodeComputer")}
             </p>
             <CommandBlock command="npx t3 pair" className="mt-2" />
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              Start T3 Code first, or run <code className="font-mono">npx t3 serve</code>. Add{" "}
-              <code className="font-mono">--tailscale</code> to use your tailnet.
+              {t("wizard.connection.startFirstOrRun")}
+              <code className="font-mono">npx t3 serve</code>
+              {t("wizard.connection.addTailscale_before")}
+              <code className="font-mono">--tailscale</code>
+              {t("wizard.connection.tailnetSuffix")}
             </p>
           </CollapsiblePanel>
         </Collapsible>
@@ -673,11 +681,12 @@ function AgentsStep({
   readonly environmentIds: readonly EnvironmentId[];
   readonly onContinue: () => void;
 }) {
+  const t = useTranslate();
   const { environments } = useEnvironments();
   return (
     <StepShell
-      title="Connect your agents"
-      description="Choose an agent to start coding. You can add more later."
+      title={t("wizard.agents.connectTitle")}
+      description={t("wizard.agents.connectDescription")}
     >
       <ScrollArea scrollFade className="mt-5 h-auto max-h-[min(32rem,55dvh)]">
         <div className="space-y-5 pr-3">
@@ -687,7 +696,7 @@ function AgentsStep({
               environmentId={environmentId}
               machineLabel={
                 environments.find((environment) => environment.environmentId === environmentId)
-                  ?.label ?? "Computer"
+                  ?.label ?? t("wizard.computer")
               }
             />
           ))}
@@ -695,7 +704,7 @@ function AgentsStep({
       </ScrollArea>
       <div className="mt-6 flex justify-end">
         <Button autoFocus onClick={onContinue}>
-          Continue
+          {t("wizard.continue")}
           <ArrowRightIcon className="size-3.5" />
         </Button>
       </div>
@@ -966,7 +975,10 @@ function AgentCard({
   readonly terminalAvailable: boolean;
   readonly onOpenTerminal: () => void;
 }) {
+  const t = useTranslate();
   const meta = providerClients.get(ProviderDriverKind.make(driver));
+  // Provider names are product names, so they are never translated; only the
+  // surrounding UI copy is.
   const displayName =
     provider?.displayName || (driver === "claudeAgent" ? "Claude Code" : (meta?.label ?? driver));
   const summary = getProviderSummary(provider);
@@ -982,7 +994,7 @@ function AgentCard({
       <div className="min-w-0 flex-1">
         <span className="block text-sm font-medium text-foreground">{displayName}</span>
         <p className="mt-0.5 text-xs leading-relaxed break-words whitespace-pre-wrap text-muted-foreground">
-          {providerState === "ready" ? "Ready to code." : summary.headline}
+          {providerState === "ready" ? t("wizard.agents.readyToCode") : summary.headline}
           {providerState !== "ready" && summary.detail ? ` · ${summary.detail}` : ""}
         </p>
       </div>
@@ -990,12 +1002,12 @@ function AgentCard({
         {providerState === "ready" ? (
           <span className="inline-flex items-center gap-1.5 text-xs font-medium text-success-foreground">
             <CheckIcon className="size-3.5" />
-            Ready
+            {t("wizard.ready")}
           </span>
         ) : providerState === "checking" ? (
-          <span className="text-xs text-muted-foreground">Checking...</span>
+          <span className="text-xs text-muted-foreground">{t("wizard.checking")}</span>
         ) : providerState === "disabled" ? (
-          <span className="text-xs text-muted-foreground">Disabled</span>
+          <span className="text-xs text-muted-foreground">{t("wizard.disabled")}</span>
         ) : providerState === "attention" ? (
           <span className="text-xs text-muted-foreground">{summary.headline}</span>
         ) : (
@@ -1006,7 +1018,7 @@ function AgentCard({
             disabled={terminalOpen || !terminalAvailable}
           >
             <TerminalIcon className="size-3.5" />
-            {providerState === "signIn" ? "Sign in" : "Install"}
+            {providerState === "signIn" ? t("wizard.signIn") : t("wizard.install")}
           </Button>
         )}
       </div>
@@ -1027,6 +1039,7 @@ function AgentInstallTerminal({
   readonly session: AgentTerminalSession;
   readonly onClose: () => void;
 }) {
+  const t = useTranslate();
   const { command, cwd, driver, environmentId, keybindings, providerInstanceId } = session;
   const canOperateTerminal = useEnvironmentScope(environmentId, AuthTerminalOperateScope);
   // Same terminal typography preference the thread drawer honors.
@@ -1132,15 +1145,16 @@ function AgentInstallTerminal({
             "This connection cannot control terminals."
           ) : setupState === "writeFailed" ? (
             <>
-              Run <code className="rounded bg-muted px-1 font-mono">{command}</code> in this
-              terminal.
+              {t("wizard.runInTerminal_before")}
+              <code className="rounded bg-muted px-1 font-mono">{command}</code>
+              {t("wizard.runInTerminal_after")}
             </>
           ) : setupState === "ready" ? (
-            "Review the command, then press Enter to run it."
+            t("wizard.agents.reviewCommand")
           ) : setupState === "openFailed" ? (
-            "Could not open the setup terminal."
+            t("wizard.agents.couldNotOpenTerminal")
           ) : (
-            "Preparing command..."
+            t("wizard.agents.preparingCommand")
           )}
         </span>
         <div className="flex items-center gap-1">
@@ -1169,7 +1183,7 @@ function AgentInstallTerminal({
             threadRef={threadRef}
             threadId={AGENT_ONBOARDING_THREAD_ID}
             terminalId={terminalId}
-            terminalLabel={`Install ${driver}`}
+            terminalLabel={t("wizard.agents.terminalLabel", { driver })}
             cwd={cwd}
             providerInstanceId={providerInstanceId}
             advancedTypography={advancedTypography}
@@ -1206,6 +1220,7 @@ function ImportStep({
     importedThreadCount?: number,
   ) => Promise<boolean>;
 }) {
+  const t = useTranslate();
   const { environments } = useEnvironments();
   const writableEnvironments = useEnvironmentsWithScope(scans, AuthOrchestrationOperateScope);
   const createProject = useAtomCommand(projectEnvironment.create, { reportFailure: false });
@@ -1419,14 +1434,19 @@ function ImportStep({
     setIsImporting(false);
     importedThreadCountRef.current = importedThreadCount;
     if (importedProjectsCount < selection.length) {
+      // Two counts, two plurals: i18next pluralizes one `count` per message, so
+      // the sentence is composed from two messages rather than one. The
+      // separator is itself a message, because Chinese punctuates differently.
       if (importedThreadCount > 0 && skippedThreadCount > 0) {
-        importWarningRef.current = `Imported ${importedThreadCount} ${importedThreadCount === 1 ? "thread" : "threads"}. ${skippedThreadCount} ${skippedThreadCount === 1 ? "thread" : "threads"} could not be imported.`;
+        importWarningRef.current = `${t("wizard.import.imported", { count: importedThreadCount })}${t("wizard.import.sentenceSeparator")}${t("wizard.import.skipped", { count: skippedThreadCount })}`;
       } else if (skippedThreadCount > 0) {
-        importWarningRef.current = `${skippedThreadCount} ${skippedThreadCount === 1 ? "thread could" : "threads could"} not be imported.`;
+        importWarningRef.current = t("wizard.import.skipped", { count: skippedThreadCount });
       } else if (importedThreadCount > 0) {
-        importWarningRef.current = `Imported ${importedThreadCount} ${importedThreadCount === 1 ? "thread" : "threads"}. Some thread history could not be imported.`;
+        importWarningRef.current = t("wizard.import.importedWithRemaining", {
+          count: importedThreadCount,
+        });
       } else {
-        importWarningRef.current = "Could not import thread history.";
+        importWarningRef.current = t("wizard.import.couldNotImport");
       }
     }
     finishAfterImport();
@@ -1435,16 +1455,18 @@ function ImportStep({
   if (scans.every((scan) => scan.data === null) && scans.some((scan) => scan.isPending)) {
     return (
       <div className="flex h-full min-h-40 flex-col">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Your projects</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          {t("wizard.projects.title")}
+        </h1>
         <div className="flex flex-1 flex-col items-center justify-center gap-3 py-6">
           <Spinner size="lg" tone="muted" />
           <p className="text-center text-sm text-muted-foreground">
-            Looking for projects from Claude Code and Codex…
+            {t("wizard.projects.lookingForImported")}
           </p>
         </div>
         <div className="flex justify-end">
           <Button variant="ghost-muted" onClick={() => void onDone()}>
-            Do not import projects
+            {t("wizard.projects.doNotImport")}
           </Button>
         </div>
       </div>
@@ -1453,13 +1475,16 @@ function ImportStep({
 
   return (
     <StepShell
-      title="Choose your projects"
-      description="Import projects and conversations from your selected computers."
+      title={t("wizard.projects.chooseTitle")}
+      description={t("wizard.projects.chooseDescription")}
     >
       {candidates.length > 0 ? (
         <div className="mt-5 flex items-center justify-between gap-3 text-xs text-muted-foreground">
           <span role="status">
-            {selected.length} of {candidates.length} selected
+            {t("wizard.projects.selectedCount", {
+              selected: selected.length,
+              total: candidates.length,
+            })}
           </span>
           <div className="flex items-center gap-1">
             <Button
@@ -1468,7 +1493,7 @@ function ImportStep({
               disabled={isImporting || selected.length === candidates.length}
               onClick={() => setSelectedPaths(new Set(candidates.map((item) => item.key)))}
             >
-              Select all
+              {t("wizard.projects.selectAll")}
             </Button>
             <Button
               variant="ghost"
@@ -1476,7 +1501,7 @@ function ImportStep({
               disabled={isImporting || selected.length === 0}
               onClick={() => setSelectedPaths(new Set())}
             >
-              Select none
+              {t("wizard.projects.selectNone")}
             </Button>
           </div>
         </div>
@@ -1502,26 +1527,26 @@ function ImportStep({
                 {scan.isPending && scan.data === null ? (
                   <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
                     <Spinner size="md" />
-                    Looking for projects…
+                    {t("wizard.projects.lookingForProjects")}
                   </div>
                 ) : scan.error !== null ? (
                   <div
                     role="alert"
                     className="flex items-center justify-between gap-3 text-sm text-muted-foreground"
                   >
-                    <span>Could not check projects. {scan.error}</span>
+                    <span>{t("wizard.projects.couldNotCheck", { error: scan.error })}</span>
                     <Button variant="ghost" size="sm" onClick={scan.refresh}>
-                      Retry
+                      {t("wizard.retry")}
                     </Button>
                   </div>
                 ) : scanCandidates.length === 0 ? (
                   <p className="py-2 text-sm text-muted-foreground">
-                    No existing Claude Code or Codex projects found.
+                    {t("wizard.projects.noneFound")}
                   </p>
                 ) : null}
                 {scan.data?.truncated ? (
                   <p className="text-xs text-muted-foreground" role="status">
-                    {SCAN_LIMIT_MESSAGE}
+                    {t("wizard.projects.scanLimitReached")}
                   </p>
                 ) : null}
                 <ImportCandidateList
@@ -1539,7 +1564,7 @@ function ImportStep({
       ) : null}
       <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
         <Button variant="ghost-muted" disabled={isImporting} onClick={finishAfterImport}>
-          Do not import projects
+          {t("wizard.projects.doNotImport")}
         </Button>
         <Button
           autoFocus
@@ -1547,8 +1572,8 @@ function ImportStep({
           onClick={() => void runImport(selected)}
         >
           {isImporting
-            ? "Importing…"
-            : `Import ${selected.length} ${selected.length === 1 ? "project" : "projects"}`}
+            ? t("wizard.projects.importing")
+            : t("wizard.projects.importCount", { count: selected.length })}
         </Button>
       </div>
     </StepShell>
@@ -1575,6 +1600,7 @@ function ImportCandidateList({
   readonly selectedKeys: ReadonlySet<string>;
   readonly onSelectionChange: (next: ReadonlySet<string>) => void;
 }) {
+  const t = useTranslate();
   const { repositories, other } = useMemo(() => groupOnboardingProjects(candidates), [candidates]);
   const setKeys = (keys: ReadonlyArray<string>, checked: boolean) => {
     const next = new Set(selectedKeys);
@@ -1611,9 +1637,11 @@ function ImportCandidateList({
             />
             <CollapsibleTrigger className="group flex min-w-0 flex-1 items-center gap-1.5 text-left">
               <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground transition-transform group-data-panel-open:rotate-90" />
-              <span className="truncate text-sm text-muted-foreground">Other folders</span>
+              <span className="truncate text-sm text-muted-foreground">
+                {t("wizard.projects.otherFolders")}
+              </span>
               <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums">
-                {other.length} {other.length === 1 ? "folder" : "folders"}
+                {t("wizard.projects.folderCount", { count: other.length })}
               </span>
             </CollapsibleTrigger>
           </div>

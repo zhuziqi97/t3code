@@ -8,7 +8,11 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { createStaticNavigation } from "@react-navigation/native";
 
-import { RegistryContext } from "@effect/atom-react";
+import { RegistryContext, useAtomValue } from "@effect/atom-react";
+import { AsyncResult } from "effect/unstable/reactivity";
+import { resolveLanguage } from "@t3tools/client-runtime/i18n";
+import { changeLanguage, i18n } from "./i18n";
+import { mobilePreferencesAtom } from "./state/preferences";
 import { ThreadArrangementHost } from "./features/threads/ThreadArrangementSheet";
 import { ConfirmDialogHost } from "./components/ConfirmDialogHost";
 import { CloudAuthProvider } from "./features/cloud/CloudAuthProvider";
@@ -47,6 +51,39 @@ const appLinking = {
 
 const Navigation = createStaticNavigation(RootStack);
 
+/**
+ * Applies the stored language preference to i18next.
+ *
+ * The host locale is read here rather than at module load so a language the
+ * user picked is never overridden by the device on startup.
+ */
+function LanguageSync() {
+  const preferencesResult = useAtomValue(mobilePreferencesAtom);
+  const languagePreference = AsyncResult.isSuccess(preferencesResult)
+    ? (preferencesResult.value.languagePreference ?? "system")
+    : "system";
+
+  useEffect(() => {
+    const language = resolveLanguage(languagePreference, [deviceLocale()]);
+    if (i18n.resolvedLanguage !== language) {
+      void changeLanguage(language);
+    }
+  }, [languagePreference]);
+
+  return null;
+}
+
+/**
+ * The device's preferred locale.
+ *
+ * Hermes reads this from the native locale settings, so it is coarser than
+ * `expo-localization.getLocales()`; bring that in if per-region matching is
+ * ever needed.
+ */
+function deviceLocale(): string {
+  return Intl.DateTimeFormat().resolvedOptions().locale;
+}
+
 function SplashScreenCoordinator() {
   const { isReady } = useAppearancePreferences();
 
@@ -78,6 +115,7 @@ function AppContent() {
   return (
     <>
       <SplashScreenCoordinator />
+      <LanguageSync />
       <SubscriptionUsageCoordinator />
       <PermissionUpdateNotice />
       <GestureHandlerRootView className="flex-1">
