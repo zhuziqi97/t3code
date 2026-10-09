@@ -3615,6 +3615,61 @@ export const en = {
   "scope.noCheckout": "This project has no checkout on this environment.",
   "scope.checkoutEnvironmentMissing": "This checkout's environment is no longer available.",
   "scope.allCheckouts": "All checkouts",
+
+  "sourceControl.writing.repoLabel": "Repository conventions",
+  "sourceControl.writing.repoDescription":
+    "In each project, matches recent change descriptions and change request titles.",
+  "sourceControl.writing.conventionalLabel": "Conventional Commits",
+  "sourceControl.writing.conventionalDescription":
+    "Use Conventional Commit prefixes and keep change request text concise.",
+  "sourceControl.writing.customLabel": "Custom instructions",
+  "sourceControl.writing.customDescription":
+    "Use your instructions for change descriptions and change requests in every project.",
+  "sourceControl.writing.section": "Text generation",
+  "sourceControl.writing.reset": "source control writing style",
+  "sourceControl.writing.allInstructions":
+    "Custom source control instructions for all selected environments",
+  "sourceControl.writing.allPlaceholder":
+    "Write the instructions each selected environment should use.",
+  "sourceControl.writing.applyAll": "Apply instructions to all",
+  "sourceControl.writing.editAll": "Write custom instructions for all",
+  "sourceControl.writing.placeholder":
+    "Keep titles concise. Use short bullet points in descriptions.",
+  "sourceControl.writing.instructions": "Custom source control writing instructions",
+  "sourceControl.writing.templateDescription":
+    "Use the repository's template for change request descriptions when available.",
+  "sourceControl.writing.templateReset": "change request templates",
+  "sourceControl.writing.modelDescription":
+    "Model for source control text and branch or bookmark names. Off uses the environment's text generation model.",
+  "sourceControl.writing.connect":
+    "Connect an environment to choose its source control writer model.",
+  "sourceControl.writing.noProviders": "No text generation providers available.",
+  "sourceControl.writing.modelNotSaved": "Source control writer model not saved",
+  "sourceControl.writing.separateModel": "Use a separate source control writer model",
+  "sourceControl.branch.static": "Static prefix",
+  "sourceControl.branch.semantic": "Semantic prefix",
+  "sourceControl.branch.description":
+    "Choose how new worktree branches are named from your first message.",
+  "sourceControl.branch.semanticDescription":
+    "The model chooses a prefix that describes the work, such as feat/add-search, fix/login-timeout, or refactor/auth.",
+  "sourceControl.branch.reset": "branch naming",
+  "sourceControl.branch.prefix": "Branch prefix",
+  "sourceControl.branch.prefixDescription":
+    "For example, t3 or t3/ produces t3/add-search. Leave empty for no prefix.",
+  "sourceControl.branch.prefixReset": "branch prefix",
+  "sourceControl.branch.noPrefix": "No prefix",
+  "sourceControl.branch.instructions": "Branch naming instructions",
+  "sourceControl.branch.instructionsDescription":
+    "Appended to the naming prompt. The model returns the complete branch name; no prefix or suffix is added.",
+  "sourceControl.branch.instructionsReset": "branch naming instructions",
+  "sourceControl.branch.mixedPlaceholder":
+    "Mixed. Enter instructions to apply to all selected targets.",
+  "sourceControl.branch.placeholder":
+    "Use julius/ followed by the issue ID and a short description.",
+  "settings.search.worktree-branch-naming.title": "Worktree branch naming",
+  "settings.search.source-control-writing-style.title": "Source control writing style",
+  "settings.search.follow-change-request-templates.title": "Follow change request templates",
+  "settings.search.source-control-writer-model.title": "Source control writer model",
 } as const;
 
 export type MessageKey = keyof typeof en;

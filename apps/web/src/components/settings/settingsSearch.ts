@@ -1004,9 +1004,14 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "worktree-branch-naming",
-    title: "Worktree branch naming",
+    get title() {
+      return i18n.t("settings.search.worktree-branch-naming.title");
+    },
     to: "/settings/source-control",
-    searchTerms: ["static semantic prefix custom prompt instructions feat fix refactor chore"],
+    searchTerms: [
+      "static semantic prefix custom prompt instructions feat fix refactor chore",
+      "Git 工作树分支命名 固定前缀 语义前缀 分支前缀 命名指令",
+    ],
     environmentOnly: true,
     scope: "project-defaults",
   },
@@ -1030,26 +1035,37 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "source-control-writing-style",
-    title: "Source control writing style",
+    get title() {
+      return i18n.t("settings.search.source-control-writing-style.title");
+    },
     to: "/settings/source-control",
     searchTerms: [
       "repository conventions conventional commits custom instructions change descriptions request titles",
+      "版本控制写作风格 仓库惯例 约定式提交 自定义指令 变更说明",
     ],
     environmentOnly: true,
   },
   {
     id: "follow-change-request-templates",
-    title: "Follow change request templates",
+    get title() {
+      return i18n.t("settings.search.follow-change-request-templates.title");
+    },
     to: "/settings/source-control",
-    searchTerms: ["repository pr pull request description structure"],
+    searchTerms: [
+      "repository pr pull request description structure",
+      "遵循变更请求模板 拉取请求模板 PR 模板",
+    ],
     environmentOnly: true,
   },
   {
     id: "source-control-writer-model",
-    title: "Source control writer model",
+    get title() {
+      return i18n.t("settings.search.source-control-writer-model.title");
+    },
     to: "/settings/source-control",
     searchTerms: [
       "override generated commit change request pr titles descriptions branch bookmark",
+      "版本控制写作模型 提交说明 书签命名 分支命名模型",
     ],
     environmentOnly: true,
     scope: "project-defaults",

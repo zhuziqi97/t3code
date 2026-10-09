@@ -621,3 +621,26 @@ it("finds provider setup and background checks by their Chinese actions", async 
     });
   }
 });
+
+it("finds source control writing and branch naming by Chinese terms without changing destinations", async () => {
+  await changeLanguage("zh");
+  for (const [query, id] of [
+    ["固定前缀", "worktree-branch-naming"],
+    ["约定式提交", "source-control-writing-style"],
+    ["变更请求模板", "follow-change-request-templates"],
+    ["书签命名", "source-control-writer-model"],
+  ]) {
+    expect(
+      searchSettings(query!).find((item) => item.id === id),
+      query,
+    ).toMatchObject({
+      id,
+      to: "/settings/source-control",
+      environmentOnly: true,
+    });
+  }
+  expect(searchableSetting("worktree-branch-naming").title).toBe("Git 工作树分支命名");
+  expect(searchSettings("conventional commits").map((item) => item.id)).toContain(
+    "source-control-writing-style",
+  );
+});
