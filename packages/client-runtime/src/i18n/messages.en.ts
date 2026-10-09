@@ -3069,6 +3069,62 @@ export const en = {
   "provider.setup.signOutQuestion":
     "Sign out of {{provider}} on {{environment}}? This stops running threads that share this sign-in. Thread history is kept.",
   "provider.setup.deviceCode": "Enter code <code>{{code}}</code> in your browser.",
+
+  "provider.settings.checkedUnavailable": "Checked unavailable",
+  "provider.settings.primaryDevice": "Primary device",
+  "provider.settings.localDevice": "Local device",
+  "provider.settings.remoteDevice": "Remote device",
+  "provider.settings.loadingSettings": "Loading provider settings",
+  "provider.settings.connectFailed": "Could not connect to this device",
+  "provider.settings.unavailable": "Provider settings are unavailable",
+  "provider.settings.checkingPermissions": "Checking what this session is allowed to change.",
+  "provider.settings.devices": "Devices",
+  "provider.settings.deviceUnavailable": "Device unavailable",
+  "provider.settings.reconnectHint":
+    "Reconnect this device to set up its provider, or select another device.",
+  "provider.settings.noDevices": "No connected devices",
+  "provider.settings.loadingDevices": "Loading devices",
+  "provider.settings.connectEnvironmentHint":
+    "Connect an execution environment before configuring providers.",
+  "provider.settings.readingEnvironments": "Reading connected execution environments.",
+  "provider.settings.authExpired": "Authentication request expired",
+  "provider.settings.authExpiredHint":
+    "Refresh the provider and start the authentication flow again.",
+  "provider.settings.authContinueFailed": "Could not continue authentication",
+  "provider.settings.authExpiredDetail": "The authentication request expired.",
+  "provider.settings.updateStartFailed": "The provider update command could not be started.",
+  "provider.settings.instanceUpdateFailed": "Could not update provider instance",
+  "provider.settings.settingsUpdateFailed": "The settings update failed.",
+  "provider.settings.instanceDeleteFailed": "Could not delete provider instance",
+  "provider.settings.managedFilesRemain": "Provider deleted, but managed files remain",
+  "provider.settings.managedCleanupFailed": "Managed binary cleanup failed.",
+  "provider.settings.instanceResetFailed": "Could not reset provider instance",
+  "provider.settings.cursorAccount": "Cursor account",
+  "provider.settings.cursorApiKeyHint":
+    "Using CURSOR_API_KEY. Remove it from this provider's environment to use browser sign-in.",
+  "provider.settings.addProvider": "Add provider",
+  "provider.settings.refreshStatus": "Refresh provider status",
+  "provider.settings.refreshing": "Refreshing providers",
+  "provider.settings.limitedPermissions": "Limited permissions",
+  "provider.settings.instanceGone": "This provider instance is no longer available on this device.",
+  "provider.settings.noProviders": "No providers configured.",
+  "provider.settings.advanced": "Advanced",
+  "provider.settings.intervalPolicy":
+    "This interval is configured here, then the shared Background activity policy decides whether provider probes may run when the timer fires. Custom intervals appear as Advanced in General settings.",
+  "provider.settings.intervalDescription":
+    "Refresh provider status, versions, and models in the background. Set to 0 to disable.",
+  "provider.settings.intervalResetLabel": "provider health check interval",
+  "provider.settings.intervalDecrease": "Decrease provider health check interval",
+  "provider.settings.intervalInput": "Provider health check interval in seconds",
+  "provider.settings.intervalIncrease": "Increase provider health check interval",
+  "provider.settings.seconds": "seconds",
+  "provider.settings.checkedAt": "Checked <time>{{time}}</time>",
+  "provider.settings.waitingConfiguration": "Waiting for {{environment}}'s configuration.",
+  "provider.settings.updateFailed": "Could not update {{provider}}",
+  "provider.settings.resetLabel": "{{provider}} provider settings",
+  "provider.settings.readOnlyDescription":
+    "This session can view {{environment}}'s providers but can't change their settings.",
+  "settings.search.provider-health-check-interval.title": "Health check interval",
 } as const;
 
 export type MessageKey = keyof typeof en;

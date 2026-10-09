@@ -587,3 +587,21 @@ it("finds connection settings by Chinese actions and keeps their original destin
     expect(result, query).toMatchObject({ id, to: "/settings/connections" });
   }
 });
+
+it("finds provider setup and background checks by their Chinese actions", async () => {
+  await changeLanguage("zh");
+  for (const [query, id] of [
+    ["身份验证", "providers"],
+    ["安装", "providers"],
+    ["环境变量", "providers"],
+    ["状态检查", "provider-health-check-interval"],
+  ]) {
+    expect(
+      searchSettings(query!).find((item) => item.id === id),
+      query,
+    ).toMatchObject({
+      id,
+      to: "/settings/providers",
+    });
+  }
+});

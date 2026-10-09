@@ -807,6 +807,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/providers",
     searchTerms: [
       "agents cli codex claude cursor grok opencode antigravity google sign in sign out install subscription instances authentication api key models configuration binary path config directory endpoint arguments environment variables display name accent color custom favorite hidden auto compact",
+      "智能体 提供方 安装 更新 登录 退出 身份验证 实例 模型 环境变量 配置",
     ],
   },
   {
@@ -830,7 +831,10 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "provider-health-check-interval",
     title: "Health check interval",
     to: "/settings/providers",
-    searchTerms: ["refresh availability versions auth state models background probes seconds off"],
+    searchTerms: [
+      "refresh availability versions auth state models background probes seconds off",
+      "刷新 状态检查 间隔 后台 版本 秒 停用",
+    ],
     providerSettingsOnly: true,
   },
   {
