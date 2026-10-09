@@ -3718,6 +3718,75 @@ export const en = {
   "sourceControl.bitbucket.replaces": "Saving replaces your {{method}}.",
   "settings.search.github-accounts.title": "GitHub accounts and token",
   "settings.search.bitbucket-credentials.title": "Bitbucket credentials",
+
+  "sourceControl.notAuthenticated": "Not authenticated",
+  "sourceControl.statusUnknown": "Status unknown",
+  "sourceControl.accountVisibility": "Toggle source control account visibility",
+  "sourceControl.comingSoon": "Coming Soon",
+  "sourceControl.supportComing": "Support for {{label}} is coming soon.",
+  "sourceControl.notAvailable": "Not available on this server: {{hint}}",
+  "sourceControl.authenticatedAccount": "Authenticated as <account/>",
+  "sourceControl.availableHint": "Available. {{hint}}",
+  "sourceControl.allHostsOff": "Every {{label}} host is turned off.",
+  "sourceControl.signInHint":
+    "{{label}} is not authenticated on this server. Sign in or configure credentials using the <command>{{executable}}</command> tool on the server host to enable change request features.",
+  "sourceControl.couldNotVerify": "Could not verify {{label}}. {{detail}}",
+  "sourceControl.toggleDetails": "Toggle {{label}} details",
+  "sourceControl.availability": "{{label}} availability",
+  "sourceControl.fetchPolicy":
+    "This interval is configured for Git only. The shared Background activity policy still decides whether Git refreshes may run when the timer fires. Custom intervals appear as Advanced in General settings.",
+  "sourceControl.fetchReset": "fetch interval",
+  "sourceControl.fetchDescription":
+    "Refresh remote branches in the background. Set to 0 to avoid automatic Git prompts.",
+  "sourceControl.fetchDecrease": "Decrease fetch interval",
+  "sourceControl.fetchInput": "Automatic Git fetch interval in seconds",
+  "sourceControl.fetchIncrease": "Increase fetch interval",
+  "sourceControl.serverEnvironment": "Server environment",
+  "sourceControl.scanFailed": "Could not scan the server environment",
+  "sourceControl.nothingDetected": "Nothing detected yet",
+  "sourceControl.emptyHint":
+    "Install Git on the server, add optional hosting integrations or credentials your workspace needs, then rescan.",
+  "sourceControl.scan": "Scan",
+  "sourceControl.rescan": "Rescan server environment",
+  "sourceControl.rescanHint": "Rescan Git and hosting integrations",
+  "sourceControl.connectHint":
+    "Connect an environment to inspect its version control tools and hosting integrations.",
+  "sourceControl.versionControl": "Version Control{{suffix}}",
+  "sourceControl.providers": "Source Control Providers{{suffix}}",
+  "sourceControl.installHint.git":
+    "Install Git from https://git-scm.com/downloads or with your package manager.",
+  "sourceControl.installHint.jj":
+    "Install Jujutsu with `brew install jj` or from https://github.com/jj-vcs/jj.",
+  "sourceControl.installHint.github":
+    "Install the GitHub command-line tool (`gh`) via https://cli.github.com/ or your package manager (for example `brew install gh`).",
+  "sourceControl.installHint.gitlab":
+    "Install the GitLab command-line tool (`glab`) from https://gitlab.com/gitlab-org/cli or your package manager (for example `brew install glab`).",
+  "sourceControl.installHint.forgejo":
+    "Install `fj` 0.6 or later from https://codeberg.org/forgejo-contrib/forgejo-cli and run `fj --host <server-url> auth add-token`, or install `tea` 0.16 or later from https://gitea.com/gitea/tea and run `tea login add` for each Forgejo or Gitea server.",
+  "sourceControl.installHint.azure-devops":
+    "Install the Azure command-line tools (`az`), then enable Azure DevOps support with `az extension add --name azure-devops`.",
+  "sourceControl.installHint.bitbucket": "Add a Bitbucket token in Settings → Source Control.",
+  "settings.search.source-control.title": "Source control",
+
+  "sourceControl.authDetail.allGithubHostsOff":
+    "Every GitHub host gh is signed in to is turned off in Settings → Source Control.",
+  "sourceControl.authDetail.savedGithubToken":
+    "Using the token saved in Settings; it overrides GH_TOKEN and the gh login.",
+  "sourceControl.authDetail.oldGithubCli":
+    "GitHub CLI is too old to report sign-in status. Update `gh` to 2.81.0 or newer (for example `brew upgrade gh`) and rescan.",
+  "sourceControl.authDetail.githubUnparsed": "GitHub CLI auth status could not be parsed.",
+  "sourceControl.authDetail.gitlabUnparsed": "GitLab CLI auth status could not be parsed.",
+  "sourceControl.authDetail.azureUnparsed": "Azure CLI account status could not be parsed.",
+  "sourceControl.authDetail.forgejoStorage":
+    "Could not read fj authentication storage. Authenticate again with fj.",
+  "sourceControl.authDetail.bitbucketAccess": "An access token is configured.",
+  "sourceControl.authDetail.bitbucketApi": "An API token is configured.",
+  "sourceControl.authDetail.environmentOverride":
+    "Using {{variable}} from the server environment; it overrides the account chosen in Settings.",
+  "sourceControl.authDetail.checkSavedToken":
+    "Could not check the token saved in Settings: {{error}}",
+  "sourceControl.authDetail.checkEnvironmentToken":
+    "Could not check the token in {{variable}}: {{error}}",
 } as const;
 
 export type MessageKey = keyof typeof en;

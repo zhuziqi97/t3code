@@ -982,11 +982,14 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "source-control",
-    title: "Source control",
+    get title() {
+      return i18n.t("settings.search.source-control.title");
+    },
     to: "/settings/source-control",
     scope: "environment-defaults",
     searchTerms: [
       "version control git github gitlab forgejo gitea tea codeberg bitbucket azure devops hosting integrations credentials scan server environment",
+      "版本控制 代码托管 托管平台 工具发现 安装 凭据 服务器环境 扫描",
     ],
   },
   {
@@ -998,6 +1001,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [
       "Git fetch interval Git fetch 间隔",
       "automatic remote branch refresh background credentials security keys seconds off",
+      "自动获取 后台刷新 远程分支 获取间隔 秒",
     ],
     environmentOnly: true,
     scope: "environment-defaults",

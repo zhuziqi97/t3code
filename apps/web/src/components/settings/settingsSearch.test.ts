@@ -662,3 +662,19 @@ it("finds hosting credentials by Chinese terms while keeping environment-only de
     });
   }
 });
+
+it("finds tool discovery and automatic fetching by Chinese terms", async () => {
+  await changeLanguage("zh");
+  expect(searchSettings("工具发现").find((item) => item.id === "source-control")).toMatchObject({
+    title: "版本控制",
+    to: "/settings/source-control",
+    scope: "environment-defaults",
+  });
+  expect(searchSettings("自动获取").find((item) => item.id === "git-fetch-interval")).toMatchObject(
+    {
+      to: "/settings/source-control",
+      environmentOnly: true,
+      scope: "environment-defaults",
+    },
+  );
+});

@@ -3487,4 +3487,65 @@ export const zh: Partial<Messages> = {
   "sourceControl.bitbucket.replaces": "保存后将替换现有的{{method}}。",
   "settings.search.github-accounts.title": "GitHub 账户与令牌",
   "settings.search.bitbucket-credentials.title": "Bitbucket 凭据",
+  "sourceControl.notAuthenticated": "未认证",
+  "sourceControl.statusUnknown": "状态未知",
+  "sourceControl.accountVisibility": "切换版本控制账户显示状态",
+  "sourceControl.comingSoon": "即将支持",
+  "sourceControl.supportComing": "即将支持 {{label}}。",
+  "sourceControl.notAvailable": "此服务器尚不可用：{{hint}}",
+  "sourceControl.authenticatedAccount": "已认证账户：<account/>",
+  "sourceControl.availableHint": "可用。{{hint}}",
+  "sourceControl.allHostsOff": "所有 {{label}} 主机均已停用。",
+  "sourceControl.signInHint":
+    "此服务器上的 {{label}} 尚未认证。请在服务器主机上使用 <command>{{executable}}</command> 工具登录或配置凭据，以启用变更请求功能。",
+  "sourceControl.couldNotVerify": "无法验证 {{label}}。{{detail}}",
+  "sourceControl.toggleDetails": "展开或收起 {{label}} 详情",
+  "sourceControl.availability": "{{label}} 可用状态",
+  "sourceControl.fetchPolicy":
+    "此间隔仅适用于 Git。定时触发时是否允许刷新，仍由统一的后台活动策略决定。自定义间隔会在常规设置中显示为“高级”。",
+  "sourceControl.fetchReset": "获取间隔",
+  "sourceControl.fetchDescription": "在后台刷新远程分支。设为 0 可避免自动触发 Git 提示。",
+  "sourceControl.fetchDecrease": "缩短获取间隔",
+  "sourceControl.fetchInput": "自动获取 Git 更新的间隔（秒）",
+  "sourceControl.fetchIncrease": "延长获取间隔",
+  "sourceControl.serverEnvironment": "服务器环境",
+  "sourceControl.scanFailed": "无法扫描服务器环境",
+  "sourceControl.nothingDetected": "尚未检测到任何工具",
+  "sourceControl.emptyHint":
+    "在服务器上安装 Git，按工作区需要添加托管平台集成或凭据，然后重新扫描。",
+  "sourceControl.scan": "扫描",
+  "sourceControl.rescan": "重新扫描服务器环境",
+  "sourceControl.rescanHint": "重新扫描 Git 和托管平台集成",
+  "sourceControl.connectHint": "请连接执行环境，以查看其版本控制工具和托管平台集成。",
+  "sourceControl.versionControl": "版本控制{{suffix}}",
+  "sourceControl.providers": "代码托管平台{{suffix}}",
+  "sourceControl.installHint.git": "从 https://git-scm.com/downloads 或通过软件包管理器安装 Git。",
+  "sourceControl.installHint.jj":
+    "使用 `brew install jj` 或从 https://github.com/jj-vcs/jj 安装 Jujutsu。",
+  "sourceControl.installHint.github":
+    "通过 https://cli.github.com/ 或软件包管理器安装 GitHub 命令行工具（`gh`），例如运行 `brew install gh`。",
+  "sourceControl.installHint.gitlab":
+    "从 https://gitlab.com/gitlab-org/cli 或通过软件包管理器安装 GitLab 命令行工具（`glab`），例如运行 `brew install glab`。",
+  "sourceControl.installHint.forgejo":
+    "从 https://codeberg.org/forgejo-contrib/forgejo-cli 安装 `fj` 0.6 或更新版本，并运行 `fj --host <server-url> auth add-token`；也可从 https://gitea.com/gitea/tea 安装 `tea` 0.16 或更新版本，再为各 Forgejo 或 Gitea 服务器运行 `tea login add`。",
+  "sourceControl.installHint.azure-devops":
+    "安装 Azure 命令行工具（`az`），然后运行 `az extension add --name azure-devops` 启用 Azure DevOps 支持。",
+  "sourceControl.installHint.bitbucket": "在“设置 → 版本控制”中添加 Bitbucket 令牌。",
+  "settings.search.source-control.title": "版本控制",
+  "sourceControl.authDetail.allGithubHostsOff":
+    "gh 已登录的所有 GitHub 主机均已在“设置 → 版本控制”中停用。",
+  "sourceControl.authDetail.savedGithubToken":
+    "正在使用设置中保存的令牌；它优先于 GH_TOKEN 和 gh 登录账户。",
+  "sourceControl.authDetail.oldGithubCli":
+    "GitHub CLI 版本过旧，无法报告登录状态。请将 `gh` 更新至 2.81.0 或更新版本（例如运行 `brew upgrade gh`），然后重新扫描。",
+  "sourceControl.authDetail.githubUnparsed": "无法解析 GitHub CLI 认证状态。",
+  "sourceControl.authDetail.gitlabUnparsed": "无法解析 GitLab CLI 认证状态。",
+  "sourceControl.authDetail.azureUnparsed": "无法解析 Azure CLI 账户状态。",
+  "sourceControl.authDetail.forgejoStorage": "无法读取 fj 认证存储。请使用 fj 重新认证。",
+  "sourceControl.authDetail.bitbucketAccess": "已配置访问令牌。",
+  "sourceControl.authDetail.bitbucketApi": "已配置 API 令牌。",
+  "sourceControl.authDetail.environmentOverride":
+    "正在使用服务器环境中的 {{variable}}；它会覆盖设置中选择的账户。",
+  "sourceControl.authDetail.checkSavedToken": "无法检查设置中保存的令牌：{{error}}",
+  "sourceControl.authDetail.checkEnvironmentToken": "无法检查 {{variable}} 中的令牌：{{error}}",
 };
