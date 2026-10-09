@@ -4,6 +4,7 @@ import {
   OrchestrationV2SearchThreadResult,
 } from "./orchestrationV2.ts";
 import { OrchestrationDispatchCommandError } from "./orchestrationDispatch.ts";
+import { ProjectId } from "./baseSchemas.ts";
 import {
   McpAppCallToolInput,
   McpAppCallToolResult,
@@ -358,6 +359,12 @@ import { VcsError } from "./vcs.ts";
 import { Project, ProjectMutation, ProjectMutationError } from "./project.ts";
 
 export const WS_METHODS = {
+  conveneStatus: "convene.status",
+  conveneSubscribeStatus: "convene.subscribeStatus",
+  conveneManage: "convene.manage",
+  conveneQueryProject: "convene.queryProject",
+  conveneMutateProject: "convene.mutateProject",
+  conveneProjectOptions: "convene.projectOptions",
   // Project registry methods
   projectsList: "projects.list",
   projectsAdd: "projects.add",
@@ -1809,6 +1816,37 @@ export class RpcScopeAuthorization extends RpcMiddleware.Service<RpcScopeAuthori
 ) {}
 
 export const WsRpcGroup = RpcGroup.make(
+  Rpc.make(WS_METHODS.conveneStatus, {
+    payload: Schema.Struct({}),
+    success: ConveneStatus,
+    error: EnvironmentAuthorizationError,
+  }),
+  Rpc.make(WS_METHODS.conveneSubscribeStatus, {
+    payload: Schema.Struct({}),
+    success: ConveneStatus,
+    error: EnvironmentAuthorizationError,
+    stream: true,
+  }),
+  Rpc.make(WS_METHODS.conveneManage, {
+    payload: ConveneManageInput,
+    success: ConveneManageResult,
+    error: Schema.Union([ConveneIntegrationError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make(WS_METHODS.conveneQueryProject, {
+    payload: Schema.Struct({ projectId: ProjectId }),
+    success: ConveneProjectView,
+    error: Schema.Union([ConveneIntegrationError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make(WS_METHODS.conveneMutateProject, {
+    payload: ConveneProjectMutation,
+    success: ConveneProjectConfiguration,
+    error: Schema.Union([ConveneIntegrationError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make(WS_METHODS.conveneProjectOptions, {
+    payload: ConveneProjectOptionsInput,
+    success: ConveneProjectOptions,
+    error: Schema.Union([ConveneIntegrationError, EnvironmentAuthorizationError]),
+  }),
   WsServerProbeRpc,
   WsServerGetConfigRpc,
   WsServerRefreshProvidersRpc,
@@ -1995,3 +2033,14 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationV2SubscribeShellRpc,
   WsOrchestrationV2SubscribeThreadRpc,
 ).middleware(RpcScopeAuthorization);
+import {
+  ConveneStatus,
+  ConveneManageInput,
+  ConveneManageResult,
+  ConveneProjectMutation,
+  ConveneProjectConfiguration,
+  ConveneProjectOptionsInput,
+  ConveneProjectOptions,
+  ConveneProjectView,
+  ConveneIntegrationError,
+} from "./convene.ts";

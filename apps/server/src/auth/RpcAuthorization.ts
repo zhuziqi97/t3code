@@ -41,6 +41,10 @@ type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
  * runtime failure.
  */
 export const RPC_REQUIRED_SCOPES = {
+  [WS_METHODS.conveneStatus]: AuthOrchestrationReadScope,
+  [WS_METHODS.conveneSubscribeStatus]: AuthOrchestrationReadScope,
+  [WS_METHODS.conveneQueryProject]: AuthOrchestrationReadScope,
+  [WS_METHODS.conveneProjectOptions]: AuthOrchestrationReadScope,
   ...CLIENT_GUARDED_RPC_SCOPES,
   [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: AuthOrchestrationOperateScope,
   [ORCHESTRATION_V2_WS_METHODS.getWorkflowScript]: AuthOrchestrationReadScope,

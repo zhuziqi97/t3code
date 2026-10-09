@@ -8,6 +8,8 @@ import { describe, expect, it } from "@effect/vitest";
 import { vi } from "vite-plus/test";
 import {
   AuthOrchestrationOperateScope,
+  AuthEnvironmentMaintainScope,
+  AuthSettingsWriteScope,
   AuthSourceControlWriteScope,
   ThreadId,
   EnvironmentId,
@@ -58,6 +60,42 @@ const setup = Effect.gen(function* () {
 });
 
 describe("command permissions", () => {
+  it.effect("separates Convene connection management from project configuration grants", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const registry = yield* setup;
+        const manage = createCommandPermissions(runtime, WS_METHODS.conveneManage);
+        const configure = createCommandPermissions(runtime, WS_METHODS.conveneMutateProject);
+        registry.set(
+          sessions(env),
+          AsyncResult.success({
+            ...grant(false),
+            scopes: [AuthSettingsWriteScope],
+            permissions: [AuthSettingsWriteScope],
+          }),
+        );
+        expect(registry.get(configure.permissionAtom(env))).toBe(true);
+        yield* configure.authorize(registry, env);
+        expect(registry.get(manage.permissionAtom(env))).toBe(false);
+        expect((yield* manage.authorize(registry, env).pipe(Effect.flip)).requiredPermission).toBe(
+          AuthEnvironmentMaintainScope,
+        );
+        registry.set(
+          sessions(env),
+          AsyncResult.success({
+            ...grant(false),
+            scopes: [AuthEnvironmentMaintainScope],
+            permissions: [AuthEnvironmentMaintainScope],
+          }),
+        );
+        yield* manage.authorize(registry, env);
+        expect(registry.get(configure.permissionAtom(env))).toBe(false);
+        expect(
+          (yield* configure.authorize(registry, env).pipe(Effect.flip)).requiredPermission,
+        ).toBe(AuthSettingsWriteScope);
+      }),
+    ),
+  );
   it.effect("uses the target grant for both availability and execution", () =>
     Effect.scoped(
       Effect.gen(function* () {

@@ -35,9 +35,21 @@ import {
   createProjectFaviconUrlAtomFamily,
   InvalidAssetCollectionKeyError,
   parseAssetCollectionKey,
+  resolveAssetUrl,
 } from "./assets.ts";
 
 describe("asset collection keys", () => {
+  it("keeps native signed media inside its mounted environment", () => {
+    expect(
+      resolveAssetUrl(
+        "https://convene.test/client-web/one/",
+        "/api/assets/signed/file%20name.png?download=1",
+      ),
+    ).toBe("https://convene.test/client-web/one/api/assets/signed/file%20name.png?download=1");
+    expect(
+      resolveAssetUrl("https://convene.test/client-web/one/", "https://media.test/file.png"),
+    ).toBe("https://media.test/file.png");
+  });
   it("preserves malformed JSON and its native cause", () => {
     const key = "not-json";
     let error: unknown;

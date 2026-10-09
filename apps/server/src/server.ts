@@ -58,6 +58,13 @@ import * as TextGeneration from "./textGeneration/TextGeneration.ts";
 import * as ProviderInstanceRegistryHydration from "./provider/ProviderInstanceRegistryHydration.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
 import * as McpHttpServer from "./mcp/McpHttpServer.ts";
+import * as ConveneConnection from "./convene/ConveneConnection.ts";
+import * as ConveneMcp from "./convene/ConveneMcp.ts";
+import * as ConveneNative from "./convene/ConveneNative.ts";
+import * as ConvenePlatform from "./convene/ConvenePlatform.ts";
+import * as ConveneWorkspaces from "./convene/ConveneWorkspaces.ts";
+import * as ConveneConfiguration from "./convene/ConveneConfiguration.ts";
+import * as ConveneSettings from "./convene/ConveneSettings.ts";
 import * as McpSessionRegistry from "./mcp/McpSessionRegistry.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
 import * as DeviceService from "./device/DeviceService.ts";
@@ -529,6 +536,12 @@ const layerProviderInstallationRefresh = Layer.effectDiscard(
 );
 
 const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
+  ConveneSettings.layer.pipe(
+    Layer.provideMerge(ConveneConnection.layer),
+    Layer.provideMerge(ConveneNative.layer),
+    Layer.provideMerge(ConveneConfiguration.layer),
+    Layer.provideMerge(ConveneWorkspaces.layer),
+  ),
   AgentAwarenessRelay.layer,
   // Asks T3 Connect to deliver webhooks it held while this environment was offline.
   HeldHooksWaker.layer,
@@ -567,6 +580,13 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   Layer.provideMerge(layerOrchestrationApplication),
   Layer.provideMerge(RuntimeLayer.layerEventInfrastructure),
   Layer.provideMerge(Layer.merge(ProjectStore.layer, ThreadSearch.layer)),
+  Layer.provideMerge(
+    ConveneMcp.layer.pipe(
+      Layer.provideMerge(ConveneWorkspaces.layer.pipe(Layer.provideMerge(ProjectStore.layer))),
+      Layer.provide(ProjectionStoreV2.layer),
+      Layer.provideMerge(ConvenePlatform.layer.pipe(Layer.provide(ServerSecretStore.layer))),
+    ),
+  ),
   Layer.provideMerge(layerServerSettings),
   // The asset route uses the registry's GitHub credential for private PR media.
   Layer.provideMerge(layerSourceControlProviderRegistry),
@@ -697,6 +717,7 @@ const layerMakeRoutes = Layer.mergeAll(
     Layer.provide(ProviderAdapterRegistry.layerFromProviderInstanceRegistry),
     Layer.provide(McpOAuth.layerMcpClientAuthenticator),
   ),
+  ConveneMcp.route,
 ).pipe(
   // Both transports consume the same service instance, so caches single-flight across clients
   // and mutations observed on WebSocket invalidate patches subsequently read over HTTP.

@@ -513,6 +513,40 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
     assert.deepEqual(overrides, {});
   });
 
+  it("keeps t3-code and adds project MCP without auto-approving it in a read-only sandbox", () => {
+    const threadId = ThreadId.make("thread-claude-project-mcp");
+    withMcpSession(threadId, () => {
+      const current = McpProviderSession.readMcpProviderSession(threadId)!;
+      McpProviderSession.setMcpProviderSession({
+        ...current,
+        additionalServers: {
+          convene: {
+            endpoint: "http://localhost/convene/mcp",
+            authorizationHeader: "Bearer local-project-lease",
+          },
+        },
+      });
+      const writable = ClaudeAdapterV2.claudeMcpQueryOverrides({
+        threadId,
+        readOnlySandbox: false,
+      });
+      assert.deepEqual(writable.mcpServers?.["t3-code"], T3_MCP_SERVERS["t3-code"]);
+      assert.deepEqual(writable.mcpServers?.convene, {
+        type: "http",
+        url: "http://localhost/convene/mcp",
+        headers: { Authorization: "${T3_CODE_EXTRA_MCP_AUTHORIZATION_0}" },
+      });
+      assert.equal(
+        writable.mcpEnvironment?.T3_CODE_EXTRA_MCP_AUTHORIZATION_0,
+        "Bearer local-project-lease",
+      );
+      assert.isTrue(writable.allowedTools?.includes("mcp__convene__*") ?? false);
+      const readonly = ClaudeAdapterV2.claudeMcpQueryOverrides({ threadId, readOnlySandbox: true });
+      assert.isFalse(readonly.allowedTools?.includes("mcp__convene__*") ?? false);
+      assert.deepEqual(readonly.mcpServers?.convene, writable.mcpServers?.convene);
+    });
+  });
+
   it("preserves an explicit allowlist when no MCP session exists", () => {
     const overrides = ClaudeAdapterV2.claudeMcpQueryOverrides({
       threadId: ThreadId.make("thread-claude-no-mcp-with-allowlist"),

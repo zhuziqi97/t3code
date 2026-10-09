@@ -656,6 +656,12 @@ describe("CodexAdapterV2 process spawning", () => {
       endpoint: "http://127.0.0.1:43123/mcp",
       authorizationHeader: "Bearer secret-codex-token",
       browserToolsAvailable: true,
+      additionalServers: {
+        convene: {
+          endpoint: "http://127.0.0.1:43123/convene/mcp",
+          authorizationHeader: "Bearer project-only-token",
+        },
+      },
     });
 
     try {
@@ -675,6 +681,10 @@ describe("CodexAdapterV2 process spawning", () => {
           config: {
             "tools.update_plan.enabled": true,
             mcp_servers: {
+              convene: {
+                url: "http://127.0.0.1:43123/convene/mcp",
+                http_headers: { Authorization: "Bearer project-only-token" },
+              },
               "t3-code": {
                 url: "http://127.0.0.1:43123/mcp",
                 http_headers: {

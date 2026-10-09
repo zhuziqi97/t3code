@@ -1,5 +1,10 @@
 import type { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 
+export interface McpHttpContribution {
+  readonly endpoint: string;
+  readonly authorizationHeader: string;
+}
+
 export interface McpProviderSessionConfig {
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
@@ -22,6 +27,7 @@ export interface McpProviderSessionConfig {
    * already pointed at the server's daemon; the agent never handles a token.
    */
   readonly agentDeviceEnvironment?: Readonly<Record<string, string>>;
+  readonly additionalServers?: Readonly<Record<string, McpHttpContribution>>;
 }
 
 /** Provider env with the device variables applied over `base`, or `base` untouched. */

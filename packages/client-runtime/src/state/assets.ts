@@ -57,7 +57,12 @@ export function parseAssetCollectionKey(
 
 export function resolveAssetUrl(httpBaseUrl: string, relativeUrl: string): string | null {
   try {
-    return new URL(relativeUrl, httpBaseUrl).toString();
+    return new URL(
+      relativeUrl.startsWith("/") && !relativeUrl.startsWith("//")
+        ? relativeUrl.slice(1)
+        : relativeUrl,
+      httpBaseUrl.replace(/\/+$/, "") + "/",
+    ).toString();
   } catch {
     return null;
   }
@@ -135,7 +140,10 @@ export function createAssetEnvironmentAtoms<R, E>(
       request(WS_METHODS.assetsCreateUrl, input),
     );
     // Callers resolve against the thread's server, so preserve the local server's origin.
-    return { ...asset, relativeUrl: new URL(asset.relativeUrl, local.httpBaseUrl).href };
+    return {
+      ...asset,
+      relativeUrl: resolveAssetUrl(local.httpBaseUrl, asset.relativeUrl) ?? asset.relativeUrl,
+    };
   });
   const createUrl = createEnvironmentQueryAtomFamily(runtime, {
     label: "environment-data:assets:create-url",

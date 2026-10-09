@@ -41,6 +41,7 @@ import {
 import { ProviderWorkspaceMissingError } from "../provider/Errors.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as McpProviderSession from "@t3tools/provider-core/server/mcpSession";
+import * as ConveneMcp from "../convene/ConveneMcp.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as McpSessionRegistry from "../mcp/McpSessionRegistry.ts";
 import * as EventSink from "./EventSink.ts";
@@ -411,6 +412,7 @@ export const layerWithOptions = (
             process.off("SIGTERM", onShutdownSignal);
           }),
       );
+      const conveneMcp = yield* Effect.serviceOption(ConveneMcp.ConveneMcp);
       const sessions = yield* Ref.make(new Map<string, LiveSessionEntry>());
       // One retry per released entry, so a later release with the same id
       // cannot drop cleanup for threads only the earlier session served.
@@ -464,7 +466,7 @@ export const layerWithOptions = (
        * Serialized per thread so two concurrent prepares cannot interleave
        * their rotate steps and revoke each other's freshly minted credential.
        */
-      const prepareMcpSession = (
+      const prepareBaseMcpSession = (
         threadId: ThreadId,
         providerInstanceId: ProviderInstanceId,
       ): Effect.Effect<PreparedMcpCredential> =>
@@ -531,13 +533,45 @@ export const layerWithOptions = (
                 return { mcpCredentialId: credential.config.providerSessionId, issued: true };
               }),
             );
+      const prepareMcpSession = (threadId: ThreadId, providerInstanceId: ProviderInstanceId) =>
+        prepareBaseMcpSession(threadId, providerInstanceId).pipe(
+          Effect.tap((prepared) => {
+            if (Option.isNone(conveneMcp) || prepared.mcpCredentialId === undefined)
+              return Effect.void;
+            const credentialId = prepared.mcpCredentialId;
+            return conveneMcp.value.prepare(threadId, credentialId).pipe(
+              Effect.tap((additionalServers) =>
+                Effect.sync(() => {
+                  const current = McpProviderSession.readMcpProviderSession(threadId);
+                  if (current?.providerSessionId === credentialId)
+                    McpProviderSession.setMcpProviderSession({ ...current, additionalServers });
+                }),
+              ),
+              Effect.onError(() =>
+                Effect.gen(function* () {
+                  dropMcpCredentialReservation(threadId, credentialId);
+                  if (prepared.issued) {
+                    yield* mcpSessionRegistry.revokeProviderSession(credentialId);
+                    yield* Effect.sync(() => {
+                      if (
+                        McpProviderSession.readMcpProviderSession(threadId)?.providerSessionId ===
+                        credentialId
+                      )
+                        McpProviderSession.clearMcpProviderSession(threadId);
+                    });
+                  }
+                }),
+              ),
+            );
+          }),
+        );
       /**
        * With a credential id, revocation is scoped to that credential and the
        * config slot is cleared only while it still holds it; a replacement
        * session's newer credential survives. Without one (attach failed before
        * a credential was recorded), fall back to thread-wide revocation.
        */
-      const clearMcpSession = (threadId: ThreadId, mcpCredentialId?: string) =>
+      const clearBaseMcpSession = (threadId: ThreadId, mcpCredentialId?: string) =>
         mcpCredentialId === undefined
           ? mcpSessionRegistry
               .revokeThread(threadId)
@@ -558,6 +592,15 @@ export const layerWithOptions = (
                 }),
               ),
             );
+
+      const clearMcpSession = (threadId: ThreadId, mcpCredentialId?: string) =>
+        clearBaseMcpSession(threadId, mcpCredentialId).pipe(
+          Effect.andThen(
+            Option.isSome(conveneMcp)
+              ? conveneMcp.value.release(threadId, mcpCredentialId)
+              : Effect.void,
+          ),
+        );
 
       const publishToSubscribers = (
         subscribers: Ref.Ref<
@@ -1309,7 +1352,18 @@ export const layerWithOptions = (
               Effect.uninterruptible,
             );
             if (attached !== undefined) {
-              const prepared = yield* prepareMcpSession(input.threadId, input.providerInstanceId);
+              const prepared = yield* prepareMcpSession(
+                input.threadId,
+                input.providerInstanceId,
+              ).pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new ProviderSessionActivityError({
+                      providerSessionId: input.providerSessionId,
+                      cause,
+                    }),
+                ),
+              );
               preparedForCleanup = prepared;
               if (prepared.mcpCredentialId !== undefined) {
                 const mcpCredentialId = prepared.mcpCredentialId;
@@ -2069,6 +2123,15 @@ export const layerWithOptions = (
               const prepared = yield* prepareMcpSession(
                 input.threadId,
                 input.modelSelection.instanceId,
+              ).pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new ProviderSessionOpenError({
+                      instanceId: input.modelSelection.instanceId,
+                      providerSessionId: input.providerSessionId,
+                      cause,
+                    }),
+                ),
               );
               const mcpCredentialId = prepared.mcpCredentialId;
               // The reservation from prepare protects the credential (which

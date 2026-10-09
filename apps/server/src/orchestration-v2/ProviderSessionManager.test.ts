@@ -37,6 +37,7 @@ import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as McpProviderSession from "@t3tools/provider-core/server/mcpSession";
 import * as McpSessionRegistry from "../mcp/McpSessionRegistry.ts";
+import * as ConveneMcp from "../convene/ConveneMcp.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
@@ -477,6 +478,7 @@ function layerTest(input: {
   readonly scopeCloseReached?: Deferred.Deferred<void>;
   readonly serverSettingsLayer?: ReturnType<typeof ServerSettings.layerTest>;
   readonly projectServiceLayer?: Layer.Layer<ProjectService.ProjectService>;
+  readonly conveneMcp?: ConveneMcp.ConveneMcp["Service"];
 }) {
   const layerConfiguredEventSink =
     input.flakyReleaseWrites !== undefined
@@ -540,6 +542,9 @@ function layerTest(input: {
           layerProviderEventIngestorTest,
           layerConfiguredMcpRegistry,
           layerTestStores,
+          ...(input.conveneMcp === undefined
+            ? []
+            : [Layer.succeed(ConveneMcp.ConveneMcp, input.conveneMcp)]),
           ...(input.serverSettingsLayer === undefined ? [] : [input.serverSettingsLayer]),
           ...(input.projectServiceLayer === undefined ? [] : [input.projectServiceLayer]),
         ),
@@ -565,6 +570,83 @@ const layerTestMcpRegistry = Layer.effect(
   Layer.provide(Layer.succeed(HttpServer.HttpServer, fakeHttpServer)),
   Layer.provide(Layer.succeed(ServerEnvironment.ServerEnvironment, fakeEnvironment)),
   Layer.provide(NodeServices.layer),
+);
+
+it.effect(
+  "Convene MCP acquisition failure revokes the fresh native credential and a retry owns its lease",
+  () =>
+    Effect.gen(function* () {
+      const state = yield* Ref.make(emptyState);
+      const configs = yield* Ref.make<
+        ReadonlyArray<McpProviderSession.McpProviderSessionConfig | undefined>
+      >([]);
+      const leases = new Set<string>();
+      let reject = true;
+      let failedToken: string | undefined;
+      const threadId = ThreadId.make("thread-convene-mcp-failure");
+      const conveneMcp = ConveneMcp.ConveneMcp.of({
+        configure: () => Effect.void,
+        forward: () => Effect.die("unused"),
+        prepare: (id, credentialId) =>
+          Effect.suspend(() => {
+            const current = McpProviderSession.readMcpProviderSession(id);
+            if (reject) {
+              failedToken = current?.authorizationHeader.replace(/^Bearer\s+/, "");
+              return Effect.fail(new ConveneMcp.ConveneMcpError({ category: "credential" }));
+            }
+            leases.add(credentialId);
+            return Effect.succeed({
+              convene: {
+                endpoint: "http://localhost/convene/mcp",
+                authorizationHeader: "Bearer local-project",
+              },
+            });
+          }),
+        release: (_id, credentialId) =>
+          Effect.sync(() => {
+            if (credentialId) leases.delete(credentialId);
+          }),
+      });
+      yield* Effect.gen(function* () {
+        const sink = yield* EventSink.EventSinkV2;
+        const ids = yield* IdAllocator.IdAllocatorV2;
+        const manager = yield* ProviderSessionManager.ProviderSessionManagerV2;
+        const registry = yield* McpSessionRegistry.McpSessionRegistry;
+        const providerSessionId = yield* ids.allocate.providerSession({
+          providerInstanceId: modelSelection.instanceId,
+          threadId,
+        });
+        yield* sink.write({
+          events: [
+            yield* makeThreadCreatedEvent({ idAllocator: ids, threadId, now: yield* DateTime.now }),
+          ],
+        });
+        yield* manager
+          .open({ threadId, providerSessionId, modelSelection, runtimePolicy })
+          .pipe(Effect.flip);
+        assert.isDefined(failedToken);
+        assert.isUndefined(yield* registry.resolve(failedToken!));
+        assert.isUndefined(McpProviderSession.readMcpProviderSession(threadId));
+        assert.isTrue(Option.isNone(yield* manager.get(providerSessionId)));
+        reject = false;
+        yield* manager.open({ threadId, providerSessionId, modelSelection, runtimePolicy });
+        const active = (yield* Ref.get(configs)).at(-1)!;
+        assert.deepEqual(active.additionalServers?.convene, {
+          endpoint: "http://localhost/convene/mcp",
+          authorizationHeader: "Bearer local-project",
+        });
+        assert.isTrue(leases.has(active.providerSessionId));
+        const token = active.authorizationHeader.replace(/^Bearer\s+/, "");
+        assert.isDefined(yield* registry.resolve(token));
+        yield* manager.close(providerSessionId);
+        assert.equal(leases.size, 0);
+        assert.isUndefined(yield* registry.resolve(token));
+      }).pipe(
+        Effect.provide(
+          layerTest({ state, idleTimeoutMs: 60_000, mcpConfigs: configs, conveneMcp }),
+        ),
+      );
+    }).pipe(Effect.scoped),
 );
 
 const layerPausingMcpRegistry = (pause: {

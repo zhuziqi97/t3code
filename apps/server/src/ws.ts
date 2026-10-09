@@ -176,6 +176,9 @@ import * as ServerSelfUpdate from "./cloud/selfUpdate.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import * as ServerSettings from "./serverSettings.ts";
+import * as ConveneSettings from "./convene/ConveneSettings.ts";
+import * as ConveneConnection from "./convene/ConveneConnection.ts";
+import * as ConveneConfiguration from "./convene/ConveneConfiguration.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
 import { withTerminalOutputWindow } from "./terminal/OutputProtocol.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
@@ -1283,6 +1286,9 @@ const layerWsRpc = (
       const config = yield* ServerConfig.ServerConfig;
       const lifecycleEvents = yield* ServerLifecycleEvents.ServerLifecycleEvents;
       const serverSettings = yield* ServerSettings.ServerSettingsService;
+      const conveneSettings = yield* ConveneSettings.ConveneSettings;
+      const conveneConnection = yield* ConveneConnection.ConveneConnection;
+      const conveneConfiguration = yield* ConveneConfiguration.ConveneConfiguration;
       const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
       const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
       const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
@@ -2386,6 +2392,12 @@ const layerWsRpc = (
             const keybindingsConfig = yield* keybindings.removeKeybindingRule(rule);
             return { keybindings: keybindingsConfig, issues: [] };
           }),
+        [WS_METHODS.conveneStatus]: () => conveneConnection.status,
+        [WS_METHODS.conveneSubscribeStatus]: () => conveneConnection.changes,
+        [WS_METHODS.conveneManage]: (input) => conveneSettings.manage(input),
+        [WS_METHODS.conveneQueryProject]: (input) => conveneSettings.queryProject(input.projectId),
+        [WS_METHODS.conveneMutateProject]: (input) => conveneConfiguration.mutate(input),
+        [WS_METHODS.conveneProjectOptions]: (input) => conveneConfiguration.options(input),
         [WS_METHODS.serverGetSettings]: (_input) =>
           serverSettings.getSettings.pipe(Effect.map(ServerSettings.redactServerSettingsForClient)),
         [WS_METHODS.serverUpdateSettings]: ({ patch, providerInstanceMutation }) =>

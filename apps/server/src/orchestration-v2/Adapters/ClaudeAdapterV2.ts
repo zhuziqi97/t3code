@@ -989,9 +989,34 @@ export function claudeMcpQueryOverrides(input: {
   const mcpAllowedTools = input.readOnlySandbox
     ? CLAUDE_READ_ONLY_T3_MCP_ALLOWED_TOOLS
     : [CLAUDE_T3_MCP_TOOL_WILDCARD];
+  const additionalServers = Object.entries(session.additionalServers ?? {}).map(
+    ([name, server], index) => ({
+      name,
+      server,
+      authorizationEnvironment: `T3_CODE_EXTRA_MCP_AUTHORIZATION_${index}`,
+    }),
+  );
   return {
-    allowedTools: Array.from(new Set([...(input.allowedTools ?? []), ...mcpAllowedTools])),
+    allowedTools: Array.from(
+      new Set([
+        ...(input.allowedTools ?? []),
+        ...mcpAllowedTools,
+        ...(input.readOnlySandbox
+          ? []
+          : Object.keys(session.additionalServers ?? {}).map((name) => `mcp__${name}__*`)),
+      ]),
+    ),
     mcpServers: {
+      ...Object.fromEntries(
+        additionalServers.map(({ name, server, authorizationEnvironment }) => [
+          name,
+          {
+            type: "http" as const,
+            url: server.endpoint,
+            headers: { Authorization: `\${${authorizationEnvironment}}` },
+          },
+        ]),
+      ),
       "t3-code": {
         type: "http",
         url: session.endpoint,
@@ -1001,7 +1026,15 @@ export function claudeMcpQueryOverrides(input: {
         timeout: CLAUDE_T3_MCP_TOOL_TIMEOUT_MS,
       },
     },
-    mcpEnvironment: { [CLAUDE_T3_MCP_AUTHORIZATION_ENV]: session.authorizationHeader },
+    mcpEnvironment: {
+      [CLAUDE_T3_MCP_AUTHORIZATION_ENV]: session.authorizationHeader,
+      ...Object.fromEntries(
+        additionalServers.map(({ server, authorizationEnvironment }) => [
+          authorizationEnvironment,
+          server.authorizationHeader,
+        ]),
+      ),
+    },
   };
 }
 

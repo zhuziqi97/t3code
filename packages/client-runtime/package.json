@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./state/convene": {
+      "types": "./src/state/convene.ts",
+      "default": "./src/state/convene.ts"
+    },
     "./composerThreadItems": {
       "types": "./src/composerThreadItems.ts",
       "default": "./src/composerThreadItems.ts"
