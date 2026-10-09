@@ -7,10 +7,10 @@ function terminalNumber(terminalId: string): string | undefined {
 }
 
 /** Human-readable label for a terminal tab; matches mobile and web sidebars. */
-export function getTerminalLabel(terminalId: string): string {
+export function getTerminalLabel(terminalId: string, label = "Terminal"): string {
   const numericSuffix = terminalNumber(terminalId);
   if (numericSuffix) {
-    return `Terminal ${numericSuffix}`;
+    return `${label} ${numericSuffix}`;
   }
 
   return terminalId;
