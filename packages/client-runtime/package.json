@@ -394,6 +394,10 @@
     "./state/mcp-apps": {
       "types": "./src/state/mcpApps.ts",
       "default": "./src/state/mcpApps.ts"
+    },
+    "./i18n/languages": {
+      "types": "./src/i18n/languages.ts",
+      "default": "./src/i18n/languages.ts"
     }
   },
   "scripts": {

@@ -2,7 +2,7 @@ import { ClientSettingsSchema, type ClientSettings } from "@t3tools/contracts";
 
 import { getLocalStorageItem, setLocalStorageItem } from "./hooks/useLocalStorage";
 
-const CLIENT_SETTINGS_STORAGE_KEY = "t3code:client-settings:v1";
+import { CLIENT_SETTINGS_STORAGE_KEY } from "./clientSettingsStorageKey";
 
 function hasWindow(): boolean {
   return typeof window !== "undefined";
