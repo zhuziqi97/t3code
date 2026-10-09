@@ -681,6 +681,13 @@ it("finds tool discovery and automatic fetching by Chinese terms", async () => {
 
 it("finds appearance and typography controls by Chinese terms with their existing targets", async () => {
   await changeLanguage("zh");
+  expect(searchSettings("跟随系统外观")[0]).toMatchObject({
+    id: "color-scheme",
+    title: "颜色模式",
+    to: "/settings/appearance",
+    targetId: "appearance",
+  });
+  expect(searchSettings("color scheme")[0]?.id).toBe("color-scheme");
   for (const [query, id] of [
     ["玻璃效果", "setting-glass-opacity"],
     ["版本标签", "environment-identification"],

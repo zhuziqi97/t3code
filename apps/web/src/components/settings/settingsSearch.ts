@@ -237,9 +237,14 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "color-scheme",
-    title: "Color scheme",
+    get title() {
+      return i18n.t("settings.search.color-scheme.title");
+    },
     to: "/settings/appearance",
-    searchTerms: ["appearance light dark system mode"],
+    searchTerms: [
+      "color scheme appearance light dark system mode",
+      "颜色模式 浅色 深色 跟随系统外观",
+    ],
     // The scheme tiles sit at the top of the Appearance section.
     targetId: "appearance",
   },
