@@ -318,3 +318,9 @@ it("does not finish or claim success when the desktop could not reload", async (
   expect(complete).not.toHaveBeenCalled();
   expect(toastManager.add).not.toHaveBeenCalled();
 });
+
+// Direct hook-harness tests use the existing English expectations at the translation boundary.
+vi.mock("../../i18n", async (original) => {
+  const actual = await original<typeof import("../../i18n")>();
+  return { ...actual, useTranslate: () => actual.i18n.getFixedT("en") };
+});

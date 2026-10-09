@@ -782,3 +782,29 @@ it("finds device integration destinations using either language and keeps scope 
     expect.objectContaining({ id: "device-hosts" }),
   );
 });
+
+it("finds snapshot settings using Chinese and English without changing destinations", async () => {
+  await changeLanguage("zh");
+  for (const [query, id, title] of [
+    ["窗口快照", "snap-shot-enabled", "SnapShots"],
+    ["包含应用文字", "snap-shot-accessibility", "包含应用文字"],
+    ["快照快捷键", "snap-shot-shortcut", "快照快捷键"],
+    ["快照声音", "snap-shot-sound", "快照声音"],
+    ["快照闪光", "snap-shot-flash", "快照闪光"],
+    ["快照动画", "snap-shot-animations", "快照动画"],
+  ])
+    expect(searchSettings(query!)).toContainEqual(
+      expect.objectContaining({ id, title, to: "/settings/snap-shot" }),
+    );
+  await changeLanguage("en");
+  expect(searchSettings("快照快捷键")).toContainEqual(
+    expect.objectContaining({
+      id: "snap-shot-shortcut",
+      title: "Capture shortcut",
+      targetId: "snap-shot-enabled",
+    }),
+  );
+  expect(searchSettings("Capture shortcut")).toContainEqual(
+    expect.objectContaining({ id: "snap-shot-shortcut" }),
+  );
+});

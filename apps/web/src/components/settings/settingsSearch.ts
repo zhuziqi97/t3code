@@ -848,42 +848,64 @@ export const SETTINGS_SEARCH_ITEMS = [
   ...KEYBINDING_SEARCH_ITEMS,
   {
     id: "snap-shot-enabled",
-    title: "SnapShots",
-    searchTerms: ["window capture screenshot"],
+    get title() {
+      return i18n.t("settings.sections.snap-shot");
+    },
+    searchTerms: [
+      "SnapShots SnapShots",
+      "窗口快照 截图 截屏 窗口捕获",
+      "window capture screenshot",
+    ],
     to: "/settings/snap-shot",
   },
   {
     id: "snap-shot-accessibility",
-    title: "Include app text",
+    get title() {
+      return i18n.t("snapshots.search.text");
+    },
     to: "/settings/snap-shot",
     targetId: "snap-shot-enabled",
     searchTerms: [
+      "Include app text 包含应用文字",
+      "应用文字 文本 辅助功能 控件 隐私",
       "capture accessibility data text UI structure elements privacy omit agent context",
     ],
   },
   {
     id: "snap-shot-shortcut",
-    title: "Capture shortcut",
+    get title() {
+      return i18n.t("snapshots.search.shortcut");
+    },
     to: "/settings/snap-shot",
     targetId: "snap-shot-enabled",
+    searchTerms: ["Capture shortcut 快照快捷键", "快照快捷键 快捷键 按键 录制"],
   },
   {
     id: "snap-shot-sound",
-    title: "Capture sound",
+    get title() {
+      return i18n.t("snapshots.search.sound");
+    },
     to: "/settings/snap-shot",
     targetId: "snap-shot-enabled",
+    searchTerms: ["Capture sound 快照声音", "快照声音 音效 风声 快门声 静音"],
   },
   {
     id: "snap-shot-flash",
-    title: "Capture flash",
+    get title() {
+      return i18n.t("snapshots.search.flash");
+    },
     to: "/settings/snap-shot",
     targetId: "snap-shot-enabled",
+    searchTerms: ["Capture flash 快照闪光", "快照闪光 闪烁 提示"],
   },
   {
     id: "snap-shot-animations",
-    title: "Capture animations",
+    get title() {
+      return i18n.t("snapshots.search.animations");
+    },
     to: "/settings/snap-shot",
     targetId: "snap-shot-enabled",
+    searchTerms: ["Capture animations 快照动画", "快照动画 草稿"],
   },
   {
     id: "providers",
