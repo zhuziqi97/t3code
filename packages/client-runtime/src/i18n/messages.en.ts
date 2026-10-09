@@ -3590,6 +3590,31 @@ export const en = {
   "settings.search.storage-artifacts.title": "Artifacts and logs",
 
   "scope.openAllEnvironments": "Open all environments",
+
+  "settings.save.notSaved": "Setting not saved",
+  "settings.save.partial": "Setting saved on some environments",
+  "settings.save.permission": "This connection lacks permission to change these settings.",
+  "settings.save.failedOn": "Could not save on {{environment}}: {{message}}",
+  "settings.save.savedOn": "Saved on {{environments}}.",
+  "settings.save.environmentOnly":
+    "This setting is environment-wide and cannot be overridden by a project.",
+  "settings.save.projectDisconnected":
+    "Connect the selected checkouts, or update their environments, to save a project override.",
+  "settings.save.connectNamed": "Connect {{environment}} to save this setting.",
+  "settings.save.connect": "Connect an environment to save this setting.",
+  "settings.save.resetDisconnected":
+    "Connect the selected checkouts, or update their environments, to reset this override.",
+  "settings.save.resetEnvironments": "Connect the environments to reset these overrides.",
+  "settings.save.failed": "The save failed. Try reconnecting and saving again.",
+  "scope.unavailableLabel": "Unavailable selection",
+  "scope.projectRequired": "Select a project to choose one of its checkouts.",
+  "scope.environmentMissing": "This environment is no longer available.",
+  "scope.projectMissing": "This project is no longer available.",
+  "scope.checkoutMissing":
+    "This checkout is no longer available in the selected project and environment.",
+  "scope.noCheckout": "This project has no checkout on this environment.",
+  "scope.checkoutEnvironmentMissing": "This checkout's environment is no longer available.",
+  "scope.allCheckouts": "All checkouts",
 } as const;
 
 export type MessageKey = keyof typeof en;
