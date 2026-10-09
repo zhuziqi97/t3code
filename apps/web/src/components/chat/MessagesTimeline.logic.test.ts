@@ -1370,7 +1370,7 @@ describe("deriveMessagesTimelineRows", () => {
     expect(foldRow?.runId).toBe("turn-1");
     expect(foldRow?.expanded).toBe(false);
     // User message boundary (00:00:00) → terminal message updatedAt (00:00:22).
-    expect(foldRow?.label).toBe("Worked for 22s");
+    expect(foldRow).toMatchObject({ duration: "22s", interrupted: false });
     expect(collapsedRows.map((row) => row.id)).toEqual([
       "user-entry",
       "turn-fold:turn-1",
@@ -1662,7 +1662,7 @@ describe("deriveMessagesTimelineRows", () => {
     );
     // User message (00:00:00) → trailing work entry (00:00:12).
     expect(foldRow?.runId).toBe("turn-1");
-    expect(foldRow?.label).toBe("Worked for 12s");
+    expect(foldRow).toMatchObject({ duration: "12s", interrupted: false });
   });
 
   it("uses latest-turn timings and the stopped label for an interrupted latest turn", () => {
@@ -1697,7 +1697,8 @@ describe("deriveMessagesTimelineRows", () => {
       expect.objectContaining({
         kind: "turn-fold",
         runId: "turn-1",
-        label: "You stopped after 47s",
+        duration: "47s",
+        interrupted: true,
         expanded: false,
       }),
     ]);
@@ -1814,7 +1815,8 @@ describe("deriveMessagesTimelineRows", () => {
             "steer",
           ]);
           expect(rows[1]?.createdAt).toBe(time(0));
-          if (!isWorking) expect(rows[1]).toMatchObject({ label: "Worked for 20s", expanded });
+          if (!isWorking)
+            expect(rows[1]).toMatchObject({ duration: "20s", interrupted: false, expanded });
           expect(rows.some((row) => row.id === "final")).toBe(true);
           expect(rows.some((row) => row.id === "work")).toBe(isWorking || expanded);
         }
@@ -2280,7 +2282,7 @@ describe("deriveMessagesTimelineRows", () => {
     const shape = (timeline: ReadonlyArray<MessagesTimelineRow>) =>
       timeline.map((row) =>
         row.kind === "turn-fold"
-          ? `fold:${row.label}`
+          ? `fold:${row.interrupted ? "stopped" : "worked"}:${row.duration}`
           : row.kind === "message"
             ? `${row.message.role}:${row.message.id}`
             : row.kind,
@@ -2290,10 +2292,10 @@ describe("deriveMessagesTimelineRows", () => {
     const settled = rows({ resume: "completed", working: false });
     expect(shape(settled)).toEqual([
       "user:launch",
-      "fold:Worked for 8.0s",
+      "fold:worked:8.0s",
       "assistant:launch-answer",
       "user:resume",
-      "fold:Worked for 8.0s",
+      "fold:worked:8.0s",
       "assistant:resume-answer",
     ]);
 
@@ -2307,18 +2309,18 @@ describe("deriveMessagesTimelineRows", () => {
     });
     expect(shape(expanded)).toEqual([
       "user:launch",
-      "fold:Worked for 8.0s",
+      "fold:worked:8.0s",
       "work-toggle",
       "assistant:launch-answer",
       "user:resume",
-      "fold:Worked for 8.0s",
+      "fold:worked:8.0s",
       "assistant:resume-answer",
     ]);
 
     // While the resume runs, only the settled launch folds.
     expect(shape(rows({ resume: "running", working: true }))).toEqual([
       "user:launch",
-      "fold:Worked for 8.0s",
+      "fold:worked:8.0s",
       "assistant:launch-answer",
       "user:resume",
       "working",
@@ -2328,7 +2330,7 @@ describe("deriveMessagesTimelineRows", () => {
     // A failed run stays open, as on a normal thread.
     expect(shape(rows({ resume: "failed", working: false }))).toEqual([
       "user:launch",
-      "fold:Worked for 8.0s",
+      "fold:worked:8.0s",
       "assistant:launch-answer",
       "user:resume",
       "work",
@@ -3697,7 +3699,7 @@ describe("v2 run and attempt history", () => {
     expect(foldRow?.runId).toBe("turn-1");
     expect(foldRow?.expanded).toBe(false);
     // User message boundary (00:00:00) → terminal message updatedAt (00:00:22).
-    expect(foldRow?.label).toBe("Worked for 22s");
+    expect(foldRow).toMatchObject({ duration: "22s", interrupted: false });
     expect(collapsedRows.map((row) => row.id)).toEqual([
       "user-entry",
       "turn-fold:turn-1",

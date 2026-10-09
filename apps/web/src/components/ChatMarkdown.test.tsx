@@ -13,6 +13,7 @@ import { create, type ReactTestRenderer } from "react-test-renderer";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { getSyntaxHighlighterPromise } from "../lib/syntaxHighlighting";
+import { i18n } from "../i18n";
 import { GitHubIcon } from "./Icons";
 import { Button } from "./ui/button";
 import { setMarkdownTaskChecked } from "./files/filePreviewMode";
@@ -93,6 +94,89 @@ function codeButton(renderer: ReactTestRenderer, label: string) {
   if (!button) throw new Error(`Missing code button: ${label}`);
   return button.props as ComponentProps<typeof Button>;
 }
+
+it("relabels Markdown controls without resetting wrapping or duplicating a pending copy", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const originalLanguage = i18n.language;
+  const run = vi.fn();
+  let finishCopy!: () => void;
+  const writeText = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        finishCopy = resolve;
+      }),
+  );
+  const originalClipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  const button = (label: string) => {
+    const element = container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+    if (!element) throw new Error(`Missing Markdown control: ${label}`);
+    return element;
+  };
+  const text =
+    '```bash\necho "Keep 原文"\n```\n\n| Field | Value |\n| --- | --- |\n| raw_id | New thread |\n\n```mermaid\ngraph TD; Alpha-->Beta\n```';
+  try {
+    await act(async () => {
+      await i18n.changeLanguage("en");
+      root.render(<ChatMarkdown cwd={undefined} text={text} onRunShellCommand={run} />);
+    });
+    const code = container.querySelector('[data-language="bash"]')!;
+    const table = container.querySelector("table")!;
+    const initialWrap = code.getAttribute("data-wrap");
+    const initialExpanded = table.closest("[data-expanded]")!.getAttribute("data-expanded");
+    await act(async () => {
+      button(initialWrap === "true" ? "Disable line wrap" : "Wrap lines").click();
+      button(initialExpanded === "true" ? "Collapse table cells" : "Expand table cells").click();
+      button("Show code").click();
+      button("Copy code").click();
+    });
+    expect(writeText).toHaveBeenCalledExactlyOnceWith('echo "Keep 原文"\n');
+    await act(async () => {
+      await i18n.changeLanguage("zh");
+    });
+    expect(container.querySelector('[data-language="bash"]')).toBe(code);
+    expect(container.querySelector("table")).toBe(table);
+    expect(code.getAttribute("data-wrap")).not.toBe(initialWrap);
+    expect(table.closest("[data-expanded]")!.getAttribute("data-expanded")).not.toBe(
+      initialExpanded,
+    );
+    expect(button("显示图表")).toBeTruthy();
+    expect(button("在终端中运行")).toBeTruthy();
+    expect(container.querySelector('[role="toolbar"]')?.getAttribute("aria-label")).toBe(
+      "代码块操作",
+    );
+    expect(container.textContent).toContain("raw_id");
+    expect(container.textContent).toContain("New thread");
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(run).not.toHaveBeenCalled();
+    await act(async () => {
+      finishCopy();
+    });
+    expect(button("已复制")).toBeTruthy();
+    await act(async () => {
+      await i18n.changeLanguage("en");
+    });
+    expect(button("Copied")).toBeTruthy();
+    expect(button("Show diagram")).toBeTruthy();
+    await act(async () => {
+      button("Run in terminal").click();
+    });
+    expect(run).toHaveBeenCalledExactlyOnceWith('echo "Keep 原文"');
+    expect(writeText).toHaveBeenCalledTimes(1);
+  } finally {
+    await act(async () => {
+      root.unmount();
+      await i18n.changeLanguage(originalLanguage);
+    });
+    container.remove();
+    if (originalClipboard) Object.defineProperty(navigator, "clipboard", originalClipboard);
+    else Reflect.deleteProperty(navigator, "clipboard");
+    vi.unstubAllGlobals();
+  }
+});
 
 describe("ChatMarkdown bare anchor placeholders", () => {
   it.each(["<A>", "<a>", "<a >", "<a/>", "<A/>", "<a />"])(

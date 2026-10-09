@@ -1,3 +1,4 @@
+import { useTranslate } from "../i18n";
 import { MarkdownFindContext, useFindRevealRef } from "./chat/markdownFindContext";
 import {
   buildFileLinkParentSuffixByPath,
@@ -557,13 +558,14 @@ function readInitialWordWrapSetting(): boolean {
 }
 
 function MarkdownTable({ children, ...props }: React.ComponentProps<"table">) {
+  const t = useTranslate();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const tableRef = useRef<HTMLTableElement | null>(null);
   const [expanded, setExpanded] = useState(readInitialWordWrapSetting);
   const [copied, setCopied] = useState(false);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const expandLabel = expanded ? "Collapse table cells" : "Expand table cells";
-  const copyLabel = copied ? "Copied" : "Copy table";
+  const expandLabel = t(expanded ? "chat.markdown.collapseCells" : "chat.markdown.expandCells");
+  const copyLabel = t(copied ? "chat.markdown.copied" : "chat.markdown.copyTable");
 
   function toggleExpanded() {
     const table = tableRef.current;
@@ -675,8 +677,10 @@ function MarkdownTable({ children, ...props }: React.ComponentProps<"table">) {
             <TooltipPopup side="top">{copyLabel}</TooltipPopup>
           </Tooltip>
           <MenuPopup align="end">
-            <MenuItem onClick={() => handleCopy("markdown")}>Copy as Markdown</MenuItem>
-            <MenuItem onClick={() => handleCopy("csv")}>Copy as CSV</MenuItem>
+            <MenuItem onClick={() => handleCopy("markdown")}>
+              {t("chat.markdown.copyMarkdown")}
+            </MenuItem>
+            <MenuItem onClick={() => handleCopy("csv")}>{t("chat.markdown.copyCsv")}</MenuItem>
           </MenuPopup>
         </Menu>
       </div>
@@ -688,6 +692,7 @@ function MarkdownDetails({
   children,
   open = false,
 }: Pick<React.ComponentProps<"details">, "children" | "open">) {
+  const t = useTranslate();
   const [isOpen, setIsOpen] = useState(open);
   const searching = use(MarkdownFindContext);
   const expanded = isOpen;
@@ -703,7 +708,7 @@ function MarkdownDetails({
   const summary =
     isValidElement<{ children?: ReactNode }>(summaryNode) && summaryNode.props.children
       ? summaryNode.props.children
-      : "Details";
+      : t("chat.markdown.details");
   const content = childNodes.filter((_, index) => index !== summaryIndex);
 
   return (
@@ -863,11 +868,12 @@ function MarkdownCodeBlock({
   diagram?: boolean;
   children: ReactNode;
 }) {
+  const t = useTranslate();
   const [copied, setCopied] = useState(false);
   const [wrapped, setWrapped] = useState(readInitialWordWrapSetting);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const wrapLabel = wrapped ? "Disable line wrap" : "Wrap lines";
-  const copyLabel = copied ? "Copied" : "Copy code";
+  const wrapLabel = t(wrapped ? "chat.markdown.unwrap" : "chat.markdown.wrap");
+  const copyLabel = t(copied ? "chat.markdown.copied" : "chat.markdown.copyCode");
   const command = code.trim();
   const canRun =
     onRunShellCommand !== undefined &&
@@ -958,7 +964,11 @@ function MarkdownCodeBlock({
       // Find does not count the header, so it must not highlight it either.
       headerProps={THREAD_FIND_IGNORE_PROPS}
       actions={
-        <span className="flex items-center gap-0.5" role="toolbar" aria-label="Code block actions">
+        <span
+          className="flex items-center gap-0.5"
+          role="toolbar"
+          aria-label={t("chat.markdown.codeActions")}
+        >
           {leadingActions}
           {canWrap ? (
             <Tooltip>
@@ -988,13 +998,13 @@ function MarkdownCodeBlock({
                     variant="ghost-muted"
                     size="icon-xs"
                     onClick={() => onRunShellCommand(command)}
-                    aria-label="Run in terminal"
+                    aria-label={t("chat.markdown.runTerminal")}
                   />
                 }
               >
                 <PlayIcon className="size-3" />
               </TooltipTrigger>
-              <TooltipPopup side="top">Run in terminal</TooltipPopup>
+              <TooltipPopup side="top">{t("chat.markdown.runTerminal")}</TooltipPopup>
             </Tooltip>
           ) : null}
           {copyButton}
@@ -1025,12 +1035,13 @@ function MarkdownMermaidCodeBlock({
   onExpand: (imageUrl: string) => void;
   children: ReactNode;
 }) {
+  const t = useTranslate();
   const [showCode, setShowCode] = useState(false);
   const searching = use(MarkdownFindContext);
   const revealSource = useCallback(() => setShowCode(true), []);
   const sourceRevealRef = useFindRevealRef(revealSource);
   const showDiagram = !showCode && !isStreaming && code.trim().length > 0;
-  const toggleLabel = showCode ? "Show diagram" : "Show code";
+  const toggleLabel = t(showCode ? "chat.markdown.showDiagram" : "chat.markdown.showCode");
   return (
     <MarkdownCodeBlock
       code={code}
@@ -1066,7 +1077,7 @@ function MarkdownMermaidCodeBlock({
           <Suspense
             fallback={
               <div className="flex min-h-36 items-center justify-center text-xs text-muted-foreground">
-                Rendering diagram
+                {t("chat.markdown.renderingDiagram")}
               </div>
             }
           >

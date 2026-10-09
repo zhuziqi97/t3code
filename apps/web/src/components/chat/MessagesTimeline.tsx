@@ -2710,7 +2710,15 @@ function TimelineRowTimestamp({
 }
 
 function TurnFoldTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "turn-fold" }> }) {
+  const t = useTranslate();
   const ctx = use(TimelineRowCtx);
+  const label = row.interrupted
+    ? row.duration
+      ? t("chat.timeline.stoppedAfter", { duration: row.duration })
+      : t("chat.timeline.stoppedResponse")
+    : row.duration
+      ? t("chat.timeline.workedFor", { duration: row.duration })
+      : t("chat.timeline.worked");
 
   return (
     <div className="group/timeline-row relative flex items-center gap-1 border-b border-border/60 pb-2 pe-0.5 pt-1">
@@ -2721,7 +2729,7 @@ function TurnFoldTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "turn-
         onClick={() => ctx.onToggleTurnFold(row.runId)}
         className="flex cursor-pointer select-none items-center gap-1 rounded-md px-1 text-sm leading-relaxed text-muted-foreground tabular-nums transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
       >
-        <span>{row.label}</span>
+        <span>{label}</span>
         <MorphIcon className="size-3.5" icon={row.expanded ? ChevronDown : ChevronRight} />
       </button>
       <TimelineRowTimestamp
@@ -2750,7 +2758,9 @@ function AttemptFoldTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "at
         className="size-3.5 shrink-0 text-muted-foreground"
         icon={row.expanded ? ChevronDown : ChevronRight}
       />
-      <span className="text-xs font-medium text-foreground/80">{row.label}</span>
+      <span className="text-xs font-medium text-foreground/80">
+        {t("chat.timeline.supersededAttempt")}
+      </span>
       <span className="text-2xs text-muted-foreground">{t("chat.timeline.partialRetained")}</span>
     </button>
   );

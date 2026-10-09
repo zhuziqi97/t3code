@@ -576,7 +576,8 @@ type MessagesTimelineRowContent =
       id: string;
       createdAt: string;
       runId: RunId;
-      label: string;
+      duration: string | null;
+      interrupted: boolean;
       expanded: boolean;
     }
   | {
@@ -740,7 +741,8 @@ interface TurnFold {
   anchorEntryId: string;
   createdAt: string;
   hiddenEntryIds: ReadonlySet<string>;
-  label: string;
+  duration: string | null;
+  interrupted: boolean;
 }
 
 interface SupersededAttemptFold {
@@ -1124,20 +1126,13 @@ function deriveTurnFolds(input: {
               lastEntryEnd,
           );
     const duration = elapsedMs !== null ? formatDuration(elapsedMs) : null;
-    const label = isLatestInterruptedTurn
-      ? duration
-        ? `You stopped after ${duration}`
-        : "You stopped this response"
-      : duration
-        ? `Worked for ${duration}`
-        : "Worked";
-
     foldsByAnchorEntryId.set(group.anchorEntryId, {
       runId,
       anchorEntryId: group.anchorEntryId,
       createdAt: group.startBoundary ?? firstEntry.createdAt,
       hiddenEntryIds,
-      label,
+      duration,
+      interrupted: isLatestInterruptedTurn,
     });
   }
   return foldsByAnchorEntryId;
@@ -1542,7 +1537,8 @@ export function deriveMessagesTimelineRows(input: {
         id: `turn-fold:${turnFold.runId}`,
         createdAt: turnFold.createdAt,
         runId: turnFold.runId,
-        label: turnFold.label,
+        duration: turnFold.duration,
+        interrupted: turnFold.interrupted,
         expanded: input.expandedRunIds?.has(turnFold.runId) ?? false,
       });
     }
@@ -2191,7 +2187,12 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
 
     case "turn-fold": {
       const bf = b as typeof a;
-      return a.createdAt === bf.createdAt && a.label === bf.label && a.expanded === bf.expanded;
+      return (
+        a.createdAt === bf.createdAt &&
+        a.duration === bf.duration &&
+        a.interrupted === bf.interrupted &&
+        a.expanded === bf.expanded
+      );
     }
 
     case "attempt-fold": {
