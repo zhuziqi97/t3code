@@ -497,7 +497,7 @@ function ConnectAccountOption({
             {!isLoaded
               ? t("wizard.connection.loadingSignIn")
               : !isSignedIn
-                ? t("wizard.connection.signIn")
+                ? t("wizard.signIn")
                 : !discoveryReady
                   ? t("wizard.connection.loadingComputers")
                   : null}

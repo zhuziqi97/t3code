@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   complete: vi.fn(),
   refresh: vi.fn(),
   toast: vi.fn(),
+  openAuthPrompt: vi.fn(),
+  cloudEnabled: false,
   projects: [] as Array<{ id: string; environmentId: string; workspaceRoot: string }>,
 }));
 vi.mock("../../state/session", () => ({
@@ -33,12 +35,22 @@ vi.mock("../../state/entities", () => ({
   useProjects: () => mocks.projects,
   readProjects: () => mocks.projects,
 }));
-vi.mock("../../state/environments", () => {
+vi.mock("../../state/environments", async () => {
+  const { PrimaryConnectionTarget } = await import("@t3tools/client-runtime/connection");
+  const { EnvironmentId } = await import("@t3tools/contracts");
   const environment = {
     environmentId: "test-env",
     label: "Computer",
     connection: { phase: "connected" },
-    entry: { enabled: true },
+    entry: {
+      enabled: true,
+      target: new PrimaryConnectionTarget({
+        environmentId: EnvironmentId.make("test-env"),
+        label: "Computer",
+        httpBaseUrl: "http://127.0.0.1:3773",
+        wsBaseUrl: "ws://127.0.0.1:3773",
+      }),
+    },
   };
   return {
     useEnvironments: () => ({ environments: [environment] }),
@@ -78,8 +90,11 @@ vi.mock("../../onboarding/useProjectScans", () => ({
 }));
 vi.mock("../../connection/onboarding", () => ({ connectPairing: vi.fn() }));
 vi.mock("../../state/terminal", () => ({ terminalEnvironment: {} }));
-vi.mock("../clerk/useT3ConnectAuthPrompt", () => ({ useT3ConnectAuthPrompt: vi.fn() }));
-vi.mock("../../cloud/publicConfig", () => ({ hasCloudPublicConfig: () => false }));
+vi.mock("@clerk/react", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: false }) }));
+vi.mock("../clerk/useT3ConnectAuthPrompt", () => ({
+  useT3ConnectAuthPrompt: () => ({ openAuthPrompt: mocks.openAuthPrompt }),
+}));
+vi.mock("../../cloud/publicConfig", () => ({ hasCloudPublicConfig: () => mocks.cloudEnabled }));
 vi.mock("../ThreadTerminalDrawer", () => ({ TerminalViewport: () => null }));
 vi.mock("../settings/ChatGptWelcomeCoordinator", () => ({ ChatGptWelcomeCoordinator: () => null }));
 vi.mock("../settings/CodexSetupSection", () => ({
@@ -94,12 +109,14 @@ vi.mock("../ui/toast", () => ({
 }));
 
 import { WelcomeWizard } from "./WelcomeWizard";
+import { changeLanguage } from "../../i18n";
 
 let root: Root;
 let container: HTMLDivElement;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.cloudEnabled = false;
   vi.stubGlobal(
     "ResizeObserver",
     class {
@@ -127,6 +144,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  await changeLanguage("en");
 });
 
 async function click(label: string) {
@@ -136,6 +154,22 @@ async function click(label: string) {
   expect(button, `button ${label}`).toBeDefined();
   await act(async () => button!.click());
 }
+
+it("updates the signed-out T3 Connect action when the language changes and still opens sign-in", async () => {
+  mocks.cloudEnabled = true;
+  await act(async () => root.render(<WelcomeWizard localAvailable onDone={vi.fn()} />));
+  const connectButton = [...document.querySelectorAll("button")].find((element) =>
+    element.textContent?.includes("T3 Connect"),
+  );
+  expect(connectButton).toBeDefined();
+  expect(connectButton!.textContent).toContain("Sign in");
+  await act(async () => {
+    await changeLanguage("zh");
+  });
+  expect(connectButton!.textContent).toContain("登录");
+  await act(async () => connectButton!.click());
+  expect(mocks.openAuthPrompt).toHaveBeenCalledOnce();
+});
 
 it("enters the workspace after a partial import and warns after navigation finishes", async () => {
   let finishNavigation = () => {};
