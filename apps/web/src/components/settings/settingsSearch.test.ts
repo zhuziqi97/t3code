@@ -573,3 +573,17 @@ it("finds Chinese settings with the same destination after a language switch", a
   await changeLanguage("en");
   expect(searchableSetting("default-model").title).toBe("Default model");
 });
+
+it("finds connection settings by Chinese actions and keeps their original destinations", async () => {
+  await changeLanguage("zh");
+  for (const [query, id] of [
+    ["配对", "remote-environments"],
+    ["局域网", "network-access"],
+    ["已授权", "connections-environment"],
+    ["暂存", "hold-webhooks-while-offline"],
+    ["负载", "load-balancing"],
+  ]) {
+    const result = searchSettings(query!).find((item) => item.id === id);
+    expect(result, query).toMatchObject({ id, to: "/settings/connections" });
+  }
+});

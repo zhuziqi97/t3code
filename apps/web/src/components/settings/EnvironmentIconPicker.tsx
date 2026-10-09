@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next";
+import { i18n, useTranslate } from "../../i18n";
 import {
   AuthSettingsWriteScope,
   ENVIRONMENT_MACHINE_KINDS,
@@ -24,18 +26,21 @@ import {
  * Why the picker is inert, in the order the user can do something about it.
  * Null means it can be changed.
  */
-export function resolveEnvironmentIconPickerLock(input: {
-  readonly serverConfig: ServerConfig | null;
-  readonly operateAccess: "granted" | "denied" | "pending";
-}): string | null {
+export function resolveEnvironmentIconPickerLock(
+  input: {
+    readonly serverConfig: ServerConfig | null;
+    readonly operateAccess: "granted" | "denied" | "pending";
+  },
+  t: TFunction = i18n.t,
+): string | null {
   if (input.serverConfig === null) {
-    return "Connect to this environment to change its icon.";
+    return t("connections.iconConnect");
   }
   if (input.serverConfig.environment.capabilities.environmentIcon !== true) {
-    return "This environment's server is too old to keep an icon. Update it to choose one.";
+    return t("connections.iconUpdate");
   }
   if (input.operateAccess !== "granted") {
-    return "Your session on this environment cannot change its settings.";
+    return t("connections.iconPermission");
   }
   return null;
 }
@@ -54,21 +59,22 @@ export function EnvironmentIconMenu({
   readonly environmentId: EnvironmentId;
   readonly serverConfig: ServerConfig | null;
 }) {
+  const t = useTranslate();
   const updateSettings = useUpdateEnvironmentSettings(environmentId);
   const operateAccess = useEnvironmentScope(environmentId, AuthSettingsWriteScope)
     ? "granted"
     : "denied";
-  const lock = resolveEnvironmentIconPickerLock({ serverConfig, operateAccess });
+  const lock = resolveEnvironmentIconPickerLock({ serverConfig, operateAccess }, t);
   // With no detection the server falls back to "server", so picking that
   // kind clears the override the same way picking the detected kind does.
-  const detected = serverConfig?.environment.platform.machine ?? "server";
+  const detected = serverConfig?.environment.platform.machine ?? t("connections.server");
   const resolved = resolveEnvironmentMachineKind(serverConfig);
 
   return (
     <MenuSub>
       <MenuSubTrigger>
         <EnvironmentMachineIcon kind={resolved} />
-        Icon
+        {t("connections.icon")}
       </MenuSubTrigger>
       <MenuSubPopup>
         {lock !== null ? (
@@ -91,11 +97,15 @@ export function EnvironmentIconMenu({
               <span className="flex min-w-0 items-center gap-2">
                 <EnvironmentMachineIcon kind={kind} className="size-3.5 shrink-0" />
                 <span className="min-w-0 flex-1 truncate">
-                  {ENVIRONMENT_MACHINE_KIND_LABELS[kind]}
+                  {t(`connections.machineKind.${kind}`, {
+                    defaultValue: ENVIRONMENT_MACHINE_KIND_LABELS[kind],
+                  })}
                 </span>
                 {kind === detected ? (
                   <span className="shrink-0 text-xs text-muted-foreground">
-                    {serverConfig?.environment.platform.machine ? "detected" : "default"}
+                    {serverConfig?.environment.platform.machine
+                      ? t("connections.detected")
+                      : t("connections.defaultDetected")}
                   </span>
                 ) : null}
               </span>

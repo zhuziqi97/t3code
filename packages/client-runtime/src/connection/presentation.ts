@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import type { ServerConfig } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 
@@ -57,34 +58,42 @@ export function presentConnectionState(
   }
 }
 
-export function connectionStatusText(connection: EnvironmentConnectionPresentation): string {
+export function connectionStatusText(
+  connection: EnvironmentConnectionPresentation,
+  t?: TFunction,
+): string {
   switch (connection.phase) {
     case "available":
-      return "Available";
+      return t?.("connections.available") ?? "Available";
     case "offline":
-      return "Offline";
+      return t?.("connections.offline") ?? "Offline";
     case "connecting":
-      return "Connecting...";
+      return t?.("connections.connectingDetailed") ?? "Connecting...";
     case "reconnecting":
       return connection.error
-        ? `Failed to connect. Reconnecting... Reason: ${connection.error}`
-        : "Reconnecting...";
+        ? (t?.("connections.statusReconnectingReason", { error: connection.error }) ??
+            `Failed to connect. Reconnecting... Reason: ${connection.error}`)
+        : (t?.("connections.reconnectingDetailed") ?? "Reconnecting...");
     case "connected":
-      return "Connected";
+      return t?.("connections.connected") ?? "Connected";
     case "unsupported":
-      return "Client not supported";
+      return t?.("connections.unsupported") ?? "Client not supported";
     case "error":
       return connection.error
-        ? `Connection failed. Reason: ${connection.error}`
-        : "Connection failed";
+        ? (t?.("connections.statusConnectionFailedReason", { error: connection.error }) ??
+            `Connection failed. Reason: ${connection.error}`)
+        : (t?.("connections.connectionFailed") ?? "Connection failed");
   }
 }
 
-export function connectionStatusTitle(connection: EnvironmentConnectionPresentation): string {
+export function connectionStatusTitle(
+  connection: EnvironmentConnectionPresentation,
+  t?: TFunction,
+): string {
   if (connection.phase === "reconnecting" && connection.error) {
-    return "Failed to connect. Reconnecting...";
+    return t?.("connections.reconnectingTitle") ?? "Failed to connect. Reconnecting...";
   }
-  return connectionStatusText({ ...connection, error: null });
+  return connectionStatusText({ ...connection, error: null }, t);
 }
 
 export function presentEnvironmentConnection(

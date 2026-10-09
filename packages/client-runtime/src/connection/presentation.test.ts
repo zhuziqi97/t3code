@@ -1,3 +1,4 @@
+import { createI18n } from "../i18n/index.ts";
 import { EnvironmentId } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Option from "effect/Option";
@@ -259,5 +260,26 @@ describe("connection presentation", () => {
       error: null,
       traceId: null,
     });
+  });
+});
+
+it("translates connection status while keeping the original error reason and source-language default", () => {
+  const t = createI18n({ lng: "zh" }).t;
+  const connection = {
+    phase: "reconnecting" as const,
+    error: "ECONNREFUSED host.example:3773",
+    traceId: "trace-1",
+  };
+  expect(connectionStatusText(connection, t)).toBe(
+    "连接失败，正在重新连接…原因：ECONNREFUSED host.example:3773",
+  );
+  expect(connectionStatusTitle(connection, t)).toBe("连接失败，正在重新连接…");
+  expect(connectionStatusText(connection)).toBe(
+    "Failed to connect. Reconnecting... Reason: ECONNREFUSED host.example:3773",
+  );
+  expect(connection).toEqual({
+    phase: "reconnecting",
+    error: "ECONNREFUSED host.example:3773",
+    traceId: "trace-1",
   });
 });

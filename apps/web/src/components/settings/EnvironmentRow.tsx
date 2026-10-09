@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next";
+import { i18n } from "../../i18n";
 import {
   type ConnectionTarget,
   connectionRouteId,
@@ -26,9 +28,10 @@ export function formatDesktopSshTarget(target: DesktopSshEnvironmentTarget): str
 export function environmentTransportLabel(
   environment: EnvironmentPresentation,
   activeTarget: ConnectionTarget | null = null,
+  t: TFunction = i18n.t,
 ): string {
   const { entry } = environment;
-  if (entry.target._tag === "PrimaryConnectionTarget") return "This machine";
+  if (entry.target._tag === "PrimaryConnectionTarget") return t("connections.thisMachine");
   const routes = connectionRoutes(entry);
   if (routes.length > 1) {
     const active =
@@ -38,8 +41,8 @@ export function environmentTransportLabel(
             (route) => connectionRouteId(route.target) === connectionRouteId(activeTarget),
           );
     return active === undefined
-      ? connectionRouteLabel(routes[0]!)
-      : `via ${connectionRouteLabel(active)}`;
+      ? connectionRouteLabel(routes[0]!, t)
+      : t("connections.via", { route: connectionRouteLabel(active, t) });
   }
   if (environment.relayManaged) return "T3 Connect";
   if (isDesktopLocalConnectionTarget(entry.target)) return "WSL";
@@ -50,7 +53,7 @@ export function environmentTransportLabel(
   ) {
     return `SSH ${formatDesktopSshTarget(entry.profile.value.target)}`;
   }
-  return environment.displayUrl ?? "Remote link";
+  return environment.displayUrl ?? t("connections.remoteLink");
 }
 
 /**

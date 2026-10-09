@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import {
   isLocalLoopbackHost,
   isPrivateNetworkHost,
@@ -167,14 +168,14 @@ function routeAddressKey(route: ConnectionRoute): string | null {
 }
 
 /** Short user-facing route description: "LAN", "Tailscale", "T3 Connect", a URL, or an SSH host. */
-export function connectionRouteLabel(route: ConnectionRoute): string {
+export function connectionRouteLabel(route: ConnectionRoute, t?: TFunction): string {
   switch (connectionRouteKind(route)) {
     case "relay":
       return "T3 Connect";
     case "loopback":
-      return "This device";
+      return t ? t("connections.thisDevice") : "This device";
     case "lan":
-      return "LAN";
+      return t ? t("connections.lan") : "LAN";
     case "tailnet":
       return "Tailscale";
     case "ssh": {
@@ -184,7 +185,7 @@ export function connectionRouteLabel(route: ConnectionRoute): string {
         : "SSH";
     }
     case "public":
-      return routeHostname(route) ?? "Remote link";
+      return routeHostname(route) ?? (t ? t("connections.remoteLink") : "Remote link");
   }
 }
 

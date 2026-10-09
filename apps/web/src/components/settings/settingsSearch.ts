@@ -1042,14 +1042,20 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "Environment icon",
     to: "/settings/connections",
     targetId: "connections-environment",
-    searchTerms: ["machine glyph sidebar mac mini studio laptop desktop server cloud vm"],
+    searchTerms: [
+      "machine glyph sidebar mac mini studio laptop desktop server cloud vm",
+      "机器 图标 标识",
+    ],
   },
   {
     id: "local-environment",
     title: "Local environment",
     to: "/settings/connections",
     targetId: "connections-environment",
-    searchTerms: ["turn off on disable enable local server agents remote only restart"],
+    searchTerms: [
+      "turn off on disable enable local server agents remote only restart",
+      "本机 智能体 开关 服务器 重启",
+    ],
     desktopOnly: true,
   },
   {
@@ -1057,7 +1063,10 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "Network access",
     to: "/settings/connections",
     targetId: "connections-environment",
-    searchTerms: ["expose backend remote pairing local machine interfaces host restart"],
+    searchTerms: [
+      "expose backend remote pairing local machine interfaces host restart",
+      "远程 配对 局域网 地址 网络",
+    ],
     localBackendManagementOnly: true,
   },
   {
@@ -1065,7 +1074,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "Tailscale HTTPS",
     to: "/settings/connections",
     targetId: "connections-environment",
-    searchTerms: ["serve magicdns endpoint remote secure network"],
+    searchTerms: ["serve magicdns endpoint remote secure network", "隧道 网络 远程 安全"],
     desktopOnly: true,
     localBackendManagementOnly: true,
   },
@@ -1075,6 +1084,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/connections",
     searchTerms: [
       "windows subsystem linux distro second server projects stop windows backend restart",
+      "发行版 子系统 后端 重启",
     ],
     desktopOnly: true,
     windowsOnly: true,
@@ -1087,7 +1097,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "T3 Connect",
     to: "/settings/connections",
     targetId: "connections-environment",
-    searchTerms: ["managed tunnel cloud other devices remote"],
+    searchTerms: ["managed tunnel cloud other devices remote", "隧道 远程 云端 其他设备"],
     desktopOnly: true,
     cloudOnly: true,
   },
@@ -1097,7 +1107,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "Hold webhooks while offline",
     to: "/settings/connections",
     targetId: "connections-environment",
-    searchTerms: ["webhook automations offline queue mailbox t3 connect"],
+    searchTerms: ["webhook automations offline queue mailbox t3 connect", "离线 队列 自动化 暂存"],
     cloudOnly: true,
     managedTunnelOnly: true,
   },
@@ -1107,7 +1117,10 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "Publish agent activity",
     to: "/settings/connections",
     targetId: "connections-environment",
-    searchTerms: ["mobile push notifications live activities cloud tunnel"],
+    searchTerms: [
+      "mobile push notifications live activities cloud tunnel",
+      "移动 通知 推送 实时活动",
+    ],
     cloudOnly: true,
   },
   {
@@ -1116,13 +1129,17 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/connections",
     searchTerms: [
       "connections server backend local remote access administrative permissions scope pairing links qr code authorized clients sessions revoke endpoint",
+      "本机 权限 已授权 客户端 配对 凭据 撤销",
     ],
   },
   {
     id: "remote-environments",
     title: "Environments",
     to: "/settings/connections",
-    searchTerms: ["add pair backend host code ssh config agent tunnel saved t3 connect"],
+    searchTerms: [
+      "add pair backend host code ssh config agent tunnel saved t3 connect",
+      "远程 设备 连接 主机 配对 SSH 路由",
+    ],
   },
   {
     id: "load-balancing",
@@ -1130,13 +1147,17 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/connections",
     searchTerms: [
       "automatic machine environment resources cpu memory capacity preference weight shared projects",
+      "分配 负载 多设备 CPU 内存",
     ],
   },
   {
     id: "github-routing",
     title: "GitHub sharing",
     to: "/settings/connections",
-    searchTerms: ["pull request trusted environments shared credentials permissions read actions"],
+    searchTerms: [
+      "pull request trusted environments shared credentials permissions read actions",
+      "共享 权限 拉取请求 信任",
+    ],
   },
   {
     id: "archive",
