@@ -1,6 +1,10 @@
 import type { TFunction } from "i18next";
 
 const FIXED_ERROR_KEYS = [
+  "appearance.theme.error.nameFirst",
+  "appearance.theme.error.activate",
+  "appearance.theme.error.save",
+  "appearance.theme.error.create",
   "appearance.theme.error.readFile",
   "appearance.theme.error.tooLarge",
   "appearance.theme.error.notTheme",
@@ -151,6 +155,21 @@ export function translateThemeError(message: string, t: TFunction): string {
     );
   if (oversized) {
     return t("appearance.theme.error.oversized", { size: oversized[1], limit: oversized[2] });
+  }
+  const collision = /^“(.*)” already has a (light|dark) palette\. Pick another name\.$/s.exec(
+    message,
+  );
+  if (collision) {
+    return t("appearance.theme.error.paletteTakenRename", {
+      name: collision[1],
+      mode: t(`appearance.${collision[2]}`),
+    });
+  }
+  const bothPalettes = /^“(.*)” already has light and dark palettes\. Pick another name\.$/s.exec(
+    message,
+  );
+  if (bothPalettes) {
+    return t("appearance.theme.error.bothPalettesTaken", { name: bothPalettes[1] });
   }
   return message;
 }
