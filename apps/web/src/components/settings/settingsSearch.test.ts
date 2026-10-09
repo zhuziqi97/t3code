@@ -688,6 +688,11 @@ it("finds appearance and typography controls by Chinese terms with their existin
     targetId: "appearance",
   });
   expect(searchSettings("color scheme")[0]?.id).toBe("color-scheme");
+  expect(searchSettings("社区主题")[0]).toMatchObject({
+    id: "theme",
+    to: "/settings/appearance",
+    targetId: "appearance",
+  });
   for (const [query, id] of [
     ["玻璃效果", "setting-glass-opacity"],
     ["版本标签", "environment-identification"],

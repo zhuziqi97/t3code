@@ -254,7 +254,10 @@ export const SETTINGS_SEARCH_ITEMS = [
       return i18n.t("settings.search.theme.title");
     },
     to: "/settings/appearance",
-    searchTerms: ["appearance colors palette custom import", "主题 外观 颜色 配色 自定义 导入"],
+    searchTerms: [
+      "appearance colors palette custom import Open VSX community search install",
+      "主题 外观 颜色 配色 自定义 导入 社区主题 搜索主题 安装主题 JSON 文件",
+    ],
     // Theme cards live directly under the scheme tiles; the section is the
     // stable scroll destination for both.
     targetId: "appearance",
