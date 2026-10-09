@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { cva, type VariantProps } from "class-variance-authority";
@@ -194,6 +195,7 @@ function Sidebar({
   collapsible?: "offcanvas" | "icon" | "none";
   resizable?: boolean | SidebarResizableOptions;
 }) {
+  const t = useTranslate();
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
   const resolvedResizable = React.useMemo<SidebarResolvedResizableOptions | null>(() => {
     if (isMobile || collapsible === "none" || !resizable) {
@@ -252,8 +254,8 @@ function Sidebar({
             }
           >
             <SheetHeader className="sr-only">
-              <SheetTitle>Sidebar</SheetTitle>
-              <SheetDescription>Displays the mobile sidebar.</SheetDescription>
+              <SheetTitle>{t("sidebar.title")}</SheetTitle>
+              <SheetDescription>{t("sidebar.mobileDescription")}</SheetDescription>
             </SheetHeader>
             <div
               className={cn(
@@ -323,6 +325,7 @@ function Sidebar({
 }
 
 function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<typeof Button>) {
+  const t = useTranslate();
   const { toggleSidebar } = useSidebar();
   const isOpen = useSidebarVisibility();
 
@@ -344,7 +347,7 @@ function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<t
       {...props}
     >
       <MorphIcon className="size-4" icon={isOpen ? PanelLeftClose : PanelLeft} />
-      <span className="sr-only">Toggle Sidebar</span>
+      <span className="sr-only">{t("sidebar.toggle")}</span>
     </Button>
   );
 }
@@ -363,6 +366,7 @@ function SidebarRail({
   onPointerUp,
   ...props
 }: React.ComponentProps<"button">) {
+  const t = useTranslate();
   const { open, toggleSidebar } = useSidebar();
   const sidebarInstance = React.use(SidebarInstanceContext);
   const railRef = React.useRef<HTMLButtonElement | null>(null);
@@ -373,8 +377,8 @@ function SidebarRail({
     latestResizable.current = resolvedResizable;
   }, [resolvedResizable]);
   const canResize = resolvedResizable !== null && open;
-  const railLabel = canResize ? "Resize Sidebar" : "Toggle Sidebar";
-  const railTitle = canResize ? "Drag to resize sidebar" : "Toggle Sidebar";
+  const railLabel = canResize ? t("sidebar.resize") : t("sidebar.toggle");
+  const railTitle = canResize ? t("sidebar.dragResize") : t("sidebar.toggle");
   const resize = useResizeDrag<HTMLButtonElement>((event) => {
     if (!resolvedResizable || !open) return null;
     const rail = event.currentTarget;

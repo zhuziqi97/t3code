@@ -1019,11 +1019,14 @@ function OpenCommandPaletteDialog(props: {
         const isPrimary = environment.entry.target._tag === "PrimaryConnectionTarget";
         return {
           environmentId: environment.environmentId,
-          label: resolveEnvironmentOptionLabel({
-            isPrimary,
-            environmentId: environment.environmentId,
-            runtimeLabel: environment.label,
-          }),
+          label: resolveEnvironmentOptionLabel(
+            {
+              isPrimary,
+              environmentId: environment.environmentId,
+              runtimeLabel: environment.label,
+            },
+            t,
+          ),
           isPrimary,
           machine: resolveEnvironmentMachineKind(environment.serverConfig),
           isConnected: canCreateProjectInEnvironment(environment.connection.phase),
@@ -1039,7 +1042,7 @@ function OpenCommandPaletteDialog(props: {
     });
 
     return options;
-  }, [environments]);
+  }, [environments, t]);
   const defaultAddProjectEnvironmentId =
     addProjectEnvironmentOptions.find((option) => option.isConnected)?.environmentId ?? null;
   const wslAddProjectEnvironmentOption = useMemo(

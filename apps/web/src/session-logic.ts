@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next";
+import { i18n } from "./i18n";
 import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
 import {
   type AssetResource,
@@ -393,13 +395,14 @@ function projectedWorkEntryTone(item: OrchestrationV2TurnItem): WorkLogEntry["to
 
 export function providerErrorPresentation(
   item: Extract<OrchestrationV2TurnItem, { readonly type: "error" }>,
+  t: TFunction = i18n.t,
 ): { readonly label: string; readonly detail: string } {
   if (item.retry === undefined) {
     return {
       label:
         item.failure.class === "usage_limit"
-          ? "Usage limit reached"
-          : item.title?.trim() || "Provider error",
+          ? t("chat.retry.usageLimit")
+          : item.title?.trim() || t("chat.retry.providerError"),
       detail: item.failure.message,
     };
   }
@@ -409,17 +412,25 @@ export function providerErrorPresentation(
       : `${item.retry.attempt}/${item.retry.maxAttempts}`;
   const label =
     item.status === "running"
-      ? `Retrying provider (${progress})`
+      ? t("chat.retry.retrying", { progress })
       : item.status === "completed"
-        ? `Provider recovered (${progress} retries)`
+        ? t("chat.retry.recovered", { progress })
         : item.status === "failed"
-          ? `${item.failure.class === "usage_limit" ? "Usage limit reached" : "Provider error"} after ${progress} retries`
-          : `Provider retry stopped (${progress})`;
+          ? t("chat.retry.failed", {
+              progress,
+              error:
+                item.failure.class === "usage_limit"
+                  ? t("chat.retry.usageLimit")
+                  : t("chat.retry.providerError"),
+            })
+          : t("chat.retry.stopped", { progress });
   const retryDelay =
     item.status === "running" && item.retry.retryDelayMs !== null && item.retry.retryDelayMs > 0
       ? item.retry.retryDelayMs < 1_000
-        ? ` Retrying in ${item.retry.retryDelayMs}ms.`
-        : ` Retrying in ${(item.retry.retryDelayMs / 1_000).toFixed(1).replace(/\.0$/u, "")}s.`
+        ? t("chat.retry.delayMs", { delay: item.retry.retryDelayMs })
+        : t("chat.retry.delaySeconds", {
+            delay: (item.retry.retryDelayMs / 1_000).toFixed(1).replace(/\.0$/u, ""),
+          })
       : "";
   return {
     label,

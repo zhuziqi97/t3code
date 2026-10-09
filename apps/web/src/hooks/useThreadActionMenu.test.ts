@@ -1,3 +1,5 @@
+import { act, createElement, useLayoutEffect } from "react";
+import { create, type ReactTestRenderer } from "react-test-renderer";
 import {
   AuthOrchestrationOperateScope,
   EnvironmentId,
@@ -5,7 +7,7 @@ import {
   type ContextMenuItem,
 } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { ThreadActionMenuId } from "../components/threadActionMenu.logic";
 
@@ -35,10 +37,6 @@ function recordEffect(action: string) {
 }
 
 vi.mock("../components/CustomSnoozeDialog", () => ({ requestCustomSnooze: vi.fn() }));
-vi.mock("react", () => ({
-  useCallback: (callback: unknown) => callback,
-  useMemo: (factory: () => unknown) => factory(),
-}));
 vi.mock("@tanstack/react-router", () => ({
   useRouter: () => ({ navigate: async () => recordEffect("project-settings") }),
 }));
@@ -151,14 +149,33 @@ const target = {
   threadId: ThreadId.make("thread"),
 };
 const position = { x: 10, y: 20 };
-const createMenu = () =>
-  useThreadActionMenu({
-    threadRef: target,
-    projectCwd: "/project",
-    onStartRename: () => recordEffect("rename"),
+
+const hookRenderers: ReactTestRenderer[] = [];
+function createMenu() {
+  let result!: ReturnType<typeof useThreadActionMenu>;
+  function Harness() {
+    const actions = useThreadActionMenu({
+      threadRef: target,
+      projectCwd: "/project",
+      onStartRename: () => recordEffect("rename"),
+    });
+    useLayoutEffect(() => {
+      result = actions;
+    });
+    return null;
+  }
+  act(() => {
+    hookRenderers.push(create(createElement(Harness)));
   });
+  return result;
+}
+afterEach(() => {
+  act(() => hookRenderers.splice(0).forEach((renderer) => renderer.unmount()));
+  vi.unstubAllGlobals();
+});
 
 beforeEach(() => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   state.granted = new Set(["primary"]);
   state.effects = [];
   state.completed = deferred<void>();

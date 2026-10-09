@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import {
   ANTIGRAVITY_DEFAULT_MODEL,
   type ProviderInstanceId,
@@ -187,6 +188,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
   getModelDisabledReason?: (instanceId: ProviderInstanceId, model: string) => string | null;
   onInstanceModelChange: (instanceId: ProviderInstanceId, model: string) => void;
 }) {
+  const t = useTranslate();
   const {
     keybindings: providedKeybindings,
     modelOptionsByInstance,
@@ -865,7 +867,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
               ? {
                   disabledInstanceIds: lockedDisabledInstanceIds,
                   getDisabledInstanceTooltip: (entry: ProviderInstanceEntry) =>
-                    `${entry.displayName} is unavailable in this thread. Start a new thread to switch providers.`,
+                    t("chat.model.switchProviderHint", { provider: entry.displayName }),
                 }
               : {})}
           />
@@ -922,7 +924,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
           >
             <ComboboxSearchInput
               ref={searchInputRef}
-              placeholder="Search models..."
+              placeholder={t("chat.model.search")}
               value={searchQuery}
               onChange={(e) => {
                 if (!isSearching) setSearchHeight(pickerContentRef.current?.offsetHeight ?? 0);
@@ -1002,9 +1004,11 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                           className="group w-full cursor-pointer"
                         >
                           <div className="min-w-0 flex-1 text-left">
-                            <div className="text-xs font-medium leading-snug">Legacy models</div>
+                            <div className="text-xs font-medium leading-snug">
+                              {t("chat.model.legacy")}
+                            </div>
                             <div className="mt-1 text-xs font-normal leading-snug text-muted-foreground/70">
-                              {legacySection.legacyModels.length} models
+                              {t("chat.model.count", { count: legacySection.legacyModels.length })}
                             </div>
                           </div>
                           <ChevronRightIcon
@@ -1075,7 +1079,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                 {providerSetupEntries.map((entry) => (
                   <div key={entry.instanceId} className="px-1 py-1.5 text-xs leading-snug">
                     <p className="line-clamp-3 text-muted-foreground">
-                      {getProviderStatusMessage(entry.snapshot)}
+                      {getProviderStatusMessage(entry.snapshot, t)}
                     </p>
                     <InlineButton
                       className="mt-1"
@@ -1085,14 +1089,14 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                       }}
                     >
                       {providerSetupEntries.length > 1
-                        ? `Set up ${entry.displayName}`
-                        : "Open provider setup"}
+                        ? t("chat.provider.setupName", { provider: entry.displayName })
+                        : t("chat.provider.openSetup")}
                     </InlineButton>
                   </div>
                 ))}
               </div>
             ) : (
-              <ComboboxEmpty className="empty:h-0">No models found</ComboboxEmpty>
+              <ComboboxEmpty className="empty:h-0">{t("chat.model.noneFound")}</ComboboxEmpty>
             )}
             {updateRequiredNotices.map(({ instanceId, notice }) => (
               <p
@@ -1106,7 +1110,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                     void navigate({ to: "/settings/providers" });
                   }}
                 >
-                  Provider settings
+                  {t("chat.provider.settings")}
                 </InlineButton>
               </p>
             ))}

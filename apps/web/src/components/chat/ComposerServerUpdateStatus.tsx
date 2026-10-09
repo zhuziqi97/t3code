@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import { Spinner } from "~/components/ui/spinner";
 import type { ServerUpdateState } from "@t3tools/client-runtime/state/server";
 import { CircleAlertIcon, DownloadIcon } from "lucide-react";
@@ -29,9 +30,10 @@ export function ComposerServerUpdateStatus({
   readonly state: Exclude<ServerUpdateState, { status: "idle" }>;
   readonly serverLabel?: string;
 }) {
+  const t = useTranslate();
   const [detailsOpen, setDetailsOpen] = useState(false);
   const triggerId = useId();
-  const title = `${state.status === "failed" ? "Could not update" : "Updating"} ${serverLabel}`;
+  const title = `${state.status === "failed" ? t("chat.update.failedPrefix") : "Updating"} ${serverLabel}`;
   const detail = state.status === "failed" ? state.message : serverUpdateStageLabel(state.stage);
   return (
     <span

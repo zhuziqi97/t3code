@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next";
+import { i18n } from "../i18n";
 import type {
   EnvironmentId,
   EnvironmentMachineKind,
@@ -33,12 +35,15 @@ function normalizeDisplayLabel(value: string | null | undefined): string | null 
   return trimmed && trimmed.length > 0 ? trimmed : null;
 }
 
-export function resolveEnvironmentOptionLabel(input: {
-  isPrimary: boolean;
-  environmentId: EnvironmentId;
-  runtimeLabel?: string | null;
-  savedLabel?: string | null;
-}): string {
+export function resolveEnvironmentOptionLabel(
+  input: {
+    isPrimary: boolean;
+    environmentId: EnvironmentId;
+    runtimeLabel?: string | null;
+    savedLabel?: string | null;
+  },
+  t: TFunction = i18n.t,
+): string {
   const runtimeLabel = normalizeDisplayLabel(input.runtimeLabel);
   const savedLabel = normalizeDisplayLabel(input.savedLabel);
 
@@ -47,7 +52,7 @@ export function resolveEnvironmentOptionLabel(input: {
       if (!label) return false;
       return !GENERIC_LOCAL_ENVIRONMENT_LABELS.has(label.toLowerCase());
     });
-    return preferredLocalLabel ?? "This device";
+    return preferredLocalLabel ?? t("chat.branch.thisDevice");
   }
 
   return runtimeLabel ?? savedLabel ?? input.environmentId;
@@ -94,8 +99,8 @@ export function resolveContextStripLabelsCompact(input: {
     : input.neededWidth > input.availableWidth;
 }
 
-export function resolveEnvModeLabel(mode: EnvMode): string {
-  return mode === "worktree" ? "New worktree" : "Current checkout";
+export function resolveEnvModeLabel(mode: EnvMode, t: TFunction = i18n.t): string {
+  return mode === "worktree" ? t("chat.branch.newWorktree") : t("chat.branch.currentCheckout");
 }
 
 export const WORKTREE_SUBMODULES_LABELS: Record<WorktreeSubmodules, string> = {
@@ -104,8 +109,11 @@ export const WORKTREE_SUBMODULES_LABELS: Record<WorktreeSubmodules, string> = {
   none: "Skip",
 };
 
-export function resolveCurrentWorkspaceLabel(activeWorktreePath: string | null): string {
-  return activeWorktreePath ? "Current worktree" : resolveEnvModeLabel("local");
+export function resolveCurrentWorkspaceLabel(
+  activeWorktreePath: string | null,
+  t: TFunction = i18n.t,
+): string {
+  return activeWorktreePath ? t("chat.branch.currentWorktree") : resolveEnvModeLabel("local", t);
 }
 
 // A locked thread in worktree mode with no path is still creating its
@@ -113,9 +121,12 @@ export function resolveCurrentWorkspaceLabel(activeWorktreePath: string | null):
 export function resolveLockedWorkspaceLabel(
   activeWorktreePath: string | null,
   effectiveEnvMode: EnvMode,
+  t: TFunction = i18n.t,
 ): string {
-  if (activeWorktreePath) return "Worktree";
-  return effectiveEnvMode === "worktree" ? resolveEnvModeLabel("worktree") : "Local checkout";
+  if (activeWorktreePath) return t("chat.branch.worktree");
+  return effectiveEnvMode === "worktree"
+    ? resolveEnvModeLabel("worktree", t)
+    : t("chat.branch.localCheckout");
 }
 
 export interface PreviousWorktreeSeed {
@@ -124,7 +135,7 @@ export interface PreviousWorktreeSeed {
 }
 
 // The most recently touched worktree in the project that the composer isn't
-// already pointing at. Backs the "Previous worktree" entry in the workspace
+// already pointing at. Backs the t("chat.branch.previousWorktree") entry in the workspace
 // selector so a follow-up thread can hop back into the worktree you just
 // worked in without hunting for its branch. Archived threads don't compete —
 // the rest of the UI hides them, so their worktrees shouldn't resurface here.
@@ -161,8 +172,13 @@ export function resolvePreviousWorktreeSeed(input: {
   return latest === null ? null : { branch: latest.branch, worktreePath: latest.worktreePath };
 }
 
-export function resolvePreviousWorktreeLabel(seed: PreviousWorktreeSeed): string {
-  return seed.branch ? `Previous worktree (${seed.branch})` : "Previous worktree";
+export function resolvePreviousWorktreeLabel(
+  seed: PreviousWorktreeSeed,
+  t: TFunction = i18n.t,
+): string {
+  return seed.branch
+    ? t("chat.branch.previousWorktreeNamed", { branch: seed.branch })
+    : t("chat.branch.previousWorktree");
 }
 
 export function resolveEffectiveEnvMode(input: {
@@ -213,13 +229,16 @@ export function resolveBranchToolbarValue(input: {
   return currentGitBranch ?? activeThreadBranch;
 }
 
-export function resolveBranchTriggerLabel(input: {
-  activeWorktreePath: string | null;
-  effectiveEnvMode: EnvMode;
-  resolvedActiveBranch: string | null;
-  resolvedActiveBranchIsRemote: boolean | null;
-  startFromOrigin: boolean;
-}): string {
+export function resolveBranchTriggerLabel(
+  input: {
+    activeWorktreePath: string | null;
+    effectiveEnvMode: EnvMode;
+    resolvedActiveBranch: string | null;
+    resolvedActiveBranchIsRemote: boolean | null;
+    startFromOrigin: boolean;
+  },
+  t: TFunction = i18n.t,
+): string {
   const {
     activeWorktreePath,
     effectiveEnvMode,
@@ -228,14 +247,14 @@ export function resolveBranchTriggerLabel(input: {
     startFromOrigin,
   } = input;
   if (!resolvedActiveBranch) {
-    return "Select ref";
+    return t("chat.branch.selectRef");
   }
   if (effectiveEnvMode === "worktree" && !activeWorktreePath) {
     const baseRef =
       startFromOrigin && resolvedActiveBranchIsRemote === false
         ? `origin/${resolvedActiveBranch}`
         : resolvedActiveBranch;
-    return `From ${baseRef}`;
+    return t("chat.branch.from", { ref: baseRef });
   }
   return resolvedActiveBranch;
 }

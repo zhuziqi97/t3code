@@ -9,7 +9,8 @@ vi.mock("./hooks/useSettings", () => ({
   useClientSettings: (select: (value: typeof settings) => unknown) => select(settings),
 }));
 
-import { LanguageSync, useTranslate, changeLanguage, i18n } from "./i18n";
+import { useTranslate, changeLanguage, i18n } from "./i18n";
+import { LanguageSync } from "./LanguageSync";
 
 /**
  * The web binding initializes i18next at module load, then registers the React

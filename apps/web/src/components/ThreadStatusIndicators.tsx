@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next";
+import { i18n, useTranslate } from "../i18n";
 import {
   scopeProjectRef,
   scopedThreadKey,
@@ -55,6 +57,30 @@ import {
   type PullRequestGlyphIcon,
 } from "./pullRequest/pullRequestIcons";
 import { resolvePullRequestState } from "./pullRequest/pullRequestPresentation";
+
+function localizedStatusLabel(label: string, t: TFunction): string {
+  const keys: Record<string, string> = {
+    Working: "thread.working",
+    Connecting: "thread.connecting",
+    Completed: "thread.completed",
+    "Pending Approval": "thread.pendingApproval",
+    "Awaiting Input": "thread.awaitingInput",
+    Waiting: "thread.waiting",
+    "Plan Ready": "thread.planReady",
+    "Terminal process running": "thread.terminalRunning",
+  };
+  return keys[label] ? t(keys[label]!) : label;
+}
+
+function localizedPullRequestStateLabel(label: string, t: TFunction): string {
+  const keys: Record<string, string> = {
+    Open: "pullRequest.state.open",
+    Draft: "pullRequest.state.draft",
+    Closed: "pullRequest.state.closed",
+    Merged: "pullRequest.state.merged",
+  };
+  return keys[label] ? t(keys[label]!) : label;
+}
 
 export interface PrStatusIndicator {
   label: string;
@@ -166,17 +192,20 @@ export interface ThreadPullRequestBadgePresentation {
 }
 
 /** Resolve the complete badge appearance before rendering it in the sidebar or composer. */
-export function resolveThreadPullRequestBadgePresentation({
-  badge,
-  number,
-  url,
-  status,
-}: {
-  readonly badge: ThreadPullRequestBadge | null;
-  readonly number?: number | undefined;
-  readonly url?: string | undefined;
-  readonly status: PrStatusIndicator | null;
-}): ThreadPullRequestBadgePresentation | null {
+export function resolveThreadPullRequestBadgePresentation(
+  {
+    badge,
+    number,
+    url,
+    status,
+  }: {
+    readonly badge: ThreadPullRequestBadge | null;
+    readonly number?: number | undefined;
+    readonly url?: string | undefined;
+    readonly status: PrStatusIndicator | null;
+  },
+  t: TFunction = i18n.t,
+): ThreadPullRequestBadgePresentation | null {
   // The badge already folds every visible link into one state, draft included, so both the
   // stack and the linked count index the shared table directly rather than the single-PR resolver.
   if (badge?.kind === "stack") {
@@ -184,20 +213,27 @@ export function resolveThreadPullRequestBadgePresentation({
     return {
       Icon: PullRequestGlyph.stack,
       toneClassName: aggregate.toneClassName,
-      label: `Stack of ${badge.layers} pull requests, ${aggregate.label.toLowerCase()}`,
+      label: t("pullRequest.stack", {
+        count: badge.layers,
+        state: localizedPullRequestStateLabel(aggregate.label, t).toLowerCase(),
+      }),
       text: badge.layers,
     };
   }
   if (number === undefined || url === undefined) return null;
 
-  const tooltip = status?.tooltip ?? `PR #${number}, status pending`;
+  const tooltip = status?.tooltip ?? t("pullRequest.pending", { number });
   if (badge?.kind === "pull-request" && badge.others > 0) {
     // Unrelated links fold into one state, so a count of merged PRs reads as merged.
     const aggregate = PULL_REQUEST_STATE_PRESENTATION[badge.state];
     return {
       Icon: aggregate.Icon,
       toneClassName: aggregate.toneClassName,
-      label: `${tooltip}, and ${badge.others} more linked; overall ${aggregate.label.toLowerCase()}`,
+      label: t("pullRequest.moreLinked", {
+        tooltip,
+        count: badge.others,
+        state: localizedPullRequestStateLabel(aggregate.label, t).toLowerCase(),
+      }),
       text: `+${badge.others + 1}`,
     };
   }
@@ -235,7 +271,8 @@ export function ThreadPullRequestBadgeControl({
   onOpenList: () => void;
   onOpenPullRequest: (event: MouseEvent<HTMLElement>, url?: string) => void;
 }) {
-  const presentation = resolveThreadPullRequestBadgePresentation({ badge, number, url, status });
+  const t = useTranslate();
+  const presentation = resolveThreadPullRequestBadgePresentation({ badge, number, url, status }, t);
   if (presentation === null) return null;
   return (
     <PullRequestBadge
@@ -434,14 +471,16 @@ function ThreadPullRequestMiniListItem({
 export function prStatusIndicator(
   pr: ThreadPr,
   provider: VcsStatusResult["sourceControlProvider"] | null | undefined,
+  t: TFunction = i18n.t,
 ): PrStatusIndicator | null {
   if (!pr) return null;
   const presentation = resolveChangeRequestPresentation(provider);
   const state = resolvePullRequestState({ state: pr.state, isDraft: pr.isDraft === true });
 
-  const tooltipLead = `${presentation.shortName} #${pr.number} - ${state.label}`;
+  const stateLabel = localizedPullRequestStateLabel(state.label, t);
+  const tooltipLead = `${presentation.shortName} #${pr.number} - ${stateLabel}`;
   return {
-    label: `${presentation.shortName} ${state.label.toLowerCase()}`,
+    label: `${presentation.shortName} ${stateLabel.toLowerCase()}`,
     colorClass: state.toneClassName,
     Icon: state.Icon,
     tooltip: `${tooltipLead}: ${pr.title}`,
@@ -785,6 +824,7 @@ export function ThreadWorktreeIndicator({
 }: {
   thread: Pick<SidebarThreadSummary, "id" | "branch" | "worktreePath">;
 }) {
+  const t = useTranslate();
   const worktreePath = thread.worktreePath?.trim();
   if (!worktreePath) {
     return null;
@@ -792,8 +832,8 @@ export function ThreadWorktreeIndicator({
 
   const displayPath = formatWorktreePathForDisplay(worktreePath);
   const tooltip = thread.branch
-    ? `Worktree: ${displayPath} (${thread.branch})`
-    : `Worktree: ${displayPath}`;
+    ? t("thread.worktreeBranch", { path: displayPath, branch: thread.branch })
+    : t("thread.worktree", { path: displayPath });
 
   return (
     <Tooltip>
@@ -821,6 +861,7 @@ export function ThreadStatusLabel({
   status: ThreadStatusPill;
   compact?: boolean;
 }) {
+  const t = useTranslate();
   if (compact) {
     return (
       <Tooltip>
@@ -828,7 +869,7 @@ export function ThreadStatusLabel({
           render={
             <span
               role="img"
-              aria-label={status.label}
+              aria-label={localizedStatusLabel(status.label, t)}
               className={`inline-flex size-3.5 shrink-0 items-center justify-center ${status.colorClass}`}
             />
           }
@@ -839,7 +880,7 @@ export function ThreadStatusLabel({
             }`}
           />
         </TooltipTrigger>
-        <TooltipPopup side="top">{status.label}</TooltipPopup>
+        <TooltipPopup side="top">{localizedStatusLabel(status.label, t)}</TooltipPopup>
       </Tooltip>
     );
   }
@@ -850,7 +891,7 @@ export function ThreadStatusLabel({
         render={
           <span
             role="img"
-            aria-label={status.label}
+            aria-label={localizedStatusLabel(status.label, t)}
             className={`inline-flex items-center gap-1 text-3xs ${status.colorClass}`}
           />
         }
@@ -860,9 +901,9 @@ export function ThreadStatusLabel({
             status.pulse ? "animate-status-pulse" : ""
           }`}
         />
-        <span className="hidden md:inline">{status.label}</span>
+        <span className="hidden md:inline">{localizedStatusLabel(status.label, t)}</span>
       </TooltipTrigger>
-      <TooltipPopup side="top">{status.label}</TooltipPopup>
+      <TooltipPopup side="top">{localizedStatusLabel(status.label, t)}</TooltipPopup>
     </Tooltip>
   );
 }
@@ -879,6 +920,7 @@ export function ThreadRowLeadingStatus({
   thread: SidebarThreadSummary;
   snapshot?: ThreadChangeRequestSnapshot | undefined;
 }) {
+  const t = useTranslate();
   const { leaseLiveStatus, rowRef } = useSidebarRowSubscriptionLease(false);
   // Observe the containing title even when this thread has no badge yet.
   const statusRef = useCallback(
@@ -927,7 +969,7 @@ export function ThreadRowLeadingStatus({
     linkedPullRequestStatus: linkedPullRequest,
   };
   const pr = resolveDisplayedThreadPr(displayedPrInput);
-  const prStatus = prStatusIndicator(pr, resolveDisplayedThreadPrProvider(displayedPrInput));
+  const prStatus = prStatusIndicator(pr, resolveDisplayedThreadPrProvider(displayedPrInput), t);
   const threadStatus = resolveThreadStatusPill({
     thread: {
       ...thread,
@@ -968,7 +1010,7 @@ export function ThreadRowLeadingStatus({
       {pendingLink ? (
         <PullRequestGlyph.pullRequest
           className="size-3 text-muted-foreground"
-          aria-label={`PR #${pendingLink.number}, status pending`}
+          aria-label={t("pullRequest.pending", { number: pendingLink.number })}
         />
       ) : null}
       {threadStatus ? <ThreadStatusLabel status={threadStatus} /> : null}
@@ -982,6 +1024,7 @@ export function ThreadRowLeadingStatus({
  * environment indicator, matching the sidebar's trailing indicators.
  */
 export function ThreadRowTrailingStatus({ thread }: { thread: SidebarThreadSummary }) {
+  const t = useTranslate();
   const runningTerminalIds = useThreadRunningTerminalIds({
     environmentId: thread.environmentId,
     threadId: thread.id,
@@ -992,7 +1035,9 @@ export function ThreadRowTrailingStatus({ thread }: { thread: SidebarThreadSumma
   // glyph is what tells the environments apart.
   const isRemoteThread = thread.environmentId !== primaryEnvironmentId;
   const remoteEnvLabel = environment?.label ?? null;
-  const threadEnvironmentLabel = isRemoteThread ? (remoteEnvLabel ?? "Remote") : null;
+  const threadEnvironmentLabel = isRemoteThread
+    ? (remoteEnvLabel ?? t("environment.remote"))
+    : null;
   const remoteMachine = resolveEnvironmentMachineKind(environment?.serverConfig ?? null);
   const terminalStatus = terminalStatusFromRunningIds(runningTerminalIds);
 
@@ -1008,7 +1053,7 @@ export function ThreadRowTrailingStatus({ thread }: { thread: SidebarThreadSumma
             render={
               <span
                 role="img"
-                aria-label={terminalStatus.label}
+                aria-label={localizedStatusLabel(terminalStatus.label, t)}
                 className={`inline-flex items-center justify-center ${terminalStatus.colorClass}`}
               />
             }
@@ -1018,7 +1063,7 @@ export function ThreadRowTrailingStatus({ thread }: { thread: SidebarThreadSumma
               onAnimationStart={synchronizeTerminalPulse}
             />
           </TooltipTrigger>
-          <TooltipPopup side="top">{terminalStatus.label}</TooltipPopup>
+          <TooltipPopup side="top">{localizedStatusLabel(terminalStatus.label, t)}</TooltipPopup>
         </Tooltip>
       ) : null}
       {isRemoteThread ? (
@@ -1026,7 +1071,7 @@ export function ThreadRowTrailingStatus({ thread }: { thread: SidebarThreadSumma
           <TooltipTrigger
             render={
               <span
-                aria-label={threadEnvironmentLabel ?? "Remote"}
+                aria-label={threadEnvironmentLabel ?? t("environment.remote")}
                 className="inline-flex items-center justify-center"
               />
             }

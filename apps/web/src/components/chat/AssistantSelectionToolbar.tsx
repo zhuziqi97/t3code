@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import {
   ASSISTANT_CITATION_MAX_TEXT_LENGTH,
   MessageId,
@@ -27,6 +28,7 @@ export function AssistantSelectionToolbar({
   threadRef: ScopedThreadRef;
   onCite: (citation: AssistantCitation, sourceAnchor: AssistantCitationSourceAnchor) => boolean;
 }) {
+  const t = useTranslate();
   const [selection, setSelection] = useState<{
     citation: AssistantCitation;
     position: SelectionActionPoint;
@@ -133,7 +135,7 @@ export function AssistantSelectionToolbar({
       size="xs"
       variant="glass"
       disabled={tooLong}
-      aria-label={tooLong ? "Selection is too long to cite" : "Cite selection in composer"}
+      aria-label={tooLong ? t("chat.citation.tooLong") : t("chat.citation.cite")}
       className="fixed z-50 max-w-[calc(100vw-1rem)]"
       style={{ left: selection.position.x, top: selection.position.y }}
       onPointerDown={(event) => event.preventDefault()}
@@ -147,7 +149,7 @@ export function AssistantSelectionToolbar({
       }}
     >
       <QuoteIcon aria-hidden="true" className="size-3.5" />
-      {tooLong ? "Shorten selection" : "Cite"}
+      {tooLong ? t("chat.citation.shorten") : "Cite"}
     </Button>,
     document.body,
   );

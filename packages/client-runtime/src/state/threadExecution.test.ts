@@ -718,3 +718,47 @@ describe("presentProviderGoal", () => {
     ).toBe("Goal set");
   });
 });
+
+it("localizes execution summaries without changing goals, task identity or provider text", async () => {
+  const { createI18n } = await import("../i18n/index.ts");
+  const translator = createI18n({ lng: "zh" });
+  const goal = {
+    objective: "Keep user objective 原文",
+    status: "paused" as const,
+    tokensUsed: 12000,
+    tokenBudget: 50000,
+    checks: 2,
+  };
+  expect(presentProviderGoal(goal, false, translator.t)).toMatchObject({
+    title: "持续目标已暂停",
+    objective: goal.objective,
+    usage: "12k / 50k Token · 2 次检查",
+    canResume: true,
+  });
+  const tasks = [
+    { taskId: "task:one", kind: "subagent" as const, description: "Review src/math.ts 原文" },
+    { taskId: "task:two", kind: "command" as const },
+  ];
+  const chinese = presentPendingBackgroundWork(tasks, translator.t)!;
+  expect(chinese.title).toBe("等待1 个子智能体和1 个命令");
+  expect(chinese.items.map((item) => [item.taskId, item.kind, item.label])).toEqual([
+    ["task:one", "subagent", "Review src/math.ts 原文"],
+    ["task:two", "command", "命令"],
+  ]);
+  expect(
+    formatProviderSubagentStatus(
+      {
+        status: "completed",
+        startedAt: "2026-07-28T10:00:00Z",
+        completedAt: "2026-07-28T10:00:34Z",
+      },
+      0,
+      translator.t,
+    ),
+  ).toBe("已完成，耗时 34s");
+  await translator.changeLanguage("en");
+  expect(presentProviderGoal(goal, false, translator.t).title).toBe("Goal paused");
+  expect(presentPendingBackgroundWork(tasks, translator.t)?.items[0]?.label).toBe(
+    "Review src/math.ts 原文",
+  );
+});

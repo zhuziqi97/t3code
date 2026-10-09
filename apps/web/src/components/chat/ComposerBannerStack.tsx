@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import { InfoIcon } from "lucide-react";
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
@@ -49,6 +50,7 @@ interface ComposerBannerStackProps {
 }
 
 export function ComposerBannerStack({ className, items, attachedAbove }: ComposerBannerStackProps) {
+  const t = useTranslate();
   const [stackExpanded, setStackExpanded] = useState(false);
   const noticesRef = useRef<HTMLDivElement>(null);
   const peekRef = useRef<HTMLButtonElement>(null);
@@ -155,7 +157,7 @@ export function ComposerBannerStack({ className, items, attachedAbove }: Compose
             <ComposerBanner.Peek
               ref={peekRef}
               variant={firstStackedItem.variant}
-              aria-label="Show other notices"
+              aria-label={t("chat.banner.showOthers")}
               aria-expanded={stackExpanded}
               aria-controls={expandedItemsId}
               aria-hidden={stackExpanded || undefined}
@@ -172,7 +174,7 @@ export function ComposerBannerStack({ className, items, attachedAbove }: Compose
             id={expandedItemsId}
             ref={expandedItemsRef}
             role="group"
-            aria-label="Other notices"
+            aria-label={t("chat.banner.others")}
             tabIndex={-1}
             data-composer-banner-stack-expanded-items="true"
             className={cn(
@@ -251,6 +253,7 @@ export function ComposerBannerStack({ className, items, attachedAbove }: Compose
 
 /** Keep full descriptions reachable only when their inline copy is clipped. */
 function NoticeDescription({ children, compact }: { children: ReactNode; compact?: boolean }) {
+  const t = useTranslate();
   const descriptionRef = useRef<HTMLSpanElement>(null);
   const detailsRef = useRef<HTMLButtonElement>(null);
   const [showDetails, setShowDetails] = useState(false);
@@ -302,7 +305,7 @@ function NoticeDescription({ children, compact }: { children: ReactNode; compact
                 ref={detailsRef}
                 size="icon-xs"
                 variant="ghost-muted"
-                aria-label="Show notice details"
+                aria-label={t("chat.banner.showDetails")}
                 className="flex-none"
               />
             }
@@ -310,7 +313,7 @@ function NoticeDescription({ children, compact }: { children: ReactNode; compact
             <InfoIcon />
           </PopoverTrigger>
           <PopoverPopup
-            aria-label="Notice details"
+            aria-label={t("chat.banner.details")}
             tooltipStyle
             side="top"
             className="max-w-[min(30rem,calc(100vw-2rem))] whitespace-normal wrap-anywhere [--inline-button-text-align:start] [--inline-button-white-space:normal] [&_[data-slot=inline-button]]:max-w-full"
@@ -336,6 +339,7 @@ function ComposerBannerStackAlert({
   readonly exiting: boolean;
   readonly onDismissRequest: () => void;
 }) {
+  const t = useTranslate();
   if ("content" in item) {
     return (
       <ComposerBanner.Root
@@ -371,7 +375,7 @@ function ComposerBannerStackAlert({
             {item.actions}
             {item.onDismiss ? (
               <ComposerBanner.Dismiss
-                aria-label={item.dismissLabel ?? "Dismiss warning"}
+                aria-label={item.dismissLabel ?? t("chat.banner.dismissWarning")}
                 disabled={exiting}
                 onClick={onDismissRequest}
               />

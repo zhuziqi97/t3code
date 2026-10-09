@@ -223,13 +223,13 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
           {pullRequestsSupported ? (
             <SidebarUtilityItem
               icon={<PullRequestGlyph.pullRequest />}
-              label="Pull Requests"
+              label={t("sidebar.pullRequests")}
               onClick={handlePullRequestsClick}
             />
           ) : null}
           <SidebarUtilityItem
             icon={<ChartNoAxesColumnIcon />}
-            label="Usage"
+            label={t("sidebar.usage")}
             onClick={handleUsageClick}
           />
         </>

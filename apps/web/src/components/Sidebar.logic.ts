@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next";
+import { i18n } from "../i18n";
 import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
 import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import { threadPullRequestSearchTerms } from "@t3tools/shared/threadPullRequests";
@@ -548,18 +550,21 @@ export async function archiveSelectedThreadEntries<
   return { archivedThreadKeys, mutationFailure: null, followupFailures };
 }
 
-export function buildMultiSelectThreadContextMenuItems(input: {
-  count: number;
-  hasRunningThread: boolean;
-}): readonly ContextMenuItem<"mark-unread" | "archive" | "delete">[] {
+export function buildMultiSelectThreadContextMenuItems(
+  input: {
+    count: number;
+    hasRunningThread: boolean;
+  },
+  t: TFunction = i18n.t,
+): readonly ContextMenuItem<"mark-unread" | "archive" | "delete">[] {
   return [
-    { id: "mark-unread", label: `Mark unread (${input.count})` },
+    { id: "mark-unread", label: t("thread.bulk.markUnread", { count: input.count }) },
     {
       id: "archive",
-      label: `Archive (${input.count})`,
+      label: t("thread.bulk.archive", { count: input.count }),
       disabled: input.hasRunningThread,
     },
-    { id: "delete", label: `Delete (${input.count})`, destructive: true },
+    { id: "delete", label: t("thread.bulk.delete", { count: input.count }), destructive: true },
   ];
 }
 
@@ -593,21 +598,24 @@ export function getSidebarForkParentThreadId(
     : thread.lineage.parentThreadId;
 }
 
-export function buildBulkTitleRegenerationContextMenuItem(input: {
-  supportedCount: number;
-  actionableCount: number;
-}): ContextMenuItem<"regenerate-title"> | null {
+export function buildBulkTitleRegenerationContextMenuItem(
+  input: {
+    supportedCount: number;
+    actionableCount: number;
+  },
+  t: TFunction = i18n.t,
+): ContextMenuItem<"regenerate-title"> | null {
   if (input.supportedCount === 0) return null;
   if (input.actionableCount === 0) {
     return {
       id: "regenerate-title",
-      label: `Regenerating… (${input.supportedCount})`,
+      label: t("thread.bulk.regenerating", { count: input.supportedCount }),
       disabled: true,
     };
   }
   return {
     id: "regenerate-title",
-    label: `Regenerate titles (${input.actionableCount})`,
+    label: t("thread.bulk.regenerate", { count: input.actionableCount }),
   };
 }
 
@@ -616,11 +624,14 @@ export function buildBulkTitleRegenerationContextMenuItem(input: {
  * as title regeneration: on a mixed selection the label counts the pinned
  * rows alone, and the item disappears when nothing selected is pinned.
  */
-export function buildBulkUnpinContextMenuItem(input: {
-  pinnedCount: number;
-}): ContextMenuItem<"unpin"> | null {
+export function buildBulkUnpinContextMenuItem(
+  input: {
+    pinnedCount: number;
+  },
+  t: TFunction = i18n.t,
+): ContextMenuItem<"unpin"> | null {
   if (input.pinnedCount === 0) return null;
-  return { id: "unpin", label: `Unpin (${input.pinnedCount})` };
+  return { id: "unpin", label: t("thread.bulk.unpin", { count: input.pinnedCount }) };
 }
 
 export interface ThreadStatusPill {
@@ -1153,12 +1164,12 @@ export function resolveWorkingStartedAt(
   return resolveThreadWorkingStartedAt(thread);
 }
 
-export function formatWorkingDurationLabel(elapsedMs: number): string {
+export function formatWorkingDurationLabel(elapsedMs: number, t: TFunction = i18n.t): string {
   const seconds = Number.isFinite(elapsedMs) ? Math.max(0, Math.floor(elapsedMs / 1000)) : 0;
-  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 60) return t("time.compact.seconds", { count: seconds });
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+  if (minutes < 60) return t("time.compact.minutes", { count: minutes });
+  return t("time.compact.hourMinutes", { hours: Math.floor(minutes / 60), minutes: minutes % 60 });
 }
 
 export function resolveThreadStatusPill(input: {

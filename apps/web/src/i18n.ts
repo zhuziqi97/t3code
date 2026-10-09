@@ -7,13 +7,10 @@
  * without a provider, which keeps component tests that render a screen directly
  * working unchanged.
  */
-import { useEffect } from "react";
 import { initReactI18next, useTranslation } from "react-i18next";
 
-import { createI18n, resolveLanguage } from "@t3tools/client-runtime/i18n";
+import { createI18n } from "@t3tools/client-runtime/i18n";
 import type { SupportedLanguage } from "@t3tools/client-runtime/i18n";
-
-import { useClientSettings } from "./hooks/useSettings";
 
 export const i18n = createI18n({ plugins: [initReactI18next] });
 
@@ -31,28 +28,4 @@ export function changeLanguage(language: SupportedLanguage): Promise<unknown> {
 /** Translate function bound to the active language. */
 export function useTranslate() {
   return useTranslation().t;
-}
-
-/**
- * Applies the stored language preference to i18next and to the document.
- *
- * Rendered once above the router rather than inside a route, because
- * `__root` returns several separate trees (pair, welcome, app shell) and a
- * branch that forgets this would silently render in the source language.
- *
- * The host locale is consulted only for `system`, and only here: resolving it
- * at module load would freeze the choice before settings hydrate.
- */
-export function LanguageSync() {
-  const languagePreference = useClientSettings((settings) => settings.languagePreference);
-
-  useEffect(() => {
-    const language = resolveLanguage(languagePreference, navigator.languages);
-    if (i18n.resolvedLanguage !== language) {
-      void changeLanguage(language);
-    }
-    document.documentElement.lang = language;
-  }, [languagePreference]);
-
-  return null;
 }

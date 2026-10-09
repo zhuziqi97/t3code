@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import type { EnvironmentId } from "@t3tools/contracts";
 import {
   HTML_RENDER_COLUMN_WIDTH,
@@ -29,6 +30,7 @@ export function HtmlRenderFrame(props: {
   readonly htmlRender: HtmlRenderReference;
   readonly onOpen: (attachment: ChatFileAttachment) => void;
 }) {
+  const t = useTranslate();
   const { attachmentId, title } = props.htmlRender;
   // The frame takes the page's measured height at its own width, read before
   // first paint so the reserved box is already the right size.
@@ -106,7 +108,7 @@ export function HtmlRenderFrame(props: {
               <TooltipTrigger
                 render={
                   <Button
-                    aria-label="Open in panel"
+                    aria-label={t("chat.html.openPanel")}
                     size="icon-xs"
                     variant="glass"
                     onClick={() =>
@@ -125,13 +127,13 @@ export function HtmlRenderFrame(props: {
               >
                 <Maximize2Icon className="size-3.5" />
               </TooltipTrigger>
-              <TooltipPopup side="left">Open in panel</TooltipPopup>
+              <TooltipPopup side="left">{t("chat.html.openPanel")}</TooltipPopup>
             </Tooltip>
           </div>
         </>
       ) : failed ? (
         <p className="flex size-full items-center justify-center text-muted-foreground text-xs">
-          Unable to load {title}
+          {t("chat.html.loadFailed", { title })}
         </p>
       ) : null}
     </div>

@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import {
   type ModelSelection,
   type ProviderDriverKind,
@@ -93,9 +94,10 @@ type TraitsPersistence =
 const ULTRATHINK_PROMPT_PREFIX = "Ultrathink:\n";
 
 function DefaultBadge() {
+  const t = useTranslate();
   return (
     <Badge variant="outline" size="sm" className="min-w-0">
-      Default
+      {t("chat.traits.default")}
     </Badge>
   );
 }
@@ -296,6 +298,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
   planModeEnabled,
   ...persistence
 }: TraitsMenuContentProps & TraitsPersistence) {
+  const t = useTranslate();
   const modelSelection =
     instanceId && model ? { instanceId, model, options: modelOptions ?? [] } : null;
   const setProviderModelOptions = useComposerDraftStore((store) => store.setProviderModelOptions);
@@ -407,8 +410,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
               </div>
               {ultrathinkInBodyText && descriptor.id === primarySelectDescriptor?.id ? (
                 <div className="px-2 pb-1.5 text-muted-foreground/80 text-xs">
-                  Your prompt contains &quot;ultrathink&quot; in the text. Remove it to change this
-                  option.
+                  {t("chat.traits.ultrathinkHint")}
                 </div>
               ) : null}
               <MenuRadioGroup
@@ -471,7 +473,9 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
                 {(["on", "off"] as const).map((value) => (
                   <MenuRadioItem key={value} value={value} hideIndicator closeOnClick>
                     <span className="flex w-full min-w-0 items-center justify-between gap-3">
-                      <span>{value === "on" ? "On" : "Off"}</span>
+                      <span>
+                        {value === "on" ? t("common.on") : t("options.notifications.off")}
+                      </span>
                     </span>
                   </MenuRadioItem>
                 ))}

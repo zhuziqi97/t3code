@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next";
+import { i18n, useTranslate } from "../../i18n";
 import { Toolbar } from "@base-ui/react/toolbar";
 import { type ProviderInstanceId } from "@t3tools/contracts";
 import { memo, useLayoutEffect, useRef, useState } from "react";
@@ -16,16 +18,20 @@ import {
  * kind-based copy but uses the entry's configured `displayName` so custom
  * instances get their user-authored name (e.g. "Codex Personal — Unavailable.").
  */
-function describeUnavailableInstance(entry: ProviderInstanceEntry): string {
+function describeUnavailableInstance(entry: ProviderInstanceEntry, t: TFunction = i18n.t): string {
   const label = entry.displayName;
   if (!entry.enabled || entry.status === "disabled") {
-    return `${label} — Disabled in settings.`;
+    return t("chat.model.disabled", { provider: label });
   }
   if (entry.status === "ready" && entry.isAvailable) {
     return label;
   }
   const kind =
-    entry.status === "error" ? "Unavailable" : entry.status === "warning" ? "Limited" : "Not ready";
+    entry.status === "error"
+      ? t("common.unavailable")
+      : entry.status === "warning"
+        ? t("thread.limited")
+        : t("chat.model.notReady");
   const msg = entry.snapshot.message?.trim();
   return msg ? `${label} — ${kind}. ${msg}` : `${label} — ${kind}.`;
 }
@@ -65,6 +71,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
    */
   newBadgeInstanceIds?: ReadonlySet<ProviderInstanceId>;
 }) {
+  const t = useTranslate();
   const handleSelect = (instanceId: ProviderInstanceId | "favorites") => {
     props.onSelectInstance(instanceId);
   };
@@ -91,7 +98,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
     <Toolbar.Root
       className="w-11 shrink-0 overflow-hidden bg-muted/30"
       data-model-picker-sidebar="true"
-      aria-label="Providers"
+      aria-label={t("chat.model.providers")}
       orientation="vertical"
       onKeyDown={(event) => {
         if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
@@ -127,7 +134,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
                         )}
                         onClick={() => handleSelect("favorites")}
                         type="button"
-                        aria-label="Favorites"
+                        aria-label={t("chat.model.favorites")}
                         aria-pressed={props.selectedInstanceId === "favorites"}
                       >
                         <StarIcon className="size-5 fill-current shrink-0" aria-hidden />
@@ -139,7 +146,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
                     sideOffset={PICKER_TOOLTIP_SIDE_OFFSET}
                     align="center"
                   >
-                    Favorites
+                    {t("chat.model.favorites")}
                   </TooltipPopup>
                 </Tooltip>
               </div>
@@ -161,11 +168,11 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
             const showInstanceBadge = shouldShowInstanceBadge(entry, props.instanceEntries);
 
             const tooltip = isUnavailable
-              ? describeUnavailableInstance(entry)
+              ? describeUnavailableInstance(entry, t)
               : isContextDisabled
                 ? (props.getDisabledInstanceTooltip?.(entry) ?? entry.displayName)
                 : showNewBadge
-                  ? `${entry.displayName} — New`
+                  ? t("chat.model.newProvider", { provider: entry.displayName })
                   : entry.displayName;
 
             const button = (
@@ -192,7 +199,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
                   isUnavailable || isContextDisabled
                     ? tooltip
                     : showNewBadge
-                      ? `${entry.displayName}, new`
+                      ? t("chat.model.newProviderAria", { provider: entry.displayName })
                       : entry.displayName
                 }
               >

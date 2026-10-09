@@ -3,7 +3,7 @@ import { RouterProvider } from "@tanstack/react-router";
 import { BrowserProfileReporter } from "./browser/BrowserProfileReporter";
 import { ElectronBrowserHost } from "./browser/ElectronBrowserHost";
 import { QuitHoldOverlay } from "./components/QuitHoldOverlay";
-import { LanguageSync } from "./i18n";
+import { LanguageSync } from "./LanguageSync";
 import { AppAtomRegistryProvider } from "./rpc/atomRegistry";
 import type { AppRouter } from "./router";
 

@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next";
+import { i18n, useTranslate } from "../../i18n";
 import type { EnvironmentId, UsageLimitsReport } from "@t3tools/contracts";
 import { limitsNotice } from "@t3tools/shared/usageLimits";
 import { GaugeIcon } from "lucide-react";
@@ -24,6 +26,7 @@ function accountLabel(account: UsageLimitsReport["accounts"][number]): string {
 }
 
 function AccountSummary({ account }: { readonly account: UsageLimitsReport["accounts"][number] }) {
+  const t = useTranslate();
   const label = accountLabel(account);
   return (
     <>
@@ -31,9 +34,9 @@ function AccountSummary({ account }: { readonly account: UsageLimitsReport["acco
         <RedactedSensitiveText
           key={label}
           value={label}
-          ariaLabel="Toggle account label visibility"
-          revealTooltip="Click to reveal account"
-          hideTooltip="Click to hide account"
+          ariaLabel={t("chat.account.toggle")}
+          revealTooltip={t("chat.account.reveal")}
+          hideTooltip={t("chat.account.hide")}
           className="max-w-full truncate align-bottom font-sans text-xs leading-normal"
         />
       ) : (
@@ -50,22 +53,23 @@ export function usageLimitsBannerItem(
   report: UsageLimitsReport,
   environmentId: EnvironmentId,
   onDismiss: () => void,
+  t: TFunction = i18n.t,
 ): ComposerBannerStackItem {
   const [first] = report.accounts;
   const single = report.accounts.length === 1 && first ? first : null;
   const summary = single ? (
     <AccountSummary account={single} />
   ) : (
-    `${report.accounts.length} accounts`
+    t("chat.usage.accounts", { count: report.accounts.length })
   );
   return {
     id,
     variant: "info",
     priority: "notice",
     icon: <GaugeIcon />,
-    title: "Usage limits",
+    title: t("chat.usage.limits"),
     description: summary,
-    dismissLabel: "Dismiss usage limits",
+    dismissLabel: t("chat.usage.dismiss"),
     onDismiss,
     children: <UsageLimitsBannerBody report={report} environmentId={environmentId} />,
   };
@@ -78,6 +82,7 @@ function UsageLimitsBannerBody({
   readonly report: UsageLimitsReport;
   readonly environmentId: EnvironmentId;
 }) {
+  const t = useTranslate();
   const now = Date.parse(report.createdAt);
   return (
     <ComposerBanner.Scroll>
@@ -112,7 +117,7 @@ function UsageLimitsBannerBody({
                   className="self-start"
                   onClick={() => void ensureLocalApi().shell.openExternal(externalUsage.url)}
                 >
-                  Manage usage
+                  {t("chat.usage.manage")}
                 </Button>
               ) : null}
               {resetCreditInput && account.limits.resetCredits ? (

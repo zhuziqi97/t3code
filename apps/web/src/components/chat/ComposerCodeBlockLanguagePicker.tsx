@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import { CheckIcon, ChevronDownIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -45,6 +46,7 @@ export function ComposerCodeBlockLanguagePicker(props: {
   disabled: boolean;
   onChange: (language: string) => void;
 }) {
+  const t = useTranslate();
   const [query, setQuery] = useState("");
   const current = codeLanguageEntry(props.language)?.id ?? props.language;
   const items = useMemo<CodeBlockLanguage[]>(
@@ -89,7 +91,7 @@ export function ComposerCodeBlockLanguagePicker(props: {
               variant="ghost-muted"
               size="xs"
               disabled={props.disabled}
-              aria-label={`Code language: ${codeLanguageLabel(props.language)}`}
+              aria-label={t("chat.code.language", { language: codeLanguageLabel(props.language) })}
             />
           }
         >
@@ -99,12 +101,12 @@ export function ComposerCodeBlockLanguagePicker(props: {
         </ComboboxTrigger>
         <ComboboxPopup align="start" className="w-56">
           <ComboboxSearchInput
-            aria-label="Search languages"
-            placeholder="Search languages"
+            aria-label={t("chat.code.searchLanguages")}
+            placeholder={t("chat.code.searchLanguages")}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
-          <ComboboxEmpty>No matching languages.</ComboboxEmpty>
+          <ComboboxEmpty>{t("chat.code.noMatchingLanguages")}</ComboboxEmpty>
           <ComboboxList>
             {(entry: CodeBlockLanguage) => (
               <ComboboxItem key={entry.id || "plain"} value={entry}>

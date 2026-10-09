@@ -1,3 +1,6 @@
+// @vitest-environment jsdom
+import { act, createElement } from "react";
+import { create, type ReactTestRenderer } from "react-test-renderer";
 import {
   AuthOrchestrationOperateScope,
   AuthSourceControlWriteScope,
@@ -6,7 +9,7 @@ import {
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const state = vi.hoisted(() => ({
   scopes: new Set<string>(),
@@ -23,11 +26,6 @@ const state = vi.hoisted(() => ({
 
 vi.mock("react", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react")>()),
-  useCallback: (callback: unknown) => callback,
-  useMemo: (factory: () => unknown) => factory(),
-  useState: (initial: unknown) => [typeof initial === "function" ? initial() : initial, () => {}],
-  useRef: (current: unknown) => ({ current }),
-  useEffect: () => {},
   useEffectEvent: (callback: typeof state.run) => {
     state.run = callback;
     return callback;
@@ -170,13 +168,25 @@ vi.mock("./AnimatedHeight", () => ({ AnimatedHeight: "AnimatedHeight" }));
 
 import GitActionsControl from "./GitActionsControl";
 
+const renderers: ReactTestRenderer[] = [];
+afterEach(() => {
+  act(() => renderers.splice(0).forEach((renderer) => renderer.unmount()));
+  vi.unstubAllGlobals();
+});
 function renderActions() {
-  GitActionsControl({
-    gitCwd: "/repo",
-    activeThreadRef: {
-      environmentId: EnvironmentId.make("environment"),
-      threadId: ThreadId.make("thread"),
-    },
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  function Harness() {
+    GitActionsControl({
+      gitCwd: "/repo",
+      activeThreadRef: {
+        environmentId: EnvironmentId.make("environment"),
+        threadId: ThreadId.make("thread"),
+      },
+    });
+    return null;
+  }
+  act(() => {
+    renderers.push(create(createElement(Harness)));
   });
   if (!state.run) throw new Error("Git action missing");
   return state.run;

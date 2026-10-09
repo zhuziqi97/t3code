@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import { ThreadDetailsControl } from "./ThreadDetailsControl";
 import { PullRequestGlyph } from "../pullRequest/pullRequestIcons";
 /**
@@ -107,6 +108,7 @@ export function ThreadDetailsPrRow({
   /** Set while the server watches this pull request for the thread; stops the watch. */
   onStopWatching?: (() => void) | undefined;
 }) {
+  const t = useTranslate();
   const serverConfigs = useServerConfigs();
   const supportsPullRequests =
     serverConfigs.get(environmentId)?.environment.capabilities.pullRequests === true;
@@ -237,7 +239,9 @@ export function ThreadDetailsPrRow({
   // detail rows, so the two read as one family.
   const rowTooltip =
     detail === null || statePresentation === null ? (
-      <TooltipPopup side="top">{status?.tooltip ?? `Pull request #${number}`}</TooltipPopup>
+      <TooltipPopup side="top">
+        {status?.tooltip ?? t("chat.pullRequest.number", { number: number })}
+      </TooltipPopup>
     ) : (
       <TooltipPopup
         side="top"
@@ -285,7 +289,8 @@ export function ThreadDetailsPrRow({
               <div className="flex min-w-0 items-start gap-2 text-destructive">
                 <TriangleAlertIcon aria-hidden className="mt-0.5 size-3 shrink-0 stroke-current" />
                 <div className="min-w-0 flex-1 wrap-break-word leading-5">
-                  Merge conflicts with {detail.baseBranch}
+                  {t("chat.pullRequest.conflictsWith")}
+                  {detail.baseBranch}
                 </div>
               </div>
             ) : null}
@@ -310,17 +315,17 @@ export function ThreadDetailsPrRow({
           pending: handoff === "conflicts",
           destructive: true,
           suffix: <ArrowUpRightIcon aria-hidden className="size-3 shrink-0" />,
-          tooltip: "Check the branch out and resolve the conflicts in a new thread",
+          tooltip: t("chat.pullRequest.resolveHint"),
           onClick: startResolveConflicts,
         }
       : rowAction === "ready"
         ? {
-            label: "Ready",
+            label: t("wizard.ready"),
             pendingLabel: "Marking...",
             pending: actionPending,
             destructive: false,
             suffix: null,
-            tooltip: "Mark this pull request as ready for review",
+            tooltip: t("chat.pullRequest.markReadyHint"),
             onClick: () => void perform("ready"),
           }
         : rowAction === "fix"
@@ -330,17 +335,17 @@ export function ThreadDetailsPrRow({
               pending: handoff === "findings",
               destructive: true,
               suffix: <ArrowUpRightIcon aria-hidden className="size-3 shrink-0" />,
-              tooltip: "Fix the failing checks in a new thread",
+              tooltip: t("chat.pullRequest.fixChecksHint"),
               onClick: startFixChecks,
             }
           : rowAction === "merge"
             ? {
-                label: "Merge",
+                label: t("chat.pullRequest.merge"),
                 pendingLabel: "Merging...",
                 pending: actionPending,
                 destructive: false,
                 suffix: null,
-                tooltip: `Merge this pull request (${selectedMergeMethod})`,
+                tooltip: t("chat.pullRequest.mergeMethod", { method: selectedMergeMethod }),
                 onClick: () => setConfirmingMerge(true),
               }
             : null;
@@ -359,7 +364,7 @@ export function ThreadDetailsPrRow({
               size="sm"
               part={part}
               className="group/watch"
-              aria-label={`Stop watching #${number}`}
+              aria-label={t("chat.pullRequest.stopWatch", { number: number })}
               onClick={onStopWatching}
             />
           }
@@ -376,10 +381,7 @@ export function ThreadDetailsPrRow({
             )}
           />
         </TooltipTrigger>
-        <TooltipPopup side="top">
-          Watching: the agent wakes when checks finish, someone comments, or the branch conflicts.
-          Click to stop.
-        </TooltipPopup>
+        <TooltipPopup side="top">{t("chat.pullRequest.watchingHint")}</TooltipPopup>
       </Tooltip>
     ) : null;
 
@@ -462,14 +464,14 @@ export function ThreadDetailsPrRow({
         <AlertDialog open={confirmingMerge} onOpenChange={(open) => setConfirmingMerge(open)}>
           <AlertDialogPopup>
             <AlertDialogHeader>
-              <AlertDialogTitle>Merge pull request?</AlertDialogTitle>
+              <AlertDialogTitle>{t("chat.pullRequest.mergeQuestion")}</AlertDialogTitle>
               <AlertDialogDescription>
-                This merges #{number} using {selectedMergeMethod}.
+                {t("chat.pullRequest.mergeDescription", { number, method: selectedMergeMethod })}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogClose render={<Button variant="outline" size="sm" />}>
-                Cancel
+                {t("common.cancel")}
               </AlertDialogClose>
               <Button
                 size="sm"
@@ -479,7 +481,7 @@ export function ThreadDetailsPrRow({
                   void perform("merge", selectedMergeMethod);
                 }}
               >
-                Merge
+                {t("chat.pullRequest.merge")}
               </Button>
             </AlertDialogFooter>
           </AlertDialogPopup>

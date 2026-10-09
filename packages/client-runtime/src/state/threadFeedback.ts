@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import { MessageId, type ProviderUploadFeedbackResult } from "@t3tools/contracts";
 
 import {
@@ -28,19 +29,27 @@ export function parseCodexFeedbackCommand(text: string): { readonly reason?: str
   return reason ? { reason } : {};
 }
 
-export function codexFeedbackNotice(submission: CodexFeedbackSubmission) {
+export function codexFeedbackNotice(submission: CodexFeedbackSubmission, t?: TFunction) {
   switch (submission.status) {
     case "interrupted":
       return null;
     case "uploading":
-      return { title: "Sending feedback to OpenAI...", description: undefined };
+      return {
+        title: t?.("chat.feedback.sending") ?? "Sending feedback to OpenAI...",
+        description: undefined,
+      };
     case "sent":
       return {
-        title: "Feedback sent to OpenAI",
-        description: `Thread ID: ${submission.feedbackId}`,
+        title: t?.("chat.feedback.sent") ?? "Feedback sent to OpenAI",
+        description:
+          t?.("chat.feedback.id", { id: submission.feedbackId }) ??
+          `Thread ID: ${submission.feedbackId}`,
       };
     case "failed":
-      return { title: "Could not send feedback to OpenAI", description: submission.errorMessage };
+      return {
+        title: t?.("chat.feedback.failed") ?? "Could not send feedback to OpenAI",
+        description: submission.errorMessage,
+      };
   }
 }
 
@@ -67,15 +76,18 @@ export interface LocalChatMessage {
 export function codexFeedbackMessage(
   submission: CodexFeedbackSubmission,
   role: "user" | "assistant" = "user",
+  t?: TFunction,
 ): LocalChatMessage {
   const text =
     role === "user"
       ? submission.command
       : submission.status === "sent"
-        ? `Feedback sent to OpenAI.\n\nThread ID: \`${submission.feedbackId}\``
+        ? (t?.("chat.feedback.sentMessage", { id: submission.feedbackId }) ??
+          `Feedback sent to OpenAI.\n\nThread ID: \`${submission.feedbackId}\``)
         : submission.status === "failed"
-          ? `Could not send feedback to OpenAI.\n\n${submission.errorMessage}`
-          : "Sending feedback to OpenAI...";
+          ? (t?.("chat.feedback.failedMessage", { error: submission.errorMessage }) ??
+            `Could not send feedback to OpenAI.\n\n${submission.errorMessage}`)
+          : (t?.("chat.feedback.sending") ?? "Sending feedback to OpenAI...");
 
   return {
     id: role === "user" ? submission.id : MessageId.make(`${submission.id}:feedback`),

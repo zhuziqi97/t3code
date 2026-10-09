@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import {
   latestRootProviderFailure,
   latestUnheldRun,
@@ -204,9 +205,11 @@ const SUBAGENT_STATUS_LABELS: Record<OrchestrationV2ExecutionNode["status"], str
 export function formatProviderSubagentStatus(
   status: ProviderSubagentStatus | null,
   nowMs: number,
+  t?: TFunction,
 ): string {
-  if (status === null) return "Starting";
-  const label = SUBAGENT_STATUS_LABELS[status.status];
+  if (status === null) return t?.("chat.execution.starting") ?? "Starting";
+  const label =
+    t?.(`chat.execution.status.${status.status}`) ?? SUBAGENT_STATUS_LABELS[status.status];
   const live = isOrchestrationV2WorkActive(status.status);
   if (!live && status.status !== "completed") return label;
   const start = status.startedAt === null ? Number.NaN : Date.parse(status.startedAt);
@@ -218,7 +221,10 @@ export function formatProviderSubagentStatus(
   if (!Number.isFinite(start) || !Number.isFinite(end)) return label;
   // Whole seconds: a ticking label must not flicker through tenths.
   const elapsed = formatDuration(Math.max(1_000, Math.floor((end - start) / 1_000) * 1_000));
-  return live ? `${label} ${elapsed}` : `${label} in ${elapsed}`;
+  return live
+    ? (t?.("chat.execution.live", { status: label, duration: elapsed }) ?? `${label} ${elapsed}`)
+    : (t?.("chat.execution.completedIn", { status: label, duration: elapsed }) ??
+        `${label} in ${elapsed}`);
 }
 
 export function deriveThreadRuntime(
@@ -323,14 +329,20 @@ export interface PendingBackgroundWorkPresentation {
   readonly waiting: boolean;
 }
 
-function joinWithAnd(parts: ReadonlyArray<string>): string {
+function joinWithAnd(parts: ReadonlyArray<string>, t?: TFunction): string {
   if (parts.length <= 1) return parts.join("");
-  return `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`;
+  return (
+    t?.("chat.execution.join", {
+      first: parts.slice(0, -1).join(t("chat.execution.separator")),
+      last: parts.at(-1),
+    }) ?? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`
+  );
 }
 
 /** Names what a settled thread still runs, grouped by kind, for the composer strip. */
 export function presentPendingBackgroundWork(
   tasks: ReadonlyArray<OrchestrationV2PendingBackgroundTask>,
+  t?: TFunction,
 ): PendingBackgroundWorkPresentation | null {
   if (tasks.length === 0) return null;
   const waiting = backgroundWorkHoldsCompletion(tasks);
@@ -346,7 +358,7 @@ export function presentPendingBackgroundWork(
         kind: task.kind,
         label:
           label === undefined || label.length === 0
-            ? BACKGROUND_WORK_KINDS[task.kind].singular
+            ? (t?.(`chat.execution.noun.${task.kind}`) ?? BACKGROUND_WORK_KINDS[task.kind].singular)
             : label,
         childThreadId: task.kind === "subagent" ? task.childThreadId : undefined,
       };
@@ -358,24 +370,36 @@ export function presentPendingBackgroundWork(
     );
   const [only] = items;
   if (items.length === 1 && only !== undefined) {
-    const noun = BACKGROUND_WORK_KINDS[only.kind].singular;
+    const noun =
+      t?.(`chat.execution.noun.${only.kind}`) ?? BACKGROUND_WORK_KINDS[only.kind].singular;
     const named = only.label !== noun;
     const title = waiting
       ? named
-        ? `Waiting on ${noun} ${only.label}`
-        : `Waiting on a ${noun}`
+        ? (t?.("chat.execution.waitNamed", { noun, label: only.label }) ??
+          `Waiting on ${noun} ${only.label}`)
+        : (t?.("chat.execution.waitUnnamed", { noun }) ?? `Waiting on a ${noun}`)
       : named
-        ? `Running: ${only.label}`
-        : `Running a ${noun}`;
+        ? (t?.("chat.execution.runNamed", { label: only.label }) ?? `Running: ${only.label}`)
+        : (t?.("chat.execution.runUnnamed", { noun }) ?? `Running a ${noun}`);
     return { title, items, waiting };
   }
   const counts = new Map<BackgroundWorkKind, number>();
   for (const item of items) counts.set(item.kind, (counts.get(item.kind) ?? 0) + 1);
   const groups = Array.from(counts, ([kind, count]) => {
     const { singular, plural } = BACKGROUND_WORK_KINDS[kind];
-    return `${count} ${count === 1 ? singular : plural}`;
+    return (
+      t?.(`chat.execution.count.${kind}`, { count }) ??
+      `${count} ${count === 1 ? singular : plural}`
+    );
   });
-  return { title: `${waiting ? "Waiting on" : "Running"} ${joinWithAnd(groups)}`, items, waiting };
+  return {
+    title:
+      t?.(waiting ? "chat.execution.waitGroup" : "chat.execution.runGroup", {
+        group: joinWithAnd(groups, t),
+      }) ?? `${waiting ? "Waiting on" : "Running"} ${joinWithAnd(groups)}`,
+    items,
+    waiting,
+  };
 }
 
 export interface ProviderGoalPresentation {
@@ -410,23 +434,35 @@ function formatGoalTokens(tokens: number): string {
 export function presentProviderGoal(
   goal: OrchestrationV2ProviderGoal,
   working: boolean,
+  t?: TFunction,
 ): ProviderGoalPresentation {
   const usage: Array<string> = [];
   if (goal.tokensUsed !== undefined && goal.tokensUsed > 0) {
     usage.push(
       goal.tokenBudget == null
-        ? `${formatGoalTokens(goal.tokensUsed)} tokens`
-        : `${formatGoalTokens(goal.tokensUsed)} / ${formatGoalTokens(goal.tokenBudget)} tokens`,
+        ? (t?.("chat.goal.tokensUsed", { used: formatGoalTokens(goal.tokensUsed) }) ??
+            `${formatGoalTokens(goal.tokensUsed)} tokens`)
+        : (t?.("chat.goal.tokensBudget", {
+            used: formatGoalTokens(goal.tokensUsed),
+            budget: formatGoalTokens(goal.tokenBudget),
+          }) ??
+            `${formatGoalTokens(goal.tokensUsed)} / ${formatGoalTokens(goal.tokenBudget)} tokens`),
     );
   }
   if (goal.timeUsedSeconds !== undefined && goal.timeUsedSeconds >= 60) {
     usage.push(formatDuration(goal.timeUsedSeconds * 1_000));
   }
   if (goal.checks !== undefined && goal.checks > 0) {
-    usage.push(`${goal.checks} ${goal.checks === 1 ? "check" : "checks"}`);
+    usage.push(
+      t?.("chat.goal.checks", { count: goal.checks }) ??
+        `${goal.checks} ${goal.checks === 1 ? "check" : "checks"}`,
+    );
   }
   return {
-    title: goal.status === "active" && !working ? "Goal set" : PROVIDER_GOAL_TITLES[goal.status],
+    title:
+      goal.status === "active" && !working
+        ? (t?.("chat.goal.set") ?? "Goal set")
+        : (t?.(`chat.goal.status.${goal.status}`) ?? PROVIDER_GOAL_TITLES[goal.status]),
     objective: goal.objective,
     usage: usage.length === 0 ? null : usage.join(" · "),
     canResume: goal.status !== "active" && goal.status !== "complete",

@@ -1,3 +1,5 @@
+import { i18n } from "../../i18n";
+import type { TFunction } from "i18next";
 import type { RuntimeMode } from "@t3tools/contracts";
 import { type LucideIcon, LockIcon, LockOpenIcon, PenLineIcon, SparklesIcon } from "lucide-react";
 
@@ -28,3 +30,11 @@ export const runtimeModeConfig: Record<
 };
 
 export const runtimeModeOptions = Object.keys(runtimeModeConfig) as RuntimeMode[];
+
+export function runtimeModePresentation(mode: RuntimeMode, t: TFunction = i18n.t) {
+  return {
+    ...runtimeModeConfig[mode],
+    label: t(`chat.runtime.${mode}.label`),
+    description: t(`chat.runtime.${mode}.description`),
+  };
+}
