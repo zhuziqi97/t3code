@@ -146,7 +146,12 @@ import {
   shouldShowArm64IntelBuildWarning,
   shouldToastDesktopUpdateActionResult,
 } from "./desktopUpdate.logic";
-import { showDesktopUpdateDownloadedToast } from "./desktopUpdate.toast";
+import { DesktopUpdateText } from "./DesktopUpdateText";
+import { useTranslate } from "../i18n";
+import {
+  showDesktopUpdateDownloadedToast,
+  showDesktopUpdateErrorToast,
+} from "./desktopUpdate.toast";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "./ui/alert";
 import { Button } from "./ui/button";
 import {
@@ -3090,7 +3095,9 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
         <SidebarGroup>
           <Alert variant="warning">
             <TriangleAlertIcon />
-            <AlertTitle>Intel build on Apple Silicon</AlertTitle>
+            <AlertTitle>
+              <DesktopUpdateText render={(t) => t("update.architecture.title")} />
+            </AlertTitle>
             <AlertDescription>{arm64IntelBuildWarningDescription}</AlertDescription>
             {desktopUpdateButtonAction !== "none" ? (
               <AlertAction>
@@ -3100,9 +3107,11 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
                   disabled={desktopUpdateButtonDisabled || desktopUpdateActionPending}
                   onClick={handleDesktopUpdateButtonClick}
                 >
-                  {desktopUpdateButtonAction === "download"
-                    ? "Download ARM build"
-                    : "Install ARM build"}
+                  {desktopUpdateButtonAction === "download" ? (
+                    <DesktopUpdateText render={(t) => t("update.architecture.downloadAction")} />
+                  ) : (
+                    <DesktopUpdateText render={(t) => t("update.architecture.installAction")} />
+                  )}
                 </Button>
               </AlertAction>
             ) : null}
@@ -3227,6 +3236,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
 });
 
 export default function LegacySidebar() {
+  const t = useTranslate();
   const projects = useProjects();
   const sidebarThreads = useThreadShells();
   const projectExpandedById = useUiStateStore((store) => store.projectExpandedById);
@@ -3743,7 +3753,7 @@ export default function LegacySidebar() {
     isElectron && shouldShowArm64IntelBuildWarning(desktopUpdateState);
   const arm64IntelBuildWarningDescription =
     desktopUpdateState && showArm64IntelBuildWarning
-      ? getArm64IntelBuildWarningDescription(desktopUpdateState)
+      ? getArm64IntelBuildWarningDescription(desktopUpdateState, t)
       : null;
   const commandPaletteShortcutLabel = isMobile
     ? null
@@ -3771,21 +3781,17 @@ export default function LegacySidebar() {
           if (!shouldToastDesktopUpdateActionResult(result)) return;
           const actionError = getDesktopUpdateActionError(result);
           if (!actionError) return;
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: "Could not download update",
-              description: actionError,
-            }),
+          showDesktopUpdateErrorToast(
+            "about.updateDownload.error",
+            actionError,
+            "update.unexpected",
           );
         })
         .catch((error) => {
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: "Could not start update download",
-              description: error instanceof Error ? error.message : "An unexpected error occurred.",
-            }),
+          showDesktopUpdateErrorToast(
+            "update.downloadStartFailed",
+            error instanceof Error ? error.message : null,
+            "update.unexpected",
           );
         })
         .finally(() => setDesktopUpdateActionPending(false));
@@ -3796,16 +3802,14 @@ export default function LegacySidebar() {
       let confirmed = false;
       try {
         confirmed = await ensureLocalApi().dialogs.confirm(
-          getDesktopUpdateInstallConfirmationMessage(desktopUpdateState),
+          getDesktopUpdateInstallConfirmationMessage(desktopUpdateState, t),
         );
       } catch (error) {
         setDesktopUpdateActionPending(false);
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: "Could not confirm update",
-            description: error instanceof Error ? error.message : "Update confirmation failed.",
-          }),
+        showDesktopUpdateErrorToast(
+          "about.updateConfirm.error",
+          error instanceof Error ? error.message : null,
+          "about.updateConfirm.failed",
         );
         return;
       }
@@ -3819,21 +3823,17 @@ export default function LegacySidebar() {
           if (!shouldToastDesktopUpdateActionResult(result)) return;
           const actionError = getDesktopUpdateActionError(result);
           if (!actionError) return;
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: "Could not install update",
-              description: actionError,
-            }),
+          showDesktopUpdateErrorToast(
+            "about.updateInstall.error",
+            actionError,
+            "update.unexpected",
           );
         })
         .catch((error) => {
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: "Could not install update",
-              description: error instanceof Error ? error.message : "An unexpected error occurred.",
-            }),
+          showDesktopUpdateErrorToast(
+            "about.updateInstall.error",
+            error instanceof Error ? error.message : null,
+            "update.unexpected",
           );
         })
         .finally(() => setDesktopUpdateActionPending(false));
@@ -3843,6 +3843,7 @@ export default function LegacySidebar() {
     desktopUpdateButtonAction,
     desktopUpdateButtonDisabled,
     desktopUpdateState,
+    t,
   ]);
 
   const expandThreadListForProject = useCallback((projectKey: string) => {

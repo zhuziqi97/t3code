@@ -1,3 +1,4 @@
+import { showDesktopUpdateErrorToast } from "../desktopUpdate.toast";
 import { SettingsGroup } from "./SettingsGroup";
 import { useScopedSettingsWriteAllowed } from "./useScopedSettings";
 import { Spinner } from "~/components/ui/spinner";
@@ -311,19 +312,17 @@ function AboutVersionSection() {
       void bridge
         .setUpdateChannel(channel)
         .catch((error: unknown) => {
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: t("about.updateTrack.error"),
-              description: error instanceof Error ? error.message : t("about.updateTrack.failed"),
-            }),
+          showDesktopUpdateErrorToast(
+            "about.updateTrack.error",
+            error instanceof Error ? error.message : null,
+            "about.updateTrack.failed",
           );
         })
         .finally(() => {
           setIsChangingUpdateChannel(false);
         });
     },
-    [selectedUpdateChannel, t],
+    [selectedUpdateChannel],
   );
 
   const handleButtonClick = useCallback(async () => {
@@ -334,12 +333,10 @@ function AboutVersionSection() {
 
     if (action === "download") {
       void bridge.downloadUpdate().catch((error: unknown) => {
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: t("about.updateDownload.error"),
-            description: error instanceof Error ? error.message : t("about.updateDownload.failed"),
-          }),
+        showDesktopUpdateErrorToast(
+          "about.updateDownload.error",
+          error instanceof Error ? error.message : null,
+          "about.updateDownload.failed",
         );
       });
       return;
@@ -358,12 +355,10 @@ function AboutVersionSection() {
         );
       } catch (error) {
         setIsUpdateActionPending(false);
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: t("about.updateConfirm.error"),
-            description: error instanceof Error ? error.message : t("about.updateConfirm.failed"),
-          }),
+        showDesktopUpdateErrorToast(
+          "about.updateConfirm.error",
+          error instanceof Error ? error.message : null,
+          "about.updateConfirm.failed",
         );
         return;
       }
@@ -374,12 +369,10 @@ function AboutVersionSection() {
       void bridge
         .installUpdate()
         .catch((error: unknown) => {
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: t("about.updateInstall.error"),
-              description: error instanceof Error ? error.message : t("about.updateInstall.failed"),
-            }),
+          showDesktopUpdateErrorToast(
+            "about.updateInstall.error",
+            error instanceof Error ? error.message : null,
+            "about.updateInstall.failed",
           );
         })
         .finally(() => setIsUpdateActionPending(false));
@@ -391,22 +384,18 @@ function AboutVersionSection() {
       .checkForUpdate()
       .then((result) => {
         if (!result.checked) {
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: t("about.updateCheck.error"),
-              description: result.state.message ?? t("about.updateUnsupported"),
-            }),
+          showDesktopUpdateErrorToast(
+            "about.updateCheck.error",
+            result.state.message,
+            "about.updateUnsupported",
           );
         }
       })
       .catch((error: unknown) => {
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: t("about.updateCheck.error"),
-            description: error instanceof Error ? error.message : t("about.updateCheck.failed"),
-          }),
+        showDesktopUpdateErrorToast(
+          "about.updateCheck.error",
+          error instanceof Error ? error.message : null,
+          "about.updateCheck.failed",
         );
       });
   }, [isUpdateActionPending, updateState, t]);
@@ -437,6 +426,7 @@ function AboutVersionSection() {
   return (
     <>
       <SettingsRow
+        id={searchableSetting("desktop-updates").id}
         title={<AboutVersionTitle />}
         description={description}
         control={

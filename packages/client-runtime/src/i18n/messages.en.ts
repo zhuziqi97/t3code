@@ -5352,6 +5352,52 @@ export const en = {
   "chat.traits.description.ultrafast": "Even faster, more expensive",
   "chat.traits.description.fast": "2x speed, increased usage",
   "chat.traits.description.ultracode": "xhigh effort plus multi-agent workflow orchestration",
+  "update.check": "Check for updates",
+  "update.search.title": "Desktop updates",
+  "update.checking": "Checking for updates…",
+  "update.availableShort": "Update available",
+  "update.architecture.title": "Intel build on Apple Silicon",
+  "update.architecture.correct": "This install is using the correct architecture.",
+  "update.architecture.download":
+    "This Mac has Apple Silicon, but T3 Code is still running the Intel build under Rosetta. Download the available update to switch to the native Apple Silicon build.",
+  "update.architecture.install":
+    "This Mac has Apple Silicon, but T3 Code is still running the Intel build under Rosetta. Restart to install the downloaded Apple Silicon build.",
+  "update.architecture.next":
+    "This Mac has Apple Silicon, but T3 Code is still running the Intel build under Rosetta. The next app update will replace it with the native Apple Silicon build.",
+  "update.architecture.downloadAction": "Download ARM build",
+  "update.architecture.installAction": "Install ARM build",
+  "update.downloadStartFailed": "Could not start update download",
+  "update.unexpected": "An unexpected error occurred.",
+  "update.notes.openFailed": "Unable to open release notes",
+  "update.notes.readMore": "Read more",
+  "update.notes.title": "Nightly update release notes",
+  "update.notes.ready": "Update ready to download",
+  "update.notes.changed": "What's changed",
+  "update.notes.version": "Changes in {{version}}",
+  "update.notes.view": "View release on GitHub",
+  "update.notes.more_one": "{{count}} more change on GitHub",
+  "update.notes.more_other": "{{count}} more changes on GitHub",
+  "update.notes.older_one": "{{count}} older release on GitHub",
+  "update.notes.older_other": "{{count}} older releases on GitHub",
+  "update.toast.downloaded": "Update downloaded",
+  "update.toast.restart": "Restart the app from the update button to install it.",
+  "update.disabled.feed":
+    "Automatic updates are not available because no update feed is configured.",
+  "update.disabled.production":
+    "Automatic updates are only available in packaged production builds.",
+  "update.disabled.setting":
+    "Automatic updates are disabled by the T3CODE_DISABLE_AUTO_UPDATE setting.",
+  "update.disabled.linux": "Automatic updates on Linux require the AppImage or the .deb package.",
+  "update.action.check": "check",
+  "update.action.download": "download",
+  "update.action.install": "install",
+  "update.action.channel": "channel",
+  "update.action.background": "background",
+  "update.channel.busy":
+    "Cannot change the desktop update channel to {{channel}} while an update {{action}} action is in progress.",
+  "update.channel.persistFailed": "Failed to persist the {{channel}} desktop update channel.",
+  "update.operation.failed": "Desktop updater {{operation}} operation reported an error.",
+  "update.action.failed": "Desktop update {{action}} action failed unexpectedly.",
 } as const;
 
 export type MessageKey = keyof typeof en;

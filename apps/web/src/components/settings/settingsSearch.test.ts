@@ -828,3 +828,23 @@ it("finds diagnostic flows by Chinese names in either language without changing 
     }
   }
 });
+
+it("retranslates the providers group and keeps Chinese and English searches at its original route", async () => {
+  await changeLanguage("zh");
+  expect(searchableSetting("providers").title).toBe("智能体提供方");
+  expect(SETTINGS_SEARCH_ITEMS.find((item) => item.id === "providers")?.title).toBe("智能体提供方");
+  for (const query of ["智能体提供方", "Providers"]) {
+    expect(searchSettings(query)).toContainEqual(
+      expect.objectContaining({
+        id: "providers",
+        title: "智能体提供方",
+        to: "/settings/providers",
+      }),
+    );
+  }
+  await changeLanguage("en");
+  expect(searchableSetting("providers").title).toBe("Providers");
+  expect(searchSettings("智能体提供方")).toContainEqual(
+    expect.objectContaining({ id: "providers", title: "Providers", to: "/settings/providers" }),
+  );
+});

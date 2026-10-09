@@ -1,22 +1,13 @@
+// @vitest-environment jsdom
 import type { DesktopUpdateState } from "@t3tools/contracts";
-import { isValidElement, type MouseEvent, type ReactElement, type ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { act, type ReactNode } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-const testState = vi.hoisted(() => ({
-  addToast: vi.fn(),
-}));
-
-vi.mock("../ui/toast", () => ({
-  toastManager: { add: testState.addToast },
-}));
-
+const testState = vi.hoisted(() => ({ addToast: vi.fn() }));
+vi.mock("../ui/toast", () => ({ toastManager: { add: testState.addToast } }));
+import { changeLanguage } from "../../i18n";
 import { SidebarUpdateReleaseNotes } from "./SidebarUpdateReleaseNotes";
-
-type AnchorElement = ReactElement<{
-  readonly children?: ReactNode;
-  readonly href?: string;
-  readonly onClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
-}>;
 
 const baseState: DesktopUpdateState = {
   enabled: true,
@@ -36,117 +27,127 @@ const baseState: DesktopUpdateState = {
   errorContext: null,
   canRetry: false,
 };
-
-function collectAnchors(node: ReactNode, anchors: AnchorElement[] = []): AnchorElement[] {
-  if (Array.isArray(node)) {
-    for (const child of node) collectAnchors(child, anchors);
-    return anchors;
-  }
-  if (!isValidElement(node)) return anchors;
-
-  const element = node as ReactElement<{ readonly children?: ReactNode }>;
-  if (typeof element.type === "function") {
-    const render = element.type as (props: unknown) => ReactNode;
-    return collectAnchors(render(element.props), anchors);
-  }
-  if (element.type === "a") anchors.push(element as AnchorElement);
-  return collectAnchors(element.props.children, anchors);
+let root: Root;
+let container: HTMLDivElement;
+async function renderNotes(
+  state: DesktopUpdateState,
+  openExternal = vi.fn().mockResolvedValue(true),
+) {
+  await act(async () =>
+    root.render(
+      <SidebarUpdateReleaseNotes
+        shell={{ openExternal }}
+        state={state}
+        tooltip="Update available"
+      />,
+    ),
+  );
 }
-
-function textContent(node: ReactNode): string {
-  if (typeof node === "string" || typeof node === "number") return String(node);
-  if (Array.isArray(node)) return node.map(textContent).join("");
-  if (!isValidElement(node)) return "";
-  const element = node as ReactElement<{ readonly children?: ReactNode }>;
-  return textContent(element.props.children);
+function links() {
+  return [...container.querySelectorAll("a")];
 }
-
-function renderNotes(state: DesktopUpdateState, openExternal = vi.fn().mockResolvedValue(true)) {
-  return SidebarUpdateReleaseNotes({
-    shell: { openExternal },
-    state,
-    tooltip: "Update available",
-  });
-}
+beforeEach(async () => {
+  testState.addToast.mockReset();
+  await changeLanguage("en");
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+});
+afterEach(async () => {
+  await act(async () => root.unmount());
+  container.remove();
+  await changeLanguage("en");
+});
 
 describe("SidebarUpdateReleaseNotes", () => {
-  beforeEach(() => {
-    testState.addToast.mockReset();
-  });
-
-  it("links each preview to its exact release and labels hidden changes", () => {
-    const anchors = collectAnchors(
-      renderNotes({
+  it("keeps exact release links and the focused link when changing language, including plural counts", async () => {
+    const openExternal = vi.fn().mockResolvedValue(true);
+    await renderNotes(
+      {
         ...baseState,
         releaseNotes: [
-          { version: "0.0.36-nightly.3", items: ["Change 3"], totalItems: 1 },
+          { version: "0.0.36-nightly.3", items: ["Raw change 中文原文"], totalItems: 1 },
           { version: "0.0.36-nightly.2", items: ["Change 2"], totalItems: 2 },
           { version: "0.0.36-nightly.1", items: ["Change 1", "Earlier"], totalItems: 4 },
         ],
-      }),
+      },
+      openExternal,
     );
-
-    expect(anchors.map(({ props }) => props.href)).toEqual([
-      "https://github.com/pingdotgg/t3code/releases/tag/v0.0.36-nightly.3",
-      "https://github.com/pingdotgg/t3code/releases/tag/v0.0.36-nightly.2",
-      "https://github.com/pingdotgg/t3code/releases/tag/v0.0.36-nightly.1",
-    ]);
-    expect(anchors.map(({ props }) => textContent(props.children))).toEqual([
+    expect(links().map((link) => link.textContent)).toEqual([
       "View release on GitHub",
       "1 more change on GitHub",
       "2 more changes on GitHub",
     ]);
-  });
-
-  it("links omitted releases to release history", () => {
-    const anchors = collectAnchors(
-      renderNotes({
-        ...baseState,
-        releaseNotes: [{ version: "0.0.36-nightly.3", items: ["Change 3"], totalItems: 1 }],
-        omittedReleaseCount: 1,
-      }),
+    const focused = links()[1]!;
+    focused.focus();
+    await act(async () => {
+      await changeLanguage("zh");
+    });
+    expect(links().map((link) => link.textContent)).toEqual([
+      "在 GitHub 查看此版本",
+      "在 GitHub 查看另外 1 项更改",
+      "在 GitHub 查看另外 2 项更改",
+    ]);
+    expect(container.textContent).toContain("更新可供下载");
+    expect(container.textContent).toContain("0.0.36-nightly.2 的更新内容");
+    expect(container.textContent).toContain("Raw change 中文原文");
+    expect(document.activeElement).toBe(focused);
+    expect(openExternal).not.toHaveBeenCalled();
+    await act(async () => focused.click());
+    expect(openExternal).toHaveBeenCalledExactlyOnceWith(
+      "https://github.com/pingdotgg/t3code/releases/tag/v0.0.36-nightly.2",
     );
-
-    expect(anchors.at(-1)?.props.href).toBe("https://github.com/pingdotgg/t3code/releases");
-    expect(textContent(anchors.at(-1)?.props.children)).toBe("1 older release on GitHub");
+    await act(async () => {
+      await changeLanguage("en");
+    });
+    expect(focused.textContent).toBe("1 more change on GitHub");
   });
 
-  it("shows plural history text for multiple omitted releases", () => {
-    const anchors = collectAnchors(
-      renderNotes({
-        ...baseState,
-        releaseNotes: [{ version: "0.0.36-nightly.3", items: ["Change 3"], totalItems: 1 }],
-        omittedReleaseCount: 3,
-      }),
-    );
-
-    expect(textContent(anchors.at(-1)?.props.children)).toBe("3 older releases on GitHub");
-  });
-
-  it("reports a release link that fails to open", async () => {
-    const openExternal = vi.fn().mockResolvedValue(false);
-    const [anchor] = collectAnchors(
-      renderNotes(
+  it.each([1, 3])(
+    "links %s omitted releases to release history and retranslates the count",
+    async (count) => {
+      const openExternal = vi.fn().mockResolvedValue(true);
+      await renderNotes(
         {
           ...baseState,
           releaseNotes: [{ version: "0.0.36-nightly.3", items: ["Change 3"], totalItems: 1 }],
+          omittedReleaseCount: count,
         },
         openExternal,
-      ),
-    );
-    const preventDefault = vi.fn();
-
-    anchor?.props.onClick?.({ preventDefault } as unknown as MouseEvent<HTMLAnchorElement>);
-
-    expect(preventDefault).toHaveBeenCalledOnce();
-    await vi.waitFor(() => {
-      expect(openExternal).toHaveBeenCalledWith(
-        "https://github.com/pingdotgg/t3code/releases/tag/v0.0.36-nightly.3",
       );
-      expect(testState.addToast).toHaveBeenCalledWith({
-        type: "error",
-        title: "Unable to open release notes",
+      const link = links().at(-1)!;
+      expect(link.textContent).toBe(
+        `${count} older ${count === 1 ? "release" : "releases"} on GitHub`,
+      );
+      await act(async () => {
+        await changeLanguage("zh");
       });
+      expect(link.textContent).toBe(`在 GitHub 查看 ${count} 个更早版本`);
+      await act(async () => link.click());
+      expect(openExternal).toHaveBeenCalledExactlyOnceWith(
+        "https://github.com/pingdotgg/t3code/releases",
+      );
+    },
+  );
+
+  it("reports a release link that fails to open using the current language", async () => {
+    const openExternal = vi.fn().mockResolvedValue(false);
+    await renderNotes(
+      {
+        ...baseState,
+        releaseNotes: [{ version: "0.0.36-nightly.3", items: ["Change 3"], totalItems: 1 }],
+      },
+      openExternal,
+    );
+    await act(async () => {
+      await changeLanguage("zh");
+      links()[0]!.click();
     });
+    const toast = testState.addToast.mock.calls[0]![0] as { title: ReactNode };
+    await act(async () => root.render(<>{toast.title}</>));
+    expect(container.textContent).toBe("无法打开发布说明");
+    expect(openExternal).toHaveBeenCalledExactlyOnceWith(
+      "https://github.com/pingdotgg/t3code/releases/tag/v0.0.36-nightly.3",
+    );
   });
 });

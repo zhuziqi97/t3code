@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
+import { i18n } from "../i18n";
 import type { DesktopUpdateActionResult, DesktopUpdateState } from "@t3tools/contracts";
 
 import {
   canCheckForUpdate,
+  formatDesktopUpdateMessage,
   getArm64IntelBuildWarningDescription,
   getDesktopUpdateActionError,
   getDesktopUpdateButtonTooltip,
@@ -345,5 +347,56 @@ describe("getDesktopUpdateButtonTooltip", () => {
     expect(getDesktopUpdateButtonTooltip({ ...baseState, status: "up-to-date" })).toBe(
       "Up to date",
     );
+  });
+});
+
+describe("desktop updater message ownership", () => {
+  const t = i18n.getFixedT("zh");
+  it("formats native T3 disabled reasons and preserves arbitrary updater diagnostics", () => {
+    expect(
+      formatDesktopUpdateMessage(
+        "Automatic updates are not available because no update feed is configured.",
+        t,
+      ),
+    ).toBe("未配置更新源，无法自动更新。");
+    expect(
+      formatDesktopUpdateMessage(
+        "Automatic updates are only available in packaged production builds.",
+        t,
+      ),
+    ).toBe("仅打包后的正式构建支持自动更新。");
+    expect(
+      formatDesktopUpdateMessage(
+        "Automatic updates are disabled by the T3CODE_DISABLE_AUTO_UPDATE setting.",
+        t,
+      ),
+    ).toBe("T3CODE_DISABLE_AUTO_UPDATE 设置已禁用自动更新。");
+    expect(
+      formatDesktopUpdateMessage(
+        "Automatic updates on Linux require the AppImage or the .deb package.",
+        t,
+      ),
+    ).toBe("Linux 自动更新需要使用 AppImage 或 .deb 软件包。");
+    expect(formatDesktopUpdateMessage("Network download error /tmp/原文 404", t)).toBe(
+      "Network download error /tmp/原文 404",
+    );
+    expect(formatDesktopUpdateMessage("", t)).toBe("");
+  });
+  it("formats the exact channel and action templates emitted by the desktop updater", () => {
+    expect(
+      formatDesktopUpdateMessage(
+        "Cannot change the desktop update channel to nightly while an update download action is in progress.",
+        t,
+      ),
+    ).toBe("正在执行更新下载操作，无法将桌面更新通道切换为 nightly。");
+    expect(
+      formatDesktopUpdateMessage("Failed to persist the latest desktop update channel.", t),
+    ).toBe("无法保存桌面更新通道 latest。");
+    expect(
+      formatDesktopUpdateMessage("Desktop updater background operation reported an error.", t),
+    ).toBe("桌面更新程序的后台操作报告了错误。");
+    expect(
+      formatDesktopUpdateMessage("Desktop update install action failed unexpectedly.", t),
+    ).toBe("桌面更新的安装操作意外失败。");
   });
 });

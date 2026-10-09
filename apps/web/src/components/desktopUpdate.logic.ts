@@ -57,19 +57,22 @@ export function isDesktopUpdateButtonDisabled(state: DesktopUpdateState | null):
   return state?.status === "downloading";
 }
 
-export function getArm64IntelBuildWarningDescription(state: DesktopUpdateState): string {
+export function getArm64IntelBuildWarningDescription(
+  state: DesktopUpdateState,
+  translate: TFunction = i18n.t,
+): string {
   if (!shouldShowArm64IntelBuildWarning(state)) {
-    return "This install is using the correct architecture.";
+    return translate("update.architecture.correct");
   }
 
   const action = resolveDesktopUpdateButtonAction(state);
   if (action === "download") {
-    return "This Mac has Apple Silicon, but T3 Code is still running the Intel build under Rosetta. Download the available update to switch to the native Apple Silicon build.";
+    return translate("update.architecture.download");
   }
   if (action === "install") {
-    return "This Mac has Apple Silicon, but T3 Code is still running the Intel build under Rosetta. Restart to install the downloaded Apple Silicon build.";
+    return translate("update.architecture.install");
   }
-  return "This Mac has Apple Silicon, but T3 Code is still running the Intel build under Rosetta. The next app update will replace it with the native Apple Silicon build.";
+  return translate("update.architecture.next");
 }
 
 export function getDesktopUpdateButtonTooltip(
@@ -103,7 +106,9 @@ export function getDesktopUpdateButtonTooltip(
     if (state.downloadedVersion) {
       return translate("update.downloadedVersion", { version: state.downloadedVersion });
     }
-    return state.message ?? translate("update.failed");
+    return state.message === null
+      ? translate("update.failed")
+      : formatDesktopUpdateMessage(state.message, translate);
   }
   return translate("update.current");
 }
@@ -132,4 +137,43 @@ export function canCheckForUpdate(state: DesktopUpdateState | null): boolean {
   return (
     state.status !== "checking" && state.status !== "downloading" && state.status !== "disabled"
   );
+}
+
+/** Translate messages owned by the current desktop updater; native diagnostics stay verbatim. */
+export function formatDesktopUpdateMessage(message: string, translate: TFunction = i18n.t): string {
+  const fixed: Readonly<Record<string, string>> = {
+    "Automatic updates are not available because no update feed is configured.":
+      "update.disabled.feed",
+    "Automatic updates are only available in packaged production builds.":
+      "update.disabled.production",
+    "Automatic updates are disabled by the T3CODE_DISABLE_AUTO_UPDATE setting.":
+      "update.disabled.setting",
+    "Automatic updates on Linux require the AppImage or the .deb package.": "update.disabled.linux",
+  };
+  if (fixed[message]) return translate(fixed[message]);
+  const busy =
+    /^Cannot change the desktop update channel to (latest|nightly) while an update (check|download|install|channel) action is in progress\.$/.exec(
+      message,
+    );
+  if (busy)
+    return translate("update.channel.busy", {
+      channel: busy[1],
+      action: translate(`update.action.${busy[2]}`),
+    });
+  const persistence = /^Failed to persist the (latest|nightly) desktop update channel\.$/.exec(
+    message,
+  );
+  if (persistence) return translate("update.channel.persistFailed", { channel: persistence[1] });
+  const operation =
+    /^Desktop updater (check|download|install|channel|background) operation reported an error\.$/.exec(
+      message,
+    );
+  if (operation)
+    return translate("update.operation.failed", {
+      operation: translate(`update.action.${operation[1]}`),
+    });
+  const action = /^Desktop update (download|install) action failed unexpectedly\.$/.exec(message);
+  if (action)
+    return translate("update.action.failed", { action: translate(`update.action.${action[1]}`) });
+  return message;
 }

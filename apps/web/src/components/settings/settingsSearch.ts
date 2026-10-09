@@ -640,6 +640,18 @@ export const SETTINGS_SEARCH_ITEMS = [
     ],
   },
   {
+    id: "desktop-updates",
+    get title() {
+      return i18n.t("update.search.title");
+    },
+    to: "/settings/general",
+    desktopOnly: true,
+    searchTerms: [
+      "Desktop updates check for updates update track stable nightly releases download install restart",
+      "桌面更新 应用更新 检查更新 更新渠道 稳定版 每日构建版 下载 安装 重启",
+    ],
+  },
+  {
     id: "provider-update-checks",
     get title() {
       return i18n.t("settings.search.provider-update-checks.title");
@@ -911,10 +923,12 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "providers",
-    title: "Providers",
+    get title() {
+      return i18n.t("settings.sections.providers");
+    },
     to: "/settings/providers",
     searchTerms: [
-      "agents cli codex claude cursor grok opencode antigravity google sign in sign out install subscription instances authentication api key models configuration binary path config directory endpoint arguments environment variables display name accent color custom favorite hidden auto compact",
+      "Providers 智能体提供方 agents cli codex claude cursor grok opencode antigravity google sign in sign out install subscription instances authentication api key models configuration binary path config directory endpoint arguments environment variables display name accent color custom favorite hidden auto compact",
       "智能体 提供方 安装 更新 登录 退出 身份验证 实例 模型 环境变量 配置",
       "ACP 注册表 本地命令 实例 ID 强调色 颜色 参数 可执行文件 原生会话 导入",
     ],
