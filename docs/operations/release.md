@@ -4,6 +4,21 @@
 
 This document covers the unified release workflow for stable and nightly desktop releases.
 
+The Convene fork ships as **T3 Code for Convene** with its own app ID, protocol,
+desktop profile and `t3code-convene` executable. Local builds have no update feed.
+For a published fork release, explicitly set
+`T3CODE_DESKTOP_UPDATE_REPOSITORY=zhuziqi97/t3code`; the artifact builder does not
+infer an update repository from `GITHUB_REPOSITORY`. Publish the Convene installer
+and its matching update metadata together before enabling that feed.
+
+Linux packaging needs Rust 1.95 or newer for the current resource monitor.
+The builder selects each crate's output directory explicitly. On Arch Linux,
+the bundled FPM used for `.deb` packaging also needs `libcrypt.so.1` (provided by
+[libxcrypt-compat](https://archlinux.org/packages/core/x86_64/libxcrypt-compat/)).
+This is a build host dependency, not an application dependency. AppImages can be
+extracted with `--appimage-extract` when FUSE mounting is unavailable; run the
+extracted `t3code-convene` executable to use the same packaged application.
+
 ## What the workflow does
 
 - Workflow: `.github/workflows/release.yml`

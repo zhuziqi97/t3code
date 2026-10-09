@@ -474,6 +474,10 @@
     "./PtyAdapter": {
       "types": "./src/PtyAdapter.ts",
       "import": "./src/PtyAdapter.ts"
+    },
+    "./conveneDesktopIdentity": {
+      "types": "./src/conveneDesktopIdentity.ts",
+      "import": "./src/conveneDesktopIdentity.ts"
     }
   },
   "scripts": {
