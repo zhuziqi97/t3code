@@ -57,4 +57,18 @@ export function showBootError(error: unknown) {
   reload.addEventListener("click", () => window.location.reload());
   content.append(reload);
   bootShell.replaceChildren(content);
+
+  if (typeof window !== "undefined" && window.desktopBridge) {
+    return window.desktopBridge.getClientSettings().then(
+      (settings) => {
+        const locales = typeof navigator === "undefined" ? [] : navigator.languages;
+        const labels = messages[resolveLanguage(settings?.languagePreference ?? "system", locales)];
+        message.textContent = labels.failed;
+        reload.textContent = labels.reload;
+      },
+      () => {
+        // Keep the working fallback when desktop settings cannot be read during startup.
+      },
+    );
+  }
 }
