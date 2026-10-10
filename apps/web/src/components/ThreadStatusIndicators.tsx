@@ -58,7 +58,7 @@ import {
 } from "./pullRequest/pullRequestIcons";
 import { resolvePullRequestState } from "./pullRequest/pullRequestPresentation";
 
-function localizedStatusLabel(label: string, t: TFunction): string {
+export function localizedStatusLabel(label: string, t: TFunction): string {
   const keys: Record<string, string> = {
     Working: "thread.working",
     Connecting: "thread.connecting",
