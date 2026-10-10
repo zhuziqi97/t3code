@@ -14,6 +14,21 @@
 import type { Messages } from "./messages.en.ts";
 
 export const zh: Partial<Messages> = {
+  "common.loading": "加载中",
+  "chat.branch.searchRefs": "搜索 Git 引用…",
+  "chat.branch.noRefs": "未找到 Git 引用。",
+  "chat.branch.startFromOrigin": "从 origin 创建 Git 工作树",
+  "chat.branch.originHint": "从 origin 上对应分支的最新版本创建 Git 工作树，而非基于本地分支。",
+  "chat.branch.badge.current": "当前",
+  "chat.branch.badge.worktree": "工作树",
+  "chat.branch.badge.remote": "远程",
+  "chat.branch.badge.default": "默认",
+  "panels.reopenFailed": "无法重新打开视图",
+  "preview.unavailable.title": "此执行环境不支持浏览器预览",
+  "preview.unavailable.description": "请使用 T3 Code 桌面客户端，或连接支持浏览器预览的执行环境。",
+  "migration.restoring": "正在恢复会话…",
+  "migration.description_one": "正在迁移旧版本中的 {{total}} 个会话。迁移期间可继续使用应用。",
+  "migration.description_other": "正在迁移旧版本中的 {{total}} 个会话。迁移期间可继续使用应用。",
   "server.update.desktopGuidance": "更新桌面应用",
   "server.update.syncGuidance": "更新以保持版本一致",
   "relay.install.checking": "正在检查当前安装",

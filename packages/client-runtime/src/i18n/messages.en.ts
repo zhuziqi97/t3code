@@ -14,6 +14,25 @@
  * rename another product or rewrite a command it tells the user to run.
  */
 export const en = {
+  "common.loading": "Loading",
+  "chat.branch.searchRefs": "Search refs...",
+  "chat.branch.noRefs": "No refs found.",
+  "chat.branch.startFromOrigin": "Start worktree from origin",
+  "chat.branch.originHint":
+    "Creates the worktree from the latest matching branch on origin instead of your local branch.",
+  "chat.branch.badge.current": "current",
+  "chat.branch.badge.worktree": "worktree",
+  "chat.branch.badge.remote": "remote",
+  "chat.branch.badge.default": "default",
+  "panels.reopenFailed": "Could not reopen view",
+  "preview.unavailable.title": "Preview isn't available in this environment",
+  "preview.unavailable.description":
+    "Open T3 Code in the desktop app, or connect to an environment that supports browser preview.",
+  "migration.restoring": "Restoring your threads…",
+  "migration.description_one":
+    "Migrating {{total}} thread from the previous version. You can keep working while this finishes.",
+  "migration.description_other":
+    "Migrating {{total}} threads from the previous version. You can keep working while this finishes.",
   "server.update.desktopGuidance": "Update the desktop app",
   "server.update.syncGuidance": "Update to stay in sync",
   "relay.install.checking": "Checking current installation",
