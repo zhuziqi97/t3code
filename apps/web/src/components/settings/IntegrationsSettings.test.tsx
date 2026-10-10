@@ -39,7 +39,6 @@ vi.mock("../../state/environments", () => ({
 }));
 vi.mock("../../hooks/useSettings", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../hooks/useSettings")>()),
-  PRIMARY_SETTINGS_UNAVAILABLE_MESSAGE: "Connect to an environment",
   useClientSettings: (selector?: (settings: typeof DEFAULT_CLIENT_SETTINGS) => unknown) =>
     selector ? selector(DEFAULT_CLIENT_SETTINGS) : DEFAULT_CLIENT_SETTINGS,
   useClientSettingsHydrated: () => true,

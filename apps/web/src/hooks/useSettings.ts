@@ -57,6 +57,7 @@ import { useAtomCommand } from "~/state/use-atom-command";
 import { useTheme } from "./useTheme";
 import { environmentSession, readEnvironmentScope, useEnvironmentScope } from "~/state/session";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
+import { i18n } from "~/i18n";
 
 const CLIENT_SETTINGS_PERSISTENCE_ERROR_SCOPE = "[CLIENT_SETTINGS]";
 
@@ -422,9 +423,6 @@ export function usePrimarySettings<T = UnifiedSettings>(
   return useMergedSettings(useAtomValue(primaryServerSettingsAtom), selector);
 }
 
-export const PRIMARY_SETTINGS_UNAVAILABLE_MESSAGE =
-  "This setting is saved on a server, and the hosted app is not anchored to one. Change it from the desktop app or from the server's own address.";
-
 /**
  * Whether primary-scoped server settings have a server to live on. The
  * hosted app connects to every environment as a remote, so it has no primary:
@@ -488,8 +486,11 @@ function useUpdateSettingsTarget(environmentId: EnvironmentId | null) {
         const error = squashAtomCommandFailure(result);
         toastManager.add({
           type: "error",
-          title: "Setting not saved",
-          description: `Could not save on ${label}: ${error instanceof Error ? error.message : "The save failed. Try reconnecting and saving again."}`,
+          title: i18n.t("settings.save.notSaved"),
+          description: i18n.t("settings.save.failedOn", {
+            environment: label,
+            message: error instanceof Error ? error.message : i18n.t("settings.save.failed"),
+          }),
         });
       }
       return result;
@@ -509,17 +510,21 @@ function useUpdateSettingsTarget(environmentId: EnvironmentId | null) {
       if (Object.keys(serverPatch).length > 0 && !canWriteServerPatch) {
         toastManager.add({
           type: "warning",
-          title: "Setting not saved",
-          description: `This connection lacks permission to change settings on ${environments.find((target) => target.environmentId === environmentId)?.label ?? "the selected environment"}.`,
+          title: i18n.t("settings.save.notSaved"),
+          description: i18n.t("settings.permissionDenied", {
+            environments:
+              environments.find((target) => target.environmentId === environmentId)?.label ??
+              i18n.t("settings.theSelectedEnvironment"),
+          }),
         });
       }
       if (Object.keys(serverPatch).length > 0 && canWriteServerPatch) {
         const { sharedPatch, localPatch } = splitSharedServerPatch(serverPatch);
         // Dropping the write silently leaves the control looking saved.
-        const warnUnsaved = (description = PRIMARY_SETTINGS_UNAVAILABLE_MESSAGE) =>
+        const warnUnsaved = (description = i18n.t("settings.primaryUnavailable")) =>
           toastManager.add({
             type: "warning",
-            title: "Setting not saved",
+            title: i18n.t("settings.save.notSaved"),
             description,
           });
         if (Object.keys(localPatch).length > 0) {
@@ -570,9 +575,9 @@ function useUpdateSettingsTarget(environmentId: EnvironmentId | null) {
           if (writes.length === 0) {
             warnUnsaved(
               deniedLabels.length > 0
-                ? `This connection lacks permission to change settings on ${deniedLabels.join(", ")}.`
+                ? i18n.t("settings.permissionDenied", { environments: deniedLabels.join(", ") })
                 : targets.size > 0
-                  ? "Update older servers to save this setting."
+                  ? i18n.t("settings.save.upgradeServer")
                   : undefined,
             );
           } else {
@@ -588,7 +593,11 @@ function useUpdateSettingsTarget(environmentId: EnvironmentId | null) {
                 if (result._tag !== "Failure" || isAtomCommandInterrupted(result)) return [];
                 const error = squashAtomCommandFailure(result);
                 return [
-                  `Could not save on ${label}: ${error instanceof Error ? error.message : "The save failed. Try reconnecting and saving again."}`,
+                  i18n.t("settings.save.failedOn", {
+                    environment: label,
+                    message:
+                      error instanceof Error ? error.message : i18n.t("settings.save.failed"),
+                  }),
                 ];
               });
               if (failures.length === 0) return;
@@ -597,11 +606,14 @@ function useUpdateSettingsTarget(environmentId: EnvironmentId | null) {
                 .map(({ label }) => label);
               toastManager.add({
                 type: "error",
-                title:
-                  saved.length > 0 ? "Setting saved on some environments" : "Setting not saved",
+                title: i18n.t(
+                  saved.length > 0 ? "settings.save.partial" : "settings.save.notSaved",
+                ),
                 description: [
                   ...failures,
-                  ...(saved.length > 0 ? [`Saved on ${saved.join(", ")}.`] : []),
+                  ...(saved.length > 0
+                    ? [i18n.t("settings.save.savedOn", { environments: saved.join(", ") })]
+                    : []),
                 ].join("\n"),
               });
             });

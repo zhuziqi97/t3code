@@ -3614,6 +3614,9 @@ export const en = {
   "scope.openAllEnvironments": "Open all environments",
 
   "settings.save.notSaved": "Setting not saved",
+  "settings.save.upgradeServer": "Update older servers to save this setting.",
+  "provider.settings.reconnectNamed": "Reconnect {{environment}} to set up its providers.",
+  "provider.settings.connectForSetup": "Connect an environment to set up its providers.",
   "settings.save.partial": "Setting saved on some environments",
   "settings.save.permission": "This connection lacks permission to change these settings.",
   "settings.save.failedOn": "Could not save on {{environment}}: {{message}}",
