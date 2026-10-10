@@ -7,10 +7,12 @@ import {
   type UncontrolledCodeViewProps,
 } from "@pierre/diffs/react";
 /* oxlint-enable eslint/no-restricted-imports */
-import type { Ref } from "react";
+import { useMemo, type Ref } from "react";
 
+import { useTranslate } from "~/i18n";
 import { DIFF_SURFACE_THEME_UNSAFE_CSS } from "~/lib/diffRendering";
 import { DiffWorkerPoolProvider } from "../DiffWorkerPoolProvider";
+import { diffViewerLabels } from "./diffViewerLabels";
 
 const DIFF_VIEW_UNSAFE_CSS = `${DIFF_SURFACE_THEME_UNSAFE_CSS}
 :is(
@@ -286,6 +288,8 @@ export function StyledDiffCodeView<LAnnotation = undefined>({
   unsafeCSSExtra,
   ...props
 }: StyledDiffCodeViewProps<LAnnotation>) {
+  const t = useTranslate();
+  const uiLabels = useMemo(() => diffViewerLabels(t), [t]);
   return (
     <DiffWorkerPoolProvider>
       <CodeView<LAnnotation>
@@ -300,6 +304,7 @@ export function StyledDiffCodeView<LAnnotation = undefined>({
         }
         options={{
           ...options,
+          uiLabels,
           unsafeCSS: unsafeCSSExtra
             ? `${DIFF_VIEW_UNSAFE_CSS}\n${unsafeCSSExtra}`
             : DIFF_VIEW_UNSAFE_CSS,

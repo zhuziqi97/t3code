@@ -1,7 +1,19 @@
 diff --git a/dist/components/CodeView.d.ts b/dist/components/CodeView.d.ts
-index cc32d28..3a46bf4 100644
+index cc32d281b029fd66b48819adf4ca0e532cecad86..e48ec8f95895422e844e411b9caa85aa201d04dc 100644
 --- a/dist/components/CodeView.d.ts
 +++ b/dist/components/CodeView.d.ts
+@@ -87,9 +87,9 @@ type CodeViewOptionCallback<LAnnotation, Caret, TKey extends keyof FileOptions<L
+   (...args: [...OverloadFileCallbackArgs<LAnnotation, Caret, TKey>, context: CodeViewFileItemContext<LAnnotation, Caret>]): CallbackReturn<NonNullable<FileOptions<LAnnotation, Caret>[TKey]>>;
+   (...args: [...OverloadDiffCallbackArgs<LAnnotation, Caret, TKey>, context: CodeViewDiffItemContext<LAnnotation, Caret>]): CallbackReturn<NonNullable<FileDiffOptions<LAnnotation, Caret>[TKey]>>;
+ };
+-declare const CODE_VIEW_DIFF_OPTION_KEYS: readonly ['theme', 'disableLineNumbers', 'overflow', 'themeType', 'disableFileHeader', 'disableVirtualizationBuffers', 'preferredHighlighter', 'useCSSClasses', 'useTokenTransformer', 'tokenizeMaxLineLength', 'tokenizeMaxLength', 'unsafeCSS', 'diffStyle', 'diffIndicators', 'disableBackground', 'expandUnchanged', 'loadDiffFiles', 'parseDiffOptions', 'collapsedContextThreshold', 'lineDiffType', 'maxLineDiffLength', 'expansionLineCount', 'lineHoverHighlight', 'enableTokenInteractionsOnWhitespace', 'enableGutterUtility', '__debugPointerEvents', 'enableLineSelection', 'controlledSelection', 'disableErrorHandling'];
++declare const CODE_VIEW_DIFF_OPTION_KEYS: readonly ['uiLabels', 'theme', 'disableLineNumbers', 'overflow', 'themeType', 'disableFileHeader', 'disableVirtualizationBuffers', 'preferredHighlighter', 'useCSSClasses', 'useTokenTransformer', 'tokenizeMaxLineLength', 'tokenizeMaxLength', 'unsafeCSS', 'diffStyle', 'diffIndicators', 'disableBackground', 'expandUnchanged', 'loadDiffFiles', 'parseDiffOptions', 'collapsedContextThreshold', 'lineDiffType', 'maxLineDiffLength', 'expansionLineCount', 'lineHoverHighlight', 'enableTokenInteractionsOnWhitespace', 'enableGutterUtility', '__debugPointerEvents', 'enableLineSelection', 'controlledSelection', 'disableErrorHandling'];
+ type CodeViewDiffOptionKeys = (typeof CODE_VIEW_DIFF_OPTION_KEYS)[number];
+-declare const CODE_VIEW_FILE_OPTION_KEYS: readonly ['theme', 'disableLineNumbers', 'overflow', 'themeType', 'disableFileHeader', 'disableVirtualizationBuffers', 'preferredHighlighter', 'useCSSClasses', 'useTokenTransformer', 'tokenizeMaxLineLength', 'tokenizeMaxLength', 'unsafeCSS', 'lineHoverHighlight', 'enableTokenInteractionsOnWhitespace', 'enableGutterUtility', '__debugPointerEvents', 'enableLineSelection', 'controlledSelection', 'disableErrorHandling'];
++declare const CODE_VIEW_FILE_OPTION_KEYS: readonly ['uiLabels', 'theme', 'disableLineNumbers', 'overflow', 'themeType', 'disableFileHeader', 'disableVirtualizationBuffers', 'preferredHighlighter', 'useCSSClasses', 'useTokenTransformer', 'tokenizeMaxLineLength', 'tokenizeMaxLength', 'unsafeCSS', 'lineHoverHighlight', 'enableTokenInteractionsOnWhitespace', 'enableGutterUtility', '__debugPointerEvents', 'enableLineSelection', 'controlledSelection', 'disableErrorHandling'];
+ type CodeViewPassThroughOptions<LAnnotation, Caret> = Pick<FileDiffOptions<LAnnotation, Caret>, CodeViewDiffOptionKeys>;
+ type CodeViewMode = 'file' | 'diff';
+ interface CodeViewItemEditCompleteEventMap<LAnnotation, Caret> {
 @@ -158,6 +158,12 @@ interface CodeViewOptions<LAnnotation, Caret> extends CodeViewPassThroughOptions
     * final pre-detach state.
     */
@@ -30,18 +42,29 @@ index cc32d28..3a46bf4 100644
     * Returns the editor while this item is being edited. Partial diffs get an
     * editor after their files load; scrolling away or collapsing keeps it.
 diff --git a/dist/components/CodeView.js b/dist/components/CodeView.js
-index 140f94f..96fc774 100644
+index 140f94fe8480aa6b4ccbfca5573123442644a808..e46367a308f1f75a0d41cb550f6bebc90d9aada6 100644
 --- a/dist/components/CodeView.js
 +++ b/dist/components/CodeView.js
-@@ -16,6 +16,7 @@ import { prefersReducedMotion } from "../utils/prefersReducedMotion.js";
+@@ -16,8 +16,10 @@ import { prefersReducedMotion } from "../utils/prefersReducedMotion.js";
  import { roundToDevicePixel } from "../utils/roundToDevicePixel.js";
  import { VirtualizedFile } from "./VirtualizedFile.js";
  import { VirtualizedFileDiff } from "./VirtualizedFileDiff.js";
 +import { CodeViewSearch } from "./CodeViewSearch.js";
  //#region src/components/CodeView.ts
  const CODE_VIEW_DIFF_OPTION_KEYS = [
++	"uiLabels",
  	"theme",
-@@ -114,6 +115,8 @@ function defineItemOption(target, key, get) {
+ 	"disableLineNumbers",
+ 	"overflow",
+@@ -49,6 +51,7 @@ const CODE_VIEW_DIFF_OPTION_KEYS = [
+ 	"disableErrorHandling"
+ ];
+ const CODE_VIEW_FILE_OPTION_KEYS = [
++	"uiLabels",
+ 	"theme",
+ 	"disableLineNumbers",
+ 	"overflow",
+@@ -114,6 +117,8 @@ function defineItemOption(target, key, get) {
  }
  const DEFAULT_SCROLL_INTERACTION_RESTORE_DELAY_MS = 120;
  const SUB_PIXEL_TOLERANCE = 1;
@@ -50,7 +73,7 @@ index 140f94f..96fc774 100644
  const SCROLLING_CODE_OVERFLOW_FIX_VARIABLE = "--diffs-overflow-override";
  function createScrollRebaseConfig(containerHeight, triggerTop, targetTop) {
  	return {
-@@ -211,6 +214,8 @@ var CodeView = class CodeView {
+@@ -211,6 +216,8 @@ var CodeView = class CodeView {
  	isReadySubscription;
  	pendingHighlighterTheme;
  	isContainerManaged;
@@ -59,7 +82,7 @@ index 140f94f..96fc774 100644
  	constructor(options = { theme: DEFAULT_THEMES }, workerManager, isContainerManaged = false) {
  		this.options = options;
  		this.computeMetricsCache(options.itemMetrics);
-@@ -392,6 +397,7 @@ var CodeView = class CodeView {
+@@ -392,6 +399,7 @@ var CodeView = class CodeView {
  		this.root.addEventListener("touchstart", this.clearPendingScroll, { passive: true });
  		this.root.addEventListener("pointerdown", this.clearPendingScroll, { passive: true });
  		this.root.addEventListener("keydown", this.clearPendingScroll, { passive: true });
@@ -67,7 +90,7 @@ index 140f94f..96fc774 100644
  		this.resizeObserver.observe(this.root);
  		this.render(true);
  		window.__INSTANCE = this;
-@@ -464,6 +470,7 @@ var CodeView = class CodeView {
+@@ -464,6 +472,7 @@ var CodeView = class CodeView {
  		this.heightDirty = true;
  		this.resetRenderState();
  		if (!this.isContainerManaged) this.flushSlotCoordinator();
@@ -75,7 +98,7 @@ index 140f94f..96fc774 100644
  		if (failed) throw failure;
  	}
  	cleanUp() {
-@@ -485,6 +492,8 @@ var CodeView = class CodeView {
+@@ -485,6 +494,8 @@ var CodeView = class CodeView {
  		this.root?.removeEventListener("touchstart", this.clearPendingScroll);
  		this.root?.removeEventListener("pointerdown", this.clearPendingScroll);
  		this.root?.removeEventListener("keydown", this.clearPendingScroll);
@@ -84,7 +107,7 @@ index 140f94f..96fc774 100644
  		this.root?.style.removeProperty("overflow-anchor");
  		this.container?.remove();
  		this.stickyOffset.remove();
-@@ -626,6 +635,137 @@ var CodeView = class CodeView {
+@@ -626,6 +637,137 @@ var CodeView = class CodeView {
  	getItem(itemId) {
  		return this.idToItem.get(itemId)?.item;
  	}
@@ -222,7 +245,7 @@ index 140f94f..96fc774 100644
  	/**
  	* Returns the editor while this item is being edited. Partial diffs get an
  	* editor after their files load; scrolling away or collapsing keeps it.
-@@ -645,6 +785,7 @@ var CodeView = class CodeView {
+@@ -645,6 +787,7 @@ var CodeView = class CodeView {
  		this.render();
  		this.syncItemEditors();
  		this.syncSelection();
@@ -230,7 +253,7 @@ index 140f94f..96fc774 100644
  		return true;
  	}
  	updateItemId(oldId, newId) {
-@@ -678,6 +819,7 @@ var CodeView = class CodeView {
+@@ -678,6 +821,7 @@ var CodeView = class CodeView {
  		this.renamePendingScrollTarget(oldId, newId);
  		this.renamePendingLayoutAnchor(oldId, newId);
  		this.render();
@@ -238,7 +261,7 @@ index 140f94f..96fc774 100644
  		return true;
  	}
  	addItem(input) {
-@@ -687,6 +829,7 @@ var CodeView = class CodeView {
+@@ -687,6 +831,7 @@ var CodeView = class CodeView {
  		this.appendItemsInternal(inputs);
  		this.syncItemEditors();
  		this.syncSelection();
@@ -246,7 +269,7 @@ index 140f94f..96fc774 100644
  	}
  	removeItem(itemId) {
  		const item = this.idToItem.get(itemId);
-@@ -709,6 +852,7 @@ var CodeView = class CodeView {
+@@ -709,6 +854,7 @@ var CodeView = class CodeView {
  			for (const removedItem of removedItemsById?.values() ?? []) removedItem.instance.cleanUp();
  		}
  		this.syncSelection();
@@ -254,7 +277,15 @@ index 140f94f..96fc774 100644
  	}
  	/**
  	* Append new records to the viewer while preserving existing layout state.
-@@ -1330,6 +1474,10 @@ var CodeView = class CodeView {
+@@ -753,6 +899,7 @@ var CodeView = class CodeView {
+ 		const { itemMetricsCache: previousItemMetrics } = this;
+ 		if (shouldClearPool(prevOptions, options)) this.invalidateElementPool();
+ 		this.options = options;
++		this.search.setLabels(options.uiLabels);
+ 		const nextItemMetrics = this.computeMetricsCache(options.itemMetrics);
+ 		const itemMetricsChanged = !areObjectsEqual(previousItemMetrics, nextItemMetrics);
+ 		const layoutChanged = !areObjectsEqual(previousLayout, this.getLayout());
+@@ -1330,6 +1477,10 @@ var CodeView = class CodeView {
  		item.item = nextItem;
  		item.version = nextItem.version;
  		item.renderedOptionsRevision = -1;
@@ -265,7 +296,7 @@ index 140f94f..96fc774 100644
  		return true;
  	}
  	getMaxScrollTopForHeight(scrollHeight) {
-@@ -1710,6 +1858,10 @@ var CodeView = class CodeView {
+@@ -1710,6 +1861,10 @@ var CodeView = class CodeView {
  		this.updateStickyPositioning();
  		this.validateStickyContainerHeight();
  		this.fixContainerFocus();
@@ -276,7 +307,7 @@ index 140f94f..96fc774 100644
  		if (fitPerfectly || this.scrollAnimation != null) this.render();
  	};
  	flushManagers(updatedItems) {
-@@ -1804,7 +1956,8 @@ var CodeView = class CodeView {
+@@ -1804,7 +1959,8 @@ var CodeView = class CodeView {
  		this.notifyScroll();
  		this.render();
  	};
@@ -286,7 +317,7 @@ index 140f94f..96fc774 100644
  		this.pendingScrollTarget = void 0;
  		this.pendingLayoutAnchor = void 0;
  		this.scrollAnimation = void 0;
-@@ -2066,7 +2219,12 @@ var CodeView = class CodeView {
+@@ -2066,7 +2222,12 @@ var CodeView = class CodeView {
  			const item = this.items[index];
  			if (item == null) throw new Error("CodeView.recomputeLayout: invalid item index");
  			item.top = runningTop;
@@ -300,7 +331,7 @@ index 140f94f..96fc774 100644
  			else item.height = item.instance.updateCodeViewLayout(item.item.file, runningTop, reset, item.item.annotations ?? []);
  			runningTop += item.height;
  			if (index < this.items.length - 1) runningTop += layout.gap;
-@@ -2086,6 +2244,27 @@ var CodeView = class CodeView {
+@@ -2086,6 +2247,27 @@ var CodeView = class CodeView {
  		return this.getLayout().gap + this.itemMetricsCache.diffHeaderHeight;
  	}
  };
@@ -330,10 +361,10 @@ index 140f94f..96fc774 100644
  	if (item.type === "diff") return item.instance.updateCodeViewLayout(item.item.fileDiff, item.top, void 0, item.item.annotations ?? []);
 diff --git a/dist/components/CodeViewSearch.js b/dist/components/CodeViewSearch.js
 new file mode 100644
-index 0000000..29370ad
+index 0000000000000000000000000000000000000000..e6b7fd1199bedd4221bb00aadd19832c46dff40a
 --- /dev/null
 +++ b/dist/components/CodeViewSearch.js
-@@ -0,0 +1,360 @@
+@@ -0,0 +1,364 @@
 +import { isPrimaryModifier } from "../editor/platform.js";
 +import { resolveFindAgainShortcut } from "../editor/command.js";
 +import { SearchPanelWidget } from "../editor/searchPanel.js";
@@ -422,6 +453,7 @@ index 0000000..29370ad
 +			defaultQuery,
 +			mode: "find",
 +			allowReplace: false,
++			uiLabels: this.#view.options.uiLabels,
 +			initialMatch: defaultQuery !== "" ? [0, 0] : void 0,
 +			scrollToMatch: ([offset]) => {
 +				if (isLive()) this.#goTo(offset);
@@ -449,6 +481,9 @@ index 0000000..29370ad
 +			initializing = false;
 +		});
 +		widget.focus();
++	}
++	setLabels(labels) {
++		this.#widget?.setLabels(labels);
 +	}
 +	close() {
 +		this.#widget?.close();
@@ -694,8 +729,32 @@ index 0000000..29370ad
 +export { CodeViewSearch, collectMatches };
 +
 +//# sourceMappingURL=CodeViewSearch.js.map
+diff --git a/dist/components/File.js b/dist/components/File.js
+index a47efffcd23a5622f6ed53c93deaf79ad4093180..c7996f31a67d381862f31d30546643e85300bb8d 100644
+--- a/dist/components/File.js
++++ b/dist/components/File.js
+@@ -150,6 +150,7 @@ var File = class {
+ 	setOptions(options) {
+ 		if (options == null) return;
+ 		this.options = options;
++		this.editor?.setUILabels(options.uiLabels);
+ 		this.cachedHeaderHTML = void 0;
+ 		this.syncInteractionOptions();
+ 	}
+diff --git a/dist/components/FileDiff.js b/dist/components/FileDiff.js
+index 6f66bd3910315a1c16e37dabd9dd5b8df067661d..1340a48fa66f49ccdf334639f3da0352c4283e48 100644
+--- a/dist/components/FileDiff.js
++++ b/dist/components/FileDiff.js
+@@ -217,6 +217,7 @@ var FileDiff = class {
+ 	setOptions(options) {
+ 		if (options == null) return;
+ 		this.options = options;
++		this.editor?.setUILabels(options.uiLabels);
+ 		this.clearReusableHeader();
+ 		this.hunksRenderer.setOptions(this.getHunksRendererOptions(options));
+ 		this.syncInteractionOptions();
 diff --git a/dist/components/VirtualizedFile.d.ts b/dist/components/VirtualizedFile.d.ts
-index 5e68e35..79dcd88 100644
+index 5e68e354318c9d3556b5dd7dea0d96b0f438acd8..79dcd88829255d5479f2af11fc5f4f6ad75f6565 100644
 --- a/dist/components/VirtualizedFile.d.ts
 +++ b/dist/components/VirtualizedFile.d.ts
 @@ -49,7 +49,7 @@ declare class VirtualizedFile<LAnnotation = undefined, Caret = undefined> extend
@@ -708,7 +767,7 @@ index 5e68e35..79dcd88 100644
    protected finalizeRender(): void;
    private updatePendingRender;
 diff --git a/dist/components/VirtualizedFile.js b/dist/components/VirtualizedFile.js
-index d1f57cd..5908ad7 100644
+index d1f57cdef24ed5d34d391ee3bfe4a1d3505acd73..5908ad77e5f18a8035cbfdf8ae9b1ba6a6c0b990 100644
 --- a/dist/components/VirtualizedFile.js
 +++ b/dist/components/VirtualizedFile.js
 @@ -23,6 +23,7 @@ var VirtualizedFile = class extends File {
@@ -774,7 +833,7 @@ index d1f57cd..5908ad7 100644
  		if (!this.isSimpleMode()) this.computeApproximateSize(true);
  		else if (shouldUpdateBuffer && previousRenderRange != null && file != null) {
 diff --git a/dist/components/web-components.js b/dist/components/web-components.js
-index 6e7b486..5b7290f 100644
+index 6e7b486a02a0f9f9d2c57ea3d9e95b706925e72a..5b7290f1814f4883e9fd13ffdf22b9bacad461c0 100644
 --- a/dist/components/web-components.js
 +++ b/dist/components/web-components.js
 @@ -2,8 +2,17 @@ import { DIFFS_TAG_NAME } from "../constants.js";
@@ -807,11 +866,39 @@ index 6e7b486..5b7290f 100644
  		}
  		connectedCallback() {
  			const shadowRoot = this.shadowRoot ?? this.attachShadow({ mode: "open" });
+diff --git a/dist/editor/editor.d.ts b/dist/editor/editor.d.ts
+index 82e6804b3326e4cf0caafec8ae29b33309720ff8..88ec1f08becfead6a60a3cd44fd64b5262a2f11e 100644
+--- a/dist/editor/editor.d.ts
++++ b/dist/editor/editor.d.ts
+@@ -1,4 +1,4 @@
+-import { DiffLineAnnotation, DiffsHighlighter, FileContents, FileDiffMetadata, LineAnnotation, RenderRange } from "../types.js";
++import { BaseCodeOptions, DiffLineAnnotation, DiffsHighlighter, FileContents, FileDiffMetadata, LineAnnotation, RenderRange } from "../types.js";
+ import { EditState, EditorCaret, EditorChangeEvent, EditorEditCompleteEvent, EditorInitialState, EditorType, EditorViewState, Range, RetainedDiffSessionSnapshot, TextEdit } from "./types.js";
+ import { File } from "../components/File.js";
+ import { FileDiff } from "../components/FileDiff.js";
+@@ -143,6 +143,7 @@ declare class Editor<EType extends EditorType = EditorType, LAnnotation = undefi
+    * in memory so a later editor using the same type and key can resume them.
+    */
+   constructor(type: EType, options?: EditorOptions<EType, LAnnotation, Caret>, editStateKey?: string);
++  setUILabels(labels: BaseCodeOptions["uiLabels"]): void;
+   setOptions(options: EditorOptions<EType, LAnnotation, Caret>): void;
+   __emitEditComplete(event: EditorEditCompleteEvent<EType, LAnnotation, Caret>): void;
+   /** @internal */
 diff --git a/dist/editor/editor.js b/dist/editor/editor.js
-index 8f04a6f..c203023 100644
+index 8f04a6f92221c796a2636c203f739f94786c2df3..0d3bf10a5da3fcb9028f2c6484bc74d7a27732b2 100644
 --- a/dist/editor/editor.js
 +++ b/dist/editor/editor.js
-@@ -1899,7 +1899,11 @@ var Editor = class {
+@@ -188,6 +188,9 @@ var Editor = class {
+ 	get #getTypedEditor() {
+ 		return this.type === "file" ? this : this;
+ 	}
++	setUILabels(labels) {
++		this.#searchPanel?.setLabels(labels);
++	}
+ 	setOptions(options) {
+ 		const previousRenderCaret = this.#options.renderCaret;
+ 		const previousEditPrediction = this.#options.editPrediction;
+@@ -1899,7 +1902,11 @@ var Editor = class {
  			changedDocumentLines: this.#isDiff && !didLineCountChange ? getChangedDocumentLines(textDocument, change) : void 0,
  			documentLineCount: textDocument.lineCount
  		});
@@ -824,11 +911,30 @@ index 8f04a6f..c203023 100644
  		if (didLineCountChange || this.#isDiff && this.#diffSyle === "unified") this.#resetCache();
  		if (newLineAnnotations != null) {
  			this.#lineAnnotations = newLineAnnotations;
+@@ -3224,6 +3231,7 @@ var Editor = class {
+ 			this.#retainSearchPanelFocus = retainFocus;
+ 		};
+ 		const searchPanel = new SearchPanelWidget({
++			uiLabels: this.#fileInstance?.options.uiLabels,
+ 			textDocument,
+ 			containerElement: preElement,
+ 			defaultQuery,
 diff --git a/dist/editor/searchPanel.d.ts b/dist/editor/searchPanel.d.ts
-index 9542849..1c1a51f 100644
+index 9542849786b98a7b11f98894847a2f53a9aac113..8dfa21fc33e14dd08d2b397bb6537d6e72603051 100644
 --- a/dist/editor/searchPanel.d.ts
 +++ b/dist/editor/searchPanel.d.ts
-@@ -15,6 +15,8 @@ interface SearchPanelOptions {
+@@ -1,4 +1,5 @@
+ import { ResolvedTextEdit } from "./types.js";
++import { BaseCodeOptions } from "../types.js";
+ import { TextDocument } from "./textDocument.js";
+ //#region src/editor/searchPanel.d.ts
+ type MatchRange = [startOffset: number, endOffset: number];
+@@ -11,10 +12,13 @@ interface SearchParams {
+   regex: boolean;
+ }
+ interface SearchPanelOptions {
++  uiLabels?: BaseCodeOptions["uiLabels"];
+   textDocument: TextDocument;
    containerElement: HTMLElement;
    defaultQuery: string;
    mode?: SearchPanelMode;
@@ -837,20 +943,64 @@ index 9542849..1c1a51f 100644
    initialMatch?: MatchRange;
    scrollToMatch: (nextMatch: MatchRange, retainFocus: boolean) => void;
    applyReplace: (edits: ResolvedTextEdit[]) => void;
+@@ -31,6 +35,7 @@ declare class SearchPanelWidget {
+   updateMatches(options?: {
+     syncSelection?: boolean;
+   }): void;
++  setLabels(labels: BaseCodeOptions["uiLabels"]): void;
+   setMode(mode: SearchPanelMode): void;
+   close(): void;
+   cleanup(): void;
 diff --git a/dist/editor/searchPanel.js b/dist/editor/searchPanel.js
-index df1ba63..676751b 100644
+index df1ba637c2f7834f21f087eba7a416c802f4ac68..e68c1272256081be7cb974ba8627d2ade3bf5667 100644
 --- a/dist/editor/searchPanel.js
 +++ b/dist/editor/searchPanel.js
-@@ -12,7 +12,7 @@ var SearchPanelWidget = class {
+@@ -11,8 +11,10 @@ var SearchPanelWidget = class {
+ 	#applyMode;
  	#navigate;
  	#close;
++	#applyLabels;
  	constructor(options) {
 -		const { textDocument, containerElement, defaultQuery, mode = "find", initialMatch, scrollToMatch, applyReplace, onUpdate, onClose } = options;
 +		const { textDocument, containerElement, defaultQuery, mode = "find", allowReplace = true, initialMatch, scrollToMatch, applyReplace, onUpdate, onClose } = options;
++		let uiLabels = options.uiLabels;
  		const searchParams = {
  			text: defaultQuery,
  			replaceText: "",
-@@ -278,7 +278,7 @@ var SearchPanelWidget = class {
+@@ -29,7 +31,7 @@ var SearchPanelWidget = class {
+ 				matches: "",
+ 				noMatches: ""
+ 			},
+-			textContent: "No results"
++			textContent: uiLabels?.noResults ?? "No results"
+ 		});
+ 		const updateMatches = (options) => {
+ 			matches.all = searchParams.text !== "" ? textDocument.search(searchParams) : [];
+@@ -37,7 +39,7 @@ var SearchPanelWidget = class {
+ 			prevButton.disabled = noMatches;
+ 			nextButton.disabled = noMatches;
+ 			if (noMatches) {
+-				matchResultElement.textContent = "No results";
++				matchResultElement.textContent = uiLabels?.noResults ?? "No results";
+ 				matchResultElement.dataset.noMatches = "";
+ 				matches.current = void 0;
+ 				onUpdate([]);
+@@ -53,11 +55,12 @@ var SearchPanelWidget = class {
+ 		};
+ 		this.#updateMatches = updateMatches;
+ 		const updateCurrentMatch = (currentMatch) => {
+-			if (currentMatch === void 0) matchResultElement.textContent = `${matches.all.length} results`;
++			if (matches.all.length === 0) matchResultElement.textContent = uiLabels?.noResults ?? "No results";
++			else if (currentMatch === void 0) matchResultElement.textContent = uiLabels?.results?.(matches.all.length) ?? `${matches.all.length} results`;
+ 			else {
+ 				const [start, end] = currentMatch;
+ 				const index = matches.all.findIndex((m) => m[0] === start && m[1] === end);
+-				matchResultElement.textContent = `${index + 1} of ${matches.all.length}`;
++				matchResultElement.textContent = uiLabels?.currentResult?.(index + 1, matches.all.length) ?? `${index + 1} of ${matches.all.length}`;
+ 			}
+ 			matches.current = currentMatch;
+ 		};
+@@ -278,7 +281,7 @@ var SearchPanelWidget = class {
  			]
  		});
  		const applyMode = (next) => {
@@ -859,8 +1009,47 @@ index df1ba63..676751b 100644
  			this.#inputElement.focus();
  			this.#inputElement.select();
  		};
+@@ -290,6 +293,28 @@ var SearchPanelWidget = class {
+ 				children: [gridElement]
+ 			})]
+ 		});
++		this.#applyLabels = (labels) => {
++			uiLabels = labels;
++			this.#inputElement.placeholder = labels?.search ?? "Search";
++			this.#inputElement.ariaLabel = this.#inputElement.placeholder;
++			replaceInputElement.placeholder = labels?.replace ?? "Replace";
++			replaceInputElement.ariaLabel = replaceInputElement.placeholder;
++			for (const [button, label] of [
++				[caseSensitiveToggle, labels?.matchCase ?? "Match Case"],
++				[wholeWordToggle, labels?.wholeWord ?? "Whole Word"],
++				[regexToggle, labels?.regex ?? "Regexp"],
++				[prevButton, labels?.previous ?? "Previous"],
++				[nextButton, labels?.next ?? "Next"],
++				[closeElement, labels?.close ?? "Close"],
++				[replaceActionsElement.children[0], labels?.replace ?? "Replace"],
++				[replaceActionsElement.children[1], labels?.replaceAll ?? "Replace All"],
++			]) {
++				button.title = label;
++				button.ariaLabel = label;
++			}
++			updateCurrentMatch(matches.current);
++		};
++		this.#applyLabels(uiLabels);
+ 		matches.current = initialMatch;
+ 		containerElement.before(this.#container);
+ 		requestAnimationFrame(() => {
+@@ -307,6 +332,9 @@ var SearchPanelWidget = class {
+ 	updateMatches(options) {
+ 		this.#updateMatches?.(options);
+ 	}
++	setLabels(labels) {
++		this.#applyLabels?.(labels);
++	}
+ 	setMode(mode) {
+ 		this.#applyMode?.(mode);
+ 	}
 diff --git a/dist/managers/ResizeManager.d.ts b/dist/managers/ResizeManager.d.ts
-index 3efafc4..9e5b751 100644
+index 3efafc41324e09c546e66645c0dc474e68417896..9e5b7511f9f82702c4e15fe7063b3e9a0b05a79d 100644
 --- a/dist/managers/ResizeManager.d.ts
 +++ b/dist/managers/ResizeManager.d.ts
 @@ -5,6 +5,8 @@ interface ResizeManagerSetupOptions {
@@ -873,7 +1062,7 @@ index 3efafc4..9e5b751 100644
    private static managersByElement;
    private static getResizeObserver;
 diff --git a/dist/managers/ResizeManager.js b/dist/managers/ResizeManager.js
-index 9724cb1..14145d8 100644
+index 9724cb1e344af1ac8763b592f671a9ceb63f1a76..14145d832900e7a9734786dbb6223d03424f7cb6 100644
 --- a/dist/managers/ResizeManager.js
 +++ b/dist/managers/ResizeManager.js
 @@ -19,6 +19,7 @@ var ResizeManager = class ResizeManager {
@@ -893,7 +1082,7 @@ index 9724cb1..14145d8 100644
  	}
  	applyAnnotationUpdates(annotationUpdates) {
 diff --git a/dist/react/CodeView.d.ts b/dist/react/CodeView.d.ts
-index e78e713..642b235 100644
+index e78e713bdea30c46a548bc46dacf79aa8c184c3d..642b235942f2a8f476c95c9ed05661f4f4431923 100644
 --- a/dist/react/CodeView.d.ts
 +++ b/dist/react/CodeView.d.ts
 @@ -56,6 +56,8 @@ interface CodeViewBaseProps<LAnnotation, Caret> {
@@ -906,7 +1095,7 @@ index e78e713..642b235 100644
    renderHeaderPrefix?(item: CodeViewItem<LAnnotation>): ReactNode;
    renderHeaderFilenameSuffix?(item: CodeViewItem<LAnnotation>): ReactNode;
 diff --git a/dist/react/CodeView.js b/dist/react/CodeView.js
-index 84c7915..d1930bf 100644
+index 84c7915d9bd1f9664010966370f60649a7a5d67e..d1930bfb8950ee6b78d56259181edeb1a1492d2a 100644
 --- a/dist/react/CodeView.js
 +++ b/dist/react/CodeView.js
 @@ -24,7 +24,7 @@ function createDefaultCache(controlled) {
@@ -970,8 +1159,176 @@ index 84c7915..d1930bf 100644
  	if (hasCustomHeader) managedOptions.renderCustomHeader = noopRender;
  	if (hasGutterRenderer) managedOptions.renderGutterUtility = noopRender;
  	if (hasCodeViewHeader) managedOptions.renderCodeViewHeader = noopRender;
+diff --git a/dist/renderers/DiffHunksRenderer.js b/dist/renderers/DiffHunksRenderer.js
+index 8314469bd2b833d393d0dec3bc3f26244010aad6..98c46ec73a71f0ae61fdfa6480e4c6f5303c9b4b 100644
+--- a/dist/renderers/DiffHunksRenderer.js
++++ b/dist/renderers/DiffHunksRenderer.js
+@@ -671,6 +671,7 @@ var DiffHunksRenderer = class {
+ 		const context = {
+ 			rowCount: 0,
+ 			hunkSeparators,
++			uiLabels: this.options.uiLabels,
+ 			additionsContentAST,
+ 			deletionsContentAST,
+ 			unifiedContentAST,
+@@ -1185,10 +1186,11 @@ function pushSeparator(type, { hunkIndex, collapsedLines, rangeSize, hunkSpecs,
+ 	const slotName = getHunkSeparatorSlotName(type, hunkIndex);
+ 	const chunked = rangeSize > context.expansionLineCount;
+ 	const expandIndex = isExpandable ? hunkIndex : void 0;
+-	const content = typeof collapsedLines === "number" ? getModifiedLinesString(collapsedLines) : "More unchanged context may be available";
++	const content = typeof collapsedLines === "number" ? (context.uiLabels?.unmodifiedLines?.(collapsedLines) ?? getModifiedLinesString(collapsedLines)) : (context.uiLabels?.moreContext ?? "More unchanged context may be available");
+ 	context.pushToGutter(type, createSeparator({
+ 		type: context.hunkSeparators,
+ 		content,
++		uiLabels: context.uiLabels,
+ 		expandIndex,
+ 		chunked,
+ 		slotName,
+@@ -1198,6 +1200,7 @@ function pushSeparator(type, { hunkIndex, collapsedLines, rangeSize, hunkSpecs,
+ 	linesAST.push(createSeparator({
+ 		type: context.hunkSeparators,
+ 		content,
++		uiLabels: context.uiLabels,
+ 		expandIndex,
+ 		chunked,
+ 		slotName,
+diff --git a/dist/types.d.ts b/dist/types.d.ts
+index b469f0a2b6cc0aa0cd250a294efb674faee2b2a4..e0c8590965760bf96dd08a63c4deab34611f3a55 100644
+--- a/dist/types.d.ts
++++ b/dist/types.d.ts
+@@ -330,6 +330,27 @@ type HunkSeparators = 'simple' | 'metadata' | 'line-info' | 'line-info-basic' |
+ type LineDiffTypes = 'word-alt' | 'word-line' | 'word' | 'char' | 'none';
+ type DiffIndicators = 'classic' | 'bars' | 'none';
+ interface BaseCodeOptions {
++  /** UI labels are independent of highlighted code and do not change diff data. */
++  uiLabels?: {
++    unmodifiedLines?: (count: number) => string;
++    moreContext?: string;
++    expandAll?: string;
++    expandUp?: string;
++    expandDown?: string;
++    expandBoth?: string;
++    search?: string;
++    replace?: string;
++    replaceAll?: string;
++    matchCase?: string;
++    wholeWord?: string;
++    regex?: string;
++    previous?: string;
++    next?: string;
++    close?: string;
++    noResults?: string;
++    results?: (count: number) => string;
++    currentResult?: (current: number, count: number) => string;
++  };
+   theme?: DiffsThemeNames | ThemesType;
+   disableLineNumbers?: boolean;
+   overflow?: 'scroll' | 'wrap';
+@@ -369,7 +390,7 @@ interface BaseDiffOptions extends BaseCodeOptions {
+    */
+   parseDiffOptions?: CreatePatchOptionsNonabortable;
+ }
+-type BaseDiffOptionsWithDefaults = Required<Omit<BaseDiffOptions, 'unsafeCSS' | 'preferredHighlighter' | 'parseDiffOptions' | 'loadDiffFiles'>>;
++type BaseDiffOptionsWithDefaults = Required<Omit<BaseDiffOptions, 'unsafeCSS' | 'preferredHighlighter' | 'parseDiffOptions' | 'loadDiffFiles' | 'uiLabels'>>;
+ type CustomPreProperties = Record<string, string | number | undefined>;
+ interface PrePropertiesConfig extends Required<Pick<BaseDiffOptions, 'diffIndicators' | 'disableBackground' | 'disableLineNumbers' | 'overflow'>> {
+   type: 'diff' | 'file';
+diff --git a/dist/utils/createSeparator.d.ts b/dist/utils/createSeparator.d.ts
+index b9f81605a91ff7ef74ec1e7e47b8dbf0921d0381..57f2b9a027f38829cbadadbf9488e8c354c726d5 100644
+--- a/dist/utils/createSeparator.d.ts
++++ b/dist/utils/createSeparator.d.ts
+@@ -1,8 +1,9 @@
+ import { Element } from "../node_modules/.pnpm/@types_hast@3.0.4/node_modules/@types/hast/index.js";
+-import { HunkSeparators } from "../types.js";
++import { BaseCodeOptions, HunkSeparators } from "../types.js";
+ //#region src/utils/createSeparator.d.ts
+ interface CreateSeparatorProps {
+   type: HunkSeparators;
++  uiLabels?: BaseCodeOptions["uiLabels"];
+   content?: string;
+   expandIndex?: number;
+   chunked?: boolean;
+@@ -10,7 +11,7 @@ interface CreateSeparatorProps {
+   isFirstHunk: boolean;
+   isLastHunk: boolean;
+ }
+-declare function createSeparator({ type, content, expandIndex, chunked, slotName, isFirstHunk, isLastHunk }: CreateSeparatorProps): Element;
++declare function createSeparator({ type, content, expandIndex, chunked, slotName, isFirstHunk, isLastHunk, uiLabels }: CreateSeparatorProps): Element;
+ //#endregion
+ export { createSeparator };
+ //# sourceMappingURL=createSeparator.d.ts.map
+\ No newline at end of file
+diff --git a/dist/utils/createSeparator.js b/dist/utils/createSeparator.js
+index f3878295981424f452b215df958603e446c6ef64..85ccb1c78e52a0146bc097effc43b9e86d7df381 100644
+--- a/dist/utils/createSeparator.js
++++ b/dist/utils/createSeparator.js
+@@ -1,6 +1,6 @@
+ import { createHastElement, createIconElement, createTextNodeElement } from "./hast_utils.js";
+ //#region src/utils/createSeparator.ts
+-function createExpandButton(type) {
++function createExpandButton(type, labels) {
+ 	return createHastElement({
+ 		tagName: "div",
+ 		children: [createIconElement({
+@@ -9,6 +9,7 @@ function createExpandButton(type) {
+ 		})],
+ 		properties: {
+ 			role: "button",
++			"aria-label": type === "both" ? (labels?.expandBoth ?? "Expand context in both directions") : type === "up" ? (labels?.expandUp ?? "Expand context upward") : (labels?.expandDown ?? "Expand context downward"),
+ 			"data-expand-button": "",
+ 			"data-expand-both": type === "both" ? "" : void 0,
+ 			"data-expand-up": type === "up" ? "" : void 0,
+@@ -16,7 +17,7 @@ function createExpandButton(type) {
+ 		}
+ 	});
+ }
+-function createSeparator({ type, content, expandIndex, chunked = false, slotName, isFirstHunk, isLastHunk }) {
++function createSeparator({ type, content, uiLabels, expandIndex, chunked = false, slotName, isFirstHunk, isLastHunk }) {
+ 	let buttonCount = 0;
+ 	const children = [];
+ 	if (type === "metadata" && content != null) children.push(createHastElement({
+@@ -28,15 +29,15 @@ function createSeparator({ type, content, expandIndex, chunked = false, slotName
+ 		const contentChildren = [];
+ 		if (expandIndex != null) {
+ 			if (!chunked) {
+-				contentChildren.push(createExpandButton(!isFirstHunk && !isLastHunk ? "both" : isFirstHunk ? "down" : "up"));
++				contentChildren.push(createExpandButton(!isFirstHunk && !isLastHunk ? "both" : isFirstHunk ? "down" : "up", uiLabels));
+ 				buttonCount++;
+ 			} else {
+ 				if (!isFirstHunk) {
+-					contentChildren.push(createExpandButton("up"));
++					contentChildren.push(createExpandButton("up", uiLabels));
+ 					buttonCount++;
+ 				}
+ 				if (!isLastHunk) {
+-					contentChildren.push(createExpandButton("down"));
++					contentChildren.push(createExpandButton("down", uiLabels));
+ 					buttonCount++;
+ 				}
+ 			}
+@@ -52,7 +53,7 @@ function createSeparator({ type, content, expandIndex, chunked = false, slotName
+ 		}));
+ 		if (chunked && expandIndex != null) contentChildren.push(createHastElement({
+ 			tagName: "div",
+-			children: [createTextNodeElement("Expand all")],
++			children: [createTextNodeElement(uiLabels?.expandAll ?? "Expand all")],
+ 			properties: {
+ 				role: "button",
+ 				"data-expand-button": "",
+diff --git a/dist/utils/getDiffHunksRendererOptions.js b/dist/utils/getDiffHunksRendererOptions.js
+index 869d1a184024621c85a2bee17966bef3fcb822c3..f2214aad8b919f23c6de0d81e660076e2f43564a 100644
+--- a/dist/utils/getDiffHunksRendererOptions.js
++++ b/dist/utils/getDiffHunksRendererOptions.js
+@@ -2,6 +2,7 @@ import { shouldUseTokenTransformer } from "./shouldUseTokenTransformer.js";
+ //#region src/utils/getDiffHunksRendererOptions.ts
+ function getDiffHunksRendererOptions(options) {
+ 	return {
++		uiLabels: options?.uiLabels,
+ 		theme: options?.theme,
+ 		disableLineNumbers: options?.disableLineNumbers,
+ 		overflow: options?.overflow,
 diff --git a/package.json b/package.json
-index d9dc7b5..3c37bae 100644
+index d9dc7b5f55ef4ac464e027fff9619212cec143f4..3c37baedae2d975c65fa7273e591338164aff2ae 100644
 --- a/package.json
 +++ b/package.json
 @@ -58,6 +58,18 @@
