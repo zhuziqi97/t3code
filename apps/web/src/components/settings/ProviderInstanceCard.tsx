@@ -65,6 +65,7 @@ import {
   getProviderVersionAdvisoryPresentation,
   PROVIDER_STATUS_STYLES,
   getProviderSummary,
+  formatProviderAuthLabel,
   getProviderVersionLabel,
   type ProviderStatusKey,
 } from "./providerStatus";
@@ -596,7 +597,7 @@ export function ProviderInstanceCard({
   const isAuthenticated = enabled && liveProvider?.auth.status === "authenticated";
   const authLabel =
     enabled && liveProvider?.auth.status === "authenticated"
-      ? (liveProvider.auth.label ?? liveProvider.auth.type ?? null)
+      ? (formatProviderAuthLabel(liveProvider, t) ?? null)
       : null;
   const versionLabel = getProviderVersionLabel(liveProvider?.version);
   const versionAdvisory = getProviderVersionAdvisoryPresentation(

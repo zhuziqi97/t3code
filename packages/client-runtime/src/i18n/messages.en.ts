@@ -5988,6 +5988,108 @@ export const en = {
   "appearance.theme.error.jsonSyntax": "Theme JSON is invalid: {{detail}}",
   "diagnostics.monitor.binary.not-executable":
     "Resource monitor binary at '{{path}}' is not executable.",
+  "provider.status.cursorDisabled": "Cursor is disabled in T3 Code settings.",
+  "provider.status.cursorChecking": "Checking Cursor SDK availability...",
+  "provider.status.cursorSignIn": "Sign in with Cursor or add CURSOR_API_KEY in provider settings.",
+  "provider.status.cursorSignInRejected":
+    "Cursor sign-in expired or was rejected. Sign in again in provider settings.",
+  "provider.status.cursorAuthFailed": "Cursor SDK authentication failed. Check CURSOR_API_KEY.",
+  "provider.status.cursorCatalogFailed":
+    "Cursor SDK catalog request failed. Check server logs for details.",
+  "provider.status.cursorNoModels": "Cursor SDK model discovery returned no built-in models.",
+  "provider.status.grokDisabled": "Grok is disabled in T3 Code settings.",
+  "provider.status.grokChecking": "Checking Grok CLI availability...",
+  "provider.status.grokMissing": "Grok CLI (`grok`) is not installed or not on PATH.",
+  "provider.status.grokHealthFailed": "Failed to execute Grok CLI health check.",
+  "provider.status.grokTimeout":
+    "Grok CLI is installed but timed out while running `grok --version`.",
+  "provider.status.grokRunFailed": "Grok CLI is installed but failed to run.",
+  "provider.status.grokUnauthenticated":
+    "Grok CLI is installed but not logged in. Run `grok login`.",
+  "provider.status.grokAcpFailed":
+    "Grok CLI is installed but ACP initialize failed. Model options may be incomplete.",
+  "provider.status.opencodeDisabled": "OpenCode is disabled in T3 Code settings.",
+  "provider.status.opencodeServerDisabled":
+    "OpenCode is disabled in T3 Code settings. A server URL is configured.",
+  "provider.status.opencodeUnchecked":
+    "OpenCode provider status has not been checked in this session yet.",
+  "provider.status.opencodeAuthFailed":
+    "OpenCode server rejected authentication. Check the server URL and password.",
+  "provider.status.opencodeConnectFailed": "Failed to connect to the configured OpenCode server.",
+  "provider.status.opencodeMissing": "OpenCode CLI (`opencode`) is not installed or not on PATH.",
+  "provider.status.opencodeQuarantine":
+    "macOS is blocking the OpenCode binary (quarantine). Run `xattr -d com.apple.quarantine $(which opencode)` to fix this.",
+  "provider.status.opencodeSignature":
+    "macOS killed the OpenCode process due to an invalid code signature. The binary may be corrupted — try reinstalling OpenCode.",
+  "provider.status.opencodeInventoryFailed": "Failed to load OpenCode provider inventory.",
+  "provider.status.opencodeHealthFailed": "Failed to execute OpenCode CLI health check.",
+  "provider.status.opencodeModelsFailed": "OpenCode could not load its model list.",
+  "provider.status.opencodeNoModels": "OpenCode 2 is running, but it did not list any models yet.",
+  "provider.status.opencodeServerNoUpstreams":
+    "Connected to the configured OpenCode server, but it did not report any connected upstream providers.",
+  "provider.status.opencodeNoUpstreams":
+    "OpenCode is available, but it did not report any connected upstream providers.",
+  "provider.status.piDisabled": "Pi is disabled in T3 Code settings.",
+  "provider.status.piChecking": "Checking Pi CLI availability...",
+  "provider.status.piMissing":
+    "Pi CLI (`pi`) is not installed or not on PATH. Install with `npm install -g @earendil-works/pi-coding-agent`.",
+  "provider.status.piHealthFailed": "Failed to execute Pi CLI health check.",
+  "provider.status.piTimeout": "Pi CLI is installed but timed out while running `pi --version`.",
+  "provider.status.piRunFailed": "Pi CLI is installed but failed to run.",
+  "provider.status.piDiscoveryFailed":
+    "Pi is available, but T3 Code could not refresh its models and commands. The live session will retry startup.",
+  "provider.status.piDiscoveryInteractive":
+    "Pi is available, but model and command discovery needs interactive input. The live session will handle it.",
+  "provider.status.piNoModels":
+    "Pi has no usable models. Run `pi` in a terminal and use /login, or configure an API key in ~/.pi/agent.",
+  "provider.status.piNoPositionalPrompts": "Pi launch arguments cannot include positional prompts.",
+  "provider.status.piProviderRequiresModel": "Pi launch argument '--provider' requires '--model'.",
+  "provider.status.museChecking": "Checking Muse Code CLI availability...",
+  "provider.status.museDisabled": "Muse Code is disabled in T3 Code settings.",
+  "provider.status.museMissing":
+    "Muse Code CLI (`muse`) was not found. Install Muse Code and run `muse login` on this T3 server host.",
+  "provider.status.museHealthFailed":
+    "Failed to execute Muse Code CLI. Check its binary path on this T3 server host.",
+  "provider.status.museTimeout": "Muse Code CLI version check timed out.",
+  "provider.status.museRunFailed": "Muse Code CLI is installed but failed to run.",
+  "provider.status.museCatalogFailed":
+    "Muse Code SDK could not read the model catalog. Check your Muse installation and run `muse login` on this T3 server host.",
+  "provider.status.museNoModels":
+    "Muse Code returned no models. Run `muse login` on this T3 server host and refresh its status.",
+  "provider.status.cursorTimeout": "Cursor SDK catalog request timed out after {{milliseconds}}ms.",
+  "provider.status.opencodeInventoryDetail":
+    "Failed to load OpenCode provider inventory: {{detail}}",
+  "provider.status.opencodeHealthDetail": "Failed to execute OpenCode CLI health check: {{detail}}",
+  "provider.status.opencodeServerUnreachable":
+    "Couldn't reach the configured OpenCode server at {{url}}. Check that the server is running and the URL is correct.",
+  "provider.status.opencodeOldVersion":
+    "OpenCode v{{version}} is too old. Upgrade to v{{minimum}} or newer.",
+  "provider.status.opencodeUpstreams_one":
+    "{{count}} upstream provider connected through OpenCode.",
+  "provider.status.opencodeUpstreams_other":
+    "{{count}} upstream providers connected through OpenCode.",
+  "provider.status.opencodeServerUpstreams_one":
+    "{{count}} upstream provider connected through the configured OpenCode server.",
+  "provider.status.opencodeServerUpstreams_other":
+    "{{count}} upstream providers connected through the configured OpenCode server.",
+  "provider.status.opencodeModelCount_one": "OpenCode {{version}} lists {{count}} model.",
+  "provider.status.opencodeModelCount_other": "OpenCode {{version}} lists {{count}} models.",
+  "provider.status.piUnknownVersion":
+    "T3 Code could not determine the Pi version. Pi {{minimum}} or newer is required.",
+  "provider.status.piOldVersion":
+    "Pi {{version}} is unsupported. Update to Pi {{minimum}} or newer.",
+  "provider.status.piControlledArgument":
+    "Pi launch argument '{{argument}}' is controlled by T3 Code and cannot be overridden.",
+  "provider.status.piArgumentValue": "Pi launch argument '{{argument}}' requires a value.",
+  "provider.status.piUnsupportedArgument":
+    "Pi launch argument '{{argument}}' is not supported by T3 Code.",
+  "provider.status.piPositionalPrompt":
+    "Pi launch arguments cannot include positional prompt '{{prompt}}'.",
+  "provider.auth.cursorAccount": "Cursor account",
+  "provider.auth.grokAccount": "Grok account",
+  "provider.auth.xaiApiKey": "xAI API key",
+  "provider.auth.cursorApiKey": "Cursor API key",
+  "provider.auth.cursorNamedApiKey": "Cursor API key ({{name}})",
 } as const;
 
 export type MessageKey = keyof typeof en;

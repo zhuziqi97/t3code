@@ -45,6 +45,340 @@ describe("getProviderSummary", () => {
     expect(status.message).toBe(message);
   });
 
+  it.each([
+    ["cursor", "Cursor is disabled in T3 Code settings.", "已在 T3 Code 设置中停用 Cursor。"],
+    ["cursor", "Checking Cursor SDK availability...", "正在检查 Cursor SDK 是否可用…"],
+    [
+      "cursor",
+      "Sign in with Cursor or add CURSOR_API_KEY in provider settings.",
+      "请使用 Cursor 账号登录，或在智能体提供方设置中添加 CURSOR_API_KEY。",
+    ],
+    [
+      "cursor",
+      "Cursor sign-in expired or was rejected. Sign in again in provider settings.",
+      "Cursor 登录已过期或被拒绝。请在智能体提供方设置中重新登录。",
+    ],
+    [
+      "cursor",
+      "Cursor SDK authentication failed. Check CURSOR_API_KEY.",
+      "Cursor SDK 认证失败。请检查 CURSOR_API_KEY。",
+    ],
+    [
+      "cursor",
+      "Cursor SDK catalog request failed. Check server logs for details.",
+      "Cursor SDK 模型目录请求失败。详情请查看服务端日志。",
+    ],
+    [
+      "cursor",
+      "Cursor SDK model discovery returned no built-in models.",
+      "Cursor SDK 未发现内置模型。",
+    ],
+    ["grok", "Grok is disabled in T3 Code settings.", "已在 T3 Code 设置中停用 Grok。"],
+    ["grok", "Checking Grok CLI availability...", "正在检查 Grok CLI 是否可用…"],
+    [
+      "grok",
+      "Grok CLI (`grok`) is not installed or not on PATH.",
+      "Grok CLI（`grok`）尚未安装，或不在 PATH 中。",
+    ],
+    ["grok", "Failed to execute Grok CLI health check.", "无法执行 Grok CLI 健康检查。"],
+    [
+      "grok",
+      "Grok CLI is installed but timed out while running `grok --version`.",
+      "Grok CLI 已安装，但运行 `grok --version` 时超时。",
+    ],
+    ["grok", "Grok CLI is installed but failed to run.", "Grok CLI 已安装，但无法运行。"],
+    [
+      "grok",
+      "Grok CLI is installed but not logged in. Run `grok login`.",
+      "Grok CLI 已安装，但尚未登录。请运行 `grok login`。",
+    ],
+    [
+      "grok",
+      "Grok CLI is installed but ACP initialize failed. Model options may be incomplete.",
+      "Grok CLI 已安装，但 ACP 初始化失败。模型选项可能不完整。",
+    ],
+    ["opencode", "OpenCode is disabled in T3 Code settings.", "已在 T3 Code 设置中停用 OpenCode。"],
+    [
+      "opencode",
+      "OpenCode is disabled in T3 Code settings. A server URL is configured.",
+      "已在 T3 Code 设置中停用 OpenCode，且已配置服务端 URL。",
+    ],
+    [
+      "opencode",
+      "OpenCode provider status has not been checked in this session yet.",
+      "本次启动后尚未检查 OpenCode 状态。",
+    ],
+    [
+      "opencode",
+      "OpenCode server rejected authentication. Check the server URL and password.",
+      "OpenCode 服务端拒绝认证。请检查服务端 URL 和密码。",
+    ],
+    [
+      "opencode",
+      "Failed to connect to the configured OpenCode server.",
+      "无法连接已配置的 OpenCode 服务端。",
+    ],
+    [
+      "opencode",
+      "OpenCode CLI (`opencode`) is not installed or not on PATH.",
+      "OpenCode CLI（`opencode`）尚未安装，或不在 PATH 中。",
+    ],
+    [
+      "opencode",
+      "macOS is blocking the OpenCode binary (quarantine). Run `xattr -d com.apple.quarantine $(which opencode)` to fix this.",
+      "macOS 已阻止 OpenCode 可执行文件运行（隔离标记）。请运行 `xattr -d com.apple.quarantine $(which opencode)` 解除隔离。",
+    ],
+    [
+      "opencode",
+      "macOS killed the OpenCode process due to an invalid code signature. The binary may be corrupted — try reinstalling OpenCode.",
+      "macOS 因代码签名无效而终止了 OpenCode 进程。可执行文件可能已损坏，请尝试重新安装 OpenCode。",
+    ],
+    [
+      "opencode",
+      "Failed to load OpenCode provider inventory.",
+      "无法加载 OpenCode 智能体提供方清单。",
+    ],
+    [
+      "opencode",
+      "Failed to execute OpenCode CLI health check.",
+      "无法执行 OpenCode CLI 健康检查。",
+    ],
+    ["opencode", "OpenCode could not load its model list.", "OpenCode 无法加载模型列表。"],
+    [
+      "opencode",
+      "OpenCode 2 is running, but it did not list any models yet.",
+      "OpenCode 2 正在运行，但尚未列出模型。",
+    ],
+    [
+      "opencode",
+      "Connected to the configured OpenCode server, but it did not report any connected upstream providers.",
+      "已连接配置的 OpenCode 服务端，但未报告已连接的上游模型提供方。",
+    ],
+    [
+      "opencode",
+      "OpenCode is available, but it did not report any connected upstream providers.",
+      "OpenCode 可用，但未报告已连接的上游模型提供方。",
+    ],
+    ["pi", "Pi is disabled in T3 Code settings.", "已在 T3 Code 设置中停用 Pi。"],
+    ["pi", "Checking Pi CLI availability...", "正在检查 Pi CLI 是否可用…"],
+    [
+      "pi",
+      "Pi CLI (`pi`) is not installed or not on PATH. Install with `npm install -g @earendil-works/pi-coding-agent`.",
+      "Pi CLI（`pi`）尚未安装，或不在 PATH 中。请运行 `npm install -g @earendil-works/pi-coding-agent` 安装。",
+    ],
+    ["pi", "Failed to execute Pi CLI health check.", "无法执行 Pi CLI 健康检查。"],
+    [
+      "pi",
+      "Pi CLI is installed but timed out while running `pi --version`.",
+      "Pi CLI 已安装，但运行 `pi --version` 时超时。",
+    ],
+    ["pi", "Pi CLI is installed but failed to run.", "Pi CLI 已安装，但无法运行。"],
+    [
+      "pi",
+      "Pi is available, but T3 Code could not refresh its models and commands. The live session will retry startup.",
+      "Pi 可用，但 T3 Code 无法刷新其模型和命令。实际会话启动时会重试。",
+    ],
+    [
+      "pi",
+      "Pi is available, but model and command discovery needs interactive input. The live session will handle it.",
+      "Pi 可用，但发现模型和命令需要交互输入。实际会话启动时会处理。",
+    ],
+    [
+      "pi",
+      "Pi has no usable models. Run `pi` in a terminal and use /login, or configure an API key in ~/.pi/agent.",
+      "Pi 没有可用模型。请在终端运行 `pi` 后使用 /login，或在 ~/.pi/agent 中配置 API 密钥。",
+    ],
+    [
+      "pi",
+      "Pi launch arguments cannot include positional prompts.",
+      "Pi 启动参数不能包含位置提示词。",
+    ],
+    [
+      "pi",
+      "Pi launch argument '--provider' requires '--model'.",
+      "Pi 启动参数 '--provider' 需要同时指定 '--model'。",
+    ],
+    ["muse", "Checking Muse Code CLI availability...", "正在检查 Muse Code CLI 是否可用…"],
+    ["muse", "Muse Code is disabled in T3 Code settings.", "已在 T3 Code 设置中停用 Muse Code。"],
+    [
+      "muse",
+      "Muse Code CLI (`muse`) was not found. Install Muse Code and run `muse login` on this T3 server host.",
+      "未找到 Muse Code CLI（`muse`）。请在此 T3 服务端主机上安装 Muse Code 并运行 `muse login`。",
+    ],
+    [
+      "muse",
+      "Failed to execute Muse Code CLI. Check its binary path on this T3 server host.",
+      "无法执行 Muse Code CLI。请检查其在此 T3 服务端主机上的可执行文件路径。",
+    ],
+    ["muse", "Muse Code CLI version check timed out.", "Muse Code CLI 版本检查超时。"],
+    ["muse", "Muse Code CLI is installed but failed to run.", "Muse Code CLI 已安装，但无法运行。"],
+    [
+      "muse",
+      "Muse Code SDK could not read the model catalog. Check your Muse installation and run `muse login` on this T3 server host.",
+      "Muse Code SDK 无法读取模型目录。请检查 Muse 的安装，并在此 T3 服务端主机上运行 `muse login`。",
+    ],
+    [
+      "muse",
+      "Muse Code returned no models. Run `muse login` on this T3 server host and refresh its status.",
+      "Muse Code 未返回模型。请在此 T3 服务端主机上运行 `muse login` 后刷新状态。",
+    ],
+  ])("translates %s guidance in the settings summary: %s", (driver, message, chinese) => {
+    const status = {
+      ...provider,
+      driver: ProviderDriverKind.make(driver),
+      message,
+      auth: { status: "unknown" as const },
+    };
+    expect(getProviderSummary(status, createI18n({ lng: "zh" }).t).detail).toBe(chinese);
+    expect(getProviderSummary(status, createI18n({ lng: "en" }).t).detail).toBe(message);
+    expect(status.message).toBe(message);
+  });
+
+  it.each([
+    [
+      "cursor",
+      "Cursor SDK catalog request timed out after 15000ms.",
+      "Cursor SDK 模型目录请求在 15000 毫秒后超时。",
+    ],
+    [
+      "opencode",
+      "Failed to load OpenCode provider inventory: Keep 原始诊断\n/tmp/raw-path.",
+      "无法加载 OpenCode 智能体提供方清单：Keep 原始诊断\n/tmp/raw-path.",
+    ],
+    [
+      "opencode",
+      "Failed to execute OpenCode CLI health check: spawn /tmp/qa 原文 ENOENT",
+      "无法执行 OpenCode CLI 健康检查：spawn /tmp/qa 原文 ENOENT",
+    ],
+    [
+      "opencode",
+      "Couldn't reach the configured OpenCode server at http://127.0.0.1:4096/qa-原文. Check that the server is running and the URL is correct.",
+      "无法连接已配置的 OpenCode 服务端 http://127.0.0.1:4096/qa-原文。请检查服务端是否正在运行，以及 URL 是否正确。",
+    ],
+    [
+      "opencode",
+      "OpenCode v1.0.0 is too old. Upgrade to v1.14.19 or newer.",
+      "OpenCode v1.0.0 版本过旧。请升级至 v1.14.19 或更高版本。",
+    ],
+    [
+      "opencode",
+      "1 upstream provider connected through OpenCode.",
+      "已通过 OpenCode 连接 1 个上游模型提供方。",
+    ],
+    [
+      "opencode",
+      "2 upstream providers connected through OpenCode.",
+      "已通过 OpenCode 连接 2 个上游模型提供方。",
+    ],
+    [
+      "opencode",
+      "1 upstream provider connected through the configured OpenCode server.",
+      "已通过配置的 OpenCode 服务端连接 1 个上游模型提供方。",
+    ],
+    [
+      "opencode",
+      "2 upstream providers connected through the configured OpenCode server.",
+      "已通过配置的 OpenCode 服务端连接 2 个上游模型提供方。",
+    ],
+    ["opencode", "OpenCode 2.0.3 lists 1 model.", "OpenCode 2.0.3 列出了 1 个模型。"],
+    ["opencode", "OpenCode 2.0.3 lists 2 models.", "OpenCode 2.0.3 列出了 2 个模型。"],
+    [
+      "pi",
+      "T3 Code could not determine the Pi version. Pi 0.61.0 or newer is required.",
+      "T3 Code 无法确定 Pi 的版本。需要 Pi 0.61.0 或更高版本。",
+    ],
+    [
+      "pi",
+      "Pi 0.60.0 is unsupported. Update to Pi 0.61.0 or newer.",
+      "不支持 Pi 0.60.0。请升级至 Pi 0.61.0 或更高版本。",
+    ],
+    [
+      "pi",
+      "Pi launch argument '--mode' is controlled by T3 Code and cannot be overridden.",
+      "Pi 启动参数 '--mode' 由 T3 Code 管理，不能覆盖。",
+    ],
+    ["pi", "Pi launch argument '--model' requires a value.", "Pi 启动参数 '--model' 需要指定值。"],
+    [
+      "pi",
+      "Pi launch argument '-q' is not supported by T3 Code.",
+      "T3 Code 不支持 Pi 启动参数 '-q'。",
+    ],
+    [
+      "pi",
+      "Pi launch arguments cannot include positional prompt 'Keep 'quoted' 原文\nand /tmp/path'.",
+      "Pi 启动参数不能包含位置提示词 'Keep 'quoted' 原文\nand /tmp/path'。",
+    ],
+    ["grok", "spawn /tmp/grok 原文: permission denied", "spawn /tmp/grok 原文: permission denied"],
+    [
+      "pi",
+      "Pi launch argument '--model' requires a value. Keep extra diagnostic",
+      "Pi launch argument '--model' requires a value. Keep extra diagnostic",
+    ],
+  ])("preserves provider parameters and diagnostics: %s %s", (driver, message, chinese) => {
+    const status: ServerProvider = {
+      ...provider,
+      driver: ProviderDriverKind.make(driver),
+      status: "warning",
+      message,
+    };
+    expect(getProviderSummary(status, createI18n({ lng: "zh" }).t).detail).toBe(chinese);
+    expect(getProviderSummary(status, createI18n({ lng: "en" }).t).detail).toBe(message);
+    expect(status.message).toBe(message);
+  });
+
+  it.each([
+    ["Cursor account", "Cursor 账号"],
+    ["Cursor API key", "Cursor API 密钥"],
+    ["Cursor API key (QA (原文) & <keep>)", "Cursor API 密钥（QA (原文) & <keep>）"],
+    ["Company login 原文", "Company login 原文"],
+  ])("localizes Cursor-owned account labels and keeps names intact: %s", (label, chinese) => {
+    const status: ServerProvider = {
+      ...provider,
+      driver: ProviderDriverKind.make("cursor"),
+      auth: { status: "authenticated", label },
+    };
+    expect(getProviderSummary(status, createI18n({ lng: "zh" }).t).headline).toBe(
+      `已认证 · ${chinese}`,
+    );
+    expect(getProviderSummary(status, createI18n({ lng: "en" }).t).headline).toBe(
+      `Authenticated · ${label}`,
+    );
+    expect(
+      getProviderSummary(
+        { ...status, auth: { status: "unauthenticated", label } },
+        createI18n({ lng: "zh" }).t,
+      ).headline,
+    ).toBe(`未认证 · ${chinese}`);
+    expect(status.auth.label).toBe(label);
+  });
+
+  it("keeps an externally advertised authentication label unchanged", () => {
+    expect(
+      getProviderSummary(
+        { ...provider, auth: { status: "authenticated", label: "Cursor account" } },
+        createI18n({ lng: "zh" }).t,
+      ).headline,
+    ).toBe("已认证 · Cursor account");
+  });
+
+  it.each([
+    ["Grok account", "Grok 账号"],
+    ["xAI API key", "xAI API 密钥"],
+    ["Company login 原文", "Company login 原文"],
+  ])("localizes Grok-owned authentication labels: %s", (label, chinese) => {
+    const status: ServerProvider = {
+      ...provider,
+      driver: ProviderDriverKind.make("grok"),
+      auth: { status: "authenticated", label },
+    };
+    expect(getProviderSummary(status, createI18n({ lng: "zh" }).t).headline).toBe(
+      `已认证 · ${chinese}`,
+    );
+    expect(getProviderSummary(status, createI18n({ lng: "en" }).t).headline).toBe(
+      `Authenticated · ${label}`,
+    );
+  });
+
   it("reports ready providers with unknown authentication as available", () => {
     expect(getProviderSummary({ ...provider, auth: { status: "unknown" } })).toEqual({
       headline: "Available",

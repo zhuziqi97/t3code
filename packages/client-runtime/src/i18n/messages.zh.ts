@@ -5590,4 +5590,89 @@ export const zh: Partial<Messages> = {
     "暂时无法检查 Codex。请重试，或在智能体提供方设置中重新连接。",
   "appearance.theme.error.jsonSyntax": "主题 JSON 解析失败：{{detail}}",
   "diagnostics.monitor.binary.not-executable": "资源监控程序“{{path}}”不可执行。",
+  "provider.status.cursorDisabled": "已在 T3 Code 设置中停用 Cursor。",
+  "provider.status.cursorChecking": "正在检查 Cursor SDK 是否可用…",
+  "provider.status.cursorSignIn":
+    "请使用 Cursor 账号登录，或在智能体提供方设置中添加 CURSOR_API_KEY。",
+  "provider.status.cursorSignInRejected":
+    "Cursor 登录已过期或被拒绝。请在智能体提供方设置中重新登录。",
+  "provider.status.cursorAuthFailed": "Cursor SDK 认证失败。请检查 CURSOR_API_KEY。",
+  "provider.status.cursorCatalogFailed": "Cursor SDK 模型目录请求失败。详情请查看服务端日志。",
+  "provider.status.cursorNoModels": "Cursor SDK 未发现内置模型。",
+  "provider.status.grokDisabled": "已在 T3 Code 设置中停用 Grok。",
+  "provider.status.grokChecking": "正在检查 Grok CLI 是否可用…",
+  "provider.status.grokMissing": "Grok CLI（`grok`）尚未安装，或不在 PATH 中。",
+  "provider.status.grokHealthFailed": "无法执行 Grok CLI 健康检查。",
+  "provider.status.grokTimeout": "Grok CLI 已安装，但运行 `grok --version` 时超时。",
+  "provider.status.grokRunFailed": "Grok CLI 已安装，但无法运行。",
+  "provider.status.grokUnauthenticated": "Grok CLI 已安装，但尚未登录。请运行 `grok login`。",
+  "provider.status.grokAcpFailed": "Grok CLI 已安装，但 ACP 初始化失败。模型选项可能不完整。",
+  "provider.status.opencodeDisabled": "已在 T3 Code 设置中停用 OpenCode。",
+  "provider.status.opencodeServerDisabled":
+    "已在 T3 Code 设置中停用 OpenCode，且已配置服务端 URL。",
+  "provider.status.opencodeUnchecked": "本次启动后尚未检查 OpenCode 状态。",
+  "provider.status.opencodeAuthFailed": "OpenCode 服务端拒绝认证。请检查服务端 URL 和密码。",
+  "provider.status.opencodeConnectFailed": "无法连接已配置的 OpenCode 服务端。",
+  "provider.status.opencodeMissing": "OpenCode CLI（`opencode`）尚未安装，或不在 PATH 中。",
+  "provider.status.opencodeQuarantine":
+    "macOS 已阻止 OpenCode 可执行文件运行（隔离标记）。请运行 `xattr -d com.apple.quarantine $(which opencode)` 解除隔离。",
+  "provider.status.opencodeSignature":
+    "macOS 因代码签名无效而终止了 OpenCode 进程。可执行文件可能已损坏，请尝试重新安装 OpenCode。",
+  "provider.status.opencodeInventoryFailed": "无法加载 OpenCode 智能体提供方清单。",
+  "provider.status.opencodeHealthFailed": "无法执行 OpenCode CLI 健康检查。",
+  "provider.status.opencodeModelsFailed": "OpenCode 无法加载模型列表。",
+  "provider.status.opencodeNoModels": "OpenCode 2 正在运行，但尚未列出模型。",
+  "provider.status.opencodeServerNoUpstreams":
+    "已连接配置的 OpenCode 服务端，但未报告已连接的上游模型提供方。",
+  "provider.status.opencodeNoUpstreams": "OpenCode 可用，但未报告已连接的上游模型提供方。",
+  "provider.status.piDisabled": "已在 T3 Code 设置中停用 Pi。",
+  "provider.status.piChecking": "正在检查 Pi CLI 是否可用…",
+  "provider.status.piMissing":
+    "Pi CLI（`pi`）尚未安装，或不在 PATH 中。请运行 `npm install -g @earendil-works/pi-coding-agent` 安装。",
+  "provider.status.piHealthFailed": "无法执行 Pi CLI 健康检查。",
+  "provider.status.piTimeout": "Pi CLI 已安装，但运行 `pi --version` 时超时。",
+  "provider.status.piRunFailed": "Pi CLI 已安装，但无法运行。",
+  "provider.status.piDiscoveryFailed":
+    "Pi 可用，但 T3 Code 无法刷新其模型和命令。实际会话启动时会重试。",
+  "provider.status.piDiscoveryInteractive":
+    "Pi 可用，但发现模型和命令需要交互输入。实际会话启动时会处理。",
+  "provider.status.piNoModels":
+    "Pi 没有可用模型。请在终端运行 `pi` 后使用 /login，或在 ~/.pi/agent 中配置 API 密钥。",
+  "provider.status.piNoPositionalPrompts": "Pi 启动参数不能包含位置提示词。",
+  "provider.status.piProviderRequiresModel": "Pi 启动参数 '--provider' 需要同时指定 '--model'。",
+  "provider.status.museChecking": "正在检查 Muse Code CLI 是否可用…",
+  "provider.status.museDisabled": "已在 T3 Code 设置中停用 Muse Code。",
+  "provider.status.museMissing":
+    "未找到 Muse Code CLI（`muse`）。请在此 T3 服务端主机上安装 Muse Code 并运行 `muse login`。",
+  "provider.status.museHealthFailed":
+    "无法执行 Muse Code CLI。请检查其在此 T3 服务端主机上的可执行文件路径。",
+  "provider.status.museTimeout": "Muse Code CLI 版本检查超时。",
+  "provider.status.museRunFailed": "Muse Code CLI 已安装，但无法运行。",
+  "provider.status.museCatalogFailed":
+    "Muse Code SDK 无法读取模型目录。请检查 Muse 的安装，并在此 T3 服务端主机上运行 `muse login`。",
+  "provider.status.museNoModels":
+    "Muse Code 未返回模型。请在此 T3 服务端主机上运行 `muse login` 后刷新状态。",
+  "provider.status.cursorTimeout": "Cursor SDK 模型目录请求在 {{milliseconds}} 毫秒后超时。",
+  "provider.status.opencodeInventoryDetail": "无法加载 OpenCode 智能体提供方清单：{{detail}}",
+  "provider.status.opencodeHealthDetail": "无法执行 OpenCode CLI 健康检查：{{detail}}",
+  "provider.status.opencodeServerUnreachable":
+    "无法连接已配置的 OpenCode 服务端 {{url}}。请检查服务端是否正在运行，以及 URL 是否正确。",
+  "provider.status.opencodeOldVersion":
+    "OpenCode v{{version}} 版本过旧。请升级至 v{{minimum}} 或更高版本。",
+  "provider.status.opencodeUpstreams_other": "已通过 OpenCode 连接 {{count}} 个上游模型提供方。",
+  "provider.status.opencodeServerUpstreams_other":
+    "已通过配置的 OpenCode 服务端连接 {{count}} 个上游模型提供方。",
+  "provider.status.opencodeModelCount_other": "OpenCode {{version}} 列出了 {{count}} 个模型。",
+  "provider.status.piUnknownVersion":
+    "T3 Code 无法确定 Pi 的版本。需要 Pi {{minimum}} 或更高版本。",
+  "provider.status.piOldVersion": "不支持 Pi {{version}}。请升级至 Pi {{minimum}} 或更高版本。",
+  "provider.status.piControlledArgument": "Pi 启动参数 '{{argument}}' 由 T3 Code 管理，不能覆盖。",
+  "provider.status.piArgumentValue": "Pi 启动参数 '{{argument}}' 需要指定值。",
+  "provider.status.piUnsupportedArgument": "T3 Code 不支持 Pi 启动参数 '{{argument}}'。",
+  "provider.status.piPositionalPrompt": "Pi 启动参数不能包含位置提示词 '{{prompt}}'。",
+  "provider.auth.cursorAccount": "Cursor 账号",
+  "provider.auth.grokAccount": "Grok 账号",
+  "provider.auth.xaiApiKey": "xAI API 密钥",
+  "provider.auth.cursorApiKey": "Cursor API 密钥",
+  "provider.auth.cursorNamedApiKey": "Cursor API 密钥（{{name}}）",
 };
