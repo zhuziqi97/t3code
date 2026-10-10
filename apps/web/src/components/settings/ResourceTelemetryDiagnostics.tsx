@@ -360,7 +360,7 @@ function HealthSource({ label, health }: { label: string; health: ResourceTeleme
             ? t("diagnostics.health.desktop-description")
             : Option.match(health.lastError, {
                 onNone: () => t("diagnostics.health.no-errors"),
-                onSome: (error) => error,
+                onSome: (error) => formatDiagnosticsMessage(error, t),
               })}
         </div>
       </div>

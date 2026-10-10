@@ -320,6 +320,42 @@ it("translates monitor and host states while preserving collapsed identities, se
   expect(state.refreshHistory).toHaveBeenCalledOnce();
 });
 
+it.each([
+  [
+    "Resource monitor binary was not found for linux/x64.",
+    "未找到适用于 linux/x64 的资源监控程序。",
+  ],
+  ["Resource monitoring is unsupported on freebsd/arm64.", "freebsd/arm64 不支持资源监控。"],
+  [
+    "Resource monitor binary at '/tmp/原始路径/monitor' is not executable.",
+    "资源监控程序“/tmp/原始路径/monitor”不可执行。",
+  ],
+])(
+  "retranslates the current monitor failure %s while retaining its raw identity",
+  async (message, translated) => {
+    state.data = {
+      ...state.data!,
+      health: {
+        ...state.data!.health,
+        native: {
+          ...state.data!.health.native,
+          status: "unavailable",
+          lastError: Option.some(message),
+        },
+      },
+    };
+    await render();
+    expect(document.body.textContent).toContain(message);
+    const subscriptions = state.subscriptions.mock.calls.length;
+    await language("zh");
+    expect(document.body.textContent).toContain(translated);
+    expect(state.subscriptions).toHaveBeenCalledTimes(subscriptions);
+    expect(state.refresh).not.toHaveBeenCalled();
+    await language("en");
+    expect(document.body.textContent).toContain(message);
+  },
+);
+
 it("keeps a single pending retry and reports a known access failure in the completion language", async () => {
   const retry = deferred<ResourceTelemetrySnapshot>();
   state.retry.mockReturnValue(retry.promise);

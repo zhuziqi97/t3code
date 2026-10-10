@@ -5946,6 +5946,10 @@ export const en = {
   "chat.tools.command.failed": "Failed {{program}}",
   "chat.tools.command.declined": "Declined {{program}}",
   "chat.tools.command.stopped": "Stopped {{program}}",
+  "diagnostics.monitor.binary.unsupported": "Resource monitoring is unsupported on {{platform}}.",
+  "diagnostics.monitor.binary.missing": "Resource monitor binary was not found for {{platform}}.",
+  "diagnostics.monitor.binary.not-executable":
+    "Resource monitor binary at '{{path}}' is not executable.",
 } as const;
 
 export type MessageKey = keyof typeof en;

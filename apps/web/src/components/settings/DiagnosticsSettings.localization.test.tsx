@@ -334,6 +334,34 @@ it("keeps expanded diagnostics, collapsed process rows, selected periods and raw
   expect(state.copy).toHaveBeenCalledOnce();
 });
 
+it("retranslates known process and history failures while retaining raw trace diagnostics", async () => {
+  const missing = "Resource monitor binary was not found for linux/x64.";
+  const path = "/tmp/原始路径/monitor";
+  const notExecutable = `Resource monitor binary at '${path}' is not executable.`;
+  state.processes = { ...state.processes!, error: Option.some({ message: missing }) };
+  state.history = {
+    ...state.history!,
+    error: Option.some({
+      failureTag: "ProcessDiagnosticsQueryFailedError",
+      message: notExecutable,
+    }),
+  };
+  await render();
+  await click("Show full error");
+  const subscriptions = state.subscriptions.mock.calls.length;
+  await language("zh");
+  expect(document.body.textContent).toContain("未找到适用于 linux/x64 的资源监控程序。");
+  expect(document.body.textContent).toContain(`资源监控程序“${path}”不可执行。`);
+  expect(document.body.textContent).toContain(longMessage);
+  expect(button("收起").getAttribute("aria-expanded")).toBe("true");
+  expect(state.subscriptions).toHaveBeenCalledTimes(subscriptions);
+  expect(state.refresh).not.toHaveBeenCalled();
+  await language("en");
+  expect(document.body.textContent).toContain(missing);
+  expect(document.body.textContent).toContain(notExecutable);
+  expect(document.body.textContent).toContain(longMessage);
+});
+
 it("preserves pending log opening and re-translates a retained own fallback without reopening", async () => {
   const open = deferred<{ _tag: "Failure" }>();
   state.open.mockReturnValue(open.promise);

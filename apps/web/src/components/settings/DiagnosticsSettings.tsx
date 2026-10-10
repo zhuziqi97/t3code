@@ -1020,13 +1020,13 @@ export function DiagnosticsSettingsPanel() {
             {processDiagnosticsError ? (
               <div className="flex items-start gap-2 text-destructive">
                 <AlertTriangleIcon className="mt-0.5 size-3.5 shrink-0" />
-                <span>{processDiagnosticsError.message}</span>
+                <span>{formatDiagnosticsMessage(processDiagnosticsError.message, t)}</span>
               </div>
             ) : null}
             {processError ? (
               <div className="flex items-start gap-2 text-destructive">
                 <AlertTriangleIcon className="mt-0.5 size-3.5 shrink-0" />
-                <span>{processError}</span>
+                <span>{formatDiagnosticsMessage(processError, t)}</span>
               </div>
             ) : null}
           </div>
@@ -1086,13 +1086,13 @@ export function DiagnosticsSettingsPanel() {
             {processResourceError ? (
               <div className="flex items-start gap-2 text-destructive">
                 <AlertTriangleIcon className="mt-0.5 size-3.5 shrink-0" />
-                <span>{processResourceError.message}</span>
+                <span>{formatDiagnosticsMessage(processResourceError.message, t)}</span>
               </div>
             ) : null}
             {resourceError ? (
               <div className="flex items-start gap-2 text-destructive">
                 <AlertTriangleIcon className="mt-0.5 size-3.5 shrink-0" />
-                <span>{resourceError}</span>
+                <span>{formatDiagnosticsMessage(resourceError, t)}</span>
               </div>
             ) : null}
           </div>

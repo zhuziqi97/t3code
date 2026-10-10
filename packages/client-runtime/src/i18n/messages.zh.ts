@@ -5555,4 +5555,7 @@ export const zh: Partial<Messages> = {
   "chat.tools.command.failed": "{{program}} 运行失败",
   "chat.tools.command.declined": "拒绝运行 {{program}}",
   "chat.tools.command.stopped": "已停止运行 {{program}}",
+  "diagnostics.monitor.binary.unsupported": "{{platform}} 不支持资源监控。",
+  "diagnostics.monitor.binary.missing": "未找到适用于 {{platform}} 的资源监控程序。",
+  "diagnostics.monitor.binary.not-executable": "资源监控程序“{{path}}”不可执行。",
 };
