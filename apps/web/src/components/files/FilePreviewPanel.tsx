@@ -41,6 +41,7 @@ import { FolderTree, Globe2, WrapTextIcon } from "lucide-react";
 import { Code2, Eye, Table2 } from "lucide";
 import * as Schema from "effect/Schema";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { i18n, useTranslate } from "~/i18n";
 
 import { isBrowserPreviewFile, openFileInPreview } from "~/browser/openFileInPreview";
 import { useAssetUrlRefresh, useAssetUrlState } from "~/assets/assetUrls";
@@ -102,8 +103,10 @@ import { DiffCommentAnnotation } from "../diffs/DiffCommentAnnotation";
 import { projectFileCacheKey } from "./fileContentRevision";
 import {
   filePreviewReadErrorMessage,
+  formatFilePreviewErrorMessage,
   isMarkdownPreviewFile,
   resolveFilePreviewPath,
+  renderedToggleLabel,
   setMarkdownTaskChecked,
   shouldShowFileExplorer,
   workspaceAssetResource,
@@ -155,6 +158,7 @@ function WorkspaceImagePreview(props: {
   readonly alt: string;
   readonly workspaceMutationId: string | null;
 }) {
+  const t = useTranslate();
   const resource = useMemo(
     () =>
       workspaceAssetResource({
@@ -185,7 +189,7 @@ function WorkspaceImagePreview(props: {
     return (
       <MediaActions source={actionsSource}>
         <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-xs leading-relaxed text-destructive">
-          Unable to load workspace image.
+          {t("filePreview.error.workspaceImage")}
         </div>
       </MediaActions>
     );
@@ -226,6 +230,7 @@ function WorkspaceBrowserPreview(props: {
   readonly title: string;
   readonly workspaceMutationId: string | null;
 }) {
+  const t = useTranslate();
   const insideWorkspace =
     mediaFileReference(props.absolutePath, props.workspaceRoot).relativePath !== undefined;
   const resource = useMemo(
@@ -248,7 +253,7 @@ function WorkspaceBrowserPreview(props: {
   if (assetUrl._tag === "Failure") {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-xs leading-relaxed text-destructive">
-        Unable to load file preview.
+        {t("filePreview.error.preview")}
       </div>
     );
   }
@@ -337,6 +342,7 @@ function WorkspaceAudioPreview(props: {
   readonly name: string;
   readonly workspaceMutationId: string | null;
 }) {
+  const t = useTranslate();
   const resource = useMemo(
     () =>
       workspaceAssetResource({
@@ -366,7 +372,7 @@ function WorkspaceAudioPreview(props: {
   if (assetUrl._tag === "Failure" || (url !== null && failedUrl === url)) {
     return (
       <FileSurfaceFailure
-        message="Unable to load audio."
+        message={t("filePreview.error.audio")}
         onRetry={() => {
           setFailedUrl(null);
           void refreshAssetUrl().catch(() => undefined);
@@ -1010,12 +1016,6 @@ function RenderedMarkdownSurface({
   );
 }
 
-function renderedToggleLabel(mode: "markdown" | "html" | "table", rendered: boolean): string {
-  if (mode === "markdown") return rendered ? "Show markdown source" : "Show rendered markdown";
-  if (mode === "table") return rendered ? "Show source" : "Show table";
-  return rendered ? "Show HTML source" : "Show rendered page";
-}
-
 function initialExplorerOpen(): boolean {
   try {
     return getLocalStorageItem(FILE_EXPLORER_STORAGE_KEY, Schema.Boolean) ?? true;
@@ -1042,6 +1042,7 @@ export default function FilePreviewPanel({
   selectedFilePending,
   workspaceMutationId,
 }: FilePreviewPanelProps) {
+  const t = useTranslate();
   const relativePath =
     attachment === undefined ? resolveFilePreviewPath(requestedPath, cwd) : requestedPath;
   // A draft's composer target is its draft id; a thread the server knows is a ref.
@@ -1216,8 +1217,11 @@ export default function FilePreviewPanel({
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: "Unable to open file in browser",
-          description: error instanceof Error ? error.message : "An error occurred.",
+          title: i18n.t("filePreview.openBrowserFailed"),
+          description:
+            error instanceof Error
+              ? formatFilePreviewErrorMessage(error.message)
+              : i18n.t("common.error"),
         }),
       );
     })();
@@ -1237,13 +1241,16 @@ export default function FilePreviewPanel({
       return (
         <div className="flex min-h-0 flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
           <Spinner className="size-4" />
-          Checking file access...
+          {t("filePreview.checkingAccess")}
         </div>
       );
     }
     return (
       <div className="p-4 text-sm text-muted-foreground">
-        {fileAccess.error ?? "This connection cannot read host files."}
+        {formatFilePreviewErrorMessage(
+          fileAccess.error ?? "This connection cannot read host files.",
+          t,
+        )}
       </div>
     );
   }
@@ -1283,7 +1290,7 @@ export default function FilePreviewPanel({
           ) : null}
           {canToggleRendered && renderedMode ? (
             <FileSurfaceAction
-              label={renderedToggleLabel(renderedMode, rendered)}
+              label={renderedToggleLabel(renderedMode, rendered, t)}
               pressed={rendered}
               onPress={() => {
                 const pressed = !rendered;
@@ -1303,7 +1310,7 @@ export default function FilePreviewPanel({
           ) : null}
           {showsRawText ? (
             <FileSurfaceAction
-              label={wordWrap ? "Disable word wrap" : "Enable word wrap"}
+              label={t(wordWrap ? "filePreview.disableWrap" : "filePreview.enableWrap")}
               pressed={wordWrap}
               onPress={() => updateClientSettings({ wordWrap: !wordWrap })}
             >
@@ -1311,13 +1318,13 @@ export default function FilePreviewPanel({
             </FileSurfaceAction>
           ) : null}
           {canOpenInBrowser ? (
-            <FileSurfaceAction label="Open file in preview browser" onPress={handleOpenInBrowser}>
+            <FileSurfaceAction label={t("filePreview.openBrowser")} onPress={handleOpenInBrowser}>
               <Globe2 className="size-3.5" />
             </FileSurfaceAction>
           ) : null}
           {!isHostFile && previewPath !== null ? (
             <FileSurfaceAction
-              label={explorerOpen ? "Hide file explorer" : "Show file explorer"}
+              label={t(explorerOpen ? "filePreview.hideExplorer" : "filePreview.showExplorer")}
               pressed={explorerOpen}
               onPress={toggleExplorer}
             >
@@ -1328,7 +1335,7 @@ export default function FilePreviewPanel({
       ) : null}
       {relativePath && !attachment && !isHostFile && !canWriteFiles && !fileAccess.isPending ? (
         <div className="shrink-0 border-b px-3 py-1.5 text-2xs text-muted-foreground">
-          Read-only connection. Unsaved edits are kept until write access returns.
+          {t("filePreview.readOnly")}
         </div>
       ) : null}
       {previewPath &&
@@ -1337,7 +1344,7 @@ export default function FilePreviewPanel({
       !renderBrowserFile &&
       file.data?.truncated ? (
         <div className="shrink-0 border-b border-warning/20 bg-warning-surface px-3 py-1.5 text-2xs text-warning-foreground">
-          Preview limited to the first 1 MB of a {file.data.byteLength.toLocaleString()} byte file.
+          {t("filePreview.limit", { bytes: file.data.byteLength.toLocaleString() })}
         </div>
       ) : null}
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -1404,11 +1411,13 @@ export default function FilePreviewPanel({
             >
               <div className="my-auto flex shrink-0 flex-col gap-3 px-6 py-6 text-center text-xs leading-relaxed">
                 <p className="text-destructive">
-                  {file.readError ? filePreviewReadErrorMessage(file.readError) : file.error}
+                  {file.readError
+                    ? filePreviewReadErrorMessage(file.readError, t)
+                    : formatFilePreviewErrorMessage(file.error, t)}
                 </p>
                 {attemptedPath ? (
                   <p className="text-muted-foreground">
-                    Attempted path
+                    {t("filePreview.attemptedPath")}
                     <code className="block break-all font-mono text-foreground select-all">
                       {attemptedPath}
                     </code>
@@ -1416,11 +1425,11 @@ export default function FilePreviewPanel({
                 ) : null}
                 {!isHostFile ? (
                   <p className="text-muted-foreground">
-                    Workspace folder:{" "}
+                    {t("filePreview.workspaceFolder")}{" "}
                     <code className="break-all font-mono select-all">
                       {file.readError?.cwd ?? cwd}
                     </code>
-                    . Check the link's path or locate the file in Files.
+                    {t("filePreview.locateFile")}
                   </p>
                 ) : null}
               </div>
