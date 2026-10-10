@@ -28,20 +28,72 @@ describe("getTerminalLabel", () => {
 describe("resolveTerminalSessionLabel", () => {
   it("localizes generated labels while preserving a custom session name and raw id", () => {
     expect(resolveTerminalSessionLabel("term-2", null, "终端")).toBe("终端 2");
-    expect(resolveTerminalSessionLabel("term-2", { label: "User's Terminal 2" }, "终端")).toBe(
-      "User's Terminal 2",
-    );
+    expect(
+      resolveTerminalSessionLabel(
+        "term-2",
+        { label: "User's Terminal 2", hasRunningSubprocess: false },
+        "终端",
+      ),
+    ).toBe("User's Terminal 2");
     expect(resolveTerminalSessionLabel("custom-session", undefined, "终端")).toBe("custom-session");
   });
   it("prefers a non-empty summary label", () => {
-    const summary = { label: "  bun  " } as Pick<TerminalSummary, "label">;
+    const summary = { label: "  bun  ", hasRunningSubprocess: true } satisfies Pick<
+      TerminalSummary,
+      "label" | "hasRunningSubprocess"
+    >;
     expect(resolveTerminalSessionLabel("term-1", summary)).toBe("bun");
   });
 
   it("falls back to getTerminalLabel when summary is missing or blank", () => {
-    expect(resolveTerminalSessionLabel(DEFAULT_TERMINAL_ID, { label: "   " })).toBe("Terminal 1");
+    expect(
+      resolveTerminalSessionLabel(DEFAULT_TERMINAL_ID, {
+        label: "   ",
+        hasRunningSubprocess: false,
+      }),
+    ).toBe("Terminal 1");
     expect(resolveTerminalSessionLabel(DEFAULT_TERMINAL_ID, null)).toBe("Terminal 1");
     expect(resolveTerminalSessionLabel("term-2", undefined)).toBe("Terminal 2");
+  });
+
+  it("translates a host-generated idle label, including terminals allocated without metadata", () => {
+    expect(
+      resolveTerminalSessionLabel(
+        "term-1",
+        { label: "Terminal 1", hasRunningSubprocess: false },
+        "终端",
+      ),
+    ).toBe("终端 1");
+    expect(
+      resolveTerminalSessionLabel("term-1", { label: "Terminal 1", hasRunningSubprocess: false }),
+    ).toBe("Terminal 1");
+    expect(
+      resolveTerminalSessionLabel(
+        "term-2-783c91cc-a413-47c7-8312-c2a5a1f05e40",
+        { label: "Terminal 2", hasRunningSubprocess: false },
+        "终端",
+      ),
+    ).toBe("终端 2");
+  });
+
+  it("preserves a running process label even if it matches the generated terminal name", () => {
+    expect(
+      resolveTerminalSessionLabel(
+        "term-1",
+        { label: "Terminal 1", hasRunningSubprocess: true },
+        "终端",
+      ),
+    ).toBe("Terminal 1");
+    expect(
+      resolveTerminalSessionLabel("term-1", { label: "npm", hasRunningSubprocess: true }, "终端"),
+    ).toBe("npm");
+    expect(
+      resolveTerminalSessionLabel(
+        "raw-id",
+        { label: "raw-id", hasRunningSubprocess: false },
+        "终端",
+      ),
+    ).toBe("raw-id");
   });
 });
 
