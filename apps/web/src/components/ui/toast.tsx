@@ -69,10 +69,27 @@ export type ThreadToastData = {
     | "secondary";
 };
 
-const toastManager = Toast.createToastManager<ThreadToastData>();
-const anchoredToastManager = Toast.createToastManager<ThreadToastData>();
-type ToastId = ReturnType<typeof toastManager.add>;
-const threadToastVisibleTimeoutRemainingMs = new Map<ToastId, number>();
+type ToastManager = ReturnType<typeof Toast.createToastManager<ThreadToastData>>;
+type ToastId = ReturnType<ToastManager["add"]>;
+const hotData = import.meta.hot?.data as
+  | {
+      toastManager?: ToastManager;
+      anchoredToastManager?: ToastManager;
+      threadToastVisibleTimeoutRemainingMs?: Map<ToastId, number>;
+    }
+  | undefined;
+
+// Pending operations must keep publishing to the provider's manager after a hot update.
+const toastManager = hotData?.toastManager ?? Toast.createToastManager<ThreadToastData>();
+const anchoredToastManager =
+  hotData?.anchoredToastManager ?? Toast.createToastManager<ThreadToastData>();
+const threadToastVisibleTimeoutRemainingMs =
+  hotData?.threadToastVisibleTimeoutRemainingMs ?? new Map<ToastId, number>();
+if (hotData) {
+  hotData.toastManager = toastManager;
+  hotData.anchoredToastManager = anchoredToastManager;
+  hotData.threadToastVisibleTimeoutRemainingMs = threadToastVisibleTimeoutRemainingMs;
+}
 
 const TOAST_ICONS = {
   error: CircleAlertIcon,
