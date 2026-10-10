@@ -12,6 +12,8 @@ import {
   type EnvironmentId,
 } from "@t3tools/contracts";
 import { useCallback, useMemo } from "react";
+import type { TFunction } from "i18next";
+import { i18n, useTranslate } from "./i18n";
 
 import { resolveDiffPathForWorkspace } from "./diffFileActions";
 import {
@@ -76,15 +78,18 @@ export interface FileContextMenuCapabilities {
  * advertises: default-app open, reveal (with server-provided wording), and an
  * "Open with" submenu of detected editors. Empty when nothing can act.
  */
-export function buildFileContextMenuItems(input: {
-  readonly hasAbsolutePath: boolean;
-  readonly capabilities: FileContextMenuCapabilities;
-}): readonly ContextMenuItem<FileContextMenuAction>[] {
+export function buildFileContextMenuItems(
+  input: {
+    readonly hasAbsolutePath: boolean;
+    readonly capabilities: FileContextMenuCapabilities;
+  },
+  t: TFunction = i18n.t,
+): readonly ContextMenuItem<FileContextMenuAction>[] {
   // Without a resolvable absolute path nothing here can act on the file.
   if (!input.hasAbsolutePath) return [];
   const items: ContextMenuItem<FileContextMenuAction>[] = [];
   if (input.capabilities.canOpenDefault) {
-    items.push({ id: "open", label: "Open", icon: "pencil" });
+    items.push({ id: "open", label: t("fileMenu.open"), icon: "pencil" });
   }
   if (input.capabilities.revealLabel !== undefined) {
     items.push({
@@ -97,7 +102,7 @@ export function buildFileContextMenuItems(input: {
   if (editorIds.length > 0) {
     items.push({
       id: "open-with",
-      label: "Open with",
+      label: t("fileMenu.openWith"),
       children: editorIds.map((editorId) => ({
         id: `editor:${editorId}` as FileContextMenuAction,
         label: EDITOR_LABEL_BY_ID.get(editorId) ?? editorId,
@@ -114,6 +119,7 @@ export function buildFileContextMenuItems(input: {
  */
 /** Builds and dispatches the file context menu for one environment's files. */
 export function useFileContextMenu(environmentId: EnvironmentId | null) {
+  const t = useTranslate();
   const openInEditor = useAtomCommand(shellEnvironment.openInEditor, { reportFailure: false });
   const serverConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId));
 
@@ -127,8 +133,8 @@ export function useFileContextMenu(environmentId: EnvironmentId | null) {
         serverConfig?.shellRevealInFileManager === true &&
         serverConfig.availableEditors.includes("file-manager")
           ? serverConfig.shellRevealInFileManagerKind === undefined
-            ? revealInFileExplorerLabelForOs(serverConfig.environment.platform.os)
-            : revealInFileExplorerLabelForKind(serverConfig.shellRevealInFileManagerKind)
+            ? revealInFileExplorerLabelForOs(serverConfig.environment.platform.os, t)
+            : revealInFileExplorerLabelForKind(serverConfig.shellRevealInFileManagerKind, t)
           : undefined,
       canOpenDefault: availableEditors.includes("file-manager"),
       editorIds: availableEditors,
@@ -157,10 +163,12 @@ export function useFileContextMenu(environmentId: EnvironmentId | null) {
         type: "error",
         title:
           action === "open"
-            ? "Could not open file"
+            ? i18n.t("fileMenu.openFailed")
             : reveal
-              ? "Unable to reveal file"
-              : `Could not open in ${EDITOR_LABEL_BY_ID.get(editor) ?? editor}`,
+              ? i18n.t("fileMenu.revealFailed")
+              : i18n.t("fileMenu.editorFailed", {
+                  editor: EDITOR_LABEL_BY_ID.get(editor) ?? editor,
+                }),
         description: absolutePath,
       });
     };
@@ -170,10 +178,13 @@ export function useFileContextMenu(environmentId: EnvironmentId | null) {
       position?: { x: number; y: number },
     ): Promise<void> => {
       const api = readLocalApi();
-      const items = buildFileContextMenuItems({
-        hasAbsolutePath: resolveFileContextMenuAbsolutePath(target) !== null,
-        capabilities,
-      });
+      const items = buildFileContextMenuItems(
+        {
+          hasAbsolutePath: resolveFileContextMenuAbsolutePath(target) !== null,
+          capabilities,
+        },
+        t,
+      );
       if (items.length === 0 || api === undefined) return;
       const clicked = await api.contextMenu.show(items, position);
       if (clicked === null) return;
@@ -182,15 +193,18 @@ export function useFileContextMenu(environmentId: EnvironmentId | null) {
 
     return {
       buildItems: (target: FileContextMenuTarget) =>
-        buildFileContextMenuItems({
-          hasAbsolutePath: resolveFileContextMenuAbsolutePath(target) !== null,
-          capabilities,
-        }),
+        buildFileContextMenuItems(
+          {
+            hasAbsolutePath: resolveFileContextMenuAbsolutePath(target) !== null,
+            capabilities,
+          },
+          t,
+        ),
       capabilities,
       activate,
       show,
     };
-  }, [environmentId, openInEditor, serverConfig]);
+  }, [environmentId, openInEditor, serverConfig, t]);
 }
 
 /** Convenience callback for onContextMenu handlers. */
