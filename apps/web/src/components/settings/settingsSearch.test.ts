@@ -51,6 +51,14 @@ const ITEMS: ReadonlyArray<SettingsSearchItem> = [
 ];
 
 describe("searchSettings", () => {
+  it("finds the existing connection entries for relay installation and server update in Chinese", async () => {
+    await changeLanguage("zh");
+    expect(searchSettings("安装中继").map((item) => item.id)).toContain("t3-connect");
+    expect(searchSettings("服务端更新").map((item) => item.id)).toContain("remote-environments");
+    expect(searchSettings("重新启动命令").map((item) => item.id)).toContain(
+      "connections-environment",
+    );
+  });
   it.each(["send shortcut", "multiline", "new line"])("finds Send shortcut for %s", (query) => {
     expect(searchSettings(query).map((item) => item.id)).toContain("send-shortcut");
   });
@@ -239,6 +247,12 @@ describe("searchSettings", () => {
     expect(remoteOnly).not.toContain("wsl-backend");
     // Browsers without access:write still render CloudLinkRow for their host.
     const browser = filterAvailableSettingsSearchItems(availability).map((item) => item.id);
+    expect(browser).toContain("t3-connect");
+    expect(
+      searchSettings("T3 Connect", filterAvailableSettingsSearchItems(availability)),
+    ).toContainEqual(
+      expect.objectContaining({ id: "t3-connect", targetId: "connections-environment" }),
+    );
     expect(browser).toContain("publish-agent-activity");
   });
 

@@ -3098,7 +3098,7 @@ export default function ChatView(props: ChatViewProps) {
             serverConfig?.environment.label ??
             activeThread.environmentId,
         })
-      : "server";
+      : t("server.update.server");
   const serverUpdateEnvironmentId = activeThread?.environmentId ?? null;
   const versionMismatchSelfUpdate = resolveServerSelfUpdateCapability(serverConfig);
   const versionMismatchInstallation = serverConfig?.environment.capabilities.serverInstallation;
@@ -3217,7 +3217,7 @@ export default function ChatView(props: ChatViewProps) {
           !updateFailed &&
           versionMismatchSelfUpdate !== null &&
           (versionMismatchSelfUpdate !== "desktop-managed" || !versionMismatchDesktopAppUpdate)
-            ? serverUpdateGuidance(versionMismatchSelfUpdate)
+            ? serverUpdateGuidance(versionMismatchSelfUpdate, t)
             : undefined,
         actions: updateInProgress ? (
           disconnectAction
@@ -3232,7 +3232,7 @@ export default function ChatView(props: ChatViewProps) {
             desktopAppUpdate={versionMismatchDesktopAppUpdate}
             threadContinuation={versionMismatchThreadContinuation}
             targetVersion={versionMismatch.clientVersion}
-            label={updateFailed ? t("common.retry") : "Update"}
+            label={updateFailed ? t("common.retry") : t("connections.update")}
             variant="ghost"
           />
         ),

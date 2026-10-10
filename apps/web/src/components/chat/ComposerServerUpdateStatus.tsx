@@ -4,7 +4,7 @@ import type { ServerUpdateState } from "@t3tools/client-runtime/state/server";
 import { CircleAlertIcon, DownloadIcon } from "lucide-react";
 import { useId, useState } from "react";
 
-import { serverUpdateStageLabel } from "../ServerUpdateAction";
+import { formatServerUpdateMessage, serverUpdateStageLabel } from "../ServerUpdateAction.logic";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { ComposerBanner } from "./ComposerBanner";
 
@@ -25,7 +25,7 @@ export function ComposerServerUpdateIcon({
 /** One text line, clipped at the end so the error detail never squeezes its title. */
 export function ComposerServerUpdateStatus({
   state,
-  serverLabel = "server",
+  serverLabel,
 }: {
   readonly state: Exclude<ServerUpdateState, { status: "idle" }>;
   readonly serverLabel?: string;
@@ -33,8 +33,14 @@ export function ComposerServerUpdateStatus({
   const t = useTranslate();
   const [detailsOpen, setDetailsOpen] = useState(false);
   const triggerId = useId();
-  const title = `${state.status === "failed" ? t("chat.update.failedPrefix") : "Updating"} ${serverLabel}`;
-  const detail = state.status === "failed" ? state.message : serverUpdateStageLabel(state.stage);
+  const title = t(
+    state.status === "failed" ? "server.update.environmentFailedPrefix" : "server.update.updating",
+    { server: serverLabel ?? t("server.update.server") },
+  );
+  const detail =
+    state.status === "failed"
+      ? formatServerUpdateMessage(state.message, t)
+      : serverUpdateStageLabel(state.stage, t);
   return (
     <span
       role={state.status === "failed" ? "alert" : "status"}

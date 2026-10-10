@@ -1339,8 +1339,10 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "T3 Connect",
     to: "/settings/connections",
     targetId: "connections-environment",
-    searchTerms: ["managed tunnel cloud other devices remote", "隧道 远程 云端 其他设备"],
-    desktopOnly: true,
+    searchTerms: [
+      "managed tunnel cloud other devices remote relay client installation installer",
+      "隧道 远程 云端 其他设备 中继客户端 安装中继",
+    ],
     cloudOnly: true,
   },
   {
@@ -1370,8 +1372,8 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "This machine",
     to: "/settings/connections",
     searchTerms: [
-      "connections server backend local remote access administrative permissions scope pairing links qr code authorized clients sessions revoke endpoint",
-      "本机 权限 已授权 客户端 配对 凭据 撤销",
+      "connections server backend local remote access administrative permissions scope pairing links qr code authorized clients sessions revoke endpoint update restart relaunch command",
+      "本机 权限 已授权 客户端 配对 凭据 撤销 服务端更新 更新执行环境 重新启动命令",
     ],
   },
   {
@@ -1379,8 +1381,8 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "Environments",
     to: "/settings/connections",
     searchTerms: [
-      "add pair backend host code ssh config agent tunnel saved t3 connect",
-      "远程 设备 连接 主机 配对 SSH 路由",
+      "add pair backend host code ssh config agent tunnel saved t3 connect server update restart relaunch command",
+      "远程 设备 连接 主机 配对 SSH 路由 服务端更新 更新执行环境 重新启动命令",
     ],
   },
   {

@@ -16,7 +16,8 @@ const testState = vi.hoisted(() => ({
   sessionAtom: Symbol("session"),
 }));
 
-vi.mock("~/hooks/useCopyToClipboard", () => ({
+vi.mock("~/hooks/useCopyToClipboard", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/hooks/useCopyToClipboard")>()),
   useCopyToClipboard: (options: { onCopy: (context: { command: string }) => void }) => ({
     copyToClipboard: (command: string, context: { command: string }) => {
       testState.clipboard(command);
@@ -24,6 +25,10 @@ vi.mock("~/hooks/useCopyToClipboard", () => ({
     },
   }),
 }));
+vi.mock("../i18n", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../i18n")>();
+  return { ...actual, useTranslate: () => actual.i18n.t };
+});
 vi.mock("~/hooks/useSettings", () => ({
   useEnvironmentSettings: (
     _environmentId: EnvironmentId,
@@ -59,6 +64,14 @@ import {
   ServerUpdatesAction,
   type ServerUpdateTarget,
 } from "./ServerUpdateAction";
+import { changeLanguage } from "../i18n";
+
+beforeEach(async () => {
+  await changeLanguage("en");
+});
+afterEach(async () => {
+  await changeLanguage("en");
+});
 
 const decodeSessionState = Schema.decodeUnknownSync(AuthSessionState);
 
@@ -221,6 +234,41 @@ describe("ServerUpdateAction", () => {
       description: "Reconnected on t3@0.0.31.",
     });
   });
+
+  it.each(["success", "failure"] as const)(
+    "uses the completion language for a delayed %s and keeps raw result details",
+    async (outcome) => {
+      let finishUpdate: (() => void) | undefined;
+      testState.updateServer.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            finishUpdate = () =>
+              resolve(
+                outcome === "success"
+                  ? AsyncResult.success({
+                      targetVersion: "0.0.45-nightly.20261010.17",
+                      method: "boot-service" as const,
+                    })
+                  : AsyncResult.failure(Cause.fail(new Error("Network /tmp/原文 404"))),
+              );
+          }),
+      );
+      renderAction().props.onClick?.();
+      expect(testState.toast).not.toHaveBeenCalled();
+      await changeLanguage("zh");
+      finishUpdate?.();
+      await flushPromises();
+      expect(testState.toast).toHaveBeenCalledWith(
+        outcome === "success"
+          ? {
+              type: "success",
+              title: "Test server 已更新",
+              description: "已重新连接，当前版本为 t3@0.0.45-nightly.20261010.17。",
+            }
+          : { type: "error", title: "服务端更新失败", description: "Network /tmp/原文 404" },
+      );
+    },
+  );
 
   it("reports one result when the update action is double-clicked", async () => {
     let finishUpdate: (() => void) | undefined;
