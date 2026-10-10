@@ -1,7 +1,7 @@
 import type { SendUserTurnOptions } from "@muse-code/sdk";
 import { ModelCapabilities, ServerProviderModel } from "@t3tools/contracts";
 import { MuseSettings } from "../settings.ts";
-import { createModelCapabilities, getProviderOptionDescriptors } from "@t3tools/shared/model";
+import { createModelCapabilities } from "@t3tools/shared/model";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { createMuseSdkHost, createMuseSdkHostEffect, type MuseSdkHost } from "./sdk.ts";
@@ -81,16 +81,10 @@ export function museModelCapabilities(
 
 /** Apply the advertised model choices to saved, remembered and implicit efforts at dispatch. */
 export function resolveMuseReasoningEffort(
-  capabilities: ModelCapabilities | null | undefined,
+  _capabilities: ModelCapabilities | null | undefined,
   effort: string | undefined,
 ): string | undefined {
-  if (!capabilities) return effort;
-  const descriptor = getProviderOptionDescriptors({
-    caps: capabilities,
-    selections: effort ? [{ id: "reasoningEffort", value: effort }] : undefined,
-  }).find((descriptor) => descriptor.id === "reasoningEffort");
-  if (descriptor?.type !== "select") return undefined;
-  return descriptor.options.find((option) => option.id === descriptor.currentValue)?.id;
+  return effort;
 }
 
 class MuseCatalogError extends Schema.TaggedError<MuseCatalogError>()("MuseCatalogError", {

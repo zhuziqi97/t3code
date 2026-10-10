@@ -1,3 +1,5 @@
+import * as Ref from "effect/Ref";
+import type { ModelInfo } from "@anthropic-ai/claude-agent-sdk";
 /**
  * ClaudeDriver — `ProviderDriver` for the Claude Agent SDK runtime.
  *
@@ -45,7 +47,11 @@ import {
 } from "../ClaudeProvider.ts";
 import { makeManagedServerProvider } from "@t3tools/provider-core/server/managedProvider";
 import * as ModelCatalog from "@t3tools/provider-core/server/ModelCatalog";
-import { resolveClaudeModelCatalog } from "../ClaudeModelCatalog.ts";
+import {
+  resolveClaudeModelCatalog,
+  scopeClaudeModelCatalog,
+  withClaudeReportedModels,
+} from "../ClaudeModelCatalog.ts";
 import {
   defaultProviderContinuationIdentity,
   type ProviderDriver,
@@ -65,11 +71,7 @@ import {
   makeProviderSnapshotSettingsSource,
   type ProviderSnapshotSettings,
 } from "@t3tools/provider-core/server/snapshotSettings";
-import {
-  makeClaudeCapabilitiesCacheKey,
-  makeClaudeContinuationGroupKey,
-  resolveClaudeHomePath,
-} from "./ClaudeHome.ts";
+import { makeClaudeContinuationGroupKey, resolveClaudeHomePath } from "./ClaudeHome.ts";
 const decodeClaudeSettings = Schema.decodeSync(ClaudeSettings);
 
 const DRIVER_KIND = ProviderDriverKind.make("claudeAgent");
@@ -125,9 +127,28 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
       const latestVersions = yield* ProviderLatestVersions.ProviderLatestVersions;
       const resetCreditCoordinator = yield* ResetCreditCoordinator.ResetCreditCoordinator;
       const catalogService = yield* ModelCatalog.ModelCatalog;
-      const modelCatalog = catalogService
-        .current(DRIVER_KIND)
-        .pipe(Effect.map(resolveClaudeModelCatalog));
+      const reportedModels = yield* Ref.make<ReadonlyMap<string, ReadonlyArray<ModelInfo>>>(
+        new Map(),
+      );
+      const catalogFor = (workspaceCwd: string) =>
+        catalogService
+          .current(DRIVER_KIND)
+          .pipe(
+            Effect.flatMap((catalog) =>
+              Ref.get(reportedModels).pipe(
+                Effect.map((reported) =>
+                  scopeClaudeModelCatalog(
+                    withClaudeReportedModels(
+                      resolveClaudeModelCatalog(catalog),
+                      reported.get(workspaceCwd) ?? [],
+                    ),
+                    config.customModels,
+                  ),
+                ),
+              ),
+            ),
+          );
+      const modelCatalog = catalogFor(cwd);
       const processEnv = mergeProviderInstanceEnvironment(environment);
       const fallbackContinuationIdentity = defaultProviderContinuationIdentity({
         driverKind: DRIVER_KIND,
@@ -166,6 +187,27 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
         continuationGroupKey,
       });
 
+      // Instance and cwd match execution. A failed refresh keeps the last native catalog.
+      const capabilitiesProbeCache = yield* Cache.make({
+        capacity: 32,
+        timeToLive: CAPABILITIES_PROBE_TTL,
+        lookup: (workspaceCwd: string) =>
+          probeClaudeCapabilities(effectiveConfig, processEnv, workspaceCwd).pipe(
+            Effect.tap((probe) =>
+              probe?.models?.length
+                ? Ref.update(reportedModels, (reported) =>
+                    new Map(reported).set(workspaceCwd, probe.models!),
+                  )
+                : Effect.void,
+            ),
+            Effect.provideService(Path.Path, path),
+          ),
+      });
+      const modelCatalogForCwd = (workspaceCwd: string) =>
+        Cache.get(capabilitiesProbeCache, workspaceCwd).pipe(
+          Effect.andThen(catalogFor(workspaceCwd)),
+        );
+
       const scopedLimitNames = yield* makeClaudeScopedLimitNames;
       const orchestrationAdapter = yield* createClaudeAdapterV2(
         {
@@ -176,7 +218,11 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
           enabled,
           config,
         },
-        { scopedLimitNames, onUsageLimits: (update) => snapshot.applyUsageLimits(update) },
+        {
+          modelCatalog: (workspaceCwd) => modelCatalogForCwd(workspaceCwd ?? cwd),
+          scopedLimitNames,
+          onUsageLimits: (update) => snapshot.applyUsageLimits(update),
+        },
       ).pipe(
         Effect.mapError(
           (cause) =>
@@ -191,23 +237,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
       const textGeneration = yield* makeClaudeTextGeneration(
         effectiveConfig,
         processEnv,
-        modelCatalog,
-      );
-
-      // Per-instance capabilities cache: keyed on binary + resolved HOME so
-      // account-specific probes never share auth metadata across instances.
-      const capabilitiesProbeCache = yield* Cache.make({
-        capacity: 1,
-        timeToLive: CAPABILITIES_PROBE_TTL,
-        lookup: () =>
-          probeClaudeCapabilities(effectiveConfig, processEnv, cwd).pipe(
-            Effect.provideService(Path.Path, path),
-          ),
-      });
-      const capabilitiesCacheKey = yield* makeClaudeCapabilitiesCacheKey(
-        effectiveConfig,
-        cwd,
-        processEnv,
+        modelCatalogForCwd,
       );
 
       // Start the TTL-gated refresh without delaying provider readiness. The
@@ -218,7 +248,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
             Effect.flatMap((catalog) =>
               checkClaudeProviderStatus(
                 effectiveConfig,
-                () => Cache.get(capabilitiesProbeCache, capabilitiesCacheKey),
+                () => Cache.get(capabilitiesProbeCache, cwd),
                 processEnv,
                 cwd,
                 catalog,
@@ -351,7 +381,18 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
         snapshotForCwd: (cwd: string) =>
           snapshot.getSnapshot.pipe(
             Effect.flatMap((machineSnapshot) =>
-              probeClaudeWorkspaceSnapshot(effectiveConfig, machineSnapshot, cwd, processEnv),
+              catalogFor(cwd).pipe(
+                Effect.flatMap((catalog) =>
+                  probeClaudeWorkspaceSnapshot(
+                    effectiveConfig,
+                    machineSnapshot,
+                    cwd,
+                    processEnv,
+                    () => Cache.get(capabilitiesProbeCache, cwd),
+                    catalog,
+                  ),
+                ),
+              ),
             ),
             Effect.provideService(FileSystem.FileSystem, fileSystem),
             Effect.provideService(Path.Path, path),

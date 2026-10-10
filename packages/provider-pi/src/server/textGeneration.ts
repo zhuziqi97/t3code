@@ -58,7 +58,7 @@ export const makePiTextGeneration = Effect.fn("makePiTextGeneration")(function* 
         env: launch.env,
       }).pipe(Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner));
 
-      if (modelSelection.model !== "default") {
+      if (modelSelection.model !== null && modelSelection.model !== "default") {
         // `customModels` accepts arbitrary strings, so an unusable slug is
         // rejected rather than skipped: running Pi's default model here would
         // report success for a model the caller never asked for.

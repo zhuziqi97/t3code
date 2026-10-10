@@ -254,6 +254,15 @@ export function applyGrokAcpModelSelection<E>(input: {
   const reasoningEffort = reasoningProvided
     ? normalizeGrokReasoningEffort(input.requestedReasoningEffort)
     : undefined;
+  if (reasoningProvided && reasoningEffort === undefined) {
+    return Effect.fail(
+      input.mapError(
+        EffectAcpErrors.AcpRequestError.invalidParams(
+          "Grok reasoning effort must be a native effort token.",
+        ),
+      ),
+    );
+  }
   const reasoningEffortChanged =
     reasoningProvided && reasoningEffort !== input.currentReasoningEffort;
   const targetModelId = requestedModelId ?? input.currentModelId;
@@ -262,11 +271,7 @@ export function applyGrokAcpModelSelection<E>(input: {
   }
   const reasoningMeta =
     reasoningProvided && reasoningEffort !== undefined ? { reasoningEffort } : undefined;
-  // When reasoning was explicitly provided but invalid (normalize => undefined), we deliberately
-  // send no meta so the invalid value is dropped rather than forwarded. When reasoning was not
-  // provided at all, we also send no meta, but we only reach this call when the model itself
-  // changed - an omitted reasoning preference must not be treated as an explicit clear of the
-  // CLI-advertised default (e.g. Extra High) on same-model reselections.
+  // Omitted effort keeps the agent's current/default effort on same-model reselections.
   return input.runtime
     .setSessionModel(targetModelId, reasoningMeta)
     .pipe(Effect.mapError(input.mapError), Effect.as(targetModelId));

@@ -281,6 +281,7 @@ it.layer(NodeServices.layer)("Claude capability probe SDK boundary", (it) => {
         tokenSource: "oauth",
         apiKeySource: undefined,
         apiProvider: undefined,
+        models: [],
         slashCommands: [
           {
             name: "review",
@@ -372,5 +373,43 @@ it.effect("asks for usage without the local transcript scan", () =>
     yield* Effect.addFinalizer(() => Effect.sync(() => query.mockRestore()));
     yield* probeClaudeCapabilities(decodeClaudeSettings({ binaryPath: "claude" }));
     assert.deepEqual(usageOptions, { skipBehaviors: true });
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+it.effect("returns initialization while native gateway discovery finishes in the background", () =>
+  Effect.gen(function* () {
+    let abortSignal: AbortSignal | undefined;
+    const query = vi.spyOn(ClaudeSdk, "query").mockImplementation(({ options }) => {
+      abortSignal = options?.abortController?.signal;
+      return {
+        initializationResult: async () => ({
+          commands: [],
+          models: [
+            {
+              value: "claude-gateway-native",
+              displayName: "Gateway Native",
+              description: "",
+              supportsEffort: true,
+              supportedEffortLevels: ["high", "max"],
+            },
+          ],
+        }),
+      } as unknown as ReturnType<typeof ClaudeSdk.query>;
+    });
+    yield* Effect.addFinalizer(() => Effect.sync(() => query.mockRestore()));
+    const capabilities = yield* probeClaudeCapabilities(
+      decodeClaudeSettings({ binaryPath: "claude" }),
+      {
+        ANTHROPIC_BASE_URL: "http://127.0.0.1:12345",
+        CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: "1",
+        CLAUDE_CODE_GATEWAY_MODEL_DISCOVERY_TIMEOUT_MS: "3000",
+      },
+      "/tmp",
+      false,
+    );
+    assert.equal(capabilities?.models?.[0]?.displayName, "Gateway Native");
+    assert.equal(abortSignal?.aborted, false);
+    yield* TestClock.adjust("3 seconds");
+    assert.equal(abortSignal?.aborted, true);
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );

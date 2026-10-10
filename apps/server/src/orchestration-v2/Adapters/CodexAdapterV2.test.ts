@@ -518,6 +518,37 @@ describe("CodexAdapterV2 runtime policy", () => {
     }),
   );
 
+  it.effect("clears old effort and fast tier when a new selection has no overrides", () =>
+    Effect.gen(function* () {
+      const params = yield* CodexAdapterV2.buildCodexTurnStartParams({
+        nativeThreadId: "switch-model",
+        codexInput: [{ type: "text", text: "hello" }],
+        runtimePolicy: { runtimeMode: "full-access", interactionMode: "default", cwd: null },
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "new-native-model" },
+        resetUnspecifiedOptions: true,
+      });
+      assert.isNull(params.effort);
+      assert.isNull(params.serviceTier);
+      assert.equal(params.model, "new-native-model");
+    }),
+  );
+  it.effect("leaves model unset when following the native default", () =>
+    Effect.gen(function* () {
+      const params = yield* CodexAdapterV2.buildCodexTurnStartParams({
+        nativeThreadId: "native-default",
+        codexInput: [{ type: "text", text: "hello" }],
+        runtimePolicy: { runtimeMode: "full-access", interactionMode: "default", cwd: null },
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: null },
+        hasT3Mcp: true,
+        resolvedModel: "native-account-model",
+        resolvedReasoningEffort: "xhigh",
+      });
+      assert.isUndefined(params.model);
+      assert.equal(params.collaborationMode?.settings.model, "native-account-model");
+      assert.equal(params.collaborationMode?.settings.reasoning_effort, "xhigh");
+    }),
+  );
+
   it.effect("omits default-mode collaboration settings without the T3 MCP server", () =>
     Effect.gen(function* () {
       const params = yield* CodexAdapterV2.buildCodexTurnStartParams({
@@ -2756,6 +2787,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
           runtimePolicy: CODEX_TEST_RUNTIME_POLICY,
           modelSelection: CODEX_TEST_MODEL_SELECTION,
           hasT3Mcp: true,
+          resolvedReasoningEffort: "medium",
         });
         assert.include(
           params.additionalContext?.t3_code_orchestration?.value ?? "",

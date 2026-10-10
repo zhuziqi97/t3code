@@ -182,7 +182,7 @@ interface ClaudePromptOfferFrame {
 
 interface ClaudeQuerySetModelFrame {
   readonly type: "query.set_model";
-  readonly model: string;
+  readonly model: string | undefined;
 }
 
 interface ClaudeQuerySetPermissionModeFrame {
@@ -427,7 +427,7 @@ function stableClaudeQueryOptions(
   options: ClaudeAdapterV2.ClaudeAgentSdkQueryOptions,
 ): ClaudeAdapterV2.ClaudeAgentSdkQueryOptions {
   const stable = {
-    model: options.model,
+    ...(options.model === undefined ? {} : { model: options.model }),
     tools: options.tools,
     permissionMode: options.permissionMode,
     ...(options.allowedTools === undefined ? {} : { allowedTools: options.allowedTools }),

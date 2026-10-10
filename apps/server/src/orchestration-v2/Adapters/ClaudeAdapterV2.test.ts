@@ -1,4 +1,5 @@
 import * as NodeOS from "node:os";
+import * as NodeUtil from "node:util";
 
 import type {
   Query as ClaudeQuery,
@@ -9867,11 +9868,17 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         session_id: WAKE_NATIVE_SESSION,
       });
     const goalStatuses = (events: ReadonlyArray<ProviderAdapter.ProviderAdapterV2Event>) =>
-      events.flatMap((event) =>
-        event.type === "provider_thread.updated" && event.providerThread.goal != null
-          ? [event.providerThread.goal]
-          : [],
-      );
+      events
+        .flatMap((event) =>
+          event.type === "provider_thread.updated" && event.providerThread.goal != null
+            ? [event.providerThread.goal]
+            : [],
+        )
+        // Model reports also publish thread snapshots; only goal changes count here.
+        .filter(
+          (goal, index, goals) =>
+            index === 0 || !NodeUtil.isDeepStrictEqual(goal, goals[index - 1]),
+        );
 
     it.effect("tracks a /goal through unmet checks until Claude stops on its own", () =>
       Effect.gen(function* () {

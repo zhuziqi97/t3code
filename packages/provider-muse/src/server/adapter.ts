@@ -312,6 +312,7 @@ export const makeMuseAdapterV2 = Effect.fn("makeMuseAdapterV2")(function* (
       // "default" is the catalog's default model, from the provider snapshot. Without
       // one, Muse keeps whatever model the session already runs.
       const resolveModel = Effect.fnUntraced(function* (selection: ModelSelection) {
+        if (selection.model === null) return undefined;
         if (selection.model !== MUSE_DEFAULT_MODEL) return selection.model;
         const catalog = options.modelCatalog ? yield* options.modelCatalog : [];
         return catalog.find((model) => model.isDefault && !model.isCustom)?.slug;
@@ -1641,9 +1642,24 @@ export const makeMuseAdapterV2 = Effect.fn("makeMuseAdapterV2")(function* (
         const adopted = continuation ? wake : undefined;
         const effort = continuation ? undefined : yield* selectionEffort(turnInput.modelSelection);
         const parts = compact || continuation ? [] : yield* prompt(turnInput.message);
-        const targetModel = continuation
-          ? undefined
-          : yield* resolveModel(turnInput.modelSelection);
+        let targetModel = continuation ? undefined : yield* resolveModel(turnInput.modelSelection);
+        if (
+          !continuation &&
+          turnInput.modelSelection.model === null &&
+          turnInput.previousModelSelection?.model != null
+        ) {
+          const catalog = yield* decode(
+            Schema.Struct({
+              models: Schema.Array(
+                Schema.Struct({ modelId: Schema.String, isDefault: Schema.Boolean }),
+              ),
+            }),
+            yield* request("model/list", {}),
+          );
+          targetModel = catalog.models.find((model) => model.isDefault)?.modelId;
+          if (!targetModel)
+            return yield* protocolError("Muse did not report its native default model");
+        }
         if (targetModel && session.model !== targetModel) {
           yield* request("session/setModel", {
             model: { modelId: targetModel, providerId: "meta" },
@@ -1695,6 +1711,20 @@ export const makeMuseAdapterV2 = Effect.fn("makeMuseAdapterV2")(function* (
           });
           yield* updateThread({
             status: "active",
+            ...(session.model == null
+              ? {}
+              : {
+                  nativeMetadata: {
+                    ...thread.nativeMetadata,
+                    modelSelection: {
+                      instanceId: options.instanceId,
+                      model: session.model,
+                      ...(effort === undefined
+                        ? {}
+                        : { options: [{ id: "reasoningEffort", value: effort }] }),
+                    },
+                  },
+                }),
             firstRunOrdinal: thread.firstRunOrdinal ?? turnInput.runOrdinal,
             lastRunOrdinal: turnInput.runOrdinal,
           });

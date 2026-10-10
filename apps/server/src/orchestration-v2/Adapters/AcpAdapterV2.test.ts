@@ -33,6 +33,7 @@ import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import type * as Duration from "effect/Duration";
 import * as Cause from "effect/Cause";
+import * as Result from "effect/Result";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -3084,7 +3085,7 @@ describe("AcpAdapterV2", () => {
     }).pipe(Effect.provide(layerTest)),
   );
 
-  it.effect.each(["grok-build", "composer-2"])(
+  it.effect.each(["grok-build", "composer-2", null])(
     "Grok configures the native session for %s",
     (model) =>
       Effect.gen(function* () {
@@ -3128,7 +3129,7 @@ describe("AcpAdapterV2", () => {
               "configId" in request.params &&
               request.params.configId === "model",
           ).length,
-          model === "grok-build" ? 0 : 1,
+          model === "grok-build" || model === null ? 0 : 1,
         );
       }).pipe(Effect.provide(layerTest), Effect.scoped),
   );
@@ -3230,21 +3231,19 @@ describe("AcpAdapterV2", () => {
         interactionMode: "default",
         cwd: process.cwd(),
       });
-      // A stale composer selection (probe-time union descriptor) must not wedge
-      // the session open in a retry loop; the option is skipped and the agent
-      // default applies.
-      const runtime = yield* adapter.openSession({
-        threadId,
-        providerSessionId: ProviderSessionId.make("provider-session-acp-unsupported-option"),
-        modelSelection: {
-          instanceId,
-          model: "default",
-          options: [{ id: "missing-option", value: "high" }],
-        },
-        runtimePolicy,
-      });
-
-      assert.equal(runtime.providerSession.status, "ready");
+      const result = yield* adapter
+        .openSession({
+          threadId,
+          providerSessionId: ProviderSessionId.make("provider-session-acp-unsupported-option"),
+          modelSelection: {
+            instanceId,
+            model: null,
+            options: [{ id: "missing-option", value: "high" }],
+          },
+          runtimePolicy,
+        })
+        .pipe(Effect.result);
+      assert.isTrue(Result.isFailure(result));
     }).pipe(Effect.provide(layerTest), Effect.scoped),
   );
 

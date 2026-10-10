@@ -174,18 +174,19 @@ describe("applyGrokAcpModelSelection", () => {
     }),
   );
 
-  it.effect("drops malformed effort metadata instead of sending it", () =>
+  it.effect("rejects malformed effort without silently dropping it", () =>
     Effect.gen(function* () {
       const { runtime, modelCalls } = makeRecordingRuntime();
-      yield* applyGrokAcpModelSelection({
+      const result = yield* applyGrokAcpModelSelection({
         runtime,
         currentModelId: "grok-4.6",
         currentReasoningEffort: "high",
         requestedModelId: "grok-4.6",
         requestedReasoningEffort: "not a token",
         mapError: (cause) => cause.message,
-      });
-      expect(modelCalls).toEqual([{ modelId: "grok-4.6" }]);
+      }).pipe(Effect.result);
+      expect(result._tag).toBe("Failure");
+      expect(modelCalls).toEqual([]);
     }),
   );
 

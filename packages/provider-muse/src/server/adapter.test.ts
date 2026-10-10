@@ -192,6 +192,7 @@ const makeHarness = Effect.fnUntraced(function* (
     MuseAdapterV2Options,
     "createHost" | "nativeEventLogger" | "modelCatalog" | "continuationRequests"
   > = {},
+  selection: ModelSelection = modelSelection(instanceId),
 ) {
   let hostCount = 0;
   const adapter = yield* makeMuseAdapterV2({
@@ -204,7 +205,7 @@ const makeHarness = Effect.fnUntraced(function* (
   const runtime = yield* adapter.openSession({
     threadId: THREAD_ID,
     providerSessionId: ProviderSessionId.make(`session-${instanceId}`),
-    modelSelection: modelSelection(instanceId),
+    modelSelection: selection,
     runtimePolicy: policy,
     ...(initialNativeThreadId ? { initialNativeThreadId } : {}),
   });
@@ -224,7 +225,7 @@ const makeHarness = Effect.fnUntraced(function* (
   );
   const providerThread = yield* runtime.ensureThread({
     threadId: THREAD_ID,
-    modelSelection: modelSelection(instanceId),
+    modelSelection: selection,
     runtimePolicy: policy,
     ...(existingProviderThread ? { existingProviderThread } : {}),
   });
@@ -350,6 +351,53 @@ const approval = (turnId: string) => ({
 });
 
 describe("MuseAdapterV2", () => {
+  it.effect.each([undefined, "saved-native-session"])(
+    "keeps native default and restored model without overrides: %s",
+    (nativeId) =>
+      Effect.gen(function* () {
+        const fake = yield* makeFakeMuse();
+        const selection: ModelSelection = { instanceId: INSTANCE_ID, model: null };
+        const harness = yield* makeHarness(
+          fake,
+          INSTANCE_ID,
+          nativeId,
+          undefined,
+          undefined,
+          runtimePolicy,
+          {},
+          selection,
+        );
+        const opened = yield* fake.takeCall(nativeId ? "session/resume" : "session/start");
+        assert.isUndefined(opened.params.modelId);
+        const input = yield* turnInput(harness.providerThread);
+        yield* harness.runtime.startTurn({ ...input, modelSelection: selection });
+        yield* fake.takeCall("turn/start");
+        assert.deepStrictEqual(
+          fake.calls.filter((call) => call.method === "session/setModel"),
+          [],
+        );
+      }).pipe(Effect.scoped, Effect.provide(testLayer)),
+  );
+  it.effect("returns to the native default rather than a static catalogue default", () =>
+    Effect.gen(function* () {
+      const fake = yield* makeFakeMuse();
+      const harness = yield* makeHarness(fake, INSTANCE_ID, "saved-native-session");
+      fake.queueResponse("model/list", {
+        models: [{ modelId: "native-account-default", isDefault: true }],
+      });
+      const input = yield* turnInput(harness.providerThread);
+      yield* harness.runtime.startTurn({
+        ...input,
+        modelSelection: { instanceId: INSTANCE_ID, model: null },
+        previousModelSelection: modelSelection(),
+      });
+      const changed = yield* fake.takeCall("session/setModel");
+      assert.deepStrictEqual(changed.params.model, {
+        modelId: "native-account-default",
+        providerId: "meta",
+      });
+    }).pipe(Effect.scoped, Effect.provide(testLayer)),
+  );
   it.effect("connects the thread's MCP credential on native start and resume", () =>
     Effect.gen(function* () {
       yield* (yield* McpProviderSessions.McpProviderSessions).set({

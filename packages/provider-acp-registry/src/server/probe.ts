@@ -31,7 +31,6 @@ import * as AcpRegistryRuntimeCoordinator from "./AcpRegistryRuntimeCoordinator.
 import * as AcpSessionRuntime from "@t3tools/provider-acp/server/AcpSessionRuntime";
 
 const MAX_AUTH_METHODS = 32;
-const MAX_MODELS = 256;
 const MAX_ID_LENGTH = 128;
 const MAX_NAME_LENGTH = 160;
 const MAX_DESCRIPTION_LENGTH = 1_024;
@@ -79,7 +78,8 @@ function normalizeModels(
   const seen = new Set<string>();
   const models: Array<AcpRegistryProbeModel> = [];
   for (const candidate of candidates) {
-    const id = boundedOpaqueValue(candidate.id, MAX_ID_LENGTH);
+    const id =
+      typeof candidate.id === "string" && candidate.id.trim().length > 0 ? candidate.id : undefined;
     if (id === undefined || seen.has(id)) continue;
     seen.add(id);
     models.push({
@@ -90,7 +90,6 @@ function normalizeModels(
           ? null
           : boundedText(candidate.description, MAX_DESCRIPTION_LENGTH) || null,
     });
-    if (models.length === MAX_MODELS) break;
   }
   return models;
 }
@@ -182,15 +181,11 @@ export function normalizeAcpRegistryLiveConfiguration(
     (option) => option.category === "model" && option.type === "select",
   );
   const boundedCurrentModelId =
-    modelOption?.type === "select"
-      ? (boundedOpaqueValue(modelOption.currentValue, MAX_ID_LENGTH) ?? null)
-      : null;
+    modelOption?.type === "select" ? modelOption.currentValue.trim() || null : null;
   const models = normalizeModels(configOptions);
   return {
     models,
-    currentModelId: models.some((model) => model.id === boundedCurrentModelId)
-      ? boundedCurrentModelId
-      : null,
+    currentModelId: boundedCurrentModelId,
     configOptions: acpProviderOptionDescriptors({ configOptions, modeState }),
   };
 }

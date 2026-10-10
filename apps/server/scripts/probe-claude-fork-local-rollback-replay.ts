@@ -116,7 +116,7 @@ function sanitizeValue(
 
 function stableOptions(options: ClaudeAgentSdkQueryOptions): ClaudeAgentSdkQueryOptions {
   const stable = {
-    model: options.model,
+    ...(options.model === undefined ? {} : { model: options.model }),
     tools: options.tools,
     permissionMode: options.permissionMode,
     ...(options.allowedTools === undefined ? {} : { allowedTools: options.allowedTools }),

@@ -82,17 +82,15 @@ describe("Muse model catalog", () => {
     }),
   );
 
-  it("normalizes saved and implicit efforts against the selected model before dispatch", () => {
+  it("preserves explicit efforts and leaves implicit effort to Muse", () => {
     const fallback = museModelCapabilities();
-    expect(resolveMuseReasoningEffort(fallback, undefined)).toBe("high");
+    expect(resolveMuseReasoningEffort(fallback, undefined)).toBeUndefined();
     expect(resolveMuseReasoningEffort(fallback, "max")).toBe("max");
-    expect(resolveMuseReasoningEffort(fallback, "ultra")).toBe("high");
+    expect(resolveMuseReasoningEffort(fallback, "ultra")).toBe("ultra");
     const restricted = museModelCapabilities({ variants: ["xhigh"] });
-    expect(resolveMuseReasoningEffort(restricted, undefined)).toBe("xhigh");
-    expect(resolveMuseReasoningEffort(restricted, "low")).toBe("xhigh");
-    expect(
-      resolveMuseReasoningEffort(museModelCapabilities({ variants: [] }), "max"),
-    ).toBeUndefined();
+    expect(resolveMuseReasoningEffort(restricted, undefined)).toBeUndefined();
+    expect(resolveMuseReasoningEffort(restricted, "low")).toBe("low");
+    expect(resolveMuseReasoningEffort(museModelCapabilities({ variants: [] }), "max")).toBe("max");
     expect(resolveMuseReasoningEffort(undefined, "max")).toBe("max");
   });
 });

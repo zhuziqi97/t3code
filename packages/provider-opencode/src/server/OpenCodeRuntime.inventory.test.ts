@@ -24,6 +24,48 @@ const layerTest = OpenCodeRuntime.layer.pipe(
 );
 
 it.layer(layerTest)("OpenCodeRuntime inventory", (it) => {
+  it.effect(
+    "resolves the native default through a non-generating prompt and deletes the temporary session",
+    () =>
+      Effect.gen(function* () {
+        const calls: { path: string; method: string; body: unknown }[] = [];
+        const client = createOpencodeClient({
+          baseUrl: "http://opencode.test",
+          directory: "/native-workspace",
+          fetch: Object.assign(
+            async (input: string | Request | URL) => {
+              const request = input instanceof Request ? input : new Request(input.toString());
+              const path = new URL(request.url).pathname;
+              const text = await request.text();
+              calls.push({ path, method: request.method, body: text ? JSON.parse(text) : null });
+              return Response.json(
+                request.method === "DELETE"
+                  ? true
+                  : path === "/session"
+                    ? { id: "u3-default-probe" }
+                    : {
+                        info: {
+                          role: "user",
+                          model: { providerID: "native-provider", modelID: "native-model" },
+                        },
+                        parts: [],
+                      },
+              );
+            },
+            { preconnect: () => undefined },
+          ),
+        });
+        {
+          const model = yield* OpenCodeRuntime.readOpenCodeNativeDefault(client);
+          NodeAssert.deepEqual(model, { providerID: "native-provider", modelID: "native-model" });
+        }
+        NodeAssert.deepEqual(
+          calls.map((call) => call.method),
+          ["POST", "POST", "DELETE"],
+        );
+        NodeAssert.deepEqual(calls[1]?.body, { noReply: true, parts: [] });
+      }),
+  );
   it.effect("aborts pending SDK requests when inventory loading is interrupted", () =>
     Effect.gen(function* () {
       const runtime = yield* OpenCodeRuntime.OpenCodeRuntime;

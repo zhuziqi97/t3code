@@ -764,27 +764,30 @@ describe("CursorAdapterV2", () => {
     ),
   );
 
-  it("maps Cursor auto and model parameters to SDK selections", () => {
-    assert.deepEqual(
-      cursorSdkModelSelection({
-        instanceId: ProviderInstanceId.make("cursor"),
-        model: "auto",
-        options: [
-          { id: "thinking", value: "high" },
-          { id: "contextWindow", value: "1m" },
-          { id: "fastMode", value: true },
-        ],
-      }),
-      {
-        id: "default",
-        params: [
-          { id: "thinking", value: "high" },
-          { id: "context", value: "1m" },
-          { id: "fast", value: "true" },
-        ],
-      },
-    );
-  });
+  it.each(["auto", null])(
+    "maps Cursor default %s and model parameters to SDK selections",
+    (model) => {
+      assert.deepEqual(
+        cursorSdkModelSelection({
+          instanceId: ProviderInstanceId.make("cursor"),
+          model,
+          options: [
+            { id: "thinking", value: "high" },
+            { id: "contextWindow", value: "1m" },
+            { id: "fastMode", value: true },
+          ],
+        }),
+        {
+          id: "default",
+          params: [
+            { id: "thinking", value: "high" },
+            { id: "context", value: "1m" },
+            { id: "fast", value: "true" },
+          ],
+        },
+      );
+    },
+  );
 
   it("maps runtime modes to the SDK sandbox and auto-review controls", () => {
     const base = {

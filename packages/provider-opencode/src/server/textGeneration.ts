@@ -159,7 +159,10 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
   const runOpenCodeJson = Effect.fn("runOpenCodeJson")(function* <S extends Schema.Top>(
     input: TextGenerationOperations.Request<S>,
   ) {
-    const parsedModel = OpenCodeRuntime.parseOpenCodeModelSlug(input.modelSelection.model);
+    const parsedModel =
+      input.modelSelection.model === null
+        ? undefined
+        : OpenCodeRuntime.parseOpenCodeModelSlug(input.modelSelection.model);
     if (!parsedModel) {
       return yield* new TextGenerationError({
         operation: input.operation,
@@ -217,7 +220,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
           try: () =>
             client.session.prompt({
               sessionID: session.data.id,
-              model: parsedModel,
+              ...(parsedModel === undefined ? {} : { model: parsedModel }),
               ...(selectedAgent ? { agent: selectedAgent } : {}),
               ...(selectedVariant ? { variant: selectedVariant } : {}),
               parts: [{ type: "text", text: input.prompt }, ...fileParts],

@@ -1113,3 +1113,52 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
 export const layer = Layer.effect(OpenCodeRuntime, makeOpenCodeRuntime).pipe(
   Layer.provide(NetService.layer),
 );
+
+const decodeOpenCodeNativeDefault = Schema.decodeUnknownEffect(
+  Schema.Struct({
+    role: Schema.Literal("user"),
+    model: Schema.Struct({ providerID: Schema.String, modelID: Schema.String }),
+  }),
+);
+
+/** Resolve OpenCode 1's default using its public, non-generating prompt path. */
+export const readOpenCodeNativeDefault = Effect.fn("readOpenCodeNativeDefault")(function* (
+  client: OpencodeClient,
+  agent?: string,
+) {
+  const temporary = yield* Effect.acquireRelease(
+    runOpenCodeSdk("session.create", () =>
+      client.session
+        .create({ permission: [] }, { throwOnError: true })
+        .then((response) => response.data),
+    ),
+    (session) =>
+      runOpenCodeSdk("session.delete", () =>
+        client.session.delete({ sessionID: session.id }, { throwOnError: true }),
+      ).pipe(Effect.ignore({ log: true })),
+  );
+  const message = yield* runOpenCodeSdk("session.prompt", () =>
+    client.session.prompt(
+      {
+        sessionID: temporary.id,
+        noReply: true,
+        parts: [],
+        ...(agent === undefined ? {} : { agent }),
+      },
+      { throwOnError: true },
+    ),
+  );
+  // The SDK types this response as AssistantMessage, but noReply returns
+  // the user message. Decode the native route rather than casting it.
+  const resolved = yield* decodeOpenCodeNativeDefault(message.data.info).pipe(
+    Effect.mapError(
+      (cause) =>
+        new OpenCodeRuntimeError({
+          operation: "session.prompt",
+          detail: "OpenCode did not report its native default model.",
+          cause,
+        }),
+    ),
+  );
+  return resolved.model;
+}, Effect.scoped);

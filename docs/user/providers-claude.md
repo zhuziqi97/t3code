@@ -91,12 +91,29 @@ If that Claude config directory has a cached Anthropic login, run `/logout` in a
 Claude Code session using that directory before starting the router setup. Cached
 login credentials can conflict with the router token.
 
-Select the model you want in T3 Code. For an OpenRouter model outside the built-in
-list, open that Claude instance in **Settings > Providers** and add its full model
-ID with **Add custom model**. Then select it in the chat model picker.
+T3 uses the model values, display names and capabilities reported by Claude Code.
+Enable Claude Code gateway model discovery in that instance
+(`CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1`) when the gateway supports it.
+The first discovery may populate Claude Code's background cache; use **Refresh provider status** to read it again.
+
+Select the model you want in T3 Code. For an additional OpenRouter model, open that
+Claude instance in **Settings > Providers** and add its full model ID with
+**Add custom model**. A custom entry can also override the name or options of an
+existing native ID. Removing the override restores the native entry.
 `ANTHROPIC_DEFAULT_*_MODEL` variables map Claude Code aliases such as `sonnet`; they
-do not replace the explicit model ID selected in T3 Code. Custom models may have
-fewer effort, thinking, or context controls than built-in models.
+do not replace the explicit model ID selected in T3 Code. Custom models expose their native capabilities and any explicit custom options.
+
+**Follow agent default** leaves model selection to Claude Code for a new session.
+Restoring a session preserves its native model. Choosing **Follow agent default**
+after a concrete model asks Claude Code to reset the model. The picker keeps the
+follow-default label and can supplement it with the model reported while running.
+Directory failures do not clear a saved selection.
+
+For a non-Claude custom model whose gateway capacity cannot be configured per
+model in Claude Code, a custom settings entry may specify `contextWindowTokens`.
+T3 applies it through `CLAUDE_CODE_MAX_CONTEXT_TOKENS` only to that selected model
+and its context meter. Claude model IDs, native aliases and `[1m]` IDs use Claude
+Code's own context configuration.
 
 Verify the model used in OpenRouter's activity dashboard. For current compatibility
 requirements, use the

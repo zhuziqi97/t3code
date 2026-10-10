@@ -170,18 +170,6 @@ function inferDefaultAgent(agents: ReadonlyArray<Agent>): string | undefined {
 const DEFAULT_OPENCODE_MODEL_CAPABILITIES: ModelCapabilities = createModelCapabilities({
   optionDescriptors: [
     {
-      id: "variant",
-      label: "Reasoning",
-      type: "select",
-      options: [
-        { id: "low", label: "Low" },
-        { id: "medium", label: "Medium", isDefault: true },
-        { id: "high", label: "High" },
-        { id: "xhigh", label: "Extra High" },
-      ],
-      currentValue: "medium",
-    },
-    {
       id: "agent",
       label: "Agent",
       type: "select",

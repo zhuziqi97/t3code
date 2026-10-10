@@ -17,24 +17,16 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { type ClaudeSettings, TextGenerationError } from "@t3tools/contracts";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
 
+import { compileClaudeModelSelection } from "../claudeModelOptions.ts";
 import * as TextGenerationOperations from "@t3tools/provider-core/server/textGenerationOperations";
 import {
   normalizeCliError,
   toJsonSchemaObject,
 } from "@t3tools/provider-core/server/textGenerationUtils";
-import {
-  getModelSelectionStringOptionValue,
-  getProviderOptionDescriptors,
-} from "@t3tools/shared/model";
+
 import {
   BUNDLED_CLAUDE_MODEL_CATALOG,
   type ClaudeModelCatalog,
-  getClaudeCatalogModelCapabilities,
-  isClaudeCatalogUltracodeEffort,
-  normalizeClaudeCatalogEffort,
-  resolveClaudeCatalogApiModelId,
-  resolveClaudeCatalogEffort,
-  resolveClaudeModelSlug,
   scopeClaudeModelCatalog,
 } from "../provider/ClaudeModelCatalog.ts";
 import { makeClaudeEnvironment } from "../provider/Drivers/ClaudeHome.ts";
@@ -62,14 +54,12 @@ const decodeClaudeOutput = Schema.decodeEffect(
 export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(function* (
   claudeSettings: ClaudeSettings,
   environment?: NodeJS.ProcessEnv,
-  modelCatalog: Effect.Effect<ClaudeModelCatalog> = Effect.succeed(BUNDLED_CLAUDE_MODEL_CATALOG),
+  modelCatalog: (cwd: string) => Effect.Effect<ClaudeModelCatalog> = () =>
+    Effect.succeed(BUNDLED_CLAUDE_MODEL_CATALOG),
 ) {
   const commandSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const fileSystem = yield* FileSystem.FileSystem;
   const claudeEnvironment = yield* makeClaudeEnvironment(claudeSettings, environment);
-  const scopedModelCatalog = modelCatalog.pipe(
-    Effect.map((catalog) => scopeClaudeModelCatalog(catalog, claudeSettings.customModels)),
-  );
 
   const readStreamAsString = <E>(
     operation: string,
@@ -117,52 +107,11 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
     TextGenerationError,
     S["DecodingServices"]
   > {
-    const catalog = yield* scopedModelCatalog;
-    const resolvedModelSelection = {
-      ...modelSelection,
-      model: resolveClaudeModelSlug(catalog, modelSelection.model),
-    };
     const jsonSchemaStr = yield* encodeJsonForOperation(
       operation,
       toJsonSchemaObject(outputSchemaJson),
       "Failed to encode structured output schema.",
     );
-    const caps = getClaudeCatalogModelCapabilities(catalog, resolvedModelSelection.model);
-    const descriptors = getProviderOptionDescriptors({
-      caps,
-      selections: resolvedModelSelection.options,
-    });
-    const findDescriptor = (id: string) => descriptors.find((descriptor) => descriptor.id === id);
-    const rawEffortSelection = getModelSelectionStringOptionValue(resolvedModelSelection, "effort");
-    const resolvedEffort = resolveClaudeCatalogEffort(
-      catalog,
-      resolvedModelSelection.model,
-      rawEffortSelection,
-    );
-    const cliEffort = normalizeClaudeCatalogEffort(
-      catalog,
-      resolvedEffort,
-      resolvedModelSelection.model,
-    );
-    const ultracode = isClaudeCatalogUltracodeEffort(resolvedEffort);
-    const thinkingDescriptor = findDescriptor("thinking");
-    const fastModeDescriptor = findDescriptor("fastMode");
-    const thinking =
-      thinkingDescriptor?.type === "boolean" ? thinkingDescriptor.currentValue : undefined;
-    const fastMode =
-      fastModeDescriptor?.type === "boolean" ? fastModeDescriptor.currentValue : undefined;
-    const settings = {
-      disableAllHooks: true,
-      ...(typeof thinking === "boolean" ? { alwaysThinkingEnabled: thinking } : {}),
-      ...(fastMode ? { fastMode: true } : {}),
-      ...(ultracode ? { ultracode: true } : {}),
-    };
-    const settingsJson = yield* encodeJsonForOperation(
-      operation,
-      settings,
-      "Failed to encode Claude CLI settings.",
-    );
-
     const runClaudeCommand = Effect.fn("runClaudeJson.runClaudeCommand")(function* () {
       // Titles need only the supplied prompt, not configuration from the checkout.
       const workingDirectory =
@@ -175,6 +124,25 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
                 ),
               )
           : cwd;
+      const catalog = scopeClaudeModelCatalog(
+        yield* modelCatalog(workingDirectory),
+        claudeSettings.customModels,
+      );
+      const compiled = yield* Effect.try(() =>
+        compileClaudeModelSelection(modelSelection, catalog),
+      ).pipe(
+        Effect.mapError((cause) =>
+          normalizeCliError("claude", operation, cause, "Invalid Claude model configuration"),
+        ),
+      );
+      const cliEffort = compiled.effort;
+      const settings = { disableAllHooks: true, ...compiled.settings };
+      const settingsJson = yield* encodeJsonForOperation(
+        operation,
+        settings,
+        "Failed to encode Claude CLI settings.",
+      );
+
       const spawnCommand = yield* resolveSpawnCommand(
         claudeSettings.binaryPath || "claude",
         [
@@ -183,8 +151,7 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
           "json",
           "--json-schema",
           jsonSchemaStr,
-          "--model",
-          resolveClaudeCatalogApiModelId(catalog, resolvedModelSelection),
+          ...(compiled.apiModelId === undefined ? [] : ["--model", compiled.apiModelId]),
           ...(cliEffort ? ["--effort", cliEffort] : []),
           "--settings",
           settingsJson,
@@ -196,10 +163,10 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
           "--permission-mode",
           "dontAsk",
         ],
-        { env: claudeEnvironment },
+        { env: { ...claudeEnvironment, ...compiled.environment } },
       );
       const command = ChildProcess.make(spawnCommand.command, spawnCommand.args, {
-        env: claudeEnvironment,
+        env: { ...claudeEnvironment, ...compiled.environment },
         cwd: workingDirectory,
         shell: spawnCommand.shell,
         stdin: {

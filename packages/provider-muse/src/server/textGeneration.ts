@@ -214,7 +214,7 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
     if (!settings.enabled) {
       return yield* new TextGenerationError({ operation, detail: "Muse Code is disabled." });
     }
-    const selectedModel = input.modelSelection.model.trim();
+    const selectedModel = input.modelSelection.model?.trim();
     const models = yield* modelCatalog;
     // "default" is the catalog's default model, as in chat. Without one, Muse picks.
     const catalogModel =
@@ -222,7 +222,11 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
         ? models.find((model) => model.slug === selectedModel)
         : models.find((model) => model.isDefault && !model.isCustom);
     const modelId =
-      selectedModel && selectedModel !== MUSE_DEFAULT_MODEL ? selectedModel : catalogModel?.slug;
+      input.modelSelection.model === null
+        ? undefined
+        : selectedModel && selectedModel !== MUSE_DEFAULT_MODEL
+          ? selectedModel
+          : catalogModel?.slug;
     const reasoningEffort = resolveMuseReasoningEffort(
       catalogModel?.capabilities ?? museModelCapabilities(),
       getModelSelectionStringOptionValue(input.modelSelection, "reasoningEffort") ??

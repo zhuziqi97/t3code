@@ -763,6 +763,7 @@ const isProviderAdapterError = Schema.is(ProviderAdapter.ProviderAdapterV2Error)
  * default while T3 records the requested model.
  */
 const modelRef = (selection: ProviderAdapter.ProviderAdapterV2TurnInput["modelSelection"]) => {
+  if (selection.model === null) return undefined;
   const parsed = OpenCodeRuntime.parseOpenCodeModelSlug(selection.model);
   if (parsed === null) return undefined;
   const variant = getModelSelectionStringOptionValue(selection, "variant");
@@ -772,7 +773,7 @@ const modelRef = (selection: ProviderAdapter.ProviderAdapterV2TurnInput["modelSe
     ...(variant === undefined ? {} : { variant: Model.VariantID.make(variant) }),
   });
 };
-const malformedModel = (model: string) =>
+const malformedModel = (model: string | null) =>
   `OpenCode model '${model}' must use provider/model format`;
 const sameModel = (left: ModelRef, right: ModelRef | undefined) =>
   left.providerID === right?.providerID &&
@@ -875,8 +876,8 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
     const contextWindows = new Map<string, Map<string, number>>();
     /** A thread without a worktree runs where T3 does, as its session is created. */
     const directoryOf = (cwd: string | null | undefined) => cwd ?? host.paths.cwd;
-    const windowOf = (cwd: string | null | undefined, model: string) =>
-      contextWindows.get(directoryOf(cwd))?.get(model);
+    const windowOf = (cwd: string | null | undefined, model: string | null) =>
+      model === null ? undefined : contextWindows.get(directoryOf(cwd))?.get(model);
     const now = yield* DateTime.now;
     let session: OrchestrationV2ProviderSession = {
       id: input.providerSessionId,
@@ -3601,7 +3602,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
           }
           yield* readModelsOnce(threadInput.runtimePolicy.cwd);
           const model = modelRef(threadInput.modelSelection);
-          if (model === undefined) {
+          if (model === undefined && threadInput.modelSelection.model !== null) {
             return yield* new ProviderAdapter.ProviderAdapterProtocolError({
               driver: OPENCODE_PROVIDER,
               detail: malformedModel(threadInput.modelSelection.model),
@@ -3617,7 +3618,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
           );
           const created = yield* client.session.create({
             location: Location.PublicRef.make({ directory: AbsolutePath.make(directory) }),
-            model,
+            ...(model === undefined ? {} : { model }),
             permissions,
           });
           const createdAt = yield* DateTime.now;
@@ -3775,8 +3776,28 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
               }
               // A turn T3 will not run still starts and fails, so the refusal is what
               // the user reads.
-              const model = modelRef(turnInput.modelSelection);
-              if (model === undefined) {
+              let model = modelRef(turnInput.modelSelection);
+              if (
+                turnInput.modelSelection.model === null &&
+                turnInput.previousModelSelection?.model != null
+              ) {
+                // Ask a fresh native session to resolve its configuration; no
+                // prompt is sent, and the temporary session is then removed.
+                const defaults = yield* client.session.create({
+                  location: Location.PublicRef.make({
+                    directory: AbsolutePath.make(state.directory),
+                  }),
+                  permissions: [],
+                });
+                model = defaults.model;
+                yield* client.session.remove({ sessionID: defaults.id });
+                if (model === undefined)
+                  return yield* new ProviderAdapter.ProviderAdapterProtocolError({
+                    driver,
+                    detail: "OpenCode did not report its native default model",
+                  });
+              }
+              if (model === undefined && turnInput.modelSelection.model !== null) {
                 yield* begin;
                 return yield* finishTurn(state, {
                   status: "failed",
@@ -3810,7 +3831,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
               }
               // A selection changed since the last turn applies now; OpenCode keeps
               // the session's model otherwise.
-              if (!sameModel(model, state.model)) {
+              if (model !== undefined && !sameModel(model, state.model)) {
                 yield* client.session.switchModel({ sessionID: Session.ID.make(sessionId), model });
                 state.model = model;
               }

@@ -37,7 +37,10 @@ export function cursorSdkParameterPriority(parameterId: string): number {
 
 export function cursorSdkModelSelection(modelSelection: ModelSelection): CursorSdkModelSelection {
   return {
-    id: modelSelection.model === "auto" ? "default" : modelSelection.model,
+    id:
+      modelSelection.model === null || modelSelection.model === "auto"
+        ? "default"
+        : modelSelection.model,
     ...(modelSelection.options === undefined || modelSelection.options.length === 0
       ? {}
       : {

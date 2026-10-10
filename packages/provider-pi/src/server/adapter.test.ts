@@ -70,7 +70,7 @@ const runtimePolicy = ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
   cwd: null,
 });
 
-const modelSelection = (model: string): ModelSelection => ({
+const modelSelection = (model: string | null): ModelSelection => ({
   instanceId: PI_INSTANCE_ID,
   model,
 });
@@ -177,6 +177,8 @@ const makeFakePi: Effect.Effect<FakePi> = Effect.gen(function* () {
         return { ...base, data: { ...recordedIdleState(sessionFile), ...stateQueue.shift() } };
       case "get_available_models":
         return { ...base, data: { models } };
+      case "set_model":
+        return { ...base, data: { provider: record["provider"], id: record["modelId"] } };
       case "new_session": {
         const cancelled = vetoNewSession;
         vetoNewSession = false;
@@ -352,7 +354,7 @@ const makeAdapter = Effect.fnUntraced(function* (
 
 const openRuntime = Effect.fnUntraced(function* (
   fake: FakePi,
-  model = "default",
+  model: string | null = "default",
   threadId = THREAD_ID,
   providerSessionId = SESSION_ID,
   forkFake?: FakePi,
@@ -380,7 +382,7 @@ const openRuntime = Effect.fnUntraced(function* (
   return { runtime, takeEvent };
 });
 
-const makeAppThread = Effect.fnUntraced(function* (model: string, threadId = THREAD_ID) {
+const makeAppThread = Effect.fnUntraced(function* (model: string | null, threadId = THREAD_ID) {
   const now = yield* DateTime.now;
   return {
     createdBy: "user",
@@ -410,13 +412,14 @@ const makeAppThread = Effect.fnUntraced(function* (model: string, threadId = THR
 const startTurn = Effect.fnUntraced(function* (
   runtime: ProviderAdapter.ProviderAdapterV2SessionRuntime,
   providerThread: OrchestrationV2ProviderThread,
-  model = "default",
+  model: string | null = "default",
   attachments: ReadonlyArray<ChatAttachment> = [],
   text = "Hello pi",
   selection?: ModelSelection,
   runOrdinal = 1,
   threadId = THREAD_ID,
   continuation = false,
+  previousModelSelection?: ModelSelection,
 ) {
   const appThread = yield* makeAppThread(model, threadId);
   const runId = RunId.make(`run:${threadId}:${runOrdinal}`);
@@ -437,6 +440,7 @@ const startTurn = Effect.fnUntraced(function* (
       creationSource: continuation ? "provider" : "web",
     },
     modelSelection: selection ?? modelSelection(model),
+    ...(previousModelSelection === undefined ? {} : { previousModelSelection }),
     runtimePolicy,
   });
 });
@@ -481,6 +485,91 @@ const expectModelFailure = (errorMessage: string) =>
   }).pipe(Effect.scoped, Effect.provide(layerTest));
 
 describe("PiAdapterV2", () => {
+  it.effect.each([false, true])(
+    "restores native session selection and explicitly returns to the process default: reset=%s",
+    (reset) =>
+      Effect.gen(function* () {
+        const original = yield* makeFakePi;
+        const first = yield* openRuntime(original, "saved/old-model");
+        const oldThread = yield* first.runtime.ensureThread({
+          threadId: THREAD_ID,
+          modelSelection: modelSelection("saved/old-model"),
+          runtimePolicy,
+        });
+        const fake = yield* makeFakePi;
+        fake.queueState({
+          model: { provider: "native", id: "configured-default", contextWindow: 272000 },
+          thinkingLevel: "high",
+        });
+        fake.queueState({
+          model: { provider: "saved", id: "old-model", contextWindow: 128000 },
+          thinkingLevel: "low",
+        });
+        const { runtime, takeEvent } = yield* openRuntime(fake, null);
+        const thread = yield* runtime.ensureThread({
+          threadId: THREAD_ID,
+          modelSelection: modelSelection(null),
+          runtimePolicy,
+          existingProviderThread: oldThread,
+        });
+        yield* startTurn(
+          runtime,
+          thread,
+          null,
+          [],
+          "hello",
+          undefined,
+          1,
+          THREAD_ID,
+          false,
+          reset ? modelSelection("saved/old-model") : undefined,
+        );
+        yield* fake.takeRequest("prompt");
+        const switches = fake.allRequests().filter((request) => request.type === "set_model");
+        assert.deepStrictEqual(
+          switches.map((request) => ({ provider: request.provider, modelId: request.modelId })),
+          reset ? [{ provider: "native", modelId: "configured-default" }] : [],
+        );
+        assert.deepStrictEqual(
+          fake
+            .allRequests()
+            .filter((request) => request.type === "set_thinking_level")
+            .map((request) => request.level),
+          reset ? ["high"] : [],
+        );
+        const activeThread = yield* takeEvent(
+          (event) =>
+            event.type === "provider_thread.updated" && event.providerThread.status === "active",
+        );
+        assert.deepStrictEqual(
+          activeThread.type === "provider_thread.updated"
+            ? activeThread.providerThread.nativeMetadata?.modelSelection
+            : undefined,
+          modelSelection(reset ? "native/configured-default" : "saved/old-model"),
+        );
+      }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+  it.effect("follows the native default without a model or thinking override", () =>
+    Effect.gen(function* () {
+      const fake = yield* makeFakePi;
+      const { runtime } = yield* openRuntime(fake, null);
+      const providerThread = yield* runtime.ensureThread({
+        threadId: THREAD_ID,
+        modelSelection: modelSelection(null),
+        runtimePolicy,
+      });
+      yield* startTurn(runtime, providerThread, null);
+      yield* fake.takeRequest("prompt");
+      assert.deepStrictEqual(
+        fake
+          .allRequests()
+          .filter(
+            (request) => request.type === "set_model" || request.type === "set_thinking_level",
+          ),
+        [],
+      );
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
   it.effect.each([false, true])(
     "serializes rollback fork hooks with native wake ownership, wake=%s",
     (nativeWake) =>
@@ -1707,6 +1796,61 @@ describe("PiAdapterV2", () => {
       const resetLevel = yield* fake.takeRequest("set_thinking_level");
       assert.equal(resetLevel["level"], "medium");
     }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect(
+    "resets previous thinking when a concrete model changes without a thinking override",
+    () =>
+      Effect.gen(function* () {
+        const fake = yield* makeFakePi;
+        fake.queueState({
+          model: { provider: "xai", id: "grok-4.6" },
+          thinkingLevel: "medium",
+          sessionFile: FAKE_SESSION_FILE,
+          sessionId: "abc",
+        });
+        const { runtime, takeEvent } = yield* openRuntime(fake);
+        const providerThread = yield* runtime.ensureThread({
+          threadId: THREAD_ID,
+          modelSelection: modelSelection("default"),
+          runtimePolicy,
+        });
+
+        // An explicit effort on a concrete model.
+        yield* startTurn(runtime, providerThread, "default", [], "Hello pi", {
+          instanceId: PI_INSTANCE_ID,
+          model: "xai/grok-4.6",
+          options: [{ id: "thinking", value: "high" }],
+        });
+        const modelRequest = yield* fake.takeRequest("set_model");
+        assert.equal(modelRequest["provider"], "xai");
+        assert.equal(modelRequest["modelId"], "grok-4.6");
+        const levelRequest = yield* fake.takeRequest("set_thinking_level");
+        assert.equal(levelRequest["level"], "high");
+        yield* fake.emit({ type: "agent_start" });
+        yield* fake.emit({ type: "agent_end", messages: [], willRetry: false });
+        yield* fake.emit({ type: "agent_settled" });
+        yield* takeEvent((event) => event.type === "turn.terminal");
+
+        // Switch models without carrying the previous thinking setting.
+        yield* startTurn(
+          runtime,
+          providerThread,
+          "default",
+          [],
+          "Hello pi",
+          {
+            instanceId: PI_INSTANCE_ID,
+            model: "other/custom",
+          },
+          2,
+        );
+        const replayModel = yield* fake.takeRequest("set_model");
+        assert.equal(replayModel["provider"], "other");
+        assert.equal(replayModel["modelId"], "custom");
+        const resetLevel = yield* fake.takeRequest("set_thinking_level");
+        assert.equal(resetLevel["level"], "medium");
+      }).pipe(Effect.scoped, Effect.provide(layerTest)),
   );
 
   it.effect("preserves selected skill references for the Pi extension to expand", () =>

@@ -253,8 +253,6 @@ function providerRef(
   return { driver: PI_PROVIDER, nativeId, strength };
 }
 
-const PI_THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
-
 // ── per-session state ─────────────────────────────────────────
 
 interface PiStreamItemState {
@@ -531,6 +529,7 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
       // explicitly.
       let baselineModel: { provider: string; modelId: string } | null = null;
       let baselineThinking: string | null = null;
+      let baselineCaptured = false;
       /** Context window of the model Pi currently runs, from get_state and set_model. */
       let contextWindow: number | null = null;
       const modelContextWindows = new Map<string, number>();
@@ -609,6 +608,14 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
           return capacity;
         }
         return null;
+      };
+
+      const readNativeModelSelection = (model: unknown): ModelSelection | undefined => {
+        const provider = recordString(model, "provider");
+        const id = recordString(model, "id");
+        return provider !== undefined && id !== undefined
+          ? { instanceId: options.instanceId, model: `${provider}/${id}` }
+          : undefined;
       };
 
       const lifecycleRequest = (record: PiRpcRecord) =>
@@ -2169,6 +2176,18 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
         const resumeId = existing?.nativeThreadRef?.nativeId;
         const needsNewSession = resumeId == null && registrationAttempted;
         registrationAttempted = true;
+        let initialState: unknown;
+        if (!baselineCaptured) {
+          const initial = yield* request({ type: "get_state" });
+          initialState = initial;
+          const model = recordField(initial, "model");
+          const provider = recordString(model, "provider");
+          const modelId = recordString(model, "id");
+          baselineModel =
+            provider !== undefined && modelId !== undefined ? { provider, modelId } : null;
+          baselineThinking = recordString(initial, "thinkingLevel") ?? null;
+          baselineCaptured = true;
+        }
         if (resumeId != null || needsNewSession) {
           lastNativeThreadId = resumeId ?? lastNativeThreadId;
           // Even a failed lifecycle operation can change Pi's native session.
@@ -2177,8 +2196,6 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
           appliedModel = null;
           appliedThinking = null;
           appliedSessionName = null;
-          baselineModel = null;
-          baselineThinking = null;
           contextWindow = null;
           const result = yield* lifecycleRequest(
             resumeId != null
@@ -2189,7 +2206,10 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
             return yield* protocolError("A Pi extension cancelled the session switch");
           }
         }
-        const stateData = yield* request({ type: "get_state" });
+        const stateData =
+          resumeId == null && !needsNewSession && initialState !== undefined
+            ? initialState
+            : yield* request({ type: "get_state" });
         if (!modelsDiscovered) {
           const modelsData = yield* request({ type: "get_available_models" }).pipe(
             Effect.orElseSucceed(() => undefined),
@@ -2201,20 +2221,6 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
           }
         }
         contextWindow = rememberModelContextWindow(recordField(stateData, "model"));
-        // Each baseline is captured independently, and only while nothing has
-        // been applied yet, so a `get_state` that arrives after our own
-        // selection cannot record that selection as Pi's default.
-        if (baselineModel === null && appliedModel === null) {
-          const stateModel = recordField(stateData, "model");
-          const provider = recordString(stateModel, "provider");
-          const modelId = recordString(stateModel, "id");
-          if (provider !== undefined && modelId !== undefined) {
-            baselineModel = { provider, modelId };
-          }
-        }
-        if (baselineThinking === null && appliedThinking === null) {
-          baselineThinking = recordString(stateData, "thinkingLevel") ?? null;
-        }
         // switch_session accepts a file path, not Pi's display session UUID.
         const nativeId = recordString(stateData, "sessionFile");
         if (nativeId === undefined) {
@@ -2225,7 +2231,8 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
         }
         lastNativeThreadId = nativeId;
         const createdAt = yield* DateTime.now;
-        const providerThread: OrchestrationV2ProviderThread =
+        const nativeSelection = readNativeModelSelection(recordField(stateData, "model"));
+        let providerThread: OrchestrationV2ProviderThread =
           existing !== undefined
             ? {
                 ...existing,
@@ -2256,6 +2263,11 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
                 createdAt,
                 updatedAt: createdAt,
               };
+        if (nativeSelection !== undefined)
+          providerThread = {
+            ...providerThread,
+            nativeMetadata: { ...providerThread.nativeMetadata, modelSelection: nativeSelection },
+          };
         threadState = { providerThread, activeTurn: null };
         // Baseline the session-tree leaf so the first turn's user entry can
         // be located with a `since` cursor instead of a full entry scan.
@@ -2276,13 +2288,20 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
         return providerThread;
       });
 
-      const applySelection = Effect.fnUntraced(function* (modelSelection: ModelSelection) {
+      const applySelection = Effect.fnUntraced(function* (
+        modelSelection: ModelSelection,
+        resetToDefault = false,
+      ) {
         const thinking = getModelSelectionStringOptionValue(modelSelection, "thinking");
-        if (modelSelection.model === PI_INHERIT_MODEL_SLUG) {
+        let reportedModel: unknown;
+        if (modelSelection.model === null || modelSelection.model === PI_INHERIT_MODEL_SLUG) {
           // Returning to "Pi default" after an explicit pick has to replay the
           // captured baseline, otherwise Pi stays on the last model applied.
-          if (appliedModel !== null && baselineModel !== null) {
+          if (resetToDefault && baselineModel === null)
+            return yield* protocolError("Pi did not report a configured native default model");
+          if ((appliedModel !== null || resetToDefault) && baselineModel !== null) {
             const restoredModel = yield* request({ type: "set_model", ...baselineModel });
+            reportedModel = restoredModel;
             contextWindow = rememberModelContextWindow(restoredModel);
             appliedModel = null;
             const updatedAt = yield* DateTime.now;
@@ -2298,9 +2317,9 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
           // instead of silently keeping the effort a previous pick applied.
           if (
             thinking === undefined &&
-            appliedThinking !== null &&
+            (appliedThinking !== null || resetToDefault) &&
             baselineThinking !== null &&
-            appliedThinking !== baselineThinking
+            (appliedThinking !== baselineThinking || resetToDefault)
           ) {
             yield* request({ type: "set_thinking_level", level: baselineThinking });
             appliedThinking = null;
@@ -2317,6 +2336,7 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
             provider: parsed.provider,
             modelId: parsed.modelId,
           });
+          reportedModel = selectedModel;
           contextWindow = rememberModelContextWindow(selectedModel);
           appliedModel = modelSelection.model;
           const updatedAt = yield* DateTime.now;
@@ -2328,13 +2348,19 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
           });
         }
         if (
-          thinking !== undefined &&
-          thinking !== appliedThinking &&
-          PI_THINKING_LEVELS.has(thinking)
+          thinking === undefined &&
+          modelSelection.model !== null &&
+          appliedThinking !== null &&
+          baselineThinking !== null
         ) {
+          yield* request({ type: "set_thinking_level", level: baselineThinking });
+          appliedThinking = null;
+        }
+        if (thinking !== undefined && thinking !== appliedThinking) {
           yield* request({ type: "set_thinking_level", level: thinking });
           appliedThinking = thinking;
         }
+        return readNativeModelSelection(reportedModel);
       });
 
       const resolvePromptPayload = Effect.fnUntraced(function* (
@@ -2376,12 +2402,9 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
           ),
         getModelContextWindow: (selection) => {
           if (selection.instanceId !== options.instanceId) return undefined;
-          const slug =
-            selection.model === PI_INHERIT_MODEL_SLUG
-              ? baselineModel === null
-                ? undefined
-                : `${baselineModel.provider}/${baselineModel.modelId}`
-              : selection.model;
+          if (selection.model === null || selection.model === PI_INHERIT_MODEL_SLUG)
+            return contextWindow ?? undefined;
+          const slug = selection.model;
           return slug === undefined ? undefined : modelContextWindows.get(slug);
         },
         ensureThread: (threadInput) =>
@@ -2444,7 +2467,13 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
             const continuation =
               turnInput.message.createdBy === "agent" &&
               turnInput.message.creationSource === "provider";
-            if (!continuation) yield* applySelection(turnInput.modelSelection);
+            const reportedSelection = continuation
+              ? undefined
+              : yield* applySelection(
+                  turnInput.modelSelection,
+                  turnInput.modelSelection.model === null &&
+                    turnInput.previousModelSelection?.model != null,
+                );
             // Mirror the thread title into pi's session name so the session
             // stays identifiable in pi's own /resume listing. Best-effort:
             // naming must never block a turn.
@@ -2536,7 +2565,19 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
                 return yield* protocolError("Pi native wake belongs to a different app thread");
               }
               pendingWake = null;
-              state.providerThread = turnInput.providerThread;
+              const nativeSelection =
+                reportedSelection ?? state.providerThread.nativeMetadata?.modelSelection;
+              state.providerThread = {
+                ...turnInput.providerThread,
+                ...(nativeSelection === undefined
+                  ? {}
+                  : {
+                      nativeMetadata: {
+                        ...turnInput.providerThread.nativeMetadata,
+                        modelSelection: nativeSelection,
+                      },
+                    }),
+              };
               state.activeTurn = activeTurn;
               activeTurn.adoptedWake = wake !== null && !continuation;
               if (compactCommand !== null) {
