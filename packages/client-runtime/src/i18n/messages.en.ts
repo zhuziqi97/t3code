@@ -5962,6 +5962,29 @@ export const en = {
   "provider.status.codexUnauthenticated":
     "Codex CLI is not authenticated. Run `codex login` and try again.",
   "provider.status.codexProbeFailed": "Codex app-server provider probe failed: {{detail}}",
+  "provider.status.claudeDisabled": "Claude is disabled in T3 Code settings.",
+  "provider.status.claudeUnchecked":
+    "Claude provider status has not been checked in this session yet.",
+  "provider.status.claudeMissing": "Claude Agent CLI (`claude`) was not found on PATH.",
+  "provider.status.claudeHealthFailed": "Failed to execute Claude Agent CLI health check.",
+  "provider.status.claudeTimeout":
+    "Claude Agent CLI is installed but failed to run. Timed out while running command.",
+  "provider.status.claudeRunFailed": "Claude Agent CLI is installed but failed to run.",
+  "provider.status.claudeAuthUnknown":
+    "Could not verify Claude authentication status from initialization result.",
+  "provider.status.claudeUnauthenticated":
+    "Claude Code is not authenticated. Run `claude auth login` and try again.",
+  "provider.status.antigravityChecking": "Checking Antigravity availability.",
+  "provider.status.antigravityDisabled": "Antigravity is disabled in T3 Code settings.",
+  "provider.status.antigravitySignIn": "Sign in with Google to use Antigravity.",
+  "provider.status.antigravityUnchecked":
+    "Antigravity is installed. Google account access is not checked yet.",
+  "provider.status.codexSetup": "Set up Codex to get started.",
+  "provider.status.codexChatGptSignIn": "Sign in with ChatGPT to use Codex.",
+  "provider.status.codexTokenSharingDisabled":
+    "Signed in with ChatGPT, but token sharing is disabled. Sign in again and enable token sharing, or use another provider.",
+  "provider.status.codexCheckFailed":
+    "Could not check Codex right now. Retry, or reconnect in provider settings.",
   "appearance.theme.error.jsonSyntax": "Theme JSON is invalid: {{detail}}",
   "diagnostics.monitor.binary.not-executable":
     "Resource monitor binary at '{{path}}' is not executable.",

@@ -52,6 +52,57 @@ describe("getProviderSummary", () => {
     });
   });
 
+  it.each([
+    ["Claude is disabled in T3 Code settings.", "已在 T3 Code 设置中停用 Claude。"],
+    [
+      "Claude provider status has not been checked in this session yet.",
+      "本次启动后尚未检查 Claude 状态。",
+    ],
+    [
+      "Claude Agent CLI (`claude`) was not found on PATH.",
+      "PATH 中未找到 Claude Agent CLI（`claude`）。",
+    ],
+    ["Failed to execute Claude Agent CLI health check.", "无法执行 Claude Agent CLI 健康检查。"],
+    [
+      "Claude Agent CLI is installed but failed to run. Timed out while running command.",
+      "Claude Agent CLI 已安装，但运行命令时超时。",
+    ],
+    ["Claude Agent CLI is installed but failed to run.", "Claude Agent CLI 已安装，但无法运行。"],
+    [
+      "Could not verify Claude authentication status from initialization result.",
+      "无法从初始化结果确认 Claude 的登录状态。",
+    ],
+    [
+      "Claude Code is not authenticated. Run `claude auth login` and try again.",
+      "Claude Code 尚未登录。请运行 `claude auth login` 后重试。",
+    ],
+    ["Checking Antigravity availability.", "正在检查 Antigravity 是否可用。"],
+    ["Antigravity is disabled in T3 Code settings.", "已在 T3 Code 设置中停用 Antigravity。"],
+    ["Sign in with Google to use Antigravity.", "请使用 Google 账号登录，以使用 Antigravity。"],
+    [
+      "Antigravity is installed. Google account access is not checked yet.",
+      "Antigravity 已安装，尚未检查 Google 账号的访问权限。",
+    ],
+    ["Set up Codex to get started.", "请先设置 Codex。"],
+    ["Sign in with ChatGPT to use Codex.", "请使用 ChatGPT 账号登录，以使用 Codex。"],
+    [
+      "Signed in with ChatGPT, but token sharing is disabled. Sign in again and enable token sharing, or use another provider.",
+      "已使用 ChatGPT 账号登录，但未启用令牌共享。请重新登录并启用令牌共享，或使用其他智能体提供方。",
+    ],
+    [
+      "Could not check Codex right now. Retry, or reconnect in provider settings.",
+      "暂时无法检查 Codex。请重试，或在智能体提供方设置中重新连接。",
+    ],
+  ])(
+    "translates application-owned provider guidance without changing English: %s",
+    (message, chinese) => {
+      const status = { ...provider, message };
+      expect(getProviderSummary(status, createI18n({ lng: "zh" }).t).detail).toBe(chinese);
+      expect(getProviderSummary(status, createI18n({ lng: "en" }).t).detail).toBe(message);
+      expect(status.message).toBe(message);
+    },
+  );
+
   it("does not hide a provider error behind a previous authenticated state", () => {
     expect(
       getProviderSummary({

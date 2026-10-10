@@ -5569,6 +5569,25 @@ export const zh: Partial<Messages> = {
   "provider.status.codexUnchecked": "本次启动后尚未检查 Codex 状态。",
   "provider.status.codexUnauthenticated": "Codex CLI 尚未登录。请运行 `codex login` 后重试。",
   "provider.status.codexProbeFailed": "Codex app-server 状态检查失败：{{detail}}",
+  "provider.status.claudeDisabled": "已在 T3 Code 设置中停用 Claude。",
+  "provider.status.claudeUnchecked": "本次启动后尚未检查 Claude 状态。",
+  "provider.status.claudeMissing": "PATH 中未找到 Claude Agent CLI（`claude`）。",
+  "provider.status.claudeHealthFailed": "无法执行 Claude Agent CLI 健康检查。",
+  "provider.status.claudeTimeout": "Claude Agent CLI 已安装，但运行命令时超时。",
+  "provider.status.claudeRunFailed": "Claude Agent CLI 已安装，但无法运行。",
+  "provider.status.claudeAuthUnknown": "无法从初始化结果确认 Claude 的登录状态。",
+  "provider.status.claudeUnauthenticated":
+    "Claude Code 尚未登录。请运行 `claude auth login` 后重试。",
+  "provider.status.antigravityChecking": "正在检查 Antigravity 是否可用。",
+  "provider.status.antigravityDisabled": "已在 T3 Code 设置中停用 Antigravity。",
+  "provider.status.antigravitySignIn": "请使用 Google 账号登录，以使用 Antigravity。",
+  "provider.status.antigravityUnchecked": "Antigravity 已安装，尚未检查 Google 账号的访问权限。",
+  "provider.status.codexSetup": "请先设置 Codex。",
+  "provider.status.codexChatGptSignIn": "请使用 ChatGPT 账号登录，以使用 Codex。",
+  "provider.status.codexTokenSharingDisabled":
+    "已使用 ChatGPT 账号登录，但未启用令牌共享。请重新登录并启用令牌共享，或使用其他智能体提供方。",
+  "provider.status.codexCheckFailed":
+    "暂时无法检查 Codex。请重试，或在智能体提供方设置中重新连接。",
   "appearance.theme.error.jsonSyntax": "主题 JSON 解析失败：{{detail}}",
   "diagnostics.monitor.binary.not-executable": "资源监控程序“{{path}}”不可执行。",
 };

@@ -27,7 +27,7 @@ export const PROVIDER_STATUS_STYLES = {
 
 export type ProviderStatusKey = keyof typeof PROVIDER_STATUS_STYLES;
 
-/** Translate T3's Codex probe guidance while retaining CLI diagnostics verbatim. */
+/** Translate T3's provider guidance while retaining CLI diagnostics verbatim. */
 export function formatProviderStatusMessage(message: string, translate: TFunction): string {
   switch (message) {
     case "Timed out while checking Codex app-server provider status.":
@@ -38,6 +38,38 @@ export function formatProviderStatusMessage(message: string, translate: TFunctio
       return translate("provider.status.codexUnchecked");
     case "Codex CLI is not authenticated. Run `codex login` and try again.":
       return translate("provider.status.codexUnauthenticated");
+    case "Claude is disabled in T3 Code settings.":
+      return translate("provider.status.claudeDisabled");
+    case "Claude provider status has not been checked in this session yet.":
+      return translate("provider.status.claudeUnchecked");
+    case "Claude Agent CLI (`claude`) was not found on PATH.":
+      return translate("provider.status.claudeMissing");
+    case "Failed to execute Claude Agent CLI health check.":
+      return translate("provider.status.claudeHealthFailed");
+    case "Claude Agent CLI is installed but failed to run. Timed out while running command.":
+      return translate("provider.status.claudeTimeout");
+    case "Claude Agent CLI is installed but failed to run.":
+      return translate("provider.status.claudeRunFailed");
+    case "Could not verify Claude authentication status from initialization result.":
+      return translate("provider.status.claudeAuthUnknown");
+    case "Claude Code is not authenticated. Run `claude auth login` and try again.":
+      return translate("provider.status.claudeUnauthenticated");
+    case "Checking Antigravity availability.":
+      return translate("provider.status.antigravityChecking");
+    case "Antigravity is disabled in T3 Code settings.":
+      return translate("provider.status.antigravityDisabled");
+    case "Sign in with Google to use Antigravity.":
+      return translate("provider.status.antigravitySignIn");
+    case "Antigravity is installed. Google account access is not checked yet.":
+      return translate("provider.status.antigravityUnchecked");
+    case "Set up Codex to get started.":
+      return translate("provider.status.codexSetup");
+    case "Sign in with ChatGPT to use Codex.":
+      return translate("provider.status.codexChatGptSignIn");
+    case "Signed in with ChatGPT, but token sharing is disabled. Sign in again and enable token sharing, or use another provider.":
+      return translate("provider.status.codexTokenSharingDisabled");
+    case "Could not check Codex right now. Retry, or reconnect in provider settings.":
+      return translate("provider.status.codexCheckFailed");
   }
   const probeFailure = "Codex app-server provider probe failed: ";
   return message.startsWith(probeFailure)

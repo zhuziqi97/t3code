@@ -94,6 +94,42 @@ describe("ProviderStatusBanner", () => {
 });
 
 describe("getProviderStatusMessage", () => {
+  it.each([
+    [
+      "claudeAgent",
+      "Claude Code is not authenticated. Run `claude auth login` and try again.",
+      "Claude Code 尚未登录。请运行 `claude auth login` 后重试。",
+    ],
+    [
+      "antigravity",
+      "Sign in with Google to use Antigravity.",
+      "请使用 Google 账号登录，以使用 Antigravity。",
+    ],
+    ["codex", "Sign in with ChatGPT to use Codex.", "请使用 ChatGPT 账号登录，以使用 Codex。"],
+    [
+      "codex",
+      "Signed in with ChatGPT, but token sharing is disabled. Sign in again and enable token sharing, or use another provider.",
+      "已使用 ChatGPT 账号登录，但未启用令牌共享。请重新登录并启用令牌共享，或使用其他智能体提供方。",
+    ],
+  ])(
+    "translates sign-in guidance while preserving dismissal identity: %s",
+    (driver, message, chinese) => {
+      const status = {
+        ...warningProvider(),
+        driver: ProviderDriverKind.make(driver),
+        status: "error" as const,
+        auth: { status: "unauthenticated" as const },
+        message,
+      };
+      const key = getProviderStatusBannerKey(status);
+      expect(getProviderStatusMessage(status, createI18n({ lng: "zh" }).t)).toBe(chinese);
+      expect(getProviderStatusMessage(status, createI18n({ lng: "en" }).t)).toBe(message);
+      expect(getProviderStatusBannerKey(status)).toBe(key);
+      expect(shouldShowProviderStatusBanner(status, key)).toBe(false);
+      expect(status.message).toBe(message);
+    },
+  );
+
   it("translates the current Codex timeout without changing banner identity or provider data", () => {
     const status = {
       ...warningProvider(),
