@@ -1,3 +1,4 @@
+import { useTranslate } from "~/i18n";
 import { parseChangeRequestUrl } from "@t3tools/shared/changeRequestUrl";
 import { useAtomValue } from "@effect/atom-react";
 import { usePullRequestStack } from "~/state/usePullRequestStack";
@@ -249,10 +250,12 @@ const ACTION_FAILURE_HINTS: Record<PullRequestAction, string> = {
 const UPDATE_BRANCH_REBASE_FAILURE_HINT =
   "The host refused it. A rebase stops at the first commit that does not apply cleanly; updating with a merge commit may still work.";
 
-const TABS: ReadonlyArray<{ value: DetailTab; label: string }> = [
-  { value: "summary", label: "Summary" },
-  { value: "timeline", label: "Timeline" },
-  { value: "code", label: "Code" },
+const TABS = (
+  t: ReturnType<typeof useTranslate>,
+): ReadonlyArray<{ value: DetailTab; label: string }> => [
+  { value: "summary", label: t("pullRequest.detail.summary") },
+  { value: "timeline", label: t("pullRequest.detail.timeline") },
+  { value: "code", label: t("pullRequest.detail.code") },
 ];
 
 // The diff viewer pulls in its worker pool, so load it only when the reader approaches Code.
@@ -477,6 +480,7 @@ export function PullRequestDetailPanel({
    */
   onBack?: (() => void) | undefined;
 }) {
+  const t = useTranslate();
   const environmentConfigs = useServerConfigs();
   const projects = useProjects();
   const project = projects.find(
@@ -1449,7 +1453,7 @@ export function PullRequestDetailPanel({
   // A host that cannot produce a patch has no Code tab to open. While detail is loading the ghost
   // uses this optimistic tab set to reserve the same chrome; a host without a patch removes Code
   // when its capabilities arrive.
-  const visibleTabs = TABS.filter(
+  const visibleTabs = TABS(t).filter(
     (item) => item.value !== "code" || detail === null || detail.capabilities.diff,
   );
   // The Code tab can be opened while the detail is still on its way, and the detail may then say
@@ -1523,16 +1527,16 @@ export function PullRequestDetailPanel({
   // The pull request number carries this state in the overview and the right-panel tab mirrors
   // it. Conflicts take the action slot while they need a person, but do not change the PR state.
   const statePresentation = detail
-    ? resolvePullRequestState({ state: detail.state, isDraft: detail.isDraft })
+    ? resolvePullRequestState({ state: detail.state, isDraft: detail.isDraft }, t)
     : null;
   const showsApproveWorkflows =
     workflowApprovalsRequired > 0 && !checksStale && can("approve-workflows");
   const checksSummary = checksStale
     ? checksState === null
-      ? "No checks reported"
-      : pullRequestChecksStatePresentation(checksState).label
+      ? t("pullRequest.checks.none")
+      : pullRequestChecksStatePresentation(checksState, t).label
     : detail
-      ? summarizePullRequestChecks(detail.checks)
+      ? summarizePullRequestChecks(detail.checks, t)
       : null;
   // Approvals that still stand, and only those. A superseded one is dimmed beside the reviewer
   // who gave it, so counting it here would have the header assert in a number what the row next
@@ -1701,7 +1705,7 @@ export function PullRequestDetailPanel({
                           variant="ghost-muted"
                           onClick={onBack}
                           className="-ml-1.5"
-                          aria-label="Back to this thread's pull requests"
+                          aria-label={t("pullRequest.detail.backToThread")}
                         >
                           <ArrowLeftIcon aria-hidden className="size-3.5" />
                         </Button>
@@ -1743,7 +1747,7 @@ export function PullRequestDetailPanel({
                           "inline-flex shrink-0 cursor-pointer items-center gap-0.5 font-medium underline-offset-2 hover:underline",
                           statePresentation.toneClassName,
                         )}
-                        aria-label={`Open pull request #${detail.number} on host`}
+                        aria-label={t("pullRequest.detail.openOnHost", { number: detail.number })}
                       >
                         #{detail.number}
                         <ExternalLinkIcon aria-hidden className="size-2.5" />
@@ -1777,7 +1781,7 @@ export function PullRequestDetailPanel({
                           tabIndex={condensed ? 0 : -1}
                           onClick={onBack}
                           className="-ml-1.5"
-                          aria-label="Back to this thread's pull requests"
+                          aria-label={t("pullRequest.detail.backToThread")}
                         >
                           <ArrowLeftIcon aria-hidden className="size-3.5" />
                         </Button>
@@ -1798,7 +1802,7 @@ export function PullRequestDetailPanel({
                           "inline-flex shrink-0 cursor-pointer items-center gap-0.5 font-medium underline-offset-2 hover:underline",
                           statePresentation.toneClassName,
                         )}
-                        aria-label={`Open pull request #${detail.number} on host`}
+                        aria-label={t("pullRequest.detail.openOnHost", { number: detail.number })}
                       >
                         #{detail.number}
                         <ExternalLinkIcon aria-hidden className="size-2.5" />
@@ -2234,7 +2238,7 @@ export function PullRequestDetailPanel({
             <Button
               size="icon-xs"
               variant="ghost"
-              aria-label="Collapse pull request panel"
+              aria-label={t("pullRequest.detail.collapse")}
               onClick={onClose}
             >
               <PanelRightIcon className="size-3.5" />
@@ -2321,7 +2325,7 @@ export function PullRequestDetailPanel({
                       </Tooltip>
                     )}
                     <ArrowLeftIcon
-                      aria-label="receives changes from"
+                      aria-label={t("pullRequest.detail.receivesChanges")}
                       className="size-3 shrink-0 opacity-60"
                     />
                     <Tooltip>
@@ -2338,9 +2342,10 @@ export function PullRequestDetailPanel({
                   <span className="ml-auto inline-flex shrink-0 items-center justify-end gap-2 text-2xs">
                     <span
                       className="inline-flex items-center gap-1 tabular-nums"
-                      aria-label={`${detail.changedFiles.toLocaleString()} changed ${
-                        detail.changedFiles === 1 ? "file" : "files"
-                      }`}
+                      aria-label={t("pullRequest.detail.changedFiles", {
+                        count: detail.changedFiles,
+                        formattedCount: detail.changedFiles.toLocaleString(),
+                      })}
                     >
                       <FileDiffIcon aria-hidden className="size-3" />
                       {detail.changedFiles.toLocaleString()}
@@ -2448,15 +2453,21 @@ export function PullRequestDetailPanel({
                 author={
                   <PullRequestActorLabel actor={detail.author} profileUrl={authorProfileUrl} />
                 }
-                updated={<span>updated {formatRelativeTimeLabel(detail.updatedAt)}</span>}
+                updated={
+                  <span>
+                    {t("pullRequest.detail.updated", {
+                      time: formatRelativeTimeLabel(detail.updatedAt),
+                    })}
+                  </span>
+                }
                 checkout={
                   checkoutCommand ? (
                     <PullRequestCopyableCode
                       key={checkoutCommand}
                       value={checkoutCommand}
                       target="pull request checkout command"
-                      copyLabel="Copy checkout command"
-                      copiedLabel="Checkout command copied"
+                      copyLabel={t("pullRequest.detail.copyCheckout")}
+                      copiedLabel={t("pullRequest.detail.checkoutCopied")}
                       className="ml-auto font-mono"
                       tooltipSide="bottom"
                       onError={onCheckoutCommandError}
@@ -2515,11 +2526,14 @@ export function PullRequestDetailPanel({
                     key={detail.headBranch}
                     value={detail.headBranch}
                     target="branch name"
-                    copyLabel="Copy pull request branch"
-                    copiedLabel="Branch name copied"
+                    copyLabel={t("pullRequest.detail.copyBranch")}
+                    copiedLabel={t("pullRequest.detail.branchCopied")}
                   />
                 }
-                files={`${detail.changedFiles.toLocaleString()} ${detail.changedFiles === 1 ? "file" : "files"}`}
+                files={t("pullRequest.detail.files", {
+                  count: detail.changedFiles,
+                  formattedCount: detail.changedFiles.toLocaleString(),
+                })}
                 diffStat={
                   <PullRequestDiffStat
                     additions={detail.additions}
@@ -2579,7 +2593,11 @@ export function PullRequestDetailPanel({
               ) : (
                 <PullRequestChecksStatusLine
                   className="text-muted-foreground"
-                  aria-label={checksSummary ? `Checks: ${checksSummary}` : "Checks"}
+                  aria-label={
+                    checksSummary
+                      ? t("pullRequest.checks.summary", { summary: checksSummary })
+                      : t("pullRequest.list.checks")
+                  }
                   icon={
                     checksState !== null ? (
                       <PullRequestChecksPopover

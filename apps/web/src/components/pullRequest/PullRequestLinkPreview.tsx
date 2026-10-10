@@ -1,3 +1,4 @@
+import { useTranslate } from "~/i18n";
 import type { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
 import { isAtomCommandInterrupted } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentId, PullRequestRef } from "@t3tools/contracts";
@@ -46,6 +47,7 @@ export function PullRequestLinkPreview({
   onOpenFallback?: (url: string) => Promise<void>;
   fallback?: ReactNode;
 }) {
+  const t = useTranslate();
   const [open, setOpen] = useState(false);
   const previewActionsRef = useRef<PreviewCardPrimitive.Root.Actions | null>(null);
   const [resolvingClick, setResolvingClick] = useState(false);
@@ -90,7 +92,7 @@ export function PullRequestLinkPreview({
   const state =
     detail === null
       ? null
-      : resolvePullRequestState({ state: detail.state, isDraft: detail.isDraft });
+      : resolvePullRequestState({ state: detail.state, isDraft: detail.isDraft }, t);
   const authorLabel =
     detail?.author === null
       ? "ghost"
@@ -140,7 +142,9 @@ export function PullRequestLinkPreview({
                   <span className="min-w-0 truncate">{authorLabel}</span>
                   <span aria-hidden>·</span>
                   <span className="shrink-0">
-                    opened {formatRelativeTimeLabel(detail.createdAt)}
+                    {t("pullRequest.detail.opened", {
+                      time: formatRelativeTimeLabel(detail.createdAt),
+                    })}
                   </span>
                 </div>
               </div>

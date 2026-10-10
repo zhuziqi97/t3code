@@ -72,16 +72,6 @@ export function localizedStatusLabel(label: string, t: TFunction): string {
   return keys[label] ? t(keys[label]!) : label;
 }
 
-function localizedPullRequestStateLabel(label: string, t: TFunction): string {
-  const keys: Record<string, string> = {
-    Open: "pullRequest.state.open",
-    Draft: "pullRequest.state.draft",
-    Closed: "pullRequest.state.closed",
-    Merged: "pullRequest.state.merged",
-  };
-  return keys[label] ? t(keys[label]!) : label;
-}
-
 export interface PrStatusIndicator {
   label: string;
   colorClass: string;
@@ -215,7 +205,7 @@ export function resolveThreadPullRequestBadgePresentation(
       toneClassName: aggregate.toneClassName,
       label: t("pullRequest.stack", {
         count: badge.layers,
-        state: localizedPullRequestStateLabel(aggregate.label, t).toLowerCase(),
+        state: t(aggregate.labelKey).toLowerCase(),
       }),
       text: badge.layers,
     };
@@ -232,7 +222,7 @@ export function resolveThreadPullRequestBadgePresentation(
       label: t("pullRequest.moreLinked", {
         tooltip,
         count: badge.others,
-        state: localizedPullRequestStateLabel(aggregate.label, t).toLowerCase(),
+        state: t(aggregate.labelKey).toLowerCase(),
       }),
       text: `+${badge.others + 1}`,
     };
@@ -383,6 +373,7 @@ export function ThreadPullRequestsMiniList({
   pullRequests: ReadonlyArray<ThreadPullRequestLink>;
   onOpenPullRequest?: (event: MouseEvent<HTMLAnchorElement>, url: string) => void;
 }) {
+  const t = useTranslate();
   const lines = useMemo(
     () =>
       pullRequestListLines(resolveThreadPullRequestChains(visibleThreadPullRequests(pullRequests))),
@@ -396,7 +387,7 @@ export function ThreadPullRequestsMiniList({
         const presentation =
           snapshot === null
             ? null
-            : resolvePullRequestState({ state: snapshot.state, isDraft: snapshot.isDraft });
+            : resolvePullRequestState({ state: snapshot.state, isDraft: snapshot.isDraft }, t);
         return (
           <ThreadPullRequestMiniListItem
             key={`${line.link.host}/${line.link.repository}#${line.link.number}`}
@@ -475,9 +466,9 @@ export function prStatusIndicator(
 ): PrStatusIndicator | null {
   if (!pr) return null;
   const presentation = resolveChangeRequestPresentation(provider);
-  const state = resolvePullRequestState({ state: pr.state, isDraft: pr.isDraft === true });
+  const state = resolvePullRequestState({ state: pr.state, isDraft: pr.isDraft === true }, t);
 
-  const stateLabel = localizedPullRequestStateLabel(state.label, t);
+  const stateLabel = state.label;
   const tooltipLead = `${presentation.shortName} #${pr.number} - ${stateLabel}`;
   return {
     label: `${presentation.shortName} ${stateLabel.toLowerCase()}`,
