@@ -48,7 +48,14 @@ import { Popover, PopoverPopup, PopoverTrigger } from "~/components/ui/popover";
 import { Button } from "~/components/ui/button";
 import { PanelTabCloseButton } from "~/components/ui/panel-tab-close-button";
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
-import { readTextFromClipboard, writeTextToClipboard } from "~/hooks/useCopyToClipboard";
+import {
+  ClipboardApiUnavailableError,
+  ClipboardReadError,
+  ClipboardReadUnavailableError,
+  ClipboardWriteError,
+  readTextFromClipboard,
+  writeTextToClipboard,
+} from "~/hooks/useCopyToClipboard";
 import { cn } from "~/lib/utils";
 import { type TerminalContextSelection } from "~/lib/terminalContext";
 import {
@@ -100,6 +107,10 @@ import {
 
 const MIN_DRAWER_HEIGHT = 180;
 const MAX_DRAWER_HEIGHT_RATIO = 0.75;
+const isClipboardApiUnavailableError = Schema.is(ClipboardApiUnavailableError);
+const isClipboardWriteError = Schema.is(ClipboardWriteError);
+const isClipboardReadUnavailableError = Schema.is(ClipboardReadUnavailableError);
+const isClipboardReadError = Schema.is(ClipboardReadError);
 
 function maxDrawerHeight(): number {
   if (typeof window === "undefined") return DEFAULT_THREAD_TERMINAL_HEIGHT;
@@ -715,7 +726,19 @@ export function TerminalViewport({
         if (requestId !== selectionActionRequestIdRef.current) return;
         const activeTerminal = terminalRef.current;
         if (activeTerminal) {
-          writeSystemMessage(activeTerminal, error instanceof Error ? error.message : fallback);
+          const clipboardKey = isClipboardApiUnavailableError(error)
+            ? "terminal.clipboard.copyUnavailable"
+            : isClipboardWriteError(error)
+              ? "terminal.clipboard.copyFailed"
+              : isClipboardReadUnavailableError(error)
+                ? "terminal.clipboard.readUnavailable"
+                : isClipboardReadError(error)
+                  ? "terminal.clipboard.readFailed"
+                  : null;
+          writeSystemMessage(
+            activeTerminal,
+            clipboardKey ? i18n.t(clipboardKey) : error instanceof Error ? error.message : fallback,
+          );
         }
       };
 

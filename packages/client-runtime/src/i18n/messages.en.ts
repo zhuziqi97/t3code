@@ -3788,6 +3788,12 @@ export const en = {
   "terminal.exited": "Process exited",
   "terminal.copyFailed": "Unable to copy terminal selection",
   "terminal.clipboardFailed": "Unable to read the clipboard",
+  "terminal.clipboard.copyUnavailable":
+    "Clipboard API is unavailable while copying terminal selection.",
+  "terminal.clipboard.copyFailed": "Failed to copy terminal selection to the clipboard.",
+  "terminal.clipboard.readUnavailable":
+    "Clipboard API is unavailable while reading terminal input.",
+  "terminal.clipboard.readFailed": "Failed to read terminal input from the clipboard.",
   "terminal.menuFailed": "Unable to open the terminal context menu",
   "terminal.cursorFailed": "Failed to move cursor",
   "terminal.deleteInputFailed": "Failed to delete terminal input",

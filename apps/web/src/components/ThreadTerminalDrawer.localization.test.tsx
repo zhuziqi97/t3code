@@ -35,7 +35,8 @@ vi.mock("../state/session", () => ({
 vi.mock("~/terminal/ghostty/surface", () => ({
   GhosttyTerminalSurface: { create: state.createSurface },
 }));
-vi.mock("~/lib/selectionActions", () => ({
+vi.mock("~/lib/selectionActions", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/lib/selectionActions")>()),
   observeSelectionActions: () => ({ cancel: vi.fn(), dispose: vi.fn(), pending: false }),
 }));
 
@@ -63,7 +64,13 @@ function createSurface() {
     fit: vi.fn(),
     scrollToBottom: vi.fn(),
     isAtBottom: () => true,
-    hasSelection: () => false,
+    hasSelection: vi.fn(() => false),
+    getSelection: () => "Raw selected output 原文",
+    getSelectionPosition: () => ({ start: { x: 0, y: 0 }, end: { x: 5, y: 0 } }),
+    getSelectionEndClientRect: () => null,
+    pasteFromClipboard: vi.fn(async (readText: () => Promise<string>) => {
+      await readText();
+    }),
     dispose: vi.fn(),
     write: vi.fn(),
     resetAndWrite: vi.fn(),
@@ -180,5 +187,64 @@ it("retranslates initialization errors while retaining raw diagnostics and avoid
   await switchLanguage("zh");
   expect(container.textContent).toBe("raw WASM diagnostic；请关闭并重新打开终端后重试。");
   expect(state.createSurface).toHaveBeenCalledOnce();
+  expect(state.command).not.toHaveBeenCalled();
+});
+
+it.each([
+  ["copy", false, "剪贴板不可用，无法复制终端选中的内容。"],
+  ["copy", true, "无法将终端选中的内容复制到剪贴板。"],
+  ["paste", false, "剪贴板不可用，无法粘贴到终端。"],
+  ["paste", true, "无法读取剪贴板内容。"],
+] as const)(
+  "shows a Chinese %s clipboard failure with API availability %s",
+  async (action, available, expected) => {
+    vi.stubGlobal(
+      "navigator",
+      available
+        ? {
+            clipboard: {
+              writeText: vi.fn().mockRejectedValue(new Error("raw clipboard failure")),
+              readText: vi.fn().mockRejectedValue(new Error("raw clipboard failure")),
+            },
+          }
+        : {},
+    );
+    surface.hasSelection.mockReturnValue(action === "copy");
+    state.menu.mockResolvedValue(action);
+    await switchLanguage("zh");
+    await render();
+    const options = state.createSurface.mock.calls[0]![1];
+    await act(async () => options.onContextMenu?.(new MouseEvent("contextmenu")));
+    expect(surface.write.mock.calls.flat().join("")).toContain(expected);
+    expect(state.command).not.toHaveBeenCalled();
+    expect(state.createSurface).toHaveBeenCalledOnce();
+  },
+);
+
+it("uses the completion language when a clipboard read fails after switching", async () => {
+  let rejectRead: (cause: Error) => void = () => undefined;
+  const pending = new Promise<string>((_, reject) => {
+    rejectRead = reject;
+  });
+  vi.stubGlobal("navigator", { clipboard: { readText: () => pending } });
+  state.menu.mockResolvedValue("paste");
+  await render();
+  const options = state.createSurface.mock.calls[0]![1];
+  await act(async () => options.onContextMenu?.(new MouseEvent("contextmenu")));
+  expect(surface.write).not.toHaveBeenCalled();
+  await switchLanguage("zh");
+  await act(async () => rejectRead(new Error("raw delayed clipboard denial")));
+  expect(surface.write.mock.calls.flat().join("")).toContain("无法读取剪贴板内容。");
+  expect(state.command).not.toHaveBeenCalled();
+  expect(surface.dispose).not.toHaveBeenCalled();
+});
+
+it("preserves unknown terminal menu diagnostics", async () => {
+  state.menu.mockRejectedValue(new Error("Unknown menu diagnostic 原文"));
+  await switchLanguage("zh");
+  await render();
+  const options = state.createSurface.mock.calls[0]![1];
+  await act(async () => options.onContextMenu?.(new MouseEvent("contextmenu")));
+  expect(surface.write.mock.calls.flat().join("")).toContain("Unknown menu diagnostic 原文");
   expect(state.command).not.toHaveBeenCalled();
 });
