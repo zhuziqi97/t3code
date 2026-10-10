@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { resolveLanguage } from "@t3tools/client-runtime/i18n";
-import { useClientSettings } from "./hooks/useSettings";
+import { useClientSettings, useClientSettingsHydrated } from "./hooks/useSettings";
 import { i18n, changeLanguage } from "./i18n";
 
 /**
@@ -15,14 +15,16 @@ import { i18n, changeLanguage } from "./i18n";
  */
 export function LanguageSync() {
   const languagePreference = useClientSettings((settings) => settings.languagePreference);
+  const settingsHydrated = useClientSettingsHydrated();
 
   useEffect(() => {
+    if (!settingsHydrated) return;
     const language = resolveLanguage(languagePreference, navigator.languages);
     if (i18n.resolvedLanguage !== language) {
       void changeLanguage(language);
     }
     document.documentElement.lang = language;
-  }, [languagePreference]);
+  }, [languagePreference, settingsHydrated]);
 
   return null;
 }

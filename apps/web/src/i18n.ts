@@ -7,12 +7,16 @@
  * without a provider, which keeps component tests that render a screen directly
  * working unchanged.
  */
-import { initReactI18next, useTranslation } from "react-i18next";
+import { getI18n, initReactI18next, setI18n, useTranslation } from "react-i18next";
 
 import { createI18n } from "@t3tools/client-runtime/i18n";
 import type { SupportedLanguage } from "@t3tools/client-runtime/i18n";
 
-const preservedInstance = import.meta.hot?.data?.i18n as ReturnType<typeof createI18n> | undefined;
+// A newly loaded consumer can import this binding before dispose data is
+// available. Reuse the renderer's instance rather than registering a second one.
+const preservedInstance = import.meta.hot?.data
+  ? (getI18n() ?? (import.meta.hot.data.i18n as ReturnType<typeof createI18n> | undefined))
+  : undefined;
 export const i18n = preservedInstance ?? createI18n({ plugins: [initReactI18next] });
 
 if (import.meta.hot?.data) {
@@ -23,6 +27,7 @@ if (import.meta.hot?.data) {
     data.i18n = i18n;
   });
   if (preservedInstance) {
+    setI18n(i18n);
     const updatedCatalogs = createI18n();
     for (const [language, namespaces] of Object.entries(updatedCatalogs.store.data)) {
       for (const [namespace, messages] of Object.entries(namespaces)) {
@@ -47,5 +52,5 @@ export function changeLanguage(language: SupportedLanguage): Promise<unknown> {
 
 /** Translate function bound to the active language. */
 export function useTranslate() {
-  return useTranslation().t;
+  return useTranslation(undefined, { i18n }).t;
 }

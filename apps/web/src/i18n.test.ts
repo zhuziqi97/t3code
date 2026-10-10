@@ -4,8 +4,12 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 
-const settings = vi.hoisted(() => ({ languagePreference: "system" as "system" | "en" | "zh" }));
+const settings = vi.hoisted(() => ({
+  languagePreference: "system" as "system" | "en" | "zh",
+  hydrated: true,
+}));
 vi.mock("./hooks/useSettings", () => ({
+  useClientSettingsHydrated: () => settings.hydrated,
   useClientSettings: (select: (value: typeof settings) => unknown) => select(settings),
 }));
 
@@ -35,9 +39,60 @@ describe("web i18n binding", () => {
     await changeLanguage("en");
     expect(i18n.t("wizard.continue")).toBe("Continue");
   });
+
+  it("keeps the initialized renderer language after another binding registers during an update", async () => {
+    const { createI18n } = await import("@t3tools/client-runtime/i18n");
+    const { initReactI18next, setI18n } = await import("react-i18next");
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    await changeLanguage("zh");
+    createI18n({ plugins: [initReactI18next] });
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    function Screen() {
+      const t = useTranslate();
+      return createElement("button", null, t("wizard.continue"));
+    }
+    try {
+      await act(async () => root.render(createElement(Screen)));
+      expect(container.textContent).toBe("继续");
+      await act(async () => changeLanguage("en"));
+      expect(container.textContent).toBe("Continue");
+    } finally {
+      await act(async () => root.unmount());
+      setI18n(i18n);
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 describe("LanguageSync", () => {
+  it("preserves the current language while native settings are being hydrated", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    await changeLanguage("zh");
+    document.documentElement.lang = "zh";
+    settings.languagePreference = "system";
+    settings.hydrated = false;
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    function Screen() {
+      const t = useTranslate();
+      return createElement("div", null, createElement(LanguageSync), t("wizard.continue"));
+    }
+    try {
+      await act(async () => root.render(createElement(Screen)));
+      expect(container.textContent).toBe("继续");
+      expect(document.documentElement.lang).toBe("zh");
+      settings.languagePreference = "en";
+      settings.hydrated = true;
+      await act(async () => root.render(createElement(Screen)));
+      expect(container.textContent).toBe("Continue");
+      expect(document.documentElement.lang).toBe("en");
+    } finally {
+      await act(async () => root.unmount());
+      settings.hydrated = true;
+      vi.unstubAllGlobals();
+    }
+  });
   it("resolves the system locale for onboarding, then follows explicit preferences", async () => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     vi.spyOn(navigator, "languages", "get").mockReturnValue(["zh-CN"]);
