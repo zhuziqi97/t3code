@@ -5962,6 +5962,7 @@ export const en = {
   "provider.status.codexUnauthenticated":
     "Codex CLI is not authenticated. Run `codex login` and try again.",
   "provider.status.codexProbeFailed": "Codex app-server provider probe failed: {{detail}}",
+  "appearance.theme.error.jsonSyntax": "Theme JSON is invalid: {{detail}}",
   "diagnostics.monitor.binary.not-executable":
     "Resource monitor binary at '{{path}}' is not executable.",
 } as const;

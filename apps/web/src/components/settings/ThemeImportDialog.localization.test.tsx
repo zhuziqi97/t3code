@@ -123,6 +123,32 @@ it("retranslates a visible parser failure without re-importing or discarding the
   expect(getCustomThemes()).toEqual([]);
 });
 
+it("explains malformed JSON in the current language and preserves the parser diagnostic for retry", async () => {
+  await render();
+  const json = "{broken JSON 原文";
+  let diagnostic = "";
+  try {
+    JSON.parse(json);
+  } catch (cause) {
+    expect(cause).toBeInstanceOf(SyntaxError);
+    diagnostic = (cause as SyntaxError).message;
+  }
+  await fill(json);
+  await click("Add theme");
+  expect(document.body.textContent).toContain(`Theme JSON is invalid: ${diagnostic}`);
+  await switchLanguage();
+  expect(document.body.textContent).toContain(`主题 JSON 解析失败：${diagnostic}`);
+  expect(editor().value).toBe(json);
+  expect(imported).not.toHaveBeenCalled();
+  expect(getCustomThemes()).toEqual([]);
+  await fill(JSON.stringify(input));
+  await click("添加主题");
+  expect(imported).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ id: input.id, label: input.name }),
+  );
+  expect(close).toHaveBeenCalledExactlyOnceWith(false);
+});
+
 it("does not restart a pending file read and shows its failure in the current language", async () => {
   await render();
   let rejectRead!: (cause: unknown) => void;
@@ -182,6 +208,28 @@ it("keeps successful batch imports and retranslates individual failures while re
   expect(readLarge).not.toHaveBeenCalled();
   expect(importedMany).toHaveBeenCalledTimes(1);
   expect(imported).not.toHaveBeenCalled();
+  expect(close).not.toHaveBeenCalled();
+});
+
+it("localizes a batch syntax failure without repeating reads or reinstalling its successful file", async () => {
+  await render();
+  const valid = new File([""], "Raw Valid.json");
+  const readValid = vi.fn(async () => JSON.stringify(input));
+  Object.defineProperty(valid, "text", { value: readValid });
+  const broken = new File([""], "Raw Broken.json");
+  const readBroken = vi.fn(async () => "{broken JSON 原文");
+  Object.defineProperty(broken, "text", { value: readBroken });
+  await chooseFile(valid, broken);
+  expect(document.body.textContent).toContain("Raw Broken.json: Theme JSON is invalid: ");
+  await switchLanguage();
+  expect(document.body.textContent).toContain("Raw Broken.json：主题 JSON 解析失败：");
+  expect(getCustomThemes().map((theme) => theme.id)).toEqual([input.id]);
+  expect(importedMany).toHaveBeenCalledExactlyOnceWith(
+    [expect.objectContaining({ id: input.id, label: input.name })],
+    { updated: false },
+  );
+  expect(readValid).toHaveBeenCalledTimes(1);
+  expect(readBroken).toHaveBeenCalledTimes(1);
   expect(close).not.toHaveBeenCalled();
 });
 

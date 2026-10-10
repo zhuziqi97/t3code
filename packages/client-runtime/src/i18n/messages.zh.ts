@@ -5569,5 +5569,6 @@ export const zh: Partial<Messages> = {
   "provider.status.codexUnchecked": "本次启动后尚未检查 Codex 状态。",
   "provider.status.codexUnauthenticated": "Codex CLI 尚未登录。请运行 `codex login` 后重试。",
   "provider.status.codexProbeFailed": "Codex app-server 状态检查失败：{{detail}}",
+  "appearance.theme.error.jsonSyntax": "主题 JSON 解析失败：{{detail}}",
   "diagnostics.monitor.binary.not-executable": "资源监控程序“{{path}}”不可执行。",
 };

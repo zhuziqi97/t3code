@@ -60,6 +60,11 @@ const FIXED_ERROR_KEYS = [
 
 const PARAMETERIZED_ERRORS = [
   {
+    pattern: /^Theme JSON is invalid: (.*)$/s,
+    key: "appearance.theme.error.jsonSyntax",
+    parameter: "detail",
+  },
+  {
     pattern: /^This theme file uses an unsupported version\. Expected (.+)\.$/s,
     key: "appearance.theme.error.version",
     parameter: "version",

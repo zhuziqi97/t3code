@@ -234,7 +234,12 @@ export function ThemeImportDialog({
           } catch (cause) {
             failures.push({
               name: file.name,
-              message: cause instanceof Error ? cause.message : "not a theme file",
+              message:
+                cause instanceof SyntaxError
+                  ? `Theme JSON is invalid: ${cause.message}`
+                  : cause instanceof Error
+                    ? cause.message
+                    : "not a theme file",
             });
           }
         }
@@ -421,7 +426,13 @@ export function ThemeImportDialog({
       }
       onOpenChange(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "That theme file is invalid.");
+      setError(
+        cause instanceof SyntaxError
+          ? `Theme JSON is invalid: ${cause.message}`
+          : cause instanceof Error
+            ? cause.message
+            : "That theme file is invalid.",
+      );
     }
   }, [json, onImported, onOpenChange]);
 
