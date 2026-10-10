@@ -14,6 +14,139 @@
  * rename another product or rewrite a command it tells the user to run.
  */
 export const en = {
+  "connect.onboarding.notNow": "Not now",
+  "connection.offlineDetail": "You appear to be offline.",
+  "connection.routeAdded": "T3 Connect route added",
+  "connection.environmentAdded": "Environment added",
+  "connection.routeAddedDescription":
+    "{{label}} falls back to T3 Connect when its other routes are unreachable.",
+  "connection.environmentAddedDescription": "Connecting to {{label}} through T3 Connect.",
+  "connection.connectFailedDetail": "Could not connect the T3 Connect environment.",
+  "connection.savedWithoutRelay": "Saved without T3 Connect",
+  "connection.notAdded": "Not added",
+  "connection.relayOnline": "Relay online",
+  "connection.relayOffline": "Relay offline",
+  "connection.relayChecking": "Checking relay status…",
+  "connection.relayUnavailable": "Relay status unavailable",
+  "connection.discoveryStatus": "T3 Connect · {{registration}} · {{status}}",
+  "connect.cli.request": "Authorization request",
+  "connect.cli.invalidTitle": "This connect link is incomplete",
+  "connect.cli.invalidDescription":
+    "The link is missing its authorization request. Re-run `t3 connect` in your terminal and open the freshly printed URL.",
+  "connect.cli.browserAuthorization": "Browser authorization",
+  "connect.cli.title": "Connecting your terminal",
+  "connect.cli.redirecting": "Redirecting to authorize T3 Connect for your CLI…",
+  "connect.cli.signInDescription": "Sign in to continue authorizing T3 Connect for your CLI.",
+  "connect.onboarding.enabled": "T3 Connect enabled",
+  "connect.onboarding.environmentEnabled":
+    "This environment is available to your other devices through T3 Connect.",
+  "connect.onboarding.activityEnabled":
+    "This environment publishes agent activity to your mobile clients.",
+  "connect.onboarding.title": "Set up T3 Connect",
+  "connect.onboarding.description":
+    "Mesh your devices together — publish this environment and connect the rest, all in one place.",
+  "connect.onboarding.dontShowAgain": "Don't show this again",
+  "connect.onboarding.enabling": "Enabling…",
+  "connect.onboarding.publish": "Publish",
+  "connect.onboarding.devices": "Connect devices",
+  "connect.onboarding.publishEnvironment": "Publish this environment",
+  "connect.onboarding.publishEnvironmentDescription":
+    "Make this environment available to your other devices through T3 Connect.",
+  "connect.onboarding.publishActivity": "Publish agent activity",
+  "connect.onboarding.publishActivityDescription":
+    "Send activity from this environment to your mobile clients for push notifications and Live Activities.",
+  "connect.onboarding.empty":
+    "No other environments are published to your account yet. Publish one from another device and it will show up here.",
+  "connections.error.networkHint":
+    "Your DNS or firewall may be blocking T3 Connect. Try another network, such as a phone hotspot.",
+  "connections.error.clockHint":
+    "Hint: Check that automatic date and time is enabled on both devices, then try again.",
+  "connections.error.unknownDpopHint":
+    "Hint: Try again. If it still fails, clock skew may be the cause; check that automatic date and time is enabled on both devices.",
+  "connections.error.retryDpopHint":
+    "Hint: Try again. If the problem continues, copy the trace ID.",
+  "connections.error.cloudSignIn": "Sign in to T3 Connect to connect this environment.",
+  "connections.error.cloudSession": "The T3 Connect session is unavailable.",
+  "connections.error.sshDesktopOnly": "SSH environments are only available in the desktop app.",
+  "connections.error.sshPairing": "The SSH environment did not issue a pairing credential.",
+  "connections.error.relayCloudToken": "Relay rejected the cloud session token.",
+  "connections.error.relayDpop": "Relay rejected the DPoP proof.",
+  "connections.error.relayAuthenticatedRequest": "Relay rejected the authenticated request.",
+  "connections.error.relayExpiredLinkProof": "Relay rejected an expired environment link proof.",
+  "connections.error.relayMissingLink":
+    "Relay has no active link for this environment. The environment server may not have re-established its link yet.",
+  "connections.error.relayConnectRejected": "Relay rejected the environment connection request.",
+  "connections.error.relayEndpointTimeout":
+    "Relay timed out while contacting the environment endpoint.",
+  "connections.error.relayExpiredActivityProof":
+    "Relay rejected an expired agent activity publish proof.",
+  "connections.error.relayDpopKey": "Could not load relay DPoP proof key.",
+  "connections.error.relayUrl": "Relay URL must be a secure absolute HTTPS origin.",
+  "connections.error.relayScopes": "Relay granted unexpected DPoP access token scopes.",
+  "connections.error.relayTokenProof": "Could not create relay token DPoP proof.",
+  "connections.error.relayRequestProof": "Could not create relay request DPoP proof.",
+  "connections.error.tunnelReleased":
+    "Offline for a while, so its T3 Connect tunnel was removed. Start T3 Code on that computer and update it to the latest version to reconnect.",
+  "connections.error.profileMissing": "Connection profile {{id}} is unavailable.",
+  "connections.error.credentialMissing": "Connection credential {{id}} is unavailable.",
+  "connections.error.environmentMismatch":
+    "Connected environment {{actual}} does not match {{expected}}.",
+  "connections.error.profileNotBearer": "Connection profile {{id}} is not a bearer connection.",
+  "connections.error.profileNotSsh": "Connection profile {{id}} is not an SSH connection.",
+  "connections.error.noRoute": "{{label}} did not answer on any saved route.",
+  "connections.error.sshPrepare": "Could not prepare the SSH environment: {{diagnostic}}",
+  "connections.error.sshDisconnect": "Could not disconnect the SSH environment: {{diagnostic}}",
+  "connections.error.primaryCredential":
+    "Could not load the desktop primary credential: {{diagnostic}}",
+  "connections.error.backendNotReady": "Desktop-local backend {{id}} is not ready yet.",
+  "connections.error.differentHost":
+    "That host reaches {{label}}, a different machine. Add it as its own environment instead.",
+  "connections.error.updateClient":
+    "This client is not supported by this server. Update your app or use a compatible release to connect to {{label}}.",
+  "connections.error.updateServer":
+    "This client requires a newer server. Update T3 Code on {{label}} to connect.",
+  "connections.error.relayInvalidLinkProof":
+    "Relay rejected the environment link proof ({{reason}}).",
+  "connections.error.relayConnectReason":
+    "Relay rejected the environment connection request ({{reason}}).",
+  "connections.error.relayEndpointUnavailable":
+    "Relay could not reach the environment endpoint ({{reason}}).",
+  "connections.error.relayLinkFailed": "Relay could not link the environment ({{reason}}).",
+  "connections.error.relayLinkUnavailable":
+    "Relay cannot provision the managed endpoint ({{reason}}).",
+  "connections.error.relayInvalidActivityProof":
+    "Relay rejected the agent activity publish proof ({{reason}}).",
+  "connections.error.relayInternal": "Relay encountered an internal error ({{reason}}).",
+  "connections.error.relayLinkLimit_one":
+    "Relay refused the link: this account already has its maximum of {{maximum}} managed tunnel. Unlink an environment to free one up.",
+  "connections.error.relayLinkLimit_other":
+    "Relay refused the link: this account already has its maximum of {{maximum}} managed tunnels. Unlink an environment to free one up.",
+  "connections.error.relay.tokenExchange.failed": "Could not exchange relay DPoP access token.",
+  "connections.error.relay.tokenExchange.timeout": "Relay DPoP access token exchange timed out.",
+  "connections.error.relay.environmentList.failed": "Could not list relay-managed environments.",
+  "connections.error.relay.environmentList.timeout": "Relay environment listing timed out.",
+  "connections.error.relay.deviceList.failed": "Could not list relay client devices.",
+  "connections.error.relay.deviceList.timeout": "Relay client device listing timed out.",
+  "connections.error.relay.linkChallenge.failed":
+    "Could not create relay environment link challenge.",
+  "connections.error.relay.linkChallenge.timeout": "Relay environment link challenge timed out.",
+  "connections.error.relay.link.failed": "Could not link relay environment.",
+  "connections.error.relay.link.timeout": "Relay environment linking timed out.",
+  "connections.error.relay.unlink.failed": "Could not unlink relay environment.",
+  "connections.error.relay.unlink.timeout": "Relay environment unlinking timed out.",
+  "connections.error.relay.status.failed": "Could not get relay environment status.",
+  "connections.error.relay.status.timeout": "Relay environment status request timed out.",
+  "connections.error.relay.connect.failed": "Could not connect relay environment.",
+  "connections.error.relay.connect.timeout": "Relay environment connection timed out.",
+  "connections.error.relay.registerDevice.failed": "Could not register relay mobile device.",
+  "connections.error.relay.registerDevice.timeout": "Relay mobile device registration timed out.",
+  "connections.error.relay.unregisterDevice.failed": "Could not unregister relay mobile device.",
+  "connections.error.relay.unregisterDevice.timeout":
+    "Relay mobile device unregistration timed out.",
+  "connections.error.relay.liveActivity.failed": "Could not register relay live activity.",
+  "connections.error.relay.liveActivity.timeout": "Relay Live Activity registration timed out.",
+  "connections.error.relay.agentActivity.failed": "Could not read relay agent activity snapshot.",
+  "connections.error.relay.agentActivity.timeout": "Relay agent activity snapshot timed out.",
   "common.loading": "Loading",
   "chat.branch.searchRefs": "Search refs...",
   "chat.branch.noRefs": "No refs found.",
