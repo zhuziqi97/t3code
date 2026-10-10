@@ -5591,6 +5591,12 @@ export const en = {
   "chat.tools.send.attempt": "Tried to send {{object}} to {{threads}}",
   "chat.tools.sendRepeated.done": "Sent attachments to {{threads}} {{times}}",
   "chat.tools.sendRepeated.attempt": "Tried to send attachments to {{threads}} {{times}}",
+  "toast.slowRequests.title": "Some requests are slow",
+  "toast.slowRequests.description_one": "{{count}} request waiting longer than {{seconds}}s.",
+  "toast.slowRequests.description_other": "{{count}} requests waiting longer than {{seconds}}s.",
+  "toast.slowRequests.started": "Started {{time}}",
+  "toast.slowRequests.hide": "Hide requests",
+  "toast.slowRequests.show": "Show requests",
 } as const;
 
 export type MessageKey = keyof typeof en;

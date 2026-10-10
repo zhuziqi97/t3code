@@ -5207,4 +5207,9 @@ export const zh: Partial<Messages> = {
   "chat.tools.send.attempt": "尝试向{{threads}}发送{{object}}",
   "chat.tools.sendRepeated.done": "向{{threads}}发送了附件（{{times}}）",
   "chat.tools.sendRepeated.attempt": "尝试向{{threads}}发送附件（{{times}}）",
+  "toast.slowRequests.title": "部分请求响应较慢",
+  "toast.slowRequests.description_other": "{{count}} 个请求已等待超过 {{seconds}} 秒。",
+  "toast.slowRequests.started": "开始时间：{{time}}",
+  "toast.slowRequests.hide": "收起请求",
+  "toast.slowRequests.show": "展开请求",
 };
