@@ -27,6 +27,24 @@ export const PROVIDER_STATUS_STYLES = {
 
 export type ProviderStatusKey = keyof typeof PROVIDER_STATUS_STYLES;
 
+/** Translate T3's Codex probe guidance while retaining CLI diagnostics verbatim. */
+export function formatProviderStatusMessage(message: string, translate: TFunction): string {
+  switch (message) {
+    case "Timed out while checking Codex app-server provider status.":
+      return translate("provider.status.codexTimeout");
+    case "Codex is disabled in T3 Code settings.":
+      return translate("provider.status.codexDisabled");
+    case "Codex provider status has not been checked in this session yet.":
+      return translate("provider.status.codexUnchecked");
+    case "Codex CLI is not authenticated. Run `codex login` and try again.":
+      return translate("provider.status.codexUnauthenticated");
+  }
+  const probeFailure = "Codex app-server provider probe failed: ";
+  return message.startsWith(probeFailure)
+    ? translate("provider.status.codexProbeFailed", { detail: message.slice(probeFailure.length) })
+    : message;
+}
+
 /**
  * Derive the headline + detail copy shown under a provider's name in the
  * settings page. Prefers `provider.message` for server-supplied detail and
@@ -45,16 +63,20 @@ export function getProviderSummary(
       detail: translate("provider.waiting"),
     };
   }
+  const message =
+    provider.message === undefined
+      ? undefined
+      : formatProviderStatusMessage(provider.message, translate);
   if (!provider.enabled || provider.status === "disabled") {
     return {
       headline: translate("provider.disabled"),
-      detail: provider.message ?? translate("provider.disabledDescription"),
+      detail: message ?? translate("provider.disabledDescription"),
     };
   }
   if (!provider.installed) {
     return {
       headline: translate("provider.notFound"),
-      detail: provider.message ?? translate("provider.noCli"),
+      detail: message ?? translate("provider.noCli"),
     };
   }
   if (provider.auth.status === "unauthenticated") {
@@ -63,19 +85,19 @@ export function getProviderSummary(
       headline: authLabel
         ? translate("provider.unauthenticatedWithLabel", { label: authLabel })
         : translate("provider.unauthenticated"),
-      detail: provider.message ?? null,
+      detail: message ?? null,
     };
   }
   if (provider.status === "warning") {
     return {
       headline: translate("provider.needsAttention"),
-      detail: provider.message ?? translate("provider.notVerified"),
+      detail: message ?? translate("provider.notVerified"),
     };
   }
   if (provider.status === "error") {
     return {
       headline: translate("provider.unavailable"),
-      detail: provider.message ?? translate("provider.checkFailed"),
+      detail: message ?? translate("provider.checkFailed"),
     };
   }
   if (provider.auth.status === "authenticated") {
@@ -84,12 +106,12 @@ export function getProviderSummary(
       headline: authLabel
         ? translate("provider.authenticatedWithLabel", { label: authLabel })
         : translate("provider.authenticated"),
-      detail: provider.message ?? null,
+      detail: message ?? null,
     };
   }
   return {
     headline: translate("provider.available"),
-    detail: provider.message ?? null,
+    detail: message ?? null,
   };
 }
 

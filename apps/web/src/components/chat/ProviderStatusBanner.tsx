@@ -7,6 +7,7 @@ import { Alert, AlertAction, AlertDescription, AlertTitle } from "../ui/alert";
 import { Button, InlineButton } from "../ui/button";
 import { formatProviderDriverKindLabel } from "../../providerModels";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { formatProviderStatusMessage } from "../settings/providerStatus";
 
 /** Unsupported and broken versions fail mid-turn, so they warn even when ready. */
 function getIncompatibleVersion(status: ServerProvider) {
@@ -70,7 +71,7 @@ export function getProviderStatusMessage(status: ServerProvider, t: TFunction = 
   ) {
     return status.compatibilityAdvisory.message;
   }
-  if (status.message) return status.message;
+  if (status.message) return formatProviderStatusMessage(status.message, t);
   const providerName = status.displayName?.trim() || formatProviderDriverKindLabel(status.driver);
   if (!status.installed && hasProviderSetup(status)) {
     return t("chat.provider.install", { provider: formatProviderDriverKindLabel(status.driver) });

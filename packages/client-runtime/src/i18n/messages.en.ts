@@ -5955,6 +5955,13 @@ export const en = {
   "chat.tools.search.filesIn": "Searched files {{term}} in {{target}}",
   "chat.tools.search.in": "Searched in {{target}}",
   "chat.tools.searchedFiles": "Searched files",
+  "provider.status.codexTimeout": "Timed out while checking Codex app-server provider status.",
+  "provider.status.codexDisabled": "Codex is disabled in T3 Code settings.",
+  "provider.status.codexUnchecked":
+    "Codex provider status has not been checked in this session yet.",
+  "provider.status.codexUnauthenticated":
+    "Codex CLI is not authenticated. Run `codex login` and try again.",
+  "provider.status.codexProbeFailed": "Codex app-server provider probe failed: {{detail}}",
   "diagnostics.monitor.binary.not-executable":
     "Resource monitor binary at '{{path}}' is not executable.",
 } as const;

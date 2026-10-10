@@ -1,5 +1,6 @@
 import { ProviderDriverKind, ProviderInstanceId, type ServerProvider } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
+import { createI18n } from "@t3tools/client-runtime/i18n";
 
 import { getProviderSummary, getProviderVersionAdvisoryPresentation } from "./providerStatus";
 
@@ -18,6 +19,32 @@ const provider: ServerProvider = {
 };
 
 describe("getProviderSummary", () => {
+  it.each([
+    [
+      "Timed out while checking Codex app-server provider status.",
+      "检查 Codex app-server 状态超时。",
+    ],
+    ["Codex is disabled in T3 Code settings.", "已在 T3 Code 设置中停用 Codex。"],
+    [
+      "Codex provider status has not been checked in this session yet.",
+      "本次启动后尚未检查 Codex 状态。",
+    ],
+    [
+      "Codex CLI is not authenticated. Run `codex login` and try again.",
+      "Codex CLI 尚未登录。请运行 `codex login` 后重试。",
+    ],
+    [
+      "Codex app-server provider probe failed: Keep 原始诊断 /tmp/raw-path.",
+      "Codex app-server 状态检查失败：Keep 原始诊断 /tmp/raw-path.",
+    ],
+    ["Unknown provider error 原文", "Unknown provider error 原文"],
+  ])("formats known status guidance and preserves diagnostics: %s", (message, chinese) => {
+    const status = { ...provider, status: "error" as const, message };
+    expect(getProviderSummary(status, createI18n({ lng: "zh" }).t).detail).toBe(chinese);
+    expect(getProviderSummary(status, createI18n({ lng: "en" }).t).detail).toBe(message);
+    expect(status.message).toBe(message);
+  });
+
   it("reports ready providers with unknown authentication as available", () => {
     expect(getProviderSummary({ ...provider, auth: { status: "unknown" } })).toEqual({
       headline: "Available",

@@ -1,6 +1,7 @@
 import { ProviderDriverKind, ProviderInstanceId, type ServerProvider } from "@t3tools/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
+import { createI18n } from "@t3tools/client-runtime/i18n";
 
 import {
   getProviderStatusBannerKey,
@@ -93,6 +94,22 @@ describe("ProviderStatusBanner", () => {
 });
 
 describe("getProviderStatusMessage", () => {
+  it("translates the current Codex timeout without changing banner identity or provider data", () => {
+    const status = {
+      ...warningProvider(),
+      status: "error" as const,
+      message: "Timed out while checking Codex app-server provider status.",
+    };
+    const key = getProviderStatusBannerKey(status);
+    expect(getProviderStatusMessage(status, createI18n({ lng: "zh" }).t)).toBe(
+      "检查 Codex app-server 状态超时。",
+    );
+    expect(getProviderStatusMessage(status, createI18n({ lng: "en" }).t)).toBe(status.message);
+    expect(getProviderStatusBannerKey(status)).toBe(key);
+    expect(shouldShowProviderStatusBanner(status, key)).toBe(false);
+    expect(status.message).toBe("Timed out while checking Codex app-server provider status.");
+  });
+
   it("preserves the environment's authentication error", () => {
     const message = "SUBSCRIPTION_REQUIRED: This Google account cannot use Antigravity.";
     expect(
