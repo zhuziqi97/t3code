@@ -186,6 +186,17 @@ export default defineConfig(() => {
       tailwindPlugins(bundledDev),
     ],
     optimizeDeps: {
+      // The icon catalog otherwise creates thousands of requests at desktop startup,
+      // exhausting Chromium's loaders when the native protocol proxies them to Vite.
+      rolldownOptions: {
+        output: {
+          codeSplitting: {
+            groups: [
+              { name: "lucide-icons", test: /node_modules[\\/](?:lucide|lucide-react)[\\/]/ },
+            ],
+          },
+        },
+      },
       include: [
         "@clerk/clerk-js",
         "@clerk/react/internal",
