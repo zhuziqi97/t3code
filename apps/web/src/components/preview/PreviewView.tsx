@@ -1,6 +1,6 @@
 "use client";
 
-import { scopedThreadKey } from "@t3tools/client-runtime/environment";
+import { scopedProjectKey, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { previewStreamDownloadUrl } from "@t3tools/client-runtime/preview/server-browser-stream";
 import {
   isAtomCommandInterrupted,
@@ -26,6 +26,7 @@ import {
   recordVisitForThread,
   removeUrlForThread,
   setTitleForThreadUrl,
+  useBrowserHistoryStore,
   useThreadRecentHistory,
 } from "~/browserHistoryStore";
 import { type ComposerImageAttachment, useComposerDraftStore } from "~/composerDraftStore";
@@ -37,7 +38,7 @@ import {
   useThreadPreviewState,
 } from "~/previewStateStore";
 import { resolveDiscoveredServerUrl } from "~/browser/browserTargetResolver";
-import { useEnvironmentSupportsServerBrowser } from "~/state/entities";
+import { useEnvironmentSupportsServerBrowser, useThreadShell } from "~/state/entities";
 import {
   useEnvironment,
   useEnvironmentHttpBaseUrl,
@@ -164,6 +165,12 @@ export function PreviewView({
   // instead of the thread object, which is recreated on every update.
   const threadRefRef = useRef(threadRef);
   threadRefRef.current = threadRef;
+  const thread = useThreadShell(threadRef);
+  const draftThread = useComposerDraftStore((store) => store.getDraftThreadByRef(threadRef));
+  const projectId = thread?.projectId ?? draftThread?.projectId;
+  const projectKey = projectId
+    ? scopedProjectKey({ environmentId: threadRef.environmentId, projectId })
+    : null;
   const previewState = useThreadPreviewState(threadRef);
   const recentHistoryEntries = useThreadRecentHistory(
     threadRef,
@@ -262,6 +269,11 @@ export function PreviewView({
   const navTitle = navStatus._tag === "Success" ? navStatus.title : null;
   const latestHistoryUrl = recentHistoryEntries[0]?.url;
   const threadKey = scopedThreadKey(threadRef);
+  useEffect(() => {
+    if (projectKey) {
+      useBrowserHistoryStore.getState().registerThreadProject(threadRefRef.current, projectKey);
+    }
+  }, [projectKey, threadKey]);
   useEffect(() => {
     if (!navUrl || !navTitle || !latestHistoryUrl) return;
     // Agent-driven pages only enrich an existing requested URL.
