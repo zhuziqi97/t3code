@@ -187,7 +187,11 @@ it("opens bot reports in pages without hiding human comments", () => {
   act(() =>
     renderer.root
       .findAllByType("button")
-      .find((button) => button.children.includes(" older bot comment"))!
+      .find((button) =>
+        button.children.some(
+          (child) => typeof child === "string" && child.includes("older bot comment"),
+        ),
+      )!
       .props.onClick(),
   );
   expect(
@@ -201,7 +205,11 @@ it("opens bot reports in pages without hiding human comments", () => {
   act(() =>
     renderer.root
       .findAllByType("button")
-      .find((button) => button.children.includes(" recent bot comments"))!
+      .find((button) =>
+        button.children.some(
+          (child) => typeof child === "string" && child.includes("recent bot comments"),
+        ),
+      )!
       .props.onClick(),
   );
   expect(

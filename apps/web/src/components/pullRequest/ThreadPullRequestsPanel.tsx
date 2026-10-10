@@ -164,7 +164,7 @@ function LinkRow({
                 #{link.number}
               </TooltipTrigger>
               <TooltipPopup>
-                {t(SOURCE_LABEL_KEYS[link.source])} · {formatRelativeTimeLabel(link.linkedAt)}
+                {t(SOURCE_LABEL_KEYS[link.source])} · {formatRelativeTimeLabel(link.linkedAt, t)}
               </TooltipPopup>
             </Tooltip>
           }
@@ -443,7 +443,7 @@ function EnabledThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThread
         <span>
           {t("pullRequest.linked.counts", { open: openCount, linked: links.length })}
           {lastSynced
-            ? ` · ${t("pullRequest.linked.synced", { time: formatRelativeTimeLabel(lastSynced) })}`
+            ? ` · ${t("pullRequest.linked.synced", { time: formatRelativeTimeLabel(lastSynced, t) })}`
             : ""}
         </span>
         <Button size="xs" variant="ghost" onClick={openLinkDialog}>

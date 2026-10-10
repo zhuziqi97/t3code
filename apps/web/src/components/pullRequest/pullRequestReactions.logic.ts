@@ -1,3 +1,6 @@
+import type { MessageKey } from "@t3tools/client-runtime/i18n";
+import type { TFunction } from "i18next";
+import { i18n } from "~/i18n";
 import type { PullRequestReaction, PullRequestReactionContent } from "@t3tools/contracts";
 
 /** The picker's order, which is GitHub's: the two verdicts first, then the rest as it lists them. */
@@ -24,38 +27,40 @@ const REACTION_EMOJI: Record<PullRequestReactionContent, string> = {
 };
 
 /** The spoken names GitHub uses in its own hover text, which is what a screen reader reads out. */
-const REACTION_NAME: Record<PullRequestReactionContent, string> = {
-  "thumbs-up": "thumbs up",
-  "thumbs-down": "thumbs down",
-  laugh: "laugh",
-  hooray: "hooray",
-  confused: "confused",
-  heart: "heart",
-  rocket: "rocket",
-  eyes: "eyes",
+const REACTION_NAME: Record<PullRequestReactionContent, MessageKey> = {
+  "thumbs-up": "pullRequest.flow.reaction.thumbsUp",
+  "thumbs-down": "pullRequest.flow.reaction.thumbsDown",
+  laugh: "pullRequest.flow.reaction.laugh",
+  hooray: "pullRequest.flow.reaction.hooray",
+  confused: "pullRequest.flow.reaction.confused",
+  heart: "pullRequest.flow.reaction.heart",
+  rocket: "pullRequest.flow.reaction.rocket",
+  eyes: "pullRequest.flow.reaction.eyes",
 };
 
 export function pullRequestReactionEmoji(content: PullRequestReactionContent): string {
   return REACTION_EMOJI[content];
 }
 
-export function pullRequestReactionName(content: PullRequestReactionContent): string {
-  return REACTION_NAME[content];
+export function pullRequestReactionName(
+  content: PullRequestReactionContent,
+  t: TFunction = i18n.t,
+): string {
+  return t(REACTION_NAME[content]);
 }
 
 /** Past three names the sentence stops being readable and starts being a list. */
 const NAMED_ACTOR_LIMIT = 3;
 
 function joinNames(parts: ReadonlyArray<string>): string {
-  if (parts.length <= 1) return parts[0] ?? "";
-  if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
-  return `${parts.slice(0, -1).join(", ")}, and ${parts.at(-1)}`;
+  return new Intl.ListFormat(i18n.resolvedLanguage ?? "en", { type: "conjunction" }).format(parts);
 }
 
 /** "others" only alongside somebody named; on its own a count is people, not other people. */
-function countRemainder(count: number, named: boolean): string {
-  if (named) return `${count} ${count === 1 ? "other" : "others"}`;
-  return `${count} ${count === 1 ? "person" : "people"}`;
+function countRemainder(count: number, named: boolean, t: TFunction): string {
+  return t(named ? "pullRequest.flow.reaction.others" : "pullRequest.flow.reaction.people", {
+    count,
+  });
 }
 
 /**
@@ -70,14 +75,22 @@ function countRemainder(count: number, named: boolean): string {
  * than `count` claims, and the remainder is counted rather than named — a host reports fewer
  * logins than it counts, so `count` is the only trustworthy total.
  */
-export function pullRequestReactionTooltip(reaction: PullRequestReaction): string {
+export function pullRequestReactionTooltip(
+  reaction: PullRequestReaction,
+  t: TFunction = i18n.t,
+): string {
   const viewerHasRoom = reaction.actors.length < reaction.count;
   const names =
-    reaction.viewerHasReacted && viewerHasRoom ? ["You", ...reaction.actors] : [...reaction.actors];
+    reaction.viewerHasReacted && viewerHasRoom
+      ? [t("pullRequest.flow.reaction.you"), ...reaction.actors]
+      : [...reaction.actors];
   const shown = names.slice(0, Math.min(NAMED_ACTOR_LIMIT, reaction.count));
   const others = Math.max(0, reaction.count - shown.length);
-  const parts = [...shown, ...(others > 0 ? [countRemainder(others, shown.length > 0)] : [])];
-  return `${joinNames(parts)} reacted with ${pullRequestReactionName(reaction.content)} emoji`;
+  const parts = [...shown, ...(others > 0 ? [countRemainder(others, shown.length > 0, t)] : [])];
+  return t("pullRequest.flow.reaction.tooltip", {
+    names: joinNames(parts),
+    reaction: pullRequestReactionName(reaction.content, t),
+  });
 }
 
 /**

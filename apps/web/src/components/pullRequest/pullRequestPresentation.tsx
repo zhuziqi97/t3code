@@ -29,6 +29,7 @@ import { Badge } from "../ui/badge";
 import { InlineButton } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import type { PullRequestReviewOutcome } from "./pullRequestDetail.logic";
+import { pullRequestReviewOutcome } from "./pullRequestDetail.logic";
 import { pullRequestLabelColor } from "./pullRequestList.logic";
 import {
   PULL_REQUEST_STATE_PRESENTATION,
@@ -451,6 +452,15 @@ export function pullRequestReviewOutcomeLabel(
   t: TFunction = i18n.t,
 ): string {
   return t(REVIEW_OUTCOME_PRESENTATION[outcome].labelKey);
+}
+
+export function pullRequestReviewStateLabel(state: string, t: TFunction = i18n.t): string {
+  const outcome = pullRequestReviewOutcome(state);
+  if (outcome) return pullRequestReviewOutcomeLabel(outcome, t);
+  const normalized = state.toLowerCase().replaceAll("_", " ").replaceAll("-", " ");
+  if (normalized === "commented") return t("pullRequest.flow.review.commented");
+  if (normalized === "pending") return t("pullRequest.flow.review.pending");
+  return normalized.replace(/^\w/u, (letter) => letter.toUpperCase());
 }
 
 export function PullRequestReviewOutcomeBadge({

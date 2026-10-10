@@ -63,7 +63,11 @@ it("reports a pending native link failure in the language selected while it was 
   await changeLanguage("zh");
   reject(new Error("Raw native diagnostic"));
   await pending;
-  expect(add).toHaveBeenCalledExactlyOnceWith({ type: "error", title: "无法打开链接" });
+  expect(add).toHaveBeenCalledExactlyOnceWith({
+    type: "error",
+    title: "无法打开链接",
+    description: "Raw native diagnostic",
+  });
 });
 
 it("leaves a dismissed native menu without a clipboard or browser action", async () => {

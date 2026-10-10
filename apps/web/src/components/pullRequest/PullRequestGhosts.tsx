@@ -242,7 +242,7 @@ export function PullRequestDetailGhost({
                 seed ? (
                   <span>
                     {t("pullRequest.detail.updated", {
-                      time: formatRelativeTimeLabel(seed.updatedAt),
+                      time: formatRelativeTimeLabel(seed.updatedAt, t),
                     })}
                   </span>
                 ) : (

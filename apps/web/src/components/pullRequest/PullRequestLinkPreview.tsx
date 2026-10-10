@@ -143,7 +143,7 @@ export function PullRequestLinkPreview({
                   <span aria-hidden>·</span>
                   <span className="shrink-0">
                     {t("pullRequest.detail.opened", {
-                      time: formatRelativeTimeLabel(detail.createdAt),
+                      time: formatRelativeTimeLabel(detail.createdAt, t),
                     })}
                   </span>
                 </div>

@@ -4,6 +4,7 @@ import type {
   PullRequestState,
 } from "@t3tools/contracts";
 import type { ReactNode } from "react";
+import { useTranslate } from "~/i18n";
 
 import { cn } from "~/lib/utils";
 import { formatRelativeTimeLabel } from "~/timestampFormat";
@@ -94,6 +95,7 @@ export function PullRequestRowLines({
   metaClassName?: string;
   updatedAt?: string | null | undefined;
 }) {
+  const t = useTranslate();
   return (
     <span className="min-w-0 flex-1">
       <span className="flex min-w-0 items-center gap-1.5">
@@ -115,7 +117,7 @@ export function PullRequestRowLines({
         {meta}
         {updatedAt ? (
           <span className="ml-auto shrink-0 whitespace-nowrap tabular-nums">
-            {formatRelativeTimeLabel(updatedAt)}
+            {formatRelativeTimeLabel(updatedAt, t)}
           </span>
         ) : null}
       </span>

@@ -38,8 +38,8 @@ export function DiffCommentAnnotation({
   onCancel,
   onComment,
   onDelete,
-  placeholder = "Add a comment…",
-  submitLabel = "Comment",
+  placeholder,
+  submitLabel,
   pending = false,
   secondaryAction,
   focusOnMount = true,
@@ -96,7 +96,7 @@ export function DiffCommentAnnotation({
         autoFocus={focusOnMount}
         size="sm"
         value={displayedText}
-        placeholder={placeholder}
+        placeholder={placeholder ?? t("diff.commentPlaceholder")}
         aria-label={t("diff.commentLines", { lines: rangeLabel })}
         onChange={(event) => (onTextChange ?? setLocalDraftText)(event.target.value)}
         onFocus={(event) => {
@@ -131,7 +131,7 @@ export function DiffCommentAnnotation({
           </Button>
         ) : null}
         <Button size="xs" disabled={pending || !trimmedText} onClick={() => onComment(trimmedText)}>
-          {submitLabel}
+          {submitLabel ?? t("diff.submitComment")}
         </Button>
       </div>
     </div>

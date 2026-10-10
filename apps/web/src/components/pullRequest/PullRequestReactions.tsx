@@ -1,3 +1,4 @@
+import { i18n, useTranslate } from "~/i18n";
 import { useAtomCommand } from "~/state/use-atom-command";
 import type {
   EnvironmentId,
@@ -53,6 +54,7 @@ export function PullRequestReactionBar({
   readonly onRefresh: () => void;
   readonly className?: string | undefined;
 }) {
+  const t = useTranslate();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pending, setPending] = useState<{
     readonly signature: string;
@@ -83,7 +85,7 @@ export function PullRequestReactionBar({
         next.delete(content);
         return { signature: current.signature, values: next };
       });
-      toastManager.add({ type: "error", title: "The reaction could not be saved" });
+      toastManager.add({ type: "error", title: i18n.t("pullRequest.flow.reaction.failed") });
       return;
     }
     onRefresh();
@@ -100,7 +102,10 @@ export function PullRequestReactionBar({
               <button
                 type="button"
                 aria-pressed={reaction.viewerHasReacted}
-                aria-label={`${pullRequestReactionName(reaction.content)}, ${reaction.count}`}
+                aria-label={t("pullRequest.flow.reaction.count", {
+                  reaction: pullRequestReactionName(reaction.content, t),
+                  count: reaction.count,
+                })}
                 disabled={!canReact}
                 className={cn(
                   PILL_CLASS,
@@ -116,7 +121,7 @@ export function PullRequestReactionBar({
             <span aria-hidden>{pullRequestReactionEmoji(reaction.content)}</span>
             <span className="tabular-nums">{reaction.count}</span>
           </TooltipTrigger>
-          <TooltipPopup side="top">{pullRequestReactionTooltip(reaction)}</TooltipPopup>
+          <TooltipPopup side="top">{pullRequestReactionTooltip(reaction, t)}</TooltipPopup>
         </Tooltip>
       ))}
 
@@ -126,7 +131,7 @@ export function PullRequestReactionBar({
             render={
               <button
                 type="button"
-                aria-label="Add a reaction"
+                aria-label={t("pullRequest.flow.reaction.add")}
                 className={cn(
                   PILL_CLASS,
                   "border-border/70 px-1.5 text-muted-foreground hover:border-primary/60 hover:text-foreground",
@@ -146,7 +151,7 @@ export function PullRequestReactionBar({
                     key={content}
                     type="button"
                     aria-pressed={reacted}
-                    aria-label={pullRequestReactionName(content)}
+                    aria-label={pullRequestReactionName(content, t)}
                     className={cn(
                       "flex size-7 items-center justify-center rounded-md text-base outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring",
                       reacted && "bg-primary/10",

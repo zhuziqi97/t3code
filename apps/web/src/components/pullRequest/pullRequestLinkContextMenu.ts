@@ -22,6 +22,20 @@ export const openOnHostLabel = (provider: string): string =>
     ? i18n.t("pullRequest.link.openOnHost", { host: OPEN_ON_HOST_NAMES[provider] })
     : i18n.t("pullRequest.link.openOnUnknownHost");
 
+export async function openPullRequestExternal(url: string): Promise<void> {
+  const api = readLocalApi();
+  if (!api) return;
+  try {
+    await api.shell.openExternal(url);
+  } catch (error) {
+    toastManager.add({
+      type: "error",
+      title: i18n.t("pullRequest.link.couldNotOpen"),
+      ...(error instanceof Error ? { description: error.message } : {}),
+    });
+  }
+}
+
 /** Copy first: it is the reason to right-click a number rather than click it. */
 function pullRequestLinkContextMenuItems(
   openLabel: string,
@@ -62,7 +76,7 @@ export async function showPullRequestLinkContextMenu({
   }
   try {
     if (action === "copy-link") await writeTextToClipboard(url, "link");
-    else if (action === "open-external") await api.shell.openExternal(url);
+    else if (action === "open-external") await openPullRequestExternal(url);
   } catch {
     toastManager.add({
       type: "error",
