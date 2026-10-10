@@ -1,3 +1,4 @@
+import { createI18n } from "@t3tools/client-runtime/i18n";
 import { shouldPreserveAssistantLineBreaks } from "@t3tools/shared/markdownPipeline";
 import { ThreadId, type WorktreeSetupSnapshot } from "@t3tools/contracts";
 import {
@@ -186,8 +187,65 @@ describe("work entry labels", () => {
       } as never,
     };
     expect(threadReadTargetId(threadRead)).toBe("thread-child");
-    expect(threadReadLabelPrefix(liveWorkEntryLabel(threadRead, undefined, active))).toBe(prefix);
-    expect(threadReadLabelPrefix(workEntryDisplayLabel(threadRead, undefined))).toBe(prefix);
+    expect(threadReadLabelPrefix(threadRead, active)).toBe(prefix);
+    expect(threadReadLabelPrefix(threadRead)).toBe(prefix);
+  });
+
+  it("localizes named-thread prefixes, commands and file paths without altering identities", () => {
+    const t = createI18n({ lng: "zh" }).t;
+    const threadRead = {
+      ...entry,
+      itemType: "dynamic_tool" as const,
+      toolLifecycleStatus: "completed" as const,
+      structuredPayload: {
+        type: "dynamic_tool",
+        toolName: "mcp__t3-code__t3_thread_read",
+        input: { threadId: "raw-target" },
+      } as never,
+    };
+    expect(threadReadLabelPrefix(threadRead, false, t)).toBe("已读取会话");
+    expect(threadReadLabelPrefix({ ...threadRead, toolLifecycleStatus: "failed" }, true, t)).toBe(
+      "未能读取会话",
+    );
+    expect(threadReadTargetId(threadRead)).toBe("raw-target");
+    expect(threadReadLabelPrefix({ ...entry, label: "Read a T3 thread" }, false, t)).toBeNull();
+    expect(
+      liveWorkEntryLabel(
+        {
+          ...entry,
+          itemType: "command_execution",
+          command: "node scripts/原始文件.mjs",
+          toolLifecycleStatus: "inProgress",
+        },
+        undefined,
+        true,
+        t,
+      ),
+    ).toBe("正在运行 node");
+    expect(
+      liveWorkEntryLabel(
+        {
+          ...entry,
+          itemType: "command_execution",
+          command: "node scripts/原始文件.mjs",
+          toolLifecycleStatus: "failed",
+        },
+        undefined,
+        true,
+        t,
+      ),
+    ).toBe("node 运行失败");
+    const read = {
+      ...entry,
+      label: "Read",
+      itemType: "dynamic_tool" as const,
+      requestKind: "file-read",
+      changedFiles: ["/repo/src/原始文件.ts", "/repo/src/other.ts"],
+    };
+    expect(workEntryDisplayLabel(read, "/repo", t)).toBe(
+      "读取 repo/src/原始文件.ts，另有 1 个文件",
+    );
+    expect(read.changedFiles[0]).toBe("/repo/src/原始文件.ts");
   });
 
   it("finds no target for other tools or thread reads without one", () => {

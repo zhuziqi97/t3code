@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import { worktreeSetupAgentStarted } from "@t3tools/client-runtime/worktree-setup";
 export { worktreeSetupAgentStarted } from "@t3tools/client-runtime/worktree-setup";
 import { isLiveSubagentTurnItem } from "@t3tools/client-runtime/state/subagentRuntime";
@@ -91,16 +92,20 @@ function workEntryIsActiveTurnActivity(entry: WorkLogEntry): boolean {
   );
 }
 
-function singleToolCallLabel(entry: WorkLogEntry): string {
-  if (entry.itemType === "reasoning") return entry.detail?.trim().replace(/\s+/g, " ") || "Thought";
-  const toolPresentation = resolveWorkEntryToolPresentation(entry, "completed");
+export function singleToolCallLabel(entry: WorkLogEntry, t?: TFunction): string {
+  if (entry.itemType === "reasoning")
+    return (
+      entry.detail?.trim().replace(/\s+/g, " ") || (t ? t("chat.timeline.thought") : "Thought")
+    );
+  const toolPresentation = resolveWorkEntryToolPresentation(entry, "completed", t);
   if (toolPresentation) return toolPresentation.displayName;
   const item = entry.structuredPayload;
   const title = item?.type === "dynamic_tool" ? dynamicToolTitle(item.toolName, item.input) : null;
   if (title) return title;
   // A lone web search keeps its heading; the query stays in its detail.
-  if (entry.itemType === "web_search") return entry.toolTitle ?? "Web search";
-  return workEntryDisplayLabel(entry, undefined);
+  if (entry.itemType === "web_search")
+    return entry.toolTitle ?? (t ? t("chat.tools.webSearch") : "Web search");
+  return workEntryDisplayLabel(entry, undefined, t);
 }
 
 function workEntryToolDataRecord(entry: WorkLogEntry): Record<string, unknown> | undefined {
@@ -128,13 +133,17 @@ function workEntryReadPaths(entry: WorkLogEntry, workspaceRoot: string | undefin
   );
 }
 
-export function workEntryDisplayLabel(entry: WorkLogEntry, workspaceRoot: string | undefined) {
+export function workEntryDisplayLabel(
+  entry: WorkLogEntry,
+  workspaceRoot: string | undefined,
+  t?: TFunction,
+) {
   if (entry.itemType === "system_notice") return entry.label;
   if (entry.itemType === "reasoning" || entry.tone === "thinking") {
     const thought = entry.detail?.trim().replace(/\s+/g, " ");
     return thought || entry.label;
   }
-  const toolPresentation = resolveWorkEntryToolPresentation(entry);
+  const toolPresentation = resolveWorkEntryToolPresentation(entry, undefined, t);
   if (toolPresentation) return toolPresentation.displayName;
   if (entry.command?.trim()) return commandDisplayText(entry.command);
   const action = toolGroupAction(entry);
@@ -148,7 +157,13 @@ export function workEntryDisplayLabel(entry: WorkLogEntry, workspaceRoot: string
   }
   const readPaths = action === "read" ? workEntryReadPaths(entry, workspaceRoot) : [];
   if (action === "read" && readPaths[0]) {
-    return formatReadToolLabel(readPaths[0], readPaths.length - 1);
+    return t
+      ? t("chat.tools.readPath", {
+          path: readPaths[0],
+          more:
+            readPaths.length > 1 ? t("chat.tools.morePaths", { count: readPaths.length - 1 }) : "",
+        })
+      : formatReadToolLabel(readPaths[0], readPaths.length - 1);
   }
   // Retrying providers keep their progress label; other diagnostics expose
   // the retained message instead of a generic error heading. File bodies
@@ -169,10 +184,12 @@ export function workEntryDisplayLabel(entry: WorkLogEntry, workspaceRoot: string
     const path = formatWorkspaceRelativePath(firstPath, workspaceRoot);
     return entry.changedFiles!.length === 1
       ? path
-      : `${path} +${entry.changedFiles!.length - 1} more`;
+      : t
+        ? `${path}${t("chat.tools.morePaths", { count: entry.changedFiles!.length - 1 })}`
+        : `${path} +${entry.changedFiles!.length - 1} more`;
   }
   if (action === "read" && !entry.viewedImagePath) {
-    return "Read file";
+    return t ? t("chat.tools.readFile") : "Read file";
   }
   const heading = normalizeCompactToolLabel(entry.toolTitle || entry.label);
   return `${heading.charAt(0).toUpperCase()}${heading.slice(1)}`;
@@ -189,8 +206,6 @@ export function threadReadTargetId(entry: Pick<WorkLogEntry, "structuredPayload"
   return typeof threadId === "string" && threadId.trim().length > 0 ? threadId.trim() : null;
 }
 
-const THREAD_READ_OBJECT = " a T3 thread";
-
 export function threadReadTargetTitle(
   shell: Pick<ThreadShell, "title" | "archivedAt" | "deletedAt"> | null,
 ) {
@@ -198,14 +213,14 @@ export function threadReadTargetTitle(
   return shell.title.trim() || null;
 }
 
-/**
- * Names the read thread in place of the generic object ("Read a T3 thread" becomes
- * `Read thread “Title”`), keeping the label's tense. Null keeps the generic label.
- */
-export function threadReadLabelPrefix(label: string) {
-  return label.endsWith(THREAD_READ_OBJECT)
-    ? `${label.slice(0, -THREAD_READ_OBJECT.length)} thread`
-    : null;
+/** Selects a named-thread prefix by tool identity, independent of the rendered language. */
+export function threadReadLabelPrefix(entry: WorkLogEntry, active?: boolean, t?: TFunction) {
+  const status =
+    active === undefined
+      ? entry.toolLifecycleStatus
+      : liveActivityToolStatus(entry.toolLifecycleStatus, active);
+  const source = status === undefined ? entry : { ...entry, toolLifecycleStatus: status };
+  return resolveWorkEntryToolPresentation(source, undefined, t)?.threadReadLabelPrefix ?? null;
 }
 
 /** Inspectable read-file output is the path when we have one, otherwise nothing. */
@@ -241,18 +256,27 @@ export function liveWorkEntryLabel(
   entry: WorkLogEntry,
   workspaceRoot: string | undefined,
   active: boolean,
+  t?: TFunction,
 ) {
   const status = liveActivityToolStatus(entry.toolLifecycleStatus, active);
   if (entry.itemType === "reasoning") {
     return (
       entry.detail?.trim().replace(/\s+/g, " ") ||
-      (status === "inProgress" ? "Thinking" : "Thought")
+      (t
+        ? t(status === "inProgress" ? "chat.timeline.thinking" : "chat.timeline.thought")
+        : status === "inProgress"
+          ? "Thinking"
+          : "Thought")
     );
   }
-  const toolPresentation = resolveWorkEntryToolPresentation({
-    ...entry,
-    toolLifecycleStatus: status,
-  });
+  const toolPresentation = resolveWorkEntryToolPresentation(
+    {
+      ...entry,
+      toolLifecycleStatus: status,
+    },
+    undefined,
+    t,
+  );
   if (toolPresentation) return toolPresentation.displayName;
   const command = entry.command?.trim();
   if (command) {
@@ -266,9 +290,13 @@ export function liveWorkEntryLabel(
             : status === "stopped"
               ? "Stopped"
               : "Ran";
-    return `${verb} ${commandProgramName(command) ?? "command"}`;
+    return t
+      ? t(`chat.tools.command.${status}`, {
+          program: commandProgramName(command) ?? t("chat.tools.commandFallback"),
+        })
+      : `${verb} ${commandProgramName(command) ?? "command"}`;
   }
-  return workEntryDisplayLabel(entry, workspaceRoot);
+  return workEntryDisplayLabel(entry, workspaceRoot, t);
 }
 
 export function workEntryIsVisibleInGroup(
@@ -566,6 +594,7 @@ type MessagesTimelineRowContent =
       expanded: boolean;
       summary: string;
       summaryEntries?: ReadonlyArray<WorkLogEntry>;
+      summaryEntry?: WorkLogEntry;
       summaryKind: ToolGroupSummaryKind;
       toolSurface?: WorkLogEntry["toolSurface"];
       toolIcon?: WorkLogEntry["toolIcon"];
@@ -1714,6 +1743,7 @@ export function deriveMessagesTimelineRows(input: {
                 ? singleEntry.label
                 : summarizeToolGroup(visibleGroupedEntries).summary,
             summaryKind,
+            ...(usesSingleToolCallLabel && singleEntry ? { summaryEntry: singleEntry } : {}),
             ...(!usesSingleToolCallLabel &&
             !(singleEntry !== null && !workLogEntryIsToolLike(singleEntry))
               ? { summaryEntries: visibleGroupedEntries }
@@ -2267,6 +2297,7 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
         a.expanded === bw.expanded &&
         a.summary === bw.summary &&
         Equal.equals(a.summaryEntries, bw.summaryEntries) &&
+        Equal.equals(a.summaryEntry, bw.summaryEntry) &&
         a.summaryKind === bw.summaryKind &&
         a.toolSurface === bw.toolSurface &&
         Equal.equals(a.toolIcon, bw.toolIcon) &&

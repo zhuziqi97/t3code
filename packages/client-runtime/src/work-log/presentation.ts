@@ -11,6 +11,7 @@ import {
 } from "@t3tools/contracts";
 import {
   resolveT3McpToolDefinition,
+  resolveT3McpToolId,
   type T3McpToolDefinition,
   type T3McpToolSummaryAction,
 } from "@t3tools/shared/t3McpToolPresentation";
@@ -143,6 +144,8 @@ function resolveT3McpToolPresentation(
   definition: T3McpToolDefinition | null,
   status: string | undefined,
   data?: unknown,
+  t?: TFunction,
+  toolId?: string | null,
 ) {
   if (!definition) return null;
   const [action, running, completed, detail] = definition.labels;
@@ -180,8 +183,28 @@ function resolveT3McpToolPresentation(
     number > 0
       ? `PR #${number}`
       : detail;
+  const phase =
+    status === "completed" || status === "failed" || status === "declined" || status === "stopped"
+      ? status
+      : "inProgress";
+  const translatedTarget = target.startsWith("PR #") ? target : t?.("chat.tools.label.pullRequest");
+  const actionLabel =
+    t && toolId ? t(`chat.tools.label.${toolId}.action`, { target: translatedTarget }) : "";
+  const displayName =
+    t && toolId
+      ? phase === "failed" || phase === "declined"
+        ? t(`chat.tools.label.${phase}`, {
+            action: actionLabel.charAt(0).toLowerCase() + actionLabel.slice(1),
+          })
+        : t(`chat.tools.label.${toolId}.${phase}`, { target: translatedTarget })
+      : `${verb} ${target}`;
   return {
-    displayName: `${verb} ${target}`,
+    displayName,
+    ...(definition.summaryAction === "thread-read"
+      ? {
+          threadReadLabelPrefix: t ? t(`chat.tools.threadRead.${phase}`) : `${verb} thread`,
+        }
+      : {}),
     icon: definition.icon,
     ...(actionKind === undefined ? {} : { action: actionKind }),
   };
@@ -203,13 +226,17 @@ export function resolveWorkEntryToolPresentation(
     "label" | "toolTitle" | "toolData" | "toolLifecycleStatus" | "structuredPayload"
   >,
   fallbackStatus?: "inProgress" | "completed",
+  t?: TFunction,
 ) {
-  const definition = resolveT3McpToolDefinition(workEntryToolName(entry));
+  const toolName = workEntryToolName(entry);
+  const definition = resolveT3McpToolDefinition(toolName);
   const status = entry.toolLifecycleStatus ?? fallbackStatus;
   return resolveT3McpToolPresentation(
     definition,
     definition && t3ToolResultIndicatesFailure(workEntryToolOutput(entry)) ? "failed" : status,
     entry.toolData,
+    t,
+    t ? resolveT3McpToolId(toolName) : undefined,
   );
 }
 

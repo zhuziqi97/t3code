@@ -203,6 +203,7 @@ import {
   deriveMessagesTimelineRowsWithState,
   type MessagesTimelineRowsProjection,
   liveWorkEntryLabel,
+  singleToolCallLabel,
   resolveAssistantMessageCopyState,
   resolveTimelineIsAtEnd,
   resolveTimelineMinimapHasPersistentGutter,
@@ -3512,7 +3513,9 @@ const WorkGroupSection = memo(function WorkGroupSection({
           displayLabel={
             displayLabel && groupedEntries.length === 1 && toolGroupAction(workEntry) === "edit"
               ? summarizeToolGroup(groupedEntries, t).summary
-              : displayLabel
+              : displayLabel && groupedEntries.length === 1
+                ? singleToolCallLabel(workEntry, t)
+                : displayLabel
           }
           onToggleEntry={onToggleStandaloneEntry}
         />
@@ -3977,8 +3980,13 @@ function useThreadReadTarget(entry: TimelineWorkEntry, environmentId: Environmen
   return threadId && title ? { threadId, title } : null;
 }
 
-function threadReadLabel(label: string, target: ReturnType<typeof useThreadReadTarget>) {
-  const prefix = target && threadReadLabelPrefix(label);
+function threadReadLabel(
+  entry: TimelineWorkEntry,
+  target: ReturnType<typeof useThreadReadTarget>,
+  t: ReturnType<typeof useTranslate>,
+  active?: boolean,
+) {
+  const prefix = target && threadReadLabelPrefix(entry, active, t);
   return prefix ? { ...target, prefix, text: `${prefix} “${target.title}”` } : null;
 }
 
@@ -4020,8 +4028,8 @@ function LiveWorkEntryTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "
   const questionHeading = row.entry.questionAnswer
     ? getQuestionTextPreview(row.entry.questionAnswer)
     : "";
-  const label = questionHeading || liveWorkEntryLabel(row.entry, ctx.workspaceRoot, row.active);
-  const threadLabel = threadReadLabel(label, threadTarget);
+  const label = questionHeading || liveWorkEntryLabel(row.entry, ctx.workspaceRoot, row.active, t);
+  const threadLabel = threadReadLabel(row.entry, threadTarget, t, row.active);
 
   const failed = workEntryDisplayIndicatesToolFailure(row.entry);
   // The expanded group already lists the thought, so the preview steps aside.
@@ -4163,7 +4171,13 @@ function WorkGroupToggleTimelineRow({
   const ctx = use(TimelineRowCtx);
   return (
     <WorkGroupHeader
-      label={row.summaryEntries ? summarizeToolGroup(row.summaryEntries, t).summary : row.summary}
+      label={
+        row.summaryEntry
+          ? singleToolCallLabel(row.summaryEntry, t)
+          : row.summaryEntries
+            ? summarizeToolGroup(row.summaryEntries, t).summary
+            : row.summary
+      }
       iconName={row.summaryToolIcon ?? row.toolSurface ?? toolGroupSummaryIconName(row.summaryKind)}
       toolIcon={row.toolIcon}
       failed={row.hasFailure}
@@ -5585,7 +5599,7 @@ function WorkEntryLogRow(props: WorkEntryRowProps) {
       ? workEntry.toolLifecycleStatus === "inProgress"
         ? t("chat.timeline.thinking")
         : t("chat.timeline.thought")
-      : questionHeading || (displayLabel ?? workEntryDisplayLabel(workEntry, workspaceRoot));
+      : questionHeading || (displayLabel ?? workEntryDisplayLabel(workEntry, workspaceRoot, t));
   const answerPreview =
     workEntry.questionAnswer && hasQuestionAnswer(workEntry.questionAnswer)
       ? getQuestionAnswerPreview(workEntry.questionAnswer)
@@ -5672,7 +5686,7 @@ function WorkEntryLogRow(props: WorkEntryRowProps) {
       : workLogEntryIsToolLike(workEntry)
         ? "text-secondary-label"
         : "text-foreground/80";
-  const threadLabel = isReasoning ? null : threadReadLabel(previewText, threadTarget);
+  const threadLabel = isReasoning ? null : threadReadLabel(workEntry, threadTarget, t);
   const accessiblePreview = [threadLabel?.text ?? previewText, answerPreview]
     .filter(Boolean)
     .join(": ");
