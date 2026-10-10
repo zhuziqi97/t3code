@@ -641,7 +641,7 @@ describe("instance-scoped model selection", () => {
     }
   });
 
-  it("offers only account catalog models for Antigravity despite custom model settings", () => {
+  it("offers persisted Antigravity custom models only on their configured instance", () => {
     const driver = ProviderDriverKind.make("antigravity");
     const customId = ProviderInstanceId.make("antigravity_work");
     const nativeModel = "gemini-3.1-pro";
@@ -660,11 +660,13 @@ describe("instance-scoped model selection", () => {
       provider({ provider: driver, instanceId: customId, models: [nativeModel] }),
     ]);
 
-    for (const entry of entries) {
-      expect(getAppModelOptionsForInstance(settings, entry).map((model) => model.slug)).toEqual([
-        nativeModel,
-      ]);
-    }
+    const reloaded = JSON.parse(JSON.stringify(settings)) as UnifiedSettings;
+    expect(getAppModelOptionsForInstance(reloaded, entries[0]!).map((model) => model.slug)).toEqual(
+      [nativeModel, "api-only-model"],
+    );
+    expect(getAppModelOptionsForInstance(reloaded, entries[1]!).map((model) => model.slug)).toEqual(
+      [nativeModel, "unknown-model"],
+    );
   });
 
   it("resolves the Antigravity default marker without creating an unavailable model", () => {
