@@ -14,6 +14,8 @@
 import type { Messages } from "./messages.en.ts";
 
 export const zh: Partial<Messages> = {
+  "thread.draft.restoreFailed": "恢复草稿失败",
+  "thread.draft.hasNewContent": "草稿已有新内容。",
   "connect.onboarding.notNow": "暂不设置",
   "connection.offlineDetail": "你似乎已离线。",
   "connection.routeAdded": "已添加 T3 Connect 连接路径",

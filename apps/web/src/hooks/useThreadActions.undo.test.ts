@@ -7,6 +7,9 @@ import { useThreadActions } from "./useThreadActions";
 import { threadEnvironment } from "../state/threads";
 import { toastManager } from "../components/ui/toast";
 import { useThreadUndoNotice } from "./showThreadUndoNotice";
+import { changeLanguage } from "../i18n";
+import * as Cause from "effect/Cause";
+import { AsyncResult } from "effect/reactivity";
 
 const commands = vi.hoisted(() => ({
   pin: vi.fn(),
@@ -106,7 +109,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-beforeEach(() => {
+beforeEach(async () => {
+  await changeLanguage("en");
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.useFakeTimers();
   for (const command of Object.values(commands)) {
@@ -117,13 +121,38 @@ beforeEach(() => {
   threadShell.pinnedAt = null;
   threadShell.snoozedUntil = null;
 });
-afterEach(() => {
+afterEach(async () => {
   vi.runAllTimers();
   vi.useRealTimers();
   vi.restoreAllMocks();
+  await changeLanguage("en");
 });
 
 describe("unpin Undo", () => {
+  it("keeps an existing hook action and reports a pending restore in the new language", async () => {
+    const add = vi.spyOn(toastManager, "add").mockReturnValue("toast");
+    const actions = renderActions();
+    await actions.unpinThread(target);
+    let finish!: (result: unknown) => void;
+    commands.pin.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const pending = currentUndo()();
+    await act(async () => changeLanguage("zh"));
+    finish(AsyncResult.failure(Cause.fail(new Error("Raw pin diagnostic 原文"))));
+    await pending;
+    expect(add).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        title: "撤销取消置顶失败",
+        description: "Raw pin diagnostic 原文",
+      }),
+    );
+    expect(commands.pin).toHaveBeenCalledOnce();
+    expect(useThreadUndoNotice.getState().notice).toBeNull();
+  });
   it("ignores an old notice across hook instances and still restores the latest unpin", async () => {
     const sidebar = renderActions();
     const header = renderActions();

@@ -12,7 +12,7 @@ import * as ThreadUndo from "./threadUndo";
 type UndoOptions = {
   action: "Settled" | "Snoozed" | "Unpinned" | "Archived" | "Discarded";
   undo: () => Promise<AtomCommandResult<unknown, unknown>>;
-  failureTitle: string;
+  failureTitle: () => string;
   claim: ReturnType<typeof ThreadUndo.begin>;
   /** Runs once the action can no longer be undone. */
   commit?: () => void;
@@ -66,7 +66,7 @@ function refreshNotice() {
               toastManager.add(
                 stackedThreadToast({
                   type: "error",
-                  title: failureTitle,
+                  title: failureTitle(),
                   description: error instanceof Error ? error.message : i18n.t("common.error"),
                 }),
               );

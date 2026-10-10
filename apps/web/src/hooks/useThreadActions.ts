@@ -415,7 +415,7 @@ export function useThreadActions() {
         claim: action,
         // Undo also brings the reader back when archiving moved them to a draft.
         undo: () => unarchiveThread(threadRef, { navigate: shouldNavigateToDraft }),
-        failureTitle: t("thread.action.undoArchiveFailed"),
+        failureTitle: () => i18n.t("thread.action.undoArchiveFailed"),
       });
 
       if (shouldNavigateToDraft) {
@@ -436,7 +436,6 @@ export function useThreadActions() {
       markThreadVisited,
       resolveThreadTarget,
       unarchiveThread,
-      t,
     ],
   );
 
@@ -764,14 +763,14 @@ export function useThreadActions() {
           action: "Unpinned",
           claim: action,
           undo: () => pinThread(target, orderKey === undefined ? {} : { orderKey }),
-          failureTitle: t("thread.action.undoUnpinFailed"),
+          failureTitle: () => i18n.t("thread.action.undoUnpinFailed"),
         });
       } else {
         action.finish();
       }
       return result;
     },
-    [pinThread, unpinThreadMutation, t],
+    [pinThread, unpinThreadMutation],
   );
 
   const settleThread = useCallback(
@@ -834,7 +833,7 @@ export function useThreadActions() {
           }
           return unsettled;
         },
-        failureTitle: t("thread.action.undoSettleFailed"),
+        failureTitle: () => i18n.t("thread.action.undoSettleFailed"),
       });
       return result;
     },
@@ -845,7 +844,6 @@ export function useThreadActions() {
       settleThreadMutation,
       snoozeThreadMutation,
       unsettleThread,
-      t,
     ],
   );
 
@@ -977,11 +975,11 @@ export function useThreadActions() {
         action: "Snoozed",
         claim: action,
         undo: () => unsnoozeThread(target),
-        failureTitle: t("thread.wake.failed"),
+        failureTitle: () => i18n.t("thread.wake.failed"),
       });
       return result;
     },
-    [resolveThreadTarget, snoozeThreadMutation, unsnoozeThread, t],
+    [resolveThreadTarget, snoozeThreadMutation, unsnoozeThread],
   );
 
   const confirmAndDeleteThread = useCallback(

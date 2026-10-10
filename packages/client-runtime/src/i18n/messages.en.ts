@@ -14,6 +14,8 @@
  * rename another product or rewrite a command it tells the user to run.
  */
 export const en = {
+  "thread.draft.restoreFailed": "Failed to restore draft",
+  "thread.draft.hasNewContent": "The draft has new content.",
   "connect.onboarding.notNow": "Not now",
   "connection.offlineDetail": "You appear to be offline.",
   "connection.routeAdded": "T3 Connect route added",
