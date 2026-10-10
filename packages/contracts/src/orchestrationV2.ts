@@ -1515,7 +1515,7 @@ export const OrchestrationV2TurnItem = Schema.Union([
     // model, so timelines can label the handoff by model rather than by
     // provider instance id. Absent on items persisted before these fields.
     fromModelSelections: Schema.optional(Schema.Array(ModelSelection)),
-    toModel: Schema.optional(Schema.String),
+    toModel: Schema.optional(Schema.NullOr(Schema.String)),
     strategy: Schema.Literals([
       "delta_since_target_last_seen",
       "fork_delta_summary",
@@ -1546,7 +1546,7 @@ export const OrchestrationV2TurnItem = Schema.Union([
     targetThreadId: ThreadId,
     targetRunId: Schema.NullOr(RunId),
     targetProviderInstanceId: ProviderInstanceId,
-    targetModel: TrimmedNonEmptyString,
+    targetModel: Schema.NullOr(TrimmedNonEmptyString),
   }),
   Schema.Struct({
     ...OrchestrationV2TurnItemBaseFields,
@@ -2290,7 +2290,7 @@ export const OrchestrationV2TurnItemJson = Schema.Union([
     fromProviderInstanceIds: Schema.Array(ProviderInstanceId),
     toProviderInstanceId: ProviderInstanceId,
     fromModelSelections: Schema.optional(Schema.Array(ModelSelection)),
-    toModel: Schema.optional(Schema.String),
+    toModel: Schema.optional(Schema.NullOr(Schema.String)),
     strategy: Schema.Literals([
       "delta_since_target_last_seen",
       "fork_delta_summary",
@@ -2321,7 +2321,7 @@ export const OrchestrationV2TurnItemJson = Schema.Union([
     targetThreadId: ThreadId,
     targetRunId: Schema.NullOr(RunId),
     targetProviderInstanceId: ProviderInstanceId,
-    targetModel: TrimmedNonEmptyString,
+    targetModel: Schema.NullOr(TrimmedNonEmptyString),
   }),
   Schema.Struct({
     ...OrchestrationV2TurnItemJsonBaseFields,

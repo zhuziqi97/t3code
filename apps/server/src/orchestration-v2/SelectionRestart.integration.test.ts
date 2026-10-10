@@ -75,7 +75,7 @@ interface RestartAdapterState {
     readonly cwd: string | null;
   }>;
   readonly started: ReadonlyArray<{
-    readonly model: string;
+    readonly model: string | null;
     readonly cwd: string | null;
     readonly attemptId: string;
   }>;

@@ -407,6 +407,8 @@ export interface ProviderAdapterV2TurnInput {
   readonly runOrdinal: number;
   /** Whether the current native session has an accepted turn; omitted when unknown. */
   readonly nativeThreadHasTurns?: boolean;
+  /** Last accepted selection on this native thread, to distinguish a reset from a resume. */
+  readonly previousModelSelection?: ModelSelection;
   readonly providerTurnOrdinal: number;
   readonly restartContinuationOfRunId?: RunId;
   readonly attemptId: RunAttemptId;

@@ -14,6 +14,7 @@ import {
   getModelSelectionStringOptionValue,
   getProviderOptionDescriptors,
   readCustomModelEntries,
+  mergeCustomModels,
   toCustomModelSetting,
   getProviderOptionBooleanSelectionValue,
   getProviderOptionStringSelectionValue,
@@ -279,7 +280,7 @@ describe("readCustomModelEntries", () => {
         42,
       ]),
     ).toEqual([
-      { slug: "bare", name: "bare", capabilities: null },
+      { slug: "bare", name: undefined, capabilities: null },
       { slug: "named", name: "Named", capabilities },
     ]);
   });
@@ -287,15 +288,18 @@ describe("readCustomModelEntries", () => {
   it("drops unparseable capabilities but keeps the entry", () => {
     expect(
       readCustomModelEntries([{ slug: "x", capabilities: { optionDescriptors: "nope" } }]),
-    ).toEqual([{ slug: "x", name: "x", capabilities: null }]);
+    ).toEqual([{ slug: "x", name: undefined, capabilities: null }]);
     expect(readCustomModelEntries("not a list")).toEqual([]);
   });
 
   it("writes the compact stored shape back", () => {
-    expect(toCustomModelSetting({ slug: "x", name: "x", capabilities: null })).toBe("x");
+    expect(toCustomModelSetting({ slug: "x", capabilities: null })).toBe("x");
     expect(
       toCustomModelSetting({ slug: "x", name: "x", capabilities: { optionDescriptors: [] } }),
-    ).toBe("x");
+    ).toEqual({ slug: "x", name: "x" });
+    expect(
+      toCustomModelSetting({ slug: "x", contextWindowTokens: 272000, capabilities: null }),
+    ).toEqual({ slug: "x", contextWindowTokens: 272000 });
     expect(toCustomModelSetting({ slug: "x", name: "X", capabilities })).toEqual({
       slug: "x",
       name: "X",
@@ -362,4 +366,64 @@ describe("provider-reported option display", () => {
   ])("ignores reports after changing the model, instance, or option: %j", (selected) => {
     expect(getProviderOptionCurrentLabel(descriptor, selected, reported)).toBe("Unknown");
   });
+});
+
+it("merges a display and capability override without changing a native model's id or other capabilities", () => {
+  const native = [
+    {
+      slug: "gateway/model",
+      name: "Native name",
+      isCustom: false,
+      capabilities: {
+        optionDescriptors: [
+          {
+            id: "effort",
+            label: "Effort",
+            type: "select" as const,
+            options: [{ id: "low", label: "Low" }],
+          },
+          { id: "fast", label: "Fast", type: "boolean" as const },
+        ],
+      },
+    },
+  ];
+  const merged = mergeCustomModels(native, [
+    {
+      slug: "gateway/model",
+      name: "My model",
+      capabilities: {
+        optionDescriptors: [
+          {
+            id: "effort",
+            label: "Effort",
+            type: "select",
+            options: [{ id: "high", label: "High" }],
+          },
+        ],
+      },
+    },
+    "opaque",
+  ]);
+  expect(merged.map((model) => [model.slug, model.name])).toEqual([
+    ["gateway/model", "My model"],
+    ["opaque", "opaque"],
+  ]);
+  expect(merged[0]?.capabilities?.optionDescriptors?.map((d) => d.id)).toEqual(["effort", "fast"]);
+  expect(merged[1]?.capabilities).toBeNull();
+  expect(mergeCustomModels(native, [])[0]).toEqual(native[0]);
+});
+
+it("an explicit name equal to the raw ID overrides a native display name", () => {
+  expect(
+    mergeCustomModels(
+      [{ slug: "native-id", name: "Native label", isCustom: false, capabilities: null }],
+      [{ slug: "native-id", name: "native-id" }],
+    )[0]?.name,
+  ).toBe("native-id");
+  expect(
+    mergeCustomModels(
+      [{ slug: "native-id", name: "Native label", isCustom: false, capabilities: null }],
+      ["native-id"],
+    )[0]?.name,
+  ).toBe("Native label");
 });

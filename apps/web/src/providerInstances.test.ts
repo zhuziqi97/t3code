@@ -498,7 +498,7 @@ describe("resolveDefaultProviderModelSelection", () => {
 
     expect(resolveDefaultProviderModelSelection(providers, null)).toEqual({
       instanceId,
-      model: modelSlug,
+      model: null,
     });
   });
 
@@ -519,7 +519,7 @@ describe("resolveDefaultProviderModelSelection", () => {
     expect(resolveDefaultProviderModelSelection(providers, stored)).toBe(stored);
   });
 
-  it("replaces a stale stored instance with the first ready instance and its model", () => {
+  it("preserves a stale stored instance and its model", () => {
     const providers = [
       provider({
         provider: ProviderDriverKind.make("codex"),
@@ -539,11 +539,11 @@ describe("resolveDefaultProviderModelSelection", () => {
         instanceId: ProviderInstanceId.make("removed-provider"),
         model: "stale-model",
       }),
-    ).toEqual({ instanceId: "claudeAgent", model: "claude-opus-4-8" });
+    ).toEqual({ instanceId: "removed-provider", model: "stale-model" });
   });
 
   it.each([{ enabled: false }, { availability: "unavailable" as const }])(
-    "replaces an unavailable stored instance deterministically",
+    "preserves an unavailable stored instance",
     (requestedState) => {
       const providers = [
         provider({
@@ -564,7 +564,7 @@ describe("resolveDefaultProviderModelSelection", () => {
           instanceId: ProviderInstanceId.make("codex"),
           model: "gpt-5.6",
         }),
-      ).toEqual({ instanceId: "claudeAgent", model: "claude-opus-4-8" });
+      ).toEqual({ instanceId: "codex", model: "gpt-5.6" });
     },
   );
 

@@ -266,7 +266,7 @@ export const OrchestratorMcpCreatedThread = Schema.Struct({
   createdBy: OrchestrationV2Actor,
   creationSource: OrchestrationV2CreationSource,
   providerInstanceId: ProviderInstanceId,
-  model: Schema.String,
+  model: Schema.NullOr(Schema.String),
 });
 export type OrchestratorMcpCreatedThread = typeof OrchestratorMcpCreatedThread.Type;
 
@@ -310,7 +310,7 @@ export const OrchestratorMcpThreadListItem = Schema.Struct({
   status: OrchestratorMcpThreadStatus,
   latestRunId: Schema.NullOr(RunId),
   providerInstanceId: ProviderInstanceId,
-  model: Schema.String,
+  model: Schema.NullOr(Schema.String),
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
   linkedPullRequest: Schema.NullOr(ThreadLinkedPullRequest),
@@ -359,7 +359,7 @@ export const OrchestratorMcpThreadDetail = Schema.Struct({
   latestRunId: Schema.NullOr(RunId),
   activeRunId: Schema.NullOr(RunId),
   providerInstanceId: ProviderInstanceId,
-  model: Schema.String,
+  model: Schema.NullOr(Schema.String),
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
   linkedPullRequest: Schema.NullOr(ThreadLinkedPullRequest),
@@ -387,7 +387,7 @@ export const OrchestratorMcpThreadRun = Schema.Struct({
   ordinal: PositiveInt,
   status: OrchestrationV2RunStatus,
   providerInstanceId: ProviderInstanceId,
-  model: Schema.String,
+  model: Schema.NullOr(Schema.String),
   requestedAt: IsoDateTime,
   startedAt: Schema.NullOr(IsoDateTime),
   completedAt: Schema.NullOr(IsoDateTime),

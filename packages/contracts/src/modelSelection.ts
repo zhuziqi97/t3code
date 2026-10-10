@@ -15,7 +15,8 @@ import { ProviderInstanceId } from "./providerInstance.ts";
  */
 const ModelSelectionWire = Schema.Struct({
   instanceId: ProviderInstanceId,
-  model: TrimmedNonEmptyString,
+  // null delegates model choice to the native agent; it is persisted as a choice.
+  model: Schema.NullOr(TrimmedNonEmptyString),
   options: Schema.optionalKey(ProviderOptionSelections),
 });
 

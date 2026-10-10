@@ -332,9 +332,7 @@ export function resolveDefaultProviderModelSelection(
   providers: ReadonlyArray<ServerProvider>,
   selection: ModelSelection | null | undefined,
 ): ModelSelection | null {
-  const instanceId = resolveSelectableProviderInstance(providers, selection?.instanceId);
-  if (instanceId === undefined) return null;
-  if (selection?.instanceId === instanceId) return selection;
-  const model = getDefaultProviderInstanceModel(providers, instanceId);
-  return model ? { instanceId, model } : null;
+  if (selection) return selection;
+  const instanceId = resolveSelectableProviderInstance(providers, undefined);
+  return instanceId === undefined ? null : { instanceId, model: null };
 }

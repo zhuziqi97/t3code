@@ -27,13 +27,14 @@ export function resolveHandoffEndpoints(
   // Clients fall back to the provider display name when neither source has a model.
   const handoffRun = item.runId === null ? undefined : runs.find((run) => run.id === item.runId);
   const toModel =
-    item.toModel ??
-    (handoffRun !== undefined && handoffRun.providerInstanceId === item.toProviderInstanceId
-      ? handoffRun.modelSelection.model
-      : undefined);
+    item.toModel !== undefined
+      ? item.toModel
+      : handoffRun !== undefined && handoffRun.providerInstanceId === item.toProviderInstanceId
+        ? handoffRun.modelSelection.model
+        : undefined;
   const fromEndpoints: ReadonlyArray<{
     readonly instanceId: ProviderInstanceId;
-    readonly model?: string | undefined;
+    readonly model?: string | null | undefined;
   }> =
     item.fromModelSelections !== undefined && item.fromModelSelections.length > 0
       ? item.fromModelSelections
@@ -53,7 +54,7 @@ function latestRunModelBefore(
   runs: ReadonlyArray<HandoffTimelineRun>,
   instanceId: ProviderInstanceId,
   beforeOrdinal: number | undefined,
-): string | undefined {
+): string | null | undefined {
   let latest: HandoffTimelineRun | undefined;
   for (const run of runs) {
     if (run.providerInstanceId !== instanceId) continue;
