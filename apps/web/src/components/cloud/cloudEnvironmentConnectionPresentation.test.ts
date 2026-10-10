@@ -9,6 +9,19 @@ afterEach(async () => {
   await changeLanguage("en");
 });
 
+it("translates a saved connection's authentication failure without changing its state", async () => {
+  const snapshot = connection("reconnecting", "The environment credential is invalid.");
+  await changeLanguage("zh");
+  expect(presentSavedCloudEnvironmentConnection(snapshot).statusText).toBe(
+    "连接失败，正在重新连接… 原因：执行环境凭据无效。",
+  );
+  await changeLanguage("en");
+  expect(presentSavedCloudEnvironmentConnection(snapshot).statusText).toBe(
+    "Failed to connect. Reconnecting... Reason: The environment credential is invalid.",
+  );
+  expect(snapshot.error).toBe("The environment credential is invalid.");
+});
+
 function connection(
   phase: EnvironmentConnectionPresentation["phase"],
   error: string | null = null,

@@ -54,6 +54,7 @@ import {
   RelayConnectionTarget,
   connectionRoutes,
   connectionStatusText,
+  formatConnectionErrorMessage,
   environmentMcpUrl,
 } from "@t3tools/client-runtime/connection";
 import {
@@ -1097,7 +1098,7 @@ const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHeaderActio
         stackedThreadToast({
           type: "error",
           title: t("connections.createFailed"),
-          description: message,
+          description: formatConnectionErrorMessage(message, i18n.t),
         }),
       );
     } finally {
@@ -1498,7 +1499,9 @@ function savedBackendStatus(
     case "reconnecting":
       return {
         text: connection.error
-          ? t("connections.reconnectingReason", { error: connection.error })
+          ? t("connections.reconnectingReason", {
+              error: formatConnectionErrorMessage(connection.error, t),
+            })
           : t("connections.reconnecting"),
         tone: "error",
       };
@@ -1508,7 +1511,9 @@ function savedBackendStatus(
     case "error":
       return {
         text: connection.error
-          ? t("connections.connectionFailedReason", { error: connection.error })
+          ? t("connections.connectionFailedReason", {
+              error: formatConnectionErrorMessage(connection.error, t),
+            })
           : t("connections.connectionFailed"),
         tone: "error",
       };
@@ -1645,7 +1650,9 @@ function SavedBackendListRow({
 
   const statusTooltip = `${
     unsupported
-      ? (environment.connection.error ?? connectionStatusText(environment.connection, t))
+      ? environment.connection.error
+        ? formatConnectionErrorMessage(environment.connection.error, t)
+        : connectionStatusText(environment.connection, t)
       : enabled
         ? connectionStatusText(environment.connection, t)
         : t("connections.switchedOff")
@@ -2423,7 +2430,7 @@ export function ConnectionsSettings() {
           stackedThreadToast({
             type: "error",
             title: t("connections.exposureFailedTitle"),
-            description: message,
+            description: formatConnectionErrorMessage(message, i18n.t),
           }),
         );
         setIsUpdatingDesktopServerExposure(false);
@@ -2462,7 +2469,7 @@ export function ConnectionsSettings() {
         stackedThreadToast({
           type: "error",
           title: t("connections.tailscaleFailedTitle"),
-          description: message,
+          description: formatConnectionErrorMessage(message, i18n.t),
         }),
       );
     } finally {
@@ -2504,7 +2511,7 @@ export function ConnectionsSettings() {
         stackedThreadToast({
           type: "error",
           title: t("connections.tailscaleDisableFailedTitle"),
-          description: message,
+          description: formatConnectionErrorMessage(message, i18n.t),
         }),
       );
     } finally {
@@ -2534,7 +2541,7 @@ export function ConnectionsSettings() {
           stackedThreadToast({
             type: "error",
             title: t("connections.revokeLinkFailedTitle"),
-            description: message,
+            description: formatConnectionErrorMessage(message, i18n.t),
           }),
         );
       } finally {
@@ -2563,7 +2570,7 @@ export function ConnectionsSettings() {
           stackedThreadToast({
             type: "error",
             title: t("connections.revokeClientFailedTitle"),
-            description: message,
+            description: formatConnectionErrorMessage(message, i18n.t),
           }),
         );
       } finally {
@@ -2595,7 +2602,7 @@ export function ConnectionsSettings() {
         stackedThreadToast({
           type: "error",
           title: t("connections.revokeOthersFailedTitle"),
-          description: message,
+          description: formatConnectionErrorMessage(message, i18n.t),
         }),
       );
     } finally {
@@ -2680,7 +2687,7 @@ export function ConnectionsSettings() {
         stackedThreadToast({
           type: "error",
           title: t("connections.addFailedTitle"),
-          description: message,
+          description: formatConnectionErrorMessage(message, i18n.t),
         }),
       );
       setIsAddingSavedBackend(false);
@@ -2694,13 +2701,13 @@ export function ConnectionsSettings() {
     if (result._tag === "Failure") {
       if (!isAtomCommandInterrupted(result)) {
         const error = squashAtomCommandFailure(result);
-        const message = error instanceof Error ? error.message : t("connections.addFailed");
+        const message = error instanceof Error ? error.message : i18n.t("connections.addFailed");
         setSavedBackendError(message);
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: t("connections.addFailedTitle"),
-            description: message,
+            title: i18n.t("connections.addFailedTitle"),
+            description: formatConnectionErrorMessage(message, i18n.t),
           }),
         );
       }
@@ -2842,7 +2849,7 @@ export function ConnectionsSettings() {
           stackedThreadToast({
             type: "error",
             title: t(enabled ? "connections.enableFailed" : "connections.disableFailed"),
-            description: message,
+            description: formatConnectionErrorMessage(message, i18n.t),
           }),
         );
       }
@@ -2865,7 +2872,7 @@ export function ConnectionsSettings() {
           stackedThreadToast({
             type: "error",
             title: t("connections.removeFailedTitle"),
-            description: message,
+            description: formatConnectionErrorMessage(message, i18n.t),
           }),
         );
       }
@@ -3076,7 +3083,11 @@ export function ConnectionsSettings() {
         </div>
       ) : null}
       {renderRemoteFields()}
-      {savedBackendError ? <p className="text-xs text-destructive">{savedBackendError}</p> : null}
+      {savedBackendError ? (
+        <p className="text-xs text-destructive">
+          {formatConnectionErrorMessage(savedBackendError, t)}
+        </p>
+      ) : null}
       <Button
         variant="outline"
         className="w-full"
@@ -3205,7 +3216,9 @@ export function ConnectionsSettings() {
         </div>
         {savedBackendError || discoveredSshHostsError ? (
           <Alert variant="error">
-            <AlertDescription>{savedBackendError ?? discoveredSshHostsError}</AlertDescription>
+            <AlertDescription>
+              {formatConnectionErrorMessage(savedBackendError ?? discoveredSshHostsError ?? "", t)}
+            </AlertDescription>
           </Alert>
         ) : null}
         <Button
@@ -3283,7 +3296,7 @@ export function ConnectionsSettings() {
           stackedThreadToast({
             type: "error",
             title: t("connections.wslFailedTitle"),
-            description: message,
+            description: formatConnectionErrorMessage(message, i18n.t),
           }),
         );
         refreshDesktopWslState();
@@ -3605,7 +3618,9 @@ export function ConnectionsSettings() {
     <>
       {desktopAccessManagementError ? (
         <div className={accessRowClassName(presentation)}>
-          <p className="text-xs text-destructive">{desktopAccessManagementError}</p>
+          <p className="text-xs text-destructive">
+            {formatConnectionErrorMessage(desktopAccessManagementError, t)}
+          </p>
         </div>
       ) : null}
       <PairingClientsList

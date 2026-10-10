@@ -2774,6 +2774,31 @@ export const en = {
   "connections.environmentConnected": "Environment connected",
   "connections.addFailed": "Failed to add backend.",
   "connections.addFailedTitle": "Could not add backend",
+  "connections.error.invalidCredential": "The environment credential is invalid.",
+  "connections.error.accessRequired":
+    "The environment credential does not grant the required access.",
+  "connections.error.authRejected": "The environment rejected the authentication request.",
+  "connections.error.endpointMissing": "The environment endpoint could not be found.",
+  "connections.error.authUnavailable": "The environment could not authorize the connection.",
+  "connections.error.invalidPairing": "The pairing details are invalid.",
+  "connections.error.credentialUnavailable": "The saved bearer credential is unavailable.",
+  "connections.error.labelRequired": "Environment label cannot be empty.",
+  "connections.error.invalidToken": "Invalid pairing token. Check the token and try again.",
+  "connections.error.tokenRequired": "Enter a pairing token to continue.",
+  "connections.error.sessionTimeout":
+    "Timed out waiting for authenticated session after bootstrap.",
+  "connections.error.primaryRequest":
+    "Primary environment request failed during {{operation}} (HTTP {{status}}).",
+  "connections.error.fetchFailed":
+    "Failed to fetch remote environment endpoint {{url}} ({{diagnostic}}).",
+  "connections.error.invalidResponse":
+    "Remote environment endpoint returned an invalid response from {{url}}.",
+  "connections.error.undeclaredStatus":
+    "Remote environment endpoint {{url}} returned undeclared status {{status}}.",
+  "connections.error.timeout":
+    "Remote environment endpoint {{url}} timed out after {{milliseconds}}ms.",
+  "connections.error.differentMachine":
+    "That address reaches {{label}}, a different machine. Add it as its own environment instead.",
   "connections.backendAdded": "Backend added",
   "connections.savedHint": "The environment is saved and will reconnect on app startup.",
   "connections.removeFailed": "Failed to remove backend.",

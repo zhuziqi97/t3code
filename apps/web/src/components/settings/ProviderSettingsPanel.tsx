@@ -11,7 +11,10 @@ import {
 } from "@t3tools/contracts";
 import { useEnvironmentScope, readEnvironmentScope } from "../../state/session";
 import { useAtomValue } from "@effect/atom-react";
-import { connectionStatusTitle } from "@t3tools/client-runtime/connection";
+import {
+  connectionStatusTitle,
+  formatConnectionErrorMessage,
+} from "@t3tools/client-runtime/connection";
 import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
 import {
   isAtomCommandInterrupted,
@@ -276,7 +279,7 @@ function EnvironmentUnavailablePlaceholder({
       {error ? (
         <ExpandableText
           key={environment.environmentId}
-          text={error}
+          text={formatConnectionErrorMessage(error, t)}
           className="w-full text-left font-mono text-xs leading-relaxed text-muted-foreground"
         />
       ) : null}

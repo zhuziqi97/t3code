@@ -27,6 +27,65 @@ export interface EnvironmentPresentation {
   readonly serverConfig: ServerConfig | null;
 }
 
+/** Translate connection-owned messages without changing wire errors or unknown diagnostics. */
+export function formatConnectionErrorMessage(message: string, t?: TFunction): string {
+  if (!t) return message;
+  const fixedMessages: Record<string, string> = {
+    "The environment credential is invalid.": "connections.error.invalidCredential",
+    "The environment credential does not grant the required access.":
+      "connections.error.accessRequired",
+    "The environment rejected the authentication request.": "connections.error.authRejected",
+    "The environment endpoint could not be found.": "connections.error.endpointMissing",
+    "The environment could not authorize the connection.": "connections.error.authUnavailable",
+    "The pairing details are invalid.": "connections.error.invalidPairing",
+    "The saved bearer credential is unavailable.": "connections.error.credentialUnavailable",
+    "Environment label cannot be empty.": "connections.error.labelRequired",
+    "Invalid pairing token. Check the token and try again.": "connections.error.invalidToken",
+    "Enter a pairing token to continue.": "connections.error.tokenRequired",
+    "Timed out waiting for authenticated session after bootstrap.":
+      "connections.error.sessionTimeout",
+  };
+  const key = fixedMessages[message];
+  if (key !== undefined) return t(key);
+
+  const fetchFailure = /^Failed to fetch remote environment endpoint (\S+) \(([\s\S]*)\)\.$/u.exec(
+    message,
+  );
+  if (fetchFailure) {
+    return t("connections.error.fetchFailed", {
+      url: fetchFailure[1],
+      diagnostic: fetchFailure[2],
+    });
+  }
+  const invalidResponse =
+    /^Remote environment endpoint returned an invalid response from (.+)\.$/u.exec(message);
+  if (invalidResponse) return t("connections.error.invalidResponse", { url: invalidResponse[1] });
+  const undeclaredStatus =
+    /^Remote environment endpoint (.+) returned undeclared status (\d+)\.$/u.exec(message);
+  if (undeclaredStatus) {
+    return t("connections.error.undeclaredStatus", {
+      url: undeclaredStatus[1],
+      status: undeclaredStatus[2],
+    });
+  }
+  const timeout = /^Remote environment endpoint (.+) timed out after (\d+)ms\.$/u.exec(message);
+  if (timeout) return t("connections.error.timeout", { url: timeout[1], milliseconds: timeout[2] });
+  const differentMachine =
+    /^That address reaches ([\s\S]+), a different machine\. Add it as its own environment instead\.$/u.exec(
+      message,
+    );
+  if (differentMachine)
+    return t("connections.error.differentMachine", { label: differentMachine[1] });
+  const primaryRequest =
+    /^Primary environment request failed during ([a-z-]+) \(HTTP (\d+)\)\.$/u.exec(message);
+  if (primaryRequest)
+    return t("connections.error.primaryRequest", {
+      operation: primaryRequest[1],
+      status: primaryRequest[2],
+    });
+  return message;
+}
+
 export function presentConnectionState(
   state: SupervisorConnectionState,
 ): EnvironmentConnectionPresentation {
@@ -62,6 +121,7 @@ export function connectionStatusText(
   connection: EnvironmentConnectionPresentation,
   t?: TFunction,
 ): string {
+  const error = connection.error ? formatConnectionErrorMessage(connection.error, t) : null;
   switch (connection.phase) {
     case "available":
       return t?.("connections.available") ?? "Available";
@@ -70,18 +130,18 @@ export function connectionStatusText(
     case "connecting":
       return t?.("connections.connectingDetailed") ?? "Connecting...";
     case "reconnecting":
-      return connection.error
-        ? (t?.("connections.statusReconnectingReason", { error: connection.error }) ??
-            `Failed to connect. Reconnecting... Reason: ${connection.error}`)
+      return error
+        ? (t?.("connections.statusReconnectingReason", { error }) ??
+            `Failed to connect. Reconnecting... Reason: ${error}`)
         : (t?.("connections.reconnectingDetailed") ?? "Reconnecting...");
     case "connected":
       return t?.("connections.connected") ?? "Connected";
     case "unsupported":
       return t?.("connections.unsupported") ?? "Client not supported";
     case "error":
-      return connection.error
-        ? (t?.("connections.statusConnectionFailedReason", { error: connection.error }) ??
-            `Connection failed. Reason: ${connection.error}`)
+      return error
+        ? (t?.("connections.statusConnectionFailedReason", { error }) ??
+            `Connection failed. Reason: ${error}`)
         : (t?.("connections.connectionFailed") ?? "Connection failed");
   }
 }

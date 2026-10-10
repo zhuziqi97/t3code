@@ -1,5 +1,8 @@
 import type { TFunction } from "i18next";
-import { type EnvironmentConnectionPresentation } from "@t3tools/client-runtime/connection";
+import {
+  formatConnectionErrorMessage,
+  type EnvironmentConnectionPresentation,
+} from "@t3tools/client-runtime/connection";
 import { i18n } from "../../i18n";
 
 export interface SavedCloudEnvironmentConnectionPresentation {
@@ -23,10 +26,16 @@ export function presentSavedCloudEnvironmentConnection(
           connection.error
             ? "connection.status.reconnectingReason"
             : "connection.status.reconnecting",
-          { reason: connection.error },
+          {
+            reason: connection.error
+              ? formatConnectionErrorMessage(connection.error, translate)
+              : null,
+          },
         )
       : connection.phase === "error" && connection.error
-        ? translate("connection.status.failedReason", { reason: connection.error })
+        ? translate("connection.status.failedReason", {
+            reason: formatConnectionErrorMessage(connection.error, translate),
+          })
         : translate(
             {
               connected: "connection.connected",

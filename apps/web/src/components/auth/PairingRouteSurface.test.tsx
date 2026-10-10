@@ -20,6 +20,8 @@ vi.mock("../../hostedPairing", () => ({
 }));
 import { changeLanguage } from "../../i18n";
 import { HostedPairingRouteSurface, PairingRouteSurface } from "./PairingRouteSurface";
+import * as Cause from "effect/Cause";
+import { ConnectionTransientError } from "@t3tools/client-runtime/connection";
 function deferred<A>() {
   let resolve!: (value: A) => void;
   let reject!: (error: unknown) => void;
@@ -50,7 +52,9 @@ afterEach(async () => {
 it("relocalizes hosted pairing progress and completion without resubmitting the token", async () => {
   const result = deferred<{ _tag: "Success"; value: undefined }>();
   state.connect.mockReturnValue(result.promise);
-  await act(() => root.render(<HostedPairingRouteSurface />));
+  await act(async () => {
+    root.render(<HostedPairingRouteSurface />);
+  });
   expect(state.connect).toHaveBeenCalledExactlyOnceWith({
     host: "https://host.example",
     pairingCode: state.token,
@@ -99,5 +103,63 @@ it("keeps a submitted credential and localizes unknown errors without restarting
   });
   expect(container.textContent).toContain("Authentication failed");
   expect(state.submit).toHaveBeenCalledTimes(1);
+  expect(authenticated).not.toHaveBeenCalled();
+});
+
+it("relocalizes a failed hosted discovery and retries only when requested", async () => {
+  const url = "https://host.example/.well-known/t3/environment";
+  const diagnostic = "ECONNREFUSED (原文 & <keep>)";
+  const message = `Failed to fetch remote environment endpoint ${url} (${diagnostic}).`;
+  state.connect.mockResolvedValue({
+    _tag: "Failure",
+    cause: Cause.fail(new ConnectionTransientError({ reason: "network", detail: message })),
+  });
+  await act(async () => {
+    root.render(<HostedPairingRouteSurface />);
+  });
+  expect(container.textContent).toContain(message);
+  await act(async () => {
+    await changeLanguage("zh");
+  });
+  expect(container.textContent).toContain(`无法获取远程执行环境端点 ${url}（${diagnostic}）。`);
+  expect(container.querySelector("button")?.textContent).toBe("重试");
+  expect(state.connect).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    await changeLanguage("en");
+  });
+  expect(container.textContent).toContain(message);
+  state.connect.mockResolvedValue({ _tag: "Success", value: undefined });
+  await act(async () => {
+    container.querySelector<HTMLButtonElement>("button")!.click();
+  });
+  expect(state.connect).toHaveBeenCalledTimes(2);
+  expect(container.textContent).toContain("Backend paired");
+});
+
+it("relocalizes authentication rejection without consuming another credential", async () => {
+  state.submit.mockRejectedValue(
+    new Error("Invalid pairing token. Check the token and try again."),
+  );
+  const authenticated = vi.fn();
+  await act(() =>
+    root.render(
+      <PairingRouteSurface
+        auth={{
+          policy: "loopback-browser",
+          bootstrapMethods: ["one-time-token"],
+          sessionMethods: ["browser-session-cookie"],
+          sessionCookieName: "test-session",
+        }}
+        onAuthenticated={authenticated}
+      />,
+    ),
+  );
+  expect(container.textContent).toContain("Invalid pairing token. Check the token and try again.");
+  await act(async () => {
+    await changeLanguage("zh");
+  });
+  expect(container.textContent).toContain("配对令牌无效，请检查后重试。");
+  expect(container.querySelector<HTMLInputElement>("input")?.value).toBe(state.token);
+  expect(state.submit).toHaveBeenCalledExactlyOnceWith(state.token);
   expect(authenticated).not.toHaveBeenCalled();
 });

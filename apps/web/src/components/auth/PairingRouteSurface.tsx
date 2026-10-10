@@ -2,6 +2,7 @@ import type { TFunction } from "i18next";
 import { useTranslate } from "../../i18n";
 import { Alert, AlertDescription } from "../ui/alert";
 import type { AuthSessionState } from "@t3tools/contracts";
+import { formatConnectionErrorMessage } from "@t3tools/client-runtime/connection";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import React, { startTransition, useEffect, useRef, useState, useCallback } from "react";
 
@@ -121,7 +122,11 @@ export function PairingRouteSurface({
 
         {errorMessage ? (
           <Alert variant="error">
-            <AlertDescription>{errorMessage.message ?? t("pairing.authFailed")}</AlertDescription>
+            <AlertDescription>
+              {errorMessage.message
+                ? formatConnectionErrorMessage(errorMessage.message, t)
+                : t("pairing.authFailed")}
+            </AlertDescription>
           </Alert>
         ) : null}
 
@@ -233,7 +238,11 @@ export function HostedPairingRouteSurface() {
           message.kind === "saved"
             ? t("pairing.saved", { label: message.label || t("pairing.environment") })
             : message.kind === "failed"
-              ? t("pairing.retryWarning", { error: message.error ?? t("pairing.authFailed") })
+              ? t("pairing.retryWarning", {
+                  error: message.error
+                    ? formatConnectionErrorMessage(message.error, t)
+                    : t("pairing.authFailed"),
+                })
               : t(`pairing.${message.kind}`)
         }
       />

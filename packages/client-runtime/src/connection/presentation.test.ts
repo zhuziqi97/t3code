@@ -20,9 +20,16 @@ import {
   environmentMcpUrl,
   connectionStatusText,
   connectionStatusTitle,
+  formatConnectionErrorMessage,
   presentEnvironmentConnection,
   presentConnectionState,
 } from "./presentation.ts";
+import {
+  RemoteEnvironmentAuthFetchError,
+  RemoteEnvironmentAuthTimeoutError,
+  RemoteEnvironmentAuthUndeclaredStatusError,
+} from "../rpc/http.ts";
+import { mapRemoteEnvironmentError } from "./errors.ts";
 
 const TARGET = new BearerConnectionTarget({
   environmentId: EnvironmentId.make("environment-1"),
@@ -282,4 +289,51 @@ it("translates connection status while keeping the original error reason and sou
     error: "ECONNREFUSED host.example:3773",
     traceId: "trace-1",
   });
+});
+
+it("translates HTTP connection failures at presentation time while preserving their source diagnostics", () => {
+  const i18n = createI18n({ lng: "zh" });
+  const url = "http://127.0.0.1:16171/.well-known/t3/environment?raw=A%26B";
+  const diagnostic = `HttpClientError: Transport error (GET ${url})\n原文 & <keep>`;
+  const failures = [
+    new RemoteEnvironmentAuthFetchError({
+      message: `Failed to fetch remote environment endpoint ${url} (${diagnostic}).`,
+      cause: new Error(diagnostic),
+    }),
+    new RemoteEnvironmentAuthTimeoutError(url, 10000),
+    new RemoteEnvironmentAuthUndeclaredStatusError(url, 503),
+  ];
+  const translated = failures.map((failure) =>
+    formatConnectionErrorMessage(mapRemoteEnvironmentError(failure).message, i18n.t),
+  );
+  expect(translated).toEqual([
+    `无法获取远程执行环境端点 ${url}（${diagnostic}）。`,
+    `远程执行环境端点 ${url} 在 10000 毫秒后超时。`,
+    `远程执行环境端点 ${url} 返回了未声明的状态码 503。`,
+  ]);
+  for (const failure of failures) {
+    expect(formatConnectionErrorMessage(failure.message)).toBe(failure.message);
+    expect(formatConnectionErrorMessage(failure.message, createI18n({ lng: "en" }).t)).toBe(
+      failure.message,
+    );
+  }
+});
+
+it("translates known authentication failures and machine mismatch labels, leaving unknown errors alone", () => {
+  const t = createI18n({ lng: "zh" }).t;
+  expect(
+    connectionStatusText(
+      { phase: "error", error: "The environment credential is invalid.", traceId: "trace-raw" },
+      t,
+    ),
+  ).toBe("连接失败。原因：执行环境凭据无效。");
+  const label = "QA (原文), host & <keep>";
+  expect(
+    formatConnectionErrorMessage(
+      `That address reaches ${label}, a different machine. Add it as its own environment instead.`,
+      t,
+    ),
+  ).toBe(`该地址指向另一台机器 ${label}。请将其添加为单独的执行环境。`);
+  const unknown = "Unknown network diagnostic 原文 & <keep>";
+  expect(formatConnectionErrorMessage(unknown, t)).toBe(unknown);
 });
