@@ -1,5 +1,6 @@
 import type { TFunction } from "i18next";
 import { i18n, useTranslate } from "../i18n";
+import { useDndAccessibility } from "../hooks/useDndAccessibility";
 import { type EnvironmentId } from "@t3tools/contracts";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "./ThreadHoverCard";
 import { CollapsibleSectionHeader } from "./ui/collapsible-section-header";
@@ -2377,6 +2378,7 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
 
 export default function Sidebar() {
   const t = useTranslate();
+  const dndAccessibility = useDndAccessibility();
   const projects = useProjects();
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const threads = useThreadShells();
@@ -5226,6 +5228,7 @@ export default function Sidebar() {
               timeout={400}
             >
               <DndContext
+                accessibility={dndAccessibility}
                 sensors={dndSensors}
                 autoScroll={!isContextDrag}
                 collisionDetection={dndCollisionDetection}

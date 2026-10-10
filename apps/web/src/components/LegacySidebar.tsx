@@ -1,4 +1,5 @@
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
+import { useDndAccessibility } from "../hooks/useDndAccessibility";
 import { resolveThreadCurrentPullRequestLink } from "@t3tools/shared/threadPullRequests";
 import { Spinner } from "~/components/ui/spinner";
 import {
@@ -2941,6 +2942,7 @@ function SortableProjectItem({
   disabled?: boolean;
   children: (handleProps: SortableProjectHandleProps) => React.ReactNode;
 }) {
+  const t = useTranslate();
   const {
     attributes,
     listeners,
@@ -2950,7 +2952,7 @@ function SortableProjectItem({
     transition,
     isDragging,
     isOver,
-  } = useSortable({ id: projectId, disabled });
+  } = useSortable({ id: projectId, disabled, attributes: { roleDescription: t("drag.sortable") } });
   return (
     <li
       ref={setNodeRef}
@@ -3012,6 +3014,7 @@ interface SidebarProjectsContentProps {
 const SidebarProjectsContent = memo(function SidebarProjectsContent(
   props: SidebarProjectsContentProps,
 ) {
+  const dndAccessibility = useDndAccessibility();
   const {
     showArm64IntelBuildWarning,
     arm64IntelBuildWarningDescription,
@@ -3152,6 +3155,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
 
         {isManualProjectSorting ? (
           <DndContext
+            accessibility={dndAccessibility}
             sensors={projectDnDSensors}
             collisionDetection={projectCollisionDetection}
             modifiers={[restrictToVerticalAxis, restrictToFirstScrollableAncestor]}

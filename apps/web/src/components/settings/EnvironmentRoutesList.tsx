@@ -1,4 +1,5 @@
 import { useTranslate } from "../../i18n";
+import { useDndAccessibility } from "../../hooks/useDndAccessibility";
 import {
   DndContext,
   type DragEndEvent,
@@ -50,6 +51,7 @@ export function EnvironmentRoutesList({
   readonly onAddRoute: () => void;
 }) {
   const t = useTranslate();
+  const dndAccessibility = useDndAccessibility();
   const saved = connectionRoutes(environment.entry);
   const savedIds = saved.map((route) => connectionRouteId(route.target));
   // A dropped order shows until the catalog matches it, so the row does not
@@ -110,6 +112,7 @@ export function EnvironmentRoutesList({
   return (
     <div className="mt-2 border-t border-border/50 py-2">
       <DndContext
+        accessibility={dndAccessibility}
         sensors={sensors}
         collisionDetection={closestCenter}
         modifiers={[restrictToVerticalAxis, restrictToParentElement]}
@@ -168,7 +171,7 @@ function SortableRouteRow({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id });
+  } = useSortable({ id, attributes: { roleDescription: t("drag.sortable") } });
 
   return (
     <li

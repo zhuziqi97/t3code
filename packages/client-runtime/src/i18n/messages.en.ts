@@ -2377,6 +2377,15 @@ export const en = {
   "sidebar.toggle": "Toggle Sidebar",
   "sidebar.resize": "Resize Sidebar",
   "sidebar.dragResize": "Drag to resize sidebar",
+  "drag.instructions":
+    "To pick up a draggable item, press the space bar. While dragging, use the arrow keys to move the item. Press space again to drop the item in its new position, or press escape to cancel.",
+  "drag.pickedUp": "Picked up draggable item {{id}}.",
+  "drag.movedOver": "Draggable item {{id}} was moved over droppable area {{target}}.",
+  "drag.movedOutside": "Draggable item {{id}} is no longer over a droppable area.",
+  "drag.droppedOver": "Draggable item {{id}} was dropped over droppable area {{target}}",
+  "drag.dropped": "Draggable item {{id}} was dropped.",
+  "drag.cancelled": "Dragging was cancelled. Draggable item {{id}} was dropped.",
+  "drag.sortable": "sortable",
   "notification.dismiss": "Dismiss notification",
   "chat.prompt.disconnected": "Ask for changes, send follow-ups, or attach images",
 
