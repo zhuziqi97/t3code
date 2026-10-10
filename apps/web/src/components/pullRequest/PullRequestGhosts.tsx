@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 /**
  * Loading states specific to the pull request surface — the first list, a search under way,
  * and a detail panel opening — use bars in the geometry of the content they stand for, pulsing
@@ -63,10 +64,11 @@ export function PullRequestListGhost({
   /** Said where the group headers speak, for the states with something to say — a search. */
   caption?: string;
 }) {
+  const t = useTranslate();
   return (
     <div
       role="status"
-      aria-label={caption ?? "Loading pull requests"}
+      aria-label={caption ?? t("pullRequest.list.loadingPullRequests")}
       className="motion-safe:animate-skeleton space-y-0.5"
     >
       {caption ? (

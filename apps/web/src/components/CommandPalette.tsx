@@ -2,6 +2,10 @@
 
 import type { TFunction } from "i18next";
 import { i18n, useTranslate } from "../i18n";
+import {
+  threadReferenceCopyFailureToast,
+  threadReferenceCopySuccessToast,
+} from "../lib/threadReferenceCopyToasts";
 
 import { threadPullRequestLinkMode } from "@t3tools/client-runtime/thread-pull-request-compatibility";
 import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
@@ -790,22 +794,12 @@ function OpenCommandPaletteDialog(props: {
     try {
       const didCopy = await writeTextToClipboard(target.value, target.clipboardTarget);
       if (!didCopy) return;
-      toastManager.add({
-        type: "success",
-        title: target.successTitle,
-        description: target.value,
-      });
+      toastManager.add(threadReferenceCopySuccessToast(target));
     } catch (error) {
       console.error(error);
-      toastManager.add(
-        stackedThreadToast({
-          type: "error",
-          title: target.failureTitle,
-          description: error instanceof Error ? error.message : t("common.error"),
-        }),
-      );
+      toastManager.add(stackedThreadToast(threadReferenceCopyFailureToast(target, error)));
     }
-  }, [activeThreadReferenceCopyTarget, t]);
+  }, [activeThreadReferenceCopyTarget]);
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const threads = useThreadShells();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);

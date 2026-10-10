@@ -1,5 +1,9 @@
 import { localizedProjectCloneProgressSummary } from "../lib/projectClonePresentation";
 import { i18n, useTranslate } from "../i18n";
+import {
+  threadReferenceCopyFailureToast,
+  threadReferenceCopySuccessToast,
+} from "../lib/threadReferenceCopyToasts";
 import { ThreadFind, ThreadFindCanvas, type ThreadFindControls } from "./chat/ThreadFindProvider";
 import { THREAD_FIND_BAR_RESERVED_HEIGHT } from "./chat/ThreadFindBar";
 import { usageLimitRecoveryBannerItem } from "./chat/UsageLimitRecoveryBanner";
@@ -7155,24 +7159,14 @@ export default function ChatView(props: ChatViewProps) {
     void writeTextToClipboard(target.value, target.clipboardTarget).then(
       (didCopy) => {
         if (!didCopy) return;
-        toastManager.add({
-          type: "success",
-          title: target.successTitle,
-          description: target.value,
-        });
+        toastManager.add(threadReferenceCopySuccessToast(target));
       },
       (error) => {
         console.error(error);
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: target.failureTitle,
-            description: error instanceof Error ? error.message : t("common.error"),
-          }),
-        );
+        toastManager.add(stackedThreadToast(threadReferenceCopyFailureToast(target, error)));
       },
     );
-  }, [activeThreadReferenceCopyTarget, t]);
+  }, [activeThreadReferenceCopyTarget]);
   const pullRequestPanelTarget = activeThread
     ? threadPullRequestPanelTarget({
         projectId: activeThread.projectId,
