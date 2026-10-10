@@ -1260,7 +1260,7 @@ export default function FilePreviewPanel({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+    <div className="@container/file-preview flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
       {relativePath && attachment === undefined ? (
         <div className={FILE_SURFACE_SUBHEADER_CLASS} data-surface-subheader>
           <ScrollArea
@@ -1351,7 +1351,9 @@ export default function FilePreviewPanel({
           {t("filePreview.limit", { bytes: file.data.byteLength.toLocaleString() })}
         </div>
       ) : null}
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      {/* A narrow panel cannot fit the 256px explorer beside the editor's find widget.
+          Stack the panes so search controls stay inside the file surface. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden @min-[34rem]/file-preview:flex-row">
         <div
           className={cn("min-w-0 flex-1 flex-col overflow-hidden", previewPath ? "flex" : "hidden")}
         >
@@ -1495,7 +1497,7 @@ export default function FilePreviewPanel({
             className={cn(
               "flex min-h-0 shrink-0 bg-background",
               previewPath
-                ? "w-[min(22rem,46%)] min-w-64 border-l border-border/60"
+                ? "h-2/5 min-h-40 border-t border-border/60 @min-[34rem]/file-preview:h-auto @min-[34rem]/file-preview:w-[min(22rem,46%)] @min-[34rem]/file-preview:min-h-0 @min-[34rem]/file-preview:min-w-64 @min-[34rem]/file-preview:border-t-0 @min-[34rem]/file-preview:border-l"
                 : "min-w-0 flex-1",
             )}
           >
