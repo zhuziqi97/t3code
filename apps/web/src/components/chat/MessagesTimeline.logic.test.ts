@@ -33,6 +33,7 @@ import {
   deriveMessagesTimelineRowsWithState,
   shouldCollapseUserMessage,
   liveWorkEntryLabel,
+  singleToolCallLabel,
   normalizeCompactToolLabel,
   resolveAssistantMessageCopyState,
   resolveWorkGroupScrollIndex,
@@ -350,6 +351,103 @@ describe("work entry labels", () => {
         undefined,
       ),
     ).toBe("Searched TODO in web");
+  });
+
+  it.each([
+    [{ pattern: "原文|TODO", path: "apps/web" }, "已在 web 中搜索 原文|TODO"],
+    [{ glob: "*.{ts,tsx}", path: "apps/web" }, "已在 web 中搜索文件 *.{ts,tsx}"],
+    [{ glob: "*.{ts,tsx}" }, "已搜索文件 *.{ts,tsx}"],
+    [{ query: "原文|TODO" }, "已搜索 原文|TODO"],
+    [{ target_directory: "/tmp/原始目录" }, "已在 原始目录 中搜索"],
+    [{ pattern: "TODO", glob: "*.ts", path: "apps/web" }, "已在 web 中搜索 TODO"],
+    [{ pattern: "TODO", glob: "*.ts" }, "已搜索文件 *.ts"],
+  ])(
+    "translates search grammar without changing query, glob or target selection %j",
+    (input, expected) => {
+      const search = {
+        ...entry,
+        itemType: "dynamic_tool" as const,
+        toolTitle: "Grep",
+        toolData: { input },
+        structuredPayload: { type: "dynamic_tool", toolName: "Grep", input } as NonNullable<
+          WorkLogEntry["structuredPayload"]
+        >,
+      };
+      expect(workEntryDisplayLabel(search, undefined, createI18n({ lng: "zh" }).t)).toBe(expected);
+      expect(workEntryDisplayLabel(search, undefined, createI18n({ lng: "en" }).t)).toBe(
+        workEntryDisplayLabel(search, undefined),
+      );
+      expect(search.toolData.input).toBe(input);
+    },
+  );
+
+  it("translates only owned skill and search headings while retaining custom titles", () => {
+    const t = createI18n({ lng: "zh" }).t;
+    const skill = {
+      ...entry,
+      itemType: "dynamic_tool" as const,
+      structuredPayload: {
+        type: "dynamic_tool",
+        toolName: "Skill",
+        input: { skill: "raw-skill 原文", args: "/tmp/参数原文" },
+      } as NonNullable<WorkLogEntry["structuredPayload"]>,
+    };
+    expect(singleToolCallLabel(skill, t)).toBe("技能：raw-skill 原文");
+    expect(workEntryDisplayLabel(skill, undefined, t)).toBe("技能：raw-skill 原文");
+    const cua = {
+      ...skill,
+      structuredPayload: {
+        type: "dynamic_tool",
+        toolName: "cua_repl.js",
+        input: { title: "Keep CUA title 原文" },
+      } as NonNullable<WorkLogEntry["structuredPayload"]>,
+    };
+    expect(singleToolCallLabel(cua, t)).toBe("Keep CUA title 原文");
+    const fileSearch = {
+      ...entry,
+      itemType: "file_search" as const,
+      label: "Searched TODO",
+      toolData: { pattern: "TODO" },
+      structuredPayload: { type: "file_search", title: null, pattern: "TODO" } as NonNullable<
+        WorkLogEntry["structuredPayload"]
+      >,
+    };
+    expect(workEntryDisplayLabel(fileSearch, undefined, t)).toBe("已搜索 TODO");
+    expect(
+      workEntryDisplayLabel(
+        {
+          ...fileSearch,
+          label: "Keep adapter title 原文",
+          structuredPayload: { ...fileSearch.structuredPayload, title: "Keep adapter title 原文" },
+        },
+        undefined,
+        t,
+      ),
+    ).toBe("Keep adapter title 原文");
+    const webSearch = {
+      ...entry,
+      itemType: "web_search" as const,
+      toolTitle: "Web search",
+      structuredPayload: {
+        id: TurnItemId.make("web-search-label"),
+        threadId: ThreadId.make("raw-search-thread"),
+        runId: null,
+        nodeId: null,
+        providerThreadId: null,
+        providerTurnId: null,
+        nativeItemRef: null,
+        parentItemId: null,
+        ordinal: 1,
+        status: "completed",
+        startedAt: null,
+        completedAt: null,
+        updatedAt: DateTime.makeUnsafe("2026-10-10T00:00:00Z"),
+        type: "web_search",
+        title: null,
+        patterns: ["原始 query"],
+      } as NonNullable<WorkLogEntry["structuredPayload"]>,
+    };
+    expect(singleToolCallLabel(webSearch, t)).toBe("网页搜索");
   });
 
   it("keeps a multi-line approval prompt as its label", () => {

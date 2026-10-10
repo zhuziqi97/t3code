@@ -5948,6 +5948,13 @@ export const en = {
   "chat.tools.command.stopped": "Stopped {{program}}",
   "diagnostics.monitor.binary.unsupported": "Resource monitoring is unsupported on {{platform}}.",
   "diagnostics.monitor.binary.missing": "Resource monitor binary was not found for {{platform}}.",
+  "chat.tools.skill": "Skill: {{name}}",
+  "chat.tools.search.query": "Searched {{term}}",
+  "chat.tools.search.queryIn": "Searched {{term}} in {{target}}",
+  "chat.tools.search.files": "Searched files {{term}}",
+  "chat.tools.search.filesIn": "Searched files {{term}} in {{target}}",
+  "chat.tools.search.in": "Searched in {{target}}",
+  "chat.tools.searchedFiles": "Searched files",
   "diagnostics.monitor.binary.not-executable":
     "Resource monitor binary at '{{path}}' is not executable.",
 } as const;

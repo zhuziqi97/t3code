@@ -5557,5 +5557,12 @@ export const zh: Partial<Messages> = {
   "chat.tools.command.stopped": "已停止运行 {{program}}",
   "diagnostics.monitor.binary.unsupported": "{{platform}} 不支持资源监控。",
   "diagnostics.monitor.binary.missing": "未找到适用于 {{platform}} 的资源监控程序。",
+  "chat.tools.skill": "技能：{{name}}",
+  "chat.tools.search.query": "已搜索 {{term}}",
+  "chat.tools.search.queryIn": "已在 {{target}} 中搜索 {{term}}",
+  "chat.tools.search.files": "已搜索文件 {{term}}",
+  "chat.tools.search.filesIn": "已在 {{target}} 中搜索文件 {{term}}",
+  "chat.tools.search.in": "已在 {{target}} 中搜索",
+  "chat.tools.searchedFiles": "已搜索文件",
   "diagnostics.monitor.binary.not-executable": "资源监控程序“{{path}}”不可执行。",
 };

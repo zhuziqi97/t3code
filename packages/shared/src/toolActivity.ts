@@ -32,10 +32,15 @@ export function claudeSkillInvocation(
 export function dynamicToolTitle(
   toolName: string | null | undefined,
   input: unknown,
+  formatSkill?: (name: string) => string,
 ): string | undefined {
   if (toolName === "cua_repl.js") return asTrimmedString(asRecord(input)?.title);
   const skill = claudeSkillInvocation(toolName, input);
-  return skill === undefined ? undefined : `Skill: ${skill.name}`;
+  return skill === undefined
+    ? undefined
+    : formatSkill
+      ? formatSkill(skill.name)
+      : `Skill: ${skill.name}`;
 }
 
 function recordHasKeys(
@@ -339,25 +344,34 @@ function searchTargetName(value: string | undefined): string | undefined {
 /** Cursor-style row: "Searched files *.{ts,tsx} in t3chat-new". */
 export function formatSearchToolLabel(
   data: Record<string, unknown> | undefined,
+  format?: (label: {
+    readonly type: "query" | "files" | "target";
+    readonly term: string;
+    readonly target?: string;
+  }) => string,
 ): string | undefined {
   const input = searchInputRecord(data);
   const query = firstInputString(input, SEARCH_QUERY_KEYS);
   const glob = firstInputString(input, SEARCH_GLOB_KEYS);
   const target = searchTargetName(firstInputString(input, SEARCH_TARGET_KEYS));
   if (query && target) {
-    return `Searched ${query} in ${target}`;
+    return format
+      ? format({ type: "query", term: query, target })
+      : `Searched ${query} in ${target}`;
   }
   if (glob && target) {
-    return `Searched files ${glob} in ${target}`;
+    return format
+      ? format({ type: "files", term: glob, target })
+      : `Searched files ${glob} in ${target}`;
   }
   if (glob) {
-    return `Searched files ${glob}`;
+    return format ? format({ type: "files", term: glob }) : `Searched files ${glob}`;
   }
   if (query) {
-    return `Searched ${query}`;
+    return format ? format({ type: "query", term: query }) : `Searched ${query}`;
   }
   if (target) {
-    return `Searched in ${target}`;
+    return format ? format({ type: "target", term: target }) : `Searched in ${target}`;
   }
   return undefined;
 }

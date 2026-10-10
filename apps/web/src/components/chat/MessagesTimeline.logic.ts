@@ -100,11 +100,20 @@ export function singleToolCallLabel(entry: WorkLogEntry, t?: TFunction): string 
   const toolPresentation = resolveWorkEntryToolPresentation(entry, "completed", t);
   if (toolPresentation) return toolPresentation.displayName;
   const item = entry.structuredPayload;
-  const title = item?.type === "dynamic_tool" ? dynamicToolTitle(item.toolName, item.input) : null;
+  const title =
+    item?.type === "dynamic_tool"
+      ? dynamicToolTitle(
+          item.toolName,
+          item.input,
+          t ? (name) => t("chat.tools.skill", { name }) : undefined,
+        )
+      : null;
   if (title) return title;
   // A lone web search keeps its heading; the query stays in its detail.
   if (entry.itemType === "web_search")
-    return entry.toolTitle ?? (t ? t("chat.tools.webSearch") : "Web search");
+    return t && item?.type === "web_search" && !item.title
+      ? t("chat.tools.webSearch")
+      : (entry.toolTitle ?? (t ? t("chat.tools.webSearch") : "Web search"));
   return workEntryDisplayLabel(entry, undefined, t);
 }
 
@@ -149,11 +158,22 @@ export function workEntryDisplayLabel(
   const action = toolGroupAction(entry);
   if (action === "code-search" || action === "search") {
     // Adapters title file searches with their target; the item keeps only the pattern.
+    const formatSearch = t
+      ? (label: { type: "query" | "files" | "target"; term: string; target?: string }) =>
+          label.type === "target"
+            ? t("chat.tools.search.in", { target: label.term })
+            : t(`chat.tools.search.${label.type}${label.target ? "In" : ""}`, {
+                term: label.term,
+                target: label.target,
+              })
+      : undefined;
+    const item = entry.structuredPayload;
     const searchLabel =
-      entry.itemType === "file_search"
+      entry.itemType === "file_search" && !(t && item?.type === "file_search" && !item.title)
         ? entry.label
-        : formatSearchToolLabel(workEntryToolDataRecord(entry));
+        : formatSearchToolLabel(workEntryToolDataRecord(entry), formatSearch);
     if (searchLabel) return searchLabel;
+    if (t && item?.type === "file_search" && !item.title) return t("chat.tools.searchedFiles");
   }
   const readPaths = action === "read" ? workEntryReadPaths(entry, workspaceRoot) : [];
   if (action === "read" && readPaths[0]) {
@@ -171,7 +191,14 @@ export function workEntryDisplayLabel(
   const providerRetry =
     entry.projectedItem?.item.type === "error" && entry.projectedItem.item.retry !== undefined;
   const item = entry.structuredPayload;
-  const title = item?.type === "dynamic_tool" ? dynamicToolTitle(item.toolName, item.input) : null;
+  const title =
+    item?.type === "dynamic_tool"
+      ? dynamicToolTitle(
+          item.toolName,
+          item.input,
+          t ? (name) => t("chat.tools.skill", { name }) : undefined,
+        )
+      : null;
   if (title) return title;
   const compactDetail = entry.detail?.trim();
   const detailIsSearchOutput =
