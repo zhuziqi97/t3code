@@ -37,6 +37,45 @@ export interface ChatThreadActionContext {
   readonly handleNewThread: NewThreadHandler;
 }
 
+export interface NewThreadProjectGroup {
+  readonly projectKey: string;
+  readonly displayName: string;
+  readonly environmentId: EnvironmentId;
+  readonly id: ProjectId;
+  readonly memberProjectRefs: readonly ScopedProjectRef[];
+}
+
+export type SidebarNewThreadTarget =
+  | { readonly kind: "project"; readonly projectRef: ScopedProjectRef; readonly label: string }
+  | { readonly kind: "picker" }
+  | { readonly kind: "empty" };
+
+/** A selected group wins over the viewed conversation; All threads requires an explicit choice. */
+export function resolveSidebarNewThreadTarget(input: {
+  readonly groups: readonly NewThreadProjectGroup[];
+  readonly selectedProjectKey: string | null;
+  readonly currentProjectRef: ScopedProjectRef | null;
+}): SidebarNewThreadTarget {
+  const selected =
+    input.selectedProjectKey === null
+      ? null
+      : input.groups.find((group) => group.projectKey === input.selectedProjectKey);
+  // A deleted selection must not silently redirect a new task to the remaining project.
+  if (input.selectedProjectKey !== null && !selected) return { kind: "picker" };
+  const group = selected ?? (input.groups.length === 1 ? input.groups[0] : null);
+  if (!group) return { kind: input.groups.length === 0 ? "empty" : "picker" };
+  const current = input.currentProjectRef;
+  const projectRef =
+    current &&
+    group.memberProjectRefs.some(
+      (member) =>
+        member.environmentId === current.environmentId && member.projectId === current.projectId,
+    )
+      ? current
+      : scopeProjectRef(group.environmentId, group.id);
+  return { kind: "project", projectRef, label: group.displayName };
+}
+
 export function resolveNewDraftStartFromOrigin(input: {
   envMode: DraftThreadEnvMode;
   newWorktreesStartFromOrigin: boolean;

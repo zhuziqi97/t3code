@@ -5,8 +5,18 @@ need a separate branch and working directory.
 
 ## Start a thread
 
-On web and desktop, a new thread keeps the current project and carries your model
-and mode selections, unless the destination project has its own model default.
+On web and desktop, select a project in the sidebar to choose where ordinary
+new-thread buttons and shortcuts start work. Clicking a project also expands or
+collapses its threads; collapsing it keeps the creation target selected. Choose
+**All threads** to clear that target. With several projects, new-thread actions
+then ask where to work. The project tree stays visible in either case.
+
+Pinned threads appear once above the projects. Search finds threads across projects;
+opening a result selects and reveals its project. Threads without a project appear
+under **No project**.
+
+A new thread carries your model and mode selections, unless the destination
+project has its own model default.
 Its branch and workspace mode come from your configured defaults. To continue in
 an existing worktree, use **New thread in this worktree** from the branch toolbar.
 
@@ -64,24 +74,17 @@ scroll position instead of following the thread to its new place in the list.
 
 Pinning does not prevent automatic settlement. Settling a thread removes its pin.
 
-On web and desktop, drag a thread between sections to change its state. Drag a thread up into
-the pinned section to pin it at the spot you drop it; drag a pinned thread down into the active
-list to unpin it. Dragging a thread onto the **Settled** header settles it, and dragging a settled
-thread into the active list un-settles it. A snoozed thread can be dragged out of the snoozed
-shelf, which wakes it, but threads cannot be dragged into the shelf because snoozing needs a wake
-time. Dragging a pinned thread out of the pinned section does not ask for unpin confirmation.
-Pinned and active boundary labels appear only while dragging, without moving the rows. The
-other rows slide aside to show where the thread will land. When you cross into another section,
-the dragged thread shows the action the drop performs, with its icon: **Pin**, **Unpin**,
-**Settle**, **Un-settle**, or **Wake**. Its status and hover actions hide during the drag. A pinned
-thread keeps its pin only while it stays in the pinned section; once it leaves, the badge takes
-over. Reordering within the same section shows no badge. When there are no pins, drag to the top
-edge to pin a thread. Section labels stay readable for the whole drag, and the section the
-thread is over takes the accent color. Section labels also
-identify empty sections and a collapsed settled shelf.
+On web and desktop, drag a thread within its project to change its order or state.
+Drag it into the pinned section to pin it at that position, or drag a pinned thread
+back into its own project's active list to unpin it. Drag onto the project's
+**Settled** header to settle it, or drag a settled thread into its active list to
+un-settle it. Dragging a snoozed thread out of its shelf wakes it; snoozing uses the
+menu because it needs a wake time. Drops onto another project are rejected and
+never change the thread's project. Unpinning by dragging does not ask for confirmation.
 
-Drag within the pinned or active section to change its order. Other rows slide aside to show the
-spot where the thread will land. Drops into either section keep the position you choose. On
+Pinned threads can be reordered across projects in the global pinned section.
+Active threads can be reordered within their project. The drop preview shows the
+position and any state change before you release it. On
 mobile, open a thread's menu and choose **Arrange threads**. Drag a handle within or between
 **Pinned** and **Active** to reorder, pin, or unpin. Drop onto the **Settled** divider to
 settle a thread. The dragged card shows the action before you release it. Expand **Snoozed**

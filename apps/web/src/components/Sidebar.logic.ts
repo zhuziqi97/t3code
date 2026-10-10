@@ -147,11 +147,15 @@ export function resolveSidebarThreadSection(input: {
 }
 
 /** Sortable ids: thread rows use their scoped key; structural items use a
-    colon-free prefix: scoped thread keys always contain a colon. */
+    structural prefix; project markers also carry their group identity. */
 const SIDEBAR_MARKER_PREFIX = "sidebar-marker-";
 
 export type SidebarListMarker =
   /** The top boundary is also a landing target when there are no pins. */
+  | "projects-header"
+  | "project-header"
+  | "draft-block"
+  | "settled-more"
   | "pinned-header"
   /** Stand-in rows so an empty section has somewhere for the gap to open. */
   | "active-placeholder"
@@ -162,16 +166,26 @@ export type SidebarListMarker =
   | "snoozed-header"
   | "settled-header";
 
-export function sidebarMarkerId(marker: SidebarListMarker): string {
-  return `${SIDEBAR_MARKER_PREFIX}${marker}`;
+export function sidebarMarkerId(marker: SidebarListMarker, projectKey?: string): string {
+  return `${SIDEBAR_MARKER_PREFIX}${marker}${projectKey === undefined ? "" : `:${projectKey}`}`;
 }
 
 export type SidebarListItem =
-  | { readonly kind: "thread"; readonly key: string; readonly section: SidebarSection }
-  | { readonly kind: "marker"; readonly marker: SidebarListMarker };
+  | {
+      readonly kind: "thread";
+      readonly key: string;
+      readonly section: SidebarSection;
+      readonly projectKey?: string;
+    }
+  | {
+      readonly kind: "marker";
+      readonly marker: SidebarListMarker;
+      readonly projectKey?: string;
+      readonly section?: SidebarSection;
+    };
 
 export function sidebarListItemId(item: SidebarListItem): string {
-  return item.kind === "thread" ? item.key : sidebarMarkerId(item.marker);
+  return item.kind === "thread" ? item.key : sidebarMarkerId(item.marker, item.projectKey);
 }
 
 /** The section a slot belongs to, read off the markers around it: from
@@ -207,6 +221,58 @@ export function resolveSidebarDropTarget(
   const activeIndex = items.findIndex((item) => sidebarListItemId(item) === activeKey);
   const overIndex = items.findIndex((item) => sidebarListItemId(item) === overId);
   if (activeIndex === -1 || overIndex === -1 || items[activeIndex]?.kind !== "thread") return null;
+  if (items.some((item) => item.kind === "marker" && item.marker === "projects-header")) {
+    // An invalid destination falls back to the source collision. Dropping
+    // there must leave its order intact, rather than insert it at the front.
+    if (activeKey === overId) return null;
+    const source = items[activeIndex]!;
+    const over = items[overIndex]!;
+    if (source.kind !== "thread") return null;
+    const section =
+      over.kind === "thread"
+        ? over.section
+        : over.marker === "pinned-header"
+          ? "pinned"
+          : over.section;
+    if (section === undefined || section === "working" || section === "snoozed") return null;
+    if (
+      section !== "pinned" &&
+      (source.projectKey === undefined || source.projectKey !== over.projectKey)
+    )
+      return null;
+    const destination = items.filter(
+      (item) =>
+        item.kind === "thread" &&
+        item.key !== activeKey &&
+        item.section === section &&
+        (section === "pinned" || item.projectKey === source.projectKey),
+    );
+    let insertion = destination.findIndex((item) => sidebarListItemId(item) === overId);
+    if (insertion < 0) insertion = 0;
+    else if (activeIndex < overIndex) insertion += 1;
+    const order = destination.map(sidebarListItemId);
+    order.splice(insertion, 0, activeKey);
+    return {
+      section,
+      pinnedOrder:
+        section === "pinned"
+          ? order
+          : items
+              .filter((item) => item.kind === "thread" && item.section === "pinned")
+              .map(sidebarListItemId),
+      activeOrder:
+        section === "active"
+          ? order
+          : items
+              .filter(
+                (item) =>
+                  item.kind === "thread" &&
+                  item.section === "active" &&
+                  item.projectKey === source.projectKey,
+              )
+              .map(sidebarListItemId),
+    };
+  }
   const moved = items.filter((_, index) => index !== activeIndex);
   moved.splice(overIndex, 0, items[activeIndex]!);
   const section = sectionAtSidebarSlot(moved, overIndex);

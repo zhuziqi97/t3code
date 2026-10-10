@@ -287,3 +287,10 @@ describe.each([
     },
   );
 });
+
+it("rejects a missing project before creating a draft or looking up execution defaults", async () => {
+  const openThread = useNewThreadHandler();
+  await expect(
+    openThread({ environmentId: "environment-ssh", projectId: "project-deleted" } as never),
+  ).rejects.toThrow("This project is no longer available");
+});

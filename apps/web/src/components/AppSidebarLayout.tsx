@@ -1,3 +1,4 @@
+import { useSidebarProjectNavigation } from "../hooks/useSidebarProjectNavigation";
 import { useAtomValue } from "@effect/atom-react";
 import * as Schema from "effect/Schema";
 import {
@@ -226,6 +227,7 @@ function ProjectProjectionRetention() {
 }
 
 export function AppSidebarLayout({ children }: { children: ReactNode }) {
+  useSidebarProjectNavigation();
   const navigate = useNavigate();
   const legacySidebarEnabled = useLegacySidebarEnabled();
   const { active: panelAnimationsActive, durationMs: panelAnimationDurationMs } =

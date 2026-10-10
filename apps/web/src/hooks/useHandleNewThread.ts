@@ -128,6 +128,10 @@ export function useNewThreadHandler() {
           candidate.id === projectRef.projectId &&
           candidate.environmentId === projectRef.environmentId,
       );
+      if (!project)
+        return Promise.reject(
+          new Error("This project is no longer available. Choose a project to start a thread."),
+        );
       // The resolver applies project overrides and, until the server has
       // folded them, the aggregate's own legacy fields.
       const projectSettings = resolveProjectSettings(
