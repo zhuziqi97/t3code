@@ -1,3 +1,4 @@
+import { useSidebarNewThread } from "../hooks/useSidebarNewThread";
 import { openConveneProjectConfiguration } from "./convene/ConveneProjectDialog";
 ("use client");
 
@@ -118,7 +119,7 @@ import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import { useProjects, useServerConfigs, useThreadShells, waitForProject } from "../state/entities";
 import { useThreadSearch } from "../state/queries";
-import { resolveThreadActionProjectRef, startNewThreadFromContext } from "../lib/chatThreadActions";
+import { resolveThreadActionProjectRef } from "../lib/chatThreadActions";
 import {
   appendBrowsePathSegment,
   ensureBrowseDirectoryPath,
@@ -467,10 +468,6 @@ function notifyThemeSaveFailure(): void {
   );
 }
 
-function projectFavicon(project: Project) {
-  return <ProjectFavicon project={project} className="size-4" />;
-}
-
 export function CommandPalette({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [state, dispatch] = useReducer(reduceCommandPaletteUiState, {
@@ -744,6 +741,7 @@ function OpenCommandPaletteDialog(props: {
   const desktopLocalBootstraps = useDesktopLocalBootstraps();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const availableSettingsSearchItems = useAvailableSettingsSearchItems();
+  const { target: sidebarNewThreadTarget, startNewThread } = useSidebarNewThread();
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread } =
     useHandleNewThread();
   const projects = useProjects();
@@ -1884,32 +1882,22 @@ function OpenCommandPaletteDialog(props: {
   const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [];
 
   if (projects.length > 0) {
-    const activeProjectTitle =
-      projectPickerEntries.find((entry) => entry.isPreferred)?.group.displayName ??
-      (currentProjectId ? (projectTitleById.get(currentProjectId) ?? null) : null);
-
-    if (activeProjectTitle) {
-      actionItems.push({
-        kind: "action",
-        value: "action:new-thread",
-        searchTerms: ["new thread", "chat", "create", "draft"],
-        title: (
+    actionItems.push({
+      kind: "action",
+      value: "action:new-thread",
+      searchTerms: ["new thread", "chat", "create", "draft"],
+      title:
+        sidebarNewThreadTarget.kind === "project" ? (
           <>
-            New thread in <span className="font-semibold">{activeProjectTitle}</span>
+            New thread in <span className="font-semibold">{sidebarNewThreadTarget.label}</span>
           </>
+        ) : (
+          "New thread…"
         ),
-        icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
-        shortcutCommand: "chat.new",
-        run: async () => {
-          await startNewThreadFromContext({
-            activeDraftThread,
-            activeThread: activeThread ?? undefined,
-            defaultProjectRef,
-            handleNewThread,
-          });
-        },
-      });
-    }
+      icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
+      shortcutCommand: "chat.new",
+      run: startNewThread,
+    });
 
     actionItems.push({
       kind: "submenu",
@@ -2488,9 +2476,11 @@ function OpenCommandPaletteDialog(props: {
       }
 
       openConveneProjectConfiguration({ environmentId: input.environmentId, projectId });
-      const navigationResult = await settlePromise(() =>
-        handleNewThread(scopeProjectRef(input.environmentId, projectId)),
-      );
+      const projectRef = scopeProjectRef(input.environmentId, projectId);
+      const navigationResult = await settlePromise(async () => {
+        await waitForProject(projectRef);
+        return handleNewThread(projectRef);
+      });
       if (navigationResult._tag === "Failure") {
         const error = squashAtomCommandFailure(navigationResult);
         toastManager.add(

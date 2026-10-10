@@ -8,6 +8,11 @@ import { isLocalEnvironmentDisabled } from "../localEnvironment";
 import { isElectron } from "../env";
 import { NoProjectsHero } from "../components/NoProjectsHero";
 import { sortScopedProjectsForSidebar } from "../components/Sidebar.logic";
+import { useSidebarNewThread } from "../hooks/useSidebarNewThread";
+import { useLegacySidebarEnabled } from "../hooks/useSettings";
+import { openCommandPalette } from "../commandPaletteBus";
+import { useScratchProject } from "../hooks/useScratchProject";
+import { usePrimaryEnvironmentId } from "../state/environments";
 import { Button } from "../components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "../components/ui/empty";
 import { SidebarInset } from "../components/ui/sidebar";
@@ -35,45 +40,54 @@ function ChatIndexRouteView() {
 }
 
 /**
- * Landing on the index route drops straight into a draft thread for the most
- * recently active project, so the first screen is a prompt instead of a dead
- * end. Falls back to an add-project hero when no project exists yet.
+ * Start only when the project is explicit or unambiguous. A global multi-project
+ * landing asks where to work instead of creating in an invisible previous project.
  */
 function IndexDraftLanding() {
   const projects = useProjects();
   const threads = useThreadShells();
   const bootstrapped = useAllEnvironmentShellsBootstrapped();
   const handleNewThread = useNewThreadHandler();
+  const { target } = useSidebarNewThread();
+  const legacy = useLegacySidebarEnabled();
+  const { scratchEnvironmentId, startScratchThread } = useScratchProject();
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const scratchTarget = scratchEnvironmentId(primaryEnvironmentId);
   const startingRef = useRef(false);
   const [startState, setStartState] = useState({ failed: false, retryRequest: 0 });
 
-  const mostRecentProject = useMemo(
-    () =>
-      bootstrapped
-        ? (projects.find((project) => project.id === window.__T3_INITIAL_PROJECT_ID__) ??
-          sortScopedProjectsForSidebar(projects, threads, "updated_at")[0] ??
-          null)
-        : null,
-    [bootstrapped, projects, threads],
-  );
+  const targetProject = useMemo(() => {
+    if (!bootstrapped) return null;
+    const explicit = projects.find((project) => project.id === window.__T3_INITIAL_PROJECT_ID__);
+    if (explicit) return explicit;
+    if (legacy) return sortScopedProjectsForSidebar(projects, threads, "updated_at")[0] ?? null;
+    if (target.kind !== "project") return null;
+    return (
+      projects.find(
+        (project) =>
+          project.environmentId === target.projectRef.environmentId &&
+          project.id === target.projectRef.projectId,
+      ) ?? null
+    );
+  }, [bootstrapped, legacy, projects, target, threads]);
 
   useEffect(() => {
-    if (mostRecentProject === null || startingRef.current) {
+    if (targetProject === null || startingRef.current) {
       return;
     }
     startingRef.current = true;
-    void handleNewThread(scopeProjectRef(mostRecentProject.environmentId, mostRecentProject.id), {
+    void handleNewThread(scopeProjectRef(targetProject.environmentId, targetProject.id), {
       replace: true,
     }).catch(() => {
       startingRef.current = false;
       setStartState((state) => ({ ...state, failed: true }));
     });
-  }, [handleNewThread, mostRecentProject, startState.retryRequest]);
+  }, [handleNewThread, targetProject, startState.retryRequest]);
 
   if (!bootstrapped) {
     return null;
   }
-  if (mostRecentProject !== null) {
+  if (targetProject !== null) {
     return startState.failed ? (
       <DraftStartError
         onRetry={() => {
@@ -84,6 +98,29 @@ function IndexDraftLanding() {
         }}
       />
     ) : null;
+  }
+  if (target.kind === "picker") {
+    return (
+      <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none">
+        {isElectron ? <WorkspacePageHeader electron /> : null}
+        <Empty className="flex-1">
+          <EmptyHeader>
+            <EmptyTitle>Choose a project to start</EmptyTitle>
+            <EmptyDescription>
+              Select a project in the sidebar or choose where to start a new thread.
+            </EmptyDescription>
+            <Button onClick={() => openCommandPalette({ open: "new-thread-in" })}>
+              New thread…
+            </Button>
+            {scratchTarget !== null && (
+              <Button variant="ghost" onClick={() => void startScratchThread(scratchTarget)}>
+                Start without a project
+              </Button>
+            )}
+          </EmptyHeader>
+        </Empty>
+      </SidebarInset>
+    );
   }
   // First-run routing to the welcome wizard happens in FirstRunGate at the
   // root, before this route ever renders.

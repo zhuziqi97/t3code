@@ -116,6 +116,20 @@ export function createSidebarSortingStrategy(input: {
 }): SortingStrategy {
   if (input.enabled === false) return () => stationary;
   const { items } = input;
+  if (items.some((item) => item.kind === "marker" && item.marker === "projects-header")) {
+    return (args) => {
+      const source = items[args.activeIndex];
+      const over = items[args.overIndex];
+      if (
+        !source ||
+        source.kind !== "thread" ||
+        !over ||
+        !resolveSidebarDropTarget(items, source.key, sidebarListItemId(over))
+      )
+        return stationary;
+      return verticalListSortingStrategy(args);
+    };
+  }
   const indices = new Map(items.map((item, index) => [sidebarListItemId(item), index]));
   let previous: Pick<Layout, "rects" | "activeIndex" | "overIndex"> | undefined;
   let transforms: ReturnType<SortingStrategy>[] | null = [];
