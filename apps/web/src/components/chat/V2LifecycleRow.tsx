@@ -573,7 +573,7 @@ function SubagentTimelineTooltip(
 function HandoffEndpoint(props: {
   readonly providers: ReadonlyArray<ServerProvider>;
   readonly instanceId: ProviderInstanceId;
-  readonly model?: string | undefined;
+  readonly model?: string | null | undefined;
 }) {
   const entry = getProviderInstanceEntry(props.providers, props.instanceId);
   const model = props.model?.trim();

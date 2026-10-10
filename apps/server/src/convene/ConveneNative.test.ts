@@ -119,14 +119,18 @@ const seed = Effect.gen(function* () {
   return directory;
 });
 
-it.effect(
-  "creates one durable native thread and sends an idempotent message without claiming provider completion",
-  () =>
+it.effect.each(["controlled-codex", null])(
+  "creates a durable native thread with selection %s and an idempotent message",
+  (selectedModel) =>
     Effect.gen(function* () {
       yield* seed;
       const service = yield* ConveneNative.ConveneNative;
-      const first = yield* service.handle(create);
-      const retry = yield* service.handle(create);
+      const selectedCreate: ConveneNativeRequest = {
+        ...create,
+        modelSelection: { ...modelSelection, model: selectedModel },
+      };
+      const first = yield* service.handle(selectedCreate);
+      const retry = yield* service.handle(selectedCreate);
       assert.deepEqual(retry, first);
       const send: ConveneNativeRequest = {
         operation: "SEND",
@@ -151,11 +155,14 @@ it.effect(
       assert.equal(result.type, "snapshot");
       if (result.type !== "snapshot") return assert.fail("Expected native snapshot");
       assert.equal(result.thread.id, threadId);
+      assert.equal(result.thread.modelSelection.model, selectedModel);
       assert.equal(result.runs.length, 1);
       assert.notEqual(result.runs[0]?.status, "completed");
       assert.isTrue(result.items.some(({ item }) => item.type === "user_message"));
       const encoded = yield* encodeNativeResult(result);
       assert.equal(encoded.type, "snapshot");
+      if (encoded.type === "snapshot")
+        assert.equal(encoded.thread.modelSelection.model, selectedModel);
       const listed = yield* service.handle({ operation: "LIST", projectId, workspaceKey: "root" });
       assert.isTrue(listed.type === "threads" && listed.threads.length === 1);
     }).pipe(Effect.provide(Layer.merge(layer, NodeServices.layer)), Effect.scoped),

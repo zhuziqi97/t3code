@@ -157,7 +157,7 @@ interface ProviderModelsSectionProps {
  *
  * Validation mirrors the pre-consolidation logic in `SettingsPanels`:
  *   - empty / whitespace → "Enter a model slug."
- *   - duplicate of a non-custom (probe-reported) slug → "already built in"
+ *   - an existing native slug → add a display/capability override
  *   - exceeds `MAX_CUSTOM_MODEL_LENGTH` → length error
  *   - duplicate of an already-saved custom slug → already-saved error
  */
@@ -228,14 +228,10 @@ export function ProviderModelsSection({
   }, [displayModels]);
 
   const handleAdd = () => {
-    if (!canManageCustomModels || driverKind === "antigravity") return;
+    if (!canManageCustomModels) return;
     const normalized = normalizeCustomModelSlug(input);
     if (!normalized) {
       setError("Enter a model slug.");
-      return;
-    }
-    if (models.some((model) => !model.isCustom && model.slug === normalized)) {
-      setError("That model is already built in.");
       return;
     }
     if (normalized.length > MAX_CUSTOM_MODEL_LENGTH) {
@@ -251,7 +247,8 @@ export function ProviderModelsSection({
     // which is also what lets the pending scroll target resolve and clear.
     scrollToSlugRef.current = normalized;
     setFilter("");
-    onChange([...customModels, { slug: normalized, name: normalized, capabilities: null }]);
+    onChange([...customModels, { slug: normalized, capabilities: null }]);
+    setEditingSlug(normalized);
     setInput("");
     setError(null);
     setIsAdding(false);
@@ -385,7 +382,7 @@ export function ProviderModelsSection({
           </Tooltip>
         </>
       ) : null}
-      {model.isCustom ? (
+      {customModels.some((entry) => entry.slug === model.slug) ? (
         <>
           <Tooltip>
             <TooltipTrigger
@@ -547,7 +544,7 @@ export function ProviderModelsSection({
             {hiddenCount > 0 ? ` · ${hiddenCount} hidden` : ""}
           </span>
         </div>
-        {driverKind !== "antigravity" && !isAdding ? (
+        {!isAdding ? (
           <Button
             type="button"
             size="xs"
@@ -574,7 +571,7 @@ export function ProviderModelsSection({
           const previous = visibleModels[index - 1];
           const startsGroup = previous === undefined || groupOf(previous) !== group;
           const editingEntry =
-            canManageCustomModels && model.isCustom && editingSlug === model.slug
+            canManageCustomModels && editingSlug === model.slug
               ? customModels.find((entry) => entry.slug === model.slug)
               : undefined;
           return (
@@ -605,7 +602,7 @@ export function ProviderModelsSection({
         })}
       </div>
 
-      {driverKind === "antigravity" || !canManageCustomModels ? null : isAdding ? (
+      {!canManageCustomModels ? null : isAdding ? (
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
           <Input
             id={`provider-instance-${instanceId}-custom-model`}
@@ -640,9 +637,7 @@ export function ProviderModelsSection({
         </div>
       ) : null}
 
-      {driverKind !== "antigravity" && error ? (
-        <p className="mt-2 text-xs text-destructive">{error}</p>
-      ) : null}
+      {error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}
     </div>
   );
 }

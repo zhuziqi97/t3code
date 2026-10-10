@@ -77,7 +77,7 @@ export function ThreadHandoffRow(props: {
 
 function HandoffEndpoint(props: {
   instanceId: ProviderInstanceId;
-  model?: string | undefined;
+  model?: string | null | undefined;
   providers: ReadonlyArray<ServerProvider>;
 }) {
   const provider = props.providers.find((candidate) => candidate.instanceId === props.instanceId);
@@ -85,7 +85,7 @@ function HandoffEndpoint(props: {
   const label =
     model?.shortName ??
     model?.name ??
-    props.model ??
+    (props.model === null ? "Follow Agent default" : props.model) ??
     (provider ? resolveProviderInstanceDisplayName(provider) : props.instanceId);
   return (
     <Pressable

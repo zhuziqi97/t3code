@@ -1133,7 +1133,11 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                             size={size}
                           />
                         )}
-                        label={currentModelOption?.label ?? currentModelSelection.model}
+                        label={
+                          currentModelOption?.label ??
+                          currentModelSelection.model ??
+                          "Follow Agent default"
+                        }
                         maxWidth="100%"
                         onPress={openSettings}
                       />

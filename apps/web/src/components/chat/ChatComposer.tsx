@@ -5497,6 +5497,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         />
       ) : null}
       <ProviderModelPicker
+        reportedModelSelection={reportedModelSelection}
         compact={false}
         isComposerOwned
         disabled={providerCatalogPending || isSendBusy}
@@ -5517,7 +5518,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     model: selection.model,
                     options: modelOptionsByInstance.get(selection.instanceId) ?? [],
                   });
-                  return (resolvedModel?.slug ?? selection.model) === model;
+                  return (resolvedModel?.slug ?? selection.model ?? "") === model;
                 };
                 const exists = current.some(matchesModel);
                 const next = exists
@@ -5528,7 +5529,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 } else {
                   setMultipleModelSelections(null);
                   const remaining = next[0] ?? selectedModelSelection;
-                  onProviderModelSelect(remaining.instanceId, remaining.model, {
+                  onProviderModelSelect(remaining.instanceId, remaining.model ?? "", {
                     focusComposer: false,
                   });
                 }

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { ProviderInstanceId, type ModelSelection, type ServerConfig } from "@t3tools/contracts";
 
 import {
-  buildModelOptions,
+  buildModelOptions as buildAllModelOptions,
   groupByProvider,
   isModelSelectionUnavailable,
   resolveDefaultableModelSelection,
@@ -11,6 +11,10 @@ import {
   resolveSelectableModelSelection,
   type ModelOption,
 } from "./modelOptions";
+
+// Catalog assertions below inspect native rows; default behavior is covered separately.
+const buildModelOptions: typeof buildAllModelOptions = (...args) =>
+  buildAllModelOptions(...args).filter((option) => option.selection.model !== null);
 
 describe("mobile model options", () => {
   it("groups models by provider and flags legacy entries", () => {
@@ -249,7 +253,7 @@ describe("mobile model options", () => {
     },
   );
 
-  it("rejects stored selections whose provider is not usable", () => {
+  it("preserves stored selections when their provider is not usable", () => {
     const config = {
       providers: [
         {
@@ -285,8 +289,8 @@ describe("mobile model options", () => {
     };
 
     expect(resolveSelectableModelSelection(config, usable)).toBe(usable);
-    expect(resolveSelectableModelSelection(config, disabled)).toBeNull();
-    expect(resolveSelectableModelSelection(config, removed)).toBeNull();
+    expect(resolveSelectableModelSelection(config, disabled)).toBe(disabled);
+    expect(resolveSelectableModelSelection(config, removed)).toBe(removed);
     expect(isModelSelectionUnavailable(config, disabled)).toBe(false);
     // An offline environment has no config to validate.
     expect(resolveSelectableModelSelection(null, disabled)).toBe(disabled);
@@ -372,14 +376,13 @@ describe("mobile model options", () => {
       };
 
       expect(resolveDefaultableModelSelection(changedConfig, selection)).toBe(selection);
-      expect(isModelSelectionUnavailable(changedConfig, selection)).toBe(true);
+      expect(isModelSelectionUnavailable(changedConfig, selection)).toBe(false);
       const options = buildModelOptions(changedConfig, selection);
       const missing = options.find((option) => option.selection.model === selection.model);
       expect(missing).toMatchObject({
         label: selection.model,
         providerLabel: "Google Work",
         providerDriver: "antigravity",
-        isUnavailable: true,
         capabilities: null,
       });
       expect(missing?.selection).toBe(selection);
@@ -430,11 +433,11 @@ describe("mobile model options", () => {
       expect(buildModelOptions(null, selection)[0]?.selection).toBe(selection);
       expect(buildModelOptions(null, selection)[0]?.isUnavailable).not.toBe(true);
       expect(isModelSelectionUnavailable(unknownConfig, selection)).toBe(false);
-      expect(resolveSelectableModelSelection(unknownConfig, selection)).toBeNull();
+      expect(resolveSelectableModelSelection(unknownConfig, selection)).toBe(selection);
     });
   });
 
-  it("keeps legacy models out of implicit defaults", () => {
+  it("keeps explicitly saved legacy models", () => {
     const config = {
       providers: [
         {
@@ -462,8 +465,8 @@ describe("mobile model options", () => {
     const legacy = { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" };
 
     expect(resolveDefaultableModelSelection(config, current)).toBe(current);
-    // A legacy last-used selection falls through to the provider default.
-    expect(resolveDefaultableModelSelection(config, legacy)).toBeNull();
+    // A catalog label does not override a saved selection.
+    expect(resolveDefaultableModelSelection(config, legacy)).toBe(legacy);
     // Offline: nothing to validate against, selection passes through.
     expect(resolveDefaultableModelSelection(null, legacy)).toBe(legacy);
   });
@@ -473,7 +476,7 @@ describe("mobile model options", () => {
     const project = { instanceId: ProviderInstanceId.make("codex"), model: "project" };
     const sticky = { instanceId: ProviderInstanceId.make("codex"), model: "sticky" };
     const providerDefault = {
-      selection: { instanceId: ProviderInstanceId.make("codex"), model: "default" },
+      selection: { instanceId: ProviderInstanceId.make("codex"), model: null },
       isDefault: true,
     } as ModelOption;
     const resolve = (
@@ -503,4 +506,38 @@ describe("mobile model options", () => {
       }),
     ).toBeNull();
   });
+});
+
+it("offers a native default for every usable mobile instance", () => {
+  const config = {
+    providers: [
+      "codex",
+      "claudeAgent",
+      "cursor",
+      "opencode",
+      "grok",
+      "antigravity",
+      "pi",
+      "muse",
+      "acpRegistry",
+    ].map((driver) => ({
+      instanceId: driver,
+      driver,
+      enabled: true,
+      installed: true,
+      auth: { status: "authenticated" },
+      models: [],
+    })),
+  } as unknown as ServerConfig;
+  const options = buildAllModelOptions(config, null);
+  expect(options).toHaveLength(9);
+  expect(options.every((option) => option.selection.model === null)).toBe(true);
+  expect(
+    resolveNewTaskModelSelection({
+      draftSelection: null,
+      projectDefaultSelection: null,
+      stickySelection: null,
+      modelOptions: options,
+    }),
+  ).toEqual({ instanceId: "codex", model: null });
 });

@@ -93,7 +93,7 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
     ? resolveProjectSettings(target.settings, null, null, null).settings
     : null;
 
-  function modelDisabledReason(instanceId: ProviderInstanceId, model: string): string | null {
+  function modelDisabledReason(instanceId: ProviderInstanceId, _model: string): string | null {
     const sourceEntry = entries.find((entry) => entry.instanceId === instanceId);
     for (const candidate of targets) {
       const environment = environments.find(
@@ -105,16 +105,7 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
         deriveProviderInstanceEntries(config.providers),
         candidate.settings,
       ).find((option) => option.instanceId === instanceId);
-      const options = getCustomModelOptionsByInstance(
-        { ...settings, ...candidate.settings },
-        config.providers,
-      ).get(instanceId);
-      if (
-        !entry?.enabled ||
-        !entry.isAvailable ||
-        entry.driverKind !== sourceEntry?.driverKind ||
-        !options?.some((option) => option.slug === model && !option.isUnavailable)
-      ) {
+      if (!entry?.enabled || !entry.isAvailable || entry.driverKind !== sourceEntry?.driverKind) {
         return `This model is unavailable on ${environment?.label ?? "a selected environment"}. Select that environment to choose its model separately.`;
       }
     }
@@ -122,7 +113,7 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
   }
 
   const setModel = (value: ModelSelection | null) => {
-    const reason = value ? modelDisabledReason(value.instanceId, value.model) : null;
+    const reason = value ? modelDisabledReason(value.instanceId, value.model ?? "") : null;
     if (reason) {
       toastManager.add({ type: "error", title: "Default model not saved", description: reason });
       return;
@@ -189,7 +180,9 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
                 planModeEnabled={settings.planModeEnabled}
                 triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
                 onModelOptionsChange={(options) =>
-                  setModel(createModelSelection(selection.instanceId, selection.model, options))
+                  setModel(
+                    createModelSelection(selection.instanceId, selection.model ?? "", options),
+                  )
                 }
               />
             ) : null}

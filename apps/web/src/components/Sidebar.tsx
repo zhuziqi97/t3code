@@ -1366,7 +1366,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   );
   const modelLabel = selectedModel
     ? getTriggerDisplayModelLabel(selectedModel)
-    : thread.modelSelection.model;
+    : (thread.modelSelection.model ?? "Follow agent default");
 
   // The local environment is "this machine" and needs no marker; every other
   // one gets its machine glyph. With no local environment (the hosted app)
@@ -2288,7 +2288,7 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
   );
   const modelLabel = selectedModel
     ? getTriggerDisplayModelLabel(selectedModel)
-    : thread.modelSelection.model;
+    : (thread.modelSelection.model ?? "Follow agent default");
   const runningTerminalIds = useThreadRunningTerminalIds({
     environmentId: thread.environmentId,
     threadId: thread.id,

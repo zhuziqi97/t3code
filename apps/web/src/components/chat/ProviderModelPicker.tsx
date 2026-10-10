@@ -1,5 +1,6 @@
 import {
   ANTIGRAVITY_DEFAULT_MODEL,
+  type ModelSelection,
   type ProviderInstanceId,
   type ProviderDriverKind,
   type ResolvedKeybindingsConfig,
@@ -32,8 +33,9 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
    * icon, label and the default-highlighted combobox row.
    */
   activeInstanceId: ProviderInstanceId;
-  model: string;
-  selectedModels?: ReadonlyArray<{ instanceId: ProviderInstanceId; model: string }>;
+  model: string | null;
+  reportedModelSelection?: ModelSelection | null | undefined;
+  selectedModels?: ReadonlyArray<{ instanceId: ProviderInstanceId; model: string | null }>;
   onToggleModel?: (instanceId: ProviderInstanceId, model: string) => void;
   lockedProvider: ProviderDriverKind | null;
   lockedContinuationGroupKey?: string | null;
@@ -75,23 +77,28 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   const activeInstanceId = props.activeInstanceId;
   const selectedInstanceOptions = props.modelOptionsByInstance.get(activeInstanceId) ?? [];
   // Account-specific catalogs must keep the selected model label while unavailable.
-  const selectedModel =
-    resolveModelPickerSelectedModel({
-      driverKind: activeEntry?.driverKind,
-      model: props.model,
-      options: selectedInstanceOptions,
-    }) ??
-    (activeEntry?.driverKind === "opencode" || activeEntry?.driverKind === "antigravity"
-      ? undefined
-      : selectedInstanceOptions[0]);
+  const selectedModel = resolveModelPickerSelectedModel({
+    driverKind: activeEntry?.driverKind,
+    model: props.model,
+    options: selectedInstanceOptions,
+  });
+  const reportedModel =
+    props.model == null || props.model === "" ? props.reportedModelSelection : undefined;
+  const reportedName =
+    reportedModel?.instanceId === activeInstanceId && reportedModel.model
+      ? (selectedInstanceOptions.find((option) => option.slug === reportedModel.model)?.name ??
+        reportedModel.model)
+      : undefined;
   const triggerTitle = selectedModel
     ? getTriggerDisplayModelName(selectedModel)
     : props.model === ANTIGRAVITY_DEFAULT_MODEL
       ? "Choose model"
-      : props.model || "Choose model";
-  const triggerLabel = selectedModel
-    ? `${getTriggerDisplayModelLabel(selectedModel)}${selectedModel.isUnavailable ? " (Unavailable)" : ""}`
-    : triggerTitle;
+      : (props.model ?? "Follow agent default");
+  const triggerLabel = reportedName
+    ? `Follow agent default · ${reportedName}`
+    : selectedModel
+      ? `${getTriggerDisplayModelLabel(selectedModel)}${selectedModel.isUnavailable ? " (Unavailable)" : ""}`
+      : triggerTitle;
   const showInstanceBadge =
     activeEntry !== null && shouldShowInstanceBadge(activeEntry, props.instanceEntries);
 
@@ -270,7 +277,9 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
                 />
               }
             >
-              {props.triggerLabel ?? multipleLabel ?? triggerTitle}
+              {props.triggerLabel ??
+                multipleLabel ??
+                `${activeEntry?.displayName ?? "Agent"} · ${triggerLabel}`}
             </TooltipTrigger>
             <TooltipPopup side="top">{triggerTooltipContent}</TooltipPopup>
           </Tooltip>
@@ -292,7 +301,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
       >
         <ModelPickerContent
           activeInstanceId={activeInstanceId}
-          model={props.model}
+          model={props.model ?? ""}
           {...(props.selectedModels !== undefined ? { selectedModels: props.selectedModels } : {})}
           {...(props.onToggleModel
             ? {

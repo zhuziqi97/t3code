@@ -23,7 +23,7 @@ import { shouldRenderTraitsControls, TraitsMenuContent, TraitsPicker } from "./T
 
 export type ComposerProviderStateInput = {
   provider: ProviderDriverKind;
-  model: string;
+  model: string | null;
   models: ReadonlyArray<ServerProviderModel>;
   promptInjectionState?: ComposerPromptInjectionState;
   modelOptions: ReadonlyArray<ProviderOptionSelection> | null | undefined;
@@ -46,7 +46,7 @@ type TraitsRenderInput = {
   instanceId?: ProviderInstanceId;
   threadRef?: ScopedThreadRef;
   draftId?: DraftId;
-  model: string;
+  model: string | null;
   models: ReadonlyArray<ServerProviderModel>;
   modelOptions: ReadonlyArray<ProviderOptionSelection> | undefined;
   reportedModelSelection?: ModelSelection | null | undefined;
@@ -89,7 +89,7 @@ export function withImplicitFastModeDefault(
 
 function resolveComposerOptionSelections(
   models: ReadonlyArray<ServerProviderModel>,
-  model: string,
+  model: string | null,
   provider: ProviderDriverKind,
   modelOptions: ReadonlyArray<ProviderOptionSelection> | null | undefined,
   planModeEnabled: boolean,
