@@ -1,8 +1,8 @@
+import { formatDesktopUpdateMessage } from "@t3tools/client-runtime/i18n";
 import type { DesktopBridge, DesktopUpdateState } from "@t3tools/contracts";
 import { ArrowRightIcon } from "lucide-react";
 
 import {
-  formatDesktopUpdateMessage,
   getDesktopUpdateDownloadedVersion,
   getDesktopUpdateReleaseUrl,
 } from "./desktopUpdate.logic";

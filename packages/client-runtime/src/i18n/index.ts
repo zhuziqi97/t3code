@@ -16,3 +16,4 @@ export {
 } from "./languages.ts";
 export { createI18n } from "./createI18n.ts";
 export type { MessageKey } from "./resources.ts";
+export { formatDesktopUpdateMessage } from "./desktopUpdateMessages.ts";

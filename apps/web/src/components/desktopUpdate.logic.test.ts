@@ -1,10 +1,10 @@
+import { formatDesktopUpdateMessage } from "@t3tools/client-runtime/i18n";
 import { describe, expect, it } from "vite-plus/test";
 import { i18n } from "../i18n";
 import type { DesktopUpdateActionResult, DesktopUpdateState } from "@t3tools/contracts";
 
 import {
   canCheckForUpdate,
-  formatDesktopUpdateMessage,
   getArm64IntelBuildWarningDescription,
   getDesktopUpdateActionError,
   getDesktopUpdateButtonTooltip,
