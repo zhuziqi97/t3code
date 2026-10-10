@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import {
   isToolLifecycleItemType,
   type AssetResource,
@@ -540,7 +541,8 @@ function toolGroupActionCount(
   return changedFiles.size + editsWithoutFileDetails;
 }
 
-function toolGroupActionLabel(action: ToolGroupAction, count: number): string {
+function toolGroupActionLabel(action: ToolGroupAction, count: number, t?: TFunction): string {
+  if (t) return t(`chat.tools.summary.${action}`, { count });
   switch (action) {
     case "link-pr":
       return `Linked ${count} ${count === 1 ? "pull request" : "pull requests"}`;
@@ -642,14 +644,23 @@ function summaryActionPriority(action: ToolGroupAction | T3McpToolSummaryAction)
 }
 
 /** Summarizes at most two action categories; every omitted call still counts in the remainder. */
-export function summarizeToolGroup(entries: ReadonlyArray<WorkLogPresentationEntry>): {
+export function summarizeToolGroup(
+  entries: ReadonlyArray<WorkLogPresentationEntry>,
+  t?: TFunction,
+): {
   summary: string;
   hasFailure: boolean;
 } {
   const toolEntries = entries.filter((entry) => entry.itemType !== "reasoning");
   if (entries.length > 0 && toolEntries.length === 0) {
     return {
-      summary: entries.length === 1 ? "Thought" : `Thought (×${entries.length})`,
+      summary: t
+        ? entries.length === 1
+          ? t("chat.timeline.thought")
+          : t("chat.tools.summary.reasoning", { count: entries.length })
+        : entries.length === 1
+          ? "Thought"
+          : `Thought (×${entries.length})`,
       hasFailure: false,
     };
   }
@@ -680,11 +691,12 @@ export function summarizeToolGroup(entries: ReadonlyArray<WorkLogPresentationEnt
     count: group.entries.length,
     priority: summaryActionPriority(action),
     ...(group.t3Action
-      ? summarizeT3ToolCalls(group.t3Action, group.entries.map(t3ToolSummaryCall))
+      ? summarizeT3ToolCalls(group.t3Action, group.entries.map(t3ToolSummaryCall), t)
       : {
           label: toolGroupActionLabel(
             group.action,
             toolGroupActionCount(group.action, group.entries),
+            t,
           ),
           failedCount: group.entries.filter(workEntryDisplayIndicatesToolFailure).length,
         }),
@@ -697,15 +709,21 @@ export function summarizeToolGroup(entries: ReadonlyArray<WorkLogPresentationEnt
   if (sources.size > 0) {
     const sourceValues = [...sources.values()];
     const sourceNames = sourceValues.map((source) => source.name);
-    const formattedNames =
-      sourceNames.length < 2
+    const formattedNames = t
+      ? joinToolSummary(sourceNames, "names", t)
+      : sourceNames.length < 2
         ? sourceNames[0]!
         : sourceNames.length === 2
           ? sourceNames.join(" and ")
           : `${sourceNames.slice(0, -1).join(", ")}, and ${sourceNames.at(-1)}`;
     const allIntegrations = sourceValues.every((source) => source.kind === "integration");
     labels.unshift(
-      `Used ${formattedNames}${allIntegrations ? ` ${sources.size === 1 ? "integration" : "integrations"}` : ""}`,
+      t
+        ? t(allIntegrations ? "chat.tools.summary.integrations" : "chat.tools.summary.sources", {
+            names: formattedNames,
+            count: sources.size,
+          })
+        : `Used ${formattedNames}${allIntegrations ? ` ${sources.size === 1 ? "integration" : "integrations"}` : ""}`,
     );
   }
   const sourcedCount = entries.filter(
@@ -716,16 +734,33 @@ export function summarizeToolGroup(entries: ReadonlyArray<WorkLogPresentationEnt
   const remainingCount =
     entries.length - sourcedCount - selected.reduce((count, group) => count + group.count, 0);
   if (remainingCount > 0) {
-    labels.push(`Performed ${remainingCount} other ${remainingCount === 1 ? "action" : "actions"}`);
+    labels.push(
+      t
+        ? t("chat.tools.summary.remainder", { count: remainingCount })
+        : `Performed ${remainingCount} other ${remainingCount === 1 ? "action" : "actions"}`,
+    );
   }
   const sentenceLabels = labels.map((label, index) =>
     index === 0 ? label : label.charAt(0).toLowerCase() + label.slice(1),
   );
-  const summary =
-    sentenceLabels.length < 3
+  const summary = t
+    ? joinToolSummary(sentenceLabels, "actions", t)
+    : sentenceLabels.length < 3
       ? sentenceLabels.join(" and ")
       : `${sentenceLabels.slice(0, -1).join(", ")}, and ${sentenceLabels.at(-1)}`;
   return { summary, hasFailure: summaries.some((group) => group.failedCount > 0) };
+}
+
+function joinToolSummary(
+  labels: ReadonlyArray<string>,
+  kind: "names" | "actions",
+  t: TFunction,
+): string {
+  if (labels.length < 2) return labels[0] ?? "";
+  return t(`chat.tools.join.${kind}.${labels.length === 2 ? "pair" : "many"}`, {
+    start: labels.slice(0, -1).join(t(`chat.tools.join.${kind}.separator`)),
+    last: labels.at(-1),
+  });
 }
 
 export function toolGroupSummaryKind(

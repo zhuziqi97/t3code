@@ -565,6 +565,7 @@ type MessagesTimelineRowContent =
       hiddenCount: number;
       expanded: boolean;
       summary: string;
+      summaryEntries?: ReadonlyArray<WorkLogEntry>;
       summaryKind: ToolGroupSummaryKind;
       toolSurface?: WorkLogEntry["toolSurface"];
       toolIcon?: WorkLogEntry["toolIcon"];
@@ -1713,6 +1714,10 @@ export function deriveMessagesTimelineRows(input: {
                 ? singleEntry.label
                 : summarizeToolGroup(visibleGroupedEntries).summary,
             summaryKind,
+            ...(!usesSingleToolCallLabel &&
+            !(singleEntry !== null && !workLogEntryIsToolLike(singleEntry))
+              ? { summaryEntries: visibleGroupedEntries }
+              : {}),
             ...(groupToolSurface ? { toolSurface: groupToolSurface } : {}),
             ...(groupToolIcon ? { toolIcon: groupToolIcon } : {}),
             ...(summaryToolIcon ? { summaryToolIcon } : {}),
@@ -2261,6 +2266,7 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
         a.hiddenCount === bw.hiddenCount &&
         a.expanded === bw.expanded &&
         a.summary === bw.summary &&
+        Equal.equals(a.summaryEntries, bw.summaryEntries) &&
         a.summaryKind === bw.summaryKind &&
         a.toolSurface === bw.toolSurface &&
         Equal.equals(a.toolIcon, bw.toolIcon) &&

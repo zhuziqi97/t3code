@@ -48,6 +48,7 @@ import {
   liveThoughtLine,
   resolveWorkEntryToolPresentation,
   resolveViewedImageAsset,
+  summarizeToolGroup,
   workEntryViewedImagePath,
 } from "@t3tools/client-runtime/work-log/presentation";
 import { resolveWorkGroupScrollAnchor } from "@t3tools/client-runtime/work-log/scroll-anchor";
@@ -3508,7 +3509,11 @@ const WorkGroupSection = memo(function WorkGroupSection({
           key={workEntry.id}
           workEntry={workEntry}
           workspaceRoot={workspaceRoot}
-          displayLabel={displayLabel}
+          displayLabel={
+            displayLabel && groupedEntries.length === 1 && toolGroupAction(workEntry) === "edit"
+              ? summarizeToolGroup(groupedEntries, t).summary
+              : displayLabel
+          }
           onToggleEntry={onToggleStandaloneEntry}
         />
       ))}
@@ -4154,10 +4159,11 @@ function WorkGroupToggleTimelineRow({
 }: {
   row: Extract<TimelineRow, { kind: "work-toggle" }>;
 }) {
+  const t = useTranslate();
   const ctx = use(TimelineRowCtx);
   return (
     <WorkGroupHeader
-      label={row.summary}
+      label={row.summaryEntries ? summarizeToolGroup(row.summaryEntries, t).summary : row.summary}
       iconName={row.summaryToolIcon ?? row.toolSurface ?? toolGroupSummaryIconName(row.summaryKind)}
       toolIcon={row.toolIcon}
       failed={row.hasFailure}

@@ -420,6 +420,81 @@ function buildProps() {
   };
 }
 
+describe("localized work groups", () => {
+  it("updates a mounted group without losing expansion or changing command text", async () => {
+    vi.unstubAllGlobals();
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    vi.stubGlobal("requestAnimationFrame", () => 0);
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const { i18n } = await import("~/i18n");
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const commands = ['printf "Keep command 原文"', "node scripts/raw-example.mjs"];
+    try {
+      await act(async () => {
+        await i18n.changeLanguage("en");
+        root.render(
+          <MessagesTimeline
+            {...buildProps()}
+            timelineEntries={commands.map((command, index) => ({
+              id: `entry-localized-${index}`,
+              kind: "work" as const,
+              createdAt: MESSAGE_CREATED_AT,
+              entry: {
+                id: `work-localized-${index}`,
+                createdAt: MESSAGE_CREATED_AT,
+                label: command,
+                tone: "tool" as const,
+                itemType: "command_execution" as const,
+                command,
+                toolLifecycleStatus: "completed" as const,
+              },
+            }))}
+          />,
+        );
+      });
+      const group = container.querySelector<HTMLButtonElement>(
+        'button[aria-label="Ran 2 commands"]',
+      )!;
+      expect(group).not.toBeNull();
+      expect(group.getAttribute("aria-expanded")).toBe("false");
+      await act(() => group.click());
+      expect(group.getAttribute("aria-expanded")).toBe("true");
+      expect(container.textContent).toContain(commands[0]);
+      await act(async () => {
+        await i18n.changeLanguage("zh");
+      });
+      expect(container.querySelector('button[aria-label="运行了 2 条命令"]')).toBe(group);
+      expect(group.getAttribute("aria-expanded")).toBe("true");
+      expect(container.textContent).toContain(commands[0]);
+      expect(container.textContent).toContain(commands[1]);
+      await act(async () => {
+        await i18n.changeLanguage("en");
+      });
+      expect(group.getAttribute("aria-label")).toBe("Ran 2 commands");
+      expect(group.getAttribute("aria-expanded")).toBe("true");
+      await act(() => group.click());
+      expect(group.getAttribute("aria-expanded")).toBe("false");
+    } finally {
+      await act(async () => {
+        root.unmount();
+        await i18n.changeLanguage("en");
+      });
+      container.remove();
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
 function buildLongUserMessageText(tail = "deep hidden detail only after expand") {
   return Array.from({ length: 9 }, (_, index) =>
     index === 8 ? tail : `Line ${index + 1}: ${"verbose prompt content ".repeat(8).trim()}`,

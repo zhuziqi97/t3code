@@ -1,3 +1,4 @@
+import { createI18n } from "../i18n/createI18n.ts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { ThreadId, TurnItemId, type OrchestrationV2TurnItem } from "@t3tools/contracts";
@@ -206,6 +207,39 @@ describe("summarizeToolGroup", () => {
     ...overrides,
   });
 
+  it("localizes groups while preserving source names, file deduplication and omitted counts", () => {
+    const t = createI18n({ lng: "zh" }).t;
+    const edit = entry("edit", {
+      itemType: "file_change",
+      changedFiles: ["src/raw.ts", "src/second.ts"],
+    });
+    expect(summarizeToolGroup([edit, { ...edit, id: "retry" }], t)).toEqual({
+      summary: "修改了 2 个文件",
+      hasFailure: false,
+    });
+    const source = {
+      key: "integration",
+      name: "Raw Integration 原文",
+      kind: "integration" as const,
+    };
+    const entries = [
+      entry("source", { toolSource: source }),
+      entry("source-again", { toolSource: source }),
+      entry("command", { itemType: "command_execution", command: "printf Raw" }),
+      edit,
+      entry("search", { itemType: "web_search" }),
+      entry("thought", { itemType: "reasoning", tone: "thinking" }),
+    ];
+    expect(summarizeToolGroup(entries, t).summary).toBe(
+      "使用了 Raw Integration 原文 集成，运行了 1 条命令，修改了 2 个文件，执行了 1 项其他操作",
+    );
+    expect(entries[2]?.command).toBe("printf Raw");
+    expect(summarizeToolGroup([entries[5]!], t).summary).toBe("思考内容");
+    expect(summarizeToolGroup([entries[5]!, { ...entries[5]!, id: "thought-2" }], t).summary).toBe(
+      "思考内容（×2）",
+    );
+  });
+
   it("excludes reasoning from mixed tool counts and icons", () => {
     const thought = entry("thought", {
       itemType: "reasoning",
@@ -288,6 +322,10 @@ describe("resolveWorkEntryToolPresentation", () => {
       const summary = summarizeToolGroup([entry]);
       expect(summary.summary, tool).not.toMatch(/Used (?:1 tool|T3 Code integration)/);
       expect(summary.hasFailure, tool).toBe(false);
+      expect(summarizeToolGroup([entry], createI18n({ lng: "en" }).t), tool).toEqual(summary);
+      const translated = summarizeToolGroup([entry], createI18n({ lng: "zh" }).t);
+      expect(translated.summary, tool).toMatch(/[\u4e00-\u9fff]/);
+      expect(translated.summary, tool).not.toMatch(/chat\.tools\.|\{\{/);
       const failed = { ...entry, toolLifecycleStatus: "failed" as const };
       expect(resolveWorkEntryToolPresentation(failed)?.displayName, tool).toMatch(/^Failed to /);
       expect(summarizeToolGroup([failed]).hasFailure, tool).toBe(true);
