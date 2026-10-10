@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { Trans } from "react-i18next";
+import { useTranslate } from "~/i18n";
 
 import { Button } from "~/components/ui/button";
 
@@ -31,26 +33,30 @@ export function PreviewFileNotShown({
   downloadUrl: string | null;
   onOpen: () => void;
 }) {
+  const t = useTranslate();
   const host = safeHost(url) ?? url;
   return (
     <div className="scrollbar-gutter-both relative flex h-full min-h-0 w-full overflow-y-auto bg-background">
       <div className="mx-auto flex w-full max-w-xl flex-1 flex-col px-8 py-12 sm:py-16">
         <ErrorIcon className="mb-6 size-12 text-muted-foreground/70" />
         <h1 className="mb-3 text-2xl font-semibold leading-tight text-foreground">
-          This file can&rsquo;t be shown here
+          {t("browser.fileNotShown")}
         </h1>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          <span className="font-semibold text-foreground">{fileName}</span> from {host} was
-          downloaded instead.
+          <Trans
+            i18nKey="browser.fileDownloaded"
+            values={{ name: fileName, host }}
+            components={{ file: <span className="font-semibold text-foreground" /> }}
+          />
         </p>
         <div className="mt-auto flex items-center gap-2 pt-8">
           <div className="flex-1" />
           <Button type="button" variant="outline" size="sm" onClick={onOpen}>
-            Open in browser
+            {t("browser.openBrowser")}
           </Button>
           {downloadUrl ? (
             <Button type="button" size="sm" render={<a href={downloadUrl} download={fileName} />}>
-              Download
+              {t("browser.download")}
             </Button>
           ) : null}
         </div>
@@ -62,8 +68,9 @@ export function PreviewFileNotShown({
 /** Theme-aware tailwind port of Chromium's "This site can't be reached" page. */
 export function PreviewUnreachable({ url, code, description, onReload, move }: Props) {
   const [showDetails, setShowDetails] = useState(false);
+  const t = useTranslate();
   const host = safeHost(url) ?? url;
-  const friendly = describePreviewError(description);
+  const friendly = describePreviewError(description, t);
   const errorLabel = description.length > 0 ? description : `ERR_${Math.abs(code) || "FAILED"}`;
 
   return (
@@ -71,22 +78,24 @@ export function PreviewUnreachable({ url, code, description, onReload, move }: P
       <div className="mx-auto flex w-full max-w-xl flex-1 flex-col px-8 py-12 sm:py-16">
         <ErrorIcon className="mb-6 size-12 text-muted-foreground/70" />
         <h1 className="mb-3 text-2xl font-semibold leading-tight text-foreground">
-          This site can&rsquo;t be reached
+          {t("browser.siteUnreachable")}
         </h1>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          <span className="font-semibold text-foreground">{host}</span>: {friendly}.
+          <Trans
+            i18nKey="browser.connectionFailure"
+            values={{ host, description: friendly }}
+            components={{ host: <span className="font-semibold text-foreground" /> }}
+          />
         </p>
 
         {showDetails ? (
           <div className="mt-6 rounded-lg border border-border bg-muted/40 p-4 text-sm">
-            <p className="mb-2 font-medium text-foreground">Try:</p>
+            <p className="mb-2 font-medium text-foreground">{t("browser.try")}</p>
             <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
-              <li>Checking your connection</li>
-              <li>Confirming the dev server is running</li>
-              {move ? (
-                <li>Opening it in the environment&rsquo;s browser, which reaches its network</li>
-              ) : null}
-              <li>Checking the proxy and the firewall</li>
+              <li>{t("browser.checkConnection")}</li>
+              <li>{t("browser.checkServer")}</li>
+              {move ? <li>{t("browser.checkEnvironment")}</li> : null}
+              <li>{t("browser.checkProxy")}</li>
             </ul>
           </div>
         ) : null}
@@ -102,7 +111,7 @@ export function PreviewUnreachable({ url, code, description, onReload, move }: P
             size="sm"
             onClick={() => setShowDetails((value) => !value)}
           >
-            {showDetails ? "Hide details" : "Details"}
+            {t(showDetails ? "browser.hideDetails" : "browser.details")}
           </Button>
           <div className="flex-1" />
           {move ? (
@@ -111,7 +120,7 @@ export function PreviewUnreachable({ url, code, description, onReload, move }: P
             </Button>
           ) : null}
           <Button type="button" size="sm" onClick={onReload}>
-            Reload
+            {t("browser.reload")}
           </Button>
         </div>
       </div>

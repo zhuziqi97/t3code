@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslate } from "~/i18n";
 import type { DesktopPreviewColorScheme } from "@t3tools/contracts";
 import { Minus, MoreVertical, Plus as PlusIcon, RotateCcw } from "lucide-react";
 
@@ -22,11 +23,11 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 
 const COLOR_SCHEME_OPTIONS: ReadonlyArray<{
   value: DesktopPreviewColorScheme;
-  label: string;
+  labelKey: string;
 }> = [
-  { value: "system", label: "System" },
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
+  { value: "system", labelKey: "browser.appearanceSystem" },
+  { value: "light", labelKey: "browser.appearanceLight" },
+  { value: "dark", labelKey: "browser.appearanceDark" },
 ];
 
 /**
@@ -68,20 +69,25 @@ interface Props {
   move?: { readonly label: string; readonly onMove: () => void };
 }
 
-const MenuTriggerButton = () => (
-  <Tooltip>
-    <TooltipTrigger
-      render={
-        <MenuTrigger
-          render={<Button variant="ghost" size="icon-xs" type="button" aria-label="Preview menu" />}
-        />
-      }
-    >
-      <MoreVertical />
-    </TooltipTrigger>
-    <TooltipPopup>More</TooltipPopup>
-  </Tooltip>
-);
+const MenuTriggerButton = () => {
+  const t = useTranslate();
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <MenuTrigger
+            render={
+              <Button variant="ghost" size="icon-xs" type="button" aria-label={t("browser.menu")} />
+            }
+          />
+        }
+      >
+        <MoreVertical />
+      </TooltipTrigger>
+      <TooltipPopup>{t("browser.more")}</TooltipPopup>
+    </Tooltip>
+  );
+};
 
 /** Three-dot menu in the chrome row; the same items for every kind of tab. */
 export function PreviewMoreMenu({
@@ -95,6 +101,7 @@ export function PreviewMoreMenu({
   profileName,
   move,
 }: Props) {
+  const t = useTranslate();
   const zoomLabel = `${Math.round(zoomFactor * 100)}%`;
   const disabled = !enabled;
   return (
@@ -102,26 +109,24 @@ export function PreviewMoreMenu({
       <MenuTriggerButton />
       <MenuPopup align="end" sideOffset={6}>
         <MenuItem onClick={actions.hardReload} disabled={disabled}>
-          Hard reload
+          {t("browser.hardReload")}
         </MenuItem>
         {actions.openDevTools ? (
           <MenuItem onClick={actions.openDevTools} disabled={disabled}>
-            Open DevTools
+            {t("browser.devTools")}
           </MenuItem>
         ) : null}
         {actions.toggleNativePictureInPicture ? (
           <MenuItem onClick={actions.toggleNativePictureInPicture} disabled={disabled}>
-            {nativePictureInPicture
-              ? "Close separate preview window"
-              : "Open separate preview window"}
+            {t(nativePictureInPicture ? "browser.closeSeparate" : "browser.openSeparate")}
           </MenuItem>
         ) : null}
         {move ? <MenuItem onClick={move.onMove}>{move.label}</MenuItem> : null}
         <MenuItem onClick={onToggleDeviceToolbar} disabled={disabled}>
-          {deviceToolbarVisible ? "Hide device toolbar" : "Show device toolbar"}
+          {t(deviceToolbarVisible ? "browser.hideDevice" : "browser.showDevice")}
         </MenuItem>
         <MenuSub>
-          <MenuSubTrigger disabled={disabled}>Appearance</MenuSubTrigger>
+          <MenuSubTrigger disabled={disabled}>{t("browser.appearance")}</MenuSubTrigger>
           <MenuSubPopup>
             <MenuRadioGroup
               value={colorScheme}
@@ -129,7 +134,7 @@ export function PreviewMoreMenu({
             >
               {COLOR_SCHEME_OPTIONS.map((option) => (
                 <MenuRadioItem key={option.value} value={option.value}>
-                  {option.label}
+                  {t(option.labelKey)}
                 </MenuRadioItem>
               ))}
             </MenuRadioGroup>
@@ -146,14 +151,14 @@ export function PreviewMoreMenu({
           className="justify-between"
           disabled={disabled}
         >
-          <span>Zoom</span>
+          <span>{t("browser.zoom")}</span>
           <span className="flex items-center gap-1">
             <Button
               variant="outline"
               size="icon-xs"
               type="button"
               onClick={actions.zoomOut}
-              aria-label="Zoom out"
+              aria-label={t("browser.zoomOut")}
               disabled={disabled}
             >
               <Minus />
@@ -166,7 +171,7 @@ export function PreviewMoreMenu({
               size="icon-xs"
               type="button"
               onClick={actions.zoomIn}
-              aria-label="Zoom in"
+              aria-label={t("browser.zoomIn")}
               disabled={disabled}
             >
               <PlusIcon />
@@ -176,7 +181,7 @@ export function PreviewMoreMenu({
               size="icon-xs"
               type="button"
               onClick={actions.resetZoom}
-              aria-label="Reset zoom"
+              aria-label={t("browser.resetZoom")}
               disabled={disabled}
             >
               <RotateCcw />
@@ -195,11 +200,11 @@ export function PreviewMoreMenu({
             // Truncation needs a block box: `text-overflow` on an inline child
             // never applies and a long name would push the popup past its width.
             <MenuGroupLabel className="max-w-64">
-              <span className="block truncate">Profile: {profileName}</span>
+              <span className="block truncate">{t("browser.profile", { name: profileName })}</span>
             </MenuGroupLabel>
           ) : null}
-          <MenuItem onClick={actions.clearCookies}>Clear cookies</MenuItem>
-          <MenuItem onClick={actions.clearCache}>Clear cache</MenuItem>
+          <MenuItem onClick={actions.clearCookies}>{t("browser.clearCookies")}</MenuItem>
+          <MenuItem onClick={actions.clearCache}>{t("browser.clearCache")}</MenuItem>
         </MenuGroup>
       </MenuPopup>
     </Menu>

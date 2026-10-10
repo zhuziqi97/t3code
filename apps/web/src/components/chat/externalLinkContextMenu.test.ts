@@ -1,10 +1,16 @@
-import { describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
   resolveExternalWebLinkHost,
   resolveExternalWebLinkHref,
   showExternalLinkContextMenu,
 } from "./externalLinkContextMenu";
+
+import { changeLanguage } from "~/i18n";
+
+afterEach(async () => {
+  await changeLanguage("en");
+});
 
 function createHarness(
   selection:
@@ -219,5 +225,29 @@ describe("external chat link context menu", () => {
     "",
   ])("rejects unsafe external web-link href %s", (href) => {
     expect(resolveExternalWebLinkHref(href)).toBeNull();
+  });
+});
+
+it("uses the active menu language while keeping selection ids and raw link destinations", async () => {
+  await changeLanguage("zh");
+  const href = "https://qa.test/raw?value=原文&literal={{x}}#fragment";
+  const harness = createHarness("copy-link");
+  await showExternalLinkContextMenu({ href, position: { x: 1, y: 2 }, ...harness });
+  expect(harness.showContextMenu).toHaveBeenCalledWith(
+    [
+      { id: "open-in-preview", label: "在内置浏览器打开" },
+      { id: "open-external", label: "在系统浏览器中打开" },
+      { id: "copy-link", label: "复制链接" },
+    ],
+    { x: 1, y: 2 },
+  );
+  expect(harness.copyLink).toHaveBeenCalledExactlyOnceWith(href);
+  await changeLanguage("en");
+  const second = createHarness("open-in-preview");
+  await showExternalLinkContextMenu({ href, position: { x: 3, y: 4 }, ...second });
+  expect(second.openInPreview).toHaveBeenCalledExactlyOnceWith(href);
+  expect(second.showContextMenu.mock.calls[0]?.[0]?.[0]).toEqual({
+    id: "open-in-preview",
+    label: "Open in integrated browser",
   });
 });

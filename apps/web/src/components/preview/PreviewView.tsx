@@ -19,6 +19,7 @@ import {
 } from "@t3tools/contracts";
 import { normalizePreviewUrl, resolveAddressBarInput } from "@t3tools/shared/preview";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { i18n, useTranslate } from "~/i18n";
 
 import {
   BROWSER_HISTORY_MAX_ENTRIES_PER_PROJECT,
@@ -107,7 +108,9 @@ function previewProfileName(
   profiles: ReadonlyArray<{ readonly id: string; readonly name: string }>,
   profileId: string,
 ): string {
-  return profiles.find((profile) => profile.id === profileId)?.name ?? "Removed profile";
+  return (
+    profiles.find((profile) => profile.id === profileId)?.name ?? i18n.t("browser.removedProfile")
+  );
 }
 
 const localApi = typeof window === "undefined" ? null : ensureLocalApi();
@@ -148,6 +151,7 @@ export function PreviewView({
   visible,
   onSendAnnotation,
 }: Props) {
+  const t = useTranslate();
   const [focusUrlNonce, setFocusUrlNonce] = useState<number | undefined>(undefined);
   const [pickActive, setPickActive] = useState(false);
   const canSendAnnotation =
@@ -176,7 +180,8 @@ export function PreviewView({
     : null;
   const open = useAtomCommand(previewEnvironment.open);
   const closePreview = useAtomCommand(previewEnvironment.close, "preview close");
-  const environmentLabel = useEnvironment(threadRef.environmentId)?.label ?? "the environment";
+  const environmentLabel =
+    useEnvironment(threadRef.environmentId)?.label ?? t("browser.environment");
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const serverBrowser = useEnvironmentSupportsServerBrowser(threadRef.environmentId);
   const resize = useAtomCommand(previewEnvironment.resize, "preview viewport resize");
@@ -284,7 +289,7 @@ export function PreviewView({
         if (error instanceof BrowserSettingsReadError) {
           toastManager.add({
             type: "error",
-            title: "Unable to open browser",
+            title: i18n.t("browser.openFailed"),
             description: error.message,
           });
         }
@@ -343,8 +348,8 @@ export function PreviewView({
         const error = squashAtomCommandFailure(result);
         toastManager.add({
           type: "error",
-          title: "Unable to change the browser tab",
-          description: error instanceof Error ? error.message : "An error occurred.",
+          title: i18n.t("browser.tabChangeFailed"),
+          description: error instanceof Error ? error.message : i18n.t("common.error"),
         });
         return;
       }
@@ -401,8 +406,8 @@ export function PreviewView({
         const error = squashAtomCommandFailure(result);
         toastManager.add({
           type: "error",
-          title: "Unable to resize browser viewport",
-          description: error instanceof Error ? error.message : "An error occurred.",
+          title: i18n.t("browser.resizeFailed"),
+          description: error instanceof Error ? error.message : i18n.t("common.error"),
         });
         throw error;
       }
@@ -457,7 +462,9 @@ export function PreviewView({
     snapshot,
   );
   const moveLabel =
-    moveTarget === "server" ? `Open in ${environmentLabel}'s browser` : "Open on this computer";
+    moveTarget === "server"
+      ? t("browser.openEnvironment", { environment: environmentLabel })
+      : t("browser.openLocal");
   const handleMoveTab = useCallback(async () => {
     if (!moveTarget || !tabId || !snapshot) return;
     const result = await openPreviewSession({
@@ -481,8 +488,8 @@ export function PreviewView({
       const error = squashAtomCommandFailure(result);
       toastManager.add({
         type: "error",
-        title: "Unable to move the browser tab",
-        description: error instanceof Error ? error.message : "An error occurred.",
+        title: i18n.t("browser.moveFailed"),
+        description: error instanceof Error ? error.message : i18n.t("common.error"),
       });
       return;
     }
@@ -555,8 +562,8 @@ export function PreviewView({
     void operation(runtimeTabId).catch((error) => {
       toastManager.add({
         type: "error",
-        title: "Unable to update popped-out preview",
-        description: error instanceof Error ? error.message : "An error occurred.",
+        title: i18n.t("browser.popoutFailed"),
+        description: error instanceof Error ? error.message : i18n.t("common.error"),
       });
     });
   }, [desktopOverlay?.pictureInPicture, runtimeTabId]);
@@ -578,8 +585,8 @@ export function PreviewView({
                   toastId,
                   stackedThreadToast({
                     type: "error",
-                    title: "Unable to copy recording path",
-                    description: "Clipboard API unavailable.",
+                    title: i18n.t("browser.copyRecordingPathFailed"),
+                    description: i18n.t("browser.clipboardUnavailable"),
                     actionProps: revealAction,
                   }),
                 );
@@ -600,8 +607,8 @@ export function PreviewView({
                     toastId,
                     stackedThreadToast({
                       type: "error",
-                      title: "Unable to copy recording path",
-                      description: error instanceof Error ? error.message : "An error occurred.",
+                      title: i18n.t("browser.copyRecordingPathFailed"),
+                      description: error instanceof Error ? error.message : i18n.t("common.error"),
                       actionProps: revealAction,
                     }),
                   );
@@ -618,11 +625,11 @@ export function PreviewView({
                 toastId,
                 stackedThreadToast({
                   type: "success",
-                  title: "Recording saved",
+                  title: i18n.t("browser.recordingSaved"),
                   actionProps: revealAction,
                   data: {
                     secondaryActionProps: {
-                      children: pathCopied ? "Copied!" : "Copy path",
+                      children: pathCopied ? i18n.t("browser.copied") : i18n.t("browser.copyPath"),
                       disabled: pathCopied,
                       onClick: copyPath,
                     },
@@ -635,11 +642,11 @@ export function PreviewView({
             toastId = toastManager.add(
               stackedThreadToast({
                 type: "success",
-                title: "Recording saved",
+                title: i18n.t("browser.recordingSaved"),
                 actionProps: revealAction,
                 data: {
                   secondaryActionProps: {
-                    children: "Copy path",
+                    children: i18n.t("browser.copyPath"),
                     onClick: copyPath,
                   },
                   secondaryActionVariant: "outline",
@@ -650,8 +657,8 @@ export function PreviewView({
           (error) => {
             toastManager.add({
               type: "error",
-              title: "Unable to stop recording",
-              description: error instanceof Error ? error.message : "An error occurred.",
+              title: i18n.t("browser.stopRecordingFailed"),
+              description: error instanceof Error ? error.message : i18n.t("common.error"),
             });
           },
         );
@@ -659,11 +666,11 @@ export function PreviewView({
       }
       if (record) {
         void startBrowserRecording(runtimeTabId, threadRef, tabId).catch((error) => {
-          const description = error instanceof Error ? error.message : "An error occurred.";
+          const description = error instanceof Error ? error.message : i18n.t("common.error");
           if (isBrowserRecordingStartCancelledError(error)) return;
           toastManager.add({
             type: "error",
-            title: "Unable to start recording",
+            title: i18n.t("browser.startRecordingFailed"),
             description,
           });
         });
@@ -681,7 +688,7 @@ export function PreviewView({
 
           const updateScreenshotToast = (
             type: "success" | "error" = "success",
-            title = "Screenshot saved",
+            title = i18n.t("browser.screenshotSaved"),
             description?: string,
           ) => {
             toastManager.update(
@@ -691,7 +698,7 @@ export function PreviewView({
                 title,
                 description,
                 actionProps: {
-                  children: imageCopied ? "Copied!" : "Copy image",
+                  children: imageCopied ? i18n.t("browser.copied") : i18n.t("browser.copyImage"),
                   disabled: imageCopied,
                   onClick: copyImage,
                 },
@@ -700,7 +707,9 @@ export function PreviewView({
                     {
                       id: "copy-path",
                       props: {
-                        children: pathCopied ? "Copied!" : "Copy path",
+                        children: pathCopied
+                          ? i18n.t("browser.copied")
+                          : i18n.t("browser.copyPath"),
                         disabled: pathCopied,
                         onClick: copyPath,
                       },
@@ -719,8 +728,8 @@ export function PreviewView({
             if (!navigator.clipboard?.writeText) {
               updateScreenshotToast(
                 "error",
-                "Unable to copy screenshot path",
-                "Clipboard API unavailable.",
+                i18n.t("browser.copyScreenshotPathFailed"),
+                i18n.t("browser.clipboardUnavailable"),
               );
               return;
             }
@@ -737,8 +746,8 @@ export function PreviewView({
               (error) => {
                 updateScreenshotToast(
                   "error",
-                  "Unable to copy screenshot path",
-                  error instanceof Error ? error.message : "An error occurred.",
+                  i18n.t("browser.copyScreenshotPathFailed"),
+                  error instanceof Error ? error.message : i18n.t("common.error"),
                 );
               },
             );
@@ -757,8 +766,8 @@ export function PreviewView({
               (error) => {
                 updateScreenshotToast(
                   "error",
-                  "Unable to copy screenshot",
-                  error instanceof Error ? error.message : "An error occurred.",
+                  i18n.t("browser.copyScreenshotFailed"),
+                  error instanceof Error ? error.message : i18n.t("common.error"),
                 );
               },
             );
@@ -767,9 +776,9 @@ export function PreviewView({
           toastId = toastManager.add(
             stackedThreadToast({
               type: "success",
-              title: "Screenshot saved",
+              title: i18n.t("browser.screenshotSaved"),
               actionProps: {
-                children: "Copy image",
+                children: i18n.t("browser.copyImage"),
                 onClick: copyImage,
               },
               data: {
@@ -777,7 +786,7 @@ export function PreviewView({
                   {
                     id: "copy-path",
                     props: {
-                      children: "Copy path",
+                      children: i18n.t("browser.copyPath"),
                       onClick: copyPath,
                     },
                   },
@@ -793,8 +802,8 @@ export function PreviewView({
         (error) => {
           toastManager.add({
             type: "error",
-            title: "Unable to capture screenshot",
-            description: error instanceof Error ? error.message : "An error occurred.",
+            title: i18n.t("browser.captureFailed"),
+            description: error instanceof Error ? error.message : i18n.t("common.error"),
           });
         },
       );
@@ -854,10 +863,10 @@ export function PreviewView({
           toastManager.add(
             stackedThreadToast({
               type: "error",
-              title: "Could not capture the picked element",
+              title: i18n.t("browser.pickCaptureFailed"),
               // The send path reports its own outcome, so only say what this
               // handler knows: the crop was dropped.
-              description: "The annotation was kept without the screenshot.",
+              description: i18n.t("browser.annotationKept"),
             }),
           );
         }
@@ -998,9 +1007,7 @@ export function PreviewView({
         // failed to load (a React overlay covers the webview, so the
         // user wouldn't be able to actually click anything underneath).
         pickDisabled={!tabId || isUnreachable}
-        pickDisabledReason={
-          isUnreachable ? "Page didn't load — pick unavailable until the page renders" : undefined
-        }
+        pickDisabledReason={isUnreachable ? i18n.t("browser.pickUnavailable") : undefined}
         leadingActions={
           // Only when it differs from the default: labelling every tab
           // "Default" would be noise on the common case, while a tab in
@@ -1097,9 +1104,7 @@ export function PreviewView({
             />
           ) : (
             <div className="flex h-full items-center justify-center p-8 text-center">
-              <p className="max-w-sm text-sm text-muted-foreground">
-                This tab is open in the T3 Code desktop app.
-              </p>
+              <p className="max-w-sm text-sm text-muted-foreground">{t("browser.desktopTab")}</p>
             </div>
           )
         ) : null}
