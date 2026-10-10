@@ -6254,7 +6254,9 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               dispatchSelection.model === null
                 ? (yield* client.request("thread/read", { threadId, includeTurns: false })).thread
                 : undefined;
-            const nativeModel = nativeState?.model;
+            // Standard thread/read replies omit the model; start/resume report it.
+            const nativeModel =
+              nativeState?.model ?? turnInput.providerThread.nativeMetadata?.modelSelection?.model;
             const nativeEffort =
               (selectionChanged
                 ? configuration?.config.model_reasoning_effort
