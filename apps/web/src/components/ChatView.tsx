@@ -10735,7 +10735,7 @@ export default function ChatView(props: ChatViewProps) {
         providerStatuses,
         model,
       );
-      if (!resolvedModel) {
+      if (resolvedModel === null) {
         if (options?.focusComposer !== false) scheduleComposerFocus();
         return;
       }
@@ -10747,8 +10747,8 @@ export default function ChatView(props: ChatViewProps) {
         ];
       const nextModelSelection: ModelSelection =
         rememberedOptions !== undefined && rememberedOptions.length > 0
-          ? { instanceId, model: resolvedModel, options: [...rememberedOptions] }
-          : { instanceId, model: resolvedModel };
+          ? { instanceId, model: resolvedModel || null, options: [...rememberedOptions] }
+          : { instanceId, model: resolvedModel || null };
       const modelChangeBlockReason = getStartedThreadModelChangeBlockReason({
         providers: providerStatuses,
         hasStartedSession: activeRuntime !== null,

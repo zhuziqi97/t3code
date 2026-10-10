@@ -1,5 +1,6 @@
 import {
   type CustomModelSetting,
+  type ServerProviderModel,
   MODEL_SLUG_ALIASES_BY_PROVIDER,
   ModelCapabilities,
   type ModelSelection,
@@ -286,17 +287,15 @@ export function buildProviderOptionSelectionsFromDescriptors(
 }
 
 export function buildExplicitProviderOptionSelectionsFromDescriptors(
-  descriptors: ReadonlyArray<ProviderOptionDescriptor> | null | undefined,
+  _descriptors: ReadonlyArray<ProviderOptionDescriptor> | null | undefined,
   selections: ReadonlyArray<ProviderOptionSelection> | null | undefined,
 ): Array<ProviderOptionSelection> | undefined {
   if (!selections || selections.length === 0) {
     return undefined;
   }
-  const explicitIds = new Set(selections.map((selection) => selection.id));
-  const normalized = buildProviderOptionSelectionsFromDescriptors(descriptors)?.filter(
-    (selection) => explicitIds.has(selection.id),
-  );
-  return normalized && normalized.length > 0 ? normalized : undefined;
+  // Discovery can be incomplete or stale. An explicit value belongs to the
+  // saved selection; only the agent can accept or reject it at dispatch.
+  return selections.map(cloneSelection);
 }
 
 export function isClaudeUltrathinkPrompt(text: string | null | undefined): boolean {
@@ -356,8 +355,9 @@ export function normalizeCustomModelSlug(model: string | null | undefined): stri
 /** A custom model setting with its optional fields resolved. */
 export interface CustomModelDefinition {
   readonly slug: string;
-  readonly name: string;
+  readonly name?: string;
   readonly capabilities: ModelCapabilities | null;
+  readonly contextWindowTokens?: number;
 }
 
 const decodeCustomModelCapabilities = Schema.decodeUnknownOption(ModelCapabilities);
@@ -378,21 +378,31 @@ export function readCustomModelEntries(value: unknown): CustomModelDefinition[] 
       typeof raw === "string"
         ? { slug: raw }
         : raw !== null && typeof raw === "object"
-          ? (raw as { slug?: unknown; name?: unknown; capabilities?: unknown })
+          ? (raw as {
+              slug?: unknown;
+              name?: unknown;
+              capabilities?: unknown;
+              contextWindowTokens?: unknown;
+            })
           : null;
     if (!record) continue;
     const slug = normalizeCustomModelSlug(typeof record.slug === "string" ? record.slug : null);
     if (!slug || seen.has(slug)) continue;
     seen.add(slug);
     const name =
-      (typeof record.name === "string" ? normalizeCustomModelSlug(record.name) : null) ?? slug;
+      (typeof record.name === "string" ? normalizeCustomModelSlug(record.name) : null) ?? undefined;
     const capabilities =
       record.capabilities === undefined || record.capabilities === null
         ? null
         : Option.getOrNull(decodeCustomModelCapabilities(record.capabilities));
     entries.push({
+      ...(typeof record.contextWindowTokens === "number" &&
+      Number.isSafeInteger(record.contextWindowTokens) &&
+      record.contextWindowTokens > 0
+        ? { contextWindowTokens: record.contextWindowTokens }
+        : {}),
       slug,
-      name,
+      ...(name === undefined ? {} : { name }),
       capabilities: capabilities
         ? createModelCapabilities({ optionDescriptors: capabilities.optionDescriptors ?? [] })
         : null,
@@ -407,15 +417,55 @@ export function readCustomModelEntries(value: unknown): CustomModelDefinition[] 
  */
 export function toCustomModelSetting(entry: CustomModelDefinition): CustomModelSetting {
   const descriptors = entry.capabilities?.optionDescriptors ?? [];
-  const name = entry.name !== entry.slug ? entry.name : undefined;
-  if (!name && descriptors.length === 0) return entry.slug;
+  const name = entry.name;
+  if (!name && descriptors.length === 0 && entry.contextWindowTokens === undefined)
+    return entry.slug;
   return {
     slug: entry.slug,
+    ...(entry.contextWindowTokens === undefined
+      ? {}
+      : { contextWindowTokens: entry.contextWindowTokens }),
     ...(name ? { name } : {}),
     ...(descriptors.length > 0
       ? { capabilities: createModelCapabilities({ optionDescriptors: descriptors }) }
       : {}),
   };
+}
+
+/** Merge native model metadata with the instance's explicit display/capability overrides. */
+export function mergeCustomModels(
+  models: ReadonlyArray<ServerProviderModel>,
+  customModels: unknown,
+  fallbackCapabilities: ModelCapabilities | null = null,
+): ServerProviderModel[] {
+  const overrides = new Map(
+    readCustomModelEntries(customModels).map((entry) => [entry.slug, entry]),
+  );
+  const merged = models.map((model) => {
+    const entry = overrides.get(model.slug);
+    if (!entry) return model;
+    overrides.delete(model.slug);
+    const descriptors = new Map(
+      (model.capabilities?.optionDescriptors ?? []).map((d) => [d.id, d]),
+    );
+    for (const descriptor of entry.capabilities?.optionDescriptors ?? [])
+      descriptors.set(descriptor.id, descriptor);
+    return {
+      ...model,
+      name: entry.name ?? model.name,
+      capabilities: entry.capabilities
+        ? { optionDescriptors: [...descriptors.values()] }
+        : model.capabilities,
+    };
+  });
+  for (const entry of overrides.values())
+    merged.push({
+      slug: entry.slug,
+      name: entry.name ?? entry.slug,
+      isCustom: true,
+      capabilities: entry.capabilities ?? fallbackCapabilities,
+    });
+  return merged;
 }
 
 export function resolveSelectableModel(
@@ -473,13 +523,13 @@ function cloneSelections(
 
 export function createModelSelection(
   instanceId: ProviderInstanceId,
-  model: string,
+  model: string | null,
   options?: ReadonlyArray<ProviderOptionSelection> | null,
 ): ModelSelection {
   const selections = options ? cloneSelections(options) : [];
   const base: ModelSelection = {
     instanceId,
-    model,
+    model: model === "" ? null : model,
   };
   return selections.length > 0 ? { ...base, options: selections } : base;
 }

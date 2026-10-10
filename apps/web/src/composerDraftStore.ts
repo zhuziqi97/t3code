@@ -37,10 +37,10 @@ import * as Schema from "effect/Schema";
 import * as Equal from "effect/Equal";
 import * as Effect from "effect/Effect";
 import { DeepMutable } from "effect/Types";
-import { createModelSelection, normalizeModelSlug } from "@t3tools/shared/model";
+import { createModelSelection, normalizeCustomModelSlug } from "@t3tools/shared/model";
 import { useMemo } from "react";
 import { getLocalStorageItem } from "./hooks/useLocalStorage";
-import { resolveAppModelSelection, resolveAppModelSelectionForInstance } from "./modelSelection";
+
 import {
   DEFAULT_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
@@ -75,7 +75,7 @@ import { create } from "zustand";
 import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
 import { createDeferredStorage, createMemoryStorage } from "./lib/storage";
-import { getDefaultServerModel } from "./providerModels";
+
 import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
 import { UnifiedSettings } from "@t3tools/contracts/settings";
 import { ReviewCommentContextSchema, type ReviewCommentContext } from "./reviewCommentContext";
@@ -815,7 +815,7 @@ function seedStickyOptionsByModel(
     ) {
       continue;
     }
-    result[instanceId] = { [selection.model]: selection.options };
+    result[instanceId] = { [selection.model ?? ""]: selection.options };
   }
   return result as NonNullable<PersistedComposerDraftStoreState["stickyOptionsByModelByProvider"]>;
 }
@@ -1124,17 +1124,17 @@ function normalizeModelSelection(
   if (instanceId === null) {
     return null;
   }
-  const rawModel = candidate?.model ?? legacy?.model;
+  const rawModel = candidate && "model" in candidate ? candidate.model : legacy?.model;
+  if (rawModel === null)
+    return createModelSelection(
+      instanceId,
+      null,
+      coerceProviderOptionSelections(candidate?.options),
+    ) as NormalizedModelSelection;
   if (typeof rawModel !== "string") {
     return null;
   }
-  // Slug normalization can use provider-kind-specific rules when a legacy
-  // driver key is present. Instance-only selections are not reverse-inferred
-  // into a driver kind here; they get generic default normalization.
-  const driverKindHint =
-    normalizeProviderDriverKind(candidate?.provider ?? legacy?.provider) ??
-    ProviderDriverKind.make("codex");
-  const model = normalizeModelSlug(rawModel, driverKindHint);
+  const model = normalizeCustomModelSlug(rawModel);
   if (!model) {
     return null;
   }
@@ -1264,32 +1264,12 @@ export function deriveEffectiveComposerModelState(input: {
   projectModelSelection: ModelSelection | null | undefined;
   settings: UnifiedSettings;
 }): EffectiveComposerModelState {
-  const baseModelCandidate =
-    input.threadModelSelection?.model ?? input.projectModelSelection?.model ?? null;
-  const preserveThreadModel =
-    input.selectedInstanceId !== null &&
-    input.selectedInstanceId !== undefined &&
-    input.threadModelSelection?.instanceId === input.selectedInstanceId;
-  const baseModel =
-    (input.selectedInstanceId
-      ? resolveAppModelSelectionForInstance(
-          input.selectedInstanceId,
-          input.settings,
-          input.providers,
-          baseModelCandidate,
-          { preserveUnavailableSelection: preserveThreadModel },
-        )
-      : null) ??
-    // Antigravity has no static model or cross-account catalog fallback.
-    (input.selectedProvider === "antigravity" && input.selectedInstanceId ? "" : null) ??
-    resolveAppModelSelection(
-      input.selectedProvider,
-      input.settings,
-      input.providers,
-      baseModelCandidate,
-    ) ??
-    normalizeModelSlug(baseModelCandidate, input.selectedProvider) ??
-    getDefaultServerModel(input.providers, input.selectedProvider);
+  const candidateBase = input.threadModelSelection ?? input.projectModelSelection;
+  const baseSelection =
+    !input.selectedInstanceId || candidateBase?.instanceId === input.selectedInstanceId
+      ? candidateBase
+      : undefined;
+  const baseModel = baseSelection?.model ?? "";
   // Look up the instance's saved selection first; fall back to the
   // driver-kind bucket so legacy kind-keyed drafts still resolve. Every
   // `ProviderDriverKind` literal is a valid `ProviderInstanceId` slug, so the
@@ -1298,31 +1278,12 @@ export function deriveEffectiveComposerModelState(input: {
     ? input.draft?.modelSelectionByProvider?.[input.selectedInstanceId]
     : undefined;
   const legacySelection =
-    input.selectedProvider === "antigravity" &&
     input.selectedInstanceId &&
     input.selectedInstanceId !== defaultInstanceIdForDriver(input.selectedProvider)
       ? undefined
       : input.draft?.modelSelectionByProvider?.[ProviderInstanceId.make(input.selectedProvider)];
   const activeSelection = instanceSelection ?? legacySelection;
-  const activeSelectionInstanceId = instanceSelection
-    ? (input.selectedInstanceId ?? ProviderInstanceId.make(input.selectedProvider))
-    : ProviderInstanceId.make(input.selectedProvider);
-  const selectedModel = activeSelection?.model
-    ? (resolveAppModelSelectionForInstance(
-        activeSelectionInstanceId,
-        input.settings,
-        input.providers,
-        activeSelection.model,
-        { preserveUnavailableSelection: true },
-      ) ??
-      (input.selectedProvider === "antigravity" ? "" : null) ??
-      resolveAppModelSelection(
-        input.selectedProvider,
-        input.settings,
-        input.providers,
-        activeSelection.model,
-      ))
-    : baseModel;
+  const selectedModel = activeSelection ? (activeSelection.model ?? "") : baseModel;
   const modelOptions =
     modelSelectionByProviderToOptions(input.draft?.modelSelectionByProvider) ??
     providerSelectionsFromModelSelection(input.threadModelSelection) ??
@@ -3208,7 +3169,7 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
               if (opts && opts.length > 0) {
                 nextMap[instanceKey] = createModelSelection(
                   instanceKey,
-                  current?.model ?? DEFAULT_MODEL_BY_PROVIDER[driverKind] ?? DEFAULT_MODEL,
+                  current ? current.model : null,
                   opts,
                 );
               } else if (current?.options) {
@@ -3242,10 +3203,7 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
             return;
           }
           const instanceKey = options?.instanceId ?? defaultInstanceIdForDriver(normalizedProvider);
-          const fallbackModel =
-            normalizeModelSlug(options?.model, normalizedProvider) ??
-            DEFAULT_MODEL_BY_PROVIDER[normalizedProvider] ??
-            DEFAULT_MODEL;
+          const fallbackModel = normalizeCustomModelSlug(options?.model) ?? "";
           const providerOpts =
             nextProviderOptions && nextProviderOptions.length > 0 ? nextProviderOptions : undefined;
 
@@ -3259,7 +3217,7 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
             if (providerOpts) {
               nextMap[instanceKey] = createModelSelection(
                 instanceKey,
-                currentForProvider?.model ?? fallbackModel,
+                currentForProvider ? currentForProvider.model : fallbackModel,
                 providerOpts,
               );
             } else if (currentForProvider && (currentForProvider.options?.length ?? 0) > 0) {
@@ -3281,7 +3239,7 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
               // (TraitsPicker passes it explicitly); the sticky selection
               // itself keeps preserving its current model on trait changes.
               const rememberedModel =
-                normalizeModelSlug(options?.model, normalizedProvider) ?? stickyBase.model;
+                normalizeCustomModelSlug(options?.model) ?? stickyBase.model ?? "";
               if (providerOpts) {
                 nextStickyMap[instanceKey] = createModelSelection(
                   instanceKey,

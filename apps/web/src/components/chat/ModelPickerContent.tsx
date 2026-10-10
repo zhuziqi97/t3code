@@ -4,7 +4,6 @@ import {
   type ProviderDriverKind,
   type ResolvedKeybindingsConfig,
 } from "@t3tools/contracts";
-import { resolveSelectableModel } from "@t3tools/shared/model";
 import { useAtomValue } from "@effect/atom-react";
 import { formatProviderUpdateRequiredNotice } from "@t3tools/client-runtime/providerUpdateRequiredModels";
 import { useNavigate } from "@tanstack/react-router";
@@ -68,7 +67,7 @@ type ModelPickerItem = {
 
 export function resolveModelPickerSelectedModel(input: {
   driverKind: ProviderDriverKind | undefined;
-  model: string;
+  model: string | null;
   options: ReadonlyArray<ModelEsque>;
 }) {
   if (input.driverKind === "antigravity" && input.model === ANTIGRAVITY_DEFAULT_MODEL) {
@@ -80,7 +79,7 @@ export function resolveModelPickerSelectedModel(input: {
       availableModels.find((option) => option.isDefault)
     );
   }
-  return input.options.find((option) => option.slug === input.model);
+  return input.options.find((option) => option.slug === (input.model ?? ""));
 }
 
 export function shouldIncludeModelPickerOption(input: {
@@ -156,7 +155,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
   /** The instance currently selected in the composer (combobox "value"). */
   activeInstanceId: ProviderInstanceId;
   model: string;
-  selectedModels?: ReadonlyArray<{ instanceId: ProviderInstanceId; model: string }>;
+  selectedModels?: ReadonlyArray<{ instanceId: ProviderInstanceId; model: string | null }>;
   onToggleModel?: (instanceId: ProviderInstanceId, model: string) => void;
   /**
    * When set, the picker is locked to the given driver kind — typically
@@ -213,9 +212,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
   });
   const activeModelSlug =
     activeModel?.slug ?? (props.model === ANTIGRAVITY_DEFAULT_MODEL ? "" : props.model);
-  const activeModelKey = activeModelSlug
-    ? modelPickerModelKey(props.activeInstanceId, activeModelSlug)
-    : null;
+  const activeModelKey = modelPickerModelKey(props.activeInstanceId, activeModelSlug);
   const selectedModelKeys = useMemo(
     () =>
       props.selectedModels?.map((selection) => {
@@ -225,7 +222,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
           model: selection.model,
           options: modelOptionsByInstance.get(selection.instanceId) ?? [],
         });
-        return modelPickerModelKey(selection.instanceId, model?.slug ?? selection.model);
+        return modelPickerModelKey(selection.instanceId, model?.slug ?? selection.model ?? "");
       }),
     [instanceEntries, modelOptionsByInstance, props.selectedModels],
   );
@@ -453,6 +450,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
           score: scoreModelPickerSearch(
             {
               name: model.name,
+              slug: model.slug,
               ...(model.shortName ? { shortName: model.shortName } : {}),
               ...(model.subProvider ? { subProvider: model.subProvider } : {}),
               driverKind: model.driverKind,
@@ -464,6 +462,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
           isFavorite: favoritesSet.has(providerModelKey(model.instanceId, model.slug)),
           tieBreaker: buildModelPickerSearchText({
             name: model.name,
+            slug: model.slug,
             ...(model.shortName ? { shortName: model.shortName } : {}),
             ...(model.subProvider ? { subProvider: model.subProvider } : {}),
             driverKind: model.driverKind,
@@ -631,16 +630,10 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       if (!entry) {
         return;
       }
-      // `resolveSelectableModel` uses the driver kind for normalization
-      // (slug casing etc.). Custom instances share their driver's
-      // normalization rules, so pass the driver kind here.
-      const resolvedModel = resolveSelectableModel(entry.driverKind, modelSlug, options);
-      if (resolvedModel) {
-        if (additive && onToggleModel) {
-          onToggleModel(instanceId, resolvedModel);
-        } else {
-          onInstanceModelChange(instanceId, resolvedModel);
-        }
+      if (additive && onToggleModel) {
+        onToggleModel(instanceId, modelSlug);
+      } else {
+        onInstanceModelChange(instanceId, modelSlug);
       }
     },
     [
@@ -1049,7 +1042,11 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                         unavailable={model.isUnavailable === true}
                         jumpLabel={modelJumpLabelByKey.get(modelKey) ?? null}
                         disabledReason={disabledReason}
-                        onToggleFavorite={() => toggleFavorite(model.instanceId, model.slug)}
+                        onToggleFavorite={
+                          model.slug
+                            ? () => toggleFavorite(model.instanceId, model.slug)
+                            : undefined
+                        }
                       />
                     );
                   }}

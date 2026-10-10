@@ -18,6 +18,7 @@ import { resolveSpawnCommand } from "@t3tools/shared/shell";
 import {
   query as claudeQuery,
   type Options as ClaudeQueryOptions,
+  type ModelInfo,
   type SlashCommand as ClaudeSlashCommand,
   type SDKControlGetUsageResponse,
   type SDKUserMessage,
@@ -46,6 +47,7 @@ import {
 } from "./claudeUsageLimits.ts";
 import {
   BUNDLED_CLAUDE_MODEL_CATALOG,
+  withClaudeReportedModels,
   type ClaudeModelCatalog,
   formatClaudeVersionUpgradeMessage,
   resolveClaudeModelsForVersion,
@@ -273,6 +275,7 @@ type ClaudeCapabilitiesProbe = {
    */
   readonly apiProvider: string | undefined;
   readonly slashCommands: ReadonlyArray<ServerProviderSlashCommand>;
+  readonly models?: ReadonlyArray<ModelInfo>;
   /**
    * Subscription windows from the SDK's `get_usage` control request, or
    * `undefined` when the request itself failed. Absent windows on an
@@ -353,6 +356,15 @@ function waitForAbortSignal(signal: AbortSignal): Promise<void> {
   });
 }
 
+/** Keep native gateway discovery alive until Claude Code's configured deadline. */
+function claudeGatewayDiscoveryGraceMs(environment: NodeJS.ProcessEnv): number {
+  const enabled = environment.CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY?.trim().toLowerCase();
+  if (!enabled || enabled === "0" || enabled === "false" || !environment.ANTHROPIC_BASE_URL?.trim())
+    return 0;
+  const configured = Number(environment.CLAUDE_CODE_GATEWAY_MODEL_DISCOVERY_TIMEOUT_MS);
+  return Number.isFinite(configured) && configured > 0 ? configured : 3_000;
+}
+
 /**
  * Probe account information by spawning a lightweight Claude Agent SDK
  * session and reading the initialization result.
@@ -373,8 +385,13 @@ const probeClaudeCapabilities = (
   includeUsage = true,
 ) => {
   const abort = new AbortController();
+  let discoveryGraceMs = 0;
+  const abortProbe = Effect.sync(() => {
+    if (!abort.signal.aborted) abort.abort();
+  });
   return Effect.gen(function* () {
     const claudeEnvironment = yield* makeClaudeEnvironment(claudeSettings, environment);
+    discoveryGraceMs = claudeGatewayDiscoveryGraceMs(claudeEnvironment);
     const executablePath = yield* resolveClaudeSdkExecutablePath(
       claudeSettings.binaryPath,
       claudeEnvironment,
@@ -432,14 +449,21 @@ const probeClaudeCapabilities = (
           apiKeySource: account?.apiKeySource,
           apiProvider: account?.apiProvider,
           slashCommands: parseClaudeInitializationCommands(init.commands),
+          ...(init.models ? { models: init.models } : {}),
           ...(usage ? { usage } : {}),
         } satisfies ClaudeCapabilitiesProbe;
       }),
     ),
     Effect.ensuring(
-      Effect.sync(() => {
-        if (!abort.signal.aborted) abort.abort();
-      }),
+      Effect.suspend(() =>
+        discoveryGraceMs > 0
+          ? Effect.sleep(discoveryGraceMs).pipe(
+              Effect.andThen(abortProbe),
+              Effect.forkDetach,
+              Effect.asVoid,
+            )
+          : abortProbe,
+      ),
     ),
     Effect.result,
     Effect.map((result) => (Result.isSuccess(result) ? result.success : undefined)),
@@ -468,12 +492,24 @@ export const probeClaudeWorkspaceSnapshot = Effect.fn("probeClaudeWorkspaceSnaps
   machineSnapshot: ServerProvider,
   cwd: string,
   environment?: NodeJS.ProcessEnv,
+  resolveCapabilities?: () => Effect.Effect<ClaudeCapabilitiesProbe | undefined>,
+  modelCatalog: ClaudeModelCatalog = BUNDLED_CLAUDE_MODEL_CATALOG,
 ): Effect.fn.Return<ProviderWorkspaceSnapshot, never, FileSystem.FileSystem | Path.Path> {
   if (!claudeSettings.enabled) return machineSnapshot;
   const skills = yield* discoverClaudeSkills(claudeSettings, cwd, environment);
-  const capabilities = yield* probeClaudeCapabilities(claudeSettings, environment, cwd, false);
+  const capabilities = yield* resolveCapabilities
+    ? resolveCapabilities()
+    : probeClaudeCapabilities(claudeSettings, environment, cwd, false);
   return {
     ...machineSnapshot,
+    models: capabilities?.models?.length
+      ? providerModelsFromSettings(
+          withClaudeReportedModels(modelCatalog, capabilities.models).models.map(
+            (entry) => entry.model,
+          ),
+          claudeSettings.customModels,
+        )
+      : machineSnapshot.models,
     skills,
     slashCommands: dedupeSlashCommands([
       COMPACT_SLASH_COMMAND,
@@ -592,7 +628,7 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
     });
   }
 
-  const models = providerModelsFromSettings(
+  const catalogModels = providerModelsFromSettings(
     resolveClaudeModelsForVersion(modelCatalog, parsedVersion),
     claudeSettings.customModels,
     DEFAULT_CLAUDE_MODEL_CAPABILITIES,
@@ -603,6 +639,20 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
   const capabilities = resolveCapabilities
     ? yield* resolveCapabilities(claudeSettings).pipe(Effect.orElseSucceed(() => undefined))
     : undefined;
+  const models = capabilities?.models?.length
+    ? providerModelsFromSettings(
+        withClaudeReportedModels(
+          {
+            models: modelCatalog.models.filter((entry) =>
+              catalogModels.some((model) => model.slug === entry.model.slug),
+            ),
+          },
+          capabilities.models,
+        ).models.map((entry) => entry.model),
+        claudeSettings.customModels,
+        DEFAULT_CLAUDE_MODEL_CAPABILITIES,
+      )
+    : catalogModels;
   const skills = yield* discoverClaudeSkills(claudeSettings, cwd, resolvedEnvironment);
   const slashCommands = [COMPACT_SLASH_COMMAND, ...(capabilities?.slashCommands ?? [])];
   const dedupedSlashCommands = dedupeSlashCommands(slashCommands);

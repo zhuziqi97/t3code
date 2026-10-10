@@ -1444,7 +1444,7 @@ describe("resolveComposerProviderSelection", () => {
           lockedProvider,
           lockedInstanceId: imported.instanceId,
         }).selectedProviderEntry,
-      ).toBeUndefined();
+      ).toEqual(state === "missing" ? undefined : imported);
     },
   );
 
@@ -1487,7 +1487,7 @@ describe("resolveComposerProviderSelection", () => {
     ).toEqual({ enabled: false, interactionMode: "default" });
   });
 
-  it("uses the fallback provider's plan capability after the draft's instance is disabled", () => {
+  it("preserves a disabled draft instance and its plan capability", () => {
     const disabledEntry = entry("antigravity", "antigravity", {
       enabled: false,
       showInteractionModeToggle: false,
@@ -1500,14 +1500,14 @@ describe("resolveComposerProviderSelection", () => {
       lockedInstanceId: null,
     });
 
-    expect(selection.selectedProviderEntry?.instanceId).toBe(fallbackEntry.instanceId);
+    expect(selection.selectedProviderEntry?.instanceId).toBe(disabledEntry.instanceId);
     expect(
       resolveComposerInteractionMode({
         provider: selection.selectedProviderEntry?.snapshot,
         planModeEnabled: true,
         interactionMode: "plan",
       }),
-    ).toEqual({ enabled: true, interactionMode: "plan" });
+    ).toEqual({ enabled: false, interactionMode: "default" });
   });
 
   it("keeps a signed-out selection instead of silently switching providers", () => {
@@ -1552,23 +1552,17 @@ describe("resolveComposerProviderSelection", () => {
     expect(
       getAntigravitySendBlockReason({ ...provider, models: catalogModels }, "gemini-pro"),
     ).toBeNull();
-    expect(getAntigravitySendBlockReason(provider, "")).toBe(
-      "Choose an Antigravity model before sending.",
-    );
+    expect(getAntigravitySendBlockReason(provider, "")).toBeNull();
   });
 
-  it("blocks saved model sends until Antigravity loads its account catalog", () => {
-    expect(getAntigravitySendBlockReason(entry("antigravity").snapshot, "gemini-pro")).toBe(
-      "Refresh Antigravity models in provider settings before sending.",
-    );
+  it("keeps saved model sends available while Antigravity loads its account catalog", () => {
+    expect(getAntigravitySendBlockReason(entry("antigravity").snapshot, "gemini-pro")).toBeNull();
   });
 
-  it("blocks an empty Antigravity selection after the catalog has loaded", () => {
+  it("accepts native default after the catalog has loaded", () => {
     const provider = entry("antigravity", "google_work", { models: catalogModels }).snapshot;
 
-    expect(getAntigravitySendBlockReason(provider, "")).toBe(
-      "Choose an Antigravity model before sending.",
-    );
+    expect(getAntigravitySendBlockReason(provider, "")).toBeNull();
   });
 
   it("blocks a saved model that a ready catalog no longer lists", () => {
@@ -1577,9 +1571,9 @@ describe("resolveComposerProviderSelection", () => {
       models: catalogModels,
     }).snapshot;
 
-    expect(getAntigravitySendBlockReason(provider, "saved-model-not-in-current-catalog")).toBe(
-      "That Antigravity model is no longer available. Choose another model.",
-    );
+    expect(
+      getAntigravitySendBlockReason(provider, "saved-model-not-in-current-catalog"),
+    ).toBeNull();
     expect(getAntigravitySendBlockReason(provider, "gemini-pro")).toBeNull();
   });
 
@@ -1644,7 +1638,7 @@ describe("resolveComposerProviderSelection", () => {
       lockedInstanceId: sessionEntry.instanceId,
     });
 
-    expect(selection.selectedProviderEntry).toBeUndefined();
+    expect(selection.selectedProviderEntry).toEqual(sessionEntry);
   });
 });
 

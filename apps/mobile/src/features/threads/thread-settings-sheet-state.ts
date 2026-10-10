@@ -6,8 +6,8 @@ export type ModelFavorite = {
   readonly model: string;
 };
 
-export function modelFavoriteKey(provider: ProviderInstanceId, model: string): string {
-  return `${provider}:${model}`;
+export function modelFavoriteKey(provider: ProviderInstanceId, model: string | null): string {
+  return `${provider}:${model ?? ""}`;
 }
 
 export function toggleModelFavorite(
@@ -16,6 +16,7 @@ export function toggleModelFavorite(
 ): ReadonlyArray<ModelFavorite> {
   const provider = option.selection.instanceId;
   const model = option.selection.model;
+  if (model === null) return favorites;
   return favorites.some((favorite) => favorite.provider === provider && favorite.model === model)
     ? favorites.filter((favorite) => favorite.provider !== provider || favorite.model !== model)
     : [...favorites, { provider, model }];
@@ -50,7 +51,7 @@ export function modelMatchesCatalogQuery(input: {
     input.model.subtitle,
     input.model.selection.model,
     input.providerLabel,
-  ].some((value) => value.toLocaleLowerCase().includes(query));
+  ].some((value) => (value ?? "").toLocaleLowerCase().includes(query));
 }
 
 /** Preserve staged provider options when the highlighted model is tapped again. */

@@ -175,7 +175,7 @@ describe("Claude model catalog", () => {
         instanceId: ProviderInstanceId.make("claudeAgent"),
         model: "synthetic",
       }),
-      "claude-synthetic-next[large]",
+      "synthetic[large]",
     );
   });
 
@@ -250,7 +250,7 @@ describe("Claude model catalog", () => {
     );
     assert.deepStrictEqual(
       resolveClaudeModelsForVersion(catalog, "3.2.0").map((model) => model.slug),
-      ["claude-synthetic-next", "claude-custom-tuned"],
+      ["claude-synthetic-next", "synthetic", "claude-custom-tuned"],
     );
   });
 });

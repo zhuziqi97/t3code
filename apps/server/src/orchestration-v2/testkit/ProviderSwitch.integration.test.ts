@@ -492,7 +492,7 @@ describe("orchestration v2 provider switching", () => {
               : modelScenario
                 ? {
                     getModelContextWindow: (selection: ModelSelection) =>
-                      selection.model.endsWith("-large") ||
+                      selection.model?.endsWith("-large") ||
                       selection.options?.some(
                         (option) => option.id === "contextWindow" && option.value === "1m",
                       )

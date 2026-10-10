@@ -73,12 +73,12 @@ describe("deriveProviderModelsForDisplay", () => {
       ],
     });
 
-    // A bare entry keeps the driver default the server filled in.
+    // Stale custom rows do not supply capabilities for current settings entries.
     expect(display[0]).toEqual({
       slug: "bare",
       name: "bare",
       isCustom: true,
-      capabilities: liveCapabilities,
+      capabilities: null,
     });
     expect(display[1]).toEqual({
       slug: "named",

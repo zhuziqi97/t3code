@@ -222,7 +222,7 @@ function providerSession(input: {
   readonly providerSessionId: OrchestrationV2ProviderSession["id"];
   readonly providerInstanceId: ProviderInstanceId;
   readonly cwd: string | null;
-  readonly model: string;
+  readonly model: string | null;
   readonly now: DateTime.Utc;
 }): OrchestrationV2ProviderSession {
   return {

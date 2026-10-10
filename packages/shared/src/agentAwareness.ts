@@ -78,7 +78,7 @@ export function projectThreadAwarenessV2(
     phase,
     headline: headlineForPhase(phase),
     ...(detail === undefined ? {} : { detail }),
-    modelTitle: thread.modelSelection.model,
+    modelTitle: thread.modelSelection.model ?? "Follow agent default",
     updatedAt: DateTime.formatIso(thread.updatedAt),
     deepLink: buildAgentAwarenessDeepLink({ environmentId, threadId: thread.id }),
   };

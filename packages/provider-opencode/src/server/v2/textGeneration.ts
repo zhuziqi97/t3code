@@ -44,7 +44,10 @@ const runOnServer = (
   Effect.gen(function* () {
     const { resolveAttachmentPath } = yield* ProviderHost.ProviderHost;
     const { client } = connection;
-    const parsed = OpenCodeRuntime.parseOpenCodeModelSlug(input.modelSelection.model);
+    const parsed =
+      input.modelSelection.model === null
+        ? undefined
+        : OpenCodeRuntime.parseOpenCodeModelSlug(input.modelSelection.model);
     if (parsed === null) {
       return yield* new TextGenerationError({
         operation: input.operation,
@@ -129,11 +132,15 @@ const runOnServer = (
     const session = yield* client.session.create({
       title: `T3 Code ${input.operation}`,
       location: Location.PublicRef.make({ directory: AbsolutePath.make(input.cwd) }),
-      model: Model.Ref.make({
-        providerID: Provider.ID.make(parsed.providerID),
-        id: Model.ID.make(parsed.modelID),
-        ...(variant === undefined ? {} : { variant: Model.VariantID.make(variant) }),
-      }),
+      ...(parsed === undefined
+        ? {}
+        : {
+            model: Model.Ref.make({
+              providerID: Provider.ID.make(parsed.providerID),
+              id: Model.ID.make(parsed.modelID),
+              ...(variant === undefined ? {} : { variant: Model.VariantID.make(variant) }),
+            }),
+          }),
       permissions: GENERATION_PERMISSIONS,
     });
     sessionId = session.id;

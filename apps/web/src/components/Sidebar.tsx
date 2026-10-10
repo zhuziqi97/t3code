@@ -1155,7 +1155,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   );
   const modelLabel = selectedModel
     ? getTriggerDisplayModelLabel(selectedModel)
-    : thread.modelSelection.model;
+    : (thread.modelSelection.model ?? "Follow agent default");
 
   const detailsTooltip = (
     <SidebarThreadTooltip
@@ -1837,7 +1837,7 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
   );
   const modelLabel = selectedModel
     ? getTriggerDisplayModelLabel(selectedModel)
-    : thread.modelSelection.model;
+    : (thread.modelSelection.model ?? "Follow agent default");
   const runningTerminalIds = useThreadRunningTerminalIds({
     environmentId: thread.environmentId,
     threadId: thread.id,

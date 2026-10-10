@@ -16,6 +16,19 @@ describe("buildModelPickerSearchText", () => {
 });
 
 describe("scoreModelPickerSearch", () => {
+  it("finds a renamed native model by its original routing ID", () => {
+    expect(
+      scoreModelPickerSearch(
+        {
+          driverKind: "codex",
+          providerDisplayName: "Codex",
+          name: "A custom display name",
+          slug: "u3-native-47",
+        },
+        "u3-native-47",
+      ),
+    ).not.toBeNull();
+  });
   it("matches typo-tolerant multi-token queries", () => {
     expect(
       scoreModelPickerSearch(

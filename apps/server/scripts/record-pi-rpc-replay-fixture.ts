@@ -68,8 +68,11 @@ if (fixture === undefined || variant === undefined) {
   throw new Error(`Pass --scenario with a fixture that registers Pi: ${names.join(", ")}`);
 }
 
+if (variant.modelSelection.model === null)
+  throw new Error("Pi replay recording requires an explicit model");
 const piBinary = process.env.T3_PI_BIN ?? "pi";
-const [modelProvider, ...modelId] = variant.modelSelection.model.split("/");
+const modelSlug = variant.modelSelection.model;
+const [modelProvider, ...modelId] = modelSlug.split("/");
 const launchArgs = `--provider ${modelProvider} --model ${modelId.join("/")} ${HERMETIC_LAUNCH_ARGS}`;
 const home = process.env.HOME ?? "";
 
@@ -310,7 +313,7 @@ const record = Effect.gen(function* () {
       entries,
       workspace,
       sessionDir,
-      modelSlug: variant.modelSelection.model,
+      modelSlug,
     }),
   } satisfies ProviderReplayTranscript;
 

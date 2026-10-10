@@ -136,6 +136,8 @@ export const CustomModelEntry = Schema.Struct({
   slug: TrimmedNonEmptyString,
   name: Schema.optional(TrimmedNonEmptyString),
   capabilities: Schema.optional(ModelCapabilities),
+  /** Claude process allowance for gateways without per-model native configuration. */
+  contextWindowTokens: Schema.optional(Schema.Int.pipe(Schema.check(Schema.isGreaterThan(0)))),
 });
 export type CustomModelEntry = typeof CustomModelEntry.Type;
 

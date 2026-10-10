@@ -8,7 +8,7 @@ When the t3-code MCP server exposes link_pull_request, you must use it to regist
  */
 export function buildRuntimeInstructions(runtime: {
   readonly harness: string;
-  readonly model?: string | undefined;
+  readonly model?: string | null | undefined;
   readonly modelName?: string | undefined;
   readonly reasoningEffort?: string | undefined;
 }): string {

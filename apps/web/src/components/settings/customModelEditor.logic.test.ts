@@ -220,10 +220,9 @@ describe("customModelEditor.logic", () => {
   it("collapses a blank name and no options back to a bare definition", () => {
     expect(definitionFromDraft(draft({ name: "  " }))).toEqual({
       slug: "my-model",
-      name: "my-model",
       capabilities: null,
     });
-    expect(draftFromDefinition({ slug: "x", name: "x", capabilities: null }).name).toBe("");
+    expect(draftFromDefinition({ slug: "x", name: "x", capabilities: null }).name).toBe("x");
   });
 
   it("rejects duplicate ids, blank ids, and selects without choices", () => {
@@ -255,5 +254,19 @@ describe("customModelEditor.logic", () => {
       validateDraft(draft({ descriptors: [select("effort", [{ id: "a" }, { id: "a" }])] })),
     ).toBe('Option 1: choice "a" is used twice.');
     expect(validateDraft(draft({ descriptors: [select("effort", [{ id: "a" }])] }))).toBeNull();
+  });
+});
+
+it("retains a model's custom context allowance when editing its display name", () => {
+  const reopened = draftFromDefinition({
+    slug: "gateway/custom",
+    capabilities: null,
+    contextWindowTokens: 272000,
+  });
+  expect(definitionFromDraft({ ...reopened, name: "Work" })).toEqual({
+    slug: "gateway/custom",
+    name: "Work",
+    capabilities: null,
+    contextWindowTokens: 272000,
   });
 });

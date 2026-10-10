@@ -16,6 +16,27 @@ import {
 } from "./driver.ts";
 
 const decodeSettings = Schema.decodeSync(AcpRegistrySettings);
+it("reads legacy ACP model strings and preserves named capability overrides", () => {
+  const customModels = [
+    "native-old-id",
+    {
+      slug: "native-new-id",
+      name: "Native display",
+      capabilities: {
+        optionDescriptors: [
+          {
+            id: "effort",
+            label: "Effort",
+            type: "select",
+            options: [{ id: "high", label: "High" }],
+          },
+        ],
+      },
+    },
+  ];
+  expect(decodeSettings({ customModels }).customModels).toEqual(customModels);
+});
+
 const identity = {
   instanceId: ProviderInstanceId.make("acpRegistry_test"),
   displayName: "Test ACP",

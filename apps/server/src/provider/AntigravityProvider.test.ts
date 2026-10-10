@@ -3,6 +3,7 @@ import { describe, expect, it } from "@effect/vitest";
 import {
   ANTIGRAVITY_DEFAULT_MODEL,
   AntigravitySettings,
+  type CustomModelSetting,
   ProviderDriverKind,
   ProviderInstanceId,
   ProviderSetupError,
@@ -128,7 +129,11 @@ const layerTest = ProviderHostLive.layer.pipe(
 type ProbeError = EffectAcpErrors.AcpError | ProviderSetupError;
 
 const makeHarness = Effect.fn("makeAntigravityProviderHarness")(function* (
-  options: { readonly enabled?: boolean; readonly safe?: boolean } = {},
+  options: {
+    readonly enabled?: boolean;
+    readonly safe?: boolean;
+    readonly customModels?: readonly CustomModelSetting[];
+  } = {},
 ) {
   const initialProbe = yield* Deferred.make<EffectAcpSchema.InitializeResponse, ProbeError>();
   const probeCalls = yield* Ref.make(0);
@@ -138,7 +143,7 @@ const makeHarness = Effect.fn("makeAntigravityProviderHarness")(function* (
   );
   const safety = yield* Ref.make<Effect.Effect<boolean>>(Effect.succeed(options.safe ?? true));
   const provider = yield* makeAntigravityProvider(
-    decodeSettings({ enabled: options.enabled ?? true, customModels: ["do-not-seed-me"] }),
+    decodeSettings({ enabled: options.enabled ?? true, customModels: options.customModels ?? [] }),
     {
       stampIdentity: (snapshot) => Effect.succeed({ ...snapshot, instanceId, driver }),
       probe: Ref.update(probeCalls, (count) => count + 1).pipe(
@@ -173,6 +178,40 @@ const makeHarness = Effect.fn("makeAntigravityProviderHarness")(function* (
 });
 
 describe("Antigravity model catalog", () => {
+  it.effect("merges an override into native session and configuration updates", () =>
+    Effect.gen(function* () {
+      const { provider } = yield* makeHarness({
+        customModels: [{ slug: "gemini-3.7-flash-high", name: "My thinking preset" }],
+      });
+      yield* provider.onSessionStarted(started);
+      const snapshot = yield* provider.snapshot.getSnapshot;
+      expect(snapshot.models).toHaveLength(modelOptions.length);
+      expect(snapshot.models.find((model) => model.slug === "gemini-3.7-flash-high")).toMatchObject(
+        { name: "My thinking preset", isCustom: false },
+      );
+      yield* provider.onConfigOptionsUpdated(sessionSetupResult.configOptions ?? []);
+      expect(
+        (yield* provider.snapshot.getSnapshot).models.find(
+          (model) => model.slug === "gemini-3.7-flash-high",
+        )?.name,
+      ).toBe("My thinking preset");
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+  it.effect("keeps a hand-entered model while native discovery is unavailable", () =>
+    Effect.gen(function* () {
+      const { provider } = yield* makeHarness({
+        customModels: [{ slug: "native-thinking-high", name: "My native preset" }],
+      });
+      expect((yield* provider.snapshot.getSnapshot).models).toEqual([
+        {
+          slug: "native-thinking-high",
+          name: "My native preset",
+          isCustom: true,
+          capabilities: null,
+        },
+      ]);
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
   it("keeps the captured personal catalog's IDs, labels, order, and selected default", () => {
     const models = buildAntigravityModelsFromSession(sessionSetupResult);
     expect(models.map((model) => [model.slug, model.name])).toEqual(

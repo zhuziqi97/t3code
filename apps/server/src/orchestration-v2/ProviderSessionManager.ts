@@ -1866,7 +1866,9 @@ export const layerWithOptions = (
                     ),
                   ),
                   () =>
-                    runtime.startTurn(input).pipe(turnMetrics("send", input.modelSelection.model)),
+                    runtime
+                      .startTurn(input)
+                      .pipe(turnMetrics("send", input.modelSelection.model ?? undefined)),
                   (_, exit) =>
                     Exit.isFailure(exit)
                       ? observeActivity(

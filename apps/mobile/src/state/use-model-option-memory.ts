@@ -10,7 +10,7 @@ import {
 function recordModelOptionsInState(
   state: ModelOptionMemoryState,
   instanceId: string,
-  model: string,
+  model: string | null,
   options: ReadonlyArray<ProviderOptionSelection>,
 ): ModelOptionMemoryState {
   if (options.length === 0) {
@@ -20,7 +20,7 @@ function recordModelOptionsInState(
     ...state,
     [instanceId]: {
       ...(state[instanceId] ?? {}),
-      [model]: options,
+      [model ?? ""]: options,
     },
   };
 }
@@ -29,15 +29,15 @@ function recordModelOptionsInState(
 function lookupModelOptionsInState(
   state: ModelOptionMemoryState,
   instanceId: string,
-  model: string,
+  model: string | null,
 ): ReadonlyArray<ProviderOptionSelection> | undefined {
-  return state[instanceId]?.[model];
+  return state[instanceId]?.[model ?? ""];
 }
 
 /** Records an explicitly chosen option set for one instance and model. */
 export function rememberModelOptions(
   instanceId: string,
-  model: string,
+  model: string | null,
   options: ReadonlyArray<ProviderOptionSelection>,
 ): void {
   if (options.length === 0) {
@@ -53,7 +53,7 @@ export function rememberModelOptions(
 
 export function rememberedModelOptions(
   instanceId: string,
-  model: string,
+  model: string | null,
 ): ReadonlyArray<ProviderOptionSelection> | undefined {
   return lookupModelOptionsInState(
     appAtomRegistry.get(modelOptionMemoryAtom),
@@ -69,7 +69,7 @@ export function rememberedModelOptions(
 export function withRememberedModelOptions<
   T extends {
     readonly instanceId: string;
-    readonly model: string;
+    readonly model: string | null;
     readonly options?: ReadonlyArray<ProviderOptionSelection>;
   },
 >(selection: T): T {

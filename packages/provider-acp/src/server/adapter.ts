@@ -242,6 +242,11 @@ export interface AcpAdapterV2Flavor {
     ChildProcessSpawner.ChildProcessSpawner | Crypto.Crypto | Scope.Scope
   >;
   readonly resolveModelId?: (selection: ModelSelection) => string | undefined;
+  /** Read the native default in the execution directory when the user resets a selection. */
+  readonly modelOptionIds?: ReadonlyArray<string>;
+  readonly nativeDefaultModel?: (
+    cwd: string,
+  ) => Effect.Effect<string | undefined, EffectAcpErrors.AcpError>;
   /**
    * Replaces the default model application on session setup. Returns the model
    * the session now runs on. Antigravity resolves its provider-default alias
@@ -6274,27 +6279,45 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
           startResult: AcpSessionRuntime.AcpSessionRuntimeStartResult,
           modelSelection: ModelSelection,
           runtimePolicy: ProviderAdapter.ProviderAdapterV2RuntimePolicy,
+          resetToDefault = false,
         ) {
-          const requestedModel = flavor.resolveModelId?.(modelSelection) ?? modelSelection.model;
+          if (modelSelection.model === null && resetToDefault && flavor.nativeDefaultModel) {
+            const model = yield* flavor.nativeDefaultModel(
+              runtimePolicy.cwd ?? input.runtimePolicy.cwd ?? process.cwd(),
+            );
+            if (!model)
+              return yield* EffectAcpErrors.AcpRequestError.invalidParams(
+                "The agent did not report its native default model.",
+              );
+            modelSelection = { ...modelSelection, model };
+          }
+          const requestedModel =
+            modelSelection.model === null
+              ? null
+              : (flavor.resolveModelId?.(modelSelection) ?? modelSelection.model);
           let appliedModel: string | undefined;
-          if (flavor.applyModelSelection !== undefined) {
+          if (
+            flavor.applyModelSelection !== undefined &&
+            (modelSelection.model !== null || resetToDefault)
+          ) {
             appliedModel = yield* flavor.applyModelSelection({
               runtime,
               startResult,
               modelSelection,
             });
           } else if (
+            requestedModel != null &&
             requestedModel.length > 0 &&
             requestedModel !== "auto" &&
             requestedModel !== "default"
           ) {
-            const hasModelConfig =
-              startResult.sessionSetupResult.configOptions?.some(
-                (option) => option.category === "model",
-              ) === true;
-            if (hasModelConfig) {
+            const configOptions = yield* runtime.getConfigOptions;
+            if (configOptions.some((option) => option.category === "model")) {
               yield* runtime.setModel(requestedModel);
+            } else {
+              yield* runtime.setSessionModel(requestedModel);
             }
+            appliedModel = requestedModel;
           }
           // Same-runtime switches compare against this stored setup, so keep
           // its model metadata in sync with what the session now runs on;
@@ -6319,7 +6342,9 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
               };
             });
           }
-          const optionSelections = modelSelection.options ?? [];
+          const optionSelections = (modelSelection.options ?? []).filter(
+            (option) => !flavor.modelOptionIds?.includes(option.id),
+          );
           const configOptions = yield* runtime.getConfigOptions;
           const availableConfigIds = new Set(configOptions.map((option) => option.id));
           const hasNativeConfigWithSyntheticModeId = availableConfigIds.has(
@@ -6331,55 +6356,13 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
           const configSelections = hasNativeConfigWithSyntheticModeId
             ? optionSelections
             : optionSelections.filter((selection) => selection.id !== ACP_SESSION_MODE_OPTION_ID);
-          // Probe-time descriptors are a per-model union, so a stored
-          // selection can reference an option the live session does not
-          // expose (Kilo advertises per-model "effort" descriptors while its
-          // session config omits them). Failing the open here wedges the run
-          // in a retry loop; skip like the out-of-range values below and let
-          // the agent default apply.
-          const unsupportedConfigIds = configSelections
-            .map((selection) => selection.id)
-            .filter((id) => !availableConfigIds.has(id));
-          if (unsupportedConfigIds.length > 0) {
-            yield* Effect.logWarning(
-              "ACP session does not expose requested configuration option(s)",
-              {
-                driver,
-                sessionId: startResult.sessionId,
-                optionIds: unsupportedConfigIds,
-              },
-            );
-          }
           for (const selection of configSelections) {
-            if (!availableConfigIds.has(selection.id)) continue;
-            // Tuning knobs degrade instead of failing the session open: agents
-            // advertise the union of values across models but can reject a
-            // per-model invalid one at set time (codex-acp advertises "ultra"
-            // reasoning effort and then rejects it for most models). Skip
-            // values the session does not currently offer and downgrade an
-            // agent-side set rejection to a warning; the agent's default
-            // applies for that option.
-            const option = configOptions.find((candidate) => candidate.id === selection.id);
-            if (
-              option !== undefined &&
-              option.type === "select" &&
-              typeof selection.value === "string"
-            ) {
-              const advertisedValues = option.options.flatMap((entry) =>
-                "value" in entry ? [entry.value] : entry.options.map((choice) => choice.value),
+            if (!availableConfigIds.has(selection.id)) {
+              return yield* EffectAcpErrors.AcpRequestError.invalidParams(
+                `The agent does not expose configuration option '${selection.id}' for the current model.`,
               );
-              if (!advertisedValues.includes(selection.value)) continue;
             }
-            yield* runtime.setConfigOption(selection.id, selection.value).pipe(
-              Effect.catchTags({
-                AcpRequestError: (error) =>
-                  Effect.logWarning("ACP session rejected a configuration option value", {
-                    optionId: selection.id,
-                    value: selection.value,
-                    detail: error.message,
-                  }),
-              }),
-            );
+            yield* runtime.setConfigOption(selection.id, selection.value);
           }
           const policyMode = flavor.sessionModeForPolicy?.(runtimePolicy);
           if (policyMode !== undefined) {
@@ -6890,7 +6873,13 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
               const activated = yield* activateSession(requestedSessionId, turnInput.threadId);
               yield* Ref.set(activeSessionId, activated.sessionId);
               yield* Ref.set(activeSessionSetup, activated);
-              yield* configureSession(activated, turnInput.modelSelection, turnInput.runtimePolicy);
+              yield* configureSession(
+                activated,
+                turnInput.modelSelection,
+                turnInput.runtimePolicy,
+                turnInput.modelSelection.model === null &&
+                  turnInput.previousModelSelection?.model != null,
+              );
               yield* Ref.set(activeSelection, turnInput.modelSelection);
               yield* Ref.set(activeInteractionMode, turnInput.runtimePolicy.interactionMode);
             } else {
@@ -6899,6 +6888,8 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
               if (
                 configuredSelection === null ||
                 !modelSelectionsEqual(configuredSelection, turnInput.modelSelection) ||
+                (turnInput.modelSelection.model === null &&
+                  turnInput.previousModelSelection?.model != null) ||
                 configuredInteractionMode !== turnInput.runtimePolicy.interactionMode
               ) {
                 const currentSessionSetup = yield* Ref.get(activeSessionSetup);
@@ -6912,6 +6903,8 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                   currentSessionSetup,
                   turnInput.modelSelection,
                   turnInput.runtimePolicy,
+                  turnInput.modelSelection.model === null &&
+                    turnInput.previousModelSelection?.model != null,
                 );
                 yield* Ref.set(activeSelection, turnInput.modelSelection);
                 yield* Ref.set(activeInteractionMode, turnInput.runtimePolicy.interactionMode);

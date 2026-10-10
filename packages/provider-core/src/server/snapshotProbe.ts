@@ -18,7 +18,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as ChildProcess from "effect/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
-import { readCustomModelEntries } from "@t3tools/shared/model";
+import { mergeCustomModels } from "@t3tools/shared/model";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { createProviderVersionAdvisory } from "./maintenanceResolver.ts";
 import { collectUint8StreamText } from "./collectStreamText.ts";
@@ -144,33 +144,16 @@ export function parseGenericCliVersion(output: string): string | null {
 }
 
 /**
- * Append the user's custom models after the built-ins. A custom entry that
- * declares its own capabilities keeps them; a bare slug gets the driver's
- * default set. Slugs that collide with a built-in are dropped.
+ * Merge exact-ID display and capability overrides into native entries, then
+ * append hand-entered IDs. Only an explicitly supplied Agent capability set
+ * supplements a hand-entered model with no native report.
  */
 export function providerModelsFromSettings(
   builtInModels: ReadonlyArray<ServerProviderModel>,
   customModels: ReadonlyArray<CustomModelSetting>,
-  customModelCapabilities: ModelCapabilities,
+  customModelCapabilities: ModelCapabilities | null = null,
 ): ReadonlyArray<ServerProviderModel> {
-  const resolvedBuiltInModels = [...builtInModels];
-  const seen = new Set(resolvedBuiltInModels.map((model) => model.slug));
-  const customEntries: ServerProviderModel[] = [];
-
-  for (const entry of readCustomModelEntries(customModels)) {
-    if (seen.has(entry.slug)) {
-      continue;
-    }
-    seen.add(entry.slug);
-    customEntries.push({
-      slug: entry.slug,
-      name: entry.name,
-      isCustom: true,
-      capabilities: entry.capabilities ?? customModelCapabilities,
-    });
-  }
-
-  return [...resolvedBuiltInModels, ...customEntries];
+  return mergeCustomModels(builtInModels, customModels, customModelCapabilities);
 }
 
 export function buildSelectOptionDescriptor(input: {

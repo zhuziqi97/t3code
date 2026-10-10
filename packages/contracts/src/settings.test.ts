@@ -199,6 +199,13 @@ describe("custom model settings", () => {
     ],
   };
 
+  it("preserves a custom model capacity through settings decoding", () => {
+    expect(
+      decodeClaudeSettings({
+        customModels: [{ slug: "gateway/model", name: "Gateway", contextWindowTokens: 272000 }],
+      }).customModels,
+    ).toEqual([{ slug: "gateway/model", name: "Gateway", contextWindowTokens: 272000 }]);
+  });
   it("accepts legacy bare slugs alongside full entries", () => {
     const decoded = decodeClaudeSettings({
       customModels: ["bare-slug", { slug: "named", name: "Named", capabilities }],

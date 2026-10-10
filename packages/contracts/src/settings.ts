@@ -1379,7 +1379,7 @@ export const DEFAULT_UNIFIED_SETTINGS: UnifiedSettings = {
 
 const ModelSelectionPatch = Schema.Struct({
   instanceId: Schema.optionalKey(ProviderInstanceId),
-  model: Schema.optionalKey(TrimmedNonEmptyString),
+  model: Schema.optionalKey(Schema.NullOr(TrimmedNonEmptyString)),
   options: Schema.optionalKey(ProviderOptionSelections),
 });
 

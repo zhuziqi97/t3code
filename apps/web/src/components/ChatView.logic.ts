@@ -1,7 +1,6 @@
 import * as Option from "effect/Option";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import {
-  ANTIGRAVITY_DEFAULT_MODEL,
   type AssetCreateUrlInput,
   type AssetCreateUrlResult,
   type ChatFileAttachment,
@@ -598,17 +597,14 @@ export function resolveComposerProviderSelection(input: {
   );
   const selectedProviderEntry =
     input.candidateInstanceIds
-      .map((candidate) =>
-        compatibleEntries.find(
-          (entry) => entry.instanceId === candidate && entry.enabled && entry.isAvailable,
-        ),
-      )
+      .map((candidate) => compatibleEntries.find((entry) => entry.instanceId === candidate))
       .find((entry) => entry !== undefined) ??
-    resolveSelectableProviderInstanceEntry(
-      compatibleEntries.filter((entry) => entry.driverKind === requestedDriverKind),
-      undefined,
-    ) ??
-    resolveSelectableProviderInstanceEntry(compatibleEntries, undefined);
+    (requestedInstanceId !== undefined
+      ? undefined
+      : (resolveSelectableProviderInstanceEntry(
+          compatibleEntries.filter((entry) => entry.driverKind === requestedDriverKind),
+          undefined,
+        ) ?? resolveSelectableProviderInstanceEntry(compatibleEntries, undefined)));
   const unavailableProviderInstanceId = selectedProviderEntry
     ? undefined
     : input.lockedProvider
@@ -643,7 +639,7 @@ export function getAntigravitySendBlockReason(
     | Pick<ServerProvider, "driver" | "installed" | "auth" | "models" | "status">
     | null
     | undefined,
-  model: string,
+  _model: string | null,
 ): string | null {
   if (provider?.driver !== "antigravity") return null;
   if (!provider.installed) {
@@ -651,25 +647,6 @@ export function getAntigravitySendBlockReason(
   }
   if (provider.auth.status === "unauthenticated") {
     return "Sign in to Antigravity in provider settings before sending.";
-  }
-  const slug = model.trim();
-  if (slug.length === 0) return "Choose an Antigravity model before sending.";
-  // A restart clears the account status and catalog. Session startup checks
-  // saved credentials and validates the model before sending the prompt.
-  if (provider.auth.status === "unknown") return null;
-  if (provider.models.length === 0) {
-    return "Refresh Antigravity models in provider settings before sending.";
-  }
-  // A saved model that left the catalog is kept in the picker as unavailable
-  // so the user sees what the thread used. The server rejects it at turn
-  // start, so block here unless the provider is in an error state, where a
-  // retry with the same model is the right move.
-  if (
-    provider.status === "ready" &&
-    slug !== ANTIGRAVITY_DEFAULT_MODEL &&
-    !provider.models.some((entry) => entry.slug === slug || entry.aliases?.includes(slug))
-  ) {
-    return "That Antigravity model is no longer available. Choose another model.";
   }
   return null;
 }

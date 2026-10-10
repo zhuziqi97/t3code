@@ -5,7 +5,7 @@ import { buildRuntimeInstructions } from "@t3tools/provider-core/server/runtimeI
 /** Adds current runtime context to legacy prompt expectations, keeping outbound matching exact. */
 export function materializeReplayTranscriptRuntimeInstructions(
   transcript: ProviderReplayTranscript,
-  runtime: { readonly driver: ProviderDriverKind; readonly model: string },
+  runtime: { readonly driver: ProviderDriverKind; readonly model: string | null },
 ): ProviderReplayTranscript {
   const harness =
     runtime.driver === "cursor"

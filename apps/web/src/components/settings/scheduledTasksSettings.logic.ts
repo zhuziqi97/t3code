@@ -150,7 +150,7 @@ export function taskToDraft(task: ScheduledTask): DraftState {
       task.workspaceStrategy.type === "existing_worktree"
         ? task.workspaceStrategy.worktreePath
         : "",
-    modelKey: `${task.modelSelection.instanceId}:${task.modelSelection.model}`,
+    modelKey: `${task.modelSelection.instanceId}:${task.modelSelection.model ?? ""}`,
     runtimeMode: task.runtimeMode,
     interactionMode: task.interactionMode,
     baseModelSelection: task.modelSelection,
@@ -185,22 +185,7 @@ export function scheduledTaskDefaultModel(
   );
   const configured = resolveProjectSettings(settings, project?.id ?? null, project).settings
     .defaultModelSelection;
-  for (const selection of [configured, settings.defaultModelSelection]) {
-    if (
-      selection &&
-      available.some(
-        (entry) =>
-          entry.instanceId === selection.instanceId &&
-          entry.models.find((model) => model.slug === selection.model)?.isLegacy !== true,
-      )
-    )
-      return selection;
-  }
-  const models = available.flatMap((entry) =>
-    entry.models
-      .filter((model) => !model.isLegacy)
-      .map((model) => ({ instanceId: entry.instanceId, model })),
-  );
-  const fallback = models.find(({ model }) => model.isDefault) ?? models[0];
-  return fallback ? { instanceId: fallback.instanceId, model: fallback.model.slug } : null;
+  if (configured) return configured;
+  if (settings.defaultModelSelection) return settings.defaultModelSelection;
+  return available[0] ? { instanceId: available[0].instanceId, model: null } : null;
 }

@@ -12,6 +12,7 @@ import {
   type OrchestrationV2ProviderCapabilities,
   type RuntimeMode,
 } from "@t3tools/contracts";
+import { checkGrokProviderStatus } from "./status.ts";
 import { GrokSettings } from "../settings.ts";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
@@ -29,6 +30,7 @@ import { makeAcpNativeLoggerFactory } from "@t3tools/provider-acp/server/nativeL
 import {
   applyGrokAcpModelSelection,
   currentGrokModelIdFromSessionSetup,
+  currentGrokReasoningEffortFromSessionSetup,
   grokApprovalOptions,
   makeGrokAcpRuntime,
   resolveGrokAcpBaseModelId,
@@ -54,6 +56,7 @@ import {
   XAiAskUserQuestionRequest,
   XAiExitPlanModeRequest,
 } from "./xaiAcpExtension.ts";
+import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import { mergeProviderInstanceEnvironment } from "@t3tools/provider-core/server/instanceEnvironment";
 import { acpPermissionDisposition } from "@t3tools/provider-acp/server/clientPolicy";
 import * as AcpSessionRuntime from "@t3tools/provider-acp/server/AcpSessionRuntime";
@@ -251,13 +254,23 @@ export function makeGrokAcpAdapterFlavor(options: GrokAdapterV2Options): AcpAdap
     // still accepts image content blocks (verified with real screenshots).
     supportsImagePrompts: true,
     supportsCompaction: true,
+    modelOptionIds: ["reasoningEffort"],
     resolveModelId: (selection) => resolveGrokAcpBaseModelId(selection.model),
     applyModelSelection: ({ runtime, startResult, modelSelection }) =>
       Effect.gen(function* () {
         const legacy = startResult.initializeResult.protocolVersion === 1;
         const options = legacy ? [] : yield* runtime.getConfigOptions;
         const configuredModel = options.find((option) => option.category === "model")?.currentValue;
-        return yield* applyGrokAcpModelSelection({
+        const reasoning = getModelSelectionStringOptionValue(modelSelection, "reasoningEffort");
+        const appliedModel = yield* applyGrokAcpModelSelection({
+          ...(legacy
+            ? {
+                currentReasoningEffort: currentGrokReasoningEffortFromSessionSetup(
+                  startResult.sessionSetupResult,
+                ),
+                requestedReasoningEffort: reasoning,
+              }
+            : {}),
           runtime: legacy
             ? runtime
             : { setSessionModel: (model) => runtime.setModel(model).pipe(Effect.as({})) },
@@ -269,6 +282,18 @@ export function makeGrokAcpAdapterFlavor(options: GrokAdapterV2Options): AcpAdap
           requestedModelId: resolveGrokAcpBaseModelId(modelSelection.model),
           mapError: (cause) => cause,
         });
+        if (!legacy && reasoning !== undefined) {
+          const currentOptions = yield* runtime.getConfigOptions;
+          const option = currentOptions.find(
+            (option) => option.category === "thought_level" || option.id === "reasoningEffort",
+          );
+          if (!option)
+            return yield* EffectAcpErrors.AcpRequestError.invalidParams(
+              "Grok does not expose reasoning effort for the current model.",
+            );
+          yield* runtime.setConfigOption(option.id, reasoning);
+        }
+        return appliedModel;
       }),
     makeRuntime:
       options.makeRuntime ??
@@ -329,9 +354,21 @@ export function makeGrokAcpAdapterFlavor(options: GrokAdapterV2Options): AcpAdap
 export const makeGrokAdapterV2 = Effect.fn("makeGrokAdapterV2")(function* (
   options: GrokAdapterV2Options,
 ) {
+  const discoveryServices = yield* Effect.context<
+    ChildProcessSpawner.ChildProcessSpawner | Crypto.Crypto
+  >();
   return yield* makeAcpAdapterV2({
     instanceId: options.instanceId,
-    flavor: makeGrokAcpAdapterFlavor(options),
+    flavor: {
+      ...makeGrokAcpAdapterFlavor(options),
+      nativeDefaultModel: (cwd) =>
+        checkGrokProviderStatus(options.settings, options.environment, cwd).pipe(
+          Effect.map(
+            (snapshot) => snapshot.models.find((model) => model.isDefault && !model.isCustom)?.slug,
+          ),
+          Effect.provide(discoveryServices),
+        ),
+    },
     selfInvocation: options.selfInvocation,
     ...(options.nativeLogging === undefined ? {} : { nativeLogging: options.nativeLogging }),
     ...(options.continuationRequests === undefined

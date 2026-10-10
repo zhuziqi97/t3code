@@ -783,14 +783,14 @@ export const layer: Layer.Layer<
       // Only started runs reached the provider-thread update below. Queued runs and
       // failures during session setup cannot establish a new telemetry selection.
       const measuredContext = latestNativeContextUsage(projection, providerThread);
-      const previousSelection =
-        measuredContext?.modelSelection ??
-        projection.runs.findLast(
-          (source) =>
-            source.ordinal < run.ordinal &&
-            source.startedAt !== null &&
-            source.providerThreadId === providerThread.id,
-        )?.modelSelection;
+      const previousUserSelection = projection.runs.findLast(
+        (source) =>
+          source.ordinal < run.ordinal &&
+          source.startedAt !== null &&
+          source.status !== "failed" &&
+          source.providerThreadId === providerThread.id,
+      )?.modelSelection;
+      const previousSelection = measuredContext?.modelSelection ?? previousUserSelection;
       const sameSelection =
         previousSelection === undefined ||
         modelSelectionsEqual(previousSelection, run.modelSelection);
@@ -1254,6 +1254,9 @@ export const layer: Layer.Layer<
           (legacyInputRunIds.size > 0 &&
             sameNativeThread &&
             !acceptedAttempts.some((source) => source.nativeThreadId !== undefined)),
+        ...(sameNativeThread && previousUserSelection !== undefined
+          ? { previousModelSelection: previousUserSelection }
+          : {}),
         shouldStartProviderTurn: runControls.shouldStartProviderTurn,
         shouldFinalizeRun: runControls.shouldFinalizeRun,
         hasUnpairedRunInterruptRequest: runControls.hasUnpairedRunInterruptRequest,

@@ -66,8 +66,8 @@ export function SubagentTooltipContent(props: {
         props.provider.driver,
         childSelection?.model,
         props.provider.models,
-      ) ?? childSelection?.model.trim())
-    : childSelection?.model.trim();
+      ) ?? childSelection?.model?.trim())
+    : childSelection?.model?.trim();
   const provider = props.provider;
   const matchingSelection =
     childModel === (modelSlug ?? model) && childSelection?.instanceId === props.providerInstanceId

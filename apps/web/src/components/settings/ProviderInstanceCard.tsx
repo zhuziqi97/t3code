@@ -13,8 +13,7 @@ import {
   XIcon,
 } from "lucide-react";
 import { Lock as LockGlyph, LockOpen } from "lucide";
-import * as Arr from "effect/Array";
-import * as Result from "effect/Result";
+
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import {
   isProviderDriverKind,
@@ -33,6 +32,7 @@ import {
 import {
   type CustomModelDefinition,
   readCustomModelEntries,
+  mergeCustomModels,
   toCustomModelSetting,
 } from "@t3tools/shared/model";
 import { cn } from "../../lib/utils";
@@ -172,20 +172,10 @@ export function deriveProviderModelsForDisplay(input: {
   readonly liveModels: ReadonlyArray<ServerProviderModel> | undefined;
   readonly customModels: ReadonlyArray<CustomModelDefinition>;
 }): ReadonlyArray<ServerProviderModel> {
-  const liveCustomModelsBySlug = new Map(
-    Arr.filterMap(input.liveModels ?? [], (model) =>
-      model.isCustom ? Result.succeed([model.slug, model] as const) : Result.failVoid,
-    ),
+  return mergeCustomModels(
+    input.liveModels?.filter((model) => !model.isCustom) ?? [],
+    input.customModels,
   );
-  const serverModels = input.liveModels?.filter((model) => !model.isCustom) ?? [];
-  const customModels = input.customModels.map((entry) => ({
-    slug: entry.slug,
-    name: entry.name,
-    isCustom: true,
-    capabilities:
-      entry.capabilities ?? liveCustomModelsBySlug.get(entry.slug)?.capabilities ?? null,
-  }));
-  return [...serverModels, ...customModels];
 }
 
 function ProviderAuthEmail(props: { readonly email: string | undefined }) {
@@ -645,8 +635,7 @@ export function ProviderInstanceCard({
   const driverKind: ProviderDriverKind | null = isProviderDriverKind(instance.driver)
     ? instance.driver
     : null;
-  const customModels =
-    instance.driver === "antigravity" ? [] : readConfigCustomModels(instance.config);
+  const customModels = readConfigCustomModels(instance.config);
   // Server-returned models may lag behind settings writes. Treat server
   // models as the source for built-ins only; custom rows come directly
   // from the current instance config so add/remove reflects immediately.

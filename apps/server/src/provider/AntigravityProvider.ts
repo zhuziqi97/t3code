@@ -7,7 +7,7 @@ import {
   type ServerProviderModel,
   type ServerProviderSlashCommand,
 } from "@t3tools/contracts";
-import { createModelCapabilities } from "@t3tools/shared/model";
+import { mergeCustomModels, createModelCapabilities } from "@t3tools/shared/model";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -139,7 +139,7 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
       presentation: { displayName: "Antigravity", showInteractionModeToggle: false },
       enabled: settings.enabled,
       checkedAt,
-      models: [],
+      models: mergeCustomModels([], settings.customModels),
       probe: {
         installed: false,
         version: null,
@@ -214,7 +214,7 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
           checkedAt: updatedAt,
           ...(missingInstallation
             ? {
-                models: [],
+                models: mergeCustomModels([], settings.customModels),
                 slashCommands: [],
                 skills: [],
                 workspaceSnapshots: [],
@@ -285,7 +285,10 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
             label: options.auth?.label ?? "Google account",
           },
           checkedAt: updatedAt,
-          models: buildAntigravityModelsFromSession(started.sessionSetupResult),
+          models: mergeCustomModels(
+            buildAntigravityModelsFromSession(started.sessionSetupResult),
+            settings.customModels,
+          ),
           supportsTextGeneration,
           ...(cwd
             ? {
@@ -308,7 +311,10 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
   const onConfigOptionsUpdated = Effect.fn("AntigravityProvider.onConfigOptionsUpdated")(function* (
     configOptions: ReadonlyArray<EffectAcpSchema.SessionConfigOption>,
   ) {
-    const models = buildAntigravityModelsFromSession({ configOptions });
+    const models = mergeCustomModels(
+      buildAntigravityModelsFromSession({ configOptions }),
+      settings.customModels,
+    );
     yield* SubscriptionRef.update(metadata, (state) => {
       if (state.draft.auth.status !== "authenticated") return state;
       return { ...state, draft: { ...state.draft, models } };
@@ -362,7 +368,7 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
             status: settings.enabled ? "warning" : "disabled",
             message: SIGN_IN_MESSAGE,
             checkedAt: updatedAt,
-            models: [],
+            models: mergeCustomModels([], settings.customModels),
             slashCommands: [],
             skills: [],
             workspaceSnapshots: [],

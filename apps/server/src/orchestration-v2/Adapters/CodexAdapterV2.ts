@@ -700,6 +700,10 @@ function codexRuntimeModeTurnDefaults(runtimeMode: RuntimeMode): {
 
 export function buildCodexTurnStartParams(input: {
   readonly nativeThreadId: string;
+  readonly resolvedModel?: string;
+  readonly resolvedReasoningEffort?: string;
+  readonly resolvedServiceTier?: string;
+  readonly resetUnspecifiedOptions?: boolean;
   readonly codexInput: ReadonlyArray<CodexSchema.V2TurnStartParams__UserInput>;
   readonly runtimePolicy: ProviderAdapter.ProviderAdapterV2RuntimePolicy;
   readonly modelSelection: ModelSelection;
@@ -725,12 +729,21 @@ export function buildCodexTurnStartParams(input: {
       input.modelSelection,
       "reasoningEffort",
     );
+    const nativeEffort = input.resolvedReasoningEffort;
     const effort =
-      selectedEffort === undefined ? undefined : yield* decodeTurnReasoningEffort(selectedEffort);
+      selectedEffort === undefined
+        ? input.resetUnspecifiedOptions
+          ? nativeEffort === undefined
+            ? null
+            : yield* decodeTurnReasoningEffort(nativeEffort)
+          : undefined
+        : yield* decodeTurnReasoningEffort(selectedEffort);
+    const collaborationEffort = selectedEffort ?? nativeEffort;
     const serviceTier =
       input.omitServiceTier === true
         ? undefined
-        : getCodexServiceTierOptionValue(input.modelSelection);
+        : (getCodexServiceTierOptionValue(input.modelSelection) ??
+          (input.resetUnspecifiedOptions ? (input.resolvedServiceTier ?? null) : undefined));
     const developerInstructions =
       input.hasT3Mcp !== true
         ? undefined
@@ -747,7 +760,10 @@ export function buildCodexTurnStartParams(input: {
     const t3Context =
       input.hasT3Mcp === true
         ? buildCodexAdditionalContext(
-            { model: input.modelSelection.model, reasoningEffort: effort ?? "medium" },
+            {
+              model: input.modelSelection.model ?? input.resolvedModel ?? "",
+              reasoningEffort: effort ?? nativeEffort,
+            },
             {
               browser: input.browserToolsAvailable ?? true,
               device: input.deviceToolsAvailable ?? false,
@@ -758,14 +774,27 @@ export function buildCodexTurnStartParams(input: {
       t3Context === undefined && Object.keys(appContext).length === 0
         ? undefined
         : { ...t3Context, ...appContext };
+    if (
+      (input.runtimePolicy.interactionMode === "plan" || developerInstructions !== undefined) &&
+      input.modelSelection.model === null &&
+      !input.resolvedModel
+    ) {
+      return yield* new ProviderAdapter.ProviderAdapterProtocolError({
+        driver: CODEX_PROVIDER,
+        detail: "Codex did not report its current model for collaboration mode.",
+      });
+    }
     const collaborationMode: CodexSchema.ClientRequest__CollaborationMode | undefined =
       input.runtimePolicy.interactionMode !== "plan" && developerInstructions === undefined
         ? undefined
         : {
             mode: input.runtimePolicy.interactionMode === "plan" ? "plan" : "default",
             settings: {
-              model: input.modelSelection.model,
-              reasoning_effort: effort ?? "medium",
+              model: input.modelSelection.model ?? input.resolvedModel ?? "",
+              reasoning_effort:
+                collaborationEffort === undefined
+                  ? null
+                  : yield* decodeTurnReasoningEffort(collaborationEffort),
               ...(developerInstructions === undefined
                 ? {}
                 : { developer_instructions: developerInstructions }),
@@ -777,7 +806,7 @@ export function buildCodexTurnStartParams(input: {
       input: input.codexInput,
       ...(additionalContext ? { additionalContext } : {}),
       cwd: input.runtimePolicy.cwd,
-      model: input.modelSelection.model,
+      ...(input.modelSelection.model === null ? {} : { model: input.modelSelection.model }),
       // Model catalogues can default summaries to "none". Request them on every
       // turn, including resumed threads, for T3's reasoning timeline.
       summary: "detailed",
@@ -797,7 +826,7 @@ function providerSession(input: {
   readonly providerSessionId: OrchestrationV2ProviderSession["id"];
   readonly providerInstanceId: ProviderInstanceId;
   readonly cwd: string | null;
-  readonly model: string;
+  readonly model: string | null;
   readonly now: DateTime.Utc;
 }): OrchestrationV2ProviderSession {
   return {
@@ -832,6 +861,8 @@ function providerThreadFromCodexThread(input: {
   readonly ownerNodeId: OrchestrationV2ProviderThread["ownerNodeId"];
   readonly providerSessionId: OrchestrationV2ProviderThread["providerSessionId"];
   readonly providerInstanceId: ProviderInstanceId;
+  readonly model?: string;
+  readonly reasoningEffort?: string | null | undefined;
   readonly thread: {
     readonly createdAt: number;
     readonly forkedFromId?: string | null;
@@ -856,6 +887,19 @@ function providerThreadFromCodexThread(input: {
       strength: "strong" as const,
     },
     nativeConversationHeadRef: null,
+    ...(input.model == null
+      ? {}
+      : {
+          nativeMetadata: {
+            modelSelection: {
+              instanceId: input.providerInstanceId,
+              model: input.model,
+              ...(input.reasoningEffort == null
+                ? { options: [] }
+                : { options: [{ id: "reasoningEffort", value: input.reasoningEffort }] }),
+            },
+          },
+        }),
     status: "idle",
     firstRunOrdinal: null,
     lastRunOrdinal: null,
@@ -1298,7 +1342,7 @@ export const CODEX_THREAD_CONFIG = { "tools.update_plan.enabled": true } as cons
 
 export function codexThreadRuntimeParams(input: {
   readonly mcpSession: McpProviderSession.McpProviderSessionConfig | undefined;
-  readonly modelSelection?: { readonly model: string };
+  readonly modelSelection?: { readonly model: string | null };
   readonly runtimePolicy?: ProviderAdapter.ProviderAdapterV2RuntimePolicy;
 }): {
   readonly cwd?: string;
@@ -1308,7 +1352,7 @@ export function codexThreadRuntimeParams(input: {
   const { mcpSession } = input;
   return {
     ...(input.runtimePolicy?.cwd == null ? {} : { cwd: input.runtimePolicy.cwd }),
-    ...(input.modelSelection === undefined ? {} : { model: input.modelSelection.model }),
+    ...(input.modelSelection?.model == null ? {} : { model: input.modelSelection.model }),
     config: {
       ...CODEX_THREAD_CONFIG,
       ...(mcpSession === undefined
@@ -6181,11 +6225,58 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           Effect.gen(function* () {
             const threadId = yield* getNativeThreadId(turnInput.providerThread);
             const mcpSession = yield* mcpSessions.read(turnInput.threadId);
+            let dispatchSelection = turnInput.modelSelection;
+            const selectionChanged =
+              turnInput.previousModelSelection !== undefined &&
+              !modelSelectionsEqual(turnInput.previousModelSelection, dispatchSelection);
+            const configuration = selectionChanged
+              ? yield* client.request("config/read", {
+                  cwd: turnInput.runtimePolicy.cwd,
+                  includeLayers: false,
+                })
+              : undefined;
+            if (
+              dispatchSelection.model === null &&
+              turnInput.previousModelSelection?.model != null
+            ) {
+              const defaultModel =
+                configuration?.config.model ??
+                (yield* client.request("model/list", {})).data.find((model) => model.isDefault)
+                  ?.model;
+              if (!defaultModel)
+                return yield* new ProviderAdapter.ProviderAdapterProtocolError({
+                  driver: CODEX_PROVIDER,
+                  detail: "Codex did not report its native default model.",
+                });
+              dispatchSelection = { ...dispatchSelection, model: defaultModel };
+            }
+            const nativeState =
+              dispatchSelection.model === null
+                ? (yield* client.request("thread/read", { threadId, includeTurns: false })).thread
+                : undefined;
+            // Standard thread/read replies omit the model; start/resume report it.
+            const nativeModel =
+              nativeState?.model ?? turnInput.providerThread.nativeMetadata?.modelSelection?.model;
+            const nativeEffort =
+              (selectionChanged
+                ? configuration?.config.model_reasoning_effort
+                : (nativeState?.reasoningEffort ??
+                  getModelSelectionStringOptionValue(
+                    turnInput.providerThread.nativeMetadata?.modelSelection,
+                    "reasoningEffort",
+                  ))) ?? undefined;
+            const nativeServiceTier = configuration?.config.service_tier ?? undefined;
             const turnStartParams = yield* buildCodexTurnStartParams({
+              ...(nativeModel == null ? {} : { resolvedModel: nativeModel }),
+              ...(nativeEffort == null ? {} : { resolvedReasoningEffort: nativeEffort }),
+              ...(nativeServiceTier === undefined
+                ? {}
+                : { resolvedServiceTier: nativeServiceTier }),
+              resetUnspecifiedOptions: selectionChanged,
               nativeThreadId: threadId,
               codexInput,
               runtimePolicy: turnInput.runtimePolicy,
-              modelSelection: turnInput.modelSelection,
+              modelSelection: dispatchSelection,
               hasT3Mcp: mcpSession !== undefined,
               browserToolsAvailable: mcpSession?.browserToolsAvailable ?? true,
               deviceToolsAvailable: mcpSession?.capabilities?.has("device") ?? false,
@@ -6205,8 +6296,35 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               return next;
             });
             const started = yield* client.request("turn/start", turnStartParams);
+            let reportedThread = turnInput.providerThread;
+            const reportedModel = dispatchSelection.model ?? nativeModel;
+            if (reportedModel && (turnInput.modelSelection.model === null || selectionChanged)) {
+              const reportedEffort =
+                getModelSelectionStringOptionValue(dispatchSelection, "reasoningEffort") ??
+                nativeEffort;
+              reportedThread = {
+                ...reportedThread,
+                nativeMetadata: {
+                  ...reportedThread.nativeMetadata,
+                  modelSelection: {
+                    instanceId: adapterOptions.instanceId,
+                    model: reportedModel,
+                    options:
+                      reportedEffort === undefined
+                        ? []
+                        : [{ id: "reasoningEffort", value: reportedEffort }],
+                  },
+                },
+                updatedAt: yield* DateTime.now,
+              };
+              yield* emitProviderEvent({
+                type: "provider_thread.updated",
+                driver: CODEX_PROVIDER,
+                providerThread: reportedThread,
+              });
+            }
             yield* registerRootTurn({
-              turnInput,
+              turnInput: { ...turnInput, providerThread: reportedThread },
               nativeTurnId: started.turn.id,
               startedAt: codexTimestamp(started.turn.startedAt),
               waitForNativeStart: started.turn.startedAt === null,
@@ -6478,6 +6596,8 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                   providerSessionId: input.providerSessionId,
                   providerInstanceId: adapterOptions.instanceId,
                   thread: response.thread,
+                  model: response.model,
+                  reasoningEffort: response.reasoningEffort,
                 }),
               ),
               Effect.mapError(
@@ -7331,6 +7451,8 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                 providerSessionId: input.providerSessionId,
                 providerInstanceId: adapterOptions.instanceId,
                 thread: forkedThread,
+                model: response.model,
+                reasoningEffort: response.reasoningEffort,
                 forkedFrom: {
                   providerThreadId: threadInput.sourceProviderThread.id,
                   ...(threadInput.providerTurnId === undefined

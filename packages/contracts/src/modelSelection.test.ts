@@ -122,3 +122,18 @@ it.effect(
       assert.deepStrictEqual(encoded.options, decoded.options);
     }),
 );
+
+it.effect("round trips the agent default without selecting a concrete model", () =>
+  Effect.gen(function* () {
+    const selection = yield* decodeModelSelection({
+      instanceId: "claude_gateway",
+      model: null,
+      options: [{ id: "effort", value: "high" }],
+    });
+    assert.deepStrictEqual(yield* encodeModelSelection(selection), {
+      instanceId: "claude_gateway",
+      model: null,
+      options: [{ id: "effort", value: "high" }],
+    });
+  }),
+);

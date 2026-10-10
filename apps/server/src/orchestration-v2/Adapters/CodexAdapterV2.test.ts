@@ -518,6 +518,37 @@ describe("CodexAdapterV2 runtime policy", () => {
     }),
   );
 
+  it.effect("clears old effort and fast tier when a new selection has no overrides", () =>
+    Effect.gen(function* () {
+      const params = yield* CodexAdapterV2.buildCodexTurnStartParams({
+        nativeThreadId: "switch-model",
+        codexInput: [{ type: "text", text: "hello" }],
+        runtimePolicy: { runtimeMode: "full-access", interactionMode: "default", cwd: null },
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "new-native-model" },
+        resetUnspecifiedOptions: true,
+      });
+      assert.isNull(params.effort);
+      assert.isNull(params.serviceTier);
+      assert.equal(params.model, "new-native-model");
+    }),
+  );
+  it.effect("leaves model unset when following the native default", () =>
+    Effect.gen(function* () {
+      const params = yield* CodexAdapterV2.buildCodexTurnStartParams({
+        nativeThreadId: "native-default",
+        codexInput: [{ type: "text", text: "hello" }],
+        runtimePolicy: { runtimeMode: "full-access", interactionMode: "default", cwd: null },
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: null },
+        hasT3Mcp: true,
+        resolvedModel: "native-account-model",
+        resolvedReasoningEffort: "xhigh",
+      });
+      assert.isUndefined(params.model);
+      assert.equal(params.collaborationMode?.settings.model, "native-account-model");
+      assert.equal(params.collaborationMode?.settings.reasoning_effort, "xhigh");
+    }),
+  );
+
   it.effect("omits default-mode collaboration settings without the T3 MCP server", () =>
     Effect.gen(function* () {
       const params = yield* CodexAdapterV2.buildCodexTurnStartParams({
@@ -1925,6 +1956,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
       Effect.void,
     onRequest: (method: string, params: unknown) => Effect.Effect<void> = () => Effect.void,
     readChildMetadata?: Parameters<typeof withCodexReplayChildMetadata>[2],
+    selection: ModelSelection = CODEX_TEST_MODEL_SELECTION,
   ) =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
@@ -1983,12 +2015,12 @@ describe("CodexAdapterV2 post-settle continuation", () => {
       const runtime = yield* adapter.openSession({
         threadId,
         providerSessionId: ProviderSessionId.make(`provider-session-${transcript.scenario}`),
-        modelSelection: CODEX_TEST_MODEL_SELECTION,
+        modelSelection: selection,
         runtimePolicy: CODEX_TEST_RUNTIME_POLICY,
       });
       const providerThread = yield* runtime.ensureThread({
         threadId,
-        modelSelection: CODEX_TEST_MODEL_SELECTION,
+        modelSelection: selection,
         runtimePolicy: CODEX_TEST_RUNTIME_POLICY,
       });
       const events: Array<ProviderAdapter.ProviderAdapterV2Event> = [];
@@ -2745,6 +2777,131 @@ describe("CodexAdapterV2 post-settle continuation", () => {
     ),
   );
 
+  it.effect("starts a native default with T3 context when thread/read omits its model", () =>
+    Effect.gen(function* () {
+      const nativeThreadId = "native-default-context-thread";
+      const nativeTurnId = "native-default-context-turn";
+      const selection: ModelSelection = { ...CODEX_TEST_MODEL_SELECTION, model: null };
+      const params = yield* CodexAdapterV2.buildCodexTurnStartParams({
+        nativeThreadId,
+        codexInput: [{ type: "text", text: "work" }],
+        runtimePolicy: CODEX_TEST_RUNTIME_POLICY,
+        modelSelection: selection,
+        resolvedModel: "gpt-5.4",
+        resolvedReasoningEffort: "medium",
+        hasT3Mcp: true,
+      });
+      const entries = codexReplayPreamble({ nativeThreadId, nativeTurnId, prompt: "work" });
+      const startFrame = (
+        entries[4] as {
+          readonly frame: { readonly result: { readonly thread: unknown } };
+        }
+      ).frame;
+      const transcript = makeCodexReplayTranscript({
+        scenario: "native-default-context",
+        entries: [
+          ...entries.slice(0, 5),
+          {
+            type: "expect_outbound",
+            label: "read current thread",
+            frame: {
+              id: 3,
+              method: "thread/read",
+              params: { threadId: nativeThreadId, includeTurns: false },
+            },
+          },
+          {
+            type: "emit_inbound",
+            label: "thread without model",
+            frame: { id: 3, result: { thread: startFrame.result.thread } },
+          },
+          {
+            type: "expect_outbound",
+            label: "start with native model context",
+            frame: {
+              id: 4,
+              method: "turn/start",
+              params,
+            },
+          },
+          {
+            type: "emit_inbound",
+            label: "turn accepted",
+            frame: {
+              id: 4,
+              result: { turn: makeCodexReplayTurn({ id: nativeTurnId, status: "inProgress" }) },
+            },
+          },
+          ...entries.slice(7),
+          {
+            type: "emit_inbound",
+            label: "done",
+            frame: {
+              method: "turn/completed",
+              params: {
+                threadId: nativeThreadId,
+                turn: makeCodexReplayTurn({ id: nativeTurnId, status: "completed" }),
+              },
+            },
+          },
+        ],
+      });
+      const requests: Array<{ method: string; params: unknown }> = [];
+      const harness = yield* makeCodexReplayHarness(
+        transcript,
+        () => Effect.void,
+        (method, params) =>
+          Effect.sync(() => {
+            requests.push({ method, params });
+          }),
+        undefined,
+        selection,
+      );
+      yield* (yield* McpProviderSessions.McpProviderSessions).set({
+        environmentId: EnvironmentId.make("test"),
+        threadId: harness.threadId,
+        providerSessionId: "native-default-context-session",
+        providerInstanceId: selection.instanceId,
+        endpoint: "http://127.0.0.1:43123/mcp",
+        authorizationHeader: "Bearer test",
+        browserToolsAvailable: true,
+      });
+      const turn = makeCodexTestTurnInput({
+        threadId: harness.threadId,
+        providerThread: harness.providerThread,
+        now: yield* DateTime.now,
+        attemptId: RunAttemptId.make("native-default-context-attempt"),
+        text: "work",
+      });
+      yield* harness.runtime.startTurn({
+        ...turn,
+        modelSelection: selection,
+        appThread: { ...turn.appThread, modelSelection: selection },
+      });
+      yield* harness.firstTerminal;
+      const start = requests.find((request) => request.method === "thread/start")?.params as Record<
+        string,
+        unknown
+      >;
+      const dispatched = requests.find((request) => request.method === "turn/start")?.params as {
+        readonly model?: string;
+        readonly collaborationMode?: {
+          readonly settings: { readonly model: string; readonly reasoning_effort: string };
+        };
+      };
+      assert.isUndefined(start.model);
+      assert.isUndefined(dispatched.model);
+      assert.equal(dispatched.collaborationMode?.settings.model, "gpt-5.4");
+      assert.equal(dispatched.collaborationMode?.settings.reasoning_effort, "medium");
+      assert.equal(harness.terminalEvents()[0]?.status, "completed");
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),
+      ),
+    ),
+  );
+
   it.effect("preserves T3 context on the wire and restores it after compaction", () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -2756,6 +2913,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
           runtimePolicy: CODEX_TEST_RUNTIME_POLICY,
           modelSelection: CODEX_TEST_MODEL_SELECTION,
           hasT3Mcp: true,
+          resolvedReasoningEffort: "medium",
         });
         assert.include(
           params.additionalContext?.t3_code_orchestration?.value ?? "",

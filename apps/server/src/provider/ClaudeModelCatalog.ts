@@ -1,3 +1,4 @@
+import type { ModelInfo } from "@anthropic-ai/claude-agent-sdk";
 import {
   type CustomModelSetting,
   type ModelCapabilities,
@@ -12,6 +13,7 @@ import {
   getProviderOptionCurrentValue,
   getProviderOptionDescriptors,
   readCustomModelEntries,
+  mergeCustomModels,
 } from "@t3tools/shared/model";
 import { compareSemverVersions } from "@t3tools/shared/semver";
 
@@ -30,6 +32,7 @@ const EMPTY_CAPABILITIES: ModelCapabilities = { optionDescriptors: [] };
 export interface ClaudeCatalogModel {
   readonly model: ServerProviderModel;
   readonly runtime: ClaudeCodeProfile;
+  readonly customContextWindowTokens?: number;
   readonly compatibility: ClaudeCodeCompatibility;
 }
 
@@ -109,23 +112,71 @@ export function scopeClaudeModelCatalog(
       },
     };
   });
-  const builtInSlugs = new Set(builtInModels.map((entry) => entry.model.slug));
-  const customCatalogModels: Array<ClaudeCatalogModel> = [];
-  for (const entry of customEntries) {
-    if (!entry.capabilities || builtInSlugs.has(entry.slug)) continue;
-    customCatalogModels.push({
-      model: {
-        slug: entry.slug,
-        name: entry.name,
-        isCustom: true,
-        capabilities: entry.capabilities,
-      },
-      runtime: {},
-      compatibility: {},
-    });
-  }
+  const merged = mergeCustomModels(
+    builtInModels.map((entry) => entry.model),
+    customModels,
+  );
+  return {
+    models: merged.map((model) => {
+      const previous = builtInModels.find((entry) => entry.model.slug === model.slug);
+      const customContextWindowTokens = customEntries.find(
+        (entry) => entry.slug === model.slug,
+      )?.contextWindowTokens;
+      return {
+        model,
+        runtime: previous?.runtime ?? {},
+        compatibility: previous?.compatibility ?? {},
+        ...(customContextWindowTokens === undefined ? {} : { customContextWindowTokens }),
+      };
+    }),
+  };
+}
 
-  return { models: [...builtInModels, ...customCatalogModels] };
+/** Native values remain opaque: aliases and gateway ids are dispatched to Claude verbatim. */
+export function withClaudeReportedModels(
+  catalog: ClaudeModelCatalog,
+  reported: ReadonlyArray<ModelInfo>,
+): ClaudeModelCatalog {
+  const models = [...catalog.models];
+  for (const info of reported) {
+    if (!info.value || info.value === "default") continue;
+    const prior = models.find(
+      (entry) =>
+        entry.model.slug === info.value ||
+        entry.model.slug === info.resolvedModel ||
+        entry.model.aliases?.includes(info.value),
+    );
+    const descriptors = new Map(
+      (prior?.model.capabilities?.optionDescriptors ?? []).map((d) => [d.id, d]),
+    );
+    if (info.supportsEffort === false) descriptors.delete("effort");
+    if (info.supportsFastMode === false) descriptors.delete("fastMode");
+    if (info.supportsEffort && info.supportedEffortLevels?.length)
+      descriptors.set("effort", {
+        id: "effort",
+        label: "Effort",
+        type: "select",
+        options: info.supportedEffortLevels.map((value) => ({ id: value, label: value })),
+      });
+    if (info.supportsAdaptiveThinking)
+      descriptors.set("thinking", { id: "thinking", label: "Thinking", type: "boolean" });
+    if (info.supportsFastMode)
+      descriptors.set("fastMode", { id: "fastMode", label: "Fast mode", type: "boolean" });
+    const nativeEntry: ClaudeCatalogModel = {
+      model: {
+        slug: info.value,
+        name: info.displayName || info.value,
+        isCustom: false,
+        capabilities: { optionDescriptors: [...descriptors.values()] },
+      },
+      runtime: prior?.runtime ?? {},
+      compatibility: {},
+    };
+    const index = models.findIndex((entry) => entry.model.slug === info.value);
+    if (index >= 0) models[index] = nativeEntry;
+    else models.push(nativeEntry);
+  }
+  return { models };
 }
 
 function resolveClaudeCatalogModel(
@@ -268,9 +319,10 @@ function resolveClaudeCatalogContextWindow(
 export function resolveClaudeCatalogApiModelId(
   catalog: ClaudeModelCatalog,
   modelSelection: ModelSelection,
-): string {
+): string | undefined {
+  if (modelSelection.model === null) return undefined;
   const entry = resolveClaudeCatalogModel(catalog, modelSelection.model);
-  const slug = entry?.model.slug ?? modelSelection.model;
+  const slug = modelSelection.model;
   const descriptors = getProviderOptionDescriptors({
     caps: entry?.model.capabilities ?? EMPTY_CAPABILITIES,
     selections: modelSelection.options,
@@ -290,7 +342,19 @@ export function resolveClaudeCatalogContextWindowTokens(
 ): number | undefined {
   const entry = resolveClaudeCatalogModel(catalog, modelSelection?.model);
   if (!entry) return undefined;
+  if (entry.customContextWindowTokens !== undefined) return entry.customContextWindowTokens;
   if (entry.runtime.fixedContextWindowTokens) return entry.runtime.fixedContextWindowTokens;
   const contextWindow = resolveClaudeCatalogContextWindow(catalog, modelSelection);
   return contextWindow ? entry.runtime.contextWindowTokens?.[contextWindow] : undefined;
+}
+
+/** Only settings-owned per-model allowances override the native process setting. */
+export function resolveClaudeCatalogCustomContextWindowTokens(
+  catalog: ClaudeModelCatalog,
+  selection: ModelSelection,
+): number | undefined {
+  return selection.model === null
+    ? undefined
+    : catalog.models.find((entry) => entry.model.slug === selection.model)
+        ?.customContextWindowTokens;
 }

@@ -2413,6 +2413,15 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
           const message = event.properties.info;
           state.messageRoles.set(message.id, message.role);
           if (message.role === "assistant") {
+            const actualModel = `${message.providerID}/${message.modelID}`;
+            if (state.providerThread.nativeMetadata?.modelSelection?.model !== actualModel) {
+              yield* updateProviderThread(state, {
+                nativeMetadata: {
+                  ...state.providerThread.nativeMetadata,
+                  modelSelection: { instanceId: options.instanceId, model: actualModel },
+                },
+              });
+            }
             const usage = state.activeTurn?.usage;
             if (usage === undefined) return;
             const prior = usage.assistantOwnershipByMessageId.get(message.id);
@@ -3138,17 +3147,34 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
                   `OpenCode provider thread ${turnInput.providerThread.id} already has an active turn`,
                 );
               }
-              const parsedModel = OpenCodeRuntime.parseOpenCodeModelSlug(
-                turnInput.modelSelection.model,
-              );
+              let parsedModel =
+                turnInput.modelSelection.model === null
+                  ? undefined
+                  : OpenCodeRuntime.parseOpenCodeModelSlug(turnInput.modelSelection.model);
               if (parsedModel === null) {
                 return yield* protocolError(
                   `OpenCode model '${turnInput.modelSelection.model}' must use provider/model format`,
                 );
               }
+              if (
+                turnInput.modelSelection.model === null &&
+                turnInput.previousModelSelection?.model != null
+              ) {
+                parsedModel = yield* OpenCodeRuntime.readOpenCodeNativeDefault(
+                  client,
+                  getModelSelectionStringOptionValue(turnInput.modelSelection, "agent"),
+                );
+              }
               const isCompaction =
                 turnInput.message.text.trim() === "/compact" &&
                 turnInput.message.attachments.length === 0;
+              if (isCompaction && parsedModel === undefined) {
+                const current = state.providerThread.nativeMetadata?.modelSelection?.model;
+                parsedModel = current
+                  ? (OpenCodeRuntime.parseOpenCodeModelSlug(current) ?? undefined)
+                  : undefined;
+                parsedModel ??= yield* OpenCodeRuntime.readOpenCodeNativeDefault(client);
+              }
               const parts = isCompaction ? [] : resolvePromptParts(turnInput);
               const startedAt = yield* DateTime.now;
               const syntheticNativeTurnId = `${sessionId}:attempt:${turnInput.attemptId}`;
@@ -3280,7 +3306,7 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
                 {
                   sessionID: sessionId,
                   messageID: turn.admissionMessageId!,
-                  model: parsedModel,
+                  ...(parsedModel === undefined ? {} : { model: parsedModel }),
                   ...(agent === undefined ? {} : { agent }),
                   ...(variant === undefined ? {} : { variant }),
                   system: systemPrompt,
@@ -3343,7 +3369,10 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
                   `OpenCode turn ${steerInput.providerTurnId} is not active`,
                 );
               }
-              const parsedModel = OpenCodeRuntime.parseOpenCodeModelSlug(turn.modelSelection.model);
+              const parsedModel =
+                turn.modelSelection.model === null
+                  ? undefined
+                  : OpenCodeRuntime.parseOpenCodeModelSlug(turn.modelSelection.model);
               if (parsedModel === null) {
                 return yield* protocolError(
                   `OpenCode model '${turn.modelSelection.model}' must use provider/model format`,
@@ -3383,7 +3412,7 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
                 {
                   sessionID: sessionId,
                   messageID: turn.admissionMessageId,
-                  model: parsedModel,
+                  ...(parsedModel === undefined ? {} : { model: parsedModel }),
                   parts,
                 },
                 admissionAbortController!,

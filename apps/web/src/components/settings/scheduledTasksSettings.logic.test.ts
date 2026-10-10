@@ -288,23 +288,33 @@ describe("scheduled task model defaults", () => {
       ),
     ).toEqual(projectSelection);
   });
-  it("uses the advertised default instead of catalog order when no default is configured", () => {
+  it("follows native default when no default is configured", () => {
     expect(
       resolve({ ...config, settings: { ...config.settings, defaultModelSelection: null } }, null),
-    ).toEqual({ instanceId, model: "catalog-default" });
+    ).toEqual({ instanceId, model: null });
   });
-  it("falls back to the environment default when the project provider is unavailable", () => {
+  it("preserves the project choice when its provider is unavailable", () => {
     expect(
-      resolve(config, {
-        id: projectId,
-        defaultModelSelection: {
-          instanceId: ProviderInstanceId.make("unavailable"),
-          model: "missing",
+      resolve(
+        {
+          ...config,
+          settings: {
+            ...config.settings,
+            projectSettingsOverrides: {
+              [projectId]: {
+                defaultModelSelection: {
+                  instanceId: ProviderInstanceId.make("unavailable"),
+                  model: "missing",
+                },
+              },
+            },
+          },
         },
-      }),
-    ).toEqual(environmentSelection);
+        { id: projectId },
+      ),
+    ).toEqual({ instanceId: "unavailable", model: "missing" });
   });
-  it("does not choose an implicit model on a disabled provider", () => {
+  it("preserves an explicit model on a disabled provider", () => {
     expect(
       resolve(
         {
@@ -313,6 +323,6 @@ describe("scheduled task model defaults", () => {
         },
         null,
       ),
-    ).toBeNull();
+    ).toEqual(environmentSelection);
   });
 });

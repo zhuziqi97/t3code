@@ -182,9 +182,7 @@ function withFakeClaudeEnv<A, E, R>(
     );
 
     const config = decodeClaudeSettings(input.claudeConfig ?? {});
-    const textGeneration = yield* makeClaudeTextGeneration(
-      config,
-      undefined,
+    const textGeneration = yield* makeClaudeTextGeneration(config, undefined, () =>
       Effect.succeed(SYNTHETIC_CLAUDE_MODEL_CATALOG),
     );
     return yield* effectFn(textGeneration);
@@ -192,7 +190,7 @@ function withFakeClaudeEnv<A, E, R>(
 }
 
 it.layer(layerClaudeTextGenerationTest)("ClaudeTextGeneration", (it) => {
-  it.effect("forwards Claude thinking settings without passing unsupported effort", () =>
+  it.effect("forwards explicit Claude thinking and effort settings", () =>
     withFakeClaudeEnv(
       {
         output: JSON.stringify({
@@ -201,8 +199,8 @@ it.layer(layerClaudeTextGenerationTest)("ClaudeTextGeneration", (it) => {
             body: "",
           },
         }),
-        argsMustContain: '--settings {"disableAllHooks":true,"alwaysThinkingEnabled":false}',
-        argsMustNotContain: "--effort",
+        argsMustContain:
+          '--effort high --settings {"disableAllHooks":true,"alwaysThinkingEnabled":false}',
       },
       (textGeneration) =>
         Effect.gen(function* () {
@@ -237,7 +235,7 @@ it.layer(layerClaudeTextGenerationTest)("ClaudeTextGeneration", (it) => {
             body: "",
           },
         }),
-        argsMustContain: `--model ${SYNTHETIC_CLAUDE_COLLIDING_ALIAS} --settings`,
+        argsMustContain: `--model ${SYNTHETIC_CLAUDE_COLLIDING_ALIAS} --effort max --settings`,
         claudeConfig: { customModels: [SYNTHETIC_CLAUDE_COLLIDING_ALIAS] },
       },
       (textGeneration) =>

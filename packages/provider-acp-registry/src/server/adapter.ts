@@ -21,6 +21,7 @@ import * as EffectAcpErrors from "effect-acp/errors";
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import {
+  probeAcpRegistryConfiguration,
   normalizeAcpRegistryCommands,
   normalizeAcpRegistryLiveConfiguration,
   normalizeAcpRegistryWebUrl,
@@ -178,6 +179,9 @@ export const makeAcpRegistryAdapterV2 = Effect.fn("makeAcpRegistryAdapterV2")(fu
   const runtimeCoordinator = Option.getOrUndefined(
     yield* Effect.serviceOption(AcpRegistryRuntimeCoordinator.AcpRegistryRuntimeCoordinator),
   );
+  const probeServices = yield* Effect.context<
+    AcpRegistrySupport.AcpRegistryCatalog | ChildProcessSpawner.ChildProcessSpawner | Crypto.Crypto
+  >();
   const registryAgentId = options.settings.source === "local" ? "" : options.settings.agentId;
   const startupKey =
     options.settings.source === "local" ? `local:${options.instanceId}` : registryAgentId;
@@ -185,6 +189,17 @@ export const makeAcpRegistryAdapterV2 = Effect.fn("makeAcpRegistryAdapterV2")(fu
   const flavor: AcpAdapterV2Flavor = {
     driver: ACP_REGISTRY_PROVIDER,
     capabilities: AcpProviderCapabilitiesV2,
+    nativeDefaultModel: (cwd) =>
+      probeAcpRegistryConfiguration({
+        instanceId: options.instanceId,
+        settings: options.settings,
+        cwd,
+        environment: options.environment,
+      }).pipe(
+        Effect.map((result) => result.probe.currentModelId ?? undefined),
+        Effect.mapError((cause) => EffectAcpErrors.AcpRequestError.invalidParams(cause.message)),
+        Effect.provide(probeServices),
+      ),
     promptFailure: (cause) => acpRegistryPromptFailure(registryAgentId, cause),
     // Per-agent exceptions (Mistral Vibe, Devin): see the note above
     // registerMistralVibeAcpExtensions before adding any more.

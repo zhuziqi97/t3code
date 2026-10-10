@@ -1351,7 +1351,9 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                         provider={providerSubagentProvider ?? null}
                         modelLabel={
                           providerSubagentCatalogModel?.name ??
-                          formatModelSlugName(props.selectedThread.modelSelection.model)
+                          (props.selectedThread.modelSelection.model === null
+                            ? "Follow Agent default"
+                            : formatModelSlugName(props.selectedThread.modelSelection.model))
                         }
                         effortLabel={formatModelSelectionEffort(
                           props.selectedThread.modelSelection,
