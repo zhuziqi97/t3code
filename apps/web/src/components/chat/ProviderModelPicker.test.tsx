@@ -53,6 +53,7 @@ async function renderPicker(input: {
   options: ReadonlyArray<ModelEsque>;
   includeEntry?: boolean;
   triggerLabel?: string;
+  reportedModel?: string;
 }) {
   const instanceId = ProviderInstanceId.make(input.instanceId);
   const entry = providerEntry(input.instanceId, input.driver);
@@ -61,6 +62,9 @@ async function renderPicker(input: {
       <ProviderModelPicker
         activeInstanceId={instanceId}
         model={input.model}
+        reportedModelSelection={
+          input.reportedModel ? { instanceId, model: input.reportedModel } : undefined
+        }
         lockedProvider={null}
         instanceEntries={input.includeEntry === false ? [] : [entry]}
         modelOptionsByInstance={new Map([[instanceId, input.options]])}
@@ -228,4 +232,28 @@ it("shows the resolved native default without changing its follow-default select
     ],
   });
   expect(text).toContain("gateway-model · 跟随默认");
+});
+
+it("keeps an existing session's reported model when the native default changes", async () => {
+  for (const nextDefault of ["first-default", "next-default"]) {
+    const text = await renderPicker({
+      instanceId: "codex",
+      driver: "codex",
+      model: null,
+      reportedModel: "session-model",
+      options: [
+        { slug: "", name: nextDefault },
+        { slug: "session-model", name: "Session Model" },
+      ],
+    });
+    expect(text).toContain("Session Model");
+    expect(text).not.toContain(nextDefault);
+  }
+  const fresh = await renderPicker({
+    instanceId: "codex",
+    driver: "codex",
+    model: null,
+    options: [{ slug: "", name: "next-default" }],
+  });
+  expect(fresh).toContain("next-default");
 });

@@ -12,5 +12,5 @@ export const CONVENE_DESKTOP_IDENTITY = {
 
 /** Default fork release for the checked-out upstream base. Explicit artifact versions override it. */
 export function resolveConveneVersion(upstreamVersion: string): string {
-  return `${upstreamVersion}${upstreamVersion.includes("-") ? "." : "-"}convene.2`;
+  return `${upstreamVersion}${upstreamVersion.includes("-") ? "." : "-"}convene.3`;
 }

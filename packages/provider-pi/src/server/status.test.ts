@@ -6,7 +6,7 @@ import * as Stream from "effect/Stream";
 import * as ChildProcess from "effect/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
-import { checkPiProviderStatus, MINIMUM_PI_VERSION } from "./status.ts";
+import { checkPiProviderStatus, MINIMUM_PI_VERSION, parseDiscoveredModels } from "./status.ts";
 
 const encoder = new TextEncoder();
 
@@ -78,4 +78,23 @@ describe("PiProvider", () => {
       assert.include(snapshot.message ?? "", "could not refresh its models and commands");
     }).pipe(Effect.provide(NodeServices.layer)),
   );
+});
+
+describe("Pi native default", () => {
+  it("refreshes the default from native state without confusing equal IDs across providers", () => {
+    const models = {
+      models: [
+        { provider: "first", id: "model", name: "First" },
+        { provider: "second", id: "model", name: "Second" },
+      ],
+    };
+    for (const provider of ["first", "second"]) {
+      const parsed = parseDiscoveredModels(models, undefined, { provider, id: "model" });
+      assert.deepEqual(
+        parsed.filter((model) => model.isDefault).map((model) => model.slug),
+        [`${provider}/model`],
+      );
+    }
+    assert.isFalse(parseDiscoveredModels(models, undefined).some((model) => model.isDefault));
+  });
 });
