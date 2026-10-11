@@ -30,7 +30,10 @@ export function getDisplayModelName(
   model: ModelEsque,
   options?: { preferShortName?: boolean },
 ): string {
-  if (model.slug === "") return i18n.t("convene.model.default");
+  if (model.slug === "")
+    return model.name === "Follow agent default"
+      ? i18n.t("convene.model.default")
+      : i18n.t("convene.model.reported", { model: model.name });
   const name = options?.preferShortName && model.shortName ? model.shortName : model.name;
   return stripLeadingQualifier(name, model.subProvider);
 }

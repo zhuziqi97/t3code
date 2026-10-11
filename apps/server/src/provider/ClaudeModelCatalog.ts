@@ -136,6 +136,7 @@ export function scopeClaudeModelCatalog(
 export function withClaudeReportedModels(
   catalog: ClaudeModelCatalog,
   reported: ReadonlyArray<ModelInfo>,
+  defaultModel?: string,
 ): ClaudeModelCatalog {
   const models = [...catalog.models];
   for (const info of reported) {
@@ -175,6 +176,30 @@ export function withClaudeReportedModels(
     const index = models.findIndex((entry) => entry.model.slug === info.value);
     if (index >= 0) models[index] = nativeEntry;
     else models.push(nativeEntry);
+  }
+  if (defaultModel) {
+    for (let i = 0; i < models.length; i++) {
+      const entry = models[i]!;
+      if (entry.model.isDefault) {
+        models[i] = { ...entry, model: { ...entry.model, isDefault: false } };
+      }
+    }
+    const index = models.findIndex((entry) => entry.model.slug === defaultModel);
+    if (index >= 0) {
+      models[index] = { ...models[index]!, model: { ...models[index]!.model, isDefault: true } };
+    } else {
+      models.push({
+        model: {
+          slug: defaultModel,
+          name: defaultModel,
+          isCustom: false,
+          isDefault: true,
+          capabilities: null,
+        },
+        runtime: {},
+        compatibility: {},
+      });
+    }
   }
   return { models };
 }

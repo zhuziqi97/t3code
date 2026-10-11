@@ -36,6 +36,7 @@ export const ModelListRow = memo(function ModelListRow(props: {
   isSelected: boolean;
   showSelection?: boolean;
   showProvider: boolean;
+  showModelId?: boolean;
   preferShortName?: boolean;
   useTriggerLabel?: boolean;
   showNewBadge?: boolean;
@@ -97,6 +98,7 @@ export const ModelListRow = memo(function ModelListRow(props: {
             />
             <span className="truncate text-xs font-normal leading-snug text-muted-foreground/70">
               {providerLabel}
+              {props.showModelId && props.model.slug ? ` · ${props.model.slug}` : ""}
             </span>
           </div>
         )}

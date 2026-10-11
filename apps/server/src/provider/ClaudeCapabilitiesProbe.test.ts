@@ -95,6 +95,7 @@ it.layer(NodeServices.layer)("Claude capability probe SDK boundary", (it) => {
           assert.equal(options?.env?.CLAUDE_CONFIG_DIR, configDir);
           assert.equal(options?.env?.T3_WORKSPACE_PROBE, "owned-instance");
           return {
+            getContextUsage: async () => ({ model: "native-default" }),
             initializationResult: async () => ({
               account: { email: "workspace@example.com" },
               commands: [
@@ -123,8 +124,13 @@ it.layer(NodeServices.layer)("Claude capability probe SDK boundary", (it) => {
             cwd,
             { ...process.env, T3_WORKSPACE_PROBE: "owned-instance" },
           );
+          assert.deepEqual(
+            scoped.models.filter((model) => model.isDefault).map((model) => model.slug),
+            ["native-default"],
+          );
           assert.deepEqual(scoped, {
             ...machineSnapshot,
+            models: scoped.models,
             slashCommandsPending: false,
             slashCommands: [
               COMPACT_SLASH_COMMAND,
@@ -182,6 +188,7 @@ it.layer(NodeServices.layer)("Claude capability probe SDK boundary", (it) => {
       const query = vi.spyOn(ClaudeSdk, "query").mockImplementation(
         () =>
           ({
+            getContextUsage: async () => ({ model: "native-default" }),
             initializationResult: () =>
               Promise.reject<ClaudeSdk.SDKControlInitializeResponse>(
                 new Error("Initialization failed"),
@@ -212,6 +219,7 @@ it.layer(NodeServices.layer)("Claude capability probe SDK boundary", (it) => {
       query.mockImplementation(
         () =>
           ({
+            getContextUsage: async () => ({ model: "native-default" }),
             initializationResult: async () => ({
               commands: [{ name: "recovered", description: "", argumentHint: "" }],
             }),
@@ -282,6 +290,7 @@ it.layer(NodeServices.layer)("Claude capability probe SDK boundary", (it) => {
         apiKeySource: undefined,
         apiProvider: undefined,
         models: [],
+        defaultModel: "fixture-native-default",
         slashCommands: [
           {
             name: "review",
@@ -326,6 +335,7 @@ it.effect("preserves initialized capabilities when optional usage times out", ()
     const query = vi.spyOn(ClaudeSdk, "query").mockImplementation(({ options }) => {
       abortSignal = options?.abortController?.signal;
       return {
+        getContextUsage: async () => ({ model: "native-default" }),
         initializationResult: async () => ({
           account: { email: "dev@example.com", subscriptionType: "pro", tokenSource: "oauth" },
           commands: [{ name: "review", description: "Review changes", argumentHint: "[path]" }],
@@ -350,6 +360,7 @@ it.effect("preserves initialized capabilities when optional usage times out", ()
       { name: "review", description: "Review changes", input: { hint: "[path]" } },
     ]);
     assert.equal(capabilities?.usage, undefined);
+    assert.equal(capabilities?.defaultModel, "native-default");
     assert.equal(abortSignal?.aborted, true);
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
@@ -360,6 +371,7 @@ it.effect("asks for usage without the local transcript scan", () =>
     const query = vi.spyOn(ClaudeSdk, "query").mockImplementation(
       () =>
         ({
+          getContextUsage: async () => ({ model: "native-default" }),
           initializationResult: async () => ({
             account: { email: "dev@example.com", subscriptionType: "max", tokenSource: "oauth" },
             commands: [],
@@ -382,6 +394,7 @@ it.effect("returns initialization while native gateway discovery finishes in the
     const query = vi.spyOn(ClaudeSdk, "query").mockImplementation(({ options }) => {
       abortSignal = options?.abortController?.signal;
       return {
+        getContextUsage: async () => ({ model: "native-default" }),
         initializationResult: async () => ({
           commands: [],
           models: [

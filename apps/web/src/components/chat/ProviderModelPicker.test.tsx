@@ -215,3 +215,17 @@ it("updates the native-default label in place when language changes", async () =
   await act(async () => changeLanguage("en"));
   expect(container.textContent).toContain("Follow agent default");
 });
+
+it("shows the resolved native default without changing its follow-default selection", async () => {
+  await changeLanguage("zh");
+  const text = await renderPicker({
+    instanceId: "claude",
+    driver: "claudeAgent",
+    model: null,
+    options: [
+      { slug: "", name: "gateway-model" },
+      { slug: "gateway-model", name: "gateway-model" },
+    ],
+  });
+  expect(text).toContain("gateway-model · 跟随默认");
+});

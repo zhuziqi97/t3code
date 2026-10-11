@@ -23,7 +23,7 @@ import type {
   ServerProviderModel,
   ServerProviderSkill,
 } from "@t3tools/contracts";
-import { PREFERRED_DEFAULT_CODEX_MODELS, ServerSettingsError } from "@t3tools/contracts";
+import { ServerSettingsError } from "@t3tools/contracts";
 
 import {
   codexModelFamily,
@@ -234,29 +234,23 @@ function parseCodexModelListResponse(
   }));
 }
 
-/**
- * Prefer our own default-model ranking when one of the preferred slugs is in
- * the live catalog; otherwise keep whatever Codex itself flagged as default.
- */
-export function applyPreferredCodexDefaultModel(
+/** Preserve the effective native configuration instead of applying T3 model rankings. */
+export function applyNativeCodexDefaultModel(
   models: ReadonlyArray<ServerProviderModel>,
+  configuredModel?: string | null,
 ): ReadonlyArray<ServerProviderModel> {
-  const preferredSlug = PREFERRED_DEFAULT_CODEX_MODELS.flatMap((slug) =>
-    models.filter((model) => !model.isCustom && codexModelFamily(model.slug) === slug),
-  )[0]?.slug;
-  if (!preferredSlug) {
-    return models;
+  const defaultModel = configuredModel ?? models.find((model) => model.isDefault)?.slug;
+  const result = models.map((model) => ({ ...model, isDefault: model.slug === defaultModel }));
+  if (defaultModel && !result.some((model) => model.slug === defaultModel)) {
+    result.push({
+      slug: defaultModel,
+      name: defaultModel,
+      isDefault: true,
+      isCustom: false,
+      capabilities: null,
+    });
   }
-  return models.map((model) => {
-    if (model.slug === preferredSlug) {
-      return model.isDefault ? model : { ...model, isDefault: true };
-    }
-    if (!model.isDefault) {
-      return model;
-    }
-    const { isDefault: _isDefault, ...rest } = model;
-    return rest;
-  });
+  return result;
 }
 
 /**
@@ -419,7 +413,7 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
     } satisfies CodexAppServerProviderSnapshot;
   }
 
-  const [skillsResponse, models, rateLimits] = yield* Effect.all(
+  const [skillsResponse, models, rateLimits, configuration] = yield* Effect.all(
     [
       client.request("skills/list", {
         cwds: [input.cwd],
@@ -447,6 +441,7 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
               ),
             ),
           ),
+      client.request("config/read", { cwd: input.cwd, includeLayers: false }),
     ],
     { concurrency: "unbounded" },
   );
@@ -455,8 +450,9 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
     account: accountResponse,
     ...(rateLimits ? { rateLimits } : {}),
     version,
-    models: applyPreferredCodexDefaultModel(
-      appendCustomCodexModels(models, input.customModels ?? []),
+    models: appendCustomCodexModels(
+      applyNativeCodexDefaultModel(models, configuration.config.model),
+      input.customModels ?? [],
     ),
     skills: parseCodexSkillsListResponse(skillsResponse, input.cwd),
   } satisfies CodexAppServerProviderSnapshot;

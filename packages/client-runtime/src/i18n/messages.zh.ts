@@ -136,7 +136,7 @@ export const zh: Partial<Messages> = {
   "convene.sidebar.projectSettings": "项目设置",
   "convene.sidebar.actions": "{{project}} 的操作",
   "convene.model.default": "跟随 Agent 默认模型",
-  "convene.model.reported": "跟随 Agent 默认模型 · {{model}}",
+  "convene.model.reported": "{{model}} · 跟随默认",
   "convene.model.unavailableSuffix": "（不可用）",
   "convene.cli.notInstalled":
     "在任意终端运行 `t3code-convene`，即可使用 T3 Code for Convene 命令行。",

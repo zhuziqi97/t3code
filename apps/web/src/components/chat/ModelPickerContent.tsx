@@ -28,7 +28,7 @@ import {
   ComboboxItem,
   ComboboxListVirtualized,
 } from "../ui/combobox";
-import { ModelEsque } from "./providerIconUtils";
+import { getDisplayModelName, type ModelEsque } from "./providerIconUtils";
 import { isCommandPaletteOpen } from "../../commandPaletteBus";
 import { primaryServerKeybindingsAtom } from "../../state/server";
 import {
@@ -383,7 +383,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
         }
         out.push({
           slug: model.slug,
-          name: model.slug === "" ? t("convene.model.default") : model.name,
+          name: model.name,
           ...(model.shortName ? { shortName: model.shortName } : {}),
           ...(model.subProvider ? { subProvider: model.subProvider } : {}),
           ...(model.badge ? { badge: model.badge } : {}),
@@ -441,6 +441,18 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
   );
 
   // Filter models based on search query and selected instance
+  const repeatedModelNames = useMemo(() => {
+    const seen = new Set<string>();
+    const repeated = new Set<string>();
+    for (const model of flatModels) {
+      if (!model.slug) continue;
+      const key = JSON.stringify([model.instanceId, model.name]);
+      if (seen.has(key)) repeated.add(key);
+      seen.add(key);
+    }
+    return repeated;
+  }, [flatModels]);
+
   const filteredModels = useMemo(() => {
     let result = flatModels;
 
@@ -451,7 +463,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
           model,
           score: scoreModelPickerSearch(
             {
-              name: model.slug === "" ? t("convene.model.default") : model.name,
+              name: getDisplayModelName(model),
               slug: model.slug,
               ...(model.shortName ? { shortName: model.shortName } : {}),
               ...(model.subProvider ? { subProvider: model.subProvider } : {}),
@@ -463,7 +475,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
           ),
           isFavorite: favoritesSet.has(providerModelKey(model.instanceId, model.slug)),
           tieBreaker: buildModelPickerSearchText({
-            name: model.slug === "" ? t("convene.model.default") : model.name,
+            name: getDisplayModelName(model),
             slug: model.slug,
             ...(model.shortName ? { shortName: model.shortName } : {}),
             ...(model.subProvider ? { subProvider: model.subProvider } : {}),
@@ -597,11 +609,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
   // happens to update the CLI.
   // A search spans every instance, so it can explain gated matches from any of them.
   const updateRequiredNotices = (
-    isSearching
-      ? instanceEntries.filter(matchesLockedProvider)
-      : selectedEntry
-        ? [selectedEntry]
-        : []
+    isSearching ? instanceEntries.filter(matchesLockedProvider) : []
   ).flatMap((entry) => {
     const notice = formatProviderUpdateRequiredNotice(entry.snapshot, searchQuery);
     return notice ? [{ instanceId: entry.instanceId, notice }] : [];
@@ -1024,6 +1032,9 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                         key={modelKey}
                         index={index}
                         model={model}
+                        showModelId={repeatedModelNames.has(
+                          JSON.stringify([model.instanceId, model.name]),
+                        )}
                         instanceId={model.instanceId}
                         driverKind={model.driverKind}
                         providerDisplayName={model.instanceDisplayName}

@@ -14,6 +14,7 @@ import {
   resolveClaudeModelSlug,
   resolveClaudeUpdateRequiredModels,
   scopeClaudeModelCatalog,
+  withClaudeReportedModels,
 } from "./ClaudeModelCatalog.ts";
 
 /**
@@ -251,6 +252,27 @@ describe("Claude model catalog", () => {
     assert.deepStrictEqual(
       resolveClaudeModelsForVersion(catalog, "3.2.0").map((model) => model.slug),
       ["claude-synthetic-next", "synthetic", "claude-custom-tuned"],
+    );
+  });
+});
+
+describe("native default identity", () => {
+  it("keeps the native effective model separate from alias names", () => {
+    const result = withClaudeReportedModels(
+      { models: [] },
+      [
+        { value: "opus", displayName: "Gateway", description: "" },
+        { value: "sonnet", displayName: "Gateway", description: "" },
+      ],
+      "gateway-model",
+    );
+    assert.deepEqual(
+      result.models.filter((entry) => entry.model.isDefault).map((entry) => entry.model.slug),
+      ["gateway-model"],
+    );
+    assert.deepEqual(
+      result.models.slice(0, 2).map((entry) => entry.model.slug),
+      ["opus", "sonnet"],
     );
   });
 });

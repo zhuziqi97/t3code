@@ -276,6 +276,7 @@ type ClaudeCapabilitiesProbe = {
   readonly apiProvider: string | undefined;
   readonly slashCommands: ReadonlyArray<ServerProviderSlashCommand>;
   readonly models?: ReadonlyArray<ModelInfo>;
+  readonly defaultModel?: string;
   /**
    * Subscription windows from the SDK's `get_usage` control request, or
    * `undefined` when the request itself failed. Absent windows on an
@@ -418,6 +419,11 @@ const probeClaudeCapabilities = (
     Effect.timeout(CAPABILITIES_PROBE_TIMEOUT_MS),
     Effect.flatMap(({ q, init }) =>
       Effect.gen(function* () {
+        // Ask the CLI for its effective model without sending a prompt or token-count request.
+        const context = yield* Effect.tryPromise(() =>
+          q.getContextUsage({ detail: "summary" }),
+        ).pipe(Effect.timeout(DEFAULT_TIMEOUT_MS), Effect.result);
+        const defaultModel = Result.isSuccess(context) ? context.success.model?.trim() : undefined;
         // Usage has its own deadline so a slow optional request cannot discard initialization.
         // Only the rate limits are read, so skip the local transcript scan that fills
         // `behaviors`: with a few GB of transcripts it outlasts the deadline.
@@ -450,6 +456,7 @@ const probeClaudeCapabilities = (
           apiProvider: account?.apiProvider,
           slashCommands: parseClaudeInitializationCommands(init.commands),
           ...(init.models ? { models: init.models } : {}),
+          ...(defaultModel ? { defaultModel } : {}),
           ...(usage ? { usage } : {}),
         } satisfies ClaudeCapabilitiesProbe;
       }),
@@ -502,14 +509,17 @@ export const probeClaudeWorkspaceSnapshot = Effect.fn("probeClaudeWorkspaceSnaps
     : probeClaudeCapabilities(claudeSettings, environment, cwd, false);
   return {
     ...machineSnapshot,
-    models: capabilities?.models?.length
-      ? providerModelsFromSettings(
-          withClaudeReportedModels(modelCatalog, capabilities.models).models.map(
-            (entry) => entry.model,
-          ),
-          claudeSettings.customModels,
-        )
-      : machineSnapshot.models,
+    models:
+      capabilities?.models?.length || capabilities?.defaultModel
+        ? providerModelsFromSettings(
+            withClaudeReportedModels(
+              modelCatalog,
+              capabilities.models ?? [],
+              capabilities.defaultModel,
+            ).models.map((entry) => entry.model),
+            claudeSettings.customModels,
+          )
+        : machineSnapshot.models,
     skills,
     slashCommands: dedupeSlashCommands([
       COMPACT_SLASH_COMMAND,
@@ -639,20 +649,22 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
   const capabilities = resolveCapabilities
     ? yield* resolveCapabilities(claudeSettings).pipe(Effect.orElseSucceed(() => undefined))
     : undefined;
-  const models = capabilities?.models?.length
-    ? providerModelsFromSettings(
-        withClaudeReportedModels(
-          {
-            models: modelCatalog.models.filter((entry) =>
-              catalogModels.some((model) => model.slug === entry.model.slug),
-            ),
-          },
-          capabilities.models,
-        ).models.map((entry) => entry.model),
-        claudeSettings.customModels,
-        DEFAULT_CLAUDE_MODEL_CAPABILITIES,
-      )
-    : catalogModels;
+  const models =
+    capabilities?.models?.length || capabilities?.defaultModel
+      ? providerModelsFromSettings(
+          withClaudeReportedModels(
+            {
+              models: modelCatalog.models.filter((entry) =>
+                catalogModels.some((model) => model.slug === entry.model.slug),
+              ),
+            },
+            capabilities.models ?? [],
+            capabilities.defaultModel,
+          ).models.map((entry) => entry.model),
+          claudeSettings.customModels,
+          DEFAULT_CLAUDE_MODEL_CAPABILITIES,
+        )
+      : catalogModels;
   const skills = yield* discoverClaudeSkills(claudeSettings, cwd, resolvedEnvironment);
   const slashCommands = [COMPACT_SLASH_COMMAND, ...(capabilities?.slashCommands ?? [])];
   const dedupedSlashCommands = dedupeSlashCommands(slashCommands);

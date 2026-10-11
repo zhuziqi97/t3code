@@ -126,7 +126,11 @@ export function getAppModelOptionsForInstance(
     customModels,
   ).map(toAppModelOption);
   // Empty is a local picker key only; createModelSelection writes null on the wire.
-  options.unshift({ slug: "", name: "Follow agent default", isCustom: false });
+  options.unshift({
+    slug: "",
+    name: entry.models.find((model) => model.isDefault)?.name ?? "Follow agent default",
+    isCustom: false,
+  });
   if (selectedModel && !options.some((option) => option.slug === selectedModel)) {
     options.push({ slug: selectedModel, name: selectedModel, isCustom: false });
   }

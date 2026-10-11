@@ -143,7 +143,7 @@ export const en = {
   "convene.sidebar.projectSettings": "Project settings",
   "convene.sidebar.actions": "Actions for {{project}}",
   "convene.model.default": "Follow agent default",
-  "convene.model.reported": "Follow agent default · {{model}}",
+  "convene.model.reported": "{{model}} · Agent default",
   "convene.model.unavailableSuffix": " (Unavailable)",
   "convene.cli.notInstalled":
     "Run T3 Code for Convene's CLI as `t3code-convene` from any terminal.",
