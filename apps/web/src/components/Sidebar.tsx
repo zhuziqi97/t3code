@@ -4819,7 +4819,9 @@ export default function Sidebar() {
                               marker={item.marker}
                               className="mt-3 px-2 py-1 text-xs text-sidebar-muted-foreground"
                             >
-                              {item.marker === "pinned-header" ? "Pinned" : "Projects"}
+                              {item.marker === "pinned-header"
+                                ? t("thread.pinned")
+                                : t("palette.projects")}
                             </SortableSidebarMarker>,
                           );
                         } else if (item.marker === "project-header" && group) {

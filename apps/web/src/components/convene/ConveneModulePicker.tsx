@@ -92,7 +92,10 @@ export function ConveneModulePicker({
           <div className="space-y-4">
             {error && (
               <Alert variant="error">
-                <AlertDescription>{error}</AlertDescription>
+                <AlertDescription>
+                  <p>{t("convene.error.options")}</p>
+                  <p>{error}</p>
+                </AlertDescription>
               </Alert>
             )}
             {project ? (

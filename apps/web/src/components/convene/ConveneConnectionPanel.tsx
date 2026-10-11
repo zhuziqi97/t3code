@@ -93,7 +93,10 @@ export function ConveneConnectionPanel({ environmentId }: { environmentId: Envir
       )}
       {error && (
         <Alert variant="error">
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>
+            <p>{t("convene.error.connection")}</p>
+            <p>{error}</p>
+          </AlertDescription>
         </Alert>
       )}
       {!permitted && (

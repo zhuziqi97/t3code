@@ -15,6 +15,8 @@ import type { Messages } from "./messages.en.ts";
 
 export const zh: Partial<Messages> = {
   // Convene integration and its project/model controls.
+  "settings.sections.convene": "Convene",
+  "convene.project.rootFolder": "项目文件夹",
   "convene.about.upstream": "上游基础版本 {{version}}",
   "convene.connection.description":
     "将此环境连接到 Convene 账户，即可配置项目模块与 MCP 访问权限。未连接时仍可进行本地开发。",

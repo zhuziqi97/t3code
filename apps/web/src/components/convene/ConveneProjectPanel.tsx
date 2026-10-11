@@ -25,7 +25,10 @@ export function ConveneProjectPanel({
       <p className="text-sm text-muted-foreground">{t("convene.project.optional")}</p>
       {state.error && (
         <Alert variant="error">
-          <AlertDescription>{state.error}</AlertDescription>
+          <AlertDescription>
+            <p>{t("convene.error.save")}</p>
+            <p>{state.error}</p>
+          </AlertDescription>
         </Alert>
       )}
       <div className="flex flex-wrap items-center gap-2">
@@ -84,7 +87,7 @@ export function ConveneProjectPanel({
                         { value: "none", label: t("convene.project.chooseTarget") },
                         ...configuration.targets.map((item) => ({
                           value: item.target_id,
-                          label: `${item.workspace_display_name}${item.branch ? ` · ${item.branch}` : ""}${item.availability !== "AVAILABLE" ? t("convene.project.unavailableSuffix") : ""}`,
+                          label: `${item.native_workspace_key === "root" ? t("convene.project.rootFolder") : item.workspace_display_name}${item.branch ? ` · ${item.branch}` : ""}${item.availability !== "AVAILABLE" ? t("convene.project.unavailableSuffix") : ""}`,
                         })),
                       ]}
                       disabled={!state.canWrite || binding.status === "ACTIVE"}
@@ -113,7 +116,9 @@ export function ConveneProjectPanel({
                             value={item.target_id}
                             disabled={item.availability !== "AVAILABLE"}
                           >
-                            {item.workspace_display_name}
+                            {item.native_workspace_key === "root"
+                              ? t("convene.project.rootFolder")
+                              : item.workspace_display_name}
                             {item.branch ? ` · ${item.branch}` : ""}
                             {item.availability !== "AVAILABLE"
                               ? t("convene.project.unavailableSuffix")

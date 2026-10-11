@@ -15,6 +15,8 @@
  */
 export const en = {
   // Convene integration and its project/model controls.
+  "settings.sections.convene": "Convene",
+  "convene.project.rootFolder": "Project folder",
   "convene.about.upstream": "Upstream base {{version}}",
   "convene.connection.description":
     "Connect this environment to your Convene account to configure project modules and MCP access. Local development remains available without a connection.",
