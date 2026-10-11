@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { useLocation } from "@tanstack/react-router";
 import { create } from "zustand";
@@ -29,6 +30,7 @@ export function openConveneProjectConfiguration(project: Project) {
   );
 }
 export function ConveneProjectDialogHost() {
+  const t = useTranslate();
   const projects = useRequests((state) => state.projects);
   const pathname = useLocation({ select: (state) => state.pathname });
   const project = projects[0];
@@ -43,24 +45,21 @@ export function ConveneProjectDialogHost() {
     >
       <DialogPopup key={`${project.environmentId}:${project.projectId}`}>
         <DialogHeader>
-          <DialogTitle>Configure project in Convene</DialogTitle>
-          <DialogDescription>
-            Associate execution modules and configure independent MCP access for this native
-            project.
-          </DialogDescription>
+          <DialogTitle>{t("convene.dialog.title")}</DialogTitle>
+          <DialogDescription>{t("convene.dialog.description")}</DialogDescription>
         </DialogHeader>
         <DialogPanel>
-          <Suspense fallback={<p role="status">Loading Convene configuration…</p>}>
+          <Suspense fallback={<p role="status">{t("convene.dialog.loading")}</p>}>
             <ConveneProjectPanel {...project} />
           </Suspense>
         </DialogPanel>
         <DialogFooter>
           <Button variant="outline" onClick={close}>
-            Done for now
+            {t("convene.dialog.done")}
           </Button>
           {projects.length > 1 && (
             <Button variant="ghost" onClick={() => useRequests.setState({ projects: [] })}>
-              Configure remaining projects later
+              {t("convene.dialog.later")}
             </Button>
           )}
         </DialogFooter>

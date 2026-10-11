@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import type { T3McpToolSummaryAction } from "@t3tools/shared/t3McpToolPresentation";
 
 export interface T3ToolSummaryCall {
@@ -76,7 +77,7 @@ function countEntities(ids: ReadonlyArray<string | undefined>): number {
   );
 }
 
-function quantity(count: number, noun: string, plural = `${noun}s`): string {
+function englishQuantity(count: number, noun: string, plural = `${noun}s`): string {
   return `${count} ${count === 1 ? noun : plural}`;
 }
 
@@ -84,6 +85,7 @@ function quantity(count: number, noun: string, plural = `${noun}s`): string {
 export function summarizeT3ToolCalls(
   action: T3McpToolSummaryAction,
   calls: ReadonlyArray<T3ToolSummaryCall>,
+  t?: TFunction,
 ): { label: string; failedCount: number } {
   const results = calls.map((call) => {
     const result = readResult(call.output);
@@ -96,9 +98,22 @@ export function summarizeT3ToolCalls(
   const completed = results.filter((call) => call.outcome === "completed");
   const failedCount = results.filter((call) => call.outcome === "failed").length;
   const selected = completed.length > 0 ? completed : results;
+  const quantity = (count: number, noun: string, plural = `${noun}s`) =>
+    t ? t(`chat.tools.quantity.${noun}`, { count }) : englishQuantity(count, noun, plural);
   const times = quantity(selected.length, "time");
+  const repeated = (object: string) =>
+    t ? t(`chat.tools.object.${object}`, { times }) : `${object} ${times}`;
+  const sendToThreads = (translate: TFunction, object: string, threads: string) =>
+    translate(completed.length > 0 ? "chat.tools.send.done" : "chat.tools.send.attempt", {
+      object,
+      threads,
+    });
   const phrase = (past: string, infinitive: string, object: string) =>
-    `${completed.length > 0 ? past : `Tried to ${infinitive}`} ${object}`;
+    t
+      ? t(`chat.tools.verb.${completed.length > 0 ? `done.${past}` : `attempt.${infinitive}`}`, {
+          object,
+        })
+      : `${completed.length > 0 ? past : `Tried to ${infinitive}`} ${object}`;
   const entityIds = (key: string) =>
     selected.map((call) => id(call.output?.[key]) ?? id(call.input?.[key]));
   const projectIds = selected.map(
@@ -116,12 +131,20 @@ export function summarizeT3ToolCalls(
       const messages = countEntities(selected.map((call) => id(call.output?.messageId)));
       const targetsKnown = threadIds.every((value) => value !== undefined);
       const threads = new Set(threadIds).size;
-      const object = targetsKnown
-        ? messages === threads && messages > 1
-          ? `messages to ${quantity(threads, "thread")}`
-          : `${quantity(messages, "message")} to ${quantity(threads, "thread")}`
-        : quantity(messages, "message");
-      label = phrase("Sent", "send", object);
+      const messageLabel =
+        messages === threads && messages > 1 && targetsKnown
+          ? t
+            ? t("chat.tools.messages")
+            : "messages"
+          : quantity(messages, "message");
+      label =
+        t && targetsKnown
+          ? sendToThreads(t, messageLabel, quantity(threads, "thread"))
+          : phrase(
+              "Sent",
+              "send",
+              targetsKnown ? `${messageLabel} to ${quantity(threads, "thread")}` : messageLabel,
+            );
       break;
     }
     case "thread-create": {
@@ -140,8 +163,10 @@ export function summarizeT3ToolCalls(
           });
         });
       label = resultsKnown
-        ? `Created ${quantity(new Set(createdIds).size, "thread")}`
-        : `Requested thread creation ${times}`;
+        ? phrase("Created", "create", quantity(new Set(createdIds).size, "thread"))
+        : t
+          ? t("chat.tools.threadCreationRequested", { times })
+          : `Requested thread creation ${times}`;
       break;
     }
     case "delegate":
@@ -151,7 +176,7 @@ export function summarizeT3ToolCalls(
     case "thread-wait": {
       const targets = threadIds.every((value) => value !== undefined)
         ? quantity(new Set(threadIds).size, "thread")
-        : `threads ${times}`;
+        : repeated("threads");
       label =
         action === "thread-read"
           ? phrase("Read", "read", targets)
@@ -159,7 +184,7 @@ export function summarizeT3ToolCalls(
       break;
     }
     case "thread-list":
-      label = phrase("Listed", "list", `threads ${times}`);
+      label = phrase("Listed", "list", repeated("threads"));
       break;
     case "thread-interrupt":
       label = phrase(
@@ -169,7 +194,7 @@ export function summarizeT3ToolCalls(
       );
       break;
     case "task-status":
-      label = phrase("Checked", "check", `task status ${times}`);
+      label = phrase("Checked", "check", repeated("task status"));
       break;
     case "task-cancel":
       label = phrase(
@@ -186,7 +211,7 @@ export function summarizeT3ToolCalls(
       );
       break;
     case "schedule-list":
-      label = phrase("Listed", "list", `scheduled tasks ${times}`);
+      label = phrase("Listed", "list", repeated("scheduled tasks"));
       break;
     case "schedule-update":
       label = phrase(
@@ -207,10 +232,10 @@ export function summarizeT3ToolCalls(
       label = phrase("Requested", "request", quantity(selected.length, "scheduled task run"));
       break;
     case "thread-configuration":
-      label = phrase("Checked", "check", `thread configuration ${times}`);
+      label = phrase("Checked", "check", repeated("thread configuration"));
       break;
     case "thread-configure":
-      label = phrase("Set", "set", `thread model ${times}`);
+      label = phrase("Set", "set", repeated("thread model"));
       break;
     case "thread-fork":
       label = phrase("Requested", "request", quantity(selected.length, "thread fork"));
@@ -219,19 +244,19 @@ export function summarizeT3ToolCalls(
       label = phrase("Requested", "request", quantity(selected.length, "context merge"));
       break;
     case "thread-search":
-      label = phrase("Searched", "search", `threads ${times}`);
+      label = phrase("Searched", "search", repeated("threads"));
       break;
     case "thread-transfers":
-      label = phrase("Checked", "check", `thread transfers ${times}`);
+      label = phrase("Checked", "check", repeated("thread transfers"));
       break;
     case "thread-organize":
-      label = phrase("Organized", "organize", `threads ${times}`);
+      label = phrase("Organized", "organize", repeated("threads"));
       break;
     case "thread-update":
       label = phrase("Updated", "update", quantity(countEntities(threadIds), "thread"));
       break;
     case "queue-list":
-      label = phrase("Listed", "list", `queued messages ${times}`);
+      label = phrase("Listed", "list", repeated("queued messages"));
       break;
     case "queue-read":
       label = phrase(
@@ -269,7 +294,7 @@ export function summarizeT3ToolCalls(
       );
       break;
     case "question-list":
-      label = phrase("Listed", "list", `pending questions ${times}`);
+      label = phrase("Listed", "list", repeated("pending questions"));
       break;
     case "question-read":
       label = phrase(
@@ -296,13 +321,13 @@ export function summarizeT3ToolCalls(
       );
       break;
     case "worktree-list":
-      label = phrase("Listed", "list", `workspace branches ${times}`);
+      label = phrase("Listed", "list", repeated("workspace branches"));
       break;
     case "worktree-status":
-      label = phrase("Checked", "check", `worktree status ${times}`);
+      label = phrase("Checked", "check", repeated("worktree status"));
       break;
     case "project-list":
-      label = phrase("Listed", "list", `projects ${times}`);
+      label = phrase("Listed", "list", repeated("projects"));
       break;
     case "project-read":
       label = phrase("Read", "read", quantity(countEntities(projectIds), "project"));
@@ -324,10 +349,10 @@ export function summarizeT3ToolCalls(
       );
       break;
     case "environment-read":
-      label = phrase("Checked", "check", `environment preferences ${times}`);
+      label = phrase("Checked", "check", repeated("environment preferences"));
       break;
     case "environment-update":
-      label = phrase("Updated", "update", `environment preferences ${times}`);
+      label = phrase("Updated", "update", repeated("environment preferences"));
       break;
     case "attachment-prepare":
       label = phrase(
@@ -357,16 +382,32 @@ export function summarizeT3ToolCalls(
       const countsKnown = [...messages.values()].every(
         (call) => Array.isArray(call.input?.attachments) && call.input.attachments.length > 0,
       );
-      const targets = threadIds.every((value) => value !== undefined)
-        ? ` to ${quantity(new Set(threadIds).size, "thread")}`
-        : "";
-      label = phrase(
-        "Sent",
-        "send",
-        countsKnown
-          ? `${quantity(attachmentCount, "attachment")}${targets}`
-          : `attachments${targets} ${times}`,
-      );
+      const targetsKnown = threadIds.every((value) => value !== undefined);
+      const threads = quantity(new Set(threadIds).size, "thread");
+      if (t) {
+        const object = countsKnown
+          ? quantity(attachmentCount, "attachment")
+          : t("chat.tools.attachmentsRepeated", { times });
+        label = targetsKnown
+          ? countsKnown
+            ? sendToThreads(t, object, threads)
+            : t(
+                completed.length > 0
+                  ? "chat.tools.sendRepeated.done"
+                  : "chat.tools.sendRepeated.attempt",
+                { threads, times },
+              )
+          : phrase("Sent", "send", object);
+      } else {
+        const targets = targetsKnown ? ` to ${threads}` : "";
+        label = phrase(
+          "Sent",
+          "send",
+          countsKnown
+            ? `${quantity(attachmentCount, "attachment")}${targets}`
+            : `attachments${targets} ${times}`,
+        );
+      }
       break;
     }
     case "link-pr":
@@ -389,14 +430,18 @@ export function summarizeT3ToolCalls(
       label = phrase(
         "Checked",
         "check",
-        `linked pull requests${selected.length === 1 ? "" : ` ${times}`}`,
+        selected.length === 1
+          ? t
+            ? t("chat.tools.linkedPullRequests")
+            : "linked pull requests"
+          : repeated("linked pull requests"),
       );
       break;
     case "browser":
-      label = phrase("Used", "use", `browser ${times}`);
+      label = phrase("Used", "use", repeated("browser"));
       break;
     case "device":
-      label = phrase("Used", "use", `device controls ${times}`);
+      label = phrase("Used", "use", repeated("device controls"));
       break;
     case "html-preview":
       label = phrase("Previewed", "preview", quantity(selected.length, "HTML page"));
@@ -405,7 +450,7 @@ export function summarizeT3ToolCalls(
       label = phrase("Rendered", "render", quantity(selected.length, "HTML page"));
       break;
     case "capabilities":
-      label = phrase("Checked", "check", `orchestration capabilities ${times}`);
+      label = phrase("Checked", "check", repeated("orchestration capabilities"));
       break;
   }
   return { label, failedCount };

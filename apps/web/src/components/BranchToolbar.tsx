@@ -1,3 +1,4 @@
+import { i18n, useTranslate } from "../i18n";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
 import { readLocalApi } from "../localApi";
 import { stackedThreadToast, toastManager } from "./ui/toast";
@@ -108,18 +109,18 @@ function showWorkspaceContextMenu(event: ReactMouseEvent, workspacePath: string)
   event.preventDefault();
   event.stopPropagation();
   void api.contextMenu
-    .show([{ id: "copy-path", label: "Copy full path", icon: "copy" }], {
+    .show([{ id: "copy-path", label: i18n.t("chat.branch.copyPath"), icon: "copy" }], {
       x: event.clientX,
       y: event.clientY,
     })
     .then((action) => {
       if (action !== "copy-path") return;
-      void writeTextToClipboard(workspacePath, "workspace path").then(
+      void writeTextToClipboard(workspacePath, i18n.t("chat.branch.path")).then(
         (didCopy) => {
           if (didCopy) {
             toastManager.add({
               type: "success",
-              title: "Path copied",
+              title: i18n.t("chat.branch.pathCopied"),
               description: workspacePath,
             });
           }
@@ -128,8 +129,8 @@ function showWorkspaceContextMenu(event: ReactMouseEvent, workspacePath: string)
           toastManager.add(
             stackedThreadToast({
               type: "error",
-              title: "Failed to copy path",
-              description: error instanceof Error ? error.message : "An error occurred.",
+              title: i18n.t("chat.branch.copyPathFailed"),
+              description: error instanceof Error ? error.message : i18n.t("common.error"),
             }),
           );
         },
@@ -178,6 +179,7 @@ const RunContextSelector = memo(function RunContextSelector({
   previousWorktreeBranch,
   onUsePreviousWorktree,
 }: RunContextSelectorProps) {
+  const t = useTranslate();
   const composerFloatingLayerProps = useComposerMenuProps();
   const activeEnvironment = useMemo(
     () => availableEnvironments?.find((env) => env.environmentId === environmentId) ?? null,
@@ -190,12 +192,12 @@ const RunContextSelector = memo(function RunContextSelector({
         ? FolderGitIcon
         : FolderIcon;
   const workspaceLabel = forceNewWorktree
-    ? resolveEnvModeLabel("worktree")
+    ? resolveEnvModeLabel("worktree", t)
     : envModeLocked
-      ? resolveLockedWorkspaceLabel(activeWorktreePath, effectiveEnvMode)
+      ? resolveLockedWorkspaceLabel(activeWorktreePath, effectiveEnvMode, t)
       : effectiveEnvMode === "worktree"
-        ? resolveEnvModeLabel("worktree")
-        : resolveCurrentWorkspaceLabel(activeWorktreePath);
+        ? resolveEnvModeLabel("worktree", t)
+        : resolveCurrentWorkspaceLabel(activeWorktreePath, t);
   const isPanel = displayMode === "panel";
   const isLocked = envLocked || (envModeLocked && (!isPanel || !showEnvironmentPicker));
   const workspacePath =
@@ -221,7 +223,7 @@ const RunContextSelector = memo(function RunContextSelector({
       <TooltipPopup>
         {isPanel
           ? forceNewWorktree
-            ? "Each model starts in its own worktree."
+            ? t("chat.branch.multiModelWorktree")
             : (workspacePath ?? workspaceLabel)
           : workspaceLabel}
       </TooltipPopup>
@@ -245,7 +247,9 @@ const RunContextSelector = memo(function RunContextSelector({
             />
           )}
         </TooltipTrigger>
-        <TooltipPopup>{autoEnvironmentLabel ?? activeEnvironment?.label ?? "Run on"}</TooltipPopup>
+        <TooltipPopup>
+          {autoEnvironmentLabel ?? activeEnvironment?.label ?? t("chat.branch.runOn")}
+        </TooltipPopup>
       </Tooltip>
       {workspaceIcon}
     </span>
@@ -257,7 +261,9 @@ const RunContextSelector = memo(function RunContextSelector({
       {icon}
       <ComposerContextLabel displayMode={displayMode}>
         {autoEnvironmentLabel ??
-          (showEnvironmentIndicator ? (activeEnvironment?.label ?? "Run on") : workspaceLabel)}
+          (showEnvironmentIndicator
+            ? (activeEnvironment?.label ?? t("chat.branch.runOn"))
+            : workspaceLabel)}
       </ComposerContextLabel>
     </>
   );
@@ -271,7 +277,7 @@ const RunContextSelector = memo(function RunContextSelector({
           isPanel && THREAD_DETAILS_PANEL_LOCKED_ROW_CLASS,
         )}
         onContextMenu={handleContextMenu}
-        aria-label={isPanel ? "Run context" : undefined}
+        aria-label={isPanel ? t("chat.branch.runContext") : undefined}
         data-composer-context-control
       >
         {triggerContent}
@@ -292,7 +298,7 @@ const RunContextSelector = memo(function RunContextSelector({
               }
             : undefined
         }
-        aria-label={isPanel ? "Run context" : undefined}
+        aria-label={isPanel ? t("chat.branch.runContext") : undefined}
         data-composer-context-control
         data-composer-shortcut={[
           showEnvironmentPicker && !envLocked ? "composer.host" : "",
@@ -317,7 +323,7 @@ const RunContextSelector = memo(function RunContextSelector({
         {showEnvironmentPicker && availableEnvironments && onEnvironmentChange ? (
           <>
             <MenuGroup>
-              <MenuGroupLabel>Run on</MenuGroupLabel>
+              <MenuGroupLabel>{t("chat.branch.runOn")}</MenuGroupLabel>
               <MenuRadioGroup
                 value={autoEnvironmentLabel ? "auto" : environmentId}
                 onValueChange={(value) =>
@@ -338,7 +344,7 @@ const RunContextSelector = memo(function RunContextSelector({
                     <span className="flex min-w-0 items-center gap-1.5">
                       <ScaleIcon className="size-3" aria-hidden="true" />
                       <span className="min-w-0 truncate">
-                        {autoEnvironmentLabel ?? "Auto balance"}
+                        {autoEnvironmentLabel ?? t("chat.routing.autoBalance")}
                       </span>
                     </span>
                   </MenuRadioItem>
@@ -362,7 +368,7 @@ const RunContextSelector = memo(function RunContextSelector({
           </>
         ) : null}
         <MenuGroup>
-          <MenuGroupLabel>Workspace</MenuGroupLabel>
+          <MenuGroupLabel>{t("chat.details.workspace")}</MenuGroupLabel>
           <MenuRadioGroup
             value={effectiveEnvMode}
             onValueChange={(value) => {
@@ -380,13 +386,13 @@ const RunContextSelector = memo(function RunContextSelector({
                 ) : (
                   <FolderIcon className="size-3" />
                 )}
-                <MiddleTruncate value={resolveCurrentWorkspaceLabel(activeWorktreePath)} />
+                <MiddleTruncate value={resolveCurrentWorkspaceLabel(activeWorktreePath, t)} />
               </span>
             </MenuRadioItem>
             <MenuRadioItem disabled={envModeLocked} value="worktree" closeOnClick>
               <span className="flex min-w-0 items-center gap-1.5">
                 <FolderGit2Icon className="size-3" />
-                <span className="min-w-0 truncate">{resolveEnvModeLabel("worktree")}</span>
+                <span className="min-w-0 truncate">{resolveEnvModeLabel("worktree", t)}</span>
               </span>
             </MenuRadioItem>
             {previousWorktreeLabel ? (
@@ -617,6 +623,7 @@ export const BranchToolbar = memo(function BranchToolbar({
   composerControlsHostRef,
   contextStripVisible = true,
 }: BranchToolbarProps) {
+  const t = useTranslate();
   const branchSelectorRef = useRef<BranchToolbarBranchSelectorHandle>(null);
   const threadRef = useMemo(
     () => scopeThreadRef(environmentId, threadId),
@@ -661,7 +668,7 @@ export const BranchToolbar = memo(function BranchToolbar({
     [activeWorktreePath, canUsePreviousWorktree, projectThreads],
   );
   const previousWorktreeLabel = previousWorktreeSeed
-    ? resolvePreviousWorktreeLabel(previousWorktreeSeed)
+    ? resolvePreviousWorktreeLabel(previousWorktreeSeed, t)
     : null;
   const onUsePreviousWorktree = useCallback(() => {
     if (!previousWorktreeSeed || !activeProjectRef) return;

@@ -1,3 +1,4 @@
+import { useTranslate } from "~/i18n";
 /**
  * The single floating control over a pull request. Commenting on the change and submitting the
  * review that carries the Code tab's line comments used to float as two buttons that crowded
@@ -43,6 +44,7 @@ export function PullRequestComposer({
   onCommented: () => void;
   onReviewSubmitted: () => void;
 }) {
+  const t = useTranslate();
   const [open, setOpen] = useState(false);
   const [reviewPending, setReviewPending] = useState(false);
   const [requestedMode, setRequestedMode] = useState<"comment" | "review">("comment");
@@ -83,10 +85,10 @@ export function PullRequestComposer({
         // the icon is decorative and a reader who cannot see it still needs the number.
         aria-label={
           pendingComments.length > 0
-            ? `Review pull request, ${pendingComments.length} ${pendingComments.length === 1 ? "comment" : "comments"} pending`
+            ? t("pullRequest.flow.composer.pending", { count: pendingComments.length })
             : reviewStarted || !canComment
-              ? "Review pull request"
-              : "Comment on pull request"
+              ? t("pullRequest.flow.review.pullRequest")
+              : t("pullRequest.flow.comment.pullRequest")
         }
       >
         <MessageSquareIcon className="size-4" />
@@ -106,12 +108,12 @@ export function PullRequestComposer({
         sideOffset={8}
         width="lg"
         initialFocus={mode === "review" ? reviewRef : commentRef}
-        aria-label="Pull request composer"
+        aria-label={t("pullRequest.flow.composer")}
       >
         <div className="mb-3 flex items-center justify-between gap-2">
           {canComment && verdicts.length > 0 ? (
             <ToggleGroup
-              aria-label="Composer mode"
+              aria-label={t("pullRequest.flow.composer.mode")}
               variant="segmented"
               value={[mode]}
               onValueChange={(next) => {
@@ -119,14 +121,18 @@ export function PullRequestComposer({
                 if (value === "comment" || value === "review") setRequestedMode(value);
               }}
             >
-              <Toggle value="comment">Comment</Toggle>
+              <Toggle value="comment">{t("pullRequest.flow.comment")}</Toggle>
               <Toggle value="review">
-                {pendingComments.length > 0 ? `Review (${pendingComments.length})` : "Review"}
+                {pendingComments.length > 0
+                  ? t("pullRequest.flow.composer.reviewCount", { count: pendingComments.length })
+                  : t("pullRequest.flow.review")}
               </Toggle>
             </ToggleGroup>
           ) : (
             <PopoverTitle>
-              {mode === "review" ? "Review pull request" : "Comment on pull request"}
+              {mode === "review"
+                ? t("pullRequest.flow.review.pullRequest")
+                : t("pullRequest.flow.comment.pullRequest")}
             </PopoverTitle>
           )}
           <div className="flex items-center gap-1">
@@ -134,8 +140,8 @@ export function PullRequestComposer({
               <Button
                 size="icon-xs"
                 variant="ghost"
-                aria-label="Discard pending line comments"
-                title="Discard pending line comments"
+                aria-label={t("pullRequest.flow.composer.discard")}
+                title={t("pullRequest.flow.composer.discard")}
                 disabled={reviewPending}
                 onClick={() => clearComments(reviewKey)}
               >
@@ -144,7 +150,7 @@ export function PullRequestComposer({
             ) : null}
             <PopoverClose
               render={<Button size="icon-xs" variant="ghost" />}
-              aria-label="Close composer"
+              aria-label={t("pullRequest.flow.composer.close")}
             >
               <XIcon className="size-3.5" />
             </PopoverClose>

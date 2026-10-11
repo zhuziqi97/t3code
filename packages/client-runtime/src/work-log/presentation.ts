@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import {
   isToolLifecycleItemType,
   type AssetResource,
@@ -10,6 +11,7 @@ import {
 } from "@t3tools/contracts";
 import {
   resolveT3McpToolDefinition,
+  resolveT3McpToolId,
   type T3McpToolDefinition,
   type T3McpToolSummaryAction,
 } from "@t3tools/shared/t3McpToolPresentation";
@@ -142,6 +144,8 @@ function resolveT3McpToolPresentation(
   definition: T3McpToolDefinition | null,
   status: string | undefined,
   data?: unknown,
+  t?: TFunction,
+  toolId?: string | null,
 ) {
   if (!definition) return null;
   const [action, running, completed, detail] = definition.labels;
@@ -179,8 +183,28 @@ function resolveT3McpToolPresentation(
     number > 0
       ? `PR #${number}`
       : detail;
+  const phase =
+    status === "completed" || status === "failed" || status === "declined" || status === "stopped"
+      ? status
+      : "inProgress";
+  const translatedTarget = target.startsWith("PR #") ? target : t?.("chat.tools.label.pullRequest");
+  const actionLabel =
+    t && toolId ? t(`chat.tools.label.${toolId}.action`, { target: translatedTarget }) : "";
+  const displayName =
+    t && toolId
+      ? phase === "failed" || phase === "declined"
+        ? t(`chat.tools.label.${phase}`, {
+            action: actionLabel.charAt(0).toLowerCase() + actionLabel.slice(1),
+          })
+        : t(`chat.tools.label.${toolId}.${phase}`, { target: translatedTarget })
+      : `${verb} ${target}`;
   return {
-    displayName: `${verb} ${target}`,
+    displayName,
+    ...(definition.summaryAction === "thread-read"
+      ? {
+          threadReadLabelPrefix: t ? t(`chat.tools.threadRead.${phase}`) : `${verb} thread`,
+        }
+      : {}),
     icon: definition.icon,
     ...(actionKind === undefined ? {} : { action: actionKind }),
   };
@@ -202,13 +226,17 @@ export function resolveWorkEntryToolPresentation(
     "label" | "toolTitle" | "toolData" | "toolLifecycleStatus" | "structuredPayload"
   >,
   fallbackStatus?: "inProgress" | "completed",
+  t?: TFunction,
 ) {
-  const definition = resolveT3McpToolDefinition(workEntryToolName(entry));
+  const toolName = workEntryToolName(entry);
+  const definition = resolveT3McpToolDefinition(toolName);
   const status = entry.toolLifecycleStatus ?? fallbackStatus;
   return resolveT3McpToolPresentation(
     definition,
     definition && t3ToolResultIndicatesFailure(workEntryToolOutput(entry)) ? "failed" : status,
     entry.toolData,
+    t,
+    t ? resolveT3McpToolId(toolName) : undefined,
   );
 }
 
@@ -540,7 +568,8 @@ function toolGroupActionCount(
   return changedFiles.size + editsWithoutFileDetails;
 }
 
-function toolGroupActionLabel(action: ToolGroupAction, count: number): string {
+function toolGroupActionLabel(action: ToolGroupAction, count: number, t?: TFunction): string {
+  if (t) return t(`chat.tools.summary.${action}`, { count });
   switch (action) {
     case "link-pr":
       return `Linked ${count} ${count === 1 ? "pull request" : "pull requests"}`;
@@ -642,14 +671,23 @@ function summaryActionPriority(action: ToolGroupAction | T3McpToolSummaryAction)
 }
 
 /** Summarizes at most two action categories; every omitted call still counts in the remainder. */
-export function summarizeToolGroup(entries: ReadonlyArray<WorkLogPresentationEntry>): {
+export function summarizeToolGroup(
+  entries: ReadonlyArray<WorkLogPresentationEntry>,
+  t?: TFunction,
+): {
   summary: string;
   hasFailure: boolean;
 } {
   const toolEntries = entries.filter((entry) => entry.itemType !== "reasoning");
   if (entries.length > 0 && toolEntries.length === 0) {
     return {
-      summary: entries.length === 1 ? "Thought" : `Thought (×${entries.length})`,
+      summary: t
+        ? entries.length === 1
+          ? t("chat.timeline.thought")
+          : t("chat.tools.summary.reasoning", { count: entries.length })
+        : entries.length === 1
+          ? "Thought"
+          : `Thought (×${entries.length})`,
       hasFailure: false,
     };
   }
@@ -680,11 +718,12 @@ export function summarizeToolGroup(entries: ReadonlyArray<WorkLogPresentationEnt
     count: group.entries.length,
     priority: summaryActionPriority(action),
     ...(group.t3Action
-      ? summarizeT3ToolCalls(group.t3Action, group.entries.map(t3ToolSummaryCall))
+      ? summarizeT3ToolCalls(group.t3Action, group.entries.map(t3ToolSummaryCall), t)
       : {
           label: toolGroupActionLabel(
             group.action,
             toolGroupActionCount(group.action, group.entries),
+            t,
           ),
           failedCount: group.entries.filter(workEntryDisplayIndicatesToolFailure).length,
         }),
@@ -697,15 +736,21 @@ export function summarizeToolGroup(entries: ReadonlyArray<WorkLogPresentationEnt
   if (sources.size > 0) {
     const sourceValues = [...sources.values()];
     const sourceNames = sourceValues.map((source) => source.name);
-    const formattedNames =
-      sourceNames.length < 2
+    const formattedNames = t
+      ? joinToolSummary(sourceNames, "names", t)
+      : sourceNames.length < 2
         ? sourceNames[0]!
         : sourceNames.length === 2
           ? sourceNames.join(" and ")
           : `${sourceNames.slice(0, -1).join(", ")}, and ${sourceNames.at(-1)}`;
     const allIntegrations = sourceValues.every((source) => source.kind === "integration");
     labels.unshift(
-      `Used ${formattedNames}${allIntegrations ? ` ${sources.size === 1 ? "integration" : "integrations"}` : ""}`,
+      t
+        ? t(allIntegrations ? "chat.tools.summary.integrations" : "chat.tools.summary.sources", {
+            names: formattedNames,
+            count: sources.size,
+          })
+        : `Used ${formattedNames}${allIntegrations ? ` ${sources.size === 1 ? "integration" : "integrations"}` : ""}`,
     );
   }
   const sourcedCount = entries.filter(
@@ -716,16 +761,33 @@ export function summarizeToolGroup(entries: ReadonlyArray<WorkLogPresentationEnt
   const remainingCount =
     entries.length - sourcedCount - selected.reduce((count, group) => count + group.count, 0);
   if (remainingCount > 0) {
-    labels.push(`Performed ${remainingCount} other ${remainingCount === 1 ? "action" : "actions"}`);
+    labels.push(
+      t
+        ? t("chat.tools.summary.remainder", { count: remainingCount })
+        : `Performed ${remainingCount} other ${remainingCount === 1 ? "action" : "actions"}`,
+    );
   }
   const sentenceLabels = labels.map((label, index) =>
     index === 0 ? label : label.charAt(0).toLowerCase() + label.slice(1),
   );
-  const summary =
-    sentenceLabels.length < 3
+  const summary = t
+    ? joinToolSummary(sentenceLabels, "actions", t)
+    : sentenceLabels.length < 3
       ? sentenceLabels.join(" and ")
       : `${sentenceLabels.slice(0, -1).join(", ")}, and ${sentenceLabels.at(-1)}`;
   return { summary, hasFailure: summaries.some((group) => group.failedCount > 0) };
+}
+
+function joinToolSummary(
+  labels: ReadonlyArray<string>,
+  kind: "names" | "actions",
+  t: TFunction,
+): string {
+  if (labels.length < 2) return labels[0] ?? "";
+  return t(`chat.tools.join.${kind}.${labels.length === 2 ? "pair" : "many"}`, {
+    start: labels.slice(0, -1).join(t(`chat.tools.join.${kind}.separator`)),
+    last: labels.at(-1),
+  });
 }
 
 export function toolGroupSummaryKind(

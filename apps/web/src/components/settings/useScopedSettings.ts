@@ -1,3 +1,4 @@
+import { i18n } from "../../i18n";
 import { AuthSettingsWriteScope } from "@t3tools/contracts";
 import { useEnvironmentsWithScope } from "../../state/session";
 import {
@@ -67,7 +68,7 @@ function useRunScopedPlan() {
       if (plan.unavailableReason) {
         toastManager.add({
           type: "warning",
-          title: "Setting not saved",
+          title: i18n.t("settings.save.notSaved"),
           description: plan.unavailableReason,
         });
         return;
@@ -83,7 +84,7 @@ function useRunScopedPlan() {
               Cause.fail(
                 new EnvironmentAuthorizationError({
                   requiredScope: missing,
-                  message: "This connection lacks permission to change these settings.",
+                  message: i18n.t("settings.save.permission"),
                 }),
               ),
             );
@@ -95,13 +96,19 @@ function useRunScopedPlan() {
         toastManager.add({
           type: "error",
           title:
-            savedEnvironmentCount > 0 ? "Setting saved on some environments" : "Setting not saved",
+            savedEnvironmentCount > 0
+              ? i18n.t("settings.save.partial")
+              : i18n.t("settings.save.notSaved"),
           description: [
-            ...failedEnvironments.map(
-              ({ label, message }) => `Could not save on ${label}: ${message}`,
+            ...failedEnvironments.map(({ label, message }) =>
+              i18n.t("settings.save.failedOn", { environment: label, message }),
             ),
             ...(savedEnvironmentCount > 0
-              ? [`Saved on ${savedEnvironments.map(({ label }) => label).join(", ")}.`]
+              ? [
+                  i18n.t("settings.save.savedOn", {
+                    environments: savedEnvironments.map(({ label }) => label).join(", "),
+                  }),
+                ]
               : []),
           ].join("\n"),
         });

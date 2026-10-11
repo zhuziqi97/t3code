@@ -1,3 +1,4 @@
+import { useTranslate } from "~/i18n";
 import type { PullRequestContextMetadata } from "@t3tools/contracts";
 import { ArrowRightIcon } from "lucide-react";
 
@@ -6,12 +7,15 @@ import { cn } from "~/lib/utils";
 import { resolvePullRequestState } from "./pullRequest/pullRequestPresentation";
 
 export function PullRequestContextDetails({ metadata }: { metadata: PullRequestContextMetadata }) {
-  const state = resolvePullRequestState(metadata);
+  const t = useTranslate();
+  const state = resolvePullRequestState(metadata, t);
   return (
     <div className="max-w-80 space-y-1 overflow-hidden py-0.5 text-left">
       <div className="flex items-center gap-1.5 text-xs font-medium">
         <state.Icon className={cn("size-3.5 shrink-0", state.toneClassName)} />
-        <span className="text-foreground">Pull request #{metadata.number}</span>
+        <span className="text-foreground">
+          {t("chat.pullRequest.number", { number: metadata.number })}
+        </span>
         <span className={state.toneClassName}>{state.label}</span>
       </div>
       <div className="wrap-break-word text-foreground">{metadata.title}</div>

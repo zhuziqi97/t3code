@@ -13,7 +13,10 @@ import {
   type DirectoryRecord,
 } from "@electron/asar";
 
-import { CONVENE_DESKTOP_IDENTITY } from "@t3tools/shared/conveneDesktopIdentity";
+import {
+  CONVENE_DESKTOP_IDENTITY,
+  resolveConveneVersion,
+} from "@t3tools/shared/conveneDesktopIdentity";
 import { fromYaml } from "@t3tools/shared/schemaYaml";
 import { HostProcessArchitecture, HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { clerkFrontendApiHostnameFromPublishableKey } from "@t3tools/shared/relayAuth";
@@ -3465,7 +3468,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       }),
   });
 
-  const appVersion = options.version ?? serverPackageJson.version;
+  const appVersion = options.version ?? resolveConveneVersion(serverPackageJson.version);
   const iconAssets = resolveDesktopBuildIconAssets(appVersion);
   const commitHash = yield* resolveGitCommitHash(repoRoot);
   const mkdir = options.keepStage ? fs.makeTempDirectory : fs.makeTempDirectoryScoped;
@@ -3489,6 +3492,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       ChildProcess.make(spawnCommand.command, spawnCommand.args, {
         cwd: repoRoot,
         shell: spawnCommand.shell,
+        env: { ...process.env, APP_VERSION: appVersion },
       }),
       { label: "vp run build:desktop", verbose: options.verbose },
     );

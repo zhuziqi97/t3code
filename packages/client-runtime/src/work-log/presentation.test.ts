@@ -1,3 +1,4 @@
+import { createI18n } from "../i18n/createI18n.ts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { ThreadId, TurnItemId, type OrchestrationV2TurnItem } from "@t3tools/contracts";
@@ -206,6 +207,39 @@ describe("summarizeToolGroup", () => {
     ...overrides,
   });
 
+  it("localizes groups while preserving source names, file deduplication and omitted counts", () => {
+    const t = createI18n({ lng: "zh" }).t;
+    const edit = entry("edit", {
+      itemType: "file_change",
+      changedFiles: ["src/raw.ts", "src/second.ts"],
+    });
+    expect(summarizeToolGroup([edit, { ...edit, id: "retry" }], t)).toEqual({
+      summary: "修改了 2 个文件",
+      hasFailure: false,
+    });
+    const source = {
+      key: "integration",
+      name: "Raw Integration 原文",
+      kind: "integration" as const,
+    };
+    const entries = [
+      entry("source", { toolSource: source }),
+      entry("source-again", { toolSource: source }),
+      entry("command", { itemType: "command_execution", command: "printf Raw" }),
+      edit,
+      entry("search", { itemType: "web_search" }),
+      entry("thought", { itemType: "reasoning", tone: "thinking" }),
+    ];
+    expect(summarizeToolGroup(entries, t).summary).toBe(
+      "使用了 Raw Integration 原文 集成，运行了 1 条命令，修改了 2 个文件，执行了 1 项其他操作",
+    );
+    expect(entries[2]?.command).toBe("printf Raw");
+    expect(summarizeToolGroup([entries[5]!], t).summary).toBe("思考内容");
+    expect(summarizeToolGroup([entries[5]!, { ...entries[5]!, id: "thought-2" }], t).summary).toBe(
+      "思考内容（×2）",
+    );
+  });
+
   it("excludes reasoning from mixed tool counts and icons", () => {
     const thought = entry("thought", {
       itemType: "reasoning",
@@ -285,9 +319,36 @@ describe("resolveWorkEntryToolPresentation", () => {
       const presentation = resolveWorkEntryToolPresentation(entry);
       expect(presentation, tool).not.toBeNull();
       expect(presentation?.displayName, tool).not.toContain(tool);
+      for (const toolLifecycleStatus of [
+        "inProgress",
+        "completed",
+        "failed",
+        "declined",
+        "stopped",
+      ] as const) {
+        const current = { ...entry, toolLifecycleStatus };
+        expect(
+          resolveWorkEntryToolPresentation(current, undefined, createI18n({ lng: "en" }).t),
+          `${tool}: ${toolLifecycleStatus}`,
+        ).toEqual(resolveWorkEntryToolPresentation(current));
+        const chinese = resolveWorkEntryToolPresentation(
+          current,
+          undefined,
+          createI18n({ lng: "zh" }).t,
+        );
+        expect(chinese?.displayName, `${tool}: ${toolLifecycleStatus}`).toMatch(/[\u4e00-\u9fff]/);
+        expect(chinese?.displayName, `${tool}: ${toolLifecycleStatus}`).not.toMatch(
+          /chat\.tools\.|\{\{/,
+        );
+        expect(chinese?.icon).toBe(presentation?.icon);
+      }
       const summary = summarizeToolGroup([entry]);
       expect(summary.summary, tool).not.toMatch(/Used (?:1 tool|T3 Code integration)/);
       expect(summary.hasFailure, tool).toBe(false);
+      expect(summarizeToolGroup([entry], createI18n({ lng: "en" }).t), tool).toEqual(summary);
+      const translated = summarizeToolGroup([entry], createI18n({ lng: "zh" }).t);
+      expect(translated.summary, tool).toMatch(/[\u4e00-\u9fff]/);
+      expect(translated.summary, tool).not.toMatch(/chat\.tools\.|\{\{/);
       const failed = { ...entry, toolLifecycleStatus: "failed" as const };
       expect(resolveWorkEntryToolPresentation(failed)?.displayName, tool).toMatch(/^Failed to /);
       expect(summarizeToolGroup([failed]).hasFailure, tool).toBe(true);
@@ -295,6 +356,63 @@ describe("resolveWorkEntryToolPresentation", () => {
         /^(?:Tried to |Requested thread creation)/,
       );
     }
+  });
+
+  it.each([
+    ["task_cancel", "已请求取消委派任务"],
+    ["delete_scheduled_task", "已请求删除定时任务"],
+    ["run_scheduled_task_now", "已请求运行定时任务"],
+    ["t3_thread_interrupt", "已请求中断 T3 会话"],
+    ["t3_thread_fork", "已请求派生当前会话"],
+    ["t3_project_create", "已注册项目"],
+  ])("keeps Chinese %s labels faithful to requested versus completed operations", (tool, label) => {
+    expect(
+      resolveWorkEntryToolPresentation(
+        {
+          label: "Custom title",
+          toolData: { server: "t3-code", tool },
+          toolLifecycleStatus: "completed",
+        },
+        undefined,
+        createI18n({ lng: "zh" }).t,
+      )?.displayName,
+    ).toBe(label);
+  });
+
+  it("preserves raw PR numbers and failure envelopes in translated labels", () => {
+    const t = createI18n({ lng: "zh" }).t;
+    const entry = {
+      label: "Custom provider title",
+      toolLifecycleStatus: "completed" as const,
+      toolData: {
+        server: "t3-code",
+        tool: "link_pull_request",
+        arguments: { url: "https://github.com/acme/web/pull/42" },
+      },
+    };
+    expect(resolveWorkEntryToolPresentation(entry, undefined, t)).toMatchObject({
+      displayName: "已关联PR #42",
+      icon: "pull-request",
+      action: "link-pr",
+    });
+    expect(
+      resolveWorkEntryToolPresentation(
+        { ...entry, toolData: { ...entry.toolData, result: { isError: true } } },
+        undefined,
+        t,
+      )?.displayName,
+    ).toBe("关联PR #42失败");
+    expect(entry.toolData.arguments.url).toBe("https://github.com/acme/web/pull/42");
+    expect(
+      resolveWorkEntryToolPresentation(
+        {
+          label: "Raw Integration 原文",
+          toolData: { server: "another-server", tool: "link_pull_request" },
+        },
+        undefined,
+        t,
+      ),
+    ).toBeNull();
   });
 
   it.each([

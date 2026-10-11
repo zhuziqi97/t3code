@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import { ChevronRightIcon, FolderIcon, MoreHorizontalIcon, PlusIcon } from "lucide-react";
 import { memo } from "react";
 import { AuthOrchestrationOperateScope } from "@t3tools/contracts";
@@ -14,6 +15,7 @@ import type { ComponentProps } from "react";
 export const SidebarProjectRow = memo(function SidebarProjectRow(props: {
   project: SidebarProjectSnapshot;
   label: string;
+  isScratch: boolean;
   selected: boolean;
   expanded: boolean;
   badge: ComponentProps<typeof ProjectEnvironmentBadge> | null;
@@ -21,6 +23,7 @@ export const SidebarProjectRow = memo(function SidebarProjectRow(props: {
   onNewThread: () => void;
   onSettings: () => void;
 }) {
+  const t = useTranslate();
   const canCreate = useEnvironmentScope(props.project.environmentId, AuthOrchestrationOperateScope);
   return (
     <div
@@ -45,7 +48,7 @@ export const SidebarProjectRow = memo(function SidebarProjectRow(props: {
             aria-hidden
             className={cn("size-3 shrink-0 text-icon-muted", props.expanded && "rotate-90")}
           />
-          {props.label === "No project" ? (
+          {props.isScratch ? (
             <FolderIcon aria-hidden className="size-4 shrink-0" />
           ) : (
             <ProjectFavicon project={props.project} className="size-4 shrink-0" />
@@ -55,7 +58,7 @@ export const SidebarProjectRow = memo(function SidebarProjectRow(props: {
         </TooltipTrigger>
         <TooltipPopup>
           {props.label}
-          {props.label !== "No project" && (
+          {!props.isScratch && (
             <div className="text-xs text-muted-foreground">{props.project.workspaceRoot}</div>
           )}
         </TooltipPopup>
@@ -67,7 +70,7 @@ export const SidebarProjectRow = memo(function SidebarProjectRow(props: {
               <Button
                 size="icon-xs"
                 variant="ghost-muted"
-                aria-label={`New thread in ${props.label}`}
+                aria-label={t("convene.sidebar.newInProject", { project: props.label })}
                 disabled={!canCreate}
                 onClick={props.onNewThread}
               />
@@ -75,7 +78,7 @@ export const SidebarProjectRow = memo(function SidebarProjectRow(props: {
           >
             <PlusIcon />
           </TooltipTrigger>
-          <TooltipPopup>New thread in {props.label}</TooltipPopup>
+          <TooltipPopup>{t("convene.sidebar.newInProject", { project: props.label })}</TooltipPopup>
         </Tooltip>
         <Menu>
           <MenuTrigger
@@ -83,14 +86,14 @@ export const SidebarProjectRow = memo(function SidebarProjectRow(props: {
               <Button
                 size="icon-xs"
                 variant="ghost-muted"
-                aria-label={`Actions for ${props.label}`}
+                aria-label={t("convene.sidebar.actions", { project: props.label })}
               />
             }
           >
             <MoreHorizontalIcon />
           </MenuTrigger>
           <MenuPopup>
-            <MenuItem onClick={props.onSettings}>Project settings</MenuItem>
+            <MenuItem onClick={props.onSettings}>{t("convene.sidebar.projectSettings")}</MenuItem>
           </MenuPopup>
         </Menu>
       </div>

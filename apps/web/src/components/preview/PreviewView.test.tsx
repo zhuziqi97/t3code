@@ -5,6 +5,7 @@ import {
   DEFAULT_PREVIEW_ZOOM_FACTOR,
   EnvironmentId,
   FILL_PREVIEW_VIEWPORT,
+  ProjectId,
   ThreadId,
 } from "@t3tools/contracts";
 import { act, createElement, Profiler } from "react";
@@ -40,6 +41,9 @@ const mocks = vi.hoisted(() => ({
   recordingTabIds: new Set<string>(),
   recordingRuntimeTabId: null as string | null,
   recordVisitForThread: vi.fn(),
+  liveHistory: false,
+  projectId: null as string | null,
+  draftProjectId: null as string | null,
 }));
 
 const EMPTY_HISTORY: never[] = [];
@@ -53,12 +57,22 @@ const STUB_BROWSER_DEFAULTS = {
   profileId: DEFAULT_BROWSER_PROFILE_ID,
 };
 
-vi.mock("~/browserHistoryStore", () => ({
-  recordVisitForThread: mocks.recordVisitForThread,
-  setTitleForThreadUrl: vi.fn(),
-  removeUrlForThread: vi.fn(),
-  BROWSER_HISTORY_MAX_ENTRIES_PER_PROJECT: 50,
-  useThreadRecentHistory: () => EMPTY_HISTORY,
+vi.mock("~/browserHistoryStore", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("~/browserHistoryStore")>();
+  return {
+    ...actual,
+    recordVisitForThread: mocks.recordVisitForThread,
+    setTitleForThreadUrl: vi.fn(),
+    removeUrlForThread: vi.fn(),
+    BROWSER_HISTORY_MAX_ENTRIES_PER_PROJECT: 50,
+    useThreadRecentHistory: (...args: Parameters<typeof actual.useThreadRecentHistory>) =>
+      mocks.liveHistory ? actual.useThreadRecentHistory(...args) : EMPTY_HISTORY,
+  };
+});
+
+vi.mock("~/state/entities", () => ({
+  useEnvironmentSupportsServerBrowser: () => false,
+  useThreadShell: () => (mocks.projectId ? { projectId: ProjectId.make(mocks.projectId) } : null),
 }));
 
 vi.mock("~/state/session", async (importOriginal) => ({
@@ -96,11 +110,17 @@ vi.mock("~/browser/browserDefaults", () => ({
 
 vi.mock("~/composerDraftStore", () => ({
   useComposerDraftStore: (
-    select: (store: { addPreviewAnnotation: () => void; addImage: () => void }) => unknown,
+    select: (store: {
+      addPreviewAnnotation: () => void;
+      addImage: () => void;
+      getDraftThreadByRef: () => { projectId: ProjectId } | null;
+    }) => unknown,
   ) =>
     select({
       addPreviewAnnotation: mocks.addPreviewAnnotation,
       addImage: mocks.addImage,
+      getDraftThreadByRef: () =>
+        mocks.draftProjectId ? { projectId: ProjectId.make(mocks.draftProjectId) } : null,
     }),
 }));
 
@@ -372,6 +392,82 @@ describe("PreviewView navigation", () => {
     mocks.recordingTabIds = new Set();
     mocks.recordingRuntimeTabId = null;
     mocks.recordVisitForThread.mockClear();
+    mocks.liveHistory = false;
+    mocks.projectId = null;
+    mocks.draftProjectId = null;
+  });
+
+  it("publishes pending visits after project hydration and shares history only within the same environment and project", async () => {
+    const history =
+      await vi.importActual<typeof import("~/browserHistoryStore")>("~/browserHistoryStore");
+    history.resetBrowserHistoryForTests();
+    mocks.liveHistory = true;
+    const document = installTestDom();
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(document.createElement("div") as unknown as Element);
+    const secondThread = { ...TEST_THREAD_REF, threadId: ThreadId.make("second-thread") };
+    const remoteThread = {
+      ...secondThread,
+      environmentId: EnvironmentId.make("other-environment"),
+    };
+    try {
+      history.recordVisitForThread(TEST_THREAD_REF, "http://localhost:3000/one", 123);
+      await act(() => root.render(<PreviewView threadRef={TEST_THREAD_REF} visible />));
+      expect(history.useBrowserHistoryStore.getState().byProjectKey).toEqual({});
+      mocks.projectId = "project-a";
+      await act(() => root.render(<PreviewView threadRef={TEST_THREAD_REF} visible />));
+      expect(
+        history.useBrowserHistoryStore.getState().byProjectKey["environment-1:project-a"],
+      ).toEqual([{ url: "http://localhost:3000/one", lastVisitedAt: 123 }]);
+      await act(() => root.render(<PreviewView threadRef={secondThread} visible />));
+      await act(() => history.recordVisitForThread(secondThread, "http://localhost:3000/two", 124));
+      expect(
+        history.useBrowserHistoryStore
+          .getState()
+          .byProjectKey["environment-1:project-a"]?.map((entry) => entry.url),
+      ).toEqual(["http://localhost:3000/two", "http://localhost:3000/one"]);
+      await act(() => root.render(<PreviewView threadRef={remoteThread} visible />));
+      await act(() =>
+        history.recordVisitForThread(remoteThread, "http://localhost:3000/remote", 125),
+      );
+      expect(
+        history.useBrowserHistoryStore.getState().byProjectKey["other-environment:project-a"],
+      ).toEqual([{ url: "http://localhost:3000/remote", lastVisitedAt: 125 }]);
+      expect(
+        history.useBrowserHistoryStore.getState().byProjectKey["environment-1:project-a"],
+      ).toHaveLength(2);
+      expect(history.useBrowserHistoryStore.getState().pendingVisitsByThreadKey).toEqual({});
+    } finally {
+      await act(() => root.unmount());
+      history.resetBrowserHistoryForTests();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("records history for a draft thread before its server shell exists", async () => {
+    const history =
+      await vi.importActual<typeof import("~/browserHistoryStore")>("~/browserHistoryStore");
+    history.resetBrowserHistoryForTests();
+    mocks.liveHistory = true;
+    mocks.draftProjectId = "draft-project";
+    const document = installTestDom();
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(document.createElement("div") as unknown as Element);
+    try {
+      await act(() => root.render(<PreviewView threadRef={TEST_THREAD_REF} visible />));
+      await act(() =>
+        history.recordVisitForThread(TEST_THREAD_REF, "http://localhost:3000/draft", 126),
+      );
+      mocks.projectId = "draft-project";
+      await act(() => root.render(<PreviewView threadRef={TEST_THREAD_REF} visible />));
+      expect(
+        history.useBrowserHistoryStore.getState().byProjectKey["environment-1:draft-project"],
+      ).toEqual([{ url: "http://localhost:3000/draft", lastVisitedAt: 126 }]);
+    } finally {
+      await act(() => root.unmount());
+      history.resetBrowserHistoryForTests();
+      vi.unstubAllGlobals();
+    }
   });
 
   it("shows the cursor in a replacement browser while the old instance still records", async () => {

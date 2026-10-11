@@ -9,3 +9,8 @@ export const CONVENE_DESKTOP_IDENTITY = {
   scheme: "t3code-convene",
   developmentScheme: "t3code-convene-dev",
 } as const;
+
+/** Default fork release for the checked-out upstream base. Explicit artifact versions override it. */
+export function resolveConveneVersion(upstreamVersion: string): string {
+  return `${upstreamVersion}${upstreamVersion.includes("-") ? "." : "-"}convene.2`;
+}

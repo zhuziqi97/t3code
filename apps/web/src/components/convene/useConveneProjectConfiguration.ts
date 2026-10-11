@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import { useAtomValue } from "@effect/atom-react";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import type {
@@ -20,6 +21,7 @@ import {
 } from "./conveneDraft";
 
 export function useConveneProjectConfiguration(environmentId: EnvironmentId, projectId: ProjectId) {
+  const t = useTranslate();
   const statusResult = useConveneStatus(environmentId);
   const online = AsyncResult.isSuccess(statusResult) && statusResult.value.phase === "online";
   const permitted = useAtomValue(conveneEnvironment.mutateProject.permissionAtom(environmentId));
@@ -68,7 +70,7 @@ export function useConveneProjectConfiguration(environmentId: EnvironmentId, pro
     setBusy(false);
     if (result._tag === "Failure") {
       const cause = squashAtomCommandFailure(result);
-      setError(cause instanceof Error ? cause.message : "Could not load Convene configuration.");
+      setError(cause instanceof Error ? cause.message : t("convene.error.load"));
       setFresh(false);
       return;
     }
@@ -79,7 +81,7 @@ export function useConveneProjectConfiguration(environmentId: EnvironmentId, pro
       setConfiguration(null);
       setDraft(null);
     }
-  }, [query, environmentId, projectId, accept]);
+  }, [query, environmentId, projectId, accept, t]);
   useEffect(() => {
     void refresh();
   }, [refresh, online]);
@@ -92,7 +94,7 @@ export function useConveneProjectConfiguration(environmentId: EnvironmentId, pro
           sameConveneDraft(value, configurationDraft(configuration)) ? null : value,
         );
       } catch {
-        setError("This device could not retain the draft. Keep this dialog open until you save.");
+        setError(t("convene.error.draft"));
       }
     }
   };
@@ -105,7 +107,7 @@ export function useConveneProjectConfiguration(environmentId: EnvironmentId, pro
     setBusy(false);
     if (result._tag === "Failure") {
       const cause = squashAtomCommandFailure(result);
-      setError(cause instanceof Error ? cause.message : "Could not update Convene configuration.");
+      setError(cause instanceof Error ? cause.message : t("convene.error.save"));
       return;
     }
     accept(result.value, input.operation === "save");

@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next";
+import { i18n } from "./i18n";
 import type { EnvironmentThreadStatus } from "@t3tools/client-runtime/state/threads";
 
 export type ThreadSyncPhase = "loading" | "syncing";
@@ -22,6 +24,6 @@ export function resolveThreadSyncPhase(input: {
   }
 }
 
-export function threadSyncLabel(phase: ThreadSyncPhase): string {
-  return phase === "loading" ? "Loading messages..." : "Syncing messages...";
+export function threadSyncLabel(phase: ThreadSyncPhase, t: TFunction = i18n.t): string {
+  return phase === "loading" ? t("chat.sync.loading") : t("chat.sync.syncing");
 }

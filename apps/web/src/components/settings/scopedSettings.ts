@@ -1,3 +1,5 @@
+import { i18n } from "../../i18n";
+import type { TFunction } from "i18next";
 import {
   ClientSettingsSchema,
   type ClientSettingsPatch,
@@ -214,6 +216,7 @@ export function planScopedSettingsPatch(
   scope: ResolvedSettingsScope,
   environments: readonly ScopedSettingsEnvironment[],
   patch: ScopedSettingsPatch,
+  translate: TFunction = i18n.t,
 ) {
   const clientPatch = Object.fromEntries(
     Object.entries(patch).filter(([key]) => CLIENT_KEYS.has(key)),
@@ -298,10 +301,12 @@ export function planScopedSettingsPatch(
       : scope.kind === "unavailable"
         ? scope.message
         : unscopableKeys.length > 0
-          ? "This setting is environment-wide and cannot be overridden by a project."
+          ? translate("settings.save.environmentOnly")
           : isProjectScope
-            ? "Connect the selected checkouts, or update their environments, to save a project override."
-            : `Connect ${scope.kind === "environment" ? scope.label : "an environment"} to save this setting.`;
+            ? translate("settings.save.projectDisconnected")
+            : scope.kind === "environment"
+              ? translate("settings.save.connectNamed", { environment: scope.label })
+              : translate("settings.save.connect");
   return { clientPatch, hasClientWrite, serverWrites, unavailableReason };
 }
 
@@ -310,6 +315,7 @@ export function planScopedSettingsClear(
   scope: ResolvedSettingsScope,
   environments: readonly ScopedSettingsEnvironment[],
   keys: readonly ProjectScopedServerSettingKey[],
+  translate: TFunction = i18n.t,
 ) {
   const serverWrites =
     scope.kind === "project" || scope.kind === "checkout"
@@ -322,9 +328,7 @@ export function planScopedSettingsClear(
     hasClientWrite: false,
     serverWrites,
     unavailableReason:
-      serverWrites.length > 0
-        ? null
-        : "Connect the selected checkouts, or update their environments, to reset this override.",
+      serverWrites.length > 0 ? null : translate("settings.save.resetDisconnected"),
   };
 }
 
@@ -360,6 +364,7 @@ export function planProjectOverridesClear(
   environments: readonly ScopedSettingsEnvironment[],
   entries: readonly ProjectOverrideEntry[],
   keys: readonly ProjectScopedServerSettingKey[],
+  translate: TFunction = i18n.t,
 ) {
   const byId = new Map(environments.map((environment) => [environment.environmentId, environment]));
   const writes = new Map<EnvironmentId, ScopedServerWrite>();
@@ -385,7 +390,7 @@ export function planProjectOverridesClear(
     hasClientWrite: false,
     serverWrites,
     unavailableReason:
-      serverWrites.length > 0 ? null : "Connect the environments to reset these overrides.",
+      serverWrites.length > 0 ? null : translate("settings.save.resetEnvironments"),
   };
 }
 
@@ -416,10 +421,7 @@ export async function persistScopedSettingsPatch(
     return [
       {
         ...environment,
-        message:
-          error instanceof Error
-            ? error.message
-            : "The save failed. Try reconnecting and saving again.",
+        message: error instanceof Error ? error.message : i18n.t("settings.save.failed"),
       },
     ];
   });

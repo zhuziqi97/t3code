@@ -1,6 +1,11 @@
 import type { EnvironmentId, ProjectId, PullRequestCheck } from "@t3tools/contracts";
 import { Children, isValidElement, type ReactNode } from "react";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
+
+vi.mock("../../i18n", async (original) => {
+  const module = await original<typeof import("../../i18n")>();
+  return { ...module, useTranslate: () => module.i18n.t };
+});
 
 import { PullRequestChecksPopover } from "./PullRequestChecksPopover";
 import type { EnvironmentPullRequestEntry } from "./pullRequestList.logic";

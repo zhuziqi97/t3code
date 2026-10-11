@@ -2,12 +2,12 @@ import type { DesktopUpdateState } from "@t3tools/contracts";
 import { TriangleAlertIcon } from "lucide-react";
 import { type ComponentProps, useCallback, useEffect, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import { useTranslate } from "../../i18n";
 import { isElectron } from "../../env";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { cn } from "../../lib/utils";
 import { ensureLocalApi } from "../../localApi";
 import { useDesktopUpdateState } from "../../state/desktopUpdate";
-import { stackedThreadToast, toastManager } from "../ui/toast";
 import {
   canCheckForUpdate,
   getArm64IntelBuildWarningDescription,
@@ -19,7 +19,10 @@ import {
   shouldShowArm64IntelBuildWarning,
   shouldToastDesktopUpdateActionResult,
 } from "../desktopUpdate.logic";
-import { showDesktopUpdateDownloadedToast } from "../desktopUpdate.toast";
+import {
+  showDesktopUpdateDownloadedToast,
+  showDesktopUpdateErrorToast,
+} from "../desktopUpdate.toast";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Popover, PopoverCreateHandle, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { SidebarMenuItem } from "../ui/sidebar";
@@ -93,16 +96,17 @@ export function SidebarUpdateArchitectureWarning() {
 }
 
 function SidebarUpdateArchitectureWarningContent() {
+  const t = useTranslate();
   const state = useDesktopUpdateState();
   const visible = shouldShowArm64IntelBuildWarning(state);
-  const description = state && visible ? getArm64IntelBuildWarningDescription(state) : null;
+  const description = state && visible ? getArm64IntelBuildWarningDescription(state, t) : null;
 
   if (!visible || !description) return null;
 
   return (
     <Alert variant="warning">
       <TriangleAlertIcon />
-      <AlertTitle>Intel build on Apple Silicon</AlertTitle>
+      <AlertTitle>{t("update.architecture.title")}</AlertTitle>
       <AlertDescription>{description}</AlertDescription>
     </Alert>
   );
@@ -113,6 +117,7 @@ export function SidebarUpdatePill() {
 }
 
 function SidebarUpdateControl() {
+  const t = useTranslate();
   const state = useDesktopUpdateState();
   const [isActionPending, setIsActionPending] = useState(false);
   const [checkAnimationKey, setCheckAnimationKey] = useState(0);
@@ -145,11 +150,11 @@ function SidebarUpdateControl() {
   });
   const tooltip = showUpdateDetails
     ? state
-      ? getDesktopUpdateButtonTooltip(state)
-      : "Update available"
+      ? getDesktopUpdateButtonTooltip(state, t)
+      : t("update.availableShort")
     : showCheckIcon
-      ? "Checking for updates…"
-      : "Check for updates";
+      ? t("update.checking")
+      : t("update.check");
   const disabled = showCheckIcon
     ? true
     : showUpdateDetails
@@ -190,21 +195,17 @@ function SidebarUpdateControl() {
           if (!shouldToastDesktopUpdateActionResult(result)) return;
           const actionError = getDesktopUpdateActionError(result);
           if (!actionError) return;
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: "Could not download update",
-              description: actionError,
-            }),
+          showDesktopUpdateErrorToast(
+            "about.updateDownload.error",
+            actionError,
+            "update.unexpected",
           );
         })
         .catch((error) => {
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: "Could not start update download",
-              description: error instanceof Error ? error.message : "An unexpected error occurred.",
-            }),
+          showDesktopUpdateErrorToast(
+            "update.downloadStartFailed",
+            error instanceof Error ? error.message : null,
+            "update.unexpected",
           );
         })
         .finally(() => setIsActionPending(false));
@@ -215,16 +216,14 @@ function SidebarUpdateControl() {
       let confirmed = false;
       try {
         confirmed = await ensureLocalApi().dialogs.confirm(
-          getDesktopUpdateInstallConfirmationMessage(state),
+          getDesktopUpdateInstallConfirmationMessage(state, t),
         );
       } catch (error) {
         setIsActionPending(false);
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: "Could not confirm update",
-            description: error instanceof Error ? error.message : "Update confirmation failed.",
-          }),
+        showDesktopUpdateErrorToast(
+          "about.updateConfirm.error",
+          error instanceof Error ? error.message : null,
+          "about.updateConfirm.failed",
         );
         return;
       }
@@ -238,21 +237,17 @@ function SidebarUpdateControl() {
           if (!shouldToastDesktopUpdateActionResult(result)) return;
           const actionError = getDesktopUpdateActionError(result);
           if (!actionError) return;
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: "Could not install update",
-              description: actionError,
-            }),
+          showDesktopUpdateErrorToast(
+            "about.updateInstall.error",
+            actionError,
+            "update.unexpected",
           );
         })
         .catch((error) => {
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: "Could not install update",
-              description: error instanceof Error ? error.message : "An unexpected error occurred.",
-            }),
+          showDesktopUpdateErrorToast(
+            "about.updateInstall.error",
+            error instanceof Error ? error.message : null,
+            "update.unexpected",
           );
         })
         .finally(() => setIsActionPending(false));
@@ -267,26 +262,21 @@ function SidebarUpdateControl() {
       .checkForUpdate()
       .then((result) => {
         if (result.checked) return;
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: "Could not check for updates",
-            description:
-              result.state.message ?? "Automatic updates are not available in this build.",
-          }),
+        showDesktopUpdateErrorToast(
+          "about.updateCheck.error",
+          result.state.message,
+          "about.updateUnsupported",
         );
       })
       .catch((error) => {
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: "Could not check for updates",
-            description: error instanceof Error ? error.message : "Update check failed.",
-          }),
+        showDesktopUpdateErrorToast(
+          "about.updateCheck.error",
+          error instanceof Error ? error.message : null,
+          "about.updateCheck.failed",
         );
       })
       .finally(() => setIsActionPending(false));
-  }, [action, isInteractionDisabled, prefersReducedMotion, state]);
+  }, [action, isInteractionDisabled, prefersReducedMotion, state, t]);
 
   const handleCheckAnimationIteration = useCallback(() => {
     setIsCheckAnimationLatched(
@@ -392,7 +382,7 @@ function SidebarUpdateControl() {
         {showReleaseNotesPopover && state ? (
           <PopoverPopup
             align="center"
-            aria-label="Nightly update release notes"
+            aria-label={t("update.notes.title")}
             initialFocus={false}
             onKeyDownCapture={(event) => {
               if (

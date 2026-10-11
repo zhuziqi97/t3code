@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import type { ElementType } from "react";
 import type { SourceControlProviderInfo, SourceControlProviderKind } from "@t3tools/contracts";
 export {
@@ -29,43 +30,57 @@ export interface SourceControlPresentation {
 
 export function getSourceControlPresentation(
   provider: SourceControlProviderInfo | null | undefined,
+  t?: TFunction,
 ): SourceControlPresentation {
   const presentation = resolveChangeRequestPresentation(provider);
+  const rawTerminology = getChangeRequestTerminology(provider);
+  const terminology = t
+    ? {
+        ...rawTerminology,
+        singular: t(
+          rawTerminology.singular === "merge request"
+            ? "git.mergeRequest"
+            : rawTerminology.singular === "change request"
+              ? "git.changeRequest"
+              : "git.pullRequest",
+        ),
+      }
+    : rawTerminology;
   switch (presentation.icon) {
     case "github":
       return {
         providerName: provider?.name || presentation.providerName,
-        terminology: getChangeRequestTerminology(provider),
+        terminology,
         Icon: GitHubIcon,
       };
     case "forgejo":
       return {
         providerName: provider?.name || presentation.providerName,
-        terminology: getChangeRequestTerminology(provider),
+        terminology,
         Icon: ForgejoIcon,
       };
     case "gitlab":
       return {
         providerName: provider?.name || presentation.providerName,
-        terminology: getChangeRequestTerminology(provider),
+        terminology,
         Icon: GitLabIcon,
       };
     case "azure-devops":
       return {
         providerName: provider?.name || presentation.providerName,
-        terminology: getChangeRequestTerminology(provider),
+        terminology,
         Icon: AzureDevOpsIcon,
       };
     case "bitbucket":
       return {
         providerName: provider?.name || presentation.providerName,
-        terminology: getChangeRequestTerminology(provider),
+        terminology,
         Icon: BitbucketIcon,
       };
     case "change-request":
       return {
         providerName: provider?.name || presentation.providerName,
-        terminology: getChangeRequestTerminology(provider),
+        terminology,
         Icon: PullRequestGlyph.pullRequest,
       };
   }

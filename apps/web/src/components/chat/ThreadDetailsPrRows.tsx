@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import { ThreadDetailsControl } from "./ThreadDetailsControl";
 import type { EnvironmentId, ScopedThreadRef, ThreadPullRequestLink } from "@t3tools/contracts";
 import {
@@ -33,6 +34,7 @@ function ThreadDetailsPrLinkRow({
   onActed?: (() => void) | undefined;
   onStopWatching?: (() => void) | undefined;
 }) {
+  const t = useTranslate();
   const projects = useProjects();
   const parsed = parseChangeRequestUrl(link.url);
   const project =
@@ -50,7 +52,7 @@ function ThreadDetailsPrLinkRow({
       pr={pr}
       number={link.number}
       reference={link}
-      status={prStatusIndicator(pr, linked?.sourceControlProvider)}
+      status={prStatusIndicator(pr, linked?.sourceControlProvider, t)}
       project={project}
       label={`#${link.number}${link.snapshot === null ? "" : `: ${link.snapshot.title}`}`}
       openAriaLabel={link.url}
@@ -73,6 +75,7 @@ export function ThreadDetailsPrRows({
   currentLink: ThreadPullRequestLink | null;
   onOpenLink: (event: ReactMouseEvent<HTMLElement>, url: string) => void;
 }) {
+  const t = useTranslate();
   const [expanded, setExpanded] = useState(false);
   const watch = useAtomCommand(threadEnvironment.watchPullRequest, { reportFailure: true });
   // Only watched links get the eye; the row hides it once the server records the stop.
@@ -123,7 +126,7 @@ export function ThreadDetailsPrRows({
         className="w-full active:scale-100"
       >
         <MorphIcon aria-hidden className="size-4 shrink-0" icon={expanded ? Minus : Plus} />
-        {expanded ? "Show less" : `Show ${rest.length} more`}
+        {expanded ? t("chat.timeline.showLess") : t("thread.showMore", { count: rest.length })}
       </ThreadDetailsControl>
     </>
   );

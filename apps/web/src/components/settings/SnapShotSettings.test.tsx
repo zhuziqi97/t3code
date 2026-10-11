@@ -420,3 +420,9 @@ it("requires a successful macOS test capture before enabling and allows retry", 
   expect(bridge.setupSnapShot.mock.calls).toEqual([["test-mac-capture"], ["test-mac-capture"]]);
   expect(settingsStore.current.snapShotEnabled).toBe(true);
 });
+
+// Direct hook-harness tests use the existing English expectations at the translation boundary.
+vi.mock("../../i18n", async (original) => {
+  const actual = await original<typeof import("../../i18n")>();
+  return { ...actual, useTranslate: () => actual.i18n.getFixedT("en") };
+});

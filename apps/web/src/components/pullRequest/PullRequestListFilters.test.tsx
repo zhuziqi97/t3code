@@ -3,6 +3,11 @@ import { CircleIcon } from "lucide-react";
 import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+vi.mock("../../i18n", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../../i18n")>();
+  return { ...original, useTranslate: () => original.i18n.t.bind(original.i18n) };
+});
+
 import { PullRequestFiltersMenu, pullRequestProjectKey } from "./PullRequestListFilters";
 
 function findValueChange(

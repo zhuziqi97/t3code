@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import type { ConveneMcpScope, ConveneProjectOptions, EnvironmentId } from "@t3tools/contracts";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { useEffect, useState } from "react";
@@ -33,6 +34,7 @@ export function ConveneModulePicker({
   onModule?: (moduleId: string) => void;
   onClose: () => void;
 }) {
+  const t = useTranslate();
   const options = useAtomCommand(conveneEnvironment.projectOptions, { reportFailure: false });
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -57,16 +59,14 @@ export function ConveneModulePicker({
       setBusy(false);
       if (result._tag === "Failure") {
         const cause = squashAtomCommandFailure(result);
-        setError(
-          cause instanceof Error ? cause.message : "Could not load platform projects and modules.",
-        );
+        setError(cause instanceof Error ? cause.message : t("convene.error.options"));
       } else if (project) setModules(result.value);
       else setProjects(result.value);
     });
     return () => {
       active = false;
     };
-  }, [environmentId, options, page, project, requestedSearch]);
+  }, [environmentId, options, page, project, requestedSearch, t]);
   const update = (moduleId: string, permission: "READ" | "WRITE" | null) =>
     setScope((previous) => [
       ...previous.filter((entry) => entry.module_id !== moduleId),
@@ -81,11 +81,11 @@ export function ConveneModulePicker({
     >
       <DialogPopup>
         <DialogHeader>
-          <DialogTitle>{onScope ? "MCP module access" : "Associate a Convene module"}</DialogTitle>
+          <DialogTitle>
+            {onScope ? t("convene.scope.title") : t("convene.scope.bindTitle")}
+          </DialogTitle>
           <DialogDescription>
-            {onScope
-              ? "Choose modules from any platform project. This scope is independent of execution associations. Apply updates the draft; Save MCP configuration commits it."
-              : "A project can be associated with several modules. Association does not activate a client or change MCP access."}
+            {onScope ? t("convene.scope.description") : t("convene.scope.bindDescription")}
           </DialogDescription>
         </DialogHeader>
         <DialogPanel>
@@ -103,7 +103,7 @@ export function ConveneModulePicker({
                   setPage(1);
                 }}
               >
-                Back to platform projects
+                {t("convene.scope.back")}
               </Button>
             ) : (
               <form
@@ -115,16 +115,16 @@ export function ConveneModulePicker({
                 }}
               >
                 <Input
-                  aria-label="Search platform projects"
+                  aria-label={t("convene.scope.searchLabel")}
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                 />
-                <Button type="submit">Search</Button>
+                <Button type="submit">{t("convene.scope.search")}</Button>
               </form>
             )}
             {busy && (
               <p role="status" className="text-sm text-muted-foreground">
-                Loading…
+                {t("convene.scope.loading")}
               </p>
             )}
             {!project && projects && (
@@ -143,19 +143,23 @@ export function ConveneModulePicker({
                   </Button>
                 ))}
                 {projects.items.length === 0 && (
-                  <p className="text-sm text-muted-foreground">No accessible projects.</p>
+                  <p className="text-sm text-muted-foreground">
+                    {t("convene.scope.emptyProjects")}
+                  </p>
                 )}
                 <div className="flex items-center justify-between gap-2">
                   <Button variant="ghost" disabled={page === 1} onClick={() => setPage(page - 1)}>
-                    Previous
+                    {t("convene.scope.previous")}
                   </Button>
-                  <span className="text-xs text-muted-foreground">Page {page}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {t("convene.scope.page", { page })}
+                  </span>
                   <Button
                     variant="ghost"
                     disabled={page * 20 >= projects.total}
                     onClick={() => setPage(page + 1)}
                   >
-                    Next
+                    {t("convene.scope.next")}
                   </Button>
                 </div>
               </div>
@@ -167,7 +171,9 @@ export function ConveneModulePicker({
                   return onScope ? (
                     <div key={item.id} className="flex items-center gap-3">
                       <Checkbox
-                        aria-label={`Access ${item.display_name ?? item.name}`}
+                        aria-label={t("convene.scope.access", {
+                          module: item.display_name ?? item.name,
+                        })}
                         checked={selected !== undefined}
                         onCheckedChange={(checked) => update(item.id, checked ? "READ" : null)}
                       />
@@ -178,8 +184,8 @@ export function ConveneModulePicker({
                         <Select
                           value={selected.permission}
                           items={[
-                            { value: "READ", label: "Read" },
-                            { value: "WRITE", label: "Write" },
+                            { value: "READ", label: t("convene.permission.read") },
+                            { value: "WRITE", label: t("convene.permission.writeOption") },
                           ]}
                           onValueChange={(value) => {
                             if (value) update(item.id, value);
@@ -187,15 +193,17 @@ export function ConveneModulePicker({
                         >
                           <SelectTrigger
                             size="sm"
-                            aria-label={`Permission for ${item.display_name ?? item.name}`}
+                            aria-label={t("convene.scope.permission", {
+                              module: item.display_name ?? item.name,
+                            })}
                             className="w-28"
                           >
                             <SelectValue />
                           </SelectTrigger>
                           <SelectPopup>
-                            <SelectItem value="READ">Read</SelectItem>
+                            <SelectItem value="READ">{t("convene.permission.read")}</SelectItem>
                             <SelectItem value="WRITE" disabled={!item.can_write}>
-                              Write
+                              {t("convene.permission.writeOption")}
                             </SelectItem>
                           </SelectPopup>
                         </Select>
@@ -216,28 +224,28 @@ export function ConveneModulePicker({
                   );
                 })}
                 {modules.items.length === 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    No accessible modules in this project.
-                  </p>
+                  <p className="text-sm text-muted-foreground">{t("convene.scope.emptyModules")}</p>
                 )}
                 {modules.truncated && (
                   <p role="status" className="text-sm text-muted-foreground">
-                    The platform limits the module list. Manage modules in Convene if the required
-                    module is not listed.
+                    {t("convene.scope.truncated")}
                   </p>
                 )}
               </div>
             )}
             {onScope && (
               <div className="space-y-2">
-                <p className="text-sm">Selected modules ({scope.length})</p>
+                <p className="text-sm">{t("convene.scope.selected", { count: scope.length })}</p>
                 {scope.map((entry) => (
                   <div key={entry.module_id} className="flex items-center gap-2">
                     <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                      {entry.module_id} · {entry.permission}
+                      {entry.module_id} ·{" "}
+                      {entry.permission === "WRITE"
+                        ? t("convene.permission.write")
+                        : t("convene.permission.read")}
                     </span>
                     <Button variant="ghost" size="sm" onClick={() => update(entry.module_id, null)}>
-                      Remove
+                      {t("convene.scope.remove")}
                     </Button>
                   </div>
                 ))}
@@ -247,7 +255,7 @@ export function ConveneModulePicker({
         </DialogPanel>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            {t("convene.scope.cancel")}
           </Button>
           {onScope && (
             <Button
@@ -256,7 +264,7 @@ export function ConveneModulePicker({
                 onClose();
               }}
             >
-              Apply to draft
+              {t("convene.scope.apply")}
             </Button>
           )}
         </DialogFooter>

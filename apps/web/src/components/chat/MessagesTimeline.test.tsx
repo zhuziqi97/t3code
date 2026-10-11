@@ -420,6 +420,166 @@ function buildProps() {
   };
 }
 
+describe("localized work groups", () => {
+  it("updates a mounted group without losing expansion or changing command text", async () => {
+    vi.unstubAllGlobals();
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    vi.stubGlobal("requestAnimationFrame", () => 0);
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const { i18n } = await import("~/i18n");
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const commands = ['printf "Keep command 原文"', "node scripts/raw-example.mjs"];
+    try {
+      await act(async () => {
+        await i18n.changeLanguage("en");
+        root.render(
+          <MessagesTimeline
+            {...buildProps()}
+            timelineEntries={commands.map((command, index) => ({
+              id: `entry-localized-${index}`,
+              kind: "work" as const,
+              createdAt: MESSAGE_CREATED_AT,
+              entry: {
+                id: `work-localized-${index}`,
+                createdAt: MESSAGE_CREATED_AT,
+                label: command,
+                tone: "tool" as const,
+                itemType: "command_execution" as const,
+                command,
+                toolLifecycleStatus: "completed" as const,
+              },
+            }))}
+          />,
+        );
+      });
+      const group = container.querySelector<HTMLButtonElement>(
+        'button[aria-label="Ran 2 commands"]',
+      )!;
+      expect(group).not.toBeNull();
+      expect(group.getAttribute("aria-expanded")).toBe("false");
+      await act(() => group.click());
+      expect(group.getAttribute("aria-expanded")).toBe("true");
+      expect(container.textContent).toContain(commands[0]);
+      await act(async () => {
+        await i18n.changeLanguage("zh");
+      });
+      expect(container.querySelector('button[aria-label="运行了 2 条命令"]')).toBe(group);
+      expect(group.getAttribute("aria-expanded")).toBe("true");
+      expect(container.textContent).toContain(commands[0]);
+      expect(container.textContent).toContain(commands[1]);
+      await act(async () => {
+        await i18n.changeLanguage("en");
+      });
+      expect(group.getAttribute("aria-label")).toBe("Ran 2 commands");
+      expect(group.getAttribute("aria-expanded")).toBe("true");
+      await act(() => group.click());
+      expect(group.getAttribute("aria-expanded")).toBe("false");
+    } finally {
+      await act(async () => {
+        root.unmount();
+        await i18n.changeLanguage("en");
+      });
+      container.remove();
+      vi.unstubAllGlobals();
+    }
+  });
+  it("retranslates a standalone T3 tool while preserving expanded data and returned failure", async () => {
+    vi.unstubAllGlobals();
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    vi.stubGlobal("requestAnimationFrame", () => 0);
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const { i18n } = await import("~/i18n");
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const args = { cwd: "/tmp/原始项目", title: "Keep project title 原文" };
+    const renderTool = (failed: boolean) =>
+      root.render(
+        <MessagesTimeline
+          {...buildProps()}
+          timelineEntries={[
+            {
+              id: "tool-localized",
+              kind: "work",
+              createdAt: MESSAGE_CREATED_AT,
+              entry: {
+                id: "tool-localized",
+                createdAt: MESSAGE_CREATED_AT,
+                label: "Custom provider title",
+                tone: "tool",
+                itemType: "dynamic_tool",
+                toolLifecycleStatus: "completed",
+                ...(failed ? { detail: "Original diagnostic 原文" } : {}),
+                toolData: {
+                  server: "t3-code",
+                  tool: "t3_project_create",
+                  input: args,
+                  result: failed
+                    ? { isError: true, message: "Original diagnostic 原文" }
+                    : { id: "raw-project-id" },
+                },
+              },
+            },
+          ]}
+        />,
+      );
+    try {
+      await act(async () => {
+        await i18n.changeLanguage("en");
+        renderTool(false);
+      });
+      const header = container.querySelector<HTMLElement>(
+        '[role="button"][aria-label="Registered a project"]',
+      )!;
+      expect(header).not.toBeNull();
+      await act(() => header.click());
+      expect(header.getAttribute("aria-expanded")).toBe("true");
+      expect(container.textContent).toContain("/tmp/原始项目");
+      await act(async () => {
+        await i18n.changeLanguage("zh");
+      });
+      expect(container.querySelector('[role="button"][aria-label="已注册项目"]')).toBe(header);
+      expect(header.getAttribute("aria-expanded")).toBe("true");
+      expect(container.textContent).toContain("Keep project title 原文");
+      await act(() => renderTool(true));
+      expect(header.getAttribute("aria-label")).toBe("注册项目失败，工具调用失败");
+      expect(container.textContent).toContain("Original diagnostic 原文");
+      await act(async () => {
+        await i18n.changeLanguage("en");
+      });
+      expect(header.getAttribute("aria-label")).toBe(
+        "Failed to register a project, tool call failed",
+      );
+      expect(header.getAttribute("aria-expanded")).toBe("true");
+    } finally {
+      await act(async () => {
+        root.unmount();
+        await i18n.changeLanguage("en");
+      });
+      container.remove();
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
 function buildLongUserMessageText(tail = "deep hidden detail only after expand") {
   return Array.from({ length: 9 }, (_, index) =>
     index === 8 ? tail : `Line ${index + 1}: ${"verbose prompt content ".repeat(8).trim()}`,

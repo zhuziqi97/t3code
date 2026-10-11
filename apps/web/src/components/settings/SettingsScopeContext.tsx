@@ -1,9 +1,10 @@
+import { useTranslate } from "../../i18n";
 import { T3_PROJECT_FILE_NAME, type T3ProjectFile } from "@t3tools/contracts";
 import { parseT3ProjectFile } from "@t3tools/shared/t3ProjectFile";
 import { useAtomValue } from "@effect/atom-react";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/reactivity";
-import { createContext, type ReactNode, useContext, useMemo } from "react";
+import { type ReactNode, useContext, useMemo } from "react";
 
 import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
 import { getProjectFileQueryAtom, optimisticFileAtom } from "../files/projectFilesQueryState";
@@ -11,6 +12,7 @@ import { useSettingsProjectGroups } from "./useSettingsProjectGroups";
 import { resolveScopedSettingsTargets, selectScopedSettingsEnvironments } from "./scopedSettings";
 import { resolveSettingsScope, type SettingsScopeSearch } from "./settingsScope";
 import { selectSingleEnvironmentScope } from "./settingsScopeAxis";
+import { SettingsScopeContext } from "./settingsScopeContextValue";
 
 /**
  * Each member's decoded t3.json, so file-backed settings show the file as a
@@ -55,6 +57,7 @@ function useMemberProjectFiles(scope: ReturnType<typeof resolveSettingsScope>) {
 }
 
 function useResolvedSettingsScope(rawSearch: SettingsScopeSearch, singleEnvironment: boolean) {
+  const t = useTranslate();
   const groups = useSettingsProjectGroups();
   const { environments: availableEnvironments } = useEnvironments();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
@@ -63,16 +66,16 @@ function useResolvedSettingsScope(rawSearch: SettingsScopeSearch, singleEnvironm
       singleEnvironment
         ? selectSingleEnvironmentScope(
             rawSearch,
-            resolveSettingsScope(rawSearch, groups, availableEnvironments),
+            resolveSettingsScope(rawSearch, groups, availableEnvironments, t),
             availableEnvironments,
             primaryEnvironmentId,
           )
         : rawSearch,
-    [availableEnvironments, groups, primaryEnvironmentId, rawSearch, singleEnvironment],
+    [availableEnvironments, groups, primaryEnvironmentId, rawSearch, singleEnvironment, t],
   );
   const scope = useMemo(
-    () => resolveSettingsScope(search, groups, availableEnvironments),
-    [availableEnvironments, groups, search],
+    () => resolveSettingsScope(search, groups, availableEnvironments, t),
+    [availableEnvironments, groups, search, t],
   );
   const projectFiles = useMemberProjectFiles(scope);
   return useMemo(() => {
@@ -98,14 +101,11 @@ function useResolvedSettingsScope(rawSearch: SettingsScopeSearch, singleEnvironm
   }, [availableEnvironments, groups, primaryEnvironmentId, projectFiles, scope, search]);
 }
 
-const SettingsScopeContext = createContext<
-  | (ReturnType<typeof useResolvedSettingsScope> & {
-      singleEnvironment: boolean;
-      search: SettingsScopeSearch;
-      selectScope: (next: SettingsScopeSearch) => void;
-    })
-  | null
->(null);
+export type SettingsScopeContextValue = ReturnType<typeof useResolvedSettingsScope> & {
+  singleEnvironment: boolean;
+  search: SettingsScopeSearch;
+  selectScope: (next: SettingsScopeSearch) => void;
+};
 
 export function SettingsScopeProvider({
   search,

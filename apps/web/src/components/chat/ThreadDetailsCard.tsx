@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import { useLayoutEffect, useState, type ReactNode, type RefObject } from "react";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import { ScrollArea } from "../ui/scroll-area";
@@ -25,6 +26,7 @@ export function ThreadDetailsCard({
   onPresentationChange: (presentation: ThreadPanelPresentation) => void;
   children: (density: "full" | "compact" | "essential") => ReactNode;
 }) {
+  const t = useTranslate();
   const canvas = useChatCanvas();
   const preferredPlacement = canvas
     ? resolveThreadDetailsCardLayout({
@@ -145,7 +147,7 @@ export function ThreadDetailsCard({
       {placement ? (
         inlineOpen ? (
           <aside
-            aria-label="Thread details"
+            aria-label={t("chat.details.title")}
             className="absolute z-20"
             style={{
               left: placement.x,

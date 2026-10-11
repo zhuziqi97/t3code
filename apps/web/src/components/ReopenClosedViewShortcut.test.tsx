@@ -64,6 +64,7 @@ import { useClosedViewStore } from "../closedViewStore";
 import { selectThreadRightPanelState, useRightPanelStore } from "../rightPanelStore";
 import { useTerminalUiStateStore } from "../terminalUiStateStore";
 import { ReopenClosedViewShortcut } from "./ReopenClosedViewShortcut";
+import { changeLanguage } from "../i18n";
 
 const ref = { environmentId: "remote", threadId: "thread-1" } as ScopedThreadRef;
 const snapshot = {
@@ -102,7 +103,8 @@ function press(overrides: Record<string, unknown> = {}) {
   return event;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await changeLanguage("en");
   vi.clearAllMocks();
   Object.assign(state, {
     keybindings: DEFAULT_RESOLVED_KEYBINDINGS,
@@ -141,9 +143,40 @@ afterEach(async () => {
   await act(() => renderer?.unmount());
   renderer = undefined;
   vi.unstubAllGlobals();
+  await changeLanguage("en");
 });
 
 describe("root reopen shortcut", () => {
+  it("uses the completion language when restoring navigation fails and keeps the diagnostic", async () => {
+    useClosedViewStore.getState().remember({
+      kind: "panel-tab",
+      threadRef: ref,
+      surface: { kind: "diff", id: "diff" },
+    });
+    let rejectNavigation!: (error: Error) => void;
+    state.navigate.mockImplementation(
+      () =>
+        new Promise((_, reject) => {
+          rejectNavigation = reject;
+        }),
+    );
+    await render();
+    await act(async () => {
+      press();
+    });
+    expect(state.navigate).toHaveBeenCalledOnce();
+    expect(state.toast).not.toHaveBeenCalled();
+    await act(async () => {
+      await changeLanguage("zh");
+      rejectNavigation(new Error("Navigation /tmp/原文 404"));
+    });
+    expect(state.toast).toHaveBeenCalledWith({
+      type: "error",
+      title: "无法重新打开视图",
+      description: "Navigation /tmp/原文 404",
+    });
+    expect(useClosedViewStore.getState().entries).toEqual([]);
+  });
   it("restores a tab from settings to its owning remote thread", async () => {
     useClosedViewStore
       .getState()

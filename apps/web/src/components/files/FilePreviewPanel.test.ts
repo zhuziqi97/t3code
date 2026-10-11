@@ -2,6 +2,7 @@ import type { ScopedThreadRef } from "@t3tools/contracts";
 import { ProjectReadFileError } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
+import { createI18n } from "@t3tools/client-runtime/i18n";
 
 import {
   formatFileCommentRange,
@@ -10,6 +11,7 @@ import {
 } from "./fileCommentAnnotations";
 import {
   filePreviewReadErrorMessage,
+  formatFilePreviewErrorMessage,
   isMarkdownPreviewFile,
   resolveFilePreviewPath,
   setMarkdownTaskChecked,
@@ -58,6 +60,27 @@ describe("file preview read errors", () => {
       message: "Legacy file read failure.",
     });
     expect(filePreviewReadErrorMessage(error)).toBe("Legacy file read failure.");
+  });
+
+  it("uses the failure code in Chinese and keeps unrecognized diagnostics verbatim", () => {
+    const zh = createI18n({ lng: "zh" }).t;
+    const error = new ProjectReadFileError({
+      cwd: "/原始项目",
+      relativePath: "raw.bin",
+      failure: "binary_file",
+      operation: "read",
+    });
+    expect(filePreviewReadErrorMessage(error, zh)).toBe("这是二进制文件，无法以文本显示。");
+    expect(error.relativePath).toBe("raw.bin");
+    expect(
+      formatFilePreviewErrorMessage(
+        "This file is not UTF-8 text. Open it in another app to view its contents.",
+        zh,
+      ),
+    ).toBe("此文件不是 UTF-8 文本，请使用其他应用查看内容。");
+    expect(formatFilePreviewErrorMessage("EACCES: /原始项目/raw.bin", zh)).toBe(
+      "EACCES: /原始项目/raw.bin",
+    );
   });
 });
 

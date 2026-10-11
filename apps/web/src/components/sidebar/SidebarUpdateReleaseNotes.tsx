@@ -1,4 +1,5 @@
 import type { DesktopBridge, DesktopUpdateState } from "@t3tools/contracts";
+import { useTranslate } from "../../i18n";
 import { ExternalLinkIcon } from "lucide-react";
 
 import {
@@ -52,6 +53,7 @@ export function SidebarUpdateReleaseNotes({
   readonly state: DesktopUpdateState;
   readonly tooltip: string;
 }) {
+  const t = useTranslate();
   if (state.channel !== "nightly" || state.releaseNotes.length === 0) {
     return <>{tooltip}</>;
   }
@@ -62,7 +64,7 @@ export function SidebarUpdateReleaseNotes({
         {state.status === "available" ? (
           <div>
             <div className="whitespace-nowrap text-sm leading-5 font-medium">
-              Update ready to download
+              {t("update.notes.ready")}
             </div>
             {state.availableVersion ? (
               <div className="mt-0.5 text-xs leading-4 text-muted-foreground">
@@ -80,15 +82,17 @@ export function SidebarUpdateReleaseNotes({
           const omittedItemCount = Math.max(0, releaseNote.totalItems - releaseNote.items.length);
           const linkLabel =
             omittedItemCount === 0
-              ? "View release on GitHub"
-              : `${omittedItemCount} more ${omittedItemCount === 1 ? "change" : "changes"} on GitHub`;
+              ? t("update.notes.view")
+              : t("update.notes.more", { count: omittedItemCount });
 
           return (
             <div key={releaseNote.version}>
               {index > 0 && <Separator className="my-3" />}
               <section>
                 <h3 className="text-foreground text-xs leading-4 font-semibold">
-                  {index === 0 ? "What's changed" : `Changes in ${releaseNote.version}`}
+                  {index === 0
+                    ? t("update.notes.changed")
+                    : t("update.notes.version", { version: releaseNote.version })}
                 </h3>
                 <ul className="mt-2 space-y-1.5 pl-4 text-xs leading-5 text-popover-foreground/90">
                   {keyReleaseNoteItems(releaseNote.items).map(({ item, key }) => (
@@ -110,7 +114,7 @@ export function SidebarUpdateReleaseNotes({
           <div>
             <Separator className="my-3" />
             <ReleaseLink releaseUrl={getDesktopUpdateReleaseHistoryUrl()} shell={shell}>
-              {`${state.omittedReleaseCount} older ${state.omittedReleaseCount === 1 ? "release" : "releases"} on GitHub`}
+              {t("update.notes.older", { count: state.omittedReleaseCount })}
             </ReleaseLink>
           </div>
         ) : null}

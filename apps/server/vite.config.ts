@@ -1,3 +1,4 @@
+import { resolveConveneVersion } from "@t3tools/shared/conveneDesktopIdentity";
 import "vite-plus/test/config";
 import { defineConfig, mergeConfig } from "vite-plus";
 
@@ -111,6 +112,9 @@ export default mergeConfig(
         js: "#!/usr/bin/env node\n",
       },
       define: {
+        __T3CODE_CONVENE_VERSION__: JSON.stringify(
+          process.env.APP_VERSION?.trim() || resolveConveneVersion(packageJson.version),
+        ),
         __T3CODE_BUILD_CHANNEL__: JSON.stringify(cliBuildChannel),
         __T3CODE_BUILD_RELAY_URL__: JSON.stringify(repoEnv.T3CODE_RELAY_URL?.trim() ?? ""),
         __T3CODE_BUILD_CLERK_PUBLISHABLE_KEY__: JSON.stringify(

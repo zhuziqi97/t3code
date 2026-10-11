@@ -3,6 +3,8 @@ import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
 import { EnvironmentId, ORCHESTRATION_PROTOCOL_VERSION } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import { AsyncResult } from "effect/reactivity";
+import { changeLanguage } from "../../i18n";
+import { toastManager } from "../ui/toast";
 import { act, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -121,7 +123,9 @@ async function advance(milliseconds: number) {
   });
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await changeLanguage("en");
+  vi.mocked(toastManager.add).mockClear();
   vi.useFakeTimers();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   page = Object.assign(new EventTarget(), { visibilityState: "visible" as const });
@@ -150,6 +154,51 @@ afterEach(async () => {
   await act(async () => renderer?.unmount());
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  await changeLanguage("en");
+});
+
+it("updates discovery and offline guidance when language changes without adding a computer", async () => {
+  discovery.listEnvironments.mockResolvedValue(linkedMachines);
+  await mount(false);
+  const rowText = () =>
+    renderer!.root.findAllByType("p").flatMap((paragraph) => paragraph.children);
+  expect(rowText()).toContain("T3 Connect · Not added · Relay online");
+  await act(async () => changeLanguage("zh"));
+  expect(rowText()).toContain("T3 Connect · 尚未添加 · 中继在线");
+  expect(rowText()).toContain("Work laptop");
+  await act(async () =>
+    publish({ environments: new Map(), refreshing: false, offline: true, error: Option.none() }),
+  );
+  expect(rowText()).toContain("你似乎已离线。");
+  expect(discovery.register).not.toHaveBeenCalled();
+});
+
+it("uses the completion language for an add started before switching languages", async () => {
+  discovery.listEnvironments.mockResolvedValue(linkedMachines);
+  let finish!: (result: AtomCommandResult<void, never>) => void;
+  discovery.register.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await mount(false);
+  const add = renderer!.root
+    .findAllByType("button")
+    .find((button) => button.children.includes("Add"))!;
+  await act(async () => {
+    add.props.onClick();
+  });
+  expect(discovery.register).toHaveBeenCalledOnce();
+  expect(toastManager.add).not.toHaveBeenCalled();
+  await act(async () => changeLanguage("zh"));
+  await act(async () => finish(AsyncResult.success(undefined)));
+  expect(toastManager.add).toHaveBeenCalledWith({
+    type: "success",
+    title: "已添加执行环境",
+    description: "正在通过 T3 Connect 连接 Work laptop。",
+  });
+  expect(discovery.register).toHaveBeenCalledOnce();
 });
 
 describe("cloud environment offline reasons", () => {

@@ -6,6 +6,8 @@ import { filePreviewKind, FILE_TEXT_PREVIEW_MAX_BYTES } from "@t3tools/shared/fi
 import { ChevronRightIcon, DownloadIcon, Trash2Icon, WrapTextIcon, XIcon } from "lucide-react";
 import { Check, Code2, Copy, Eye, Table2 } from "lucide";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { i18n, useTranslate } from "~/i18n";
+import { formatFilePreviewErrorMessage, renderedToggleLabel } from "./filePreviewMode";
 
 import { useAssetUrlRefresh } from "~/assets/assetUrls";
 import ChatMarkdown from "~/components/ChatMarkdown";
@@ -41,12 +43,6 @@ export function ReadOnlySourcePreview(props: { name: string; text: string }) {
   );
 }
 
-function renderedToggleLabel(mode: "markdown" | "html" | "table", rendered: boolean): string {
-  if (mode === "markdown") return rendered ? "Show markdown source" : "Show rendered markdown";
-  if (mode === "table") return rendered ? "Show source" : "Show table";
-  return rendered ? "Show HTML source" : "Show rendered page";
-}
-
 /**
  * A captured attachment shown with the same chrome as a workspace file: one
  * header row with crumbs and icon actions, then the document. Captured bytes
@@ -66,6 +62,7 @@ export function AttachmentFilePreview(props: {
   onRemove?: () => void;
   onClose?: () => void;
 }) {
+  const t = useTranslate();
   const kind = filePreviewKind(props);
   const delimiter = filePreviewDelimiter(props);
   const renderedMode =
@@ -213,8 +210,11 @@ export function AttachmentFilePreview(props: {
       } catch (cause) {
         toastManager.add({
           type: "error",
-          title: "Could not save file",
-          description: cause instanceof Error ? cause.message : "Please try again.",
+          title: i18n.t("filePreview.saveFailed"),
+          description:
+            cause instanceof Error
+              ? formatFilePreviewErrorMessage(cause.message)
+              : i18n.t("restore.tryAgain"),
         });
       } finally {
         setSaving(false);
@@ -224,7 +224,7 @@ export function AttachmentFilePreview(props: {
 
   const body = failure ? (
     <FileSurfaceFailure
-      message={failure}
+      message={formatFilePreviewErrorMessage(failure, t)}
       onRetry={() => {
         // Clearing first lets a local Blob preview remount: its URL never changes, so the
         // revision bump alone would re-render the same failed element.
@@ -276,10 +276,11 @@ export function AttachmentFilePreview(props: {
     </div>
   ) : (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1 px-6 text-center">
-      <p className="text-sm font-medium">No preview for this file</p>
+      <p className="text-sm font-medium">{t("filePreview.noPreview")}</p>
       <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">
-        Save it to open in an app that supports {props.name.split(".").at(-1) || "this format"}{" "}
-        files.
+        {t("filePreview.openSupportedApp", {
+          format: props.name.split(".").at(-1) || t("filePreview.thisFormat"),
+        })}
       </p>
     </div>
   );
@@ -289,7 +290,7 @@ export function AttachmentFilePreview(props: {
       <div className={cn(FILE_SURFACE_SUBHEADER_CLASS)} data-surface-subheader>
         <div className="flex min-w-0 flex-1 items-center text-xs">
           <span className="shrink-0 px-0.5 text-muted-foreground">
-            {props.origin ?? "Attachment"}
+            {props.origin ?? t("filePreview.attachment")}
           </span>
           <ChevronRightIcon className="mx-1 size-3.5 shrink-0 text-muted-foreground/60" />
           <span aria-current="page" className="min-w-0 truncate px-0.5 font-medium text-foreground">
@@ -303,7 +304,7 @@ export function AttachmentFilePreview(props: {
         </div>
         {renderedMode ? (
           <FileSurfaceAction
-            label={renderedToggleLabel(renderedMode, rendered)}
+            label={renderedToggleLabel(renderedMode, rendered, t)}
             pressed={rendered}
             onPress={() => setRendered((value) => !value)}
           >
@@ -315,7 +316,7 @@ export function AttachmentFilePreview(props: {
         ) : null}
         {showsRawText ? (
           <FileSurfaceAction
-            label={wordWrap ? "Disable word wrap" : "Enable word wrap"}
+            label={t(wordWrap ? "filePreview.disableWrap" : "filePreview.enableWrap")}
             pressed={wordWrap}
             onPress={() => updateClientSettings({ wordWrap: !wordWrap })}
           >
@@ -324,7 +325,13 @@ export function AttachmentFilePreview(props: {
         ) : null}
         {content ? (
           <FileSurfaceAction
-            label={isCopied ? "Copied" : content.truncated ? "Copy preview" : "Copy contents"}
+            label={t(
+              isCopied
+                ? "filePreview.copied"
+                : content.truncated
+                  ? "filePreview.copyPreview"
+                  : "filePreview.copyContents",
+            )}
             onPress={() => copyToClipboard(content.text, undefined)}
           >
             <MorphIcon className="size-3.5" icon={isCopied ? Check : Copy} />
@@ -332,7 +339,7 @@ export function AttachmentFilePreview(props: {
         ) : null}
         {url ? (
           <FileSurfaceAction
-            label={saving ? "Preparing file…" : "Save file"}
+            label={t(saving ? "filePreview.preparing" : "filePreview.save")}
             disabled={saving}
             onPress={save}
           >
@@ -340,21 +347,24 @@ export function AttachmentFilePreview(props: {
           </FileSurfaceAction>
         ) : null}
         {props.onRemove ? (
-          <FileSurfaceAction label="Remove from draft" onPress={props.onRemove}>
+          <FileSurfaceAction label={t("filePreview.removeDraft")} onPress={props.onRemove}>
             <Trash2Icon className="size-3.5" />
           </FileSurfaceAction>
         ) : null}
         {props.onClose ? (
-          <FileSurfaceAction label="Close" onPress={props.onClose}>
+          <FileSurfaceAction label={t("common.close")} onPress={props.onClose}>
             <XIcon className="size-3.5" />
           </FileSurfaceAction>
         ) : null}
       </div>
       {content?.truncated ? (
         <FileSurfaceNotice>
-          Preview limited to the first 1 MB
-          {props.sizeBytes > 0 ? ` of a ${props.sizeBytes.toLocaleString()} byte file` : ""}. Save
-          the file to read it in full.
+          {t(
+            props.sizeBytes > 0
+              ? "filePreview.attachmentLimitKnown"
+              : "filePreview.attachmentLimitUnknown",
+            { bytes: props.sizeBytes.toLocaleString() },
+          )}
         </FileSurfaceNotice>
       ) : null}
       {body}

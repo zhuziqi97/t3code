@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next";
+import { i18n } from "~/i18n";
 import * as Schema from "effect/Schema";
 
 import {
@@ -267,17 +269,17 @@ export function threadPullRequestPanelTarget(thread: {
 }
 
 /** Names where a pull-request task will land, without letting each surface guess independently. */
-export function pullRequestHandoffLabels(inThisThread: boolean) {
+export function pullRequestHandoffLabels(inThisThread: boolean, t: TFunction = i18n.t) {
   return inThisThread
     ? {
-        fixFinding: "Fix in this thread",
-        fixCheck: "Fix in this thread",
-        fixFindings: "Fix findings in this thread",
+        fixFinding: t("pullRequest.flow.fix.here"),
+        fixCheck: t("pullRequest.flow.fix.here"),
+        fixFindings: t("pullRequest.flow.fix.allHere"),
       }
     : {
-        fixFinding: "Fix in a thread",
-        fixCheck: "Fix",
-        fixFindings: "Fix findings in a thread",
+        fixFinding: t("pullRequest.flow.fix.thread"),
+        fixCheck: t("pullRequest.flow.fix"),
+        fixFindings: t("pullRequest.flow.fix.allThread"),
       };
 }
 

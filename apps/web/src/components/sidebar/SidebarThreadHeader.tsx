@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 /** Fixed sidebar actions and global thread search. */
 import { FolderPlusIcon, SearchIcon, SquarePenIcon, XIcon } from "lucide-react";
 import {
@@ -51,14 +52,15 @@ export function SidebarThreadHeader({
   activeSearchResultIndex,
   onClearSearch,
 }: SidebarThreadHeaderProps) {
+  const t = useTranslate();
   const resultsVisible = isSearching && searchResultCount > 0;
   // Results shrink as the query narrows, so the active index can outrun the
   // list; pointing aria-activedescendant at a removed option strands the
   // screen reader on nothing.
   const activeResultExists = resultsVisible && activeSearchResultIndex < searchResultCount;
   const newThreadLabel = newThreadTargetLabel
-    ? `New thread in ${newThreadTargetLabel}`
-    : "New thread…";
+    ? t("convene.sidebar.newInProject", { project: newThreadTargetLabel })
+    : t("convene.sidebar.newThread");
 
   return (
     <div className="flex flex-col gap-1">
@@ -74,7 +76,7 @@ export function SidebarThreadHeader({
               />
             }
           >
-            <SquarePenIcon /> New thread
+            <SquarePenIcon /> {t("thread.new")}
           </TooltipTrigger>
           <TooltipPopup>
             {newThreadLabel}
@@ -82,7 +84,7 @@ export function SidebarThreadHeader({
           </TooltipPopup>
         </Tooltip>
         <div className="ml-auto">
-          <SidebarHeaderIconButton label="Add project" onClick={onNewProject}>
+          <SidebarHeaderIconButton label={t("project.add")} onClick={onNewProject}>
             <FolderPlusIcon />
           </SidebarHeaderIconButton>
         </div>
@@ -99,8 +101,8 @@ export function SidebarThreadHeader({
           value={searchQuery}
           onChange={(event) => onSearchQueryChange(event.currentTarget.value)}
           onKeyDown={onSearchKeyDown}
-          placeholder="Search"
-          aria-label="Search threads"
+          placeholder={t("thread.search.short")}
+          aria-label={t("thread.search")}
           role="combobox"
           aria-autocomplete="list"
           aria-expanded={resultsVisible}
@@ -118,7 +120,7 @@ export function SidebarThreadHeader({
             size="icon-micro"
             variant="ghost-muted"
             className="shrink-0"
-            aria-label="Clear thread search"
+            aria-label={t("thread.search.clear")}
             onClick={() => {
               onClearSearch();
               searchInputRef.current?.focus();
@@ -129,7 +131,7 @@ export function SidebarThreadHeader({
         ) : null}
       </div>
       <SidebarMenuButton type="button" isActive={allThreadsSelected} onClick={onAllThreads}>
-        All threads
+        {t("convene.sidebar.allThreads")}
       </SidebarMenuButton>
     </div>
   );

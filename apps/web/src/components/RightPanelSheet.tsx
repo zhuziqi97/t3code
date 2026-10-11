@@ -11,7 +11,20 @@ export function RightPanelSheet(props: {
   return (
     <Sheet
       open={props.open}
-      onOpenChange={(open) => {
+      // The retained native browser lives outside this popup's DOM tree.
+      // Keep it focusable, and dismiss only from the sheet's own empty layer.
+      modal={false}
+      onOpenChange={(open, details) => {
+        if (details.reason === "focus-out") return;
+        if (
+          details.reason === "outside-press" &&
+          (!(details.event.target instanceof Element) ||
+            !details.event.target.matches(
+              '[data-slot="sheet-backdrop"], [data-slot="sheet-viewport"]',
+            ))
+        ) {
+          return;
+        }
         if (!open) {
           props.onClose();
         }

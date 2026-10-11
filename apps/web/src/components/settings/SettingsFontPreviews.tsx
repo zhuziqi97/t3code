@@ -1,10 +1,10 @@
+import { i18n, useTranslate } from "../../i18n";
 import { preloadPatchFile } from "@pierre/diffs/ssr";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ComposerPromptEditor, type ComposerPromptEditorHandle } from "../ComposerPromptEditor";
 import { EMPTY_COMPOSER_CONTEXT_RECORDS } from "../composerContextPresentation";
 import { terminalThemeFromApp } from "../ThreadTerminalDrawer";
 import { useTheme } from "../../hooks/useTheme";
-import { DISCONNECTED_COMPOSER_PLACEHOLDER } from "../../composerPlaceholder";
 import { resolveDiffThemeName, type DiffThemeName } from "../../lib/diffRendering";
 import { PREFERRED_HIGHLIGHTER } from "../../lib/syntaxHighlighting";
 import { GhosttyTerminalSurface } from "~/terminal/ghostty/surface";
@@ -17,36 +17,34 @@ import { GhosttyTerminalSurface } from "~/terminal/ghostty/surface";
 
 const EMPTY_SKILLS: ReadonlyArray<never> = [];
 
-// Serialized the way the composer stores inline tokens: the $skill and the
-// markdown-style file links render as chips, so the preview shows prompt
-// text and pills exactly as the real composer draws them.
-const PROMPT_PREVIEW_TEXT =
-  "Use $frontend-design to fix the flaky test in " +
-  "[surface.test.ts](apps/web/src/terminal/ghostty/surface.test.ts) and align the header with " +
-  "[SettingsPanels.tsx](apps/web/src/components/settings/SettingsPanels.tsx) before shipping.";
-
 function noop() {}
 
 /** A live composer editor: type in it to feel the family and size. */
 export function PromptFontPreview() {
+  const t = useTranslate();
   const editorRef = useRef<ComposerPromptEditorHandle>(null);
-  const [prompt, setPrompt] = useState(PROMPT_PREVIEW_TEXT);
-  const [cursor, setCursor] = useState(PROMPT_PREVIEW_TEXT.length);
+  const [draft, setDraft] = useState<string | null>(null);
+  // The sample's skill and file links use the composer's serialization. Once
+  // the user edits it, their draft stays verbatim across language changes.
+  const prompt = draft ?? t("appearance.font.promptSample");
+  const [cursor, setCursor] = useState<number | null>(null);
   const onChange = useCallback((nextValue: string, nextCursor: number) => {
-    setPrompt(nextValue);
+    setDraft((current) =>
+      current === null && nextValue === i18n.t("appearance.font.promptSample") ? null : nextValue,
+    );
     setCursor(nextCursor);
   }, []);
   return (
     <div className="mt-1 mb-2 rounded-lg border border-border bg-background px-3 py-2">
       <ComposerPromptEditor
-        ariaLabel="Prompt font preview"
+        ariaLabel={t("appearance.font.promptPreview")}
         editorRef={editorRef}
         value={prompt}
-        cursor={cursor}
+        cursor={cursor ?? prompt.length}
         contextRecords={EMPTY_COMPOSER_CONTEXT_RECORDS}
         skills={EMPTY_SKILLS}
         disabled={false}
-        placeholder={DISCONNECTED_COMPOSER_PLACEHOLDER}
+        placeholder={t("chat.prompt.disconnected")}
         className="max-h-42 min-h-14"
         onChange={onChange}
         onPaste={noop}
@@ -180,9 +178,16 @@ function previewTerminalFont(family: string, size: number): { family?: string; s
  * terminal drawer uses.
  */
 export function TerminalFontPreview({ family, size }: { family: string; size: number }) {
+  const t = useTranslate();
   const mountRef = useRef<HTMLDivElement>(null);
   const surfaceRef = useRef<GhosttyTerminalSurface | null>(null);
   const fontRef = useRef({ family, size });
+  useEffect(() => {
+    surfaceRef.current?.setAccessibleLabels(
+      t("terminal.inputLabel"),
+      t("terminal.scrollbackLabel"),
+    );
+  }, [t]);
   const { theme, resolvedTheme } = useTheme();
 
   useEffect(() => {
@@ -236,6 +241,10 @@ export function TerminalFontPreview({ family, size }: { family: string; size: nu
 
     void GhosttyTerminalSurface.create(mount, {
       theme: terminalThemeFromApp(mount),
+      accessibleLabels: {
+        input: i18n.t("terminal.inputLabel"),
+        scrollback: i18n.t("terminal.scrollbackLabel"),
+      },
       font: previewTerminalFont(fontRef.current.family, fontRef.current.size),
       onData: echo,
       onResize: noop,
@@ -249,6 +258,10 @@ export function TerminalFontPreview({ family, size }: { family: string; size: nu
         return;
       }
       surfaceRef.current = surface;
+      surface.setAccessibleLabels(
+        i18n.t("terminal.inputLabel"),
+        i18n.t("terminal.scrollbackLabel"),
+      );
       // The theme and font may both have changed while the WASM surface loaded.
       surface.setTheme(terminalThemeFromApp(mount));
       const font = fontRef.current;
@@ -267,7 +280,7 @@ export function TerminalFontPreview({ family, size }: { family: string; size: nu
     <div
       ref={mountRef}
       className="relative mt-1 mb-2 h-52 overflow-hidden rounded-lg border border-border"
-      aria-label="Terminal font preview"
+      aria-label={t("terminal.fontPreview")}
     />
   );
 }

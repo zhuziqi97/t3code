@@ -7,6 +7,7 @@ import { DraftId, useComposerDraftStore } from "../composerDraftStore";
 import { useThreadUndoNotice } from "../hooks/showThreadUndoNotice";
 import { releaseDraftAttachments } from "./attachmentUploadQueue";
 import { discardComposerDraft } from "./discardComposerDraft";
+import { changeLanguage } from "../i18n";
 
 vi.mock("./attachmentUploadQueue", () => ({ releaseDraftAttachments: vi.fn() }));
 
@@ -21,7 +22,8 @@ function undoNotice() {
   return notice;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await changeLanguage("en");
   vi.useFakeTimers();
   useComposerDraftStore.setState({
     draftsByThreadKey: {},
@@ -29,11 +31,12 @@ beforeEach(() => {
     logicalProjectDraftThreadKeyByLogicalProjectKey: {},
   });
 });
-afterEach(() => {
+afterEach(async () => {
   vi.runAllTimers();
   vi.useRealTimers();
   vi.clearAllMocks();
   vi.restoreAllMocks();
+  await changeLanguage("en");
 });
 
 describe("discardComposerDraft", () => {
@@ -73,17 +76,26 @@ describe("discardComposerDraft", () => {
     expect(useComposerDraftStore.getState().getComposerDraft(threadRef)?.prompt ?? "").toBe("");
   });
 
-  it("keeps text typed after the discard and releases the old uploads", async () => {
-    useComposerDraftStore.getState().setPrompt(threadRef, "old reply");
-    discardComposerDraft(threadRef);
-    useComposerDraftStore.getState().setPrompt(threadRef, "new reply");
-    const addToast = vi.spyOn(toastManager, "add").mockReturnValue("error-toast");
+  it.each(["en", "zh"] as const)(
+    "keeps new text and reports restore failure in %s",
+    async (language) => {
+      useComposerDraftStore.getState().setPrompt(threadRef, "old reply");
+      discardComposerDraft(threadRef);
+      await changeLanguage(language);
+      useComposerDraftStore.getState().setPrompt(threadRef, "new reply");
+      const addToast = vi.spyOn(toastManager, "add").mockReturnValue("error-toast");
 
-    await undoNotice().undo();
-    expect(useComposerDraftStore.getState().getComposerDraft(threadRef)?.prompt).toBe("new reply");
-    expect(releaseDraftAttachments).toHaveBeenCalledOnce();
-    expect(addToast).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "Failed to restore draft" }),
-    );
-  });
+      await undoNotice().undo();
+      expect(useComposerDraftStore.getState().getComposerDraft(threadRef)?.prompt).toBe(
+        "new reply",
+      );
+      expect(releaseDraftAttachments).toHaveBeenCalledOnce();
+      expect(addToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: language === "zh" ? "恢复草稿失败" : "Failed to restore draft",
+          description: language === "zh" ? "草稿已有新内容。" : "The draft has new content.",
+        }),
+      );
+    },
+  );
 });

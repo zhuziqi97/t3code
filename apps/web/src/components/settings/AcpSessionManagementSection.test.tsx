@@ -33,6 +33,11 @@ const commands = vi.hoisted(() => ({
 }));
 
 const grants = vi.hoisted(() => ({ scopes: new Set<string>() }));
+vi.mock("../../i18n", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../i18n")>();
+  return { ...actual, useTranslate: () => actual.i18n.t };
+});
+
 vi.mock("~/state/session", async (original) => ({
   ...(await original<typeof import("~/state/session")>()),
   useEnvironmentScope: (_id: unknown, scope: string) => grants.scopes.has(scope),

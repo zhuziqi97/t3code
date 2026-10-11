@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next";
+import { i18n } from "../i18n";
 import { threadPullRequestSearchTerms } from "@t3tools/shared/threadPullRequests";
 import type { CommandPaletteLinkedThreads } from "../commandPaletteBus";
 import {
@@ -27,12 +29,13 @@ export function buildLinkedThreadActionItems(
     icon: ReactNode;
     runThread: (thread: Pick<SidebarThreadSummary, "environmentId" | "id">) => Promise<void>;
   },
+  t: TFunction = i18n.t,
 ): CommandPaletteActionItem[] {
   return input.threads.map((thread) => ({
     kind: "action",
     value: `thread:${input.environmentId}:${thread.id}`,
-    title: thread.title || "Untitled thread",
-    description: thread.archivedAt === null ? "Linked thread" : "Archived thread",
+    title: thread.title || t("thread.untitled"),
+    description: thread.archivedAt === null ? t("thread.linked") : t("thread.archived"),
     searchTerms: [input.query, thread.title],
     icon: input.icon,
     run: () => input.runThread({ environmentId: input.environmentId, id: thread.id }),
@@ -251,15 +254,19 @@ export type CommandPaletteMode = "root" | "root-browse" | "submenu" | "submenu-b
 // every other surface uses the real title, so overriding it desyncs the icon.
 export type CommandPaletteProject = Project & { readonly displayName: string };
 
-export function buildCommandPaletteProjectMetadata(input: {
-  readonly projects: ReadonlyArray<Pick<Project, "environmentId" | "title" | "workspaceRoot">>;
-  readonly locationByEnvironmentId: ReadonlyMap<EnvironmentId, { readonly label: string }>;
-}) {
+export function buildCommandPaletteProjectMetadata(
+  input: {
+    readonly projects: ReadonlyArray<Pick<Project, "environmentId" | "title" | "workspaceRoot">>;
+    readonly locationByEnvironmentId: ReadonlyMap<EnvironmentId, { readonly label: string }>;
+  },
+  t: TFunction = i18n.t,
+) {
   const searchTerms: string[] = [];
   const environmentLabels = new Set<string>();
 
   for (const project of input.projects) {
-    const label = input.locationByEnvironmentId.get(project.environmentId)?.label ?? "Remote";
+    const label =
+      input.locationByEnvironmentId.get(project.environmentId)?.label ?? t("common.remote");
     searchTerms.push(project.title, project.workspaceRoot, label);
     environmentLabels.add(label);
   }
@@ -313,22 +320,25 @@ export type BuildThreadActionItemsThread = Pick<
   latestUserMessageAt?: string | null;
 };
 
-export function buildThreadActionItems<TThread extends BuildThreadActionItemsThread>(input: {
-  threads: ReadonlyArray<TThread>;
-  activeThreadId?: Thread["id"];
-  projectTitleById: ReadonlyMap<Project["id"], string>;
-  sortOrder: SidebarThreadSortOrder;
-  icon: ReactNode;
-  /** Optional content rendered inline before the title text per-thread. */
-  renderLeadingContent?: (thread: TThread) => ReactNode;
-  /** Optional content rendered inline after the title text per-thread. */
-  renderTrailingContent?: (thread: TThread) => ReactNode;
-  /** Optional rich description (e.g. favicon + workspace icons). Falls back to text. */
-  renderDescription?: (thread: TThread, meta: { projectTitle: string | undefined }) => ReactNode;
-  getContentMatch?: (thread: TThread) => CommandPaletteThreadContentMatch | undefined;
-  runThread: (thread: Pick<SidebarThreadSummary, "environmentId" | "id">) => Promise<void>;
-  limit?: number;
-}): CommandPaletteActionItem[] {
+export function buildThreadActionItems<TThread extends BuildThreadActionItemsThread>(
+  input: {
+    threads: ReadonlyArray<TThread>;
+    activeThreadId?: Thread["id"];
+    projectTitleById: ReadonlyMap<Project["id"], string>;
+    sortOrder: SidebarThreadSortOrder;
+    icon: ReactNode;
+    /** Optional content rendered inline before the title text per-thread. */
+    renderLeadingContent?: (thread: TThread) => ReactNode;
+    /** Optional content rendered inline after the title text per-thread. */
+    renderTrailingContent?: (thread: TThread) => ReactNode;
+    /** Optional rich description (e.g. favicon + workspace icons). Falls back to text. */
+    renderDescription?: (thread: TThread, meta: { projectTitle: string | undefined }) => ReactNode;
+    getContentMatch?: (thread: TThread) => CommandPaletteThreadContentMatch | undefined;
+    runThread: (thread: Pick<SidebarThreadSummary, "environmentId" | "id">) => Promise<void>;
+    limit?: number;
+  },
+  t: TFunction = i18n.t,
+): CommandPaletteActionItem[] {
   const sortedThreads = sortThreads(
     input.threads.filter((thread) => thread.archivedAt === null),
     input.sortOrder,
@@ -347,7 +357,7 @@ export function buildThreadActionItems<TThread extends BuildThreadActionItemsThr
       descriptionParts.push(`#${thread.branch}`);
     }
     if (thread.id === input.activeThreadId) {
-      descriptionParts.push("Current thread");
+      descriptionParts.push(t("thread.current"));
     }
 
     const leadingContent = input.renderLeadingContent?.(thread);
@@ -438,14 +448,17 @@ function rankCommandPaletteItemMatch(
   return 0;
 }
 
-export function filterCommandPaletteGroups(input: {
-  activeGroups: ReadonlyArray<CommandPaletteGroup>;
-  query: string;
-  isInSubmenu: boolean;
-  projectSearchItems: ReadonlyArray<CommandPaletteActionItem>;
-  settingsSearchItems?: ReadonlyArray<CommandPaletteActionItem>;
-  threadSearchItems: ReadonlyArray<CommandPaletteActionItem>;
-}): CommandPaletteGroup[] {
+export function filterCommandPaletteGroups(
+  input: {
+    activeGroups: ReadonlyArray<CommandPaletteGroup>;
+    query: string;
+    isInSubmenu: boolean;
+    projectSearchItems: ReadonlyArray<CommandPaletteActionItem>;
+    settingsSearchItems?: ReadonlyArray<CommandPaletteActionItem>;
+    threadSearchItems: ReadonlyArray<CommandPaletteActionItem>;
+  },
+  t: TFunction = i18n.t,
+): CommandPaletteGroup[] {
   const isActionsFilter = input.query.startsWith(">");
   const searchQuery = isActionsFilter ? input.query.slice(1) : input.query;
   const normalizedQuery = normalizeSearchText(searchQuery);
@@ -470,21 +483,21 @@ export function filterCommandPaletteGroups(input: {
     if (input.projectSearchItems.length > 0) {
       searchableGroups.push({
         value: "projects-search",
-        label: "Projects",
+        label: t("palette.projects"),
         items: input.projectSearchItems,
       });
     }
     if (input.settingsSearchItems && input.settingsSearchItems.length > 0) {
       searchableGroups.push({
         value: "settings-search",
-        label: "Settings",
+        label: t("palette.settings"),
         items: input.settingsSearchItems,
       });
     }
     if (input.threadSearchItems.length > 0) {
       searchableGroups.push({
         value: "threads-search",
-        label: "Threads",
+        label: t("palette.threads"),
         items: input.threadSearchItems,
       });
     }
@@ -492,7 +505,9 @@ export function filterCommandPaletteGroups(input: {
 
   return searchableGroups.flatMap((group) => {
     const items = Arr.filterMap(group.items, (item, index) => {
-      const haystack = normalizeSearchText(item.searchTerms.join(" "));
+      const haystack = normalizeSearchText(
+        [typeof item.title === "string" ? item.title : "", ...item.searchTerms].join(" "),
+      );
       if (!queryTokens.every((token) => haystack.includes(token))) {
         return Result.failVoid;
       }
@@ -520,15 +535,18 @@ export function filterCommandPaletteGroups(input: {
   });
 }
 
-export function buildBrowseGroups(input: {
-  browseEntries: ReadonlyArray<FilesystemBrowseEntry>;
-  browseQuery: string;
-  canBrowseUp: boolean;
-  upIcon: ReactNode;
-  directoryIcon: ReactNode;
-  browseUp: () => void | Promise<void>;
-  browseTo: (name: string) => void | Promise<void>;
-}): CommandPaletteGroup[] {
+export function buildBrowseGroups(
+  input: {
+    browseEntries: ReadonlyArray<FilesystemBrowseEntry>;
+    browseQuery: string;
+    canBrowseUp: boolean;
+    upIcon: ReactNode;
+    directoryIcon: ReactNode;
+    browseUp: () => void | Promise<void>;
+    browseTo: (name: string) => void | Promise<void>;
+  },
+  t: TFunction = i18n.t,
+): CommandPaletteGroup[] {
   const items: CommandPaletteActionItem[] = [];
 
   if (input.canBrowseUp) {
@@ -559,7 +577,7 @@ export function buildBrowseGroups(input: {
     });
   }
 
-  return [{ value: "directories", label: "Directories", items }];
+  return [{ value: "directories", label: t("palette.directories"), items }];
 }
 
 export function filterPinnedBrowseEntries(input: {
@@ -591,33 +609,39 @@ export function getCommandPaletteMode(input: {
   return input.isBrowsing ? "root-browse" : "root";
 }
 
-export function buildRootGroups(input: {
-  actionItems: ReadonlyArray<CommandPaletteActionItem | CommandPaletteSubmenuItem>;
-  recentThreadItems: ReadonlyArray<CommandPaletteActionItem>;
-}): CommandPaletteGroup[] {
+export function buildRootGroups(
+  input: {
+    actionItems: ReadonlyArray<CommandPaletteActionItem | CommandPaletteSubmenuItem>;
+    recentThreadItems: ReadonlyArray<CommandPaletteActionItem>;
+  },
+  t: TFunction = i18n.t,
+): CommandPaletteGroup[] {
   const groups: CommandPaletteGroup[] = [];
   if (input.actionItems.length > 0) {
-    groups.push({ value: "actions", label: "Actions", items: input.actionItems });
+    groups.push({ value: "actions", label: t("palette.actions"), items: input.actionItems });
   }
   if (input.recentThreadItems.length > 0) {
     groups.push({
       value: "recent-threads",
-      label: "Recent Threads",
+      label: t("palette.recentThreads"),
       items: input.recentThreadItems,
     });
   }
   return groups;
 }
 
-export function getCommandPaletteInputPlaceholder(mode: CommandPaletteMode): string {
+export function getCommandPaletteInputPlaceholder(
+  mode: CommandPaletteMode,
+  t: TFunction = i18n.t,
+): string {
   switch (mode) {
     case "root":
-      return "Search commands, projects, and threads...";
+      return t("palette.search");
     case "root-browse":
-      return "Enter project path (e.g. ~/projects/my-app)";
+      return t("palette.projectPath");
     case "submenu":
-      return "Search...";
+      return t("common.search");
     case "submenu-browse":
-      return "Enter path (e.g. ~/projects/my-app)";
+      return t("palette.path");
   }
 }

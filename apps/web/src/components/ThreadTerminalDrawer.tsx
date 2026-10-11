@@ -1,3 +1,5 @@
+import { i18n, useTranslate } from "../i18n";
+import type { TFunction } from "i18next";
 import { useAtomValue } from "@effect/atom-react";
 import {
   isAtomCommandInterrupted,
@@ -46,7 +48,14 @@ import { Popover, PopoverPopup, PopoverTrigger } from "~/components/ui/popover";
 import { Button } from "~/components/ui/button";
 import { PanelTabCloseButton } from "~/components/ui/panel-tab-close-button";
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
-import { readTextFromClipboard, writeTextToClipboard } from "~/hooks/useCopyToClipboard";
+import {
+  ClipboardApiUnavailableError,
+  ClipboardReadError,
+  ClipboardReadUnavailableError,
+  ClipboardWriteError,
+  readTextFromClipboard,
+  writeTextToClipboard,
+} from "~/hooks/useCopyToClipboard";
 import { cn } from "~/lib/utils";
 import { type TerminalContextSelection } from "~/lib/terminalContext";
 import {
@@ -98,6 +107,10 @@ import {
 
 const MIN_DRAWER_HEIGHT = 180;
 const MAX_DRAWER_HEIGHT_RATIO = 0.75;
+const isClipboardApiUnavailableError = Schema.is(ClipboardApiUnavailableError);
+const isClipboardWriteError = Schema.is(ClipboardWriteError);
+const isClipboardReadUnavailableError = Schema.is(ClipboardReadUnavailableError);
+const isClipboardReadError = Schema.is(ClipboardReadError);
 
 function maxDrawerHeight(): number {
   if (typeof window === "undefined") return DEFAULT_THREAD_TERMINAL_HEIGHT;
@@ -273,14 +286,17 @@ export type TerminalContextMenuAction =
   | "scroll-to-bottom";
 
 /** Post-selection popup: available selection actions, always enabled. */
-export function terminalSelectionMenuItems(options?: {
-  canAddToChat?: boolean;
-}): ContextMenuItem<"add-to-chat" | "copy">[] {
+export function terminalSelectionMenuItems(
+  options?: { canAddToChat?: boolean },
+  translate: TFunction = i18n.t,
+): ContextMenuItem<"add-to-chat" | "copy">[] {
   return [
     ...(options?.canAddToChat === false
       ? []
-      : ([{ id: "add-to-chat", label: "Add to chat" }] satisfies ContextMenuItem<"add-to-chat">[])),
-    { id: "copy", label: "Copy" },
+      : ([
+          { id: "add-to-chat", label: translate("terminal.menu.addToChat") },
+        ] satisfies ContextMenuItem<"add-to-chat">[])),
+    { id: "copy", label: translate("terminal.menu.copy") },
   ];
 }
 
@@ -290,20 +306,23 @@ export function terminalSelectionMenuItems(options?: {
  * (and Electron's default editing menu) can only paste into an editable
  * element, so a canvas terminal never gets a usable entry from them.
  */
-export function terminalContextMenuItems(options: {
-  hasSelection: boolean;
-  canAddToChat?: boolean;
-  readOnly?: boolean;
-}): ContextMenuItem<TerminalContextMenuAction>[] {
+export function terminalContextMenuItems(
+  options: { hasSelection: boolean; canAddToChat?: boolean; readOnly?: boolean },
+  translate: TFunction = i18n.t,
+): ContextMenuItem<TerminalContextMenuAction>[] {
   const { hasSelection, canAddToChat = true } = options;
   return [
-    ...terminalSelectionMenuItems({ canAddToChat }).map((item) => ({
+    ...terminalSelectionMenuItems({ canAddToChat }, translate).map((item) => ({
       ...item,
       disabled: !hasSelection,
     })),
-    { id: "paste", label: "Paste", ...(options.readOnly ? { disabled: true } : {}) },
-    { id: "select-all", label: "Select all" },
-    { id: "scroll-to-bottom", label: "Jump to latest" },
+    {
+      id: "paste",
+      label: translate("terminal.menu.paste"),
+      ...(options.readOnly ? { disabled: true } : {}),
+    },
+    { id: "select-all", label: translate("terminal.menu.selectAll") },
+    { id: "scroll-to-bottom", label: translate("terminal.menu.latest") },
   ];
 }
 
@@ -381,8 +400,24 @@ export function TerminalViewport({
   drawerHeight,
   keybindings,
 }: TerminalViewportProps) {
+  const t = useTranslate();
+  const initializationFailureRef = useRef<{ message: string | null } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<GhosttyTerminalSurface | null>(null);
+  useEffect(() => {
+    const failure = initializationFailureRef.current;
+    const mount = containerRef.current;
+    if (!failure || !mount) return;
+    mount.textContent = t("terminal.initRetry", {
+      message: failure.message ?? t("terminal.initFailed"),
+    });
+  }, [t]);
+  useEffect(() => {
+    terminalRef.current?.setAccessibleLabels(
+      t("terminal.inputLabel"),
+      t("terminal.scrollbackLabel"),
+    );
+  }, [t]);
   const visibleRef = useRef(visible);
   const environmentId = threadRef.environmentId;
   const canOperateTerminal = useEnvironmentScope(environmentId, AuthTerminalOperateScope);
@@ -481,7 +516,10 @@ export function TerminalViewport({
         shouldHandleTerminalExit(status, synchronized, hasHandledExitRef.current, version)
       ) {
         hasHandledExitRef.current = true;
-        writeSystemMessage(terminal, status === "closed" ? "Terminal closed" : "Process exited");
+        writeSystemMessage(
+          terminal,
+          t(status === "closed" ? "terminal.closed" : "terminal.exited"),
+        );
         window.setTimeout(() => {
           if (hasHandledExitRef.current) {
             handleSessionExited();
@@ -542,6 +580,7 @@ export function TerminalViewport({
     const mount = containerRef.current;
     if (!mount) return;
 
+    initializationFailureRef.current = null;
     const localApi = readLocalApi();
     let cancelled = false;
     let teardown: (() => void) | null = null;
@@ -553,6 +592,10 @@ export function TerminalViewport({
       const setupFont = terminalFontRef.current;
       const terminalOptions: GhosttyTerminalSurfaceOptions = {
         theme: terminalThemeFromApp(mount),
+        accessibleLabels: {
+          input: i18n.t("terminal.inputLabel"),
+          scrollback: i18n.t("terminal.scrollbackLabel"),
+        },
         font: terminalFontOptions(setupFont.family, setupFont.size),
         get visible() {
           return visibleRef.current;
@@ -581,6 +624,10 @@ export function TerminalViewport({
       terminal.setTheme(terminalThemeFromApp(mount));
       setupTerminal = terminal;
       terminalRef.current = terminal;
+      terminal.setAccessibleLabels(
+        i18n.t("terminal.inputLabel"),
+        i18n.t("terminal.scrollbackLabel"),
+      );
       terminal.input.readOnly = !hasTerminalWriteAccess();
       // Client settings hydrate asynchronously; a font preference that landed
       // while the surface was loading found terminalRef null, so its setFont
@@ -679,7 +726,19 @@ export function TerminalViewport({
         if (requestId !== selectionActionRequestIdRef.current) return;
         const activeTerminal = terminalRef.current;
         if (activeTerminal) {
-          writeSystemMessage(activeTerminal, error instanceof Error ? error.message : fallback);
+          const clipboardKey = isClipboardApiUnavailableError(error)
+            ? "terminal.clipboard.copyUnavailable"
+            : isClipboardWriteError(error)
+              ? "terminal.clipboard.copyFailed"
+              : isClipboardReadUnavailableError(error)
+                ? "terminal.clipboard.readUnavailable"
+                : isClipboardReadError(error)
+                  ? "terminal.clipboard.readFailed"
+                  : null;
+          writeSystemMessage(
+            activeTerminal,
+            clipboardKey ? i18n.t(clipboardKey) : error instanceof Error ? error.message : fallback,
+          );
         }
       };
 
@@ -693,7 +752,7 @@ export function TerminalViewport({
         try {
           await writeTextToClipboard(text, "terminal selection");
         } catch (error) {
-          reportIfCurrent(requestId, error, "Unable to copy terminal selection");
+          reportIfCurrent(requestId, error, i18n.t("terminal.copyFailed"));
         }
         focusIfCurrent(requestId);
       };
@@ -711,7 +770,7 @@ export function TerminalViewport({
             () => requestId === selectionActionRequestIdRef.current,
           );
         } catch (error) {
-          reportIfCurrent(requestId, error, "Unable to read the clipboard");
+          reportIfCurrent(requestId, error, i18n.t("terminal.clipboardFailed"));
           return;
         }
         focusIfCurrent(requestId);
@@ -738,7 +797,7 @@ export function TerminalViewport({
             { x: event.clientX, y: event.clientY },
           );
         } catch (error) {
-          reportIfCurrent(requestId, error, "Unable to open the terminal context menu");
+          reportIfCurrent(requestId, error, i18n.t("terminal.menuFailed"));
           focusIfCurrent(requestId);
           return;
         }
@@ -806,7 +865,7 @@ export function TerminalViewport({
         }
       };
 
-      const sendTerminalInput = async (data: string, fallbackError: string) => {
+      const sendTerminalInput = async (data: string, fallbackKey: string) => {
         if (!hasTerminalWriteAccess()) return;
         const activeTerminal = terminalRef.current;
         if (!activeTerminal) return;
@@ -815,7 +874,7 @@ export function TerminalViewport({
           const error = squashAtomCommandFailure(result);
           writeSystemMessage(
             activeTerminal,
-            error instanceof Error ? error.message : fallbackError,
+            error instanceof Error ? error.message : i18n.t(fallbackKey),
           );
         }
       };
@@ -840,7 +899,7 @@ export function TerminalViewport({
         if (navigationData !== null) {
           event.preventDefault();
           event.stopPropagation();
-          void sendTerminalInput(navigationData, "Failed to move cursor");
+          void sendTerminalInput(navigationData, "terminal.cursorFailed");
           return false;
         }
 
@@ -848,14 +907,14 @@ export function TerminalViewport({
         if (deleteData !== null) {
           event.preventDefault();
           event.stopPropagation();
-          void sendTerminalInput(deleteData, "Failed to delete terminal input");
+          void sendTerminalInput(deleteData, "terminal.deleteInputFailed");
           return false;
         }
 
         if (!isTerminalClearShortcut(event)) return true;
         event.preventDefault();
         event.stopPropagation();
-        void sendTerminalInput("\u000c", "Failed to clear terminal");
+        void sendTerminalInput("\u000c", "terminal.clearFailed");
         return false;
       }
 
@@ -865,14 +924,14 @@ export function TerminalViewport({
         if (!latestTerminal) return;
         if (isTerminalUrl(text)) {
           if (!localApi) {
-            writeSystemMessage(latestTerminal, "Opening links is unavailable in this browser.");
+            writeSystemMessage(latestTerminal, i18n.t("terminal.linksUnavailable"));
             return;
           }
           const fallbackToBrowser = () => {
             void localApi.shell.openExternal(text).catch((error: unknown) => {
               writeSystemMessage(
                 latestTerminal,
-                error instanceof Error ? error.message : "Unable to open link",
+                error instanceof Error ? error.message : i18n.t("terminal.linkFailed"),
               );
             });
           };
@@ -890,8 +949,8 @@ export function TerminalViewport({
             toastManager.add(
               stackedThreadToast({
                 type: "error",
-                title: "Unable to open link",
-                description: error instanceof Error ? error.message : "An error occurred.",
+                title: i18n.t("terminal.linkFailed"),
+                description: error instanceof Error ? error.message : i18n.t("terminal.error"),
               }),
             );
           });
@@ -906,7 +965,7 @@ export function TerminalViewport({
           const error = squashAtomCommandFailure(result);
           writeSystemMessage(
             latestTerminal,
-            error instanceof Error ? error.message : "Unable to open path",
+            error instanceof Error ? error.message : i18n.t("terminal.pathFailed"),
           );
         })();
       }
@@ -919,7 +978,7 @@ export function TerminalViewport({
           const error = squashAtomCommandFailure(result);
           writeSystemMessage(
             terminal,
-            error instanceof Error ? error.message : "Terminal write failed",
+            error instanceof Error ? error.message : i18n.t("terminal.writeFailed"),
           );
         })();
       }
@@ -993,9 +1052,12 @@ export function TerminalViewport({
         setupTerminal?.dispose();
         setupTerminal = null;
         if (cancelled) return;
-        const message =
-          error instanceof Error ? error.message : "Unable to initialize libghostty-vt";
-        mount.textContent = `${message} — close and reopen the terminal to retry.`;
+        initializationFailureRef.current = {
+          message: error instanceof Error ? error.message : null,
+        };
+        mount.textContent = i18n.t("terminal.initRetry", {
+          message: initializationFailureRef.current.message ?? i18n.t("terminal.initFailed"),
+        });
       });
 
     return () => {
@@ -1174,6 +1236,7 @@ export default function ThreadTerminalDrawer({
   terminalLabelsById,
   terminalLaunchLocationsById,
 }: ThreadTerminalDrawerProps) {
+  const t = useTranslate();
   const canOperateTerminal = useEnvironmentScope(threadRef.environmentId, AuthTerminalOperateScope);
   const isPanel = mode === "panel";
   const [advancedTypography] = useLocalStorage(
@@ -1333,10 +1396,13 @@ export default function ThreadTerminalDrawer({
   const terminalLabelById = useMemo(() => {
     const next = new Map<string, string>();
     for (const terminalId of normalizedTerminalIds) {
-      next.set(terminalId, terminalLabelsById?.get(terminalId) ?? getTerminalLabel(terminalId));
+      next.set(
+        terminalId,
+        terminalLabelsById?.get(terminalId) ?? getTerminalLabel(terminalId, t("panels.terminal")),
+      );
     }
     return next;
-  }, [normalizedTerminalIds, terminalLabelsById]);
+  }, [normalizedTerminalIds, terminalLabelsById, t]);
   const resolveTerminalLaunchLocation = useCallback(
     (terminalId: string): TerminalLaunchLocation => {
       return (
@@ -1350,21 +1416,21 @@ export default function ThreadTerminalDrawer({
     [cwd, runtimeEnv, terminalLaunchLocationsById, worktreePath],
   );
   const splitTerminalActionLabel = hasReachedSplitLimit
-    ? `Split Terminal Horizontally (max ${MAX_TERMINALS_PER_GROUP} per group)`
-    : splitShortcutLabel
-      ? `Split Terminal Horizontally (${splitShortcutLabel})`
-      : "Split Terminal Horizontally";
+    ? t("terminal.splitHorizontalLimit", { count: MAX_TERMINALS_PER_GROUP })
+    : t("terminal.splitHorizontal", {
+        shortcut: splitShortcutLabel ? ` (${splitShortcutLabel})` : "",
+      });
   const splitTerminalVerticalActionLabel = hasReachedSplitLimit
-    ? `Split Terminal Vertically (max ${MAX_TERMINALS_PER_GROUP} per group)`
-    : splitVerticalShortcutLabel
-      ? `Split Terminal Vertically (${splitVerticalShortcutLabel})`
-      : "Split Terminal Vertically";
-  const newTerminalActionLabel = newShortcutLabel
-    ? `New Terminal (${newShortcutLabel})`
-    : "New Terminal";
-  const closeTerminalActionLabel = closeShortcutLabel
-    ? `Close Terminal (${closeShortcutLabel})`
-    : "Close Terminal";
+    ? t("terminal.splitVerticalLimit", { count: MAX_TERMINALS_PER_GROUP })
+    : t("terminal.splitVertical", {
+        shortcut: splitVerticalShortcutLabel ? ` (${splitVerticalShortcutLabel})` : "",
+      });
+  const newTerminalActionLabel = t("terminal.new", {
+    shortcut: newShortcutLabel ? ` (${newShortcutLabel})` : "",
+  });
+  const closeTerminalActionLabel = t("terminal.close", {
+    shortcut: closeShortcutLabel ? ` (${closeShortcutLabel})` : "",
+  });
   const onSplitTerminalAction = useCallback(() => {
     if (!canOperateTerminal || hasReachedSplitLimit) return;
     onSplitTerminal();
@@ -1380,14 +1446,15 @@ export default function ThreadTerminalDrawer({
   const confirmCloseTerminal = useCallback(
     (terminalId: string) => {
       if (!canOperateTerminal) return;
-      const label = terminalLabelById.get(terminalId) ?? getTerminalLabel(terminalId);
+      const label =
+        terminalLabelById.get(terminalId) ?? getTerminalLabel(terminalId, t("panels.terminal"));
       void confirmTerminalClose([label]).then((confirmed) => {
         if (confirmed && readEnvironmentScope(threadRef.environmentId, AuthTerminalOperateScope)) {
           onCloseTerminal(terminalId);
         }
       });
     },
-    [canOperateTerminal, onCloseTerminal, terminalLabelById, threadRef.environmentId],
+    [canOperateTerminal, onCloseTerminal, terminalLabelById, threadRef.environmentId, t],
   );
 
   useEffect(() => {
@@ -1513,7 +1580,7 @@ export default function ThreadTerminalDrawer({
           />
         ) : null}
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-4 py-6 text-center text-sm text-muted-foreground">
-          <p>No terminal sessions for this thread yet.</p>
+          <p>{t("terminal.empty")}</p>
           <Button
             size="xs"
             variant="outline"
@@ -1646,7 +1713,7 @@ export default function ThreadTerminalDrawer({
                           threadRef={threadRef}
                           threadId={threadId}
                           terminalId={terminalId}
-                          terminalLabel={terminalLabelById.get(terminalId) ?? "Terminal"}
+                          terminalLabel={terminalLabelById.get(terminalId) ?? t("panels.terminal")}
                           cwd={terminalLaunchLocation.cwd}
                           {...(terminalLaunchLocation.worktreePath !== undefined
                             ? { worktreePath: terminalLaunchLocation.worktreePath }
@@ -1676,7 +1743,9 @@ export default function ThreadTerminalDrawer({
                   threadRef={threadRef}
                   threadId={threadId}
                   terminalId={resolvedActiveTerminalId}
-                  terminalLabel={terminalLabelById.get(resolvedActiveTerminalId) ?? "Terminal"}
+                  terminalLabel={
+                    terminalLabelById.get(resolvedActiveTerminalId) ?? t("panels.terminal")
+                  }
                   cwd={activeTerminalLaunchLocation.cwd}
                   {...(activeTerminalLaunchLocation.worktreePath !== undefined
                     ? { worktreePath: activeTerminalLaunchLocation.worktreePath }
@@ -1754,10 +1823,10 @@ export default function ThreadTerminalDrawer({
                   const terminalCount = terminalGroup.terminalIds.length;
                   const isSplitGroup = terminalCount > 1;
                   const groupLabel = !isSplitGroup
-                    ? "Single"
+                    ? t("terminal.group.single")
                     : terminalGroup.splitDirection === "vertical"
-                      ? "Stacked"
-                      : "Side by side";
+                      ? t("terminal.group.stacked")
+                      : t("terminal.group.sideBySide");
                   const GroupIcon = !isSplitGroup
                     ? Square
                     : terminalGroup.splitDirection === "vertical"
@@ -1787,10 +1856,13 @@ export default function ThreadTerminalDrawer({
                       <div className="flex flex-col gap-0.5">
                         {terminalGroup.terminalIds.map((terminalId) => {
                           const isActive = terminalId === resolvedActiveTerminalId;
-                          const terminalLabel = terminalLabelById.get(terminalId) ?? "Terminal";
-                          const closeTerminalLabel = `Close ${terminalLabel}${
-                            isActive && closeShortcutLabel ? ` (${closeShortcutLabel})` : ""
-                          }`;
+                          const terminalLabel =
+                            terminalLabelById.get(terminalId) ?? t("panels.terminal");
+                          const closeTerminalLabel = t("terminal.closeNamed", {
+                            label: terminalLabel,
+                            shortcut:
+                              isActive && closeShortcutLabel ? ` (${closeShortcutLabel})` : "",
+                          });
                           return (
                             <div
                               key={terminalId}

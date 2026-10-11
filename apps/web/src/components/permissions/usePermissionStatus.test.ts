@@ -3,6 +3,10 @@ import { reactHookHarness as hooks } from "../../test/reactHookHarness";
 import { usePermissionStatus } from "./usePermissionStatus";
 
 const effects = vi.hoisted(() => [] as Array<() => (() => void) | undefined>);
+vi.mock("../../i18n", async (original) => {
+  const actual = await original<typeof import("../../i18n")>();
+  return { ...actual, useTranslate: () => actual.i18n.getFixedT("en") };
+});
 vi.mock("react", async (original) => {
   const actual = await original<typeof import("react")>();
   const { reactHookHarness } = await import("../../test/reactHookHarness");

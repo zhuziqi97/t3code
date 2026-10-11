@@ -1,3 +1,5 @@
+import { useTranslate } from "../../i18n";
+import { formatDeviceMessage } from "./deviceMessages";
 import type { DeviceServiceState, EnvironmentId } from "@t3tools/contracts";
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
@@ -12,6 +14,7 @@ export function DeviceHostUpdates({
   state: DeviceServiceState;
   environmentId: EnvironmentId;
 }) {
+  const t = useTranslate();
   const retry = useAtomCommand(deviceEnvironment.list);
   const [pending, setPending] = useState<string | null>(null);
   if (state.hostStatus === "disabled") return null;
@@ -30,18 +33,16 @@ export function DeviceHostUpdates({
             <div className="min-w-0 flex-1">
               <p className="font-medium">{host.label}</p>
               <p className="whitespace-pre-wrap break-words text-muted-foreground">
-                {status.detail ??
-                  (failed
-                    ? "Device support could not start."
+                {status.detail
+                  ? formatDeviceMessage(status.detail, t)
+                  : failed
+                    ? t("device.host.failed")
                     : status.status === "installing"
-                      ? "Installing device tools…"
-                      : "Starting device tools…")}
+                      ? t("device.host.installing")
+                      : t("device.host.starting")}
               </p>
               {failed ? (
-                <p className="mt-1 text-muted-foreground">
-                  Check the host connection and network access, then retry. Your device settings are
-                  saved.
-                </p>
+                <p className="mt-1 text-muted-foreground">{t("device.host.retry-description")}</p>
               ) : null}
             </div>
             {failed && state.supportsHostRetry ? (
@@ -56,7 +57,7 @@ export function DeviceHostUpdates({
                   );
                 }}
               >
-                {pending === host.id ? "Retrying…" : "Retry"}
+                {pending === host.id ? t("device.retrying") : t("device.retry")}
               </Button>
             ) : null}
           </div>

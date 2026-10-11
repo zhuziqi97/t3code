@@ -1,3 +1,4 @@
+import { createI18n } from "@t3tools/client-runtime/i18n";
 import { shouldPreserveAssistantLineBreaks } from "@t3tools/shared/markdownPipeline";
 import { ThreadId, type WorktreeSetupSnapshot } from "@t3tools/contracts";
 import {
@@ -32,6 +33,7 @@ import {
   deriveMessagesTimelineRowsWithState,
   shouldCollapseUserMessage,
   liveWorkEntryLabel,
+  singleToolCallLabel,
   normalizeCompactToolLabel,
   resolveAssistantMessageCopyState,
   resolveWorkGroupScrollIndex,
@@ -186,8 +188,65 @@ describe("work entry labels", () => {
       } as never,
     };
     expect(threadReadTargetId(threadRead)).toBe("thread-child");
-    expect(threadReadLabelPrefix(liveWorkEntryLabel(threadRead, undefined, active))).toBe(prefix);
-    expect(threadReadLabelPrefix(workEntryDisplayLabel(threadRead, undefined))).toBe(prefix);
+    expect(threadReadLabelPrefix(threadRead, active)).toBe(prefix);
+    expect(threadReadLabelPrefix(threadRead)).toBe(prefix);
+  });
+
+  it("localizes named-thread prefixes, commands and file paths without altering identities", () => {
+    const t = createI18n({ lng: "zh" }).t;
+    const threadRead = {
+      ...entry,
+      itemType: "dynamic_tool" as const,
+      toolLifecycleStatus: "completed" as const,
+      structuredPayload: {
+        type: "dynamic_tool",
+        toolName: "mcp__t3-code__t3_thread_read",
+        input: { threadId: "raw-target" },
+      } as never,
+    };
+    expect(threadReadLabelPrefix(threadRead, false, t)).toBe("已读取会话");
+    expect(threadReadLabelPrefix({ ...threadRead, toolLifecycleStatus: "failed" }, true, t)).toBe(
+      "未能读取会话",
+    );
+    expect(threadReadTargetId(threadRead)).toBe("raw-target");
+    expect(threadReadLabelPrefix({ ...entry, label: "Read a T3 thread" }, false, t)).toBeNull();
+    expect(
+      liveWorkEntryLabel(
+        {
+          ...entry,
+          itemType: "command_execution",
+          command: "node scripts/原始文件.mjs",
+          toolLifecycleStatus: "inProgress",
+        },
+        undefined,
+        true,
+        t,
+      ),
+    ).toBe("正在运行 node");
+    expect(
+      liveWorkEntryLabel(
+        {
+          ...entry,
+          itemType: "command_execution",
+          command: "node scripts/原始文件.mjs",
+          toolLifecycleStatus: "failed",
+        },
+        undefined,
+        true,
+        t,
+      ),
+    ).toBe("node 运行失败");
+    const read = {
+      ...entry,
+      label: "Read",
+      itemType: "dynamic_tool" as const,
+      requestKind: "file-read",
+      changedFiles: ["/repo/src/原始文件.ts", "/repo/src/other.ts"],
+    };
+    expect(workEntryDisplayLabel(read, "/repo", t)).toBe(
+      "读取 repo/src/原始文件.ts，另有 1 个文件",
+    );
+    expect(read.changedFiles[0]).toBe("/repo/src/原始文件.ts");
   });
 
   it("finds no target for other tools or thread reads without one", () => {
@@ -292,6 +351,103 @@ describe("work entry labels", () => {
         undefined,
       ),
     ).toBe("Searched TODO in web");
+  });
+
+  it.each([
+    [{ pattern: "原文|TODO", path: "apps/web" }, "已在 web 中搜索 原文|TODO"],
+    [{ glob: "*.{ts,tsx}", path: "apps/web" }, "已在 web 中搜索文件 *.{ts,tsx}"],
+    [{ glob: "*.{ts,tsx}" }, "已搜索文件 *.{ts,tsx}"],
+    [{ query: "原文|TODO" }, "已搜索 原文|TODO"],
+    [{ target_directory: "/tmp/原始目录" }, "已在 原始目录 中搜索"],
+    [{ pattern: "TODO", glob: "*.ts", path: "apps/web" }, "已在 web 中搜索 TODO"],
+    [{ pattern: "TODO", glob: "*.ts" }, "已搜索文件 *.ts"],
+  ])(
+    "translates search grammar without changing query, glob or target selection %j",
+    (input, expected) => {
+      const search = {
+        ...entry,
+        itemType: "dynamic_tool" as const,
+        toolTitle: "Grep",
+        toolData: { input },
+        structuredPayload: { type: "dynamic_tool", toolName: "Grep", input } as NonNullable<
+          WorkLogEntry["structuredPayload"]
+        >,
+      };
+      expect(workEntryDisplayLabel(search, undefined, createI18n({ lng: "zh" }).t)).toBe(expected);
+      expect(workEntryDisplayLabel(search, undefined, createI18n({ lng: "en" }).t)).toBe(
+        workEntryDisplayLabel(search, undefined),
+      );
+      expect(search.toolData.input).toBe(input);
+    },
+  );
+
+  it("translates only owned skill and search headings while retaining custom titles", () => {
+    const t = createI18n({ lng: "zh" }).t;
+    const skill = {
+      ...entry,
+      itemType: "dynamic_tool" as const,
+      structuredPayload: {
+        type: "dynamic_tool",
+        toolName: "Skill",
+        input: { skill: "raw-skill 原文", args: "/tmp/参数原文" },
+      } as NonNullable<WorkLogEntry["structuredPayload"]>,
+    };
+    expect(singleToolCallLabel(skill, t)).toBe("技能：raw-skill 原文");
+    expect(workEntryDisplayLabel(skill, undefined, t)).toBe("技能：raw-skill 原文");
+    const cua = {
+      ...skill,
+      structuredPayload: {
+        type: "dynamic_tool",
+        toolName: "cua_repl.js",
+        input: { title: "Keep CUA title 原文" },
+      } as NonNullable<WorkLogEntry["structuredPayload"]>,
+    };
+    expect(singleToolCallLabel(cua, t)).toBe("Keep CUA title 原文");
+    const fileSearch = {
+      ...entry,
+      itemType: "file_search" as const,
+      label: "Searched TODO",
+      toolData: { pattern: "TODO" },
+      structuredPayload: { type: "file_search", title: null, pattern: "TODO" } as NonNullable<
+        WorkLogEntry["structuredPayload"]
+      >,
+    };
+    expect(workEntryDisplayLabel(fileSearch, undefined, t)).toBe("已搜索 TODO");
+    expect(
+      workEntryDisplayLabel(
+        {
+          ...fileSearch,
+          label: "Keep adapter title 原文",
+          structuredPayload: { ...fileSearch.structuredPayload, title: "Keep adapter title 原文" },
+        },
+        undefined,
+        t,
+      ),
+    ).toBe("Keep adapter title 原文");
+    const webSearch = {
+      ...entry,
+      itemType: "web_search" as const,
+      toolTitle: "Web search",
+      structuredPayload: {
+        id: TurnItemId.make("web-search-label"),
+        threadId: ThreadId.make("raw-search-thread"),
+        runId: null,
+        nodeId: null,
+        providerThreadId: null,
+        providerTurnId: null,
+        nativeItemRef: null,
+        parentItemId: null,
+        ordinal: 1,
+        status: "completed",
+        startedAt: null,
+        completedAt: null,
+        updatedAt: DateTime.makeUnsafe("2026-10-10T00:00:00Z"),
+        type: "web_search",
+        title: null,
+        patterns: ["原始 query"],
+      } as NonNullable<WorkLogEntry["structuredPayload"]>,
+    };
+    expect(singleToolCallLabel(webSearch, t)).toBe("网页搜索");
   });
 
   it("keeps a multi-line approval prompt as its label", () => {
@@ -1370,7 +1526,7 @@ describe("deriveMessagesTimelineRows", () => {
     expect(foldRow?.runId).toBe("turn-1");
     expect(foldRow?.expanded).toBe(false);
     // User message boundary (00:00:00) → terminal message updatedAt (00:00:22).
-    expect(foldRow?.label).toBe("Worked for 22s");
+    expect(foldRow).toMatchObject({ duration: "22s", interrupted: false });
     expect(collapsedRows.map((row) => row.id)).toEqual([
       "user-entry",
       "turn-fold:turn-1",
@@ -1662,7 +1818,7 @@ describe("deriveMessagesTimelineRows", () => {
     );
     // User message (00:00:00) → trailing work entry (00:00:12).
     expect(foldRow?.runId).toBe("turn-1");
-    expect(foldRow?.label).toBe("Worked for 12s");
+    expect(foldRow).toMatchObject({ duration: "12s", interrupted: false });
   });
 
   it("uses latest-turn timings and the stopped label for an interrupted latest turn", () => {
@@ -1697,7 +1853,8 @@ describe("deriveMessagesTimelineRows", () => {
       expect.objectContaining({
         kind: "turn-fold",
         runId: "turn-1",
-        label: "You stopped after 47s",
+        duration: "47s",
+        interrupted: true,
         expanded: false,
       }),
     ]);
@@ -1814,7 +1971,8 @@ describe("deriveMessagesTimelineRows", () => {
             "steer",
           ]);
           expect(rows[1]?.createdAt).toBe(time(0));
-          if (!isWorking) expect(rows[1]).toMatchObject({ label: "Worked for 20s", expanded });
+          if (!isWorking)
+            expect(rows[1]).toMatchObject({ duration: "20s", interrupted: false, expanded });
           expect(rows.some((row) => row.id === "final")).toBe(true);
           expect(rows.some((row) => row.id === "work")).toBe(isWorking || expanded);
         }
@@ -2280,7 +2438,7 @@ describe("deriveMessagesTimelineRows", () => {
     const shape = (timeline: ReadonlyArray<MessagesTimelineRow>) =>
       timeline.map((row) =>
         row.kind === "turn-fold"
-          ? `fold:${row.label}`
+          ? `fold:${row.interrupted ? "stopped" : "worked"}:${row.duration}`
           : row.kind === "message"
             ? `${row.message.role}:${row.message.id}`
             : row.kind,
@@ -2290,10 +2448,10 @@ describe("deriveMessagesTimelineRows", () => {
     const settled = rows({ resume: "completed", working: false });
     expect(shape(settled)).toEqual([
       "user:launch",
-      "fold:Worked for 8.0s",
+      "fold:worked:8.0s",
       "assistant:launch-answer",
       "user:resume",
-      "fold:Worked for 8.0s",
+      "fold:worked:8.0s",
       "assistant:resume-answer",
     ]);
 
@@ -2307,18 +2465,18 @@ describe("deriveMessagesTimelineRows", () => {
     });
     expect(shape(expanded)).toEqual([
       "user:launch",
-      "fold:Worked for 8.0s",
+      "fold:worked:8.0s",
       "work-toggle",
       "assistant:launch-answer",
       "user:resume",
-      "fold:Worked for 8.0s",
+      "fold:worked:8.0s",
       "assistant:resume-answer",
     ]);
 
     // While the resume runs, only the settled launch folds.
     expect(shape(rows({ resume: "running", working: true }))).toEqual([
       "user:launch",
-      "fold:Worked for 8.0s",
+      "fold:worked:8.0s",
       "assistant:launch-answer",
       "user:resume",
       "working",
@@ -2328,7 +2486,7 @@ describe("deriveMessagesTimelineRows", () => {
     // A failed run stays open, as on a normal thread.
     expect(shape(rows({ resume: "failed", working: false }))).toEqual([
       "user:launch",
-      "fold:Worked for 8.0s",
+      "fold:worked:8.0s",
       "assistant:launch-answer",
       "user:resume",
       "work",
@@ -3697,7 +3855,7 @@ describe("v2 run and attempt history", () => {
     expect(foldRow?.runId).toBe("turn-1");
     expect(foldRow?.expanded).toBe(false);
     // User message boundary (00:00:00) → terminal message updatedAt (00:00:22).
-    expect(foldRow?.label).toBe("Worked for 22s");
+    expect(foldRow).toMatchObject({ duration: "22s", interrupted: false });
     expect(collapsedRows.map((row) => row.id)).toEqual([
       "user-entry",
       "turn-fold:turn-1",

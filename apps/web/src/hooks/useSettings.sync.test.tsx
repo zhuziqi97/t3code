@@ -56,6 +56,7 @@ vi.mock("~/themePalette", () => ({}));
 vi.mock("./useTheme", () => ({}));
 
 import { useUpdatePrimarySettings } from "./useSettings";
+import { i18n } from "~/i18n";
 
 const primaryId = EnvironmentId.make("primary");
 const remoteId = EnvironmentId.make("remote");
@@ -72,26 +73,27 @@ const session = (scopes: ReadonlyArray<AuthEnvironmentScope>): AuthSessionState 
 });
 let renderer: ReactTestRenderer | undefined;
 
-function SettingsEditor() {
+function SettingsEditor({ settingPatch = patch }: { settingPatch?: ServerSettingsPatch }) {
   const updateSettings = useUpdatePrimarySettings();
-  return <button onClick={() => updateSettings(patch)}>Save shared setting</button>;
+  return <button onClick={() => updateSettings(settingPatch)}>Save setting</button>;
 }
 
 function saveSharedSettings() {
   renderer!.root.findByType("button").props.onClick();
 }
 
-async function mountEditor() {
+async function mountEditor(settingPatch: ServerSettingsPatch = patch) {
   await act(() => {
     renderer = create(
       <RegistryContext.Provider value={state.registry!}>
-        <SettingsEditor />
+        <SettingsEditor settingPatch={settingPatch} />
       </RegistryContext.Provider>,
     );
   });
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage("en");
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   state.registry = AtomRegistry.make();
   state.sessions.clear();
@@ -119,9 +121,91 @@ afterEach(async () => {
   renderer = undefined;
   state.registry?.dispose();
   vi.unstubAllGlobals();
+  await i18n.changeLanguage("en");
 });
 
 describe("shared settings writes", () => {
+  it("uses the language at completion and preserves failed and saved environment names", async () => {
+    let finishPrimary = () => {};
+    const pending = new Promise((resolve) => {
+      finishPrimary = () =>
+        resolve(
+          AsyncResult.failure(
+            Cause.fail(new Error("Permission denied /tmp/原文\nKeep diagnostic")),
+          ),
+        );
+    });
+    state.environments[0]!.label = "开发电脑 原文";
+    state.environments[1]!.label = "QA remote 原文";
+    state.persist.mockReturnValueOnce(pending);
+    await mountEditor();
+    await act(async () => saveSharedSettings());
+    expect(state.toast).not.toHaveBeenCalled();
+    await i18n.changeLanguage("zh");
+    await act(async () => finishPrimary());
+    expect(state.persist).toHaveBeenCalledTimes(2);
+    expect(state.toast).toHaveBeenCalledExactlyOnceWith({
+      type: "error",
+      title: "设置仅在部分执行环境保存成功",
+      description:
+        "无法在 开发电脑 原文 保存：Permission denied /tmp/原文\nKeep diagnostic\n已在 QA remote 原文 保存。",
+    });
+  });
+
+  it("translates a local setting failure at completion without resending the write", async () => {
+    const localPatch = { worktreesDirectory: "/tmp/qa 原文" } satisfies ServerSettingsPatch;
+    let finishSave = () => {};
+    state.persist.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishSave = () =>
+          resolve(AsyncResult.failure(Cause.fail(new Error("Disk is full /tmp/qa 原文"))));
+      }),
+    );
+    await mountEditor(localPatch);
+    await act(async () => saveSharedSettings());
+    await i18n.changeLanguage("zh");
+    await act(async () => finishSave());
+    expect(state.persist).toHaveBeenCalledExactlyOnceWith({
+      environmentId: primaryId,
+      input: { patch: localPatch },
+    });
+    expect(state.toast).toHaveBeenCalledExactlyOnceWith({
+      type: "error",
+      title: "设置未保存",
+      description: "无法在 primary 保存：Disk is full /tmp/qa 原文",
+    });
+  });
+
+  it("names a denied environment in Chinese and does not dispatch", async () => {
+    state.environments[0]!.label = "开发电脑 原文";
+    state.registry!.set(state.sessions.get(primaryId)!, AsyncResult.success(session([])));
+    await i18n.changeLanguage("zh");
+    await mountEditor();
+    await act(async () => saveSharedSettings());
+    expect(state.persist).not.toHaveBeenCalled();
+    expect(state.toast).toHaveBeenCalledExactlyOnceWith({
+      type: "warning",
+      title: "设置未保存",
+      description: "此连接无权更改 开发电脑 原文 上的设置。",
+    });
+  });
+
+  it("explains an unanchored hosted local setting in Chinese", async () => {
+    state.environments = state.environments.filter(
+      (environment) => environment.environmentId !== primaryId,
+    );
+    await i18n.changeLanguage("zh");
+    await mountEditor({ worktreesDirectory: "/tmp/qa 原文" });
+    await act(async () => saveSharedSettings());
+    expect(state.persist).not.toHaveBeenCalled();
+    expect(state.toast).toHaveBeenCalledExactlyOnceWith({
+      type: "warning",
+      title: "设置未保存",
+      description:
+        "此设置保存在服务端，而托管应用没有固定的主执行环境。请在桌面应用中或通过服务端自身的地址更改。",
+    });
+  });
+
   it("waits for the remaining target before reporting a partial save", async () => {
     let finishRemote = () => {};
     const remote = new Promise((resolve) => {
@@ -139,6 +223,40 @@ describe("shared settings writes", () => {
       type: "error",
       title: "Setting saved on some environments",
       description: "Could not save on primary: Permission denied\nSaved on remote.",
+    });
+  });
+
+  it.each([
+    ["en", "Setting not saved", "Update older servers to save this setting."],
+    ["zh", "设置未保存", "请更新旧版服务端后再保存此设置。"],
+  ])(
+    "explains an unsupported shared setting in %s without writing it",
+    async (language, title, description) => {
+      await i18n.changeLanguage(language);
+      await mountEditor({ continueThreadsAfterServerUpdate: true });
+      await act(async () => saveSharedSettings());
+      expect(state.persist).not.toHaveBeenCalled();
+      expect(state.toast).toHaveBeenCalledExactlyOnceWith({ type: "warning", title, description });
+    },
+  );
+
+  it("translates a hosted permission rejection when a pending grant resolves before execution", async () => {
+    state.environments = state.environments.filter(
+      (environment) => environment.environmentId !== primaryId,
+    );
+    state.environments[0]!.label = "远程电脑 / Raw laptop";
+    await mountEditor();
+    const previousUpdate = renderer!.root.findByType("button").props.onClick as () => void;
+    await act(async () => {
+      await i18n.changeLanguage("zh");
+      state.registry!.set(state.sessions.get(remoteId)!, AsyncResult.success(session([])));
+    });
+    await act(() => previousUpdate());
+    expect(state.persist).not.toHaveBeenCalled();
+    expect(state.toast).toHaveBeenCalledExactlyOnceWith({
+      type: "warning",
+      title: "设置未保存",
+      description: "此连接无权更改 远程电脑 / Raw laptop 上的设置。",
     });
   });
 

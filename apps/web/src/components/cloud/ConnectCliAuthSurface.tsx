@@ -7,6 +7,7 @@ import {
   connectCliSignInRedirectUrl,
 } from "../../cloud/connectCliAuth";
 import { isElectron } from "../../env";
+import { useTranslate } from "../../i18n";
 import { AuthSurfaceShell } from "../auth/AuthSurfaceShell";
 import { resolveClerkSignInProps } from "../clerk/authRedirect";
 import { Button } from "../ui/button";
@@ -31,13 +32,6 @@ function ConnectCliAuthMessage({
   );
 }
 
-const invalidLinkMessage = {
-  eyebrow: "Authorization request",
-  title: "This connect link is incomplete",
-  description:
-    "The link is missing its authorization request. Re-run `t3 connect` in your terminal and open the freshly printed URL.",
-} as const;
-
 /**
  * /connect: the URL the CLI prints for the loopback flow. Waits for a Clerk
  * session, then forwards the CLI's PKCE request to Clerk's authorize endpoint
@@ -45,6 +39,7 @@ const invalidLinkMessage = {
  * CLI. Headless hosts use Clerk's device authorization page instead.
  */
 export function ConnectCliAuthorizeSurface() {
+  const t = useTranslate();
   const [request] = useState(() => readConnectAuthorizeRequest(new URL(window.location.href)));
   const clerk = useClerk();
   const { isLoaded, isSignedIn } = useAuth();
@@ -85,7 +80,11 @@ export function ConnectCliAuthorizeSurface() {
   if (!request) {
     return (
       <AuthSurfaceShell>
-        <ConnectCliAuthMessage {...invalidLinkMessage} />
+        <ConnectCliAuthMessage
+          eyebrow={t("connect.cli.request")}
+          title={t("connect.cli.invalidTitle")}
+          description={t("connect.cli.invalidDescription")}
+        />
       </AuthSurfaceShell>
     );
   }
@@ -93,18 +92,14 @@ export function ConnectCliAuthorizeSurface() {
   return (
     <AuthSurfaceShell>
       <ConnectCliAuthMessage
-        eyebrow="Browser authorization"
-        title="Connecting your terminal"
-        description={
-          isSignedIn
-            ? "Redirecting to authorize T3 Connect for your CLI…"
-            : "Sign in to continue authorizing T3 Connect for your CLI."
-        }
+        eyebrow={t("connect.cli.browserAuthorization")}
+        title={t("connect.cli.title")}
+        description={isSignedIn ? t("connect.cli.redirecting") : t("connect.cli.signInDescription")}
       />
       {isLoaded && !isSignedIn ? (
         <div className="mt-6">
           <Button type="button" onClick={openSignIn}>
-            Sign in
+            {t("wizard.signIn")}
           </Button>
         </div>
       ) : null}

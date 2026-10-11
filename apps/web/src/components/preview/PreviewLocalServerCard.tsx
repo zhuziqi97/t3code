@@ -1,3 +1,4 @@
+import { useTranslate } from "~/i18n";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import { DiscoveryListRow } from "../ui/discovery-list";
 
@@ -11,7 +12,8 @@ interface Props {
 }
 
 export function PreviewLocalServerCard({ threadRef, server, onOpen }: Props) {
-  const subtitle = describeServer(server);
+  const t = useTranslate();
+  const subtitle = server.processName || t("browser.listening");
   return (
     <DiscoveryListRow
       onClick={onOpen}
@@ -20,9 +22,4 @@ export function PreviewLocalServerCard({ threadRef, server, onOpen }: Props) {
       description={`${server.host}:${server.port}`}
     />
   );
-}
-
-function describeServer(server: PreviewableServer): string {
-  if (server.processName) return server.processName;
-  return "Listening";
 }

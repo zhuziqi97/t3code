@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { EnvironmentId } from "@t3tools/contracts";
 
 import {
@@ -12,6 +12,12 @@ import {
   SETTINGS_SEARCH_ITEMS,
   type SettingsSearchItem,
 } from "./settingsSearch";
+
+import { changeLanguage } from "../../i18n";
+
+afterEach(async () => {
+  await changeLanguage("en");
+});
 
 const ITEMS: ReadonlyArray<SettingsSearchItem> = [
   {
@@ -45,6 +51,14 @@ const ITEMS: ReadonlyArray<SettingsSearchItem> = [
 ];
 
 describe("searchSettings", () => {
+  it("finds the existing connection entries for relay installation and server update in Chinese", async () => {
+    await changeLanguage("zh");
+    expect(searchSettings("安装中继").map((item) => item.id)).toContain("t3-connect");
+    expect(searchSettings("服务端更新").map((item) => item.id)).toContain("remote-environments");
+    expect(searchSettings("重新启动命令").map((item) => item.id)).toContain(
+      "connections-environment",
+    );
+  });
   it.each(["send shortcut", "multiline", "new line"])("finds Send shortcut for %s", (query) => {
     expect(searchSettings(query).map((item) => item.id)).toContain("send-shortcut");
   });
@@ -110,15 +124,29 @@ describe("searchSettings", () => {
     ]);
   });
 
-  it.each(["usage providers", "CLIProxyAPI", "CLI proxy hub", "management key"])(
-    "finds usage-provider management by %s",
-    (query) => {
-      expect(searchSettings(query)[0]).toMatchObject({
-        id: "usage-providers",
-        to: "/settings/providers",
-      });
-    },
-  );
+  it.each([
+    "usage providers",
+    "CLIProxyAPI",
+    "CLI proxy hub",
+    "management key",
+    "用量来源",
+    "管理密钥",
+    "添加服务",
+  ])("finds usage-provider management by %s", (query) => {
+    expect(searchSettings(query)[0]).toMatchObject({
+      id: "usage-providers",
+      to: "/settings/providers",
+    });
+  });
+
+  it.each([
+    ["Git 工作树位置", "storage-worktrees-location"],
+    ["闲置工作树", "storage-worktrees"],
+    ["轮转日志", "storage-artifacts"],
+  ])("finds the storage setting for %s", async (query, id) => {
+    await changeLanguage("zh");
+    expect(searchSettings(query)[0]).toMatchObject({ id, to: "/settings/storage" });
+  });
 
   it("returns no results for an empty query", () => {
     expect(searchSettings("   ", ITEMS)).toEqual([]);
@@ -219,6 +247,12 @@ describe("searchSettings", () => {
     expect(remoteOnly).not.toContain("wsl-backend");
     // Browsers without access:write still render CloudLinkRow for their host.
     const browser = filterAvailableSettingsSearchItems(availability).map((item) => item.id);
+    expect(browser).toContain("t3-connect");
+    expect(
+      searchSettings("T3 Connect", filterAvailableSettingsSearchItems(availability)),
+    ).toContainEqual(
+      expect.objectContaining({ id: "t3-connect", targetId: "connections-environment" }),
+    );
     expect(browser).toContain("publish-agent-activity");
   });
 
@@ -551,4 +585,280 @@ describe("settings sidebar scope", () => {
     expect(isSettingsOverviewVisible({ project: "project" })).toBe(true);
     expect(isSettingsOverviewVisible({ project: "project", checkout: "checkout" })).toBe(true);
   });
+});
+
+it("finds Chinese settings with the same destination after a language switch", async () => {
+  const before = searchSettings("send shortcut").find((item) => item.id === "send-shortcut")!;
+  const destination = { id: before.id, to: before.to, targetId: before.targetId };
+  await changeLanguage("zh");
+  const after = searchSettings("发送快捷键")[0]!;
+  expect(after.title).toBe("发送快捷键");
+  expect({ id: after.id, to: after.to, targetId: after.targetId }).toEqual(destination);
+  expect(searchSettings("send shortcut").map((item) => item.id)).toContain("send-shortcut");
+  expect(searchSettings("中文").map((item) => item.id)).toContain("language");
+  expect(searchSettings("子模块")[0]?.id).toBe("worktree-submodules");
+  expect(searchableSetting("default-model").title).toBe("默认模型");
+  await changeLanguage("en");
+  expect(searchableSetting("default-model").title).toBe("Default model");
+});
+
+it("finds connection settings by Chinese actions and keeps their original destinations", async () => {
+  await changeLanguage("zh");
+  for (const [query, id] of [
+    ["配对", "remote-environments"],
+    ["局域网", "network-access"],
+    ["已授权", "connections-environment"],
+    ["暂存", "hold-webhooks-while-offline"],
+    ["负载", "load-balancing"],
+  ]) {
+    const result = searchSettings(query!).find((item) => item.id === id);
+    expect(result, query).toMatchObject({ id, to: "/settings/connections" });
+  }
+});
+
+it("finds provider setup and background checks by their Chinese actions", async () => {
+  await changeLanguage("zh");
+  for (const [query, id] of [
+    ["身份验证", "providers"],
+    ["安装", "providers"],
+    ["环境变量", "providers"],
+    ["强调色", "providers"],
+    ["本地命令", "providers"],
+    ["状态检查", "provider-health-check-interval"],
+  ]) {
+    expect(
+      searchSettings(query!).find((item) => item.id === id),
+      query,
+    ).toMatchObject({
+      id,
+      to: "/settings/providers",
+    });
+  }
+});
+
+it("finds source control writing and branch naming by Chinese terms without changing destinations", async () => {
+  await changeLanguage("zh");
+  for (const [query, id] of [
+    ["固定前缀", "worktree-branch-naming"],
+    ["约定式提交", "source-control-writing-style"],
+    ["变更请求模板", "follow-change-request-templates"],
+    ["书签命名", "source-control-writer-model"],
+  ]) {
+    expect(
+      searchSettings(query!).find((item) => item.id === id),
+      query,
+    ).toMatchObject({
+      id,
+      to: "/settings/source-control",
+      environmentOnly: true,
+    });
+  }
+  expect(searchableSetting("worktree-branch-naming").title).toBe("Git 工作树分支命名");
+  expect(searchSettings("conventional commits").map((item) => item.id)).toContain(
+    "source-control-writing-style",
+  );
+});
+
+it("finds hosting credentials by Chinese terms while keeping environment-only destinations", async () => {
+  await changeLanguage("zh");
+  for (const [query, id] of [
+    ["当前账户", "github-accounts"],
+    ["Atlassian 账户邮箱", "bitbucket-credentials"],
+  ]) {
+    expect(
+      searchSettings(query!).find((item) => item.id === id),
+      query,
+    ).toMatchObject({
+      id,
+      to: "/settings/source-control",
+      environmentOnly: true,
+      scope: "environment-defaults",
+    });
+  }
+});
+
+it("finds tool discovery and automatic fetching by Chinese terms", async () => {
+  await changeLanguage("zh");
+  expect(searchSettings("工具发现").find((item) => item.id === "source-control")).toMatchObject({
+    title: "版本控制",
+    to: "/settings/source-control",
+    scope: "environment-defaults",
+  });
+  expect(searchSettings("自动获取").find((item) => item.id === "git-fetch-interval")).toMatchObject(
+    {
+      to: "/settings/source-control",
+      environmentOnly: true,
+      scope: "environment-defaults",
+    },
+  );
+});
+
+it("finds appearance and typography controls by Chinese terms with their existing targets", async () => {
+  await changeLanguage("zh");
+  expect(searchSettings("跟随系统外观")[0]).toMatchObject({
+    id: "color-scheme",
+    title: "颜色模式",
+    to: "/settings/appearance",
+    targetId: "appearance",
+  });
+  expect(searchSettings("color scheme")[0]?.id).toBe("color-scheme");
+  expect(searchSettings("社区主题")[0]).toMatchObject({
+    id: "theme",
+    to: "/settings/appearance",
+    targetId: "appearance",
+  });
+  for (const [query, id] of [
+    ["玻璃效果", "setting-glass-opacity"],
+    ["版本标签", "environment-identification"],
+    ["蓝橙", "diff-color-scheme"],
+    ["全宽", "chat-width"],
+    ["动画时长", "panel-animations"],
+    ["等宽字体", "code-font"],
+    ["提示词字体", "prompt-font"],
+    ["自动换行", "word-wrap"],
+  ]) {
+    expect(
+      searchSettings(query!).find((item) => item.id === id),
+      query,
+    ).toMatchObject({ id, to: "/settings/appearance" });
+  }
+  expect(searchSettings("主题").find((item) => item.id === "theme")).toMatchObject({
+    targetId: "appearance",
+  });
+  expect(
+    searchSettings("环境标识").find((item) => item.id === "environment-identification"),
+  ).toMatchObject({ targetId: "appearance-interface" });
+});
+
+it("retranslates command results and keeps bilingual and native searches at the same destinations", async () => {
+  await changeLanguage("zh");
+  for (const query of ["复制链接", "copy link", "thread.copyReference"]) {
+    expect(searchSettings(query)).toContainEqual(
+      expect.objectContaining({
+        id: "keybinding-thread.copyReference",
+        title: "拉取请求：复制链接或会话 ID",
+        to: "/settings/keybindings",
+      }),
+    );
+  }
+  expect(searchableSetting("keybindings").title).toBe("快捷键");
+  const item = SETTINGS_SEARCH_ITEMS.find((item) => item.id === "keybinding-thread.copyReference")!;
+  await changeLanguage("en");
+  expect(item.title).toBe("Pull Request: Copy Link or Thread ID");
+  expect(searchSettings("复制链接")).toContainEqual(item);
+  expect(searchSettings("快捷键").map((item) => item.id)).toContain("keybindings");
+});
+
+it("finds browser integration settings in either language without changing their routes", async () => {
+  await changeLanguage("zh");
+  const queries = [
+    ["浏览器配置", "browser-profiles", "浏览器配置"],
+    ["默认浏览器视口", "browser-default-viewport", "默认浏览器视口"],
+    ["录制 帧率", "browser-recording-frame-rate", "浏览器录制帧率"],
+    ["链接 打开位置", "browser-link-target", "链接打开位置"],
+  ];
+  for (const [query, id, title] of queries) {
+    expect(searchSettings(query!)).toContainEqual(
+      expect.objectContaining({ id, title, to: "/settings/integrations" }),
+    );
+  }
+  await changeLanguage("en");
+  expect(searchSettings("默认浏览器视口")).toContainEqual(
+    expect.objectContaining({
+      id: "browser-default-viewport",
+      title: "Default browser viewport",
+      to: "/settings/integrations",
+    }),
+  );
+  expect(searchSettings("default browser viewport")).toContainEqual(
+    expect.objectContaining({ id: "browser-default-viewport" }),
+  );
+});
+
+it("finds device integration destinations using either language and keeps scope and target ids", async () => {
+  await changeLanguage("zh");
+  for (const [query, id, title] of [
+    ["设备主机", "device-hosts", "设备主机"],
+    ["智能体设备访问", "agent-device-access", "智能体设备访问"],
+    ["设备中心", "device-hub", "设备中心"],
+    ["模拟器支持", "device-platform-support", "模拟器支持"],
+  ]) {
+    expect(searchSettings(query!)).toContainEqual(
+      expect.objectContaining({ id, title, to: "/settings/integrations" }),
+    );
+    expect(SETTINGS_SEARCH_ITEMS.find((item) => item.id === id)?.title).toBe(title);
+  }
+  await changeLanguage("en");
+  expect(searchSettings("设备中心")).toContainEqual(
+    expect.objectContaining({ id: "device-hub", title: "Device hub", targetId: "devices" }),
+  );
+  expect(searchSettings("SSH identity key")).toContainEqual(
+    expect.objectContaining({ id: "device-hosts" }),
+  );
+});
+
+it("finds snapshot settings using Chinese and English without changing destinations", async () => {
+  await changeLanguage("zh");
+  for (const [query, id, title] of [
+    ["窗口快照", "snap-shot-enabled", "SnapShots"],
+    ["包含应用文字", "snap-shot-accessibility", "包含应用文字"],
+    ["快照快捷键", "snap-shot-shortcut", "快照快捷键"],
+    ["快照声音", "snap-shot-sound", "快照声音"],
+    ["快照闪光", "snap-shot-flash", "快照闪光"],
+    ["快照动画", "snap-shot-animations", "快照动画"],
+  ])
+    expect(searchSettings(query!)).toContainEqual(
+      expect.objectContaining({ id, title, to: "/settings/snap-shot" }),
+    );
+  await changeLanguage("en");
+  expect(searchSettings("快照快捷键")).toContainEqual(
+    expect.objectContaining({
+      id: "snap-shot-shortcut",
+      title: "Capture shortcut",
+      targetId: "snap-shot-enabled",
+    }),
+  );
+  expect(searchSettings("Capture shortcut")).toContainEqual(
+    expect.objectContaining({ id: "snap-shot-shortcut" }),
+  );
+});
+
+it("finds diagnostic flows by Chinese names in either language without changing the settings entry", async () => {
+  for (const language of ["zh", "en"] as const) {
+    await changeLanguage(language);
+    for (const query of [
+      "进程树",
+      "资源历史",
+      "追踪",
+      "日志",
+      "采集状态",
+      "资源遥测",
+      "温度",
+      "诊断访问权限",
+    ]) {
+      const result = searchSettings(query).find((item) => item.id === "diagnostics");
+      expect(result?.to).toBe("/settings/general");
+      expect(result?.id).toBe("diagnostics");
+    }
+  }
+});
+
+it("retranslates the providers group and keeps Chinese and English searches at its original route", async () => {
+  await changeLanguage("zh");
+  expect(searchableSetting("providers").title).toBe("智能体提供方");
+  expect(SETTINGS_SEARCH_ITEMS.find((item) => item.id === "providers")?.title).toBe("智能体提供方");
+  for (const query of ["智能体提供方", "Providers"]) {
+    expect(searchSettings(query)).toContainEqual(
+      expect.objectContaining({
+        id: "providers",
+        title: "智能体提供方",
+        to: "/settings/providers",
+      }),
+    );
+  }
+  await changeLanguage("en");
+  expect(searchableSetting("providers").title).toBe("Providers");
+  expect(searchSettings("智能体提供方")).toContainEqual(
+    expect.objectContaining({ id: "providers", title: "Providers", to: "/settings/providers" }),
+  );
 });

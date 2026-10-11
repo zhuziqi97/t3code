@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import { ProviderDriverKind, ProviderInstanceId, type ServerProvider } from "@t3tools/contracts";
+import { createI18n } from "@t3tools/client-runtime/i18n";
 import {
   getProviderStatusBannerKey,
   getProviderStatusMessage,
@@ -27,6 +28,45 @@ const provider: ServerProvider = {
 };
 
 describe("compatibility banners", () => {
+  it.each([
+    [
+      "opencode",
+      "Couldn't reach the configured OpenCode server at http://127.0.0.1:4096/原文. Check that the server is running and the URL is correct.",
+      "无法连接已配置的 OpenCode 服务端 http://127.0.0.1:4096/原文。请检查服务端是否正在运行，以及 URL 是否正确。",
+    ],
+    [
+      "pi",
+      "Pi launch argument '--mode' is controlled by T3 Code and cannot be overridden.",
+      "Pi 启动参数 '--mode' 由 T3 Code 管理，不能覆盖。",
+    ],
+    [
+      "cursor",
+      "Cursor SDK catalog request timed out after 15000ms.",
+      "Cursor SDK 模型目录请求在 15000 毫秒后超时。",
+    ],
+  ])("retranslates %s guidance without changing dismissal identity", (driver, message, chinese) => {
+    const status: ServerProvider = {
+      ...provider,
+      driver: ProviderDriverKind.make(driver),
+      status: "error",
+      auth: { status: "unknown" },
+      compatibilityAdvisory: {
+        status: "supported",
+        message: null,
+        recommendedVersion: null,
+        recommendedRange: null,
+      },
+      message,
+    };
+    const key = getProviderStatusBannerKey(status);
+    expect(shouldShowProviderStatusBanner(status, null)).toBe(true);
+    expect(getProviderStatusMessage(status, createI18n({ lng: "zh" }).t)).toBe(chinese);
+    expect(getProviderStatusMessage(status, createI18n({ lng: "en" }).t)).toBe(message);
+    expect(getProviderStatusBannerKey(status)).toBe(key);
+    expect(shouldShowProviderStatusBanner(status, key)).toBe(false);
+    expect(status.message).toBe(message);
+  });
+
   it("shows and dismisses a warning on a healthy provider, then clears it after policy relaxation", () => {
     expect(shouldShowProviderStatusBanner(provider, null)).toBe(true);
     expect(shouldShowProviderStatusBanner(provider, getProviderStatusBannerKey(provider))).toBe(

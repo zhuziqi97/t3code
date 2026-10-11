@@ -8,17 +8,26 @@ import {
   DEFAULT_RESOLVED_KEYBINDINGS,
 } from "@t3tools/shared/keybindings";
 
+import { changeLanguage } from "../i18n";
 import { RightPanelTabs } from "./RightPanelTabs";
 
 vi.mock("~/hooks/useTheme", () => ({ useTheme: () => ({ resolvedTheme: "light" }) }));
-vi.mock("~/browser/browserDefaults", () => ({ useBrowserDefaults: () => ({ profiles: [] }) }));
+vi.mock("~/browser/browserDefaults", () => ({
+  useBrowserDefaults: () => ({
+    profiles: [
+      { id: "work", name: "Work Profile" },
+      { id: "personal", name: "Personal Profile" },
+    ],
+  }),
+}));
 
 let root: Root;
 let container: HTMLDivElement;
 const addFiles = vi.fn();
 const noop = () => undefined;
 
-beforeEach(() => {
+beforeEach(async () => {
+  await changeLanguage("en");
   vi.useFakeTimers();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal(
@@ -43,6 +52,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(() => root.unmount());
   container.remove();
+  await changeLanguage("en");
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.useRealTimers();
@@ -218,4 +228,28 @@ describe("right panel new-tab shortcut", () => {
     await renderPanel(panel);
     expect(document.querySelector('[role="menu"]:not([data-closed])')).toBeNull();
   });
+});
+
+it("keeps the browser profile chooser usable after a language switch", async () => {
+  const addProfile = vi.fn();
+  await renderPanel({ browserAvailable: true, onAddBrowserInProfile: addProfile });
+  await act(async () => {
+    await changeLanguage("zh");
+  });
+  const chooser = container.querySelector<HTMLButtonElement>(
+    '[aria-label="使用指定配置打开浏览器"]',
+  );
+  expect(chooser).not.toBeNull();
+  await act(async () => chooser!.click());
+  await act(() => vi.advanceTimersByTimeAsync(0));
+  const personal = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+    (item) => item.textContent === "Personal Profile",
+  );
+  expect(personal).toBeDefined();
+  await act(async () => personal!.click());
+  expect(addProfile).toHaveBeenCalledExactlyOnceWith("personal");
+  await act(async () => {
+    await changeLanguage("en");
+  });
+  expect(container.querySelector('[aria-label="Open browser in a profile"]')).not.toBeNull();
 });

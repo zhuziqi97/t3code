@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
 import { ConveneConnectionPanel } from "./ConveneConnectionPanel";
@@ -5,6 +6,7 @@ import { SettingsPageContainer, SettingsSection } from "../settings/settingsLayo
 import { Select, SelectTrigger, SelectValue, SelectPopup, SelectItem } from "../ui/select";
 
 export function ConveneSettingsPanel() {
+  const t = useTranslate();
   const { environments } = useEnvironments();
   const primaryId = usePrimaryEnvironmentId();
   const search = useSearch({ from: "/settings" });
@@ -29,7 +31,7 @@ export function ConveneSettingsPanel() {
                   label: environment.label,
                 }))}
               >
-                <SelectTrigger aria-label="Convene environment">
+                <SelectTrigger aria-label={t("convene.settings.environment")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectPopup>
@@ -45,7 +47,7 @@ export function ConveneSettingsPanel() {
           {environmentId ? (
             <ConveneConnectionPanel key={environmentId} environmentId={environmentId} />
           ) : (
-            <p className="text-sm text-muted-foreground">Connect a T3 environment first.</p>
+            <p className="text-sm text-muted-foreground">{t("convene.settings.connectFirst")}</p>
           )}
         </div>
       </SettingsSection>

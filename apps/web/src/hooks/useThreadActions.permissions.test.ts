@@ -1,3 +1,5 @@
+import { act, createElement, useLayoutEffect } from "react";
+import { create, type ReactTestRenderer } from "react-test-renderer";
 import {
   AuthOrchestrationOperateScope,
   AuthSourceControlWriteScope,
@@ -9,7 +11,7 @@ import {
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -38,11 +40,6 @@ const state = vi.hoisted(() => ({
   sessionLookupFails: false,
 }));
 
-vi.mock("react", () => ({
-  useCallback: (callback: unknown) => callback,
-  useMemo: (factory: () => unknown) => factory(),
-  useRef: (current: unknown) => ({ current }),
-}));
 vi.mock("@tanstack/react-router", () => ({
   useRouter: () => ({ state: { matches: [] }, navigate: async () => {} }),
 }));
@@ -208,7 +205,28 @@ const operations = [
   },
 ] as const;
 
+const hookRenderers: ReactTestRenderer[] = [];
+function renderActions() {
+  let result!: ReturnType<typeof useThreadActions>;
+  function Harness() {
+    const actions = useThreadActions();
+    useLayoutEffect(() => {
+      result = actions;
+    });
+    return null;
+  }
+  act(() => {
+    hookRenderers.push(create(createElement(Harness)));
+  });
+  return result;
+}
+afterEach(() => {
+  act(() => hookRenderers.splice(0).forEach((renderer) => renderer.unmount()));
+  vi.unstubAllGlobals();
+});
+
 beforeEach(() => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   state.scopes = new Map([
     [primary, new Set([AuthOrchestrationOperateScope])],
     [secondary, new Set<string>()],
@@ -234,7 +252,7 @@ beforeEach(() => {
 
 describe("thread action permissions", () => {
   it.each(operations)("$name requires the target environment's grant", async ({ run }) => {
-    const result = await run(useThreadActions(), target);
+    const result = await run(renderActions(), target);
     expect(result._tag).toBe("Failure");
     expect(state.requests).toEqual([]);
     expect(state.localEffects).toEqual([]);
@@ -242,7 +260,7 @@ describe("thread action permissions", () => {
 
   it.each(operations)("$name rechecks a retained callback after revocation", async ({ run }) => {
     state.scopes.get(secondary)!.add(AuthOrchestrationOperateScope);
-    const actions = useThreadActions();
+    const actions = renderActions();
     state.scopes.get(secondary)!.clear();
     await run(actions, target);
     expect(state.requests).toEqual([]);
@@ -251,7 +269,7 @@ describe("thread action permissions", () => {
   it.each(operations)(
     "$name works after the target gains only task permission",
     async ({ name, run }) => {
-      const actions = useThreadActions();
+      const actions = renderActions();
       state.scopes.get(primary)!.clear();
       state.scopes.get(secondary)!.add(AuthOrchestrationOperateScope);
       expect((await run(actions, target))._tag).toBe("Success");
@@ -264,7 +282,7 @@ describe("thread action permissions", () => {
   it.each(["confirmAndDeleteThread", "confirmAndUnpinThread"] as const)(
     "%s blocks a forbidden confirmation",
     async (action) => {
-      await useThreadActions()[action](target);
+      await renderActions()[action](target);
       expect(state.confirm).not.toHaveBeenCalled();
       expect(state.requests).toEqual([]);
     },
@@ -276,7 +294,7 @@ describe("thread action permissions", () => {
       state.scopes.get(secondary)!.add(AuthOrchestrationOperateScope);
       const confirmation = deferred<boolean>();
       state.confirm.mockReturnValue(confirmation.promise);
-      const result = useThreadActions()[action](target);
+      const result = renderActions()[action](target);
       expect(state.confirm).toHaveBeenCalledOnce();
       state.scopes.get(secondary)!.clear();
       confirmation.resolve(true);
@@ -287,7 +305,7 @@ describe("thread action permissions", () => {
   );
 
   it("identifies the missing task scope when thread deletion is denied", async () => {
-    const result = await useThreadActions().deleteThread(target);
+    const result = await renderActions().deleteThread(target);
 
     expect(result._tag).toBe("Failure");
     if (result._tag !== "Failure") throw new Error("Expected permission denial");
@@ -300,7 +318,7 @@ describe("thread action permissions", () => {
 
   it("deletes an archived thread only with its own environment's grant", async () => {
     state.threads = [];
-    const actions = useThreadActions();
+    const actions = renderActions();
     await actions.deleteThread(target);
     expect(state.requests).toEqual([]);
     state.scopes.get(secondary)!.add(AuthOrchestrationOperateScope);
@@ -314,7 +332,7 @@ describe("thread action permissions", () => {
     state.scopes.get(secondary)!.add(AuthOrchestrationOperateScope);
     state.threads[0]!.session = { status: "ready" };
     state.afterRequest = () => state.scopes.get(secondary)!.clear();
-    expect((await useThreadActions().deleteThread(target))._tag).toBe("Failure");
+    expect((await renderActions().deleteThread(target))._tag).toBe("Failure");
     expect(state.requests.map((request) => request.action)).toEqual(["stopSession"]);
     expect(state.localEffects).toEqual([]);
   });
@@ -326,7 +344,7 @@ describe("thread action permissions", () => {
     state.scopes.get(secondary)!.add(AuthOrchestrationOperateScope);
     state.threads[0]!.worktreePath = "/worktrees/thread";
     state.sessionLookupFails = sessionLookupFails;
-    expect((await useThreadActions().deleteThread(target))._tag).toBe("Success");
+    expect((await renderActions().deleteThread(target))._tag).toBe("Success");
     expect(state.confirm).not.toHaveBeenCalled();
     expect(state.requests.map((request) => request.action)).toEqual(["stopSession", "delete"]);
     expect(state.localEffects).toContain("clear-terminal-ui");
@@ -343,7 +361,7 @@ describe("thread action permissions", () => {
     try {
       // The thread is already gone, so cleanup reports itself in a toast
       // instead of failing the deletion.
-      const result = await useThreadActions().deleteThread(target);
+      const result = await renderActions().deleteThread(target);
       expect(result._tag).toBe("Success");
       expect(state.requests.map((request) => request.action)).toEqual(["stopSession", "delete"]);
       expect(state.toasts).toContain("Failed to delete worktree");

@@ -1,5 +1,5 @@
+import { i18n } from "../../i18n";
 import {
-  DEFAULT_SERVER_SETTINGS,
   DEFAULT_UNIFIED_SETTINGS,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -19,16 +19,22 @@ import {
   projectGroupingModeFromToggle,
   resolveBackgroundActivityProfileOption,
 } from "./SettingsPanels.logic";
+import { createI18n } from "@t3tools/client-runtime/i18n";
+const translations = createI18n();
+const t = translations.getFixedT("en");
 
 describe("typography settings restore", () => {
   it("detects family and size changes by font row", () => {
-    expect(getChangedTypographySettingLabels(DEFAULT_UNIFIED_SETTINGS)).toEqual([]);
+    expect(getChangedTypographySettingLabels(DEFAULT_UNIFIED_SETTINGS, t)).toEqual([]);
     expect(
-      getChangedTypographySettingLabels({
-        ...DEFAULT_UNIFIED_SETTINGS,
-        fontSizeInterface: 18,
-        fontFamilyCode: "Fira Code",
-      }),
+      getChangedTypographySettingLabels(
+        {
+          ...DEFAULT_UNIFIED_SETTINGS,
+          fontSizeInterface: 18,
+          fontFamilyCode: "Fira Code",
+        },
+        t,
+      ),
     ).toEqual(["Interface font", "Code font"]);
   });
 });
@@ -216,33 +222,41 @@ describe("buildProviderInstanceUpdatePatch", () => {
 
 describe("getChangedBrowserSettingLabels", () => {
   it("reports nothing for the defaults", () => {
-    expect(getChangedBrowserSettingLabels(DEFAULT_UNIFIED_SETTINGS)).toEqual([]);
+    expect(getChangedBrowserSettingLabels(DEFAULT_UNIFIED_SETTINGS, i18n.getFixedT("en"))).toEqual(
+      [],
+    );
   });
 
   it("treats a structurally equal viewport as unchanged", () => {
     // The viewport is a tagged union, so identity comparison would report a
     // freshly decoded copy of the default as dirty and offer to "restore" it.
     expect(
-      getChangedBrowserSettingLabels({
-        ...DEFAULT_UNIFIED_SETTINGS,
-        browserDefaultViewport: { ...DEFAULT_UNIFIED_SETTINGS.browserDefaultViewport },
-      }),
+      getChangedBrowserSettingLabels(
+        {
+          ...DEFAULT_UNIFIED_SETTINGS,
+          browserDefaultViewport: { ...DEFAULT_UNIFIED_SETTINGS.browserDefaultViewport },
+        },
+        i18n.getFixedT("en"),
+      ),
     ).toEqual([]);
   });
 
   it("labels each browser default that differs", () => {
     expect(
-      getChangedBrowserSettingLabels({
-        ...DEFAULT_UNIFIED_SETTINGS,
-        browserDefaultViewport: { _tag: "freeform", width: 900, height: 600 },
-        browserDefaultZoomFactor: 1.5,
-        browserDefaultAppearance: "dark",
-        browserRecordingFrameRate: 60,
-        browserRecordingShowKeyPresses: true,
-        browserRecordingShowMousePresses: true,
-        browserLinkTarget: "app",
-        browserAutoShowFloatingPreview: !DEFAULT_UNIFIED_SETTINGS.browserAutoShowFloatingPreview,
-      }),
+      getChangedBrowserSettingLabels(
+        {
+          ...DEFAULT_UNIFIED_SETTINGS,
+          browserDefaultViewport: { _tag: "freeform", width: 900, height: 600 },
+          browserDefaultZoomFactor: 1.5,
+          browserDefaultAppearance: "dark",
+          browserRecordingFrameRate: 60,
+          browserRecordingShowKeyPresses: true,
+          browserRecordingShowMousePresses: true,
+          browserLinkTarget: "app",
+          browserAutoShowFloatingPreview: !DEFAULT_UNIFIED_SETTINGS.browserAutoShowFloatingPreview,
+        },
+        i18n.getFixedT("en"),
+      ),
     ).toEqual([
       "Browser viewport",
       "Browser zoom",

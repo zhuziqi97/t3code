@@ -1,3 +1,5 @@
+import { i18n } from "../../i18n";
+
 export type ModelEsque = {
   slug: string;
   name: string;
@@ -28,6 +30,7 @@ export function getDisplayModelName(
   model: ModelEsque,
   options?: { preferShortName?: boolean },
 ): string {
+  if (model.slug === "") return i18n.t("convene.model.default");
   const name = options?.preferShortName && model.shortName ? model.shortName : model.name;
   return stripLeadingQualifier(name, model.subProvider);
 }

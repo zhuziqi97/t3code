@@ -1,4 +1,5 @@
 import type { ContextMenuItem } from "@t3tools/contracts";
+import { i18n } from "~/i18n";
 
 export type ExternalLinkContextMenuAction =
   | "open-in-preview"
@@ -23,12 +24,6 @@ const FAILURE_OPERATION_BY_ACTION = {
   "unlink-from-thread": "unlink-pull-request-from-thread",
 } as const satisfies Record<ExternalLinkContextMenuAction, ExternalLinkContextMenuFailureOperation>;
 
-const EXTERNAL_LINK_CONTEXT_MENU_ITEMS = [
-  { id: "open-in-preview", label: "Open in integrated browser" },
-  { id: "open-external", label: "Open in system browser" },
-  { id: "copy-link", label: "Copy Link" },
-] as const satisfies readonly ContextMenuItem<ExternalLinkContextMenuAction>[];
-
 /**
  * The integrated browser is not always there to offer — it needs a thread to open beside and a
  * runtime that can show it — but the other two answers hold wherever a link does. Dropping the
@@ -39,15 +34,23 @@ function externalLinkContextMenuItems(options: {
   readonly canOpenInPreview: boolean;
   readonly threadLinkAction?: "link-to-thread" | "unlink-from-thread" | undefined;
 }): readonly ContextMenuItem<ExternalLinkContextMenuAction>[] {
+  const menuItems = [
+    { id: "open-in-preview", label: i18n.t("browser.linkOpenPreview") },
+    { id: "open-external", label: i18n.t("browser.openSystem") },
+    { id: "copy-link", label: i18n.t("browser.linkCopy") },
+  ] as const satisfies readonly ContextMenuItem<ExternalLinkContextMenuAction>[];
   const items = options.canOpenInPreview
-    ? EXTERNAL_LINK_CONTEXT_MENU_ITEMS
-    : EXTERNAL_LINK_CONTEXT_MENU_ITEMS.filter((item) => item.id !== "open-in-preview");
+    ? menuItems
+    : menuItems.filter((item) => item.id !== "open-in-preview");
   if (options.threadLinkAction === undefined) return items;
   return [
     {
       id: options.threadLinkAction,
-      label:
-        options.threadLinkAction === "link-to-thread" ? "Link to thread" : "Unlink from thread",
+      label: i18n.t(
+        options.threadLinkAction === "link-to-thread"
+          ? "browser.linkThread"
+          : "browser.unlinkThread",
+      ),
     },
     ...items,
   ];

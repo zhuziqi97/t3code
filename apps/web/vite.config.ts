@@ -1,3 +1,4 @@
+import { resolveConveneVersion } from "@t3tools/shared/conveneDesktopIdentity";
 import * as NodeZlib from "node:zlib";
 
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
@@ -43,7 +44,7 @@ const configuredRelayTracingUrl = repoEnv.VITE_RELAY_OTLP_TRACES_URL?.trim() || 
 const configuredRelayTracingDataset = repoEnv.VITE_RELAY_OTLP_TRACES_DATASET?.trim() || "";
 const configuredRelayTracingToken = repoEnv.VITE_RELAY_OTLP_TRACES_TOKEN?.trim() || "";
 const configuredHostedAppChannel = process.env.VITE_HOSTED_APP_CHANNEL?.trim() || "";
-const configuredAppVersion = process.env.APP_VERSION?.trim() || pkg.version;
+const configuredAppVersion = process.env.APP_VERSION?.trim() || resolveConveneVersion(pkg.version);
 const configuredHostedAppUrl = (() => {
   const explicitHostedAppUrl = process.env.VITE_HOSTED_APP_URL?.trim();
   if (explicitHostedAppUrl) {
@@ -186,6 +187,17 @@ export default defineConfig(() => {
       tailwindPlugins(bundledDev),
     ],
     optimizeDeps: {
+      // The icon catalog otherwise creates thousands of requests at desktop startup,
+      // exhausting Chromium's loaders when the native protocol proxies them to Vite.
+      rolldownOptions: {
+        output: {
+          codeSplitting: {
+            groups: [
+              { name: "lucide-icons", test: /node_modules[\\/](?:lucide|lucide-react)[\\/]/ },
+            ],
+          },
+        },
+      },
       include: [
         "@clerk/clerk-js",
         "@clerk/react/internal",
@@ -219,6 +231,7 @@ export default defineConfig(() => {
       "import.meta.env.VITE_HOSTED_APP_URL": JSON.stringify(configuredHostedAppUrl ?? ""),
       "import.meta.env.VITE_HOSTED_APP_CHANNEL": JSON.stringify(configuredHostedAppChannel),
       "import.meta.env.APP_VERSION": JSON.stringify(configuredAppVersion),
+      "import.meta.env.UPSTREAM_VERSION": JSON.stringify(pkg.version),
     },
     resolve: {
       tsconfigPaths: true,

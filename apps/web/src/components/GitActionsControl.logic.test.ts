@@ -1238,3 +1238,43 @@ describe("resolveAutoFeatureBranchName", () => {
     assert.equal(ref, "feature/update");
   });
 });
+
+it("keeps Git operations and refs unchanged when rendering Chinese labels", async () => {
+  const { createI18n } = await import("@t3tools/client-runtime/i18n");
+  const { t } = createI18n({ lng: "zh" });
+  const dirty = status({ hasWorkingTreeChanges: true, hasUpstream: false });
+  assert.deepEqual(resolveQuickAction(dirty, false, false, true, t), {
+    label: "提交、推送并创建 PR",
+    disabled: false,
+    kind: "run_action",
+    action: "commit_push_pr",
+  });
+  assert.deepEqual(
+    buildMenuItems(dirty, false, true, t).map((item) => [item.id, item.dialogAction]),
+    [
+      ["commit", "commit"],
+      ["push", "push"],
+      ["pr", "create_pr"],
+    ],
+  );
+  const confirmation = resolveDefaultBranchActionDialogCopy(
+    { action: "push", branchName: "main", includesCommit: false },
+    t,
+  );
+  assert.include(confirmation.description, "main");
+  assert.include(confirmation.continueLabel, "main");
+  assert.deepEqual(
+    resolveGitActionProgressPresentation(
+      {
+        isRunning: true,
+        operation: "run_change_request",
+        currentLabel: "Running tests 用户钩子原文",
+        lastOutputLine: "Raw hook output",
+        phaseStartedAtMs: 1000,
+        hookStartedAtMs: 2000,
+      },
+      t,
+    ),
+    { status: "Running tests 用户钩子原文", output: "Raw hook output", startedAtMs: 2000 },
+  );
+});

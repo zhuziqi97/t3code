@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import {
   formatProviderSubagentStatus,
   type ProviderSubagentStatus,
@@ -27,6 +28,7 @@ export function ProviderSubagentBar(props: {
   readonly status: ProviderSubagentStatus | null;
   readonly onOpenParent: (() => void) | null;
 }) {
+  const t = useTranslate();
   const statusRef = useRef<HTMLSpanElement>(null);
   const { status } = props;
   const live = status !== null && isOrchestrationV2WorkActive(status.status);
@@ -36,6 +38,7 @@ export function ProviderSubagentBar(props: {
   const announcement = formatProviderSubagentStatus(
     status === null ? null : { ...status, startedAt: null },
     0,
+    t,
   );
 
   // The label is written from an effect, and live bars tick through DOM
@@ -43,14 +46,14 @@ export function ProviderSubagentBar(props: {
   useLayoutEffect(() => {
     const update = () => {
       if (statusRef.current) {
-        statusRef.current.textContent = formatProviderSubagentStatus(status, Date.now());
+        statusRef.current.textContent = formatProviderSubagentStatus(status, Date.now(), t);
       }
     };
     update();
     if (!live) return;
     const id = setInterval(update, 1_000);
     return () => clearInterval(id);
-  }, [live, status]);
+  }, [live, status, t]);
 
   return (
     <div className="flex min-h-12 items-center gap-3 rounded-3xl py-2 ps-5 pe-2 text-sm">
@@ -79,13 +82,15 @@ export function ProviderSubagentBar(props: {
         className="min-w-0 truncate text-muted-foreground tabular-nums"
       />
       <span role="status" className="sr-only">
-        {`${modelDescription} subagent: ${announcement}`}
+        {t("chat.subagent.announcement", { model: modelDescription, status: announcement })}
       </span>
-      <span className="ms-auto shrink-0 text-muted-foreground max-sm:hidden">Runs on its own</span>
+      <span className="ms-auto shrink-0 text-muted-foreground max-sm:hidden">
+        {t("chat.subagent.independent")}
+      </span>
       {props.onOpenParent ? (
         <Button size="sm" variant="ghost" onClick={props.onOpenParent}>
           <ArrowUpLeftIcon />
-          Open parent
+          {t("chat.subagent.openParent")}
         </Button>
       ) : null}
     </div>

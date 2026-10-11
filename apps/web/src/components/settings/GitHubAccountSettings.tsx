@@ -1,3 +1,5 @@
+import { useTranslate } from "../../i18n";
+import { Trans } from "react-i18next";
 import type { EnvironmentId, SourceControlProviderAuth } from "@t3tools/contracts";
 import { EyeIcon, EyeOffIcon } from "lucide-react";
 import { useState } from "react";
@@ -24,6 +26,7 @@ function RedactedLogin(props: {
   /** Distinguishes hidden logins from each other for a screen reader, e.g. "Account 2". */
   readonly label?: string;
 }) {
+  const t = useTranslate();
   return props.revealed ? (
     <span className="min-w-0 truncate font-mono text-2xs">{props.account}</span>
   ) : (
@@ -31,7 +34,7 @@ function RedactedLogin(props: {
       <span className="select-none blur-xs" aria-hidden>
         {redactedPlaceholder(props.account)}
       </span>
-      <span className="sr-only">{props.label ?? "Hidden account"}</span>
+      <span className="sr-only">{props.label ?? t("sourceControl.github.hiddenAccount")}</span>
     </span>
   );
 }
@@ -49,9 +52,10 @@ export function GitHubAccountSettings({
   readonly auth: SourceControlProviderAuth;
   readonly onSaved: () => void;
 }) {
+  const t = useTranslate();
   const hosts = useEnvironmentSettings(environmentId, (settings) => settings.github.hosts);
   const updateSettings = useAtomCommand(serverEnvironment.updateSettings, {
-    label: "save GitHub account settings",
+    label: t("sourceControl.github.saveAccounts"),
   });
   const [saving, setSaving] = useState(false);
   const [revealed, setRevealed] = useState(false);
@@ -76,8 +80,11 @@ export function GitHubAccountSettings({
   if (groups.length === 0) {
     return (
       <p className="text-xs text-muted-foreground">
-        Sign in with <code className="rounded bg-muted px-1 py-px text-2xs">gh auth login</code> on
-        the server host, then rescan to choose accounts here.
+        <Trans
+          t={t}
+          i18nKey="sourceControl.github.signInHint"
+          components={{ command: <code className="rounded bg-muted px-1 py-px text-2xs" /> }}
+        />
       </p>
     );
   }
@@ -86,14 +93,21 @@ export function GitHubAccountSettings({
     <div className="grid gap-4">
       <div className="flex items-center justify-between gap-3">
         <p className="max-w-2xl text-xs leading-relaxed text-muted-foreground">
-          Choose which <code className="rounded bg-muted px-1 py-px text-2xs">gh</code> login each
-          GitHub host uses, or turn a host off.
+          <Trans
+            t={t}
+            i18nKey="sourceControl.github.chooseHint"
+            components={{ command: <code className="rounded bg-muted px-1 py-px text-2xs" /> }}
+          />
         </p>
         <Button
           size="icon-xs"
           variant="ghost-muted"
           onClick={() => setRevealed((current) => !current)}
-          aria-label={revealed ? "Hide GitHub accounts" : "Reveal GitHub accounts"}
+          aria-label={
+            revealed
+              ? t("sourceControl.github.hideAccounts")
+              : t("sourceControl.github.revealAccounts")
+          }
           aria-pressed={revealed}
         >
           {revealed ? <EyeOffIcon /> : <EyeIcon />}
@@ -112,7 +126,7 @@ export function GitHubAccountSettings({
                 <span className="text-xs font-medium text-foreground">{group.host}</span>
                 {group.selectable.length === 1 && group.selectable[0] !== undefined ? (
                   <p className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
-                    <span>Signed in as</span>
+                    <span>{t("sourceControl.github.signedIn")}</span>
                     <RedactedLogin revealed={revealed} account={group.selectable[0]} />
                   </p>
                 ) : null}
@@ -120,13 +134,15 @@ export function GitHubAccountSettings({
               <Switch
                 checked={enabled}
                 disabled={saving}
-                aria-label={`Use GitHub on ${group.host}`}
+                aria-label={t("sourceControl.github.useHost", { host: group.host })}
                 onCheckedChange={(checked) => void save(group.host, { enabled: checked })}
               />
             </div>
             {group.selectable.length > 1 ? (
               <div className="flex items-center justify-between gap-3">
-                <span className="text-xs text-muted-foreground">Account</span>
+                <span className="text-xs text-muted-foreground">
+                  {t("sourceControl.github.account")}
+                </span>
                 <div className="w-64 max-w-full">
                   <Select
                     value={pinned}
@@ -138,12 +154,15 @@ export function GitHubAccountSettings({
                       });
                     }}
                   >
-                    <SelectTrigger size="sm" aria-label={`GitHub account for ${group.host}`}>
+                    <SelectTrigger
+                      size="sm"
+                      aria-label={t("sourceControl.github.hostAccount", { host: group.host })}
+                    >
                       <SelectValue>
                         {(value: string) =>
                           value === ACTIVE_ACCOUNT ? (
                             <span className="flex min-w-0 items-center gap-1">
-                              Active gh account
+                              {t("sourceControl.github.activeAccount")}
                               {group.activeAccount ? (
                                 <>
                                   (
@@ -164,7 +183,7 @@ export function GitHubAccountSettings({
                     <SelectPopup align="end" alignItemWithTrigger={false}>
                       <SelectItem value={ACTIVE_ACCOUNT}>
                         <span className="flex min-w-0 items-center gap-1">
-                          Active gh account
+                          {t("sourceControl.github.activeAccount")}
                           {group.activeAccount ? (
                             <>
                               (<RedactedLogin revealed={revealed} account={group.activeAccount} />)
@@ -177,7 +196,7 @@ export function GitHubAccountSettings({
                           <RedactedLogin
                             revealed={revealed}
                             account={account}
-                            label={`Account ${index + 1}`}
+                            label={t("sourceControl.github.accountNumber", { number: index + 1 })}
                           />
                         </SelectItem>
                       ))}
@@ -188,16 +207,14 @@ export function GitHubAccountSettings({
             ) : null}
             {stalePin ? (
               <div className="flex items-center justify-between gap-3">
-                <p className="text-xs text-warning">
-                  The chosen login is no longer signed in, so the active gh login is used.
-                </p>
+                <p className="text-xs text-warning">{t("sourceControl.github.stalePin")}</p>
                 <Button
                   size="xs"
                   variant="outline"
                   disabled={saving}
                   onClick={() => void save(group.host, { account: null })}
                 >
-                  Use active login
+                  {t("sourceControl.github.useActive")}
                 </Button>
               </div>
             ) : null}
@@ -207,13 +224,18 @@ export function GitHubAccountSettings({
                 className="flex min-w-0 flex-wrap items-center gap-1 text-xs text-muted-foreground/70"
               >
                 <RedactedLogin revealed={revealed} account={entry.account} />
-                <span>can't be used: {entry.error ?? "gh reports this login as invalid."}</span>
+                <span>
+                  {t("sourceControl.github.invalidLogin", {
+                    error: entry.error ?? t("sourceControl.github.invalidDetail"),
+                  })}
+                </span>
               </p>
             ))}
             {group.environmentVariable ? (
               <p className="text-xs text-warning">
-                {group.environmentVariable} is set on the server, so it overrides the account chosen
-                here until it is unset.
+                {t("sourceControl.github.environmentOverride", {
+                  variable: group.environmentVariable,
+                })}
               </p>
             ) : null}
           </div>

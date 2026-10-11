@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { createPreviewStreamClient, type PreviewStreamControl } from "./serverBrowserStream.ts";
+import {
+  createPreviewStreamClient,
+  previewStreamControlLabel,
+  previewStreamHostSetupMessage,
+  type PreviewStreamControl,
+} from "./serverBrowserStream.ts";
+
+import { createI18n } from "../i18n/createI18n.ts";
 
 class FakeSocket extends EventTarget {
   static readonly OPEN = 1;
@@ -197,5 +204,36 @@ describe("preview stream agent pointer", () => {
       y: 50,
       sequence: 2,
     });
+  });
+});
+
+describe("viewer presentation", () => {
+  it("translates control states without changing the control or default English for other clients", () => {
+    const zh = createI18n({ lng: "zh" }).t;
+    const control: PreviewStreamControl = {
+      canOperate: true,
+      controller: "you",
+      generation: 7,
+      dialog: { type: "prompt", message: "raw 页面", defaultValue: "原文" },
+    };
+    expect(previewStreamControlLabel(null)).toBe("Connecting...");
+    expect(previewStreamControlLabel(null, zh)).toBe("正在连接…");
+    expect(previewStreamControlLabel(control)).toBe("You have control");
+    expect(previewStreamControlLabel(control, zh)).toBe("你拥有控制权");
+    expect(previewStreamControlLabel({ ...control, canOperate: false }, zh)).toBe("只读");
+    expect(previewStreamControlLabel({ ...control, controller: "another-viewer" }, zh)).toBe(
+      "其他查看者拥有控制权",
+    );
+    expect(previewStreamControlLabel({ ...control, controller: "unclaimed" }, zh)).toBe("正在观看");
+    expect(control).toEqual({
+      canOperate: true,
+      controller: "you",
+      generation: 7,
+      dialog: { type: "prompt", message: "raw 页面", defaultValue: "原文" },
+    });
+    const setup = { need: "sandbox", command: "sudo npx t3 browser setup --原文" } as const;
+    expect(previewStreamHostSetupMessage(setup, zh)).toContain("沙箱");
+    expect(previewStreamHostSetupMessage(setup)).toContain("This server's host blocks the sandbox");
+    expect(setup.command).toBe("sudo npx t3 browser setup --原文");
   });
 });

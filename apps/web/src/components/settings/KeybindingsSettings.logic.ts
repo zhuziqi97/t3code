@@ -14,6 +14,12 @@ import {
 import { shortcutKeyFromEvent } from "../../keybindings";
 import { isMacPlatform } from "../../lib/utils";
 import { METRIC_OPTIONS, WINDOW_OPTIONS } from "../usage/usageShortcuts";
+import type { TFunction } from "i18next";
+import type { MessageKey } from "@t3tools/client-runtime/i18n";
+import { i18n } from "../../i18n";
+
+const englishLabels = i18n.getFixedT("en");
+const chineseLabels = i18n.getFixedT("zh");
 
 // Every usage.* command needs a rank. An unranked one falls back to the
 // alphabetical compare, which makes the comparator inconsistent and the order
@@ -107,12 +113,20 @@ export function whenAstToExpression(node: KeybindingWhenNode | undefined): strin
   }
 }
 
-export function whenNodeRemoveLabel(node: KeybindingWhenNode, depth: number): string {
-  if (depth === 0) return "Clear all conditions";
+export function whenNodeRemoveLabel(
+  node: KeybindingWhenNode,
+  depth: number,
+  t: TFunction = i18n.t,
+): string {
+  if (depth === 0) return t("keybindings.clear-conditions");
   if (node.type === "identifier" || (node.type === "not" && node.node.type === "identifier")) {
-    return "Remove condition";
+    return t("keybindings.remove-condition");
   }
-  return "Remove group and its conditions";
+  return t("keybindings.remove-group");
+}
+
+export function keybindingSourceLabel(source: KeybindingSource, t: TFunction = i18n.t): string {
+  return t(`keybindings.source.${source}`);
 }
 
 function wrapWhenExpression(node: KeybindingWhenNode): string {
@@ -186,6 +200,7 @@ function conflictsWithWhen(leftWhen: string, rightWhen: string): boolean {
 export function keybindingConflictLabels(
   rows: ReadonlyArray<KeybindingRow>,
   input: { readonly rowId: string; readonly key: string; readonly when: string },
+  t: TFunction = i18n.t,
 ): ReadonlyArray<string> {
   if (input.key.trim().length === 0) return [];
   const conflicts: Array<string> = [];
@@ -195,7 +210,7 @@ export function keybindingConflictLabels(
       candidate.key === input.key &&
       conflictsWithWhen(candidate.when, input.when)
     ) {
-      conflicts.push(commandLabel(candidate.command));
+      conflicts.push(commandLabel(candidate.command, t));
     }
   }
   return [...new Set(conflicts)].toSorted();
@@ -211,19 +226,18 @@ export interface KeybindingGroup {
 const KEYBINDING_GROUPS = [
   {
     id: "navigation",
-    title: "Navigation",
     prefixes: ["sidebar", "rightPanel", "commandPalette", "filePicker", "projectSearch", "editor"],
   },
-  { id: "threads", title: "Threads", prefixes: ["thread", "chat", "pullRequest"] },
-  { id: "composer", title: "Composer", prefixes: ["composer", "modelPicker"] },
-  { id: "terminal", title: "Terminal", prefixes: ["terminal"] },
-  { id: "preview", title: "Preview & diff", prefixes: ["preview", "diff"] },
-  { id: "appearance", title: "Appearance", prefixes: ["theme", "appearance", "themeEditor"] },
-  { id: "scripts", title: "Project scripts", prefixes: ["script"] },
+  { id: "threads", prefixes: ["thread", "chat", "pullRequest"] },
+  { id: "composer", prefixes: ["composer", "modelPicker"] },
+  { id: "terminal", prefixes: ["terminal"] },
+  { id: "preview", prefixes: ["preview", "diff"] },
+  { id: "appearance", prefixes: ["theme", "appearance", "themeEditor"] },
+  { id: "scripts", prefixes: ["script"] },
 ] as const;
-const OTHER_KEYBINDING_GROUP = { id: "other", title: "Other" } as const;
+const OTHER_KEYBINDING_GROUP = { id: "other" } as const;
 
-function keybindingGroupFor(command: KeybindingCommand): { id: string; title: string } {
+function keybindingGroupFor(command: KeybindingCommand): { id: string } {
   const prefix = String(command).split(".")[0] ?? "";
   return (
     KEYBINDING_GROUPS.find((group) => (group.prefixes as ReadonlyArray<string>).includes(prefix)) ??
@@ -234,6 +248,7 @@ function keybindingGroupFor(command: KeybindingCommand): { id: string; title: st
 /** Splits sorted rows into the page's sections, dropping sections with no rows. */
 export function groupKeybindingRows(
   rows: ReadonlyArray<KeybindingRow>,
+  t: TFunction = i18n.t,
 ): ReadonlyArray<KeybindingGroup> {
   const rowsByGroup = new Map<string, Array<KeybindingRow>>();
   for (const row of rows) {
@@ -244,15 +259,17 @@ export function groupKeybindingRows(
   }
   return [...KEYBINDING_GROUPS, OTHER_KEYBINDING_GROUP].flatMap((group) => {
     const groupRows = rowsByGroup.get(group.id);
-    return groupRows ? [{ id: group.id, title: group.title, rows: groupRows }] : [];
+    return groupRows
+      ? [{ id: group.id, title: t(`keybindings.group.${group.id}`), rows: groupRows }]
+      : [];
   });
 }
 
 export function buildKeybindingRows(
   keybindings: ResolvedKeybindingsConfig,
   query: string,
+  t: TFunction = i18n.t,
 ): ReadonlyArray<KeybindingRow> {
-  const normalizedQuery = query.trim().toLowerCase();
   const rows = keybindings.map((binding, index) => {
     const defaultBinding = defaultBindingForBinding(binding);
     const key = shortcutToKeybindingInput(binding.shortcut);
@@ -271,11 +288,15 @@ export function buildKeybindingRows(
   });
 
   const rowsWithConflicts = rows.map((row) => {
-    const conflicts = keybindingConflictLabels(rows, {
-      rowId: row.id,
-      key: row.key,
-      when: row.when,
-    });
+    const conflicts = keybindingConflictLabels(
+      rows,
+      {
+        rowId: row.id,
+        key: row.key,
+        when: row.when,
+      },
+      t,
+    );
     return conflicts.length > 0
       ? Object.assign({}, row, { conflicts: [...new Set(conflicts)].toSorted() })
       : row;
@@ -287,17 +308,25 @@ export function buildKeybindingRows(
     return left.key.localeCompare(right.key);
   });
 
-  if (normalizedQuery.length === 0) {
-    return rowsWithConflicts;
-  }
+  return filterKeybindingRows(rowsWithConflicts, query);
+}
 
-  return rowsWithConflicts.filter((row) => {
+export function filterKeybindingRows(
+  rows: ReadonlyArray<KeybindingRow>,
+  query: string,
+): ReadonlyArray<KeybindingRow> {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (normalizedQuery.length === 0) return rows;
+
+  return rows.filter((row) => {
     return (
       row.command.toLowerCase().includes(normalizedQuery) ||
-      commandLabel(row.command).toLowerCase().includes(normalizedQuery) ||
+      commandLabel(row.command, englishLabels).toLowerCase().includes(normalizedQuery) ||
+      commandLabel(row.command, chineseLabels).toLowerCase().includes(normalizedQuery) ||
       row.key.toLowerCase().includes(normalizedQuery) ||
       row.when.toLowerCase().includes(normalizedQuery) ||
-      row.source.toLowerCase().includes(normalizedQuery)
+      row.source.toLowerCase().includes(normalizedQuery) ||
+      keybindingSourceLabel(row.source, chineseLabels).includes(normalizedQuery)
     );
   });
 }
@@ -355,26 +384,25 @@ export function buildKeybindingCommandOptions(
   for (const binding of keybindings) {
     commands.add(binding.command);
   }
-  return [...commands].toSorted((left, right) => compareCommands(left, right, commandLabel));
+  return [...commands].toSorted((left, right) =>
+    compareCommands(left, right, (command) => commandLabel(command, englishLabels)),
+  );
 }
 
-export function commandLabel(command: KeybindingCommand): string {
-  if (command === "composer.sendAlternate") return "Composer: Opposite Queue or Steer Action";
-  if (command === "composer.sendBackground") return "Composer: Start in Background";
-  if (command === "composer.sendAndNewThread") return "Composer: Send and Start New Thread";
-  if (command === "thread.steerQueuedMessage") return "Queue: Send First Queued Message as Steer";
-  if (command === "thread.editQueuedMessage") return "Queue: Edit Last Queued Message";
-  if (command === "thread.copyReference") return "Pull Request: Copy Link or Thread ID";
-  const usageMetric = METRIC_OPTIONS.find((option) => option.command === command);
-  if (usageMetric) return `Usage: ${usageMetric.label}`;
-  const usagePeriod = WINDOW_OPTIONS.find((option) => option.command === command);
-  if (usagePeriod) return `Usage: Period: ${usagePeriod.label}`;
-  if (command === "view.reopenClosed") return "Reopen Closed Tab";
+export function commandLabel(command: KeybindingCommand, t: TFunction = i18n.t): string {
   const raw = String(command);
   if (raw.startsWith("script.") && raw.endsWith(".run")) {
-    return `Run Script: ${titleCaseCommandSegment(raw.slice("script.".length, -".run".length))}`;
+    return t("keybindings.script", {
+      name: titleCaseCommandSegment(raw.slice("script.".length, -".run".length)),
+    });
   }
-  return raw.split(".").map(titleCaseCommandSegment).join(": ");
+  return t(`keybindings.command.${command}` as MessageKey, {
+    defaultValue: englishCommandLabel(command),
+  });
+}
+
+function englishCommandLabel(command: KeybindingCommand): string {
+  return String(command).split(".").map(titleCaseCommandSegment).join(": ");
 }
 
 function titleCaseCommandSegment(segment: string): string {

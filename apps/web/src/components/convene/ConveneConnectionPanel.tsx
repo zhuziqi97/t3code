@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import { useAtomValue } from "@effect/atom-react";
 import { type ConvenePairing, type EnvironmentId } from "@t3tools/contracts";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
@@ -16,6 +17,7 @@ export function useConveneStatus(environmentId: EnvironmentId) {
 }
 
 export function ConveneConnectionPanel({ environmentId }: { environmentId: EnvironmentId }) {
+  const t = useTranslate();
   const urlId = useId();
   const result = useConveneStatus(environmentId);
   const status = AsyncResult.isSuccess(result) ? result.value : null;
@@ -45,7 +47,7 @@ export function ConveneConnectionPanel({ environmentId }: { environmentId: Envir
     setBusy(false);
     if (response._tag === "Failure") {
       const cause = squashAtomCommandFailure(response);
-      setError(cause instanceof Error ? cause.message : "Could not update the Convene connection.");
+      setError(cause instanceof Error ? cause.message : t("convene.error.connection"));
       return;
     }
     if (response.value.type === "pairing") {
@@ -60,34 +62,33 @@ export function ConveneConnectionPanel({ environmentId }: { environmentId: Envir
   const paired = status?.runnerId !== null && status?.runnerId !== undefined;
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        Connect this environment to your Convene account to configure project modules and MCP
-        access. Local development remains available without a connection.
-      </p>
+      <p className="text-sm text-muted-foreground">{t("convene.connection.description")}</p>
       {status ? (
         <div className="space-y-1 text-sm">
           <p role="status">
             {status.phase === "online"
-              ? "Connected to Convene"
+              ? t("convene.connection.online")
               : status.phase === "connecting"
-                ? "Connecting to Convene…"
+                ? t("convene.connection.connecting")
                 : status.phase === "offline"
-                  ? "Convene is offline"
-                  : "Not connected to Convene"}
+                  ? t("convene.connection.offline")
+                  : t("convene.connection.unpaired")}
           </p>
           {status.baseUrl && (
             <p className="break-all text-xs text-muted-foreground">{status.baseUrl}</p>
           )}
           {status.runnerId && (
-            <p className="break-all text-xs text-muted-foreground">Client ID: {status.runnerId}</p>
+            <p className="break-all text-xs text-muted-foreground">
+              {t("convene.connection.clientId", { id: status.runnerId })}
+            </p>
           )}
           {status.error && <p className="text-sm text-destructive">{status.error}</p>}
         </div>
       ) : (
         <p role="status" className="text-sm text-muted-foreground">
           {result._tag === "Failure"
-            ? "Connection status is unavailable. Reconnect this environment to continue."
-            : "Loading connection status…"}
+            ? t("convene.connection.unavailable")
+            : t("convene.connection.loading")}
         </p>
       )}
       {error && (
@@ -96,15 +97,12 @@ export function ConveneConnectionPanel({ environmentId }: { environmentId: Envir
         </Alert>
       )}
       {!permitted && (
-        <p className="text-sm text-muted-foreground">
-          This connection does not grant permission to manage environment connections.
-        </p>
+        <p className="text-sm text-muted-foreground">{t("convene.connection.noPermission")}</p>
       )}
       {paired ? (
         <div className="space-y-3">
           <p className="text-xs text-muted-foreground">
-            Disconnect unpairs this environment and removes its Convene associations and MCP
-            configuration. Local projects and sessions remain available.
+            {t("convene.connection.disconnectDescription")}
           </p>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -112,29 +110,31 @@ export function ConveneConnectionPanel({ environmentId }: { environmentId: Envir
               disabled={busy || !permitted}
               onClick={() => void run({ operation: "reconnect" })}
             >
-              Reconnect
+              {t("convene.connection.reconnect")}
             </Button>
             <Button
               variant="outline"
               disabled={busy || !permitted}
               onClick={() => void run({ operation: "disconnect" })}
             >
-              Disconnect Convene
+              {t("convene.connection.disconnect")}
             </Button>
           </div>
         </div>
       ) : pairing ? (
         <div className="space-y-3">
           <p className="text-sm">
-            Approve this code in Convene: <strong>{pairing.value.user_code}</strong>
+            {t("convene.connection.approveCode")} <strong>{pairing.value.user_code}</strong>
           </p>
           {expired ? (
             <p role="alert" className="text-sm text-destructive">
-              The pairing code expired. Start again to receive a new code.
+              {t("convene.connection.expired")}
             </p>
           ) : (
             <p className="text-xs text-muted-foreground">
-              The code expires at {new Date(pairing.expiresAt).toLocaleTimeString()}.
+              {t("convene.connection.expiresAt", {
+                time: new Date(pairing.expiresAt).toLocaleTimeString(),
+              })}
             </p>
           )}
           <div className="flex flex-wrap gap-2">
@@ -145,7 +145,7 @@ export function ConveneConnectionPanel({ environmentId }: { environmentId: Envir
               }
               disabled={expired}
             >
-              Open Convene
+              {t("convene.connection.open")}
             </Button>
             <Button
               disabled={busy || expired || !permitted}
@@ -157,7 +157,7 @@ export function ConveneConnectionPanel({ environmentId }: { environmentId: Envir
                 })
               }
             >
-              {busy ? "Checking approval…" : "I've approved"}
+              {busy ? t("convene.connection.checking") : t("convene.connection.approved")}
             </Button>
             <Button
               variant="ghost"
@@ -167,7 +167,7 @@ export function ConveneConnectionPanel({ environmentId }: { environmentId: Envir
                 setError(null);
               }}
             >
-              Cancel pairing
+              {t("convene.connection.cancel")}
             </Button>
           </div>
         </div>
@@ -180,7 +180,7 @@ export function ConveneConnectionPanel({ environmentId }: { environmentId: Envir
           }}
         >
           <div className="space-y-2">
-            <Label htmlFor={urlId}>Convene platform URL</Label>
+            <Label htmlFor={urlId}>{t("convene.connection.url")}</Label>
             <Input
               id={urlId}
               placeholder="https://convene.example.com"
@@ -190,7 +190,7 @@ export function ConveneConnectionPanel({ environmentId }: { environmentId: Envir
             />
           </div>
           <Button type="submit" disabled={busy || !baseUrl.trim() || !permitted || status === null}>
-            {busy ? "Requesting code…" : "Connect Convene"}
+            {busy ? t("convene.connection.requesting") : t("convene.connection.connect")}
           </Button>
         </form>
       )}

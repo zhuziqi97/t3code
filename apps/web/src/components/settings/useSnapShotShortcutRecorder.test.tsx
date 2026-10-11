@@ -164,3 +164,9 @@ it("preserves native modifier-pair recording and tracks released keys", async ()
   recorder.input.props.onKeyDown(event("Shift", "ShiftLeft", { shiftKey: true }));
   expect(recorded).toHaveBeenCalledExactlyOnceWith({ kind: "both-shift-keys" });
 });
+
+// Direct hook-harness tests use the existing English expectations at the translation boundary.
+vi.mock("../../i18n", async (original) => {
+  const actual = await original<typeof import("../../i18n")>();
+  return { ...actual, useTranslate: () => actual.i18n.getFixedT("en") };
+});

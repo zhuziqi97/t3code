@@ -1,3 +1,5 @@
+import { Trans } from "react-i18next";
+import { useTranslate } from "../../i18n";
 import { useState } from "react";
 
 import {
@@ -27,6 +29,7 @@ export function RemoveT3ConnectEnvironmentDialog({
   readonly onCancel: () => void;
   readonly onConfirm: () => void;
 }) {
+  const t = useTranslate();
   const accountPage = useT3ConnectAccountPage();
   // Keep the label through the close animation.
   const [shownLabel, setShownLabel] = useState(environmentLabel);
@@ -43,31 +46,35 @@ export function RemoveT3ConnectEnvironmentDialog({
       >
         <AlertDialogPopup>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove {shownLabel} from this device?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {t("connections.removeDeviceQuestion", { label: shownLabel })}
+            </AlertDialogTitle>
+            <AlertDialogDescription>{t("connections.forgetDevice")}</AlertDialogDescription>
             <AlertDialogDescription>
-              This forgets its pairing, credentials, and cached threads here.
-            </AlertDialogDescription>
-            <AlertDialogDescription>
-              It stays on your T3 Connect account and keeps its host space. Deregister it in{" "}
-              {openAccountPage ? (
-                <InlineButton
-                  onClick={() => {
-                    onCancel();
-                    openAccountPage();
-                  }}
-                >
-                  T3 Connect settings
-                </InlineButton>
-              ) : (
-                "T3 Connect settings"
-              )}{" "}
-              to free it.
+              <Trans
+                t={t}
+                i18nKey="connections.keepConnectRegistration"
+                components={{
+                  settings: openAccountPage ? (
+                    <InlineButton
+                      onClick={() => {
+                        onCancel();
+                        openAccountPage();
+                      }}
+                    />
+                  ) : (
+                    <span />
+                  ),
+                }}
+              />
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
+            <AlertDialogClose render={<Button variant="outline" />}>
+              {t("connections.cancel")}
+            </AlertDialogClose>
             <Button variant="destructive" onClick={onConfirm}>
-              Remove from this device
+              {t("connections.removeDevice")}
             </Button>
           </AlertDialogFooter>
         </AlertDialogPopup>

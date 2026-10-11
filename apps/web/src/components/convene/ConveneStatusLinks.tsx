@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import { Link } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
 import type { EnvironmentId } from "@t3tools/contracts";
@@ -13,6 +14,7 @@ function EnvironmentStatus({
   environmentId: EnvironmentId;
   label: string;
 }) {
+  const t = useTranslate();
   const result = useConveneStatus(environmentId);
   const phase = AsyncResult.isSuccess(result) ? result.value.phase : "unavailable";
   return (
@@ -21,19 +23,19 @@ function EnvironmentStatus({
       size="sm"
       className="w-full justify-start"
       render={<Link to="/settings/convene" search={{ machine: environmentId }} />}
-      aria-label={`Convene ${label}: ${phase}`}
+      aria-label={`Convene ${label}: ${t(`convene.status.${phase}`)}`}
     >
       <span className="truncate">
         Convene · {label} ·{" "}
         {phase === "online"
-          ? "Connected"
+          ? t("convene.status.online")
           : phase === "connecting"
-            ? "Connecting"
+            ? t("convene.status.connecting")
             : phase === "unpaired"
-              ? "Connect"
+              ? t("convene.status.unpaired")
               : phase === "offline"
-                ? "Offline"
-                : "Unavailable"}
+                ? t("convene.status.offline")
+                : t("convene.status.unavailable")}
       </span>
     </Button>
   );

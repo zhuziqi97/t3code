@@ -1,3 +1,5 @@
+import type { MessageKey } from "@t3tools/client-runtime/i18n";
+import { i18n } from "~/i18n";
 import { useAtomCommand } from "~/state/use-atom-command";
 /**
  * The actions a pull request offers, extracted from the detail panel so smaller surfaces — the
@@ -77,51 +79,45 @@ export function usePullRequestDefaultMergeMethodResolver(
   ]);
 }
 
-const ACTION_SUCCESS_LABELS: Record<PullRequestAction, string> = {
-  merge: "Merge requested",
-  ready: "Marked ready for review",
-  draft: "Converted to draft",
-  close: "Pull request closed",
-  reopen: "Pull request reopened",
-  "update-branch": "Branch updated with the base branch",
-  "enable-auto-merge": "Auto-merge enabled",
-  "disable-auto-merge": "Auto-merge disabled",
-  revert: "Revert pull request opened",
-  "approve-workflows": "Workflows approved",
+const ACTION_SUCCESS_LABELS: Record<PullRequestAction, MessageKey> = {
+  merge: "pullRequest.flow.action.mergeRequested",
+  ready: "pullRequest.flow.action.ready",
+  draft: "pullRequest.flow.action.draft",
+  close: "pullRequest.flow.action.closed",
+  reopen: "pullRequest.flow.action.reopened",
+  "update-branch": "pullRequest.flow.action.updated",
+  "enable-auto-merge": "pullRequest.flow.action.autoEnabled",
+  "disable-auto-merge": "pullRequest.flow.action.autoDisabled",
+  revert: "pullRequest.flow.action.reverted",
+  "approve-workflows": "pullRequest.flow.action.workflowsApproved",
 };
 
 /** Said as the thing that did not happen, rather than as the operation that returned an error. */
-const ACTION_FAILURE_LABELS: Record<PullRequestAction, string> = {
-  merge: "Could not merge this pull request",
-  ready: "Could not mark this ready for review",
-  draft: "Could not convert this to a draft",
-  close: "Could not close this pull request",
-  reopen: "Could not reopen this pull request",
-  "update-branch": "Could not update this branch",
-  "enable-auto-merge": "Could not enable auto-merge",
-  "disable-auto-merge": "Could not disable auto-merge",
-  revert: "Could not open a revert pull request",
-  "approve-workflows": "Could not approve workflows",
+const ACTION_FAILURE_LABELS: Record<PullRequestAction, MessageKey> = {
+  merge: "pullRequest.flow.action.mergeFailed",
+  ready: "pullRequest.flow.action.readyFailed",
+  draft: "pullRequest.flow.action.draftFailed",
+  close: "pullRequest.flow.action.closeFailed",
+  reopen: "pullRequest.flow.action.reopenFailed",
+  "update-branch": "pullRequest.flow.action.updateFailed",
+  "enable-auto-merge": "pullRequest.flow.action.autoEnableFailed",
+  "disable-auto-merge": "pullRequest.flow.action.autoDisableFailed",
+  revert: "pullRequest.flow.action.revertFailed",
+  "approve-workflows": "pullRequest.flow.action.approveFailed",
 };
 
 /** What to try, for the times the host says only that it refused. */
-const ACTION_FAILURE_HINTS: Record<PullRequestAction, string> = {
-  merge:
-    "The host refused the merge. Check that you have write access, that the checks it requires have passed, and that the branch is not conflicting.",
-  ready: "The host refused it. Check that you have write access to this repository.",
-  draft: "The host refused it. Check that you have write access to this repository.",
-  close: "The host refused it. Check that you have write access, or that you opened it.",
-  reopen:
-    "The host refused it. Check that you have write access, and that the branch still exists.",
-  "update-branch":
-    "The host refused it. Check that you have write access, and that the base branch has not diverged in a way the host cannot merge.",
-  "enable-auto-merge":
-    "The host refused it. Check that auto-merge is enabled for this repository and that you have write access.",
-  "disable-auto-merge": "The host refused it. Check that you have write access to this repository.",
-  revert:
-    "The host refused it. Check that you have write access and that this pull request was merged on the host.",
-  "approve-workflows":
-    "The host refused it. Check that you have Actions write access and that these workflow runs are still awaiting approval.",
+const ACTION_FAILURE_HINTS: Record<PullRequestAction, MessageKey> = {
+  merge: "pullRequest.flow.action.mergeHint",
+  ready: "pullRequest.flow.action.writeHint",
+  draft: "pullRequest.flow.action.writeHint",
+  close: "pullRequest.flow.action.closeHint",
+  reopen: "pullRequest.flow.action.reopenHint",
+  "update-branch": "pullRequest.flow.action.quickUpdateHint",
+  "enable-auto-merge": "pullRequest.flow.action.quickAutoHint",
+  "disable-auto-merge": "pullRequest.flow.action.writeHint",
+  revert: "pullRequest.flow.action.revertHint",
+  "approve-workflows": "pullRequest.flow.action.approveHint",
 };
 
 /**
@@ -160,13 +156,13 @@ export function usePullRequestActionRunner({
         },
       });
       if (result._tag === "Failure") throw squashAtomCommandFailure(result);
-      toastManager.add({ type: "success", title: ACTION_SUCCESS_LABELS[action] });
+      toastManager.add({ type: "success", title: i18n.t(ACTION_SUCCESS_LABELS[action]) });
       onSuccess?.(action);
     } catch (failure) {
       toastManager.add({
         type: "error",
-        title: ACTION_FAILURE_LABELS[action],
-        description: readableFailure(failure, ACTION_FAILURE_HINTS[action]),
+        title: i18n.t(ACTION_FAILURE_LABELS[action]),
+        description: readableFailure(failure, i18n.t(ACTION_FAILURE_HINTS[action])),
       });
     } finally {
       pendingRef.current = false;
@@ -213,7 +209,7 @@ export function usePullRequestCloseBatch(onClosed: (entry: EnvironmentPullReques
             onClosed(entry);
           } catch (failure) {
             failures.push(
-              `#${entry.number}: ${readableFailure(failure, ACTION_FAILURE_HINTS.close)}`,
+              `#${entry.number}: ${readableFailure(failure, i18n.t(ACTION_FAILURE_HINTS.close))}`,
             );
           } finally {
             pending.current.delete(pullRequestEntryKey(entry));
@@ -225,8 +221,8 @@ export function usePullRequestCloseBatch(onClosed: (entry: EnvironmentPullReques
         type: failures.length > 0 ? "error" : "success",
         title:
           failures.length > 0
-            ? `Closed ${closed} of ${batch.length} pull requests`
-            : `Closed ${closed} pull request${closed === 1 ? "" : "s"}`,
+            ? i18n.t("pullRequest.flow.action.batchPartial", { closed, total: batch.length })
+            : i18n.t("pullRequest.flow.action.batchClosed", { count: closed }),
         ...(failures.length > 0 ? { description: failures.slice(0, 3).join("\n") } : {}),
       });
     },
@@ -329,20 +325,20 @@ export function usePullRequestHandoffs({
     if (opened === null) {
       toastManager.add({
         type: "error",
-        title: "Could not open a thread",
-        description: "Try again from the project, or open a thread first.",
+        title: i18n.t("pullRequest.flow.handoff.openFailed"),
+        description: i18n.t("pullRequest.flow.handoff.retry"),
       });
       return;
     }
     toastManager.add({
       type: "success",
-      title: "Asked in a thread",
+      title: i18n.t("pullRequest.flow.handoff.asked"),
       // "Ask" leaves the composer empty on purpose, so saying the question is in it would send
       // the reader looking for something that is not there. The chips are what landed.
       description:
         task.prompt.length > 0
-          ? "The question is in the composer — read it over, then send."
-          : "The pull request is in the composer — type your question, then send.",
+          ? i18n.t("pullRequest.flow.handoff.question")
+          : i18n.t("pullRequest.flow.handoff.reference"),
     });
   };
 
@@ -364,7 +360,7 @@ export function usePullRequestHandoffs({
     // never expires, and an explicit one would survive the update and pin the result on screen.
     const toastId = toastManager.add({
       type: "loading",
-      title: "Preparing the pull request checkout...",
+      title: i18n.t("pullRequest.flow.checkout.preparing"),
     });
     const projectRef = scopeProjectRef(environmentId, detail.projectId);
     // The thread is opened before the checkout rather than after it, because the project's setup
@@ -381,8 +377,8 @@ export function usePullRequestHandoffs({
       // working tree than to prepare a worktree nobody asked for.
       toastManager.update(toastId, {
         type: "error",
-        title: "Could not open a thread for the checkout",
-        description: "Try again from the project, or open a thread first.",
+        title: i18n.t("pullRequest.flow.checkout.threadFailed"),
+        description: i18n.t("pullRequest.flow.handoff.retry"),
       });
       return;
     }
@@ -399,7 +395,7 @@ export function usePullRequestHandoffs({
         prepareThread.error instanceof Error ? prepareThread.error.message : null;
       toastManager.update(toastId, {
         type: "error",
-        title: "Could not prepare the pull request checkout",
+        title: i18n.t("pullRequest.flow.checkout.failed"),
         ...(detailMessage ? { description: detailMessage } : {}),
       });
       return;
@@ -421,8 +417,10 @@ export function usePullRequestHandoffs({
       // outcome worth stopping for, since it reads as success and is not.
       toastManager.update(toastId, {
         type: "error",
-        title: "Checked out, but the thread stayed where it was",
-        description: `The checkout is ready on \`${prepared.value.branch}\`. Point a thread at it from the branch picker, then ask again.`,
+        title: i18n.t("pullRequest.flow.checkout.threadStayed"),
+        description: i18n.t("pullRequest.flow.checkout.pointThread", {
+          branch: prepared.value.branch,
+        }),
       });
       return;
     }
@@ -434,9 +432,8 @@ export function usePullRequestHandoffs({
     // success, because everything else about the handoff did happen.
     const staleCheckoutToast = {
       type: "warning",
-      title: "Checked out, but not on the latest commits",
-      description:
-        "The checkout could not be moved onto the pull request's latest commits, so the code there is older than the pull request. Uncommitted work or local commits keep it where it is.",
+      title: i18n.t("pullRequest.flow.checkout.stale"),
+      description: i18n.t("pullRequest.flow.checkout.staleDescription"),
     } as const;
     if (task === null) {
       toastManager.update(
@@ -444,11 +441,14 @@ export function usePullRequestHandoffs({
         prepared.value.isOnPullRequestHead
           ? {
               type: "success",
-              title: mode === "local" ? "Checked out here" : "Checked out",
+              title:
+                mode === "local"
+                  ? i18n.t("pullRequest.flow.checkout.hereDone")
+                  : i18n.t("pullRequest.flow.checkout.done"),
               description:
                 mode === "local"
-                  ? "This repository is on the pull request's branch, with a thread open on it."
-                  : "The pull request is in its own worktree, with a thread open on it.",
+                  ? i18n.t("pullRequest.flow.checkout.hereDescription")
+                  : i18n.t("pullRequest.flow.checkout.worktreeDescription"),
             }
           : staleCheckoutToast,
       );
@@ -460,8 +460,8 @@ export function usePullRequestHandoffs({
       prepared.value.isOnPullRequestHead
         ? {
             type: "success",
-            title: "Checkout ready",
-            description: "The task is in the composer — read it over, then send.",
+            title: i18n.t("pullRequest.flow.checkout.ready"),
+            description: i18n.t("pullRequest.flow.handoff.task"),
           }
         : staleCheckoutToast,
     );

@@ -244,3 +244,45 @@ describe("buildDraftActionMenuItems", () => {
     expect(items.at(-1)).toMatchObject({ label: "Discard draft", destructive: true });
   });
 });
+
+describe("localized thread menus", () => {
+  it("keeps the same native menu actions and grants while showing Chinese labels", async () => {
+    const { createI18n } = await import("@t3tools/client-runtime/i18n");
+    const t = createI18n().getFixedT("zh");
+    const state = {
+      ...baseState,
+      canOperate: false,
+      branch: "feat/中文",
+      projectFilter: { label: "My Project", isActive: false },
+    };
+    const english = buildThreadActionMenuItems(state);
+    const chinese = buildThreadActionMenuItems(state, t);
+    expect(chinese.map(({ id, disabled }) => ({ id, disabled }))).toEqual(
+      english.map(({ id, disabled }) => ({ id, disabled })),
+    );
+    expect(chinese.find(({ id }) => id === "new-thread-on-branch")?.label).toBe(
+      "在 feat/中文 上新建会话",
+    );
+    expect(chinese.find(({ id }) => id === "filter-by-project")?.label).toBe(
+      "筛选项目：My Project",
+    );
+    const snooze = chinese.find(({ id }) => id === "snooze")!;
+    expect(snooze.children?.map(({ id, disabled }) => ({ id, disabled }))).toEqual(
+      english
+        .find(({ id }) => id === "snooze")
+        ?.children?.map(({ id, disabled }) => ({ id, disabled })),
+    );
+    const reversed = buildThreadActionMenuItems(
+      { ...state, isPinned: true, isSettled: true, isSnoozed: true },
+      t,
+    );
+    expect(reversed.find(({ id }) => id === "unsettle")).toMatchObject({
+      label: "恢复为未完成",
+      disabled: true,
+    });
+    expect(reversed.find(({ id }) => id === "unsnooze")).toMatchObject({
+      label: "唤醒会话",
+      disabled: true,
+    });
+  });
+});

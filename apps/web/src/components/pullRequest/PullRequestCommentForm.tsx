@@ -1,3 +1,4 @@
+import { i18n, useTranslate } from "~/i18n";
 import { useAtomCommand } from "~/state/use-atom-command";
 /**
  * The comment half of the floating composer: a remark on the pull request itself, optionally
@@ -36,6 +37,7 @@ export function PullRequestCommentForm({
   onCommented: () => void;
   onClose: () => void;
 }) {
+  const t = useTranslate();
   const [body, setBody] = useState("");
   const [submitting, setSubmitting] = useState<"comment" | "close" | "reopen" | null>(null);
   const postComment = useAtomCommand(pullRequestEnvironment.comment, {
@@ -74,7 +76,7 @@ export function PullRequestCommentForm({
     });
     if (result._tag === "Failure") {
       setSubmitting(null);
-      toastManager.add({ type: "error", title: "Could not post the comment" });
+      toastManager.add({ type: "error", title: i18n.t("pullRequest.flow.comment.postFailed") });
       return;
     }
     setBody("");
@@ -92,8 +94,8 @@ export function PullRequestCommentForm({
         disabled={submitting !== null || actionPending}
         value={body}
         rows={3}
-        placeholder="Leave a comment"
-        aria-label="Comment on this pull request"
+        placeholder={t("pullRequest.flow.comment.placeholder")}
+        aria-label={t("pullRequest.flow.comment.label")}
         onChange={(event) => setBody(event.target.value)}
         onKeyDown={(event) => {
           if (event.nativeEvent.isComposing || event.keyCode === 229) return;
@@ -124,11 +126,11 @@ export function PullRequestCommentForm({
             )}
             {submitting === followUpAction
               ? followUpAction === "close"
-                ? "Closing..."
-                : "Reopening..."
+                ? t("pullRequest.flow.comment.closing")
+                : t("pullRequest.flow.comment.reopening")
               : followUpAction === "close"
-                ? "Close with comment"
-                : "Reopen with comment"}
+                ? t("pullRequest.flow.comment.close")
+                : t("pullRequest.flow.comment.reopen")}
           </Button>
         )}
         <Button
@@ -138,7 +140,9 @@ export function PullRequestCommentForm({
           onClick={() => void submit("comment")}
         >
           <SendIcon className="size-3.5" />
-          {submitting === "comment" ? "Posting..." : "Comment"}
+          {submitting === "comment"
+            ? t("pullRequest.flow.comment.posting")
+            : t("pullRequest.flow.comment")}
         </Button>
       </div>
     </div>

@@ -1,3 +1,4 @@
+import { createI18n } from "../i18n/index.ts";
 import { EnvironmentId } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Option from "effect/Option";
@@ -167,7 +168,11 @@ describe("learned routes", () => {
       reported: [tailscale, mesh],
       allowInsecure: true,
     })!;
-    expect(first.map(connectionRouteLabel)).toEqual(["Tailscale", "VPN", "T3 Connect"]);
+    expect(first.map((route) => connectionRouteLabel(route))).toEqual([
+      "Tailscale",
+      "VPN",
+      "T3 Connect",
+    ]);
 
     // The server later finds the address is not on its Tailscale interface.
     const corrected = mergeLearnedRoutes({
@@ -177,7 +182,11 @@ describe("learned routes", () => {
       allowInsecure: true,
     })!;
     expect(ids(corrected)).toEqual(ids(first));
-    expect(corrected.map(connectionRouteLabel)).toEqual(["VPN", "VPN", "T3 Connect"]);
+    expect(corrected.map((route) => connectionRouteLabel(route))).toEqual([
+      "VPN",
+      "VPN",
+      "T3 Connect",
+    ]);
     expect(
       mergeLearnedRoutes({
         entry: entryWithRoutes(relayOnly, corrected),
@@ -201,7 +210,11 @@ describe("learned routes", () => {
     })!;
     // Same routes in the same order; only the label of the confirmed one changes.
     expect(ids(confirmed)).toEqual(["paired", "other", "relay"]);
-    expect(confirmed.map(connectionRouteLabel)).toEqual(["Tailscale", "VPN", "T3 Connect"]);
+    expect(confirmed.map((route) => connectionRouteLabel(route))).toEqual([
+      "Tailscale",
+      "VPN",
+      "T3 Connect",
+    ]);
   });
 
   it("leaves user routes alone and does not learn an address already saved", () => {
@@ -361,4 +374,13 @@ describe("learned routes", () => {
     expect(moved).not.toBeNull();
     expect(profileOf(moved![0]!)).toMatchObject({ httpBaseUrl: "https://desk.local:3773/" });
   });
+});
+
+it("localizes route labels without changing their classification or address", () => {
+  const t = createI18n({ lng: "zh" }).t;
+  expect(connectionRouteLabel(LAN, t)).toBe("局域网");
+  expect(connectionRouteLabel(direct("local", "http://127.0.0.1:3773/"), t)).toBe("此设备");
+  expect(connectionRouteLabel(PUBLIC, t)).toBe("desk.example.com");
+  expect(connectionRouteKind(LAN)).toBe("lan");
+  expect(connectionRouteLabel(LAN)).toBe("LAN");
 });

@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next";
+import { i18n, useTranslate } from "../../i18n";
 import { resolveEnvironmentMachineKind } from "@t3tools/contracts";
 
 import {
@@ -28,8 +30,10 @@ export function loadPreferenceForWeight(weight: number | undefined): LoadPrefere
   return weight < 50 ? 25 : 100;
 }
 
-function preferenceLabel(preference: LoadPreference): string {
-  return preferences.find((entry) => entry.value === preference)!.label;
+function preferenceLabel(preference: LoadPreference, t: TFunction = i18n.t): string {
+  return t(`connections.load.${preference}`, {
+    defaultValue: preferences.find((entry) => entry.value === preference)!.label,
+  });
 }
 
 /**
@@ -39,12 +43,13 @@ function preferenceLabel(preference: LoadPreference): string {
 export function summarizeLoadPreferences(
   environments: ReadonlyArray<Pick<EnvironmentPresentation, "environmentId" | "label">>,
   weights: Readonly<Record<string, number>>,
+  t: TFunction = i18n.t,
 ): string | null {
   const parts = environments.flatMap((environment) => {
     const preference = loadPreferenceForWeight(weights[environment.environmentId]);
     return preference === 50
       ? []
-      : [`${environment.label} ${preferenceLabel(preference).toLowerCase()}`];
+      : [`${environment.label} ${preferenceLabel(preference, t).toLowerCase()}`];
   });
   return parts.length === 0 ? null : parts.join(" · ");
 }
@@ -60,25 +65,30 @@ export function LoadBalancingSettings({
 }: {
   environments: ReadonlyArray<EnvironmentPresentation>;
 }) {
+  const t = useTranslate();
   const settings = useClientSettings();
   const settingsHydrated = useClientSettingsHydrated();
   const updateSettings = useUpdateClientSettings();
 
   if (environments.length < 2) return null;
 
-  const { id, title } = searchableSetting("load-balancing");
+  const { id, title } = searchableSetting("load-balancing", t);
+  const translatedPreferences = preferences.map((entry) => ({
+    ...entry,
+    label: preferenceLabel(entry.value, t),
+  }));
   return (
     <FoldedSettingsSection
       id={id}
       title={title}
       summary={
         settings.loadBalancingEnabled
-          ? summarizeLoadPreferences(environments, settings.loadBalancingWeights)
-          : "Off"
+          ? summarizeLoadPreferences(environments, settings.loadBalancingWeights, t)
+          : t("connections.off")
       }
       control={
         <Switch
-          aria-label="Automatically balance load"
+          aria-label={t("connections.balanceLabel")}
           checked={settings.loadBalancingEnabled}
           disabled={!settingsHydrated}
           onCheckedChange={(loadBalancingEnabled) => updateSettings({ loadBalancingEnabled })}
@@ -86,18 +96,17 @@ export function LoadBalancingSettings({
       }
     >
       <p className="px-3 py-2.5 text-xs text-muted-foreground sm:px-4">
-        New threads in shared projects start on the machine with the most free CPU and memory,
-        weighted by each machine's preference.
+        {t("connections.balanceHint")}
       </p>
       {environments.map((environment) => (
         <EnvironmentRow
           key={environment.environmentId}
           kind={resolveEnvironmentMachineKind(environment.serverConfig)}
           label={environment.label}
-          subtitle={environmentTransportLabel(environment)}
+          subtitle={environmentTransportLabel(environment, null, t)}
         >
           <Select
-            items={preferences}
+            items={translatedPreferences}
             value={loadPreferenceForWeight(
               settings.loadBalancingWeights[environment.environmentId],
             )}
@@ -115,12 +124,12 @@ export function LoadBalancingSettings({
             <SelectTrigger
               size="xs"
               className="w-32"
-              aria-label={`${environment.label} load preference`}
+              aria-label={t("connections.loadPreference", { label: environment.label })}
             >
               <SelectValue />
             </SelectTrigger>
             <SelectPopup align="end" alignItemWithTrigger={false}>
-              {preferences.map(({ value, label }) => (
+              {translatedPreferences.map(({ value, label }) => (
                 <SelectItem key={value} value={value}>
                   {label}
                 </SelectItem>

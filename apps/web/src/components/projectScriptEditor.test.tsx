@@ -1,3 +1,5 @@
+vi.mock("~/hooks/useSettings", () => ({ useClientSettings: () => undefined }));
+import { i18n } from "../i18n";
 import { EnvironmentId } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
@@ -109,6 +111,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   await act(async () => renderer?.unmount());
+  await i18n.changeLanguage("en");
   vi.unstubAllGlobals();
 });
 
@@ -247,5 +250,37 @@ describe("project action editor save lifecycle", () => {
       await completion;
     });
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+describe("project action editor language switching", () => {
+  it("keeps the user's command and form values when switching to Chinese and saving", async () => {
+    onSubmit.mockResolvedValue(AsyncResult.success(undefined));
+    open(request("build"));
+    act(() =>
+      renderer!.root
+        .findByProps({ id: "script-name" })
+        .props.onChange({ target: { value: "部署 API" } }),
+    );
+    act(() =>
+      renderer!.root
+        .findByProps({ id: "script-command" })
+        .props.onChange({ target: { value: "bun run build --filter api" } }),
+    );
+    await act(async () => {
+      await i18n.changeLanguage("zh");
+    });
+    expect(saveButton().children).toContain("保存更改");
+    expect(renderer!.root.findByProps({ id: "script-command" }).props.value).toBe(
+      "bun run build --filter api",
+    );
+    await act(async () => {
+      await submit();
+    });
+    expect(onSubmit).toHaveBeenCalledWith(
+      "build",
+      expect.objectContaining({ name: "部署 API", command: "bun run build --filter api" }),
+    );
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

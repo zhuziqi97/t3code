@@ -894,3 +894,28 @@ describe("virtualized command palette rows", () => {
     expect(findHighlightedCommandPaletteItem(groups, null)).toBeNull();
   });
 });
+
+describe("localized command search", () => {
+  it("finds the visible Chinese title while retaining English command aliases", () => {
+    const item: CommandPaletteActionItem = {
+      kind: "action",
+      value: "new-project",
+      title: "创建新项目",
+      searchTerms: ["new project", "create"],
+      icon: null,
+      run: async () => {},
+    };
+    const search = (query: string) =>
+      filterCommandPaletteGroups({
+        activeGroups: [{ value: "actions", label: "操作", items: [item] }],
+        query,
+        isInSubmenu: false,
+        projectSearchItems: [],
+        threadSearchItems: [],
+      }).flatMap((group) => group.items);
+    expect(search("创建")).toEqual([item]);
+    expect(search(">项目")).toEqual([item]);
+    expect(search("create")).toEqual([item]);
+    expect(search("不存在")).toEqual([]);
+  });
+});

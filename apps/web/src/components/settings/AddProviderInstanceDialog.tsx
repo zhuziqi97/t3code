@@ -1,4 +1,6 @@
 "use client";
+import type { TFunction } from "i18next";
+import { useTranslate } from "../../i18n";
 
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 
@@ -86,13 +88,17 @@ const EMPTY_CONFIG_DRAFT: Record<string, unknown> = {};
  * `ProviderInstanceId` (see `packages/contracts/src/providerInstance.ts`).
  * Returns a user-facing error string, or `null` if valid.
  */
-function validateInstanceId(id: string, existing: ReadonlySet<string>): string | null {
-  if (id.length === 0) return "Instance ID is required.";
-  if (id.length > 64) return "Instance ID must be 64 characters or fewer.";
+function validateInstanceId(
+  id: string,
+  existing: ReadonlySet<string>,
+  t: TFunction,
+): string | null {
+  if (id.length === 0) return t("provider.add.idRequired");
+  if (id.length > 64) return t("provider.add.idTooLong");
   if (!INSTANCE_ID_PATTERN.test(id)) {
-    return "Instance ID must start with a letter and use only letters, digits, '-', or '_'.";
+    return t("provider.add.idCharacters");
   }
-  if (existing.has(id)) return `An instance named '${id}' already exists.`;
+  if (existing.has(id)) return t("provider.add.idExists", { id });
   return null;
 }
 
@@ -111,6 +117,7 @@ export function AddProviderInstanceDialog({
   onOpenChange,
   onCreated,
 }: AddProviderInstanceDialogProps) {
+  const t = useTranslate();
   const settings = useEnvironmentSettings(environmentId);
   const persistProviderInstance = usePersistEnvironmentProviderInstanceMutation(environmentId);
   const canManageProviders = useEnvironmentScope(environmentId, AuthProvidersManageScope);
@@ -168,10 +175,11 @@ export function AddProviderInstanceDialog({
     () => deriveProviderSettingsFields(driverOption),
     [driverOption],
   );
-  const instanceIdError = validateInstanceId(instanceId, existingIds);
+  const instanceIdError = validateInstanceId(instanceId, existingIds, t);
   const showInstanceIdError = hasAttemptedSubmit && instanceIdError !== null;
   const identityStep = 1;
-  const previewLabel = label.trim() || `${driverOption.label} Workspace`;
+  const previewLabel =
+    label.trim() || t("provider.add.previewLabel", { provider: driverOption.label });
 
   const configDraft = configByDriver[driver] ?? EMPTY_CONFIG_DRAFT;
   const isLocalAcp = isAcpRegistry && isManualAcpConfiguration && configDraft.source === "local";
@@ -181,13 +189,15 @@ export function AddProviderInstanceDialog({
   const acpSelectionError = isLocalAcp
     ? localCommandPath.length > 0
       ? null
-      : "Executable is required."
+      : t("provider.add.executableRequired")
     : selectedAcp !== null || (isManualAcpConfiguration && manualAgentId.length > 0)
       ? null
-      : "Select an ACP or configure one manually.";
+      : t("provider.add.selectAcp");
   const wizardStepSummaries = isAcpRegistry
     ? ([
-        isLocalAcp ? "Local ACP command" : (selectedAcp?.name ?? (manualAgentId || null)),
+        isLocalAcp
+          ? t("provider.add.localCommand")
+          : (selectedAcp?.name ?? (manualAgentId || null)),
         previewLabel,
         null,
       ] as const)
@@ -342,8 +352,8 @@ export function AddProviderInstanceDialog({
       setIsSaving(false);
       toastManager.add({
         type: "error",
-        title: "Could not add provider instance",
-        description: error instanceof Error ? error.message : "The settings update failed.",
+        title: t("provider.add.failed"),
+        description: error instanceof Error ? error.message : t("provider.add.updateFailed"),
       });
       return;
     }
@@ -356,8 +366,8 @@ export function AddProviderInstanceDialog({
     }
     toastManager.add({
       type: "success",
-      title: "Provider instance added",
-      description: `${driverOption.label} instance '${instanceId}' was added.`,
+      title: t("provider.add.added"),
+      description: t("provider.add.success", { provider: driverOption.label, id: instanceId }),
     });
     onOpenChange(false);
   };
@@ -375,8 +385,8 @@ export function AddProviderInstanceDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <WizardPopup size="wide">
         <WizardHeader
-          title="Add provider"
-          description={<>Add an account or configure a provider on {environmentLabel}.</>}
+          title={t("provider.add.title")}
+          description={t("provider.add.description", { environment: environmentLabel })}
         >
           {isAcpRegistry ? (
             <AddProviderInstanceWizardSteps
@@ -415,7 +425,7 @@ export function AddProviderInstanceDialog({
             >
               <div className={cn("grid gap-2", wizardStep !== 0 && "hidden")}>
                 <div id="add-instance-driver-label" className="text-sm font-medium text-foreground">
-                  Provider
+                  {t("provider.add.step.provider")}
                 </div>
                 <RadioGroup
                   disabled={isPreparingRegistryAgent}
@@ -466,7 +476,7 @@ export function AddProviderInstanceDialog({
                 <div className="space-y-4 pt-4">
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
                     <div aria-hidden className="flex-1 border-t border-border/70" />
-                    <span>Or choose from ACP Registry</span>
+                    <span>{t("provider.add.chooseRegistry")}</span>
                     <div aria-hidden className="flex-1 border-t border-border/70" />
                   </div>
                   {isAcpRegistry && isManualAcpConfiguration ? (
@@ -474,12 +484,12 @@ export function AddProviderInstanceDialog({
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <h3 className="text-sm font-medium text-foreground">
-                            {isLocalAcp ? "Local ACP command" : "Enter manually"}
+                            {isLocalAcp ? t("provider.add.localCommand") : t("provider.add.manual")}
                           </h3>
                           <p className="mt-0.5 text-xs text-muted-foreground">
                             {isLocalAcp
-                              ? `Run an installed ACP executable on ${environmentLabel}.`
-                              : "Enter an official registry ID and any local executable or auth override."}
+                              ? t("provider.add.localHint", { environment: environmentLabel })
+                              : t("provider.add.manualHint")}
                           </p>
                         </div>
                         <Button
@@ -490,7 +500,7 @@ export function AddProviderInstanceDialog({
                           size="xs"
                           variant="ghost"
                         >
-                          Search registry
+                          {t("provider.add.searchRegistry")}
                         </Button>
                       </div>
                       <SettingsGroup variant="plain">
@@ -544,24 +554,30 @@ export function AddProviderInstanceDialog({
                   <div className="flex shrink-0 gap-2 text-2xs">
                     {selectedAcp.website ? (
                       <a
-                        aria-label={`Open documentation for ${selectedAcp.name} (${selectedAcp.id})`}
+                        aria-label={t("provider.add.openDocs", {
+                          name: selectedAcp.name,
+                          id: selectedAcp.id,
+                        })}
                         className="text-muted-foreground hover:text-foreground"
                         href={selectedAcp.website}
                         rel="noreferrer"
                         target="_blank"
                       >
-                        Docs
+                        {t("provider.add.docs")}
                       </a>
                     ) : null}
                     {selectedAcp.repository ? (
                       <a
-                        aria-label={`Open source for ${selectedAcp.name} (${selectedAcp.id})`}
+                        aria-label={t("provider.add.openSource", {
+                          name: selectedAcp.name,
+                          id: selectedAcp.id,
+                        })}
                         className="text-muted-foreground hover:text-foreground"
                         href={selectedAcp.repository}
                         rel="noreferrer"
                         target="_blank"
                       >
-                        Source
+                        {t("provider.add.source")}
                       </a>
                     ) : null}
                   </div>
@@ -573,9 +589,9 @@ export function AddProviderInstanceDialog({
                 className={cn(wizardStep !== identityStep && "hidden")}
               >
                 <SettingsRow
-                  title={<label htmlFor="add-provider-label">Label</label>}
+                  title={<label htmlFor="add-provider-label">{t("provider.add.label")}</label>}
                   description={
-                    <span id="add-provider-label-description">Shown in the provider list.</span>
+                    <span id="add-provider-label-description">{t("provider.add.labelHint")}</span>
                   }
                   control={
                     <Input
@@ -583,17 +599,17 @@ export function AddProviderInstanceDialog({
                       aria-describedby="add-provider-label-description"
                       size="sm"
                       className="w-full @min-[32rem]/settings-row:w-56"
-                      placeholder="e.g. Work"
+                      placeholder={t("provider.add.labelPlaceholder")}
                       value={label}
                       onChange={(event) => setIdentityDraft({ label: event.target.value })}
                     />
                   }
                 />
                 <SettingsRow
-                  title={<label htmlFor="add-provider-instance-id">Instance ID</label>}
+                  title={<label htmlFor="add-provider-instance-id">{t("provider.add.id")}</label>}
                   description={
                     <span id="add-provider-instance-id-description">
-                      Letters, digits, '-', or '_'.
+                      {t("provider.add.idHint")}
                     </span>
                   }
                   status={
@@ -627,8 +643,8 @@ export function AddProviderInstanceDialog({
                   }
                 />
                 <SettingsRow
-                  title="Accent color"
-                  description="Optional marker shown in the picker."
+                  title={t("provider.add.accent")}
+                  description={t("provider.add.accentHint")}
                   control={
                     <ProviderAccentColorPicker
                       displayName={label || driverOption.label}
@@ -652,9 +668,7 @@ export function AddProviderInstanceDialog({
                 </SettingsGroup>
               ) : !isAcpRegistry && wizardStep === 2 ? (
                 <div className="grid gap-2">
-                  <p className="text-sm text-muted-foreground">
-                    This driver has no required configuration. You can add the instance now.
-                  </p>
+                  <p className="text-sm text-muted-foreground">{t("provider.add.noConfig")}</p>
                 </div>
               ) : null}
             </WizardPanel>
@@ -672,12 +686,12 @@ export function AddProviderInstanceDialog({
                   setWizardStep((step) => Math.max(0, step - 1));
                 }}
               >
-                {wizardStep === 0 ? "Cancel" : "Back"}
+                {wizardStep === 0 ? t("provider.add.cancel") : t("provider.add.back")}
               </Button>
               {wizardStep === 0 && driver === "codex" ? (
                 <>
                   <Button variant="outline" size="sm" onClick={() => navigateToStep(1)}>
-                    Configure manually
+                    {t("provider.add.configureManually")}
                   </Button>
                   <ChatGptConnectionButton
                     size="sm"
@@ -690,7 +704,7 @@ export function AddProviderInstanceDialog({
                   disabled={isPreparingRegistryAgent}
                   onClick={() => navigateToStep(wizardStep + 1)}
                 >
-                  Next
+                  {t("provider.add.next")}
                 </Button>
               ) : (
                 <Button
@@ -699,10 +713,10 @@ export function AddProviderInstanceDialog({
                   onClick={() => void handleSave()}
                 >
                   {isSaving
-                    ? "Adding..."
+                    ? t("provider.add.adding")
                     : isAcpRegistry && !isLocalAcp
-                      ? "Continue to sign-in"
-                      : "Add instance"}
+                      ? t("provider.add.continueSignIn")
+                      : t("provider.add.addInstance")}
                 </Button>
               )}
             </WizardFooter>

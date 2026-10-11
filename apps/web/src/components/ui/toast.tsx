@@ -1,4 +1,5 @@
 "use client";
+import { useTranslate } from "../../i18n";
 
 import { Spinner } from "~/components/ui/spinner";
 
@@ -68,10 +69,27 @@ export type ThreadToastData = {
     | "secondary";
 };
 
-const toastManager = Toast.createToastManager<ThreadToastData>();
-const anchoredToastManager = Toast.createToastManager<ThreadToastData>();
-type ToastId = ReturnType<typeof toastManager.add>;
-const threadToastVisibleTimeoutRemainingMs = new Map<ToastId, number>();
+type ToastManager = ReturnType<typeof Toast.createToastManager<ThreadToastData>>;
+type ToastId = ReturnType<ToastManager["add"]>;
+const hotData = import.meta.hot?.data as
+  | {
+      toastManager?: ToastManager;
+      anchoredToastManager?: ToastManager;
+      threadToastVisibleTimeoutRemainingMs?: Map<ToastId, number>;
+    }
+  | undefined;
+
+// Pending operations must keep publishing to the provider's manager after a hot update.
+const toastManager = hotData?.toastManager ?? Toast.createToastManager<ThreadToastData>();
+const anchoredToastManager =
+  hotData?.anchoredToastManager ?? Toast.createToastManager<ThreadToastData>();
+const threadToastVisibleTimeoutRemainingMs =
+  hotData?.threadToastVisibleTimeoutRemainingMs ?? new Map<ToastId, number>();
+if (hotData) {
+  hotData.toastManager = toastManager;
+  hotData.anchoredToastManager = anchoredToastManager;
+  hotData.threadToastVisibleTimeoutRemainingMs = threadToastVisibleTimeoutRemainingMs;
+}
 
 const TOAST_ICONS = {
   error: CircleAlertIcon,
@@ -111,8 +129,9 @@ function handleToastDismissClick(
 }
 
 function CopyErrorButton({ text }: { text: string }) {
+  const t = useTranslate();
   const { copyToClipboard, isCopied } = useCopyToClipboard({ target: "error-message" });
-  const label = isCopied ? "Copied error" : "Copy error";
+  const label = isCopied ? t("errors.copiedError") : t("errors.copy");
 
   return (
     <Tooltip>
@@ -148,9 +167,10 @@ function ToastExpandableSection({
   children: ReactNode;
   labels: { expand?: string; collapse?: string };
 }) {
+  const t = useTranslate();
   const [open, setOpen] = useState(false);
-  const expandLabel = labels.expand ?? "Show details";
-  const collapseLabel = labels.collapse ?? "Hide details";
+  const expandLabel = labels.expand ?? t("errors.showDetails");
+  const collapseLabel = labels.collapse ?? t("errors.hideDetails");
 
   return (
     <div className="min-w-0">
@@ -181,6 +201,7 @@ function ToastDescriptionAndExpandable({
   toastDescription: unknown;
   toastType: unknown;
 }) {
+  const t = useTranslate();
   const expandableContent = toastData?.expandableContent;
   const labels = toastData?.expandableLabels ?? {};
   const descriptionTrigger = toastData?.expandableDescriptionTrigger ?? false;
@@ -203,8 +224,8 @@ function ToastDescriptionAndExpandable({
     );
   }
 
-  const expandLabel = labels.expand ?? "Show details";
-  const collapseLabel = labels.collapse ?? "Hide details";
+  const expandLabel = labels.expand ?? t("errors.showDetails");
+  const collapseLabel = labels.collapse ?? t("errors.hideDetails");
 
   const toggle = () => setOpen((v) => !v);
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -527,6 +548,7 @@ function ToastProvider({ children, position = "top-right", ...props }: ToastProv
 }
 
 function Toasts({ position }: { position: ToastPosition }) {
+  const t = useTranslate();
   const { toasts } = Toast.useToastManager<ThreadToastData>();
   const activeThreadRef = useActiveThreadRefFromRoute();
   const isTop = position.startsWith("top");
@@ -651,7 +673,7 @@ function Toasts({ position }: { position: ToastPosition }) {
               />
               <div className={toastCornerDismissClass}>
                 <button
-                  aria-label="Dismiss notification"
+                  aria-label={t("notification.dismiss")}
                   className={toastCornerOrbClass}
                   data-slot="toast-close"
                   onClick={() =>
@@ -700,6 +722,7 @@ function AnchoredToastProvider({ children, ...props }: Toast.Provider.Props) {
 }
 
 function AnchoredToasts() {
+  const t = useTranslate();
   const { toasts } = Toast.useToastManager<ThreadToastData>();
   const activeThreadRef = useActiveThreadRefFromRoute();
 
@@ -742,7 +765,7 @@ function AnchoredToasts() {
                     <>
                       <div className={toastCornerDismissClass}>
                         <button
-                          aria-label="Dismiss notification"
+                          aria-label={t("notification.dismiss")}
                           className={toastCornerOrbClass}
                           data-slot="toast-close"
                           onClick={() =>

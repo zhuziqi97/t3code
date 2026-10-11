@@ -12,6 +12,7 @@ import {
   themeColorToHex,
   updateCustomTheme,
   type ThemeDefinition,
+  type ThemeHalves,
 } from "../../themePalette";
 import type { ThemeEditorSession } from "./themeEditorStore";
 
@@ -22,7 +23,7 @@ const state = vi.hoisted(() => ({
   subscriptions: new Set<() => void>(),
   theme: {
     theme: "system",
-    themeHalves: null,
+    themeHalves: null as ThemeHalves | null,
     setTheme: vi.fn(),
     refreshTheme: vi.fn(),
   },
@@ -63,6 +64,8 @@ vi.mock("../ui/toast", () => ({
 }));
 
 import { ThemeEditorHost } from "./ThemeEditorHost";
+import { changeLanguage } from "../../i18n";
+import { toastManager } from "../ui/toast";
 
 function renderEditor() {
   hooks.beginRender();
@@ -70,16 +73,26 @@ function renderEditor() {
     children: ReactElement<{
       editingTheme: ThemeDefinition | null;
       seedTheme: ThemeDefinition | null;
+      onSaved: (
+        theme: ThemeDefinition,
+        context: { created: boolean; mergedAppearance?: "light" | "dark" },
+      ) => boolean;
     }>;
   }> | null;
   return host?.props.children.props ?? null;
 }
 
 describe("ThemeEditorHost", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await changeLanguage("en");
     hooks.reset();
     state.session = null;
     state.onStoreChange.mockReset();
+    state.theme.theme = "system";
+    state.theme.themeHalves = null;
+    state.theme.setTheme.mockReset().mockReturnValue(true);
+    state.theme.refreshTheme.mockReset();
+    vi.mocked(toastManager.add).mockClear();
     const storage = new Map<string, string>();
     vi.stubGlobal("window", {
       localStorage: {
@@ -92,11 +105,12 @@ describe("ThemeEditorHost", () => {
     invalidateCustomThemes();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     for (const unsubscribe of state.subscriptions) unsubscribe();
     state.subscriptions.clear();
     vi.unstubAllGlobals();
     invalidateCustomThemes();
+    await changeLanguage("en");
   });
 
   it.each(["editingTheme", "seedTheme"] as const)(
@@ -187,5 +201,67 @@ describe("ThemeEditorHost", () => {
     removeCustomTheme(theme.id);
 
     expect(editor?.editingTheme).toBeNull();
+  });
+
+  it.each([{ created: true }, { created: false, mergedAppearance: "dark" as const }])(
+    "uses the current language when activating a saved palette fails (%j)",
+    async (context) => {
+      const saved = parseThemeFile({
+        version: THEME_FILE_VERSION,
+        id: "raw-theme",
+        name: "Raw Name",
+        appearance: "dark",
+        colors: { canvas: "#111111" },
+      });
+      state.session = {
+        id: 1,
+        editingThemeId: null,
+        seedThemeId: null,
+        seedName: null,
+        initialAppearance: "dark",
+      };
+      const onSaved = renderEditor()!.onSaved;
+      state.theme.setTheme.mockReturnValue(false);
+      await changeLanguage("zh");
+      expect(state.theme.setTheme).not.toHaveBeenCalled();
+      expect(onSaved(saved, context)).toBe(false);
+      expect(state.theme.setTheme).toHaveBeenCalledExactlyOnceWith(saved.id);
+      expect(toastManager.add).toHaveBeenCalledExactlyOnceWith({
+        type: "error",
+        title: "无法保存主题",
+        description: "浏览器存储不可用，修改未能保留。",
+      });
+    },
+  );
+
+  it("refreshes an edited active half without changing the mix and reports the save in the current language", async () => {
+    const saved = installCustomTheme(
+      parseThemeFile({
+        version: THEME_FILE_VERSION,
+        id: "raw-active",
+        name: "Raw Active Name",
+        appearance: "dark",
+        colors: { canvas: "#111111" },
+      }),
+    );
+    state.session = {
+      id: 1,
+      editingThemeId: saved.id,
+      seedThemeId: null,
+      seedName: null,
+      initialAppearance: "dark",
+    };
+    state.theme.themeHalves = { dark: saved.id };
+    const onSaved = renderEditor()!.onSaved;
+    await changeLanguage("zh");
+    expect(onSaved(saved, { created: false })).toBe(true);
+    expect(state.theme.refreshTheme).toHaveBeenCalledTimes(1);
+    expect(state.theme.setTheme).not.toHaveBeenCalled();
+    expect(state.theme.themeHalves).toEqual({ dark: saved.id });
+    expect(toastManager.add).toHaveBeenCalledExactlyOnceWith({
+      type: "success",
+      title: "已保存 Raw Active Name",
+      description: "修改已生效。",
+    });
   });
 });

@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next";
+import { i18n, useTranslate } from "../../i18n";
 import { ThreadHoverCardPopup } from "../ThreadHoverCard";
 import { AgentElapsed } from "./AgentElapsed";
 import { projectedSubagentsToRuntime } from "@t3tools/client-runtime/state/subagentRuntime";
@@ -73,6 +75,7 @@ export function V2LifecycleRow(props: {
   readonly runs: ReadonlyArray<HandoffTimelineRun>;
   readonly onOpenThread: (threadId: ThreadId) => void;
 }) {
+  const t = useTranslate();
   const { item } = props;
   if (item.type === "run_interrupt_request") {
     return (
@@ -81,7 +84,7 @@ export function V2LifecycleRow(props: {
           <span aria-hidden="true" className="font-mono">
             ■
           </span>
-          <span className="font-medium">Interrupt requested</span>
+          <span className="font-medium">{t("chat.timeline.interruptRequested")}</span>
           <span aria-hidden="true" className="opacity-50">
             ·
           </span>
@@ -96,7 +99,7 @@ export function V2LifecycleRow(props: {
   if (item.type === "run_interrupt_result") {
     return (
       <TimelineSystemDivider
-        label="Run interrupted"
+        label={t("chat.timeline.interrupted")}
         detail={item.message}
         tone="danger"
         icon={XIcon}
@@ -107,15 +110,18 @@ export function V2LifecycleRow(props: {
     const tokenDetail =
       item.beforeTokenCount === undefined && item.afterTokenCount === undefined
         ? null
-        : `${item.beforeTokenCount ?? "?"} → ${item.afterTokenCount ?? "?"} tokens`;
+        : t("chat.timeline.tokenSummary", {
+            before: item.beforeTokenCount ?? "?",
+            after: item.afterTokenCount ?? "?",
+          });
     const label =
       item.status === "failed"
-        ? "Context compaction failed"
+        ? t("chat.lifecycle.compactionFailed")
         : item.status === "cancelled" || item.status === "interrupted"
-          ? "Context compaction stopped"
+          ? t("chat.lifecycle.compactionStopped")
           : item.status === "pending" || item.status === "running" || item.status === "waiting"
-            ? "Compacting context"
-            : "Context compacted";
+            ? t("chat.lifecycle.compacting")
+            : t("chat.timeline.compacted");
     return (
       <TimelineSystemDivider label={label} detail={item.summary ?? tokenDetail} icon={MinusIcon} />
     );
@@ -124,7 +130,7 @@ export function V2LifecycleRow(props: {
     const { from: fromEndpoints, to } = resolveHandoffEndpoints(item, props.runs);
     return (
       <TimelineSystemDivider
-        label="Context handoff"
+        label={t("chat.timeline.handoff")}
         icon={ArrowRightLeftIcon}
         showDetailSeparator={false}
         tone={item.status === "failed" ? "danger" : "neutral"}
@@ -161,9 +167,13 @@ export function V2LifecycleRow(props: {
     const relatedThreadId = item.source.type === "run" ? item.source.threadId : item.targetThreadId;
     return (
       <TimelineSystemDivider
-        label={item.source.type === "run" ? "Forked from conversation" : "Conversation fork"}
+        label={
+          item.source.type === "run" ? t("chat.lifecycle.forkedFrom") : t("chat.timeline.fork")
+        }
         icon={GitForkIcon}
-        actionLabel={item.source.type === "run" ? "Open source conversation" : "Open fork"}
+        actionLabel={
+          item.source.type === "run" ? t("chat.lifecycle.openSource") : t("chat.lifecycle.openFork")
+        }
         onAction={() => props.onOpenThread(relatedThreadId)}
       />
     );
@@ -179,15 +189,17 @@ export function V2LifecycleRow(props: {
             <MessageSquareIcon className="size-4 text-secondary-label" aria-hidden />
           </span>
           <span className="min-w-0 flex-1 truncate text-sm font-medium">
-            {item.title ?? "Created thread"}
+            {item.title ?? t("chat.lifecycle.createdThread")}
           </span>
           <Button
             size="xs"
             variant="outline"
-            aria-label={`Open ${item.title ?? "created thread"}`}
+            aria-label={t("chat.timeline.openCreated", {
+              title: item.title ?? t("chat.timeline.createdThread"),
+            })}
             onClick={() => props.onOpenThread(item.targetThreadId)}
           >
-            Open chat
+            {t("chat.timeline.openChat")}
           </Button>
         </div>
       );
@@ -196,13 +208,20 @@ export function V2LifecycleRow(props: {
       <WorkLogRow
         data-v2-item-type={item.type}
         icon={<T3Wordmark className="size-4 text-icon-muted" aria-hidden />}
-        label={<>Created thread{item.title ? ` · ${item.title}` : ""}</>}
+        label={
+          <>
+            {t("chat.lifecycle.createdThread")}
+            {item.title ? ` · ${item.title}` : ""}
+          </>
+        }
         trailing={
           <InlineButton
-            aria-label={`Open ${item.title ?? "created thread"}`}
+            aria-label={t("chat.timeline.openCreated", {
+              title: item.title ?? t("chat.timeline.createdThread"),
+            })}
             onClick={() => props.onOpenThread(item.targetThreadId)}
           >
-            Open chat
+            {t("chat.timeline.openChat")}
           </InlineButton>
         }
       />
@@ -255,8 +274,8 @@ const STATUS_VISUALS: Record<
   interrupted: { dotClass: "bg-muted-foreground/60", label: "Stopped" },
 };
 
-function subagentStatusVisual(status: OrchestrationV2TurnItem["status"]) {
-  return STATUS_VISUALS[status];
+function subagentStatusVisual(status: OrchestrationV2TurnItem["status"], t: TFunction = i18n.t) {
+  return { ...STATUS_VISUALS[status], label: t(`chat.subagent.status.${status}`) };
 }
 
 const SETTLED_SUBAGENT_STATUSES = new Set<OrchestrationV2TurnItem["status"]>([
@@ -300,6 +319,7 @@ export function SubagentAvatar({
   status?: OrchestrationV2TurnItem["status"] | undefined;
   className?: string;
 }) {
+  const t = useTranslate();
   return (
     <span
       aria-hidden
@@ -323,7 +343,7 @@ export function SubagentAvatar({
         <span
           className={cn(
             "absolute -right-px -bottom-px size-2 rounded-full ring-2 ring-background",
-            subagentStatusVisual(status).dotClass,
+            subagentStatusVisual(status, t).dotClass,
           )}
         />
       ) : null}
@@ -420,6 +440,7 @@ function SubagentTimelineLink(props: {
     readonly timestamp: string;
   };
 }) {
+  const t = useTranslate();
   const agent = useAtomValue(
     environmentThreadDetails.threadAtom(props.parentRef),
     (thread) => thread?.projection.subagents.find((agent) => agent.id === props.subagentId) ?? null,
@@ -427,7 +448,7 @@ function SubagentTimelineLink(props: {
   const threadId = props.threadId;
   const liveStatus = agent?.status ?? props.status;
   const status = props.event ? props.event.status : liveStatus;
-  const statusLabel = props.event?.label ?? subagentStatusVisual(liveStatus).label;
+  const statusLabel = props.event?.label ?? subagentStatusVisual(liveStatus, t).label;
   const result = (agent?.result ?? props.result)?.trim();
   const progress = (agent?.progress ?? props.progress)?.trim();
   const settled = SETTLED_SUBAGENT_STATUSES.has(status ?? liveStatus);
@@ -504,7 +525,7 @@ function SubagentTimelineLink(props: {
             <button
               type="button"
               data-v2-item-type="subagent"
-              aria-label={`Open ${props.title}`}
+              aria-label={t("chat.timeline.openCreated", { title: props.title })}
               aria-description={statusLabel}
               onClick={() => props.onOpenThread(threadId)}
               className={cn(

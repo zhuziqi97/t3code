@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { useTheme } from "../hooks/useTheme";
+import { useTranslate } from "../i18n";
 import { resolveDiffThemeName, type DiffThemeName } from "../lib/diffRendering";
 import { PREFERRED_HIGHLIGHTER } from "../lib/syntaxHighlighting";
 
@@ -96,6 +97,7 @@ function DiffWorkerThemeSync({ themeName }: { themeName: DiffThemeName }) {
 
 // Plain-text views do not queue a highlight task that could retry a blank first render.
 function DiffWorkerReady({ children }: { children?: ReactNode }) {
+  const t = useTranslate();
   const workerPool = useWorkerPool();
   const [readyPool, setReadyPool] = useState<WorkerPoolManager>();
   const ready = workerPool
@@ -123,7 +125,7 @@ function DiffWorkerReady({ children }: { children?: ReactNode }) {
       role="status"
       className="flex min-h-0 flex-1 items-center justify-center p-4 text-xs text-muted-foreground"
     >
-      Loading code...
+      {t("filePreview.loadingCode")}
     </div>
   );
 }

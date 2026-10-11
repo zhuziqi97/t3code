@@ -14,6 +14,7 @@ import {
 import * as DateTime from "effect/DateTime";
 import { usageLimitBlockedRun } from "@t3tools/shared/orchestrationV2ThreadError";
 import { describe, expect, it } from "vite-plus/test";
+import { createI18n } from "../i18n/index.ts";
 
 import { v2Projection } from "./orchestrationV2TestFixtures.ts";
 import {
@@ -453,6 +454,13 @@ describe("formatModelSelectionEffort", () => {
     );
   });
 
+  it("localizes the subagent effort display without changing its selected native value", () => {
+    const selected = selection([{ id: "effort", value: "xhigh" }]);
+    const t = createI18n().getFixedT("zh");
+    expect(formatModelSelectionEffort(selected, catalog({}), null, t)).toBe("超高");
+    expect(selected.options).toEqual([{ id: "effort", value: "xhigh" }]);
+  });
+
   it("shows nothing for a model the catalog does not describe", () => {
     expect(formatModelSelectionEffort(selection([{ id: "effort", value: "high" }]))).toBeNull();
     expect(
@@ -611,7 +619,7 @@ describe("presentPendingBackgroundWork", () => {
 });
 
 describe("provider-reported model selection", () => {
-  const selected = v2Projection.thread.modelSelection;
+  const selected = { ...v2Projection.thread.modelSelection, model: "fixture-model" };
   const reported = { ...selected, options: [{ id: "reasoningEffort", value: "default" }] };
   const providerThread = {
     id: ProviderThreadId.make("active"),
@@ -717,4 +725,48 @@ describe("presentProviderGoal", () => {
       presentProviderGoal({ objective: "All tests pass", status: "active" }, false).title,
     ).toBe("Goal set");
   });
+});
+
+it("localizes execution summaries without changing goals, task identity or provider text", async () => {
+  const { createI18n } = await import("../i18n/index.ts");
+  const translator = createI18n({ lng: "zh" });
+  const goal = {
+    objective: "Keep user objective 原文",
+    status: "paused" as const,
+    tokensUsed: 12000,
+    tokenBudget: 50000,
+    checks: 2,
+  };
+  expect(presentProviderGoal(goal, false, translator.t)).toMatchObject({
+    title: "持续目标已暂停",
+    objective: goal.objective,
+    usage: "12k / 50k Token · 2 次检查",
+    canResume: true,
+  });
+  const tasks = [
+    { taskId: "task:one", kind: "subagent" as const, description: "Review src/math.ts 原文" },
+    { taskId: "task:two", kind: "command" as const },
+  ];
+  const chinese = presentPendingBackgroundWork(tasks, translator.t)!;
+  expect(chinese.title).toBe("等待1 个子智能体和1 个命令");
+  expect(chinese.items.map((item) => [item.taskId, item.kind, item.label])).toEqual([
+    ["task:one", "subagent", "Review src/math.ts 原文"],
+    ["task:two", "command", "命令"],
+  ]);
+  expect(
+    formatProviderSubagentStatus(
+      {
+        status: "completed",
+        startedAt: "2026-07-28T10:00:00Z",
+        completedAt: "2026-07-28T10:00:34Z",
+      },
+      0,
+      translator.t,
+    ),
+  ).toBe("已完成，耗时 34s");
+  await translator.changeLanguage("en");
+  expect(presentProviderGoal(goal, false, translator.t).title).toBe("Goal paused");
+  expect(presentPendingBackgroundWork(tasks, translator.t)?.items[0]?.label).toBe(
+    "Review src/math.ts 原文",
+  );
 });

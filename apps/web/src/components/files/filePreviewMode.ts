@@ -1,5 +1,7 @@
 import type { AssetResource, ProjectReadFileError, ScopedThreadRef } from "@t3tools/contracts";
 import { isAbsolutePath, workspaceRelativeFilePath } from "@t3tools/shared/path";
+import type { TFunction } from "i18next";
+import { i18n } from "~/i18n";
 
 /** Resolve workspace links before choosing between the explorer and a file preview. */
 export function resolveFilePreviewPath(path: string | null, cwd: string): string | null {
@@ -10,24 +12,67 @@ export function resolveFilePreviewPath(path: string | null, cwd: string): string
 export const isMarkdownPreviewFile = (path: string): boolean => /\.(?:md|mdx)$/i.test(path);
 
 /** Describe existing failure codes without exposing the underlying platform cause. */
-export function filePreviewReadErrorMessage(error: ProjectReadFileError): string {
+export function filePreviewReadErrorMessage(
+  error: ProjectReadFileError,
+  t: TFunction = i18n.t,
+): string {
   switch (error.failure) {
     case "path_not_file":
-      return "The path is a directory or special file, not a regular file.";
+      return t("filePreview.error.notFile");
     case "binary_file":
-      return "The file is binary and cannot be displayed as text.";
+      return t("filePreview.error.binary");
     case "workspace_path_outside_root":
-      return "The requested path is outside the workspace.";
+      return t("filePreview.error.outsideWorkspace");
     case "resolved_path_outside_root":
-      return "The path resolves to a location outside the workspace.";
+      return t("filePreview.error.resolvedOutsideWorkspace");
     case "operation_failed":
       // A realpath failure can mean a missing path, permissions, or another I/O error.
       return error.operation === "realpath-workspace-root"
-        ? "The workspace folder could not be accessed."
-        : "The file could not be accessed or read. It may be missing or inaccessible.";
+        ? t("filePreview.error.workspaceAccess")
+        : t("filePreview.error.fileAccess");
     default:
       return error.message;
   }
+}
+
+export function renderedToggleLabel(
+  mode: "markdown" | "html" | "table",
+  rendered: boolean,
+  t: TFunction = i18n.t,
+): string {
+  if (mode === "markdown")
+    return t(rendered ? "filePreview.markdownSource" : "filePreview.markdownRendered");
+  if (mode === "table") return t(rendered ? "filePreview.source" : "filePreview.table");
+  return t(rendered ? "filePreview.htmlSource" : "filePreview.htmlRendered");
+}
+
+const FILE_PREVIEW_ERROR_KEYS = new Map([
+  ["Reconnect to the environment and try again.", "filePreview.error.reconnect"],
+  ["The attachment is unavailable.", "filePreview.error.attachmentUnavailable"],
+  ["Could not load this file.", "filePreview.error.load"],
+  ["The file could not be loaded. Try again.", "filePreview.error.loadRetry"],
+  ["The file could not be loaded. Reconnect and try again.", "filePreview.error.loadReconnect"],
+  [
+    "Streaming file previews are unavailable in this runtime.",
+    "filePreview.error.streamingUnavailable",
+  ],
+  ["Preview cancelled.", "filePreview.error.cancelled"],
+  ["This file contains binary data and cannot be shown as text.", "filePreview.error.binaryData"],
+  [
+    "This file is not UTF-8 text. Open it in another app to view its contents.",
+    "filePreview.error.notUtf8",
+  ],
+  ["Unable to load audio.", "filePreview.error.audio"],
+  ["Unable to load video.", "filePreview.error.video"],
+  ["Unable to load image.", "filePreview.error.image"],
+  ["This connection cannot read host files.", "filePreview.error.readPermission"],
+  ["This environment is not connected.", "filePreview.error.disconnected"],
+]);
+
+/** Stored errors remain verbatim; translate only messages owned by this preview path. */
+export function formatFilePreviewErrorMessage(message: string, t: TFunction = i18n.t): string {
+  const key = FILE_PREVIEW_ERROR_KEYS.get(message);
+  return key === undefined ? message : t(key);
 }
 
 export function shouldShowFileExplorer(input: {

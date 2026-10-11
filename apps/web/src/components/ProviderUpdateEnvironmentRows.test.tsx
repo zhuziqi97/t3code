@@ -113,6 +113,11 @@ vi.mock("./ProviderUpdateLaunchNotification.environments", () => ({
   }),
 }));
 
+vi.mock("../i18n", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../i18n")>();
+  return { ...actual, useTranslate: () => actual.i18n.getFixedT("en") };
+});
+
 import { ProviderUpdateEnvironmentRows } from "./ProviderUpdateEnvironmentRows";
 
 const environmentId = "env-wsl" as EnvironmentId;

@@ -1,12 +1,20 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { summarizeT3ToolCalls, type T3ToolSummaryCall } from "./t3ToolSummary.ts";
+import { createI18n } from "./i18n/createI18n.ts";
+import { summarizeT3ToolCalls as summarizeCalls, type T3ToolSummaryCall } from "./t3ToolSummary.ts";
 
 function completed(input: unknown, output?: unknown): T3ToolSummaryCall {
   return { input, output, outcome: "completed" };
 }
 
-describe("summarizeT3ToolCalls", () => {
+describe.each([
+  { name: "default English", translate: undefined },
+  { name: "translated English", translate: createI18n({ lng: "en" }).t },
+])("summarizeT3ToolCalls: $name", ({ translate }) => {
+  const summarizeT3ToolCalls = (
+    action: Parameters<typeof summarizeCalls>[0],
+    calls: ReadonlyArray<T3ToolSummaryCall>,
+  ) => summarizeCalls(action, calls, translate);
   it("counts registered projects, repository destinations, and accepted thread launches", () => {
     expect(
       summarizeT3ToolCalls("project-create", [
@@ -247,5 +255,92 @@ describe("summarizeT3ToolCalls", () => {
         ),
       ]).label,
     ).toBe("Requested deletion of 1 scheduled task");
+  });
+});
+
+describe("Chinese T3 summaries", () => {
+  const t = createI18n({ lng: "zh" }).t;
+  it("deduplicates successful effects while retaining failed-call status", () => {
+    const success = completed({ threadId: "first" }, { messageId: "sent", threadId: "first" });
+    const failure = completed({ threadId: "other" }, { isError: true });
+    expect(summarizeCalls("thread-send", [success, success, failure], t)).toEqual({
+      label: "向1 个会话发送了1 条消息",
+      failedCount: 1,
+    });
+    expect(summarizeCalls("thread-send", [failure], t)).toEqual({
+      label: "尝试向1 个会话发送1 条消息",
+      failedCount: 1,
+    });
+    expect(
+      summarizeCalls("thread-send", [completed(undefined, "Raw diagnostic 原文")], t).label,
+    ).toBe("发送了1 条消息");
+  });
+  it("distinguishes confirmed launches from requests and excludes rollbacks", () => {
+    expect(
+      summarizeCalls(
+        "thread-create",
+        [
+          completed(
+            {},
+            {
+              threads: [
+                { threadId: "created", status: "running" },
+                { threadId: "rolled-back", status: "rolled_back" },
+              ],
+            },
+          ),
+          completed({}, { threadId: "created" }),
+        ],
+        t,
+      ).label,
+    ).toBe("创建了1 个会话");
+    expect(summarizeCalls("thread-create", [completed({})], t).label).toBe("请求创建会话（1次）");
+  });
+  it("keeps asynchronous cancellation and deletion as requests", () => {
+    expect(summarizeCalls("thread-interrupt", [completed({ threadId: "thread" })], t).label).toBe(
+      "请求中断1 个会话",
+    );
+    expect(
+      summarizeCalls(
+        "schedule-delete",
+        [completed({ scheduledTaskId: "task" }, { deleted: false })],
+        t,
+      ).label,
+    ).toBe("请求删除1 个定时任务");
+    expect(
+      summarizeCalls(
+        "schedule-run",
+        [completed({ taskId: "task" }), completed({ taskId: "task" })],
+        t,
+      ).label,
+    ).toBe("请求执行2 次定时任务运行");
+  });
+  it("counts attachments per distinct message and retains the missing-count fallback", () => {
+    const first = completed(
+      { threadId: "thread", attachments: [{ id: "a" }, { id: "b" }] },
+      { messageId: "message" },
+    );
+    expect(summarizeCalls("attachment-send", [first, first], t).label).toBe(
+      "向1 个会话发送了2 个附件",
+    );
+    expect(
+      summarizeCalls("attachment-send", [first, completed({ threadId: "thread" })], t).label,
+    ).toBe("向1 个会话发送了附件（2次）");
+  });
+  it("counts repeated queries and answered requests rather than contained questions", () => {
+    expect(
+      summarizeCalls(
+        "task-status",
+        [completed({ taskId: "task" }), completed({ taskId: "task" })],
+        t,
+      ).label,
+    ).toBe("检查了任务状态（2次）");
+    expect(
+      summarizeCalls(
+        "question-respond",
+        [completed({ requestId: "request", answers: { a: ["Yes"], b: ["No"] } })],
+        t,
+      ).label,
+    ).toBe("回答了1 个待答问题请求");
   });
 });

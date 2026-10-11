@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import { AuthProvidersManageScope } from "@t3tools/contracts";
 import { readEnvironmentScope, useEnvironmentScope } from "../../state/session";
 import {
@@ -25,10 +26,10 @@ import { isConfiguredAcpRegistryAgent } from "./AddProviderInstanceDialog.logic"
 import { ProviderDriverKind } from "@t3tools/contracts";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 
-function errorMessage(error: unknown): string {
+function errorMessage(error: unknown): string | { key: string } {
   return error instanceof Error && error.message.trim()
     ? error.message
-    : "The ACP could not be prepared.";
+    : { key: "provider.registry.prepareFailed" };
 }
 
 interface AcpRegistrySearchStepProps {
@@ -62,13 +63,14 @@ export function AcpRegistrySearchStep({
   onLoadingChange,
   onPreparingChange,
 }: AcpRegistrySearchStepProps) {
+  const t = useTranslate();
   const [query, setQuery] = useState("");
   // An empty registry query is the compact compatible catalog. Start there so
   // entering this step is useful before the user knows what to search for.
   const [submittedQuery, setSubmittedQuery] = useState("");
   const canManageProviders = useEnvironmentScope(environmentId, AuthProvidersManageScope);
   const [preparingId, setPreparingId] = useState<string | null>(null);
-  const [prepareError, setPrepareError] = useState<string | null>(null);
+  const [prepareError, setPrepareError] = useState<string | { key: string } | null>(null);
   const prepareGeneration = useRef(0);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const search = useEnvironmentQuery(
@@ -139,7 +141,7 @@ export function AcpRegistrySearchStep({
   return (
     <section className="grid gap-3" aria-labelledby="acp-registry-search-heading">
       <h3 className="sr-only" id="acp-registry-search-heading">
-        Choose an agent
+        {t("provider.registry.choose")}
       </h3>
 
       <form className="flex flex-wrap items-center gap-2" onSubmit={handleSearch}>
@@ -148,7 +150,7 @@ export function AcpRegistrySearchStep({
             <SearchIcon />
           </InputGroupAddon>
           <InputGroupInput
-            aria-label="Search ACP Registry"
+            aria-label={t("provider.registry.search")}
             disabled={preparingId !== null}
             onChange={(event) => {
               const nextQuery = event.currentTarget.value;
@@ -160,7 +162,7 @@ export function AcpRegistrySearchStep({
                 setSubmittedQuery(nextQuery.trim());
               }, 300);
             }}
-            placeholder="Search agents…"
+            placeholder={t("provider.registry.placeholder")}
             size="sm"
             type="search"
             value={query}
@@ -173,7 +175,7 @@ export function AcpRegistrySearchStep({
           type="button"
           variant="ghost-muted"
         >
-          Enter manually
+          {t("provider.add.manual")}
         </Button>
         {onLocalConfiguration ? (
           <Button
@@ -183,38 +185,46 @@ export function AcpRegistrySearchStep({
             type="button"
             variant="outline"
           >
-            Local ACP command
+            {t("provider.add.localCommand")}
           </Button>
         ) : null}
       </form>
 
       <div className="sr-only" role="status">
         {isInitialSearch
-          ? "Searching the ACP Registry."
+          ? t("provider.registry.searchingStatus")
           : isRefreshing
-            ? "Refreshing ACP Registry results."
+            ? t("provider.registry.refreshingStatus")
             : results
-              ? `${resultCount} compatible ${resultCount === 1 ? "agent" : "agents"} found.`
+              ? t("provider.registry.count", { count: resultCount })
               : ""}
       </div>
 
       {search.error || prepareError ? (
         <Alert variant="error" role="status" aria-live="polite">
-          <AlertDescription>{prepareError ?? search.error}</AlertDescription>
+          <AlertDescription>
+            {prepareError
+              ? typeof prepareError === "string"
+                ? prepareError
+                : t(prepareError.key)
+              : search.error}
+          </AlertDescription>
         </Alert>
       ) : null}
 
       {isInitialSearch ? (
         <div className="flex min-h-20 items-center justify-center text-sm text-muted-foreground">
-          Searching the registry...
+          {t("provider.registry.searching")}
         </div>
       ) : null}
 
       {results ? (
         results.length === 0 ? (
           <div className="flex min-h-28 flex-col items-center justify-center rounded-2xl border border-dashed px-4 text-center">
-            <p className="text-sm font-medium">No compatible agents found</p>
-            <p className="mt-1 text-xs text-muted-foreground">Try a broader search.</p>
+            <p className="text-sm font-medium">{t("provider.registry.noAgents")}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t("provider.registry.broaderSearch")}
+            </p>
           </div>
         ) : (
           <ScrollArea scrollFade className="max-h-64">
@@ -224,7 +234,10 @@ export function AcpRegistrySearchStep({
               {results.map((agent) => {
                 const alreadyAdded = isConfiguredAcpRegistryAgent(providerInstances, agent.id);
                 const isPreparing = preparingId === agent.id;
-                const progressLabel = agent.distribution === "binary" ? "Downloading" : "Preparing";
+                const progressLabel =
+                  agent.distribution === "binary"
+                    ? t("provider.registry.downloading")
+                    : t("provider.registry.preparing");
                 return (
                   <article className="min-w-0 py-2.5" key={agent.id}>
                     <div className="flex min-w-0 items-center justify-between gap-3">
@@ -257,7 +270,7 @@ export function AcpRegistrySearchStep({
                                 <Button
                                   size="icon-xs"
                                   variant="ghost-muted"
-                                  aria-label={`About ${agent.name}`}
+                                  aria-label={t("provider.registry.about", { name: agent.name })}
                                   render={
                                     <a
                                       href={agent.website || agent.repository || undefined}
@@ -270,17 +283,30 @@ export function AcpRegistrySearchStep({
                                 </Button>
                               }
                             />
-                            <TooltipPopup>About {agent.name}</TooltipPopup>
+                            <TooltipPopup>
+                              {t("provider.registry.about", { name: agent.name })}
+                            </TooltipPopup>
                           </Tooltip>
                         ) : null}
                         <Button
-                          aria-label={`${alreadyAdded ? "Already added" : isPreparing ? progressLabel : "Add"} ${agent.name}`}
+                          aria-label={t(
+                            alreadyAdded
+                              ? "provider.registry.addedNamed"
+                              : isPreparing
+                                ? "provider.registry.progressNamed"
+                                : "provider.registry.addNamed",
+                            { name: agent.name, progress: progressLabel },
+                          )}
                           disabled={!canManageProviders || alreadyAdded || preparingId !== null}
                           onClick={() => void handlePrepare(agent)}
                           size="xs"
                           variant={isPreparing ? "secondary" : "outline"}
                         >
-                          {alreadyAdded ? "Added" : isPreparing ? progressLabel : "Add"}
+                          {alreadyAdded
+                            ? t("provider.registry.added")
+                            : isPreparing
+                              ? progressLabel
+                              : t("provider.registry.add")}
                         </Button>
                       </div>
                     </div>

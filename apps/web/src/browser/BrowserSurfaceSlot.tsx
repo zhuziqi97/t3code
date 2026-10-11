@@ -33,6 +33,10 @@ export function BrowserSurfaceSlot(props: {
     const update = () => {
       const rect = element.getBoundingClientRect();
       const presentation = presentationRef.current;
+      const sheetViewport = element.closest('[data-slot="sheet-viewport"]');
+      const zIndex = sheetViewport
+        ? Math.max(presentation.zIndex, Number(getComputedStyle(sheetViewport).zIndex) + 1)
+        : presentation.zIndex;
       const presented = lease.present(
         {
           x: Math.round(rect.x),
@@ -42,7 +46,7 @@ export function BrowserSurfaceSlot(props: {
         },
         presentation.visible && rect.width > 0 && rect.height > 0,
         presentation.cornerRadius,
-        presentation.zIndex,
+        zIndex,
       );
       if (presentation.visible && !presented) {
         lease.release();
@@ -56,7 +60,7 @@ export function BrowserSurfaceSlot(props: {
           },
           rect.width > 0 && rect.height > 0,
           presentation.cornerRadius,
-          presentation.zIndex,
+          zIndex,
         );
       }
     };

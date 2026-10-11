@@ -316,3 +316,32 @@ describe("formatElapsedDurationLabel", () => {
     expect(formatElapsedDurationLabel("2026-04-03T12:00:00.000Z")).toBe("4d");
   });
 });
+
+it("updates Chinese date and relative labels immediately while preserving clock preferences", async () => {
+  const { changeLanguage } = await import("./i18n");
+  const now = new Date(2026, 9, 9, 14, 4);
+  const yesterday = new Date(2026, 9, 8, 14, 4).toISOString();
+  const tomorrow = new Date(2026, 9, 10, 14, 4).toISOString();
+  const {
+    formatChatTimestampTooltip,
+    formatDayAwareTimestamp,
+    formatUpcomingTimestamp,
+    formatShortTimestamp,
+    formatElapsedDurationLabel,
+    formatExpiresInLabel,
+  } = await import("./timestampFormat");
+  try {
+    await changeLanguage("zh");
+    expect(formatDayAwareTimestamp(yesterday, "24-hour", now.getTime())).toBe("昨天 14:04");
+    expect(formatUpcomingTimestamp(tomorrow, "24-hour", now.getTime())).toBe("明天 14:04");
+    expect(formatChatTimestampTooltip(yesterday, "24-hour")).toBe("2026年10月8日 14:04");
+    expect(formatShortTimestamp(yesterday, "12-hour")).toContain("下午");
+    expect(formatElapsedDurationLabel(yesterday, now.getTime())).toBe("1天");
+    expect(formatExpiresInLabel(tomorrow, now.getTime())).toBe("1天后到期");
+    await changeLanguage("en");
+    expect(formatDayAwareTimestamp(yesterday, "24-hour", now.getTime())).toBe("yesterday at 14:04");
+    expect(formatChatTimestampTooltip(yesterday, "24-hour")).toBe("14:04, 8th October 2026");
+  } finally {
+    await changeLanguage("en");
+  }
+});

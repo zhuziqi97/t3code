@@ -1,5 +1,7 @@
 "use client";
 
+import { i18n, useTranslate } from "../../i18n";
+import { zhCN } from "@daypicker/react/locale";
 import { DayPicker } from "@daypicker/react";
 import { ChevronLeftIcon, ChevronRightIcon, ChevronsUpDownIcon } from "lucide-react";
 import type * as React from "react";
@@ -49,6 +51,8 @@ export function Calendar({
   mode = "single",
   ...props
 }: React.ComponentProps<typeof DayPicker>): React.ReactElement {
+  const t = useTranslate();
+  const isChinese = i18n.resolvedLanguage === "zh";
   const defaultClassNames = {
     button_next: buttonClassNames,
     button_previous: buttonClassNames,
@@ -103,6 +107,28 @@ export function Calendar({
     formatters: {
       formatMonthDropdown: (date: Date) => date.toLocaleString("default", { month: "short" }),
     } as React.ComponentProps<typeof DayPicker>["formatters"],
+    ...(isChinese
+      ? {
+          locale: zhCN,
+          labels: {
+            labelPrevious: () => t("calendar.previous"),
+            labelNext: () => t("calendar.next"),
+            labelMonthDropdown: () => t("calendar.month"),
+            labelYearDropdown: () => t("calendar.year"),
+            labelDayButton: (date: Date, modifiers: { today?: boolean; selected?: boolean }) =>
+              [
+                date.toLocaleDateString("zh-CN", { dateStyle: "full" }),
+                modifiers.today ? t("calendar.today") : null,
+                modifiers.selected ? t("calendar.selected") : null,
+              ]
+                .filter(Boolean)
+                .join("，"),
+          },
+          formatters: {
+            formatMonthDropdown: (date: Date) => date.toLocaleString("zh-CN", { month: "short" }),
+          },
+        }
+      : {}),
     mode,
     showOutsideDays,
     ...props,

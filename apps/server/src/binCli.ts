@@ -1,3 +1,4 @@
+import { resolveConveneVersion } from "@t3tools/shared/conveneDesktopIdentity";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
@@ -93,8 +94,14 @@ export const makeCli = ({ cloudEnabled = hasCloudPublicConfig } = {}) =>
 
 export const cli = makeCli();
 
+declare const __T3CODE_CONVENE_VERSION__: string | undefined;
+
 export function runCli() {
-  Command.run(cli, { version: packageJson.version }).pipe(
+  const version =
+    typeof __T3CODE_CONVENE_VERSION__ === "string"
+      ? __T3CODE_CONVENE_VERSION__
+      : resolveConveneVersion(packageJson.version);
+  Command.run(cli, { version }).pipe(
     Effect.scoped,
     Effect.provide(layerCliRuntime),
     NodeRuntime.runMain,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { i18n } from "../../i18n";
 import type { ResolvedKeybindingsConfig } from "@t3tools/contracts";
 import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
 
@@ -430,4 +431,24 @@ describe("KeybindingsSettings.logic", () => {
       }),
     ).toEqual(["Chat: New Local"]);
   });
+});
+
+it("keeps native command choices and row identities while translating labels and searching both languages", () => {
+  const en = i18n.getFixedT("en");
+  const zh = i18n.getFixedT("zh");
+  const english = buildKeybindingRows(DEFAULT_RESOLVED_KEYBINDINGS, "", en);
+  const chinese = buildKeybindingRows(DEFAULT_RESOLVED_KEYBINDINGS, "", zh);
+  expect(chinese.map((row) => row.id)).toEqual(english.map((row) => row.id));
+  expect(groupKeybindingRows(chinese, zh).map((group) => group.id)).toEqual(
+    groupKeybindingRows(english, en).map((group) => group.id),
+  );
+  expect(commandLabel("composer.host", zh)).toBe("输入框：选择执行环境");
+  expect(commandLabel("script.setup-db.run", zh)).toBe("运行脚本：Setup Db");
+  for (const t of [en, zh]) {
+    for (const query of ["复制链接", "copy link", "thread.copyReference"]) {
+      expect(buildKeybindingRows(DEFAULT_RESOLVED_KEYBINDINGS, query, t)).toContainEqual(
+        expect.objectContaining({ command: "thread.copyReference", key: "mod+shift+c" }),
+      );
+    }
+  }
 });

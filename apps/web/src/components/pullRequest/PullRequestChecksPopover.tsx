@@ -1,3 +1,4 @@
+import { i18n, useTranslate } from "~/i18n";
 import type * as React from "react";
 import type {
   EnvironmentId,
@@ -40,6 +41,7 @@ function LazyChecksBody({
   reference: PullRequestRef;
   threadRef: ScopedThreadRef | null;
 }) {
+  const t = useTranslate();
   const detailQuery = useEnvironmentQuery(
     pullRequestEnvironment.detail({ environmentId, input: reference }),
   );
@@ -49,7 +51,7 @@ function LazyChecksBody({
   if (detailQuery.data === null) {
     return (
       <p className="text-muted-foreground text-xs">
-        {detailQuery.isPending ? "Loading checks…" : "No checks reported"}
+        {detailQuery.isPending ? t("pullRequest.checks.loading") : t("pullRequest.checks.none")}
       </p>
     );
   }
@@ -63,13 +65,14 @@ function ChecksBody({
   checks: ReadonlyArray<PullRequestCheck>;
   threadRef: ScopedThreadRef | null;
 }) {
+  const t = useTranslate();
   const openLink = useOpenLink(threadRef);
   const [showAll, setShowAll] = useState(false);
   const { attention, running, completed } = groupPullRequestChecks(checks);
   const canCollapse = attention.length + running.length > 0 && completed.length > 0;
   const visibleChecks = [...attention, ...running, ...(showAll || !canCollapse ? completed : [])];
   if (checks.length === 0) {
-    return <p className="text-muted-foreground text-xs">No checks reported</p>;
+    return <p className="text-muted-foreground text-xs">{t("pullRequest.checks.none")}</p>;
   }
   return (
     <>
@@ -87,7 +90,7 @@ function ChecksBody({
                 <TooltipPopup side="top">{check.description ?? check.name}</TooltipPopup>
               </Tooltip>
               <span className="shrink-0 text-muted-foreground">
-                {pullRequestCheckStatusLabel(check)}
+                {pullRequestCheckStatusLabel(check, t)}
               </span>
               {check.url === null ? null : (
                 <button
@@ -97,11 +100,14 @@ function ChecksBody({
                     if (!check.url) return;
                     void openLink(check.url).catch((error: unknown) => {
                       console.error(error);
-                      toastManager.add({ type: "error", title: "Unable to open check details" });
+                      toastManager.add({
+                        type: "error",
+                        title: i18n.t("pullRequest.checks.openFailed"),
+                      });
                     });
                   }}
                 >
-                  Details
+                  {t("common.details")}
                 </button>
               )}
             </li>
@@ -115,7 +121,7 @@ function ChecksBody({
           aria-expanded={showAll}
           onClick={() => setShowAll(!showAll)}
         >
-          {showAll ? "Show less" : "Show all"}
+          {showAll ? t("pullRequest.checks.showLess") : t("pullRequest.checks.showAll")}
         </Button>
       ) : null}
     </>
@@ -152,13 +158,14 @@ export function PullRequestChecksPopover({
   className?: string;
   render?: React.ReactElement;
 }) {
-  const presentation = pullRequestChecksStatePresentation(checksState);
+  const t = useTranslate();
+  const presentation = pullRequestChecksStatePresentation(checksState, t);
   // Counts beat the rollup's own wording where they are known, the way GitHub's own header reads.
   const runningCount = checks?.filter((check) => check.status === "pending").length ?? 0;
   const failedCount =
     checks?.filter((check) => check.status === "failure" || check.status === "cancelled").length ??
     0;
-  const summary = checks === undefined || stale ? null : summarizePullRequestChecks(checks);
+  const summary = checks === undefined || stale ? null : summarizePullRequestChecks(checks, t);
   return (
     <Popover>
       {/* A listing row is itself a button, so the trigger renders as a span: a nested button is
@@ -168,8 +175,8 @@ export function PullRequestChecksPopover({
         nativeButton={variant === "count"}
         aria-label={
           variant === "count"
-            ? `Open checks: ${summary ?? presentation.label}`
-            : `Checks: ${presentation.label}`
+            ? t("pullRequest.checks.openSummary", { summary: summary ?? presentation.label })
+            : t("pullRequest.checks.summary", { summary: presentation.label })
         }
         render={
           variant === "count" ? (
@@ -192,7 +199,9 @@ export function PullRequestChecksPopover({
                 {runningCount}/{checks.length}
               </span>
             ) : failedCount > 0 ? (
-              <span className="tabular-nums">{failedCount} failed</span>
+              <span className="tabular-nums">
+                {t("pullRequest.checks.failed", { count: failedCount })}
+              </span>
             ) : null}
           </>
         ) : null}
@@ -201,9 +210,7 @@ export function PullRequestChecksPopover({
         <p className="mb-2 font-medium text-sm">{presentation.label}</p>
         {summary === null ? null : <p className="mb-2 text-muted-foreground text-xs">{summary}</p>}
         {stale ? (
-          <p className="text-muted-foreground text-xs">
-            Check details are out of date. Refresh the pull request to update them.
-          </p>
+          <p className="text-muted-foreground text-xs">{t("pullRequest.checks.stale")}</p>
         ) : checks !== undefined ? (
           <ChecksBody checks={checks} threadRef={threadRef} />
         ) : environmentId !== undefined && reference !== undefined ? (

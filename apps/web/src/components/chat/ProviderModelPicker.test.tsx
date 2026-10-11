@@ -1,11 +1,14 @@
+// @vitest-environment jsdom
 import {
   ANTIGRAVITY_DEFAULT_MODEL,
   ProviderDriverKind,
   ProviderInstanceId,
   type ServerProvider,
 } from "@t3tools/contracts";
-import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vite-plus/test";
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { changeLanguage } from "../../i18n";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { deriveProviderInstanceEntries } from "../../providerInstances";
 import { ProviderModelPicker } from "./ProviderModelPicker";
@@ -28,32 +31,50 @@ function providerEntry(instanceId: string, driver: string) {
   return deriveProviderInstanceEntries([provider])[0]!;
 }
 
-function renderPicker(input: {
+let root: Root;
+let container: HTMLDivElement;
+beforeEach(async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  await changeLanguage("en");
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+});
+afterEach(async () => {
+  await act(async () => root.unmount());
+  container.remove();
+  await changeLanguage("en");
+  vi.unstubAllGlobals();
+});
+async function renderPicker(input: {
   instanceId: string;
   driver: string;
-  model: string;
+  model: string | null;
   options: ReadonlyArray<ModelEsque>;
   includeEntry?: boolean;
   triggerLabel?: string;
 }) {
   const instanceId = ProviderInstanceId.make(input.instanceId);
   const entry = providerEntry(input.instanceId, input.driver);
-  return renderToStaticMarkup(
-    <ProviderModelPicker
-      activeInstanceId={instanceId}
-      model={input.model}
-      lockedProvider={null}
-      instanceEntries={input.includeEntry === false ? [] : [entry]}
-      modelOptionsByInstance={new Map([[instanceId, input.options]])}
-      onInstanceModelChange={() => {}}
-      {...(input.triggerLabel ? { triggerLabel: input.triggerLabel } : {})}
-    />,
+  await act(async () =>
+    root.render(
+      <ProviderModelPicker
+        activeInstanceId={instanceId}
+        model={input.model}
+        lockedProvider={null}
+        instanceEntries={input.includeEntry === false ? [] : [entry]}
+        modelOptionsByInstance={new Map([[instanceId, input.options]])}
+        onInstanceModelChange={() => {}}
+        {...(input.triggerLabel ? { triggerLabel: input.triggerLabel } : {})}
+      />,
+    ),
   );
+  return container.textContent ?? "";
 }
 
 describe("ProviderModelPicker", () => {
-  it("shows a neutral aggregate value without a representative model or availability badge", () => {
-    const markup = renderPicker({
+  it("shows a neutral aggregate value without a representative model or availability badge", async () => {
+    const markup = await renderPicker({
       instanceId: "codex_personal",
       driver: "codex",
       model: "gpt-5",
@@ -67,23 +88,23 @@ describe("ProviderModelPicker", () => {
 
   it.each(["", ANTIGRAVITY_DEFAULT_MODEL])(
     "shows a choice prompt before Antigravity has an account catalog for %s",
-    (model) => {
-      const markup = renderPicker({
+    async (model) => {
+      const markup = await renderPicker({
         instanceId: "antigravity",
         driver: "antigravity",
         model,
         options: [],
       });
 
-      expect(markup).toContain("Choose model");
+      expect(markup).toContain(model === "" ? "Follow agent default" : "Choose model");
       expect(markup).not.toContain(ANTIGRAVITY_DEFAULT_MODEL);
     },
   );
 
   it.each([{ aliases: [ANTIGRAVITY_DEFAULT_MODEL] }, { isDefault: true }])(
     "shows the actual default model for an Antigravity marker with %j",
-    (defaultMetadata) => {
-      const markup = renderPicker({
+    async (defaultMetadata) => {
+      const markup = await renderPicker({
         instanceId: "google_work",
         driver: "antigravity",
         model: ANTIGRAVITY_DEFAULT_MODEL,
@@ -101,8 +122,8 @@ describe("ProviderModelPicker", () => {
 
   it.each(["opencode", "antigravity"])(
     "keeps the selected model label when the %s account catalog does not contain it",
-    (driver) => {
-      const markup = renderPicker({
+    async (driver) => {
+      const markup = await renderPicker({
         instanceId: "team_runtime",
         driver,
         model: "missing-model",
@@ -115,22 +136,22 @@ describe("ProviderModelPicker", () => {
   );
 
   it.each(["codex", "claudeAgent", "cursor", "grok"])(
-    "uses the first option label for a missing %s model",
-    (driver) => {
-      const markup = renderPicker({
+    "preserves a missing %s model instead of displaying an unrelated catalog model",
+    async (driver) => {
+      const markup = await renderPicker({
         instanceId: `${driver}_work`,
         driver,
         model: "missing-model",
         options: [{ slug: "fallback-model", name: "Fallback model" }],
       });
 
-      expect(markup).toContain("Fallback model");
-      expect(markup).not.toContain(">missing-model<");
+      expect(markup).toContain("missing-model");
+      expect(markup).not.toContain("Fallback model");
     },
   );
 
-  it("prefers a matching model for OpenCode", () => {
-    const markup = renderPicker({
+  it("prefers a matching model for OpenCode", async () => {
+    const markup = await renderPicker({
       instanceId: "custom_runtime",
       driver: "opencode",
       model: "openrouter/selected",
@@ -144,8 +165,8 @@ describe("ProviderModelPicker", () => {
     expect(markup).not.toContain("Fallback model");
   });
 
-  it("uses the first option when the active instance entry is missing", () => {
-    const markup = renderPicker({
+  it("preserves the model when its instance entry is missing", async () => {
+    const markup = await renderPicker({
       instanceId: "missing_instance",
       driver: "opencode",
       model: "missing-model",
@@ -153,24 +174,44 @@ describe("ProviderModelPicker", () => {
       includeEntry: false,
     });
 
-    expect(markup).toContain("Fallback model");
-    expect(markup).not.toContain(">missing-model<");
+    expect(markup).toContain("missing-model");
+    expect(markup).not.toContain("Fallback model");
   });
 
-  it("keeps instance initials visible in the resting trigger", () => {
+  it("keeps instance initials visible in the resting trigger", async () => {
     const activeEntry = providerEntry("codex_personal", "codex");
-    const markup = renderToStaticMarkup(
-      <ProviderModelPicker
-        activeInstanceId={activeEntry.instanceId}
-        model="gpt-5"
-        lockedProvider={null}
-        instanceEntries={[providerEntry("codex", "codex"), activeEntry]}
-        modelOptionsByInstance={new Map()}
-        size="xs"
-        onInstanceModelChange={() => {}}
-      />,
+    await act(async () =>
+      root.render(
+        <ProviderModelPicker
+          activeInstanceId={activeEntry.instanceId}
+          model="gpt-5"
+          lockedProvider={null}
+          instanceEntries={[providerEntry("codex", "codex"), activeEntry]}
+          modelOptionsByInstance={new Map()}
+          size="xs"
+          onInstanceModelChange={() => {}}
+        />,
+      ),
     );
 
-    expect(markup).toContain(">CP</span>");
+    expect(container.textContent).toContain("CP");
   });
+});
+
+it("updates the native-default label in place when language changes", async () => {
+  await renderPicker({
+    instanceId: "codex",
+    driver: "codex",
+    model: null,
+    options: [
+      { slug: "", name: "Follow agent default" },
+      { slug: "raw/custom", name: "User model" },
+    ],
+  });
+  expect(container.textContent).toContain("Follow agent default");
+  await act(async () => changeLanguage("zh"));
+  expect(container.textContent).toContain("跟随 Agent 默认模型");
+  expect(container.textContent).not.toContain("User model");
+  await act(async () => changeLanguage("en"));
+  expect(container.textContent).toContain("Follow agent default");
 });

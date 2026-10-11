@@ -174,3 +174,30 @@ describe("submitCodexFeedback", () => {
     await first;
   });
 });
+
+it("localizes feedback notices while retaining commands, ids and raw errors", async () => {
+  const { createI18n } = await import("../i18n/index.ts");
+  const { t } = createI18n({ lng: "zh" });
+  const submission = {
+    id: MessageId.make("message:feedback"),
+    command: "/feedback user reason 原文",
+    createdAt: "2026-07-28T10:00:00Z",
+    status: "sent" as const,
+    feedbackId: "provider-thread-id",
+  };
+  expect(codexFeedbackNotice(submission, t)).toEqual({
+    title: "反馈已发送至 OpenAI",
+    description: "会话 ID：provider-thread-id",
+  });
+  expect(codexFeedbackMessage(submission, "user", t).text).toBe(submission.command);
+  expect(codexFeedbackMessage(submission, "assistant", t).text).toBe(
+    "反馈已发送至 OpenAI。\n\n会话 ID：`provider-thread-id`",
+  );
+  const failed = {
+    ...submission,
+    status: "failed" as const,
+    errorMessage: "Raw provider diagnostic 原文",
+  };
+  expect(codexFeedbackNotice(failed, t)?.description).toBe(failed.errorMessage);
+  expect(codexFeedbackMessage(failed, "assistant", t).text).toContain(failed.errorMessage);
+});

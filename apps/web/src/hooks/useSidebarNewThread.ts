@@ -1,3 +1,4 @@
+import { useTranslate } from "../i18n";
 import { useAtomValue } from "@effect/atom-react";
 import { useCallback, useMemo } from "react";
 import { isScratchProject } from "@t3tools/client-runtime/state/projects";
@@ -17,6 +18,7 @@ import { useClientSettings, useLegacySidebarEnabled } from "./useSettings";
 import { useHandleNewThread } from "./useHandleNewThread";
 
 export function useSidebarNewThread() {
+  const t = useTranslate();
   const { activeThread, activeDraftThread, defaultProjectRef, handleNewThread } =
     useHandleNewThread();
   const context = useMemo(
@@ -84,11 +86,11 @@ export function useSidebarNewThread() {
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: "Could not start a new thread",
-          description: error instanceof Error ? error.message : "An error occurred.",
+          title: t("thread.create.failed"),
+          description: error instanceof Error ? error.message : t("common.error"),
         }),
       );
     }
-  }, [context, resolve]);
+  }, [context, resolve, t]);
   return { target, startNewThread };
 }

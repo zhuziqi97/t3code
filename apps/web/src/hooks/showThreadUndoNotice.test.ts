@@ -3,6 +3,8 @@ import * as Cause from "effect/Cause";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { toastManager } from "../components/ui/toast";
+import { changeLanguage, i18n } from "../i18n";
+import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
 import {
   showThreadUndoNotice,
   undoLatestThreadAction,
@@ -10,18 +12,27 @@ import {
 } from "./showThreadUndoNotice";
 import * as ThreadUndo from "./threadUndo";
 
-beforeEach(() => vi.useFakeTimers());
-afterEach(() => {
+beforeEach(async () => {
+  await changeLanguage("en");
+  vi.useFakeTimers();
+});
+afterEach(async () => {
   vi.runAllTimers();
   vi.useRealTimers();
   vi.restoreAllMocks();
+  await changeLanguage("en");
 });
 
 function setup() {
   const add = vi.spyOn(toastManager, "add").mockReturnValue("error-toast");
   const undo = vi.fn(async () => AsyncResult.success(undefined));
   const claim = ThreadUndo.begin("pin", "env/thread");
-  const options = { action: "Unpinned" as const, failureTitle: "Restore failed", undo, claim };
+  const options = {
+    action: "Unpinned" as const,
+    failureTitle: () => "Restore failed",
+    undo,
+    claim,
+  };
   return { add, undo, claim, options };
 }
 
@@ -32,6 +43,41 @@ function notice() {
 }
 
 describe("thread undo notice", () => {
+  it.each(["failure", "rejection"] as const)(
+    "uses the completion language for a pending undo %s and preserves diagnostics",
+    async (mode) => {
+      const { add, options, claim } = setup();
+      let finish!: (result: AtomCommandResult<void, Error>) => void;
+      let reject!: (error: Error) => void;
+      const undo = vi.fn(
+        () =>
+          new Promise<AtomCommandResult<void, Error>>((resolve, fail) => {
+            finish = resolve;
+            reject = fail;
+          }),
+      );
+      const failureTitle = vi.fn(() => i18n.t("thread.action.undoUnpinFailed"));
+      showThreadUndoNotice({ ...options, undo, failureTitle });
+      const pending = notice().undo();
+      expect(undo).toHaveBeenCalledOnce();
+      expect(failureTitle).not.toHaveBeenCalled();
+      await changeLanguage("zh");
+      const diagnostic = new Error("Network /tmp/原文 404");
+      if (mode === "failure") finish(AsyncResult.failure(Cause.fail(diagnostic)));
+      else reject(diagnostic);
+      await pending;
+      expect(add).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          type: "error",
+          title: "撤销取消置顶失败",
+          description: diagnostic.message,
+        }),
+      );
+      expect(failureTitle).toHaveBeenCalledOnce();
+      expect(claim.isCurrent()).toBe(false);
+      expect(undoLatestThreadAction()).toBe(false);
+    },
+  );
   it("aggregates consecutive actions without success toasts and restores the group once", async () => {
     const { add, undo, options } = setup();
     showThreadUndoNotice({

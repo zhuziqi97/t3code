@@ -1,3 +1,4 @@
+import { i18n, useTranslate } from "../i18n";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { getNewProjectGitHubRepository } from "@t3tools/client-runtime/operations/projects";
 import {
@@ -18,7 +19,7 @@ import { openConveneProjectConfiguration } from "~/components/convene/ConvenePro
 function errorMessage(error: unknown): string {
   return error instanceof Error && error.message.trim().length > 0
     ? error.message
-    : "An error occurred.";
+    : i18n.t("common.error");
 }
 
 /**
@@ -30,6 +31,7 @@ function errorMessage(error: unknown): string {
  * Resolves to whether the project was created.
  */
 export function useNewProject() {
+  const t = useTranslate();
   const createNew = useAtomCommand(projectEnvironment.createNew, { reportFailure: false });
   const publishRepository = useAtomCommand(sourceControlEnvironment.publishRepository, {
     reportFailure: false,
@@ -56,8 +58,10 @@ export function useNewProject() {
           toastManager.add(
             stackedThreadToast({
               type: "error",
-              title: "Could not create the GitHub repository",
-              description: `${errorMessage(squashAtomCommandFailure(result))} Use Publish Repository in the Git menu to try again.`,
+              title: t("project.new.githubFailed"),
+              description: t("project.new.publishedRetry", {
+                error: errorMessage(squashAtomCommandFailure(result)),
+              }),
             }),
           );
         }
@@ -66,12 +70,12 @@ export function useNewProject() {
       toastManager.add(
         stackedThreadToast({
           type: "success",
-          title: "Published to GitHub",
+          title: t("project.new.githubPublished"),
           description: result.value.repository.nameWithOwner,
         }),
       );
     },
-    [publishRepository],
+    [publishRepository, t],
   );
 
   return useCallback(
@@ -89,7 +93,7 @@ export function useNewProject() {
           toastManager.add(
             stackedThreadToast({
               type: "error",
-              title: "Could not create the project",
+              title: t("project.new.failed"),
               description: errorMessage(squashAtomCommandFailure(result)),
             }),
           );
@@ -103,11 +107,18 @@ export function useNewProject() {
       toastManager.add(
         stackedThreadToast(
           commitError === undefined
-            ? { type: "success", title: `Created ${input.name}`, description: workspaceRoot }
+            ? {
+                type: "success",
+                title: t("project.new.created", { name: input.name }),
+                description: workspaceRoot,
+              }
             : {
                 type: "warning",
-                title: `Created ${input.name} without a first commit`,
-                description: `${commitError} The project is in ${workspaceRoot}.`,
+                title: t("project.new.noCommit", { name: input.name }),
+                description: t("project.new.commitFailure", {
+                  error: commitError,
+                  path: workspaceRoot,
+                }),
               },
         ),
       );
@@ -126,8 +137,8 @@ export function useNewProject() {
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Failed to open project",
-            description: `${errorMessage(error)} It will appear in the sidebar once this client catches up.`,
+            title: t("project.openFailed"),
+            description: t("project.new.waitForClient", { error: errorMessage(error) }),
           }),
         );
         return null;
@@ -137,13 +148,13 @@ export function useNewProject() {
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Failed to open project",
+            title: t("project.openFailed"),
             description: errorMessage(error),
           }),
         );
       });
       return true;
     },
-    [createNew, handleNewThread, publishToGitHub],
+    [createNew, handleNewThread, publishToGitHub, t],
   );
 }

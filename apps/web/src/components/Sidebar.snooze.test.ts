@@ -94,3 +94,26 @@ describe("snoozeWakeDescription", () => {
     );
   });
 });
+
+it("switches preset and wake labels to Chinese while preserving the wake instants", async () => {
+  const { changeLanguage, i18n } = await import("../i18n");
+  const now = localDate(2026, 4, 8, 10);
+  const english = resolveSnoozePresets(now, "24-hour");
+  try {
+    await changeLanguage("zh");
+    const chinese = resolveSnoozePresets(now, "24-hour", i18n.t);
+    expect(chinese.map(({ id, snoozedUntil }) => ({ id, snoozedUntil }))).toEqual(
+      english.map(({ id, snoozedUntil }) => ({ id, snoozedUntil })),
+    );
+    expect(chinese.find(({ id }) => id === "tomorrow")).toMatchObject({
+      label: "明天",
+      whenLabel: "9:00",
+    });
+    expect(chinese.find(({ id }) => id === "next-week")?.whenLabel).toContain("周一");
+    expect(
+      snoozeWakeDescription(localDate(2026, 4, 9, 9).toISOString(), now, "24-hour", i18n.t),
+    ).toBe("明天 9:00");
+  } finally {
+    await changeLanguage("en");
+  }
+});

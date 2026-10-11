@@ -7,25 +7,28 @@ function terminalNumber(terminalId: string): string | undefined {
 }
 
 /** Human-readable label for a terminal tab; matches mobile and web sidebars. */
-export function getTerminalLabel(terminalId: string): string {
+export function getTerminalLabel(terminalId: string, label = "Terminal"): string {
   const numericSuffix = terminalNumber(terminalId);
   if (numericSuffix) {
-    return `Terminal ${numericSuffix}`;
+    return `${label} ${numericSuffix}`;
   }
 
   return terminalId;
 }
 
-/** Prefer server summary label when present; otherwise fall back to `getTerminalLabel`. */
+/** Preserve process labels, and localize the server's generated label for an idle terminal. */
 export function resolveTerminalSessionLabel(
   terminalId: string,
-  summary: Pick<TerminalSummary, "label"> | null | undefined,
+  summary: Pick<TerminalSummary, "label" | "hasRunningSubprocess"> | null | undefined,
+  label = "Terminal",
 ): string {
   const trimmed = summary?.label?.trim();
-  if (trimmed && trimmed.length > 0) {
+  const isGeneratedLabel =
+    summary?.hasRunningSubprocess === false && trimmed === getTerminalLabel(terminalId);
+  if (trimmed && !isGeneratedLabel) {
     return trimmed;
   }
-  return getTerminalLabel(terminalId);
+  return getTerminalLabel(terminalId, label);
 }
 
 /**

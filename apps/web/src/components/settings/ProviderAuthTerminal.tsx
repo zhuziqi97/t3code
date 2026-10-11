@@ -1,3 +1,4 @@
+import { i18n, useTranslate } from "../../i18n";
 import type { ProviderAuthResponse } from "@t3tools/contracts";
 import { useEffect, useRef, useState } from "react";
 import { GhosttyTerminalSurface } from "../../terminal/ghostty/surface";
@@ -14,10 +15,14 @@ export default function ProviderAuthTerminal({
   readonly outputOffset?: number | undefined;
   readonly onResponse: (response: Extract<ProviderAuthResponse, { type: "terminal" }>) => void;
 }) {
+  const t = useTranslate();
   const mount = useRef<HTMLDivElement>(null);
   const surface = useRef<GhosttyTerminalSurface | null>(null);
   const latest = useRef({ output, offset: outputOffset ?? output.length, onResponse });
   const written = useRef(0);
+  useEffect(() => {
+    surface.current?.setAccessibleLabels(t("terminal.inputLabel"), t("terminal.scrollbackLabel"));
+  }, [t]);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     latest.current = { output, offset: outputOffset ?? output.length, onResponse };
@@ -34,6 +39,10 @@ export default function ProviderAuthTerminal({
     let disposed = false;
     void GhosttyTerminalSurface.create(element, {
       theme: terminalThemeFromApp(element),
+      accessibleLabels: {
+        input: i18n.t("terminal.inputLabel"),
+        scrollback: i18n.t("terminal.scrollbackLabel"),
+      },
       font: { size: 13 },
       onData: (data) => latest.current.onResponse({ type: "terminal", data }),
       onResize: (cols, rows) =>
@@ -44,7 +53,7 @@ export default function ProviderAuthTerminal({
         if (/^https?:\/\//i.test(url))
           void ensureLocalApi()
             .shell.openExternal(url)
-            .catch(() => setError("Could not open the provider link."));
+            .catch(() => setError("provider.setup.openProviderLinkFailed"));
       },
     })
       .then((terminal) => {
@@ -53,10 +62,14 @@ export default function ProviderAuthTerminal({
           return;
         }
         surface.current = terminal;
+        terminal.setAccessibleLabels(
+          i18n.t("terminal.inputLabel"),
+          i18n.t("terminal.scrollbackLabel"),
+        );
         terminal.write(latest.current.output);
         written.current = latest.current.offset;
       })
-      .catch(() => setError("Could not load the sign-in terminal. Cancel and retry sign-in."));
+      .catch(() => setError("provider.setup.terminalLoadFailed"));
     return () => {
       disposed = true;
       surface.current?.dispose();
@@ -67,12 +80,12 @@ export default function ProviderAuthTerminal({
     <>
       <div
         ref={mount}
-        aria-label="Provider sign-in terminal"
+        aria-label={t("provider.setup.signInTerminal")}
         className="relative h-64 overflow-hidden rounded-md border border-border"
       />
       {error ? (
         <p role="alert" className="text-destructive">
-          {error}
+          {t(error)}
         </p>
       ) : null}
     </>
