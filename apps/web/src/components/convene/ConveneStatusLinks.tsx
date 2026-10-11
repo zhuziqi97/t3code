@@ -1,10 +1,11 @@
 import { useTranslate } from "../../i18n";
 import { Link } from "@tanstack/react-router";
+import { Link2Icon, LoaderCircleIcon, UnplugIcon } from "lucide-react";
 import { AsyncResult } from "effect/reactivity";
 import type { EnvironmentId } from "@t3tools/contracts";
-import { useEnvironments } from "~/state/environments";
-import { Button } from "../ui/button";
-import { SidebarFooter } from "../ui/sidebar";
+import { useEnvironments, usePrimaryEnvironmentId } from "~/state/environments";
+import { SidebarMenuButton, SidebarMenuItem, useSidebar } from "../ui/sidebar";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { useConveneStatus } from "./ConveneConnectionPanel";
 
 function EnvironmentStatus({
@@ -15,42 +16,42 @@ function EnvironmentStatus({
   label: string;
 }) {
   const t = useTranslate();
+  const { isMobile, setOpenMobile } = useSidebar();
   const result = useConveneStatus(environmentId);
   const phase = AsyncResult.isSuccess(result) ? result.value.phase : "unavailable";
+  const description = `Convene · ${label} · ${t(`convene.status.${phase}`)}`;
+  const Icon =
+    phase === "connecting" ? LoaderCircleIcon : phase === "online" ? Link2Icon : UnplugIcon;
   return (
-    <Button
-      variant="ghost"
-      size="sm"
-      className="w-full justify-start"
-      render={<Link to="/settings/convene" search={{ machine: environmentId }} />}
-      aria-label={`Convene ${label}: ${t(`convene.status.${phase}`)}`}
-    >
-      <span className="truncate">
-        Convene · {label} ·{" "}
-        {phase === "online"
-          ? t("convene.status.online")
-          : phase === "connecting"
-            ? t("convene.status.connecting")
-            : phase === "unpaired"
-              ? t("convene.status.unpaired")
-              : phase === "offline"
-                ? t("convene.status.offline")
-                : t("convene.status.unavailable")}
-      </span>
-    </Button>
+    <SidebarMenuItem className="shrink-0">
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <SidebarMenuButton
+              size="icon"
+              aria-label={description}
+              render={<Link to="/settings/convene" search={{ machine: environmentId }} />}
+              onClick={() => {
+                if (isMobile) setOpenMobile(false);
+              }}
+            >
+              <Icon className={phase === "connecting" ? "animate-spin" : undefined} />
+            </SidebarMenuButton>
+          }
+        />
+        <TooltipPopup side="top">{description}</TooltipPopup>
+      </Tooltip>
+    </SidebarMenuItem>
   );
 }
+
+/** Matches the environment initially shown by the Convene settings page. */
 export function ConveneStatusLinks() {
   const { environments } = useEnvironments();
-  return (
-    <SidebarFooter>
-      {environments.map((environment) => (
-        <EnvironmentStatus
-          key={environment.environmentId}
-          environmentId={environment.environmentId}
-          label={environment.label}
-        />
-      ))}
-    </SidebarFooter>
-  );
+  const primaryId = usePrimaryEnvironmentId();
+  const environment =
+    environments.find((item) => item.environmentId === primaryId) ?? environments[0];
+  return environment ? (
+    <EnvironmentStatus environmentId={environment.environmentId} label={environment.label} />
+  ) : null;
 }

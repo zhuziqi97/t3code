@@ -1,4 +1,5 @@
 import { useTranslate } from "../../i18n";
+import { ConveneStatusLinks } from "../convene/ConveneStatusLinks";
 import { ArrowLeftIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { memo, useCallback } from "react";
@@ -232,6 +233,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             label={t("sidebar.usage")}
             onClick={handleUsageClick}
           />
+          <ConveneStatusLinks />
         </>
       )}
       <SidebarUpdatePill />
