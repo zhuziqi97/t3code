@@ -135,7 +135,7 @@ export const zh: Partial<Messages> = {
   "convene.sidebar.selectProject": "选择 {{project}}",
   "convene.sidebar.projectSettings": "项目设置",
   "convene.sidebar.actions": "{{project}} 的操作",
-  "convene.model.default": "跟随 Agent 默认模型（尚未报告名称）",
+  "convene.model.default": "默认模型",
   "convene.model.reported": "{{model}} · 跟随默认",
   "convene.model.unavailableSuffix": "（不可用）",
   "convene.cli.notInstalled":

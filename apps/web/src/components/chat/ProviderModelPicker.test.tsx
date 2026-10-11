@@ -100,7 +100,7 @@ describe("ProviderModelPicker", () => {
         options: [],
       });
 
-      expect(markup).toContain(model === "" ? "Follow agent default" : "Choose model");
+      expect(markup).toContain(model === "" ? "Default model" : "Choose model");
       expect(markup).not.toContain(ANTIGRAVITY_DEFAULT_MODEL);
     },
   );
@@ -212,12 +212,12 @@ it("updates the native-default label in place when language changes", async () =
       { slug: "raw/custom", name: "User model" },
     ],
   });
-  expect(container.textContent).toContain("Follow agent default");
+  expect(container.textContent).toContain("Default model");
   await act(async () => changeLanguage("zh"));
-  expect(container.textContent).toContain("跟随 Agent 默认模型");
+  expect(container.textContent).toContain("默认模型");
   expect(container.textContent).not.toContain("User model");
   await act(async () => changeLanguage("en"));
-  expect(container.textContent).toContain("Follow agent default");
+  expect(container.textContent).toContain("Default model");
 });
 
 it("shows the resolved native default without changing its follow-default selection", async () => {

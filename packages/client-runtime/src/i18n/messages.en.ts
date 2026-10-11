@@ -142,7 +142,7 @@ export const en = {
   "convene.sidebar.selectProject": "Select {{project}}",
   "convene.sidebar.projectSettings": "Project settings",
   "convene.sidebar.actions": "Actions for {{project}}",
-  "convene.model.default": "Follow agent default (model not reported)",
+  "convene.model.default": "Default model",
   "convene.model.reported": "{{model}} · Agent default",
   "convene.model.unavailableSuffix": " (Unavailable)",
   "convene.cli.notInstalled":
