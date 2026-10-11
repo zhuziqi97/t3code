@@ -885,7 +885,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
                       role="radio"
                       aria-checked={isSelected}
                       className={cn(
-                        "flex w-full items-baseline gap-2 rounded-lg border px-2.5 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        "flex w-full items-baseline gap-2 rounded-lg border px-2.5 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                         isSelected
                           ? "border-foreground/60 bg-muted/30"
                           : "border-border/50 hover:bg-muted/20",
@@ -1699,7 +1699,7 @@ function SavedBackendListRow({
             type="button"
             aria-expanded={routesOpen}
             onClick={() => setRoutesOpen((open) => !open)}
-            className="inline-flex shrink-0 items-center gap-0.5 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring"
+            className="inline-flex shrink-0 items-center gap-0.5 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
           >
             {routeCount === 1
               ? t("connections.routes")
@@ -1720,7 +1720,7 @@ function SavedBackendListRow({
             aria-expanded={permissionsOpen}
             aria-controls={`remote-permissions-${environmentId}`}
             onClick={() => setPermissionsOpen((open) => !open)}
-            className="inline-flex shrink-0 items-center gap-0.5 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring"
+            className="inline-flex shrink-0 items-center gap-0.5 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
           >
             {t("connections.permissions")}
             <ChevronRightIcon
@@ -3829,7 +3829,7 @@ export function ConnectionsSettings() {
             ) : null}
             {primaryEnvironment ? (
               <details className="group px-3 sm:px-4">
-                <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-md text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-md text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
                   {t("connections.permissions")}
                   <ChevronRightIcon
                     aria-hidden
@@ -4179,7 +4179,7 @@ export function ConnectionsSettings() {
   );
 
   return (
-    <SettingsPageContainer width="wide">
+    <SettingsPageContainer>
       {primarySettings}
       <SettingsSection
         {...searchableSetting("remote-environments", t)}

@@ -29,6 +29,7 @@ import { PullRequestStackLayerContent } from "./PullRequestStackLayerContent";
 import { PullRequestGlyph } from "./pullRequestIcons";
 
 export function PullRequestStackMenu({
+  hostLabel,
   stack,
   reference,
   environmentId,
@@ -40,6 +41,8 @@ export function PullRequestStackMenu({
   notice,
   onRetry,
 }: {
+  /** The host's name, which reports what it did with the stack. */
+  hostLabel: string;
   notice?: string | null;
   onRetry?: (() => void) | undefined;
   stack: PullRequestStack;
@@ -124,9 +127,8 @@ export function PullRequestStackMenu({
         type: "success",
         title:
           action === "merge"
-            ? i18n.t("pullRequest.flow.stack.mergeDone")
-            : i18n.t("pullRequest.flow.stack.rebaseDone"),
-        description: action === "merge" ? i18n.t("pullRequest.flow.stack.mergeHint") : undefined,
+            ? i18n.t("pullRequest.flow.stack.hostMergeHint", { host: hostLabel })
+            : undefined,
       });
     }
   };
@@ -253,7 +255,8 @@ export function PullRequestStackMenu({
             </DialogTitle>
             <DialogDescription>
               {confirmation === "merge"
-                ? t("pullRequest.flow.stack.mergeDescription", {
+                ? t("pullRequest.flow.stack.hostMergeDescription", {
+                    host: hostLabel,
                     number: reference.number,
                     base: stack.base,
                     method: t(`options.merge.${mergeMethod}`).toLowerCase(),

@@ -14,6 +14,39 @@
  * rename another product or rewrite a command it tells the user to run.
  */
 export const en = {
+  "pullRequest.commentFilter.label": "Filter comments",
+  "pullRequest.commentFilter.hidden": "{{count}} hidden",
+  "pullRequest.commentFilter.button": "Filter",
+  "pullRequest.commentFilter.show": "Show",
+  "pullRequest.commentFilter.bots": "Bot comments",
+  "pullRequest.commentFilter.resolved": "Resolved or dismissed",
+  "sourceControl.host.credentials": "{{host}} credentials",
+  "sourceControl.host.save": "Save {{host}} settings",
+  "sourceControl.fields.bitbucket.accessToken.label": "Access token",
+  "sourceControl.fields.bitbucket.accessToken.description":
+    "Scoped to one repository, project, or workspace. Create it in that item's Bitbucket settings.",
+  "sourceControl.fields.bitbucket.email.label": "Atlassian account email",
+  "sourceControl.fields.bitbucket.email.description":
+    "With an API token instead of an access token.",
+  "sourceControl.fields.bitbucket.apiToken.label": "API token",
+  "sourceControl.fields.bitbucket.apiToken.description":
+    "Reaches every repository your Atlassian account can. Give it read and write access to repositories and pull requests, and read:user:bitbucket.",
+
+  "project.new.hostFailed": "Could not create the {{host}} repository",
+  "project.new.hostPublished": "Published to {{host}}",
+  "project.new.privateRepository": "Create private repository",
+  "project.new.privateHost": "Create private repository on {{host}}",
+  "project.new.hostAccount": "Your {{host}} account",
+  "sidebar.project.search": "Search projects...",
+  "sidebar.project.noMatches": "No matching projects.",
+  "chat.timeline.cutOffBySteer": "Cut off by a steer",
+  "pullRequest.linked.hostStack":
+    "{{host}} stack of {{count}}: merging a layer lands the ones below it.",
+  "pullRequest.flow.stack.hostMergeHint":
+    "{{host}} merged the stack or added it to its merge queue.",
+  "pullRequest.flow.stack.hostMergeDescription":
+    "Merge #{{number}} and its unmerged layers below into {{base}} using {{method}}. {{host}} checks their rules before merging or queueing them and rebases the remaining stack after merging.",
+
   // Convene integration and its project/model controls.
   "settings.sections.convene": "Convene",
   "convene.project.rootFolder": "Project folder",

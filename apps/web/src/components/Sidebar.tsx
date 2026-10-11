@@ -1519,7 +1519,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               type="button"
               aria-label={t("thread.unpin")}
               onClick={handleUnpinClick}
-              className="group/unpin inline-flex cursor-pointer items-center justify-center rounded-sm pointer-coarse:min-h-11 pointer-coarse:min-w-9 text-muted-foreground/65 outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              className="group/unpin inline-flex cursor-pointer items-center justify-center rounded-sm pointer-coarse:min-h-11 pointer-coarse:min-w-9 text-muted-foreground/65 outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             />
           }
         >
@@ -1666,7 +1666,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                           type="button"
                           aria-label={t("thread.woke.dismiss")}
                           onClick={handleAcknowledgeWokeClick}
-                          className="inline-flex cursor-pointer items-center gap-1 rounded-sm text-xs font-medium text-warning-foreground outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                          className="inline-flex cursor-pointer items-center gap-1 rounded-sm text-xs font-medium text-warning-foreground outline-none hover:underline focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                         >
                           <AlarmClockIcon aria-hidden className="size-3" />
                           <span role="status">{t("thread.woke")}</span>

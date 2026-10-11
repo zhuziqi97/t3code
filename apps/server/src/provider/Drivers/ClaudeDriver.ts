@@ -36,6 +36,7 @@ import {
   type ClaudeAdapterV2DriverEnv,
 } from "../../orchestration-v2/Adapters/ClaudeAdapterV2.ts";
 import { ProviderDriverError } from "../Errors.ts";
+import { claudeUsageReader } from "./claudeUsage.ts";
 import { makeClaudeScopedLimitNames } from "../claudeUsageLimits.ts";
 import * as ClaudeResetCredits from "../claudeResetCredits.ts";
 import * as ResetCreditCoordinator from "../resetCreditCoordinator.ts";
@@ -72,6 +73,7 @@ import {
   type ProviderSnapshotSettings,
 } from "@t3tools/provider-core/server/snapshotSettings";
 import { makeClaudeContinuationGroupKey, resolveClaudeHomePath } from "./ClaudeHome.ts";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 const decodeClaudeSettings = Schema.decodeSync(ClaudeSettings);
 
 const DRIVER_KIND = ProviderDriverKind.make("claudeAgent");
@@ -109,7 +111,7 @@ export type ClaudeDriverEnv =
   | ProviderEventLoggers.ProviderEventLoggers
   | ServerConfig.ServerConfig;
 
-export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
+export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv, Path.Path> = {
   driverKind: DRIVER_KIND,
   metadata: {
     displayName: "Claude",
@@ -117,6 +119,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
   },
   configSchema: ClaudeSettings,
   defaultConfig: (): ClaudeSettings => decodeClaudeSettings({}),
+  usage: claudeUsageReader,
   create: ({ instanceId, displayName, accentColor, environment, enabled, config }) =>
     Effect.gen(function* () {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -149,7 +152,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
             ),
           );
       const modelCatalog = catalogFor(cwd);
-      const processEnv = mergeProviderInstanceEnvironment(environment);
+      const processEnv = yield* mergeProviderInstanceEnvironment(environment);
       const fallbackContinuationIdentity = defaultProviderContinuationIdentity({
         driverKind: DRIVER_KIND,
         instanceId,
@@ -157,7 +160,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
       const effectiveConfig = {
         ...config,
         enabled,
-        binaryPath: expandHomePath(config.binaryPath),
+        binaryPath: expandHomePath(config.binaryPath, yield* HostProcess.HomeDirectory),
       } satisfies ClaudeSettings;
       const resolveMaintenance = yield* makeCachedProviderMaintenanceResolution(
         resolveProviderMaintenanceCapabilitiesEffect(UPDATE, {
@@ -192,7 +195,13 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
         capacity: 32,
         timeToLive: CAPABILITIES_PROBE_TTL,
         lookup: (workspaceCwd: string) =>
-          probeClaudeCapabilities(effectiveConfig, processEnv, workspaceCwd).pipe(
+          Effect.all([
+            probeClaudeCapabilities(effectiveConfig, processEnv, workspaceCwd),
+            ClaudeResetCredits.readClaudeOrganizationId(accountConfigPath),
+          ]).pipe(
+            Effect.map(([probe, workspaceId]) =>
+              probe && workspaceId ? { ...probe, workspaceId } : probe,
+            ),
             Effect.tap((probe) =>
               probe?.models?.length
                 ? Ref.update(reportedModels, (reported) =>
@@ -200,6 +209,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
                   )
                 : Effect.void,
             ),
+            Effect.provideService(FileSystem.FileSystem, fileSystem),
             Effect.provideService(Path.Path, path),
           ),
       });

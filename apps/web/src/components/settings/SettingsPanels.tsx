@@ -429,7 +429,7 @@ function AboutVersionSection() {
   return (
     <>
       <SettingsRow
-        id={searchableSetting("desktop-updates").id}
+        id={searchableSetting("app-version").id}
         title={<AboutVersionTitle />}
         description={description}
         control={
@@ -452,6 +452,7 @@ function AboutVersionSection() {
       />
       {hasDesktopBridge ? (
         <SettingsRow
+          {...searchableSetting("update-track", t)}
           title={t("about.updateTrack")}
           description={t("about.updateTrack.description")}
           control={
@@ -484,6 +485,7 @@ function AboutVersionSection() {
         />
       ) : selectedHostedAppChannel ? (
         <SettingsRow
+          {...searchableSetting("update-track", t)}
           title={t("about.updateTrack")}
           description={t("about.updateTrack.hosted")}
           control={
@@ -3411,6 +3413,7 @@ export function GeneralSettingsPanel() {
         ) : (
           <>
             <SettingsRow
+              id={searchableSetting("app-version").id}
               title={<AboutVersionTitle />}
               description={t("about.version.description")}
             />

@@ -169,7 +169,7 @@ export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
                 <ComposerBanner.Content>
                   <button
                     type="button"
-                    className="min-w-0 flex-1 cursor-pointer truncate text-left text-foreground/80 outline-none before:absolute before:inset-0 before:rounded-sm focus-visible:before:ring-2 focus-visible:before:ring-ring"
+                    className="min-w-0 flex-1 cursor-pointer truncate text-left text-foreground/80 outline-none before:absolute before:inset-0 before:rounded-sm focus-visible:before:ring-2 focus-visible:before:ring-inset focus-visible:before:ring-ring"
                     data-stash-restore={entry.id}
                     aria-label={t("chat.stash.restoreNamed", { text: stashEntrySnippet(entry, t) })}
                     onPointerDown={(event) => event.preventDefault()}

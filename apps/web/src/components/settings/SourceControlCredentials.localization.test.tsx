@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 import * as Option from "effect/Option";
@@ -24,10 +24,34 @@ vi.mock("../../hooks/useSettings", () => ({
 vi.mock("../../state/server", () => ({ serverEnvironment: { updateSettings: {} } }));
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => state.save }));
 
+vi.mock("./settingsLayout", () => ({
+  SettingsRow: ({
+    title,
+    description,
+    control,
+    children,
+  }: {
+    title: ReactNode;
+    description: ReactNode;
+    control: ReactNode;
+    children: ReactNode;
+  }) => (
+    <section>
+      {title}
+      {description}
+      {control}
+      {children}
+    </section>
+  ),
+}));
 import { changeLanguage } from "../../i18n";
 import { GitHubTokenSettings } from "./GitHubTokenSettings";
 import { GitHubAccountSettings } from "./GitHubAccountSettings";
-import { BitbucketCredentialsSettings } from "./BitbucketCredentialsSettings";
+import { SourceControlHostSettings } from "./SourceControlHostSettings";
+import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
+import { SourceControlProviderKind } from "@t3tools/contracts";
+const bitbucketHost = sourceControlClients.get(SourceControlProviderKind.make("bitbucket"));
+const bitbucket = { ...bitbucketHost, settings: bitbucketHost.settings! };
 
 const environmentId = EnvironmentId.make("controlled-source-host");
 let root: Root;
@@ -37,8 +61,10 @@ beforeEach(async () => {
   await changeLanguage("en");
   state.settings = {
     ...DEFAULT_UNIFIED_SETTINGS,
-    github: { hosts: {}, tokens: {} },
-    bitbucket: { accessToken: "", email: "", apiToken: "" },
+    sourceControlHosts: {
+      github: { hosts: {}, tokens: {} },
+      bitbucket: { accessToken: "", email: "", apiToken: "" },
+    },
   };
   state.save.mockReset().mockResolvedValue({ _tag: "Success", value: undefined });
   state.onSaved.mockReset();
@@ -93,7 +119,11 @@ it("keeps GitHub host and token drafts across languages and does not repeat a pe
   await submit();
   expect(state.save).toHaveBeenCalledExactlyOnceWith({
     environmentId,
-    input: { patch: { github: { tokens: { "ghe.example.test": "Controlled-Raw-Token" } } } },
+    input: {
+      patch: {
+        sourceControlHosts: { github: { tokens: { "ghe.example.test": "Controlled-Raw-Token" } } },
+      },
+    },
   });
   await switchLanguage("en");
   expect(container.querySelector("fieldset")!.disabled).toBe(true);
@@ -112,43 +142,31 @@ it("keeps GitHub host and token drafts across languages and does not repeat a pe
   expect(state.onSaved).toHaveBeenCalledTimes(1);
 });
 
-it("preserves Bitbucket method and credential drafts and saves their original fields", async () => {
-  state.settings = {
-    ...state.settings!,
-    bitbucket: { accessToken: "[stored]", email: "", apiToken: "" },
-  };
+it("keeps a Bitbucket credential draft across language changes and saves the native field", async () => {
   await act(async () =>
     root.render(
-      <BitbucketCredentialsSettings environmentId={environmentId} onSaved={state.onSaved} />,
+      <SourceControlHostSettings
+        environmentId={environmentId}
+        definition={bitbucket}
+        onSaved={state.onSaved}
+      />,
     ),
   );
-  await act(async () => button("API token").click());
-  await type(`bitbucket-email-${environmentId}`, "Alice@Example.test");
-  await type(`bitbucket-api-token-${environmentId}`, "Controlled-API-Token");
+  const id = `source-control-bitbucket-${environmentId}-apiToken`;
+  await type(id, "Controlled-API-Token");
   await switchLanguage("zh");
-  expect(
-    (document.getElementById(`bitbucket-email-${environmentId}`) as HTMLInputElement).value,
-  ).toBe("Alice@Example.test");
-  expect(
-    (document.getElementById(`bitbucket-api-token-${environmentId}`) as HTMLInputElement).value,
-  ).toBe("Controlled-API-Token");
-  expect(container.textContent).toContain("保存后将替换现有的访问令牌。");
-  expect(container.textContent).toContain("read:user:bitbucket");
+  expect((document.getElementById(id) as HTMLInputElement).value).toBe("Controlled-API-Token");
+  expect(container.textContent).toContain("Atlassian 账户邮箱");
   expect(state.save).not.toHaveBeenCalled();
-  await submit();
+  await act(async () =>
+    document
+      .getElementById(id)!
+      .dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })),
+  );
   expect(state.save).toHaveBeenCalledExactlyOnceWith({
     environmentId,
-    input: {
-      patch: {
-        bitbucket: {
-          accessToken: "",
-          email: "Alice@Example.test",
-          apiToken: "Controlled-API-Token",
-        },
-      },
-    },
+    input: { patch: { sourceControlHosts: { bitbucket: { apiToken: "Controlled-API-Token" } } } },
   });
-  expect(state.onSaved).toHaveBeenCalledTimes(1);
 });
 
 it("keeps account visibility and raw diagnostics while Chinese account choices save raw logins", async () => {
@@ -203,7 +221,11 @@ it("keeps account visibility and raw diagnostics while Chinese account choices s
   expect(state.save).toHaveBeenCalledExactlyOnceWith({
     environmentId,
     input: {
-      patch: { github: { hosts: { "github.com": { enabled: true, account: "Raw-Work" } } } },
+      patch: {
+        sourceControlHosts: {
+          github: { hosts: { "github.com": { enabled: true, account: "Raw-Work" } } },
+        },
+      },
     },
   });
   expect(state.onSaved).toHaveBeenCalledTimes(1);

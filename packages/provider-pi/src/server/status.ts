@@ -103,11 +103,13 @@ function piModelsFromSettings(
 
 export function parseDiscoveredModels(
   data: unknown,
-  defaultThinkingLevel: unknown,
-  currentModel?: unknown,
+  state: unknown,
 ): ReadonlyArray<ServerProviderModel> {
   const models = recordField(data, "models");
   if (!Array.isArray(models)) return [];
+  const activeModel = recordField(state, "model");
+  const activeProvider = recordString(activeModel, "provider");
+  const activeModelId = recordString(activeModel, "id");
   const seen = new Set<string>();
   const parsed: Array<ServerProviderModel> = [];
   for (const model of models) {
@@ -121,11 +123,14 @@ export function parseDiscoveredModels(
       slug,
       name: recordString(model, "name") ?? slug,
       subProvider: provider,
-      isDefault:
-        provider === recordString(currentModel, "provider") &&
-        id === recordString(currentModel, "id"),
+      isDefault: provider === activeProvider && id === activeModelId,
       isCustom: false,
-      capabilities: thinkingCapabilitiesForPiModel(model, defaultThinkingLevel),
+      capabilities: thinkingCapabilitiesForPiModel(
+        model,
+        provider === activeProvider && id === activeModelId
+          ? recordString(state, "thinkingLevel")
+          : undefined,
+      ),
     });
   }
   return parsed;
@@ -171,11 +176,7 @@ const discoverPiViaRpc = (
     const commandsData = yield* connection
       .request({ type: "get_commands" })
       .pipe(Effect.orElseSucceed(() => undefined));
-    const discoveredModels = parseDiscoveredModels(
-      modelsData,
-      recordString(stateData, "thinkingLevel"),
-      recordField(stateData, "model"),
-    );
+    const discoveredModels = parseDiscoveredModels(modelsData, stateData);
     const { slashCommands, skills } = parsePiDiscoveredCommands(commandsData);
     return {
       models: discoveredModels,
@@ -308,7 +309,7 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(function
         status: "error",
         auth: { status: "unknown" },
         message: isCommandMissingCause(error)
-          ? "Pi CLI (`pi`) is not installed or not on PATH. Install with `npm install -g @earendil-works/pi-coding-agent`."
+          ? "Pi CLI (`pi`) is not installed or not on PATH. Install with `npm install -g --ignore-scripts @earendil-works/pi-coding-agent`."
           : "Failed to execute Pi CLI health check.",
       },
     });

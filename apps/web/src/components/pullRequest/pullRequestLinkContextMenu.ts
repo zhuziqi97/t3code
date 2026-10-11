@@ -1,5 +1,9 @@
 import { i18n } from "../../i18n";
 import type { ContextMenuItem } from "@t3tools/contracts";
+import {
+  type SourceControlClientDefinition,
+  UNKNOWN_SOURCE_CONTROL_CLIENT,
+} from "@t3tools/client-runtime/source-control-clients";
 
 import { writeTextToClipboard } from "~/hooks/useCopyToClipboard";
 import { readLocalApi } from "~/localApi";
@@ -9,32 +13,10 @@ import { toastManager } from "../ui/toast";
 export type PullRequestLinkContextMenuAction = "copy-link" | "open-external";
 
 /** Named for the host rather than "externally": the point is where you will land. */
-const OPEN_ON_HOST_NAMES: Partial<Record<string, string>> = {
-  github: "GitHub",
-  gitlab: "GitLab",
-  forgejo: "Forgejo",
-  bitbucket: "Bitbucket",
-  "azure-devops": "Azure DevOps",
-};
-
-export const openOnHostLabel = (provider: string): string =>
-  OPEN_ON_HOST_NAMES[provider]
-    ? i18n.t("pullRequest.link.openOnHost", { host: OPEN_ON_HOST_NAMES[provider] })
-    : i18n.t("pullRequest.link.openOnUnknownHost");
-
-export async function openPullRequestExternal(url: string): Promise<void> {
-  const api = readLocalApi();
-  if (!api) return;
-  try {
-    await api.shell.openExternal(url);
-  } catch (error) {
-    toastManager.add({
-      type: "error",
-      title: i18n.t("pullRequest.link.couldNotOpen"),
-      ...(error instanceof Error ? { description: error.message } : {}),
-    });
-  }
-}
+export const openOnHostLabel = (host: SourceControlClientDefinition): string =>
+  host === UNKNOWN_SOURCE_CONTROL_CLIENT
+    ? i18n.t("pullRequest.link.openOnUnknownHost")
+    : i18n.t("pullRequest.link.openOnHost", { host: host.label });
 
 /** Copy first: it is the reason to right-click a number rather than click it. */
 function pullRequestLinkContextMenuItems(
@@ -83,6 +65,20 @@ export async function showPullRequestLinkContextMenu({
       title: i18n.t(
         action === "copy-link" ? "pullRequest.link.couldNotCopy" : "pullRequest.link.couldNotOpen",
       ),
+    });
+  }
+}
+
+export async function openPullRequestExternal(url: string): Promise<void> {
+  const api = readLocalApi();
+  if (!api) return;
+  try {
+    await api.shell.openExternal(url);
+  } catch (error) {
+    toastManager.add({
+      type: "error",
+      title: i18n.t("pullRequest.link.couldNotOpen"),
+      ...(error instanceof Error ? { description: error.message } : {}),
     });
   }
 }

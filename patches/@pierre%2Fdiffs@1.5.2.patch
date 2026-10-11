@@ -1327,6 +1327,25 @@ index 869d1a184024621c85a2bee17966bef3fcb822c3..f2214aad8b919f23c6de0d81e660076e
  		theme: options?.theme,
  		disableLineNumbers: options?.disableLineNumbers,
  		overflow: options?.overflow,
+diff --git a/dist/utils/createFileHeaderElement.js b/dist/utils/createFileHeaderElement.js
+index 39fe30e..600442e 100644
+--- a/dist/utils/createFileHeaderElement.js
++++ b/dist/utils/createFileHeaderElement.js
+@@ -73,12 +73,12 @@ function createMetadataElement(fileDiff) {
+ 		}
+ 		if (deletions > 0 || additions === 0) children.push(createHastElement({
+ 			tagName: "span",
+-			children: [createTextNodeElement(`-${deletions}`)],
++			children: [createTextNodeElement(`-${deletions.toLocaleString()}`)],
+ 			properties: { "data-deletions-count": "" }
+ 		}));
+ 		if (additions > 0 || deletions === 0) children.push(createHastElement({
+ 			tagName: "span",
+-			children: [createTextNodeElement(`+${additions}`)],
++			children: [createTextNodeElement(`+${additions.toLocaleString()}`)],
+ 			properties: { "data-additions-count": "" }
+ 		}));
+ 	}
 diff --git a/package.json b/package.json
 index d9dc7b5f55ef4ac464e027fff9619212cec143f4..3c37baedae2d975c65fa7273e591338164aff2ae 100644
 --- a/package.json

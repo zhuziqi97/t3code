@@ -1,3 +1,4 @@
+import { SourceControlProviderKind } from "@t3tools/contracts";
 // @vitest-environment jsdom
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -135,7 +136,9 @@ it("keeps a failed scan diagnostic and only scans when the translated action is 
 });
 
 it("localizes discovered states and installation instructions while preserving tool names, versions and commands", async () => {
-  const gitlab = provider("gitlab", "Raw GitLab Host", { executable: "glab" });
+  const gitlab = provider(SourceControlProviderKind.make("gitlab"), "Raw GitLab Host", {
+    executable: "glab",
+  });
   state.discovery = {
     versionControlSystems: [
       {
@@ -150,14 +153,16 @@ it("localizes discovered states and installation instructions while preserving t
       },
     ],
     sourceControlProviders: [
-      provider("github", "GitHub", {
+      provider(SourceControlProviderKind.make("github"), "GitHub", {
         executable: "gh",
         status: "missing",
         installHint:
           "Install the GitHub command-line tool (`gh`) via https://cli.github.com/ or your package manager (for example `brew install gh`).",
       }),
       { ...gitlab, auth: { ...gitlab.auth, status: "unauthenticated" } },
-      provider("bitbucket", "Bitbucket", { auth: { ...gitlab.auth, status: "unauthenticated" } }),
+      provider(SourceControlProviderKind.make("bitbucket"), "Bitbucket", {
+        auth: { ...gitlab.auth, status: "unauthenticated" },
+      }),
     ],
   };
   await render();
@@ -173,7 +178,7 @@ it("localizes discovered states and installation instructions while preserving t
 });
 
 it("keeps a revealed account across languages and translates owned details while retaining raw failures", async () => {
-  const github = provider("github", "GitHub");
+  const github = provider(SourceControlProviderKind.make("github"), "GitHub");
   state.discovery = {
     versionControlSystems: [],
     sourceControlProviders: [

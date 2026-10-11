@@ -38,7 +38,7 @@ import { linkedPullRequestDetailAtom, useSharedPullRequestSummary } from "../sta
 import { useThreadRunningTerminalIds } from "../state/terminalSessions";
 import { vcsEnvironment } from "../state/vcs";
 import { useUiStateStore } from "../uiStateStore";
-import { resolveChangeRequestPresentation } from "../sourceControlPresentation";
+import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import {
   resolveThreadLastVisitedAt,
   resolveThreadStatusPill,
@@ -145,15 +145,10 @@ export function linkedPullRequestSnapshotStatus(
 ): LinkedThreadPullRequestStatus | null {
   const snapshot = link.snapshot;
   if (snapshot === null) return null;
-  const kind = link.url.includes("/-/merge_requests/")
-    ? "gitlab"
-    : link.url.includes("/pullrequest/")
-      ? "azure-devops"
-      : link.url.includes("/pull-requests/")
-        ? "bitbucket"
-        : link.url.includes("/pulls/")
-          ? "forgejo"
-          : "github";
+  // A link records no host kind, so read it from the URL's change request path.
+  const kind = (
+    sourceControlClients.findByChangeRequestUrl(link.url) ?? sourceControlClients.get(undefined)
+  ).kind;
   return {
     pr: {
       number: link.number,
@@ -465,13 +460,12 @@ export function prStatusIndicator(
   t: TFunction = i18n.t,
 ): PrStatusIndicator | null {
   if (!pr) return null;
-  const presentation = resolveChangeRequestPresentation(provider);
+  const { shortLabel } = sourceControlClients.get(provider?.kind).changeRequest;
   const state = resolvePullRequestState({ state: pr.state, isDraft: pr.isDraft === true }, t);
 
-  const stateLabel = state.label;
-  const tooltipLead = `${presentation.shortName} #${pr.number} - ${stateLabel}`;
+  const tooltipLead = `${shortLabel} #${pr.number} - ${state.label}`;
   return {
-    label: `${presentation.shortName} ${stateLabel.toLowerCase()}`,
+    label: `${shortLabel} ${state.label.toLowerCase()}`,
     colorClass: state.toneClassName,
     Icon: state.Icon,
     tooltip: `${tooltipLead}: ${pr.title}`,

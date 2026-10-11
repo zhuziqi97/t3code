@@ -89,7 +89,7 @@ describe("Pi native default", () => {
       ],
     };
     for (const provider of ["first", "second"]) {
-      const parsed = parseDiscoveredModels(models, undefined, { provider, id: "model" });
+      const parsed = parseDiscoveredModels(models, { model: { provider, id: "model" } });
       assert.deepEqual(
         parsed.filter((model) => model.isDefault).map((model) => model.slug),
         [`${provider}/model`],

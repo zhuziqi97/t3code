@@ -7,10 +7,8 @@ import type {
   VcsStatusResult,
 } from "@t3tools/contracts";
 import { isTemporaryWorktreeBranch } from "@t3tools/shared/git";
-import {
-  DEFAULT_CHANGE_REQUEST_TERMINOLOGY,
-  type ChangeRequestTerminology,
-} from "../sourceControlPresentation";
+import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
+import type { ChangeRequestTerminology } from "@t3tools/client-runtime/source-control-clients";
 
 export type GitActionIconName = "commit" | "push" | "pr";
 
@@ -71,9 +69,7 @@ function resolveChangeRequestTerminology(
   gitStatus: VcsStatusResult | null,
   t: TFunction = i18n.t,
 ): ChangeRequestTerminology {
-  return gitStatus?.sourceControlProvider
-    ? getSourceControlPresentation(gitStatus.sourceControlProvider, t).terminology
-    : { ...DEFAULT_CHANGE_REQUEST_TERMINOLOGY, singular: t("git.pullRequest") };
+  return getSourceControlPresentation(gitStatus?.sourceControlProvider, t).terminology;
 }
 
 export function resolveGitActionProgressPresentation(
@@ -139,7 +135,7 @@ export function buildGitActionProgressStages(
   t: TFunction = i18n.t,
 ): string[] {
   const terminology = input.terminology ?? {
-    ...DEFAULT_CHANGE_REQUEST_TERMINOLOGY,
+    ...sourceControlClients.get(undefined).changeRequest,
     singular: t("git.pullRequest"),
   };
   const branchStages = input.featureBranch ? [t("git.progress.preparingRef")] : [];
@@ -199,7 +195,6 @@ export function buildMenuItems(
   const canCreatePr =
     !isBusy &&
     hasBranch &&
-    !hasChanges &&
     !hasOpenPr &&
     hasDefaultBranchDelta &&
     !isBehind &&
@@ -432,7 +427,7 @@ export function resolveDefaultBranchActionDialogCopy(
   const branchLabel = input.branchName;
   const suffix = t("git.defaultSuffix", { ref: branchLabel });
   const terminology = input.terminology ?? {
-    ...DEFAULT_CHANGE_REQUEST_TERMINOLOGY,
+    ...sourceControlClients.get(undefined).changeRequest,
     singular: t("git.pullRequest"),
   };
 

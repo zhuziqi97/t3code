@@ -152,7 +152,7 @@ export function ZoomableImage({
         aria-label={t("chat.image.zoomable", { name: name })}
         aria-description={t("chat.image.zoomInstructions")}
         tabIndex={0}
-        className="max-w-[var(--media-width)] overflow-auto overscroll-contain rounded-lg bg-background shadow-2xl ring-1 ring-border/70 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="max-w-[var(--media-width)] overflow-auto overscroll-contain rounded-lg bg-background shadow-2xl ring-1 ring-border/70 outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:-outline-offset-2 focus-visible:outline-ring"
         style={{
           width: width || undefined,
           height: height || undefined,

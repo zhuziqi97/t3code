@@ -4,7 +4,7 @@ import {
   isXAiTaskCompletedWakeNotification,
   xAiRateLimitedErrorCode,
 } from "./xaiAcpExtension.ts";
-import { HostProcessEnvironment, HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import { resolveSelfInvocation, type SelfInvocation } from "@t3tools/shared/nodeRuntime";
 import {
   defaultInstanceIdForDriver,
@@ -230,7 +230,10 @@ export function grokLaunchRuntimeMode(
 }
 
 /** The flavor runs Grok's launcher through the adapter's spawner. */
-export function makeGrokAcpAdapterFlavor(options: GrokAdapterV2Options): AcpAdapterV2Flavor {
+export function makeGrokAcpAdapterFlavor(
+  options: GrokAdapterV2Options,
+  homeDirectory: string,
+): AcpAdapterV2Flavor {
   return {
     driver: GROK_PROVIDER,
     runtimeHarness: "Grok",
@@ -336,6 +339,7 @@ export function makeGrokAcpAdapterFlavor(options: GrokAdapterV2Options): AcpAdap
       extractGrokPlanMarkdownFromToolCallData(toolCall.data, {
         platform: options.hostPlatform,
         environment: options.environment,
+        homeDirectory,
       }),
     extractBackgroundTaskId: extractXAiMonitorTaskId,
     extractBackgroundToolMutation: extractXAiAcpBackgroundToolMutation,
@@ -360,7 +364,7 @@ export const makeGrokAdapterV2 = Effect.fn("makeGrokAdapterV2")(function* (
   return yield* makeAcpAdapterV2({
     instanceId: options.instanceId,
     flavor: {
-      ...makeGrokAcpAdapterFlavor(options),
+      ...makeGrokAcpAdapterFlavor(options, yield* HostProcess.HomeDirectory),
       nativeDefaultModel: (cwd) =>
         checkGrokProviderStatus(options.settings, options.environment, cwd).pipe(
           Effect.map(
@@ -394,8 +398,8 @@ export const GrokAdapterV2Driver: ProviderAdapterDriver<GrokSettings, GrokAdapte
   defaultConfig: (): GrokSettings => DEFAULT_GROK_SETTINGS,
   create: Effect.fn("GrokAdapterV2Driver.create")(
     function* (input: ProviderAdapterDriverCreateInput<GrokSettings>) {
-      const hostEnvironment = yield* HostProcessEnvironment;
-      const hostPlatform = yield* HostProcessPlatform;
+      const hostEnvironment = yield* HostProcess.Environment;
+      const hostPlatform = yield* HostProcess.Platform;
       const selfInvocation = yield* resolveSelfInvocation();
       const providerEventLoggers = yield* ProviderEventLoggers.ProviderEventLoggers;
       const continuationRequests = yield* ProviderContinuationRequests.ProviderContinuationRequests;
@@ -403,7 +407,7 @@ export const GrokAdapterV2Driver: ProviderAdapterDriver<GrokSettings, GrokAdapte
       return yield* makeGrokAdapterV2({
         instanceId: input.instanceId,
         settings: { ...input.config, enabled: input.enabled },
-        environment: mergeProviderInstanceEnvironment(input.environment, hostEnvironment),
+        environment: yield* mergeProviderInstanceEnvironment(input.environment, hostEnvironment),
         hostPlatform,
         selfInvocation,
         continuationRequests,
@@ -444,8 +448,8 @@ const layer: Layer.Layer<
 > = Layer.effect(
   ProviderAdapter.ProviderAdapterV2,
   Effect.gen(function* () {
-    const hostEnvironment = yield* HostProcessEnvironment;
-    const hostPlatform = yield* HostProcessPlatform;
+    const hostEnvironment = yield* HostProcess.Environment;
+    const hostPlatform = yield* HostProcess.Platform;
     const selfInvocation = yield* resolveSelfInvocation();
     const providerEventLoggers = yield* ProviderEventLoggers.ProviderEventLoggers;
     const continuationRequests = yield* ProviderContinuationRequests.ProviderContinuationRequests;

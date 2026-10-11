@@ -14,6 +14,36 @@
 import type { Messages } from "./messages.en.ts";
 
 export const zh: Partial<Messages> = {
+  "pullRequest.commentFilter.label": "筛选评论",
+  "pullRequest.commentFilter.hidden": "已隐藏 {{count}} 条",
+  "pullRequest.commentFilter.button": "筛选",
+  "pullRequest.commentFilter.show": "显示",
+  "pullRequest.commentFilter.bots": "机器人评论",
+  "pullRequest.commentFilter.resolved": "已解决或已忽略",
+  "sourceControl.host.credentials": "{{host}} 凭据",
+  "sourceControl.host.save": "保存 {{host}} 设置",
+  "sourceControl.fields.bitbucket.accessToken.label": "访问令牌",
+  "sourceControl.fields.bitbucket.accessToken.description":
+    "限定于一个仓库、项目或工作区，在对应 Bitbucket 设置中创建。",
+  "sourceControl.fields.bitbucket.email.label": "Atlassian 账户邮箱",
+  "sourceControl.fields.bitbucket.email.description": "配合 API 令牌使用，替代访问令牌。",
+  "sourceControl.fields.bitbucket.apiToken.label": "API 令牌",
+  "sourceControl.fields.bitbucket.apiToken.description":
+    "可访问 Atlassian 账户有权访问的仓库。需要仓库和拉取请求的读写权限，以及 read:user:bitbucket。",
+
+  "project.new.hostFailed": "无法创建 {{host}} 仓库",
+  "project.new.hostPublished": "已发布到 {{host}}",
+  "project.new.privateRepository": "创建私有仓库",
+  "project.new.privateHost": "在 {{host}} 创建私有仓库",
+  "project.new.hostAccount": "你的 {{host}} 账户",
+  "sidebar.project.search": "搜索项目…",
+  "sidebar.project.noMatches": "没有匹配的项目。",
+  "chat.timeline.cutOffBySteer": "已被引导消息中断",
+  "pullRequest.linked.hostStack": "{{host}} 堆叠共 {{count}} 层：合并某层也会合并其下方各层。",
+  "pullRequest.flow.stack.hostMergeHint": "{{host}} 已合并堆叠或将其加入合并队列。",
+  "pullRequest.flow.stack.hostMergeDescription":
+    "使用 {{method}} 将 #{{number}} 及其下方未合并层合入 {{base}}。{{host}} 会在合并或排队前检查规则，并在合并后变基剩余堆叠。",
+
   // Convene integration and its project/model controls.
   "settings.sections.convene": "Convene",
   "convene.project.rootFolder": "项目文件夹",

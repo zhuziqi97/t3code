@@ -1,3 +1,4 @@
+import { SourceControlProviderKind } from "@t3tools/contracts";
 // @vitest-environment jsdom
 import { EnvironmentId, ProjectId, type PullRequestDetailView } from "@t3tools/contracts";
 import { act, useRef, useState } from "react";
@@ -88,7 +89,7 @@ const reference = {
 };
 const detail: PullRequestDetailView = {
   ...reference,
-  provider: "github",
+  provider: SourceControlProviderKind.make("github"),
   projectTitle: "Raw project",
   workspaceRoot: "/repo/原文",
   title: "Raw title 原文",

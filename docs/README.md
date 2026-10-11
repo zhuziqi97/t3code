@@ -14,6 +14,7 @@
 - [SnapShots](./user/snap-shot.md)
 - [Visual replies](./user/html-renders.md)
 - [Import browser sessions](./user/browser-import.md)
+- [Use T3 Code as your default browser](./user/default-browser.md)
 - [Devices](./user/devices.md)
 - [Usage and limits](./user/usage.md)
 - [Product usage data](./user/telemetry.md)
@@ -55,6 +56,8 @@ source alone does not explain. Most code changes do not need an internal documen
 - [Voice input](./internals/voice-input.md)
 
 ### Runbooks
+
+- [Convene fork requirements and merge decisions](./operations/convene-fork-maintenance.md)
 
 - [Development and local builds](./operations/development.md)
 - [T3 Connect setup](./operations/connect-setup.md)

@@ -11,6 +11,7 @@ import { Button } from "../ui/button";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
 import { groupGitHubAccounts, nextGitHubHosts } from "./GitHubAccountSettings.logic";
+import { readGitHubSettings } from "@t3tools/client-runtime/source-control-clients";
 import { redactedPlaceholder } from "./RedactedSensitiveText";
 
 /** Sentinel select value for "follow gh's active login"; logins never contain spaces. */
@@ -53,7 +54,8 @@ export function GitHubAccountSettings({
   readonly onSaved: () => void;
 }) {
   const t = useTranslate();
-  const hosts = useEnvironmentSettings(environmentId, (settings) => settings.github.hosts);
+  const github = useEnvironmentSettings(environmentId, readGitHubSettings);
+  const hosts = github.hosts;
   const updateSettings = useAtomCommand(serverEnvironment.updateSettings, {
     label: t("sourceControl.github.saveAccounts"),
   });
@@ -69,7 +71,11 @@ export function GitHubAccountSettings({
     try {
       const result = await updateSettings({
         environmentId,
-        input: { patch: { github: { hosts: nextGitHubHosts(hosts, host, change) } } },
+        input: {
+          patch: {
+            sourceControlHosts: { github: { hosts: nextGitHubHosts(hosts, host, change) } },
+          },
+        },
       });
       if (result._tag === "Success") onSaved();
     } finally {
