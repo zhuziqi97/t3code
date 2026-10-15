@@ -2491,26 +2491,40 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       if (
         Option.isNone(created) ||
         created.value.event.type !== "thread.created" ||
-        created.value.event.payload.title !== thread.title ||
+        !isLegacyCodexContextTitle(created.value.event.payload.title) ||
         !String(created.value.event.id).startsWith("agent-session-import:v2:")
       )
         return;
-      // Even a rename back to the original placeholder belongs to the user.
-      const renamed = yield* eventStore
-        .read({
-          threadId: command.threadId,
-          eventType: "thread.metadata-updated",
-        })
+      // A prior repair is not a user rename. All other title writers, including
+      // a rename back to the original placeholder, keep ownership of the title.
+      let previousTitle = created.value.event.payload.title;
+      let renamed = false;
+      yield* eventStore
+        .read({ threadId: command.threadId, eventType: "thread.metadata-updated" })
         .pipe(
-          Stream.runFold(
-            () => false,
-            (changed, { event }) =>
-              changed ||
-              (event.type === "thread.metadata-updated" && event.payload.title !== thread.title),
+          Stream.runForEach(({ event, commandId }) =>
+            Effect.gen(function* () {
+              if (
+                renamed ||
+                event.type !== "thread.metadata-updated" ||
+                event.payload.title === previousTitle
+              )
+                return;
+              const receipt =
+                commandId === null
+                  ? Option.none()
+                  : yield* commandReceipts.getByCommandId(commandId);
+              if (
+                Option.isNone(receipt) ||
+                receipt.value.commandType !== "thread.imported-title.repair"
+              )
+                renamed = true;
+              previousTitle = event.payload.title;
+            }),
           ),
           mapDispatchError(command),
         );
-      if (renamed) return;
+      if (renamed || previousTitle !== thread.title) return;
     }
     if (thread.deletedAt !== null) {
       return yield* new OrchestratorDispatchError({

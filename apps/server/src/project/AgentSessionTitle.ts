@@ -1,6 +1,13 @@
 /** Find the first code-unit offset after context envelopes injected into a Codex message. */
 function skipLeadingCodexContext(text: string): number {
-  const contextTags = ["recommended_plugins", "environment_context", "user_instructions"];
+  const contextTags = [
+    "recommended_plugins",
+    "environment_context",
+    "user_instructions",
+    "codex_internal_context",
+    "in-app-browser-context",
+    "system-reminder",
+  ];
   let offset = 0;
   const skipWhitespace = () => {
     while (offset < text.length && /\s/.test(text[offset] ?? "")) offset += 1;
@@ -10,8 +17,8 @@ function skipLeadingCodexContext(text: string): number {
   while (offset < text.length) {
     let removedContext = false;
     for (const tag of contextTags) {
-      const openingTag = `<${tag}>`;
-      if (!text.startsWith(openingTag, offset)) continue;
+      const openingTag = text.slice(offset).match(new RegExp(`^<${tag}(?:\\s[^>]*|)>`))?.[0];
+      if (openingTag === undefined) continue;
       const closingTag = `</${tag}>`;
       const closingOffset = text.indexOf(closingTag, offset + openingTag.length);
       if (closingOffset === -1) return text.length;
@@ -66,7 +73,7 @@ export function deriveImportedThreadTitle(
 export function isLegacyCodexContextTitle(title: string): boolean {
   return (
     /^# AGENTS\.md instructions(?:\s|$)/.test(title) ||
-    /^<(?:recommended_plugins|environment_context|user_instructions|system-reminder|in-app-browser-context)(?:\s[^>]*|)>$/.test(
+    /^<(?:recommended_plugins|environment_context|user_instructions|system-reminder|in-app-browser-context|codex_internal_context)(?:\s[^>]*|)>$/.test(
       title,
     )
   );

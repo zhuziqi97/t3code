@@ -1,3 +1,4 @@
+import * as CommandReceiptStore from "./CommandReceiptStore.ts";
 import * as Layer from "effect/Layer";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as EventStore from "./EventStore.ts";
@@ -24,7 +25,11 @@ const harnessLayer = ProviderReplayHarness.layerWithRegistry(
   ProviderAdapterRegistry.layerFromAdapters([]),
   { runEffectWorker: false, databaseLayer },
 );
-const layer = Layer.merge(harnessLayer, EventStore.layer.pipe(Layer.provide(databaseLayer)));
+const layer = Layer.mergeAll(
+  harnessLayer,
+  EventStore.layer.pipe(Layer.provide(databaseLayer)),
+  CommandReceiptStore.layer.pipe(Layer.provide(databaseLayer)),
+);
 const projectId = ProjectId.make("project:import-title");
 const instanceId = ProviderInstanceId.make("codex");
 const oldTitle = "# AGENTS.md instructions for /repo";
@@ -140,5 +145,51 @@ it.effect.each([{ imported: false }, { evidence: false }, { title: "Manual title
       const before = (yield* orchestrator.getThreadRecords(id, [])).thread;
       yield* repair(id, "ineligible");
       expect((yield* orchestrator.getThreadRecords(id, [])).thread).toEqual(before);
+    }).pipe(Effect.provide(layer)),
+);
+
+it.effect.each([false, true])(
+  "can correct a prior repair but preserves a later manual rename: %s",
+  (manual) =>
+    Effect.gen(function* () {
+      const id = yield* seed("import:codex:previous-repair");
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const thread = (yield* orchestrator.getThreadRecords(id, [])).thread;
+      const sink = yield* EventSink.EventSinkV2;
+      const commandId = CommandId.make("prior-repair");
+      const events = yield* sink.write({
+        commandId,
+        events: [
+          {
+            id: EventId.make("previous-repair-event"),
+            type: "thread.metadata-updated",
+            threadId: id,
+            occurredAt: now,
+            providerInstanceId: instanceId,
+            payload: { ...thread, title: '<codex_internal_context source="goal">' },
+          },
+        ],
+      });
+      const receipts = yield* CommandReceiptStore.CommandReceiptStoreV2;
+      yield* receipts.upsert({
+        commandId,
+        threadId: id,
+        commandType: "thread.imported-title.repair",
+        status: "accepted",
+        error: null,
+        acceptedAt: now,
+        resultSequence: events[0]!.sequence,
+      });
+      if (manual)
+        yield* orchestrator.dispatch({
+          type: "thread.metadata.update",
+          commandId: CommandId.make("manual-after-repair"),
+          threadId: id,
+          title: "<recommended_plugins>",
+        });
+      yield* repair(id, "correct-prior-repair");
+      expect((yield* orchestrator.getThreadRecords(id, [])).thread.title).toBe(
+        manual ? "<recommended_plugins>" : "修复项目标题",
+      );
     }).pipe(Effect.provide(layer)),
 );
