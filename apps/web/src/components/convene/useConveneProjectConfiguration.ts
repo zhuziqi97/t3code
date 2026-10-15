@@ -1,3 +1,4 @@
+import { toastManager } from "../ui/toast";
 import { useTranslate } from "../../i18n";
 import { useAtomValue } from "@effect/atom-react";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
@@ -109,6 +110,13 @@ export function useConveneProjectConfiguration(environmentId: EnvironmentId, pro
       const cause = squashAtomCommandFailure(result);
       setError(cause instanceof Error ? cause.message : t("convene.error.save"));
       return false;
+    }
+    if (
+      input.operation === "save" &&
+      !current.current.configuration?.mcp_enabled &&
+      result.value.mcp_enabled
+    ) {
+      toastManager.add({ type: "success", title: t("convene.project.mcpEnabled") });
     }
     accept(result.value, input.operation === "save");
     setLastOperation(null);

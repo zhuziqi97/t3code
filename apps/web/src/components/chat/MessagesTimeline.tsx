@@ -2471,7 +2471,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
           className="me-1 text-2xs text-muted-foreground/70"
           data-user-message-attribution="t3code"
         >
-          Sent by T3 Code
+          {t("chat.timeline.sentT3")}
         </p>
       ) : userMessage.attribution === "agent" ? (
         <p className="me-1 text-2xs text-muted-foreground/70" data-user-message-attribution="agent">
@@ -3150,7 +3150,10 @@ function v2EventPresentation(
     case "run_interrupt_result":
       return {
         label: t("chat.timeline.interrupted"),
-        detail: item.message,
+        detail:
+          item.message === "Run interrupted by user"
+            ? t("chat.timeline.interruptedByUser")
+            : item.message,
         tone: "danger",
         icon: XIcon,
       };

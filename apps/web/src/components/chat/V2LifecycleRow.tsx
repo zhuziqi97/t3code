@@ -103,7 +103,11 @@ export function V2LifecycleRow(props: {
     return (
       <TimelineSystemDivider
         label={t("chat.timeline.interrupted")}
-        detail={item.message}
+        detail={
+          item.message === "Run interrupted by user"
+            ? t("chat.timeline.interruptedByUser")
+            : item.message
+        }
         tone="danger"
         icon={XIcon}
       />

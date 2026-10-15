@@ -5,11 +5,13 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { beforeEach, afterEach, expect, it, vi } from "vite-plus/test";
 
 const model = vi.hoisted(() => ({
+  toast: vi.fn(),
   query: vi.fn(),
   mutate: vi.fn(),
   online: true,
   commands: { query: {}, mutate: {} },
 }));
+vi.mock("../ui/toast", () => ({ toastManager: { add: model.toast } }));
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => true }));
 vi.mock("~/state/convene", () => ({
   conveneEnvironment: {
@@ -68,6 +70,7 @@ beforeEach(() => {
     removeItem: (key: string) => storage.delete(key),
   });
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  model.toast.mockReset();
   model.online = true;
   model.query
     .mockReset()
@@ -158,4 +161,24 @@ it("keeps a failed save draft, makes no offline writes and saves the latest edit
   expect(model.mutate.mock.calls[1]?.[0].input.mcp_capabilities.issue_enabled).toBe(true);
   expect(state.dirty).toBe(false);
   expect(state.lastOperation).toBeNull();
+});
+
+it("announces new-session activation only after enabling MCP succeeds", async () => {
+  await mount();
+  await act(async () => state.edit({ ...state.draft!, enabled: true }));
+  model.mutate.mockResolvedValueOnce(AsyncResult.failure(Cause.fail(new Error("offline"))));
+  await act(async () => {
+    await state.save();
+  });
+  expect(model.toast).not.toHaveBeenCalled();
+  model.mutate.mockResolvedValueOnce(AsyncResult.success({ ...configuration, mcp_enabled: true }));
+  await act(async () => {
+    await state.save();
+  });
+  expect(model.toast).toHaveBeenCalledTimes(1);
+  expect(model.toast.mock.calls[0]?.[0].title).toContain("new chat");
+  await act(async () => {
+    await state.save();
+  });
+  expect(model.toast).toHaveBeenCalledTimes(1);
 });
