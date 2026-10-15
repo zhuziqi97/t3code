@@ -1,3 +1,10 @@
+import {
+  LANGUAGE_LABELS,
+  SUPPORTED_LANGUAGES,
+  isLanguagePreference,
+} from "@t3tools/client-runtime/i18n";
+import { useUpdateClientSettings } from "../../hooks/useSettings";
+import { Select, SelectTrigger, SelectValue, SelectPopup, SelectItem } from "../ui/select";
 import { APP_BASE_NAME } from "../../branding";
 import { openConveneProjectConfiguration } from "../convene/ConveneProjectDialog";
 import { useAuth } from "@clerk/react";
@@ -38,10 +45,9 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 
 import { TYPOGRAPHY_ADVANCED_STORAGE_KEY } from "../../appearanceFonts";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
-import { useTranslate } from "../../i18n";
+import { i18n, useTranslate } from "../../i18n";
 import { Trans } from "react-i18next";
 import { hasCloudPublicConfig } from "../../cloud/publicConfig";
-import { PRIVACY_POLICY_URL } from "../../legalLinks";
 import { useT3ConnectAuthPrompt } from "../clerk/useT3ConnectAuthPrompt";
 import { useCompleteOnboarding } from "../../onboarding/firstRun";
 import {
@@ -127,6 +133,7 @@ export function WelcomeWizard({
   readonly resumeEnvironmentId?: EnvironmentId | undefined;
   readonly onDone: (projectRef?: ScopedProjectRef) => void | Promise<void>;
 }) {
+  const updateClientSettings = useUpdateClientSettings();
   const completeOnboarding = useCompleteOnboarding();
   const [step, setStep] = useState<WizardStep>(resumeEnvironmentId ? "agents" : "connection");
   const { environments } = useEnvironments();
@@ -237,11 +244,43 @@ export function WelcomeWizard({
         <WizardHeader
           title={t("wizard.header.title")}
           identity={
-            <div className="flex items-baseline gap-1.5" role="img" aria-label={APP_BASE_NAME}>
-              <T3Wordmark className="h-4 w-auto shrink-0" aria-hidden />
-              <span className="text-2xl font-medium tracking-tight text-muted-foreground">
-                Code for Convene
-              </span>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-baseline gap-1.5" role="img" aria-label={APP_BASE_NAME}>
+                <T3Wordmark className="h-4 w-auto shrink-0" aria-hidden />
+                <span className="text-2xl font-medium tracking-tight text-muted-foreground">
+                  Code for Convene
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Select
+                  value={i18n.resolvedLanguage === "zh" ? "zh" : "en"}
+                  onValueChange={(value) => {
+                    if (!isLanguagePreference(value) || value === "system") return;
+                    void updateClientSettings({ languagePreference: value }).catch(
+                      (error: unknown) => {
+                        toastManager.add({
+                          type: "error",
+                          title: t("settings.save.notSaved"),
+                          description: error instanceof Error ? error.message : String(error),
+                        });
+                      },
+                    );
+                  }}
+                >
+                  <SelectTrigger size="sm" aria-label="语言 / Language">
+                    <SelectValue>
+                      {LANGUAGE_LABELS[i18n.resolvedLanguage === "zh" ? "zh" : "en"]}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectPopup align="end" alignItemWithTrigger={false}>
+                    {SUPPORTED_LANGUAGES.map((language) => (
+                      <SelectItem key={language} value={language}>
+                        {LANGUAGE_LABELS[language]}
+                      </SelectItem>
+                    ))}
+                  </SelectPopup>
+                </Select>
+              </div>
             </div>
           }
         >
@@ -473,23 +512,7 @@ function ConnectionStep({
           })}
         </p>
       ) : null}
-      <div className="mt-6 flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-        <p className="min-w-0 text-xs leading-relaxed text-muted-foreground">
-          <Trans
-            t={t}
-            i18nKey="wizard.connection.privacy"
-            components={{
-              policy: (
-                <a
-                  className="underline underline-offset-2 hover:text-foreground"
-                  href={PRIVACY_POLICY_URL}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                />
-              ),
-            }}
-          />
-        </p>
+      <div className="mt-6 flex justify-end">
         <Button
           className="shrink-0 self-end"
           ref={continueRef}

@@ -99,7 +99,7 @@ export function useConveneProjectConfiguration(environmentId: EnvironmentId, pro
     }
   };
   const run = async (input: ConveneProjectMutation) => {
-    if (!online || !fresh || !permitted) return;
+    if (!online || !fresh || !permitted) return false;
     setBusy(true);
     setError(null);
     setLastOperation(input);
@@ -108,10 +108,11 @@ export function useConveneProjectConfiguration(environmentId: EnvironmentId, pro
     if (result._tag === "Failure") {
       const cause = squashAtomCommandFailure(result);
       setError(cause instanceof Error ? cause.message : t("convene.error.save"));
-      return;
+      return false;
     }
     accept(result.value, input.operation === "save");
     setLastOperation(null);
+    return true;
   };
   const dirty =
     configuration !== null &&
@@ -126,6 +127,7 @@ export function useConveneProjectConfiguration(environmentId: EnvironmentId, pro
         mcp_scope_modules: draft.scope,
         mcp_capabilities: draft.capabilities,
       });
+    return Promise.resolve(!dirty);
   };
   const discard = () => {
     if (configuration) edit(configurationDraft(configuration));
@@ -138,6 +140,9 @@ export function useConveneProjectConfiguration(environmentId: EnvironmentId, pro
     busy,
     error,
     online,
+    needsConnection:
+      AsyncResult.isSuccess(statusResult) &&
+      (statusResult.value.phase === "unpaired" || statusResult.value.phase === "offline"),
     permitted,
     lastOperation,
     refresh,

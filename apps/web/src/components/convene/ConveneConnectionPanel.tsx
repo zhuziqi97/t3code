@@ -4,6 +4,8 @@ import { type ConvenePairing, type EnvironmentId } from "@t3tools/contracts";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { AsyncResult } from "effect/reactivity";
 import { useEffect, useId, useState } from "react";
+import { CopyIcon, LoaderCircleIcon } from "lucide-react";
+import { writeTextToClipboard } from "../../hooks/useCopyToClipboard";
 
 import { conveneEnvironment } from "../../state/convene";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -32,14 +34,89 @@ export function ConveneConnectionPanel({ environmentId }: { environmentId: Envir
   const [expired, setExpired] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState<"code" | "link" | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
+  const paired = status?.runnerId !== null && status?.runnerId !== undefined;
+  const pairingError = (cause: unknown) => {
+    const code = typeof cause === "object" && cause !== null && "code" in cause ? cause.code : null;
+    return code === "INVALID_PLATFORM_URL"
+      ? t("convene.connection.invalidUrl")
+      : code === "RUNNER_PAIRING_EXPIRED" ||
+          code === "RUNNER_PAIRING_INVALID" ||
+          code === "RUNNER_PAIRING_CONSUMED"
+        ? t("convene.connection.expired")
+        : t("convene.connection.checkFailed");
+  };
   useEffect(() => {
-    if (!pairing) return;
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(null), 2000);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+  useEffect(() => {
+    if (!pairing || paired) return;
     const timer = window.setTimeout(
       () => setExpired(true),
       Math.max(0, pairing.expiresAt - Date.now()),
     );
     return () => window.clearTimeout(timer);
-  }, [pairing]);
+  }, [pairing, paired]);
+  useEffect(() => {
+    if (!pairing || paired || expired || error || !permitted) return;
+    let cancelled = false;
+    let timer: number;
+    const poll = async () => {
+      if (Date.now() >= pairing.expiresAt) {
+        setExpired(true);
+        return;
+      }
+      const response = await manage({
+        environmentId,
+        input: {
+          operation: "exchange",
+          baseUrl: pairing.baseUrl,
+          deviceCode: pairing.value.device_code,
+        },
+      });
+      if (cancelled) return;
+      if (response._tag === "Failure") {
+        const cause = squashAtomCommandFailure(response);
+        const code =
+          typeof cause === "object" && cause !== null && "code" in cause ? cause.code : null;
+        if (
+          code === "RUNNER_PAIRING_EXPIRED" ||
+          code === "RUNNER_PAIRING_INVALID" ||
+          code === "RUNNER_PAIRING_CONSUMED"
+        )
+          setExpired(true);
+        else setError(t("convene.connection.checkFailed"));
+        return;
+      }
+      if (response.value.type === "status") {
+        setPairing(null);
+        return;
+      }
+      timer = window.setTimeout(poll, pairing.value.interval * 1000);
+    };
+    timer = window.setTimeout(poll, pairing.value.interval * 1000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [pairing, paired, expired, error, permitted, manage, environmentId, t]);
+  const copy = async (kind: "code" | "link") => {
+    if (!pairing) return;
+    setCopyError(null);
+    try {
+      const didCopy = await writeTextToClipboard(
+        kind === "code" ? pairing.value.user_code : pairing.value.verification_uri,
+        t(kind === "code" ? "convene.connection.copyCode" : "convene.connection.copyLink"),
+      );
+      if (didCopy) setCopied(kind);
+      else setCopyError(t("convene.connection.copyFailed"));
+    } catch {
+      setCopyError(t("convene.connection.copyFailed"));
+    }
+  };
   const run = async (input: Parameters<typeof manage>[0]["input"]) => {
     setBusy(true);
     setError(null);
@@ -47,7 +124,7 @@ export function ConveneConnectionPanel({ environmentId }: { environmentId: Envir
     setBusy(false);
     if (response._tag === "Failure") {
       const cause = squashAtomCommandFailure(response);
-      setError(cause instanceof Error ? cause.message : t("convene.error.connection"));
+      setError(pairingError(cause));
       return;
     }
     if (response.value.type === "pairing") {
@@ -57,9 +134,12 @@ export function ConveneConnectionPanel({ environmentId }: { environmentId: Envir
         baseUrl,
       });
       setExpired(false);
-    } else setPairing(null);
+      setCopied(null);
+      setCopyError(null);
+    } else if (response.value.type === "status") {
+      setPairing(null);
+    }
   };
-  const paired = status?.runnerId !== null && status?.runnerId !== undefined;
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">{t("convene.connection.description")}</p>
@@ -93,10 +173,7 @@ export function ConveneConnectionPanel({ environmentId }: { environmentId: Envir
       )}
       {error && (
         <Alert variant="error">
-          <AlertDescription>
-            <p>{t("convene.error.connection")}</p>
-            <p>{error}</p>
-          </AlertDescription>
+          <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
       {!permitted && (
@@ -126,48 +203,77 @@ export function ConveneConnectionPanel({ environmentId }: { environmentId: Envir
         </div>
       ) : pairing ? (
         <div className="space-y-3">
-          <p className="text-sm">
-            {t("convene.connection.approveCode")} <strong>{pairing.value.user_code}</strong>
-          </p>
+          <p className="text-sm">{t("convene.connection.approveCode")}</p>
+          <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3">
+            <strong className="font-mono text-lg tracking-wide select-text">
+              {pairing.value.user_code}
+            </strong>
+            <Button variant="outline" size="sm" onClick={() => void copy("code")}>
+              <CopyIcon className="size-4" />
+              {t(copied === "code" ? "convene.connection.copied" : "convene.connection.copyCode")}
+            </Button>
+          </div>
           {expired ? (
             <p role="alert" className="text-sm text-destructive">
               {t("convene.connection.expired")}
             </p>
           ) : (
-            <p className="text-xs text-muted-foreground">
-              {t("convene.connection.expiresAt", {
-                time: new Date(pairing.expiresAt).toLocaleTimeString(),
-              })}
+            <>
+              {!error && (
+                <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <LoaderCircleIcon className="size-4 animate-spin" />
+                  {t("convene.connection.waiting")}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                {t("convene.connection.expiresAt", {
+                  time: new Date(pairing.expiresAt).toLocaleTimeString(),
+                })}
+              </p>
+            </>
+          )}
+          {copyError && (
+            <p role="alert" className="text-sm text-destructive">
+              {copyError}
             </p>
           )}
           <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              onClick={() =>
-                window.open(pairing.value.verification_uri, "_blank", "noopener,noreferrer")
-              }
-              disabled={expired}
-            >
-              {t("convene.connection.open")}
-            </Button>
-            <Button
-              disabled={busy || expired || !permitted}
-              onClick={() =>
-                void run({
-                  operation: "exchange",
-                  baseUrl: pairing.baseUrl,
-                  deviceCode: pairing.value.device_code,
-                })
-              }
-            >
-              {busy ? t("convene.connection.checking") : t("convene.connection.approved")}
-            </Button>
+            {expired ? (
+              <Button
+                disabled={busy || !permitted}
+                onClick={() => void run({ operation: "pair", baseUrl: pairing.baseUrl })}
+              >
+                {t("convene.connection.newCode")}
+              </Button>
+            ) : (
+              <>
+                <Button
+                  onClick={() =>
+                    window.open(pairing.value.verification_uri, "_blank", "noopener,noreferrer")
+                  }
+                >
+                  {t("convene.connection.open")}
+                </Button>
+                <Button variant="outline" onClick={() => void copy("link")}>
+                  <CopyIcon className="size-4" />
+                  {t(
+                    copied === "link" ? "convene.connection.copied" : "convene.connection.copyLink",
+                  )}
+                </Button>
+                {error && (
+                  <Button variant="outline" disabled={!permitted} onClick={() => setError(null)}>
+                    {t("convene.connection.retryCheck")}
+                  </Button>
+                )}
+              </>
+            )}
             <Button
               variant="ghost"
               disabled={busy}
               onClick={() => {
                 setPairing(null);
                 setError(null);
+                setCopyError(null);
               }}
             >
               {t("convene.connection.cancel")}

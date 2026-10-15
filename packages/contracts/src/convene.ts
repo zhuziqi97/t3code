@@ -202,6 +202,7 @@ export const ConveneManageInput = Schema.Union([
 ]);
 export const ConveneManageResult = Schema.Union([
   Schema.Struct({ type: Schema.Literal("pairing"), pairing: ConvenePairing }),
+  Schema.Struct({ type: Schema.Literal("pending") }),
   Schema.Struct({ type: Schema.Literal("status"), status: ConveneStatus }),
 ]);
 export const ConveneProjectMutation = Schema.Union([

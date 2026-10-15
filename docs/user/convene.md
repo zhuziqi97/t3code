@@ -6,7 +6,7 @@ In **Settings → General**, install the `t3code-convene` command to run the bun
 
 Connecting Convene is optional. Local projects, providers and sessions remain available without it.
 
-During first setup, the **Convene** step follows agent setup. You can skip it and connect later from **Settings → Convene**, beside **Connections**. The main sidebar shows the connection status for each environment and links to its settings. Enter the platform URL, approve the displayed code in Convene, and select **I've approved**. An unapproved or expired code leaves the pairing flow open so you can retry or request another code. Pairing and reconnecting do not restart the T3 server.
+During first setup, the **Convene** step follows agent setup. You can skip it and connect later from **Settings → Convene**, beside **Connections**. The main sidebar shows the connection status for each environment and links to its settings. Enter the platform URL, then open or copy the pairing link. It prefills the code and preserves it through login. Confirm authorization in Convene; T3 checks automatically and completes the connection. You can also copy the code separately. Cancel to stop waiting, retry a failed check, or request a new code after expiration. Pairing and reconnecting do not restart the T3 server.
 
 **Disconnect Convene** unpairs that environment and removes its platform associations and MCP configuration. It closes its platform access, while local projects and provider sessions remain available. Pairing again creates a new platform client and requires configuring its projects again.
 
@@ -16,7 +16,9 @@ An **execution association** connects a native project to a Convene module. A pr
 
 Git subdirectory projects remain scoped to the same subdirectory in each worktree. Removed worktrees stay unavailable. A checkout recreated at the same path is a new location; it cannot take over existing native sessions. Refresh the configuration to report workspace changes immediately.
 
-**Project MCP** is independent of execution associations. New projects start disabled with an empty scope. Select modules from any accessible platform project, choose Read or Write, and configure repository, code graph and issue capabilities. **Apply to draft** in the module picker updates the local draft; **Save MCP configuration** saves it to Convene. Canceling the picker leaves the draft unchanged. Refresh, closing and reopening the dialog, and platform failures retain an unsaved draft on that device. An unchanged draft cannot be submitted.
+Project configuration has separate **Module bindings** and **Convene MCP** tabs. Bind modules for execution, or configure MCP without any binding. The module browser shows projects beside their modules and keeps selections from different projects together. MCP access and tools can be configured while disabled; switching tabs retains the draft. **Save and finish** saves MCP changes before closing; a failed save keeps the page open. **Set up later** keeps unsaved input for reopening.
+
+**Project MCP** is independent of execution associations. New projects start disabled with an empty scope. Select modules from any accessible platform project, choose Read or Write, and configure repository, code graph and issue capabilities. **Confirm selection** in the module picker updates the local draft; **Save settings** saves it to Convene. Canceling the picker leaves the draft unchanged. Refresh, closing and reopening the dialog, and platform failures retain an unsaved draft on that device. An unchanged draft cannot be submitted.
 
 Cached configuration remains readable while unavailable. Platform writes require a current configuration and a connected environment. There is no automatic offline write replay: reconnect, refresh and explicitly retry. The platform enforces saved MCP access, including permission reductions; configuration changes do not restart active provider processes.
 

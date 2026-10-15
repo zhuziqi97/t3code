@@ -98,7 +98,9 @@ it("does not submit an unchanged configuration and preserves a local MCP draft a
   await act(async () => state.refresh());
   expect(state.dirty).toBe(true);
   expect(state.draft?.scope).toEqual([{ module_id: "independent-module", permission: "WRITE" }]);
-  await act(async () => state.run({ operation: "bind", projectId, module_id: "execution-module" }));
+  await act(async () => {
+    await state.run({ operation: "bind", projectId, module_id: "execution-module" });
+  });
   expect(state.draft?.enabled).toBe(true);
   expect(model.mutate.mock.calls[0]?.[0].input).toEqual({
     operation: "bind",
@@ -118,7 +120,9 @@ it("keeps a failed save draft, makes no offline writes and saves the latest edit
   model.mutate.mockResolvedValueOnce(
     AsyncResult.failure(Cause.fail(new Error("Platform unavailable"))),
   );
-  await act(async () => state.save());
+  await act(async () => {
+    await state.save();
+  });
   expect(state.error).toContain("Platform unavailable");
   expect(state.lastOperation?.operation).toBe("save");
   expect(state.dirty).toBe(true);
@@ -127,7 +131,9 @@ it("keeps a failed save draft, makes no offline writes and saves the latest edit
     AsyncResult.success({ configuration, fresh: false, error: "Offline" }),
   );
   await act(async () => renderer.update(<Harness />));
-  await act(async () => state.run({ operation: "bind", projectId, module_id: "another-module" }));
+  await act(async () => {
+    await state.run({ operation: "bind", projectId, module_id: "another-module" });
+  });
   expect(model.mutate).toHaveBeenCalledTimes(1);
   expect(state.draft?.enabled).toBe(true);
   model.online = true;
@@ -146,7 +152,9 @@ it("keeps a failed save draft, makes no offline writes and saves the latest edit
       mcp_capabilities: { ...configuration.mcp_capabilities, issue_enabled: true },
     }),
   );
-  await act(async () => state.save());
+  await act(async () => {
+    await state.save();
+  });
   expect(model.mutate.mock.calls[1]?.[0].input.mcp_capabilities.issue_enabled).toBe(true);
   expect(state.dirty).toBe(false);
   expect(state.lastOperation).toBeNull();

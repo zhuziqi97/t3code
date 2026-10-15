@@ -867,17 +867,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     desktopOnly: true,
   },
   {
-    id: "privacy-policy",
-    get title() {
-      return i18n.t("settings.search.privacy-policy.title");
-    },
-    to: "/settings/general",
-    searchTerms: [
-      "Privacy policy 隐私政策",
-      "telemetry analytics usage data tracking legal opt out",
-    ],
-  },
-  {
     id: "diagnostics",
     get title() {
       return i18n.t("settings.search.diagnostics.title");

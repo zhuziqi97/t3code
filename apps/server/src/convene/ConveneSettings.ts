@@ -51,7 +51,13 @@ const make = Effect.gen(function* () {
       const baseUrl = parsed.toString().replace(/\/$/, "");
       if (input.operation === "pair")
         return { type: "pairing" as const, pairing: yield* platform.beginPairing(baseUrl) };
-      yield* platform.finishPairing(baseUrl, input.deviceCode);
+      const result = yield* platform.finishPairing(baseUrl, input.deviceCode).pipe(
+        Effect.catchTags({
+          ConvenePlatformError: (error) =>
+            error.code === "RUNNER_PAIRING_PENDING" ? Effect.succeed(null) : Effect.fail(error),
+        }),
+      );
+      if (result === null) return { type: "pending" as const };
     } else if (input.operation === "disconnect") {
       yield* platform.disconnect;
     } else {

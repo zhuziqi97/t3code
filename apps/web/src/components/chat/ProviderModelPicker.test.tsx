@@ -231,7 +231,7 @@ it("shows the resolved native default without changing its follow-default select
       { slug: "gateway-model", name: "gateway-model" },
     ],
   });
-  expect(text).toContain("gateway-model · 跟随默认");
+  expect(text).toContain("gateway-model · 默认");
 });
 
 it("keeps an existing session's reported model when the native default changes", async () => {
