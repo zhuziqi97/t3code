@@ -104,6 +104,7 @@ export function useConveneProjectConfiguration(environmentId: EnvironmentId, pro
     setBusy(true);
     setError(null);
     setLastOperation(input);
+    const mcpWasEnabled = current.current.configuration?.mcp_enabled;
     const result = await mutate({ environmentId, input });
     setBusy(false);
     if (result._tag === "Failure") {
@@ -111,11 +112,7 @@ export function useConveneProjectConfiguration(environmentId: EnvironmentId, pro
       setError(cause instanceof Error ? cause.message : t("convene.error.save"));
       return false;
     }
-    if (
-      input.operation === "save" &&
-      !current.current.configuration?.mcp_enabled &&
-      result.value.mcp_enabled
-    ) {
+    if (input.operation === "save" && !mcpWasEnabled && result.value.mcp_enabled) {
       toastManager.add({ type: "success", title: t("convene.project.mcpEnabled") });
     }
     accept(result.value, input.operation === "save");

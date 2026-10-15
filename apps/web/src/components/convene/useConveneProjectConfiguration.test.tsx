@@ -182,3 +182,31 @@ it("announces new-session activation only after enabling MCP succeeds", async ()
   });
   expect(model.toast).toHaveBeenCalledTimes(1);
 });
+
+it("keeps the activation notice when a configuration refresh arrives before the save reply", async () => {
+  await mount();
+  await act(async () => state.edit({ ...state.draft!, enabled: true }));
+  const enabled = { ...configuration, mcp_enabled: true };
+  let finish!: (value: ReturnType<typeof AsyncResult.success<typeof enabled>>) => void;
+  model.mutate.mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = resolve;
+    }),
+  );
+  let saving!: ReturnType<typeof state.save>;
+  await act(async () => {
+    saving = state.save();
+  });
+  model.query.mockResolvedValueOnce(
+    AsyncResult.success({ configuration: enabled, fresh: true, error: null }),
+  );
+  await act(async () => {
+    await state.refresh();
+  });
+  expect(state.configuration?.mcp_enabled).toBe(true);
+  await act(async () => {
+    finish(AsyncResult.success(enabled));
+    await saving;
+  });
+  expect(model.toast).toHaveBeenCalledTimes(1);
+});
