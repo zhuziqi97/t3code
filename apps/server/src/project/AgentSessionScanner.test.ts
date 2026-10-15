@@ -3471,7 +3471,7 @@ it.each([
       source: "codex",
       providerInstanceId: ProviderInstanceId.make("codex"),
       fallbackSessionId: "fallback",
-      lastActiveAtMs: Date.now(),
+      lastActiveAtMs: Date.parse("2026-10-01T00:00:00.000Z"),
       ...(canonicalTitle ? { canonicalTitle } : {}),
       contents: [
         encodeTranscriptRecord({
