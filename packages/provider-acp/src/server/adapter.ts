@@ -89,7 +89,7 @@ import {
   resolveEmbeddedTerminalContent,
   type AcpClientTerminals,
 } from "./clientTerminals.ts";
-import { ACP_SESSION_MODE_OPTION_ID } from "./sessionConfig.ts";
+import { ACP_EMPTY_OPTION_VALUE, ACP_SESSION_MODE_OPTION_ID } from "./sessionConfig.ts";
 import * as AcpSessionRuntime from "./AcpSessionRuntime.ts";
 import {
   t3AcpPromptWithInstructions,
@@ -6006,7 +6006,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
           const mcpBridge = yield* makeAcpMcpOverAcpBridge({
             endpoint: mcpContext.endpoint,
             authorization: mcpContext.authorization,
-            allocateConnectionId: crypto.randomUUIDv4.pipe(Effect.orDie),
+            allocateConnectionId: crypto.randomUUIDv4().pipe(Effect.orDie),
           });
           yield* Scope.addFinalizer(scope, mcpBridge.dispose);
           return mcpBridge;
@@ -6289,6 +6289,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
           runtimePolicy: ProviderAdapter.ProviderAdapterV2RuntimePolicy,
           resetToDefault = false,
         ) {
+          yield* Ref.set(activeSelection, null);
           if (modelSelection.model === null && resetToDefault && flavor.nativeDefaultModel) {
             const model = yield* flavor.nativeDefaultModel(
               runtimePolicy.cwd ?? input.runtimePolicy.cwd ?? process.cwd(),
@@ -6350,9 +6351,13 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
               };
             });
           }
-          const optionSelections = (modelSelection.options ?? []).filter(
-            (option) => !flavor.modelOptionIds?.includes(option.id),
-          );
+          // Restore the agent's own empty value for choices T3 stores under a
+          // reserved ID (see ACP_EMPTY_OPTION_VALUE).
+          const optionSelections = (modelSelection.options ?? [])
+            .filter((option) => !flavor.modelOptionIds?.includes(option.id))
+            .map((selection) =>
+              selection.value === ACP_EMPTY_OPTION_VALUE ? { ...selection, value: "" } : selection,
+            );
           const configOptions = yield* runtime.getConfigOptions;
           const availableConfigIds = new Set(configOptions.map((option) => option.id));
           const hasNativeConfigWithSyntheticModeId = availableConfigIds.has(

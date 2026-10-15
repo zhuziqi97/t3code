@@ -72,7 +72,9 @@ export function canCommitPendingModel(
   groups: ReadonlyArray<ProviderGroup>,
 ): boolean {
   return groups.some((group) =>
-    group.models.some((model) => model.key === pending.key && !model.isUnavailable),
+    group.models.some(
+      (model) => model.key === pending.key && !model.isUnavailable && !model.isHidden,
+    ),
   );
 }
 

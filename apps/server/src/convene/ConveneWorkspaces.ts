@@ -143,9 +143,9 @@ const make = Effect.gen(function* () {
                 const marker = path.join(admin, "t3-convene-workspace-id");
                 const key = (yield* fs.exists(marker))
                   ? (yield* fs.readFileString(marker)).trim()
-                  : yield* crypto.randomUUIDv4.pipe(
-                      Effect.tap((id) => fs.writeFileString(marker, id)),
-                    );
+                  : yield* crypto
+                      .randomUUIDv4()
+                      .pipe(Effect.tap((id) => fs.writeFileString(marker, id)));
                 const branch = (yield* command(checkout, [
                   "rev-parse",
                   "--abbrev-ref",

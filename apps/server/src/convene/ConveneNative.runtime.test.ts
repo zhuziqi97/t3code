@@ -1,3 +1,5 @@
+import * as CommandReceiptStore from "../orchestration-v2/CommandReceiptStore.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import { materializeReplayTranscriptRuntimeInstructions } from "../orchestration-v2/testkit/ReplayRuntimeInstructions.ts";
 import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -153,7 +155,13 @@ it.live.each(["codex", "claudeAgent"] as const)(
             Layer.provide(NodeServices.layer),
           ),
         ),
-        Layer.provideMerge(ThreadManagement.layer.pipe(Layer.provideMerge(orchestration))),
+        Layer.provideMerge(
+          ThreadManagement.layer.pipe(
+            Layer.provideMerge(orchestration),
+            Layer.provide(CommandReceiptStore.layer.pipe(Layer.provide(database))),
+            Layer.provide(ServerSettings.layerTest({})),
+          ),
+        ),
         Layer.provideMerge(ProjectStore.layer.pipe(Layer.provide(database))),
         Layer.provideMerge(EventStore.layer.pipe(Layer.provide(database))),
         Layer.provide(ProviderRegistryMock.layer([provider])),
@@ -348,7 +356,13 @@ it.live.each([
           Layer.provide(NodeServices.layer),
         ),
       ),
-      Layer.provideMerge(ThreadManagement.layer.pipe(Layer.provideMerge(orchestration))),
+      Layer.provideMerge(
+        ThreadManagement.layer.pipe(
+          Layer.provideMerge(orchestration),
+          Layer.provide(CommandReceiptStore.layer.pipe(Layer.provide(database))),
+          Layer.provide(ServerSettings.layerTest({})),
+        ),
+      ),
       Layer.provideMerge(ProjectStore.layer.pipe(Layer.provide(database))),
       Layer.provideMerge(EventStore.layer.pipe(Layer.provide(database))),
       Layer.provide(ProviderRegistryMock.layer([provider])),

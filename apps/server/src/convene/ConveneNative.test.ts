@@ -1,3 +1,5 @@
+import * as CommandReceiptStore from "../orchestration-v2/CommandReceiptStore.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
@@ -73,7 +75,13 @@ const layer = ConveneNative.layer.pipe(
       Layer.provide(NodeServices.layer),
     ),
   ),
-  Layer.provideMerge(ThreadManagement.layer.pipe(Layer.provide(orchestration))),
+  Layer.provideMerge(
+    ThreadManagement.layer.pipe(
+      Layer.provide(orchestration),
+      Layer.provide(CommandReceiptStore.layer.pipe(Layer.provide(database))),
+      Layer.provide(ServerSettings.layerTest({})),
+    ),
+  ),
   Layer.provideMerge(ProjectStore.layer.pipe(Layer.provide(database))),
   Layer.provide(ProviderRegistryMock.layer([provider])),
   Layer.provide(NodeServices.layer),

@@ -30,6 +30,14 @@ vi.mock("react", async (importOriginal) => ({
     state.run = callback;
     return callback;
   },
+  useCallback: (callback: typeof state.run) => {
+    if (callback?.constructor.name === "AsyncFunction") state.run = callback;
+    return callback;
+  },
+  useMemo: (factory: () => unknown) => factory(),
+  useState: (initial: unknown) => [typeof initial === "function" ? initial() : initial, () => {}],
+  useRef: (current: unknown) => ({ current }),
+  useEffect: () => {},
 }));
 vi.mock("@effect/atom-react", () => ({
   useAtomValue: (atom: unknown) => (atom === "vcs-state" ? { isRunning: false } : null),

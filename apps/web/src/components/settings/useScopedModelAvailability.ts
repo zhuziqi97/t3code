@@ -2,6 +2,7 @@ import { useTranslate } from "../../i18n";
 import type { ProviderInstanceId, UnifiedSettings } from "@t3tools/contracts";
 import { useCallback } from "react";
 
+import { mergeEnvironmentSettings } from "../../hooks/useSettings";
 import { getCustomModelOptionsByInstance } from "../../modelSelection";
 import {
   applyProviderInstanceSettings,
@@ -25,7 +26,7 @@ export function useScopedModelDisabledReason(
   const { targets } = useSettingsScope();
   const { environments } = useEnvironments();
   return useCallback(
-    (instanceId: ProviderInstanceId, model: string): string | null => {
+    (instanceId: ProviderInstanceId, model: string | null): string | null => {
       const sourceEntry = entries.find((entry) => entry.instanceId === instanceId);
       for (const candidate of targets) {
         const environment = environments.find(
@@ -36,16 +37,18 @@ export function useScopedModelDisabledReason(
         const entry = applyProviderInstanceSettings(
           deriveProviderInstanceEntries(config.providers),
           candidate.settings,
+          candidate.projectId,
         ).find((option) => option.instanceId === instanceId);
         const options = getCustomModelOptionsByInstance(
-          { ...settings, ...candidate.settings },
+          mergeEnvironmentSettings(candidate.settings, settings),
           config.providers,
         ).get(instanceId);
         if (
           !entry?.enabled ||
           !entry.isAvailable ||
           entry.driverKind !== sourceEntry?.driverKind ||
-          !options?.some((option) => option.slug === model && !option.isUnavailable)
+          (model !== null &&
+            !options?.some((option) => option.slug === model && !option.isUnavailable))
         ) {
           return t("settings.modelUnavailable", {
             environment: environment?.label ?? t("settings.selectedEnvironment"),

@@ -62,7 +62,7 @@ const modelSection = (customModels: ReadonlyArray<CustomModelDefinition> = []) =
     onChange={onChange}
     onHiddenModelsChange={vi.fn()}
     onFavoriteModelsChange={onFavoriteModelsChange}
-    onModelOrderChange={vi.fn()}
+    onToggleFavorite={() => {}} onModelOrderChange={vi.fn()}
   />
 );
 

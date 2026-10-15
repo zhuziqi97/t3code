@@ -679,6 +679,10 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.enableAgentBrowserAccess !== DEFAULT_UNIFIED_SETTINGS.enableAgentBrowserAccess
       ? [t("defaults.browser.title")]
       : []),
+    ...(settings.sidebarAutoSettleKeepPullRequests !==
+    DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleKeepPullRequests
+      ? ["Keep threads with a PR"]
+      : []),
   ];
 
   const restoreDefaults = useCallback(async () => {
@@ -771,6 +775,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       sidebarProjectSortOrder: DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder,
       sidebarWorkingShelfEnabled: DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled,
       sidebarAutoSettleAfterDays: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays,
+      sidebarAutoSettleKeepPullRequests: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleKeepPullRequests,
       sidebarAutoSettleOnMerge: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge,
       autoResumeLimitedThreads: DEFAULT_UNIFIED_SETTINGS.autoResumeLimitedThreads,
       snoozeLimitedThreads: DEFAULT_UNIFIED_SETTINGS.snoozeLimitedThreads,
@@ -2173,7 +2178,7 @@ export function GeneralSettingsPanel() {
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
   const navigate = useNavigate();
-  const { scope, environment, connectedEnvironments } = useSettingsScope();
+  const { scope, environment, connectedEnvironments, target } = useSettingsScope();
   // The representative environment supplies the provider list for pickers;
   // a fanned-out model choice is validated against every target before it
   // is written. Per-machine tuning (background activity overrides) still
@@ -2192,6 +2197,9 @@ export function GeneralSettingsPanel() {
     connectedEnvironments.every(
       (target) => target.serverConfig?.environment.capabilities.threadAutoSettlement === true,
     );
+  const supportsAutoSettlementScope = connectedEnvironments.every(
+    (target) => target.serverConfig?.environment.capabilities.threadAutoSettlementScope === true,
+  );
   const supportsRestartContinuation =
     connectedEnvironments.length > 0 &&
     connectedEnvironments.every(
@@ -2209,7 +2217,11 @@ export function GeneralSettingsPanel() {
   const textGenModel = textGenerationModelSelection.model;
   const textGenModelOptions = textGenerationModelSelection.options;
   const textGenerationModelInstanceEntries = sortProviderInstanceEntries(
-    applyProviderInstanceSettings(deriveProviderInstanceEntries(textGenerationProviders), settings),
+    applyProviderInstanceSettings(
+      deriveProviderInstanceEntries(textGenerationProviders),
+      settings,
+      target?.projectId ?? null,
+    ),
   );
   const hasTextGenerationProvider = textGenerationModelInstanceEntries.some(
     (entry) => entry.enabled && entry.isAvailable,
@@ -2468,6 +2480,24 @@ export function GeneralSettingsPanel() {
                   <AutoSettleDaysInput
                     value={settings.sidebarAutoSettleAfterDays}
                     onCommit={(days) => updateSettings({ sidebarAutoSettleAfterDays: days })}
+                  />
+                }
+              />
+            ) : null}
+            {settings.sidebarAutoSettleAfterDays !== null && supportsAutoSettlementScope ? (
+              <SettingsRow
+                serverScoped
+                settingKeys={["sidebarAutoSettleKeepPullRequests"]}
+                title="Keep threads with a PR"
+                description="Inactivity does not settle threads with a pull request. Merge and close still do."
+                control={
+                  <ScopedSwitch
+                    settingKeys={["sidebarAutoSettleKeepPullRequests"]}
+                    checked={settings.sidebarAutoSettleKeepPullRequests}
+                    onCheckedChange={(checked) =>
+                      updateSettings({ sidebarAutoSettleKeepPullRequests: checked })
+                    }
+                    aria-label="Keep threads with a PR"
                   />
                 }
               />
@@ -3325,6 +3355,7 @@ export function GeneralSettingsPanel() {
             ) : (
               <div className="flex flex-wrap items-center justify-end gap-1.5">
                 <ProviderModelPicker
+                  environmentId={environmentId}
                   activeInstanceId={textGenInstanceId}
                   model={textGenModel}
                   lockedProvider={null}

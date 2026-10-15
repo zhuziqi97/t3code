@@ -66,7 +66,7 @@ function renderEditor() {
       modelOrder={[]}
       onHiddenModelsChange={() => undefined}
       onFavoriteModelsChange={() => undefined}
-      onModelOrderChange={() => undefined}
+      onToggleFavorite={() => {}} onModelOrderChange={() => undefined}
     />,
   );
 }

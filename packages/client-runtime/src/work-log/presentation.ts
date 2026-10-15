@@ -638,6 +638,7 @@ function summaryActionPriority(action: ToolGroupAction | T3McpToolSummaryAction)
     case "thread-create":
     case "thread-send":
     case "thread-interrupt":
+    case "workflow-stop":
     case "schedule-create":
     case "schedule-update":
     case "schedule-delete":
@@ -735,7 +736,7 @@ export function summarizeToolGroup(
   const labels = selected.map(({ label }) => label);
   if (sources.size > 0) {
     const sourceValues = [...sources.values()];
-    const sourceNames = sourceValues.map((source) => source.name);
+    const sourceNames = [...new Set(sourceValues.map((source) => source.name))];
     const formattedNames = t
       ? joinToolSummary(sourceNames, "names", t)
       : sourceNames.length < 2
@@ -748,9 +749,9 @@ export function summarizeToolGroup(
       t
         ? t(allIntegrations ? "chat.tools.summary.integrations" : "chat.tools.summary.sources", {
             names: formattedNames,
-            count: sources.size,
+            count: sourceNames.length,
           })
-        : `Used ${formattedNames}${allIntegrations ? ` ${sources.size === 1 ? "integration" : "integrations"}` : ""}`,
+        : `Used ${formattedNames}${allIntegrations ? ` ${sourceNames.length === 1 ? "integration" : "integrations"}` : ""}`,
     );
   }
   const sourcedCount = entries.filter(

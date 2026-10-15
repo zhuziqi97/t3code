@@ -7,6 +7,8 @@ export type SidebarContextProps = {
   open: boolean;
   setOpen: (open: boolean) => void;
   openMobile: boolean;
+  mobileSheetMounted: boolean;
+  setMobileSheetElement: (element: HTMLDivElement | null) => void;
   setOpenMobile: (open: boolean) => void;
   isMobile: boolean;
   toggleSidebar: () => void;

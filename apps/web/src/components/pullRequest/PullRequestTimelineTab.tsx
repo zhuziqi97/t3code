@@ -563,6 +563,7 @@ function ReviewVerdictEvent({
 }
 
 export function PullRequestTimelineTab({
+  scrollerRef,
   detail,
   environmentId,
   threadRef = null,
@@ -571,6 +572,7 @@ export function PullRequestTimelineTab({
   onOpenCommit,
   onRefresh,
 }: {
+  scrollerRef: (node: HTMLDivElement | null) => void;
   detail: PullRequestDetailView;
   environmentId: EnvironmentId;
   threadRef?: ScopedThreadRef | null;
@@ -603,7 +605,7 @@ export function PullRequestTimelineTab({
   };
 
   return (
-    <div className="scrollbar-gutter-both h-full overflow-y-auto px-4 py-5">
+    <div ref={scrollerRef} className="scrollbar-gutter-both h-full overflow-y-auto px-4 py-5">
       <div className="mx-auto max-w-3xl">
         <div className="relative">
           <span aria-hidden className="absolute bottom-5 left-[15px] top-1 w-px bg-border/45" />

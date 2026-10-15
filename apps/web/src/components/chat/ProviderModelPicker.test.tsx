@@ -60,6 +60,7 @@ async function renderPicker(input: {
   await act(async () =>
     root.render(
       <ProviderModelPicker
+        environmentId={null}
         activeInstanceId={instanceId}
         model={input.model}
         reportedModelSelection={
@@ -187,6 +188,7 @@ describe("ProviderModelPicker", () => {
     await act(async () =>
       root.render(
         <ProviderModelPicker
+          environmentId={null}
           activeInstanceId={activeEntry.instanceId}
           model="gpt-5"
           lockedProvider={null}

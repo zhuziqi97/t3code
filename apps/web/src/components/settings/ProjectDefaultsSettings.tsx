@@ -9,6 +9,7 @@ import { createModelSelection } from "@t3tools/shared/model";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { useNavigate } from "@tanstack/react-router";
 
+import { mergeEnvironmentSettings } from "../../hooks/useSettings";
 import { getCustomModelOptionsByInstance } from "../../modelSelection";
 import {
   applyProviderInstanceSettings,
@@ -63,7 +64,11 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
   const providers = representative?.serverConfig?.providers ?? EMPTY_SERVER_PROVIDERS;
   const selection = resolveDefaultProviderModelSelection(providers, settings.defaultModelSelection);
   const entries = sortProviderInstanceEntries(
-    applyProviderInstanceSettings(deriveProviderInstanceEntries(providers), settings),
+    applyProviderInstanceSettings(
+      deriveProviderInstanceEntries(providers),
+      settings,
+      target?.projectId ?? null,
+    ),
   );
   const modelOptions = getCustomModelOptionsByInstance(
     settings,
@@ -93,7 +98,10 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
     ? resolveProjectSettings(target.settings, null, null, null).settings
     : null;
 
-  function modelDisabledReason(instanceId: ProviderInstanceId, _model: string): string | null {
+  function modelDisabledReason(
+    instanceId: ProviderInstanceId,
+    _model: string | null,
+  ): string | null {
     const sourceEntry = entries.find((entry) => entry.instanceId === instanceId);
     for (const candidate of targets) {
       const environment = environments.find(
@@ -104,8 +112,19 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
       const entry = applyProviderInstanceSettings(
         deriveProviderInstanceEntries(config.providers),
         candidate.settings,
+        candidate.projectId,
       ).find((option) => option.instanceId === instanceId);
-      if (!entry?.enabled || !entry.isAvailable || entry.driverKind !== sourceEntry?.driverKind) {
+      const options = getCustomModelOptionsByInstance(
+        mergeEnvironmentSettings(candidate.settings, settings),
+        config.providers,
+      ).get(instanceId);
+      if (
+        !entry?.enabled ||
+        !entry.isAvailable ||
+        entry.driverKind !== sourceEntry?.driverKind ||
+        (_model !== null &&
+          !options?.some((option) => option.slug === _model && !option.isUnavailable))
+      ) {
         return t("settings.modelUnavailable", {
           environment: environment?.label ?? t("settings.selectedEnvironment"),
         });
@@ -149,6 +168,7 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
         selection && activeEntry ? (
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
             <ProviderModelPicker
+              environmentId={representative?.environmentId ?? null}
               activeInstanceId={selection.instanceId}
               model={selection.model}
               lockedProvider={null}

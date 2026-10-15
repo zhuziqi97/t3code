@@ -255,7 +255,7 @@ it.each(["summary", "timeline"] as const)(
     await act(async () =>
       root.render(
         tab === "summary" ? (
-          <PullRequestSummaryTab
+          <PullRequestSummaryTab scrollerRef={() => {}}
             environmentId={environmentId}
             threadRef={null}
             reference={reference}
@@ -265,7 +265,7 @@ it.each(["summary", "timeline"] as const)(
             onRefresh={() => {}}
           />
         ) : (
-          <PullRequestTimelineTab
+          <PullRequestTimelineTab scrollerRef={() => {}}
             environmentId={environmentId}
             reference={reference}
             detail={value}

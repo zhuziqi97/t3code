@@ -123,7 +123,7 @@ const start = (
           yield* send({
             PROTOCOL_VERSION: 1,
             TYPE: type,
-            MESSAGE_ID: id ?? (yield* crypto.randomUUIDv4),
+            MESSAGE_ID: id ?? (yield* crypto.randomUUIDv4()),
             OCCURRED_AT: DateTime.formatIso(yield* DateTime.now),
             RUNNER_ID: paired.runnerId,
             PAYLOAD: payload,
@@ -267,7 +267,7 @@ const start = (
               yield* Stream.fromQueue(requests).pipe(
                 Stream.runForEach((waiter) =>
                   Effect.gen(function* () {
-                    const id = yield* crypto.randomUUIDv4;
+                    const id = yield* crypto.randomUUIDv4();
                     pendingReports.set(id, waiter);
                     yield* report(id).pipe(
                       Effect.catch((cause) =>

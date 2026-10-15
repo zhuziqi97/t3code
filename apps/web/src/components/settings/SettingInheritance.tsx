@@ -46,9 +46,11 @@ function formatValue(key: keyof ServerSettings, value: unknown, translate: TFunc
           ? translate("common.automatic")
           : key === "sourceControlWriterModelSelection"
             ? translate("settings.search.text-generation-model.title")
-            : key === "defaultThreadEnvMode" || key === "worktreeSubmodules"
-              ? translate("common.inherit")
-              : translate("common.notSet");
+            : key === "reviewGuideModelSelection"
+              ? "Source control writer model"
+              : key === "defaultThreadEnvMode" || key === "worktreeSubmodules"
+                ? translate("common.inherit")
+                : translate("common.notSet");
   }
   if (typeof value === "boolean")
     return value ? translate("common.on") : translate("options.notifications.off");
