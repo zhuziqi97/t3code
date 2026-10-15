@@ -1,3 +1,5 @@
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as NodeURL from "node:url";
 import { expect, it } from "@effect/vitest";
 import {
   ProjectId,
@@ -60,6 +62,7 @@ it.effect("imports messages once and preserves the provider native resume bindin
       }),
   });
   const layerTest = AgentSessionImporter.layer.pipe(
+    Layer.provide(NodeServices.layer),
     Layer.provide(
       Layer.mergeAll(
         Layer.succeed(AgentSessionScanner.AgentSessionScanner, scanner),
@@ -182,6 +185,7 @@ it.effect.each([
           },
         };
   const testLayer = AgentSessionImporter.layer.pipe(
+    Layer.provide(NodeServices.layer),
     Layer.provide(
       Layer.mergeAll(
         Layer.mock(AgentSessionScanner.AgentSessionScanner)({
@@ -238,3 +242,70 @@ it.effect.each([
     ]);
   }).pipe(Effect.provide(testLayer));
 });
+
+it.effect.each([true, false])(
+  "repairs a skipped transcript only while its source exists: %s",
+  (exists) => {
+    const commands: Array<unknown> = [];
+    const source = {
+      provider: "codex" as const,
+      providerInstanceId,
+      providerSessionId,
+      filePath: exists ? NodeURL.fileURLToPath(import.meta.url) : "/missing-codex-rollout.jsonl",
+      size: 1,
+      mtimeMs: 1,
+      birthtimeMs: 1,
+      device: 1,
+      inode: 1,
+    };
+    const layerTest = AgentSessionImporter.layer.pipe(
+      Layer.provide(NodeServices.layer),
+      Layer.provide(
+        Layer.mergeAll(
+          Layer.mock(AgentSessionScanner.AgentSessionScanner)({
+            recentThreads: () => Stream.succeed({ _tag: "Skipped" }),
+          }),
+          Layer.mock(ProjectService.ProjectService)({
+            getById: () =>
+              Effect.succeed(Option.some({ id: projectId, workspaceRoot: "/repo" } as never)),
+          }),
+          Layer.mock(ProviderSessionRuntime.ProviderSessionRuntimeRepository)({
+            list: () =>
+              Effect.succeed([
+                { runtimePayload: { cwd: "/repo", importedTranscripts: [source] } } as never,
+              ]),
+          }),
+          Layer.mock(Orchestrator.OrchestratorV2)({
+            getThreadRecords: () =>
+              Effect.succeed({
+                thread: { historyOrigin: "v1_import", title: "# AGENTS.md instructions for /repo" },
+                messages: [{ role: "user", text: "Saved real request" }],
+              } as never),
+            dispatch: (command) =>
+              Effect.sync(() => {
+                commands.push(command);
+                return {} as never;
+              }),
+          }),
+          Layer.mock(EventSink.EventSinkV2)({
+            write: () => Effect.die("no transcript writes during repair"),
+          }),
+          IdAllocator.layer,
+        ),
+      ),
+    );
+    return Effect.gen(function* () {
+      const importer = yield* AgentSessionImporter.AgentSessionImporter;
+      expect(yield* importer.importRecentAgentThreads({ projectId })).toEqual({
+        importedCount: 0,
+        skippedCount: 1,
+      });
+      expect(commands).toHaveLength(exists ? 1 : 0);
+      if (exists)
+        expect(commands[0]).toMatchObject({
+          type: "thread.imported-title.repair",
+          title: "Saved real request",
+        });
+    }).pipe(Effect.provide(layerTest));
+  },
+);

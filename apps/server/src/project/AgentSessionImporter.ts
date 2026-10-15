@@ -1,3 +1,4 @@
+import * as FileSystem from "effect/FileSystem";
 import { deriveImportedThreadTitle, isLegacyCodexContextTitle } from "./AgentSessionTitle.ts";
 import {
   DEFAULT_MODEL,
@@ -168,6 +169,7 @@ function messageEvents(input: {
 
 const make = Effect.gen(function* () {
   const scanner = yield* AgentSessionScanner.AgentSessionScanner;
+  const fileSystem = yield* FileSystem.FileSystem;
   const orchestrator = yield* Orchestrator.OrchestratorV2;
   const projects = yield* ProjectService.ProjectService;
   const eventSink = yield* EventSink.EventSinkV2;
@@ -438,6 +440,25 @@ const make = Effect.gen(function* () {
         }
       }),
     );
+
+    // A changing or oversized transcript can be skipped even though its earlier
+    // imported messages still contain a usable title. Do not reimport its history.
+    for (const source of completedSources) {
+      if (source.provider !== "codex") continue;
+      const threadId = ThreadId.make(
+        `import:${source.providerInstanceId}:${source.providerSessionId}`,
+      );
+      if (importedThreadIds.has(threadId)) continue;
+      yield* Effect.gen(function* () {
+        if (!(yield* fileSystem.exists(source.filePath))) return;
+        yield* repairTitle(threadId, input.projectId, source);
+      }).pipe(
+        Effect.tapError((cause) =>
+          Effect.logWarning("Imported title repair failed", { threadId, cause }),
+        ),
+        Effect.ignore,
+      );
+    }
 
     return { importedCount, skippedCount } satisfies AgentSessionImportResult;
   });
