@@ -1,5 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { fileURLToPath } from "node:url";
+import * as NodeURL from "node:url";
 import { expect, it } from "@effect/vitest";
 import {
   ProjectId,
@@ -251,7 +251,7 @@ it.effect.each([true, false])(
       provider: "codex" as const,
       providerInstanceId,
       providerSessionId,
-      filePath: exists ? fileURLToPath(import.meta.url) : "/missing-codex-rollout.jsonl",
+      filePath: exists ? NodeURL.fileURLToPath(import.meta.url) : "/missing-codex-rollout.jsonl",
       size: 1,
       mtimeMs: 1,
       birthtimeMs: 1,
