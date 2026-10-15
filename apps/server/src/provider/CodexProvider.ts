@@ -40,7 +40,6 @@ import {
   AUTH_PROBE_TIMEOUT_MS,
   buildServerProvider,
   COMPACT_SLASH_COMMAND,
-  providerModelsFromSettings,
   type ServerProviderDraft,
 } from "@t3tools/provider-core/server/snapshotProbe";
 import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
@@ -527,7 +526,14 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
               ),
             ),
           ),
-      client.request("config/read", { cwd: input.cwd, includeLayers: false }),
+      client.request("config/read", { cwd: input.cwd, includeLayers: false }).pipe(
+        Effect.map((response) => ({ model: response.config.model })),
+        Effect.catch((error) =>
+          Effect.logDebug("Codex default-model configuration read failed.", { cause: error }).pipe(
+            Effect.as(undefined),
+          ),
+        ),
+      ),
     ],
     { concurrency: "unbounded" },
   );
@@ -537,7 +543,9 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
     ...(rateLimits ? { rateLimits } : {}),
     version,
     models: appendCustomCodexModels(
-      applyNativeCodexDefaultModel(models, configuration.config.model),
+      configuration === undefined
+        ? models.map((model) => ({ ...model, isDefault: false }))
+        : applyNativeCodexDefaultModel(models, configuration.model),
       input.customModels ?? [],
     ),
     skills: parseCodexSkillsListResponse(skillsResponse, input.cwd),

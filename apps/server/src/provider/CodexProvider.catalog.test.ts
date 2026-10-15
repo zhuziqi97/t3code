@@ -41,6 +41,8 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
     write({ id, result: { userAgent: "codex/0.162.0", codexHome: process.env.CODEX_HOME, platformFamily: "unix", platformOs: "macos" } });
   } else if (method === "account/read") {
     write({ id, result: { account: { type: "chatgpt", email: "test@example.com", planType: "promax" }, requiresOpenaiAuth: false } });
+  } else if (method === "config/read" && process.env.FAKE_CONFIG_READ !== "fail") {
+    write({ id, result: { config: { model: "custom-default" }, origins: {}, layers: null } });
   } else if (method === "skills/list") {
     write({ id, result: { data: [] } });
   } else if (method === "model/list") {
@@ -53,7 +55,10 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
 
 const decodeCodexSettings = Schema.decodeSync(CodexSettings);
 
-const solServiceTiers = Effect.fn("solServiceTiers")(function* (ultrafastEntitled: boolean) {
+const solServiceTiers = Effect.fn("solServiceTiers")(function* (
+  ultrafastEntitled: boolean,
+  configReadFails = false,
+) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const dir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-codex-catalog-" });
@@ -88,8 +93,20 @@ const solServiceTiers = Effect.fn("solServiceTiers")(function* (ultrafastEntitle
   const provider = yield* checkCodexProviderStatus(
     decodeCodexSettings({ binaryPath, homePath: dir }),
     undefined,
-    { ...environment, FAKE_ULTRAFAST_ENTITLED: ultrafastEntitled ? "1" : "0" },
+    {
+      ...environment,
+      FAKE_ULTRAFAST_ENTITLED: ultrafastEntitled ? "1" : "0",
+      FAKE_CONFIG_READ: configReadFails ? "fail" : "ok",
+    },
   );
+  assert.strictEqual(provider.status, "ready");
+  assert.strictEqual(
+    provider.models.some((model) => model.isDefault),
+    !configReadFails,
+  );
+  if (!configReadFails) {
+    assert.strictEqual(provider.models.find((model) => model.isDefault)?.slug, "custom-default");
+  }
   const serviceTier = provider.models
     .find((model) => model.slug === "gpt-6.1-sol")
     ?.capabilities?.optionDescriptors?.find((descriptor) => descriptor.id === "serviceTier");
@@ -106,6 +123,15 @@ it.layer(NodeServices.layer, { excludeTestServices: true })("Codex catalog disco
   it.effect("drops Ultrafast once the account is no longer entitled to it", () =>
     Effect.gen(function* () {
       assert.deepStrictEqual(yield* solServiceTiers(false), ["default", "priority"]);
+    }).pipe(Effect.scoped),
+  );
+  it.effect("keeps Codex available when the default-model config request fails", () =>
+    Effect.gen(function* () {
+      assert.deepStrictEqual(yield* solServiceTiers(true, true), [
+        "default",
+        "priority",
+        "ultrafast",
+      ]);
     }).pipe(Effect.scoped),
   );
 });
