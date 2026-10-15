@@ -3499,6 +3499,7 @@ it.each([
   'codex_internal_context source="goal"',
   'in-app-browser-context source="ambient-ui-state"',
   "system-reminder",
+  "external_codex_apps_open_page",
 ])("skips a Codex context envelope with attributes: %s", (opening) => {
   const tag = opening.split(" ")[0];
   const context = `<${opening}>\nInternal setup\n</${tag}>`;

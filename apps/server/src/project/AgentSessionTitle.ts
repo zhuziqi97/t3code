@@ -5,6 +5,7 @@ function skipLeadingCodexContext(text: string): number {
     "environment_context",
     "user_instructions",
     "codex_internal_context",
+    "external_codex_apps_open_page",
     "in-app-browser-context",
     "system-reminder",
   ];
@@ -73,7 +74,7 @@ export function deriveImportedThreadTitle(
 export function isLegacyCodexContextTitle(title: string): boolean {
   return (
     /^# AGENTS\.md instructions(?:\s|$)/.test(title) ||
-    /^<(?:recommended_plugins|environment_context|user_instructions|system-reminder|in-app-browser-context|codex_internal_context)(?:\s[^>]*|)>$/.test(
+    /^<(?:recommended_plugins|environment_context|user_instructions|system-reminder|in-app-browser-context|codex_internal_context|external_codex_apps_open_page)(?:\s[^>]*|)>$/.test(
       title,
     )
   );
