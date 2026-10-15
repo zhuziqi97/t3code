@@ -1,3 +1,5 @@
+import { EventStoreV2 } from "./EventStore.ts";
+import { isLegacyCodexContextTitle } from "../project/AgentSessionTitle.ts";
 import type {
   OrchestrationV2SearchThreadInput,
   OrchestrationV2SearchThreadResult,
@@ -469,6 +471,7 @@ function commandThreadId(command: OrchestrationV2ServerCommand): ThreadId {
     case "thread.pull-request.watch":
     case "thread.pull-request-watch.sync":
     case "thread.pull-request.sync":
+    case "thread.imported-title.repair":
     case "thread.title.regeneration.complete":
     case "thread.runtime-mode.set":
     case "thread.interaction-mode.set":
@@ -820,6 +823,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
   const commandPolicy = yield* CommandPolicyV2;
   const contextHandoffService = yield* ContextHandoffServiceV2;
   const eventSink = yield* EventSinkV2;
+  const eventStore = yield* EventStoreV2;
   const commandReceipts = yield* CommandReceiptStoreV2;
   const idAllocator = yield* IdAllocator.IdAllocatorV2;
   const projects = yield* ProjectStore.ProjectStoreV2;
@@ -2447,6 +2451,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           | "thread.pull-request.watch"
           | "thread.pull-request-watch.sync"
           | "thread.pull-request.sync"
+          | "thread.imported-title.repair"
           | "thread.title.regeneration.complete"
           | "thread.runtime-mode.set"
           | "thread.interaction-mode.set"
@@ -2466,6 +2471,47 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           }),
       ),
     );
+    if (command.type === "thread.imported-title.repair") {
+      if (
+        thread.deletedAt !== null ||
+        thread.historyOrigin !== "v1_import" ||
+        thread.projectId !== command.projectId ||
+        !isLegacyCodexContextTitle(thread.title) ||
+        isLegacyCodexContextTitle(command.title) ||
+        command.title === "Imported thread" ||
+        thread.titleRegeneration != null
+      )
+        return;
+      const created = yield* eventStore
+        .read({
+          threadId: command.threadId,
+          eventType: "thread.created",
+        })
+        .pipe(Stream.runHead, mapDispatchError(command));
+      if (
+        Option.isNone(created) ||
+        created.value.event.type !== "thread.created" ||
+        created.value.event.payload.title !== thread.title ||
+        !String(created.value.event.id).startsWith("agent-session-import:v2:")
+      )
+        return;
+      // Even a rename back to the original placeholder belongs to the user.
+      const renamed = yield* eventStore
+        .read({
+          threadId: command.threadId,
+          eventType: "thread.metadata-updated",
+        })
+        .pipe(
+          Stream.runFold(
+            () => false,
+            (changed, { event }) =>
+              changed ||
+              (event.type === "thread.metadata-updated" && event.payload.title !== thread.title),
+          ),
+          mapDispatchError(command),
+        );
+      if (renamed) return;
+    }
     if (thread.deletedAt !== null) {
       return yield* new OrchestratorDispatchError({
         commandId: command.commandId,
@@ -3244,6 +3290,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                 }),
             updatedAt: thread.updatedAt,
           };
+        case "thread.imported-title.repair":
+          return { ...thread, title: command.title };
         case "thread.title.regeneration.complete":
           return thread.titleRegeneration?.requestId === command.requestId
             ? {
@@ -3315,6 +3363,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         case "thread.mark-unread":
           return "thread.marked-unread" as const;
         case "thread.metadata.update":
+        case "thread.imported-title.repair":
         case "thread.title.regeneration.complete":
           return "thread.metadata-updated" as const;
         case "thread.pull-request.link":
@@ -10893,6 +10942,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       case "thread.active.reorder":
       case "thread.mark-unread":
       case "thread.metadata.update":
+      case "thread.imported-title.repair":
       case "thread.pull-request.link":
       case "thread.pull-request.unlink":
       case "thread.pull-request-link.sync":
@@ -11168,6 +11218,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         // stop that finds nothing running, has nothing to record. That is
         // its expected outcome, not a failure.
         planned.events.length > 0 ||
+        command.type === "thread.imported-title.repair" ||
         command.type === "thread.background-work.settle" ||
         command.type === "thread.stop" ||
         command.type === "subagent.stop"
@@ -11670,6 +11721,7 @@ export const layer: Layer.Layer<
   | ContextHandoffServiceV2
   | EffectOutbox.EffectOutboxV2
   | EventSinkV2
+  | EventStoreV2
   | IdAllocator.IdAllocatorV2
   | ProjectStore.ProjectStoreV2
   | ProviderAdapterRegistryV2

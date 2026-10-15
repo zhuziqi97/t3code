@@ -3179,6 +3179,14 @@ export type OrchestrationV2Command = typeof OrchestrationV2Command.Type;
  * send them.
  */
 const OrchestrationV2InternalCommand = Schema.Union([
+  /** Repairs an untouched Codex import title; rejected candidates are accepted no-ops. */
+  Schema.Struct({
+    type: Schema.Literal("thread.imported-title.repair"),
+    commandId: CommandId,
+    threadId: ThreadId,
+    projectId: ProjectId,
+    title: TrimmedNonEmptyString,
+  }),
   /**
    * Records what a pull request watch saw, and wakes the agent in the same transaction when
    * `wake` is set. Rejected once the watch started at `startedAt` has ended, and a wake is

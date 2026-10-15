@@ -145,3 +145,96 @@ it.effect("imports messages once and preserves the provider native resume bindin
     expect(recorded).toHaveLength(2);
   }).pipe(Effect.provide(layerTest));
 });
+
+it.effect.each([
+  { outcomeTag: "AlreadyImported" as const, canonicalTitle: "Saved 中文标题" },
+  { outcomeTag: "AlreadyImported" as const, canonicalTitle: undefined },
+  { outcomeTag: "Importable" as const, canonicalTitle: "Saved 中文标题" },
+  { outcomeTag: "Importable" as const, canonicalTitle: undefined },
+])("repairs existing imports: %j", ({ outcomeTag, canonicalTitle }) => {
+  const commands: Array<unknown> = [];
+  const source = {
+    provider: "codex" as const,
+    providerInstanceId,
+    providerSessionId,
+    filePath: "/tmp/native.jsonl",
+    size: 100,
+    mtimeMs: 2,
+    device: 3,
+    inode: 4,
+    birthtimeMs: 1,
+  };
+  const outcome: AgentSessionScanner.AgentSessionRecentThread =
+    outcomeTag === "AlreadyImported"
+      ? { _tag: outcomeTag, source, ...(canonicalTitle ? { canonicalTitle } : {}) }
+      : {
+          _tag: outcomeTag,
+          source,
+          thread: {
+            source: "codex",
+            providerInstanceId,
+            providerSessionId,
+            title: canonicalTitle ?? "Actual request",
+            model: null,
+            createdAt: "2026-10-01T00:00:00.000Z",
+            updatedAt: "2026-10-01T00:00:00.000Z",
+            messages: [],
+          },
+        };
+  const testLayer = AgentSessionImporter.layer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        Layer.mock(AgentSessionScanner.AgentSessionScanner)({
+          recentThreads: () => Stream.succeed(outcome),
+        }),
+        Layer.mock(ProjectService.ProjectService)({
+          getById: () =>
+            Effect.succeed(Option.some({ id: projectId, workspaceRoot: "/repo" } as never)),
+        }),
+        Layer.mock(Orchestrator.OrchestratorV2)({
+          getThreadRecords: () =>
+            Effect.succeed({
+              thread: {
+                id: threadId,
+                projectId,
+                historyOrigin: "v1_import",
+                title: "# AGENTS.md instructions for /repo",
+              },
+              messages: [
+                {
+                  role: "user",
+                  text: "# AGENTS.md instructions for /repo\n<INSTRUCTIONS>\nRules\n</INSTRUCTIONS>",
+                },
+                { role: "user", text: "Actual request" },
+              ],
+            } as never),
+          dispatch: (command) =>
+            Effect.sync(() => {
+              commands.push(command);
+              return {} as never;
+            }),
+        }),
+        Layer.mock(EventSink.EventSinkV2)({
+          write: () => Effect.die("repair must not rewrite history"),
+        }),
+        Layer.mock(ProviderSessionRuntime.ProviderSessionRuntimeRepository)({
+          list: () => Effect.succeed([]),
+          recordImportedTranscript: () => Effect.void,
+        }),
+        IdAllocator.layer,
+      ),
+    ),
+  );
+  return Effect.gen(function* () {
+    const importer = yield* AgentSessionImporter.AgentSessionImporter;
+    yield* importer.importRecentAgentThreads({ projectId });
+    expect(commands).toEqual([
+      expect.objectContaining({
+        type: "thread.imported-title.repair",
+        projectId,
+        threadId,
+        title: canonicalTitle ?? "Actual request",
+      }),
+    ]);
+  }).pipe(Effect.provide(testLayer));
+});
