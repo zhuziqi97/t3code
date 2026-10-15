@@ -3494,3 +3494,14 @@ it.each([
     expect(thread?.messages[0]?.text).toBe("Actual request");
   },
 );
+
+it.each([
+  'codex_internal_context source="goal"',
+  'in-app-browser-context source="ambient-ui-state"',
+  "system-reminder",
+])("skips a Codex context envelope with attributes: %s", (opening) => {
+  const tag = opening.split(" ")[0];
+  const context = `<${opening}>\nInternal setup\n</${tag}>`;
+  expect(deriveImportedThreadTitle(`${context}\n\n修复会话标题`, "codex")).toBe("修复会话标题");
+  expect(deriveImportedThreadTitle(context, "codex")).toBeNull();
+});
