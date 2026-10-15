@@ -547,7 +547,11 @@ function parseAgentSessionRecords(
     source: input.source,
     providerInstanceId: input.providerInstanceId,
     providerSessionId,
-    title: title ?? canonicalDerivedTitle ?? firstDerivedTitle ?? "Imported thread",
+    title:
+      (input.source === "codex" ? title?.split("\n")[0]?.slice(0, 100).trim() : title) ||
+      canonicalDerivedTitle ||
+      firstDerivedTitle ||
+      "Imported thread",
     model,
     createdAt: retainedMessages[0]?.createdAt ?? fallbackTimestamp,
     updatedAt: fallbackTimestamp,

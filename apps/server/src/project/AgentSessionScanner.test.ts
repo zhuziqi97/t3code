@@ -3456,6 +3456,12 @@ describe("parseAgentSessionTranscript", () => {
 });
 
 it.each([
+  {
+    name: "A".repeat(200),
+    threadName: "Second",
+    canonicalTitle: undefined,
+    expected: "A".repeat(100),
+  },
   { name: "元数据标题", threadName: "Second", canonicalTitle: undefined, expected: "元数据标题" },
   {
     name: "",
