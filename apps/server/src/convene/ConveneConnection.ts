@@ -1,5 +1,6 @@
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import {
+  CONVENE_SUPPORTED_PROTOCOLS,
   ConveneDataControl,
   ConveneIntegrationError,
   ConveneProjectConfiguration,
@@ -190,7 +191,7 @@ const start = (
           CLIENT_TYPE: "t3",
           CLIENT_VERSION: packageJson.version,
           RUNNER_BUILD_ID: `convene-t3-${packageJson.version}`,
-          SUPPORTED_PROTOCOLS: [{ MAJOR: 1, MAX_MINOR: 0 }],
+          SUPPORTED_PROTOCOLS: CONVENE_SUPPORTED_PROTOCOLS,
         });
         const configurations = new Map<string, ConvenePlatform.Configuration>();
         const dataChannels = new Map<string, Fiber.Fiber<void, unknown>>();
