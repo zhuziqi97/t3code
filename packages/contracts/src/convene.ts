@@ -127,6 +127,7 @@ export const ConveneWsOpen = Schema.Struct({
 export const ConveneHttpEnd = Schema.Struct({ TYPE: Schema.Literal("HTTP_END") });
 
 export const ConveneStatus = Schema.Struct({
+  platformUrls: Schema.Array(Schema.String),
   phase: Schema.Literals(["unpaired", "connecting", "online", "offline"]),
   baseUrl: Schema.NullOr(Schema.String),
   runnerId: Schema.NullOr(Schema.String),

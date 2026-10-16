@@ -52,6 +52,7 @@ it.effect(
       ),
       Layer.succeed(ConveneConnection.ConveneConnection, {
         status: Effect.succeed({
+          platformUrls: [],
           phase: "unpaired" as const,
           baseUrl: null,
           runnerId: null,

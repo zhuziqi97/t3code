@@ -10,7 +10,13 @@ import { writeTextToClipboard } from "../../hooks/useCopyToClipboard";
 import { conveneEnvironment } from "../../state/convene";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
+import {
+  Autocomplete,
+  AutocompleteInput,
+  AutocompleteItem,
+  AutocompleteList,
+  AutocompletePopup,
+} from "../ui/autocomplete";
 import { Label } from "../ui/label";
 import { Alert, AlertDescription } from "../ui/alert";
 
@@ -25,7 +31,9 @@ export function ConveneConnectionPanel({ environmentId }: { environmentId: Envir
   const status = AsyncResult.isSuccess(result) ? result.value : null;
   const permitted = useAtomValue(conveneEnvironment.manage.permissionAtom(environmentId));
   const manage = useAtomCommand(conveneEnvironment.manage, { reportFailure: false });
-  const [baseUrl, setBaseUrl] = useState("");
+  const platformUrls = status?.platformUrls ?? [];
+  const [customBaseUrl, setBaseUrl] = useState<string | null>(null);
+  const baseUrl = customBaseUrl ?? platformUrls[0] ?? "";
   const [pairing, setPairing] = useState<{
     value: typeof ConvenePairing.Type;
     expiresAt: number;
@@ -290,13 +298,38 @@ export function ConveneConnectionPanel({ environmentId }: { environmentId: Envir
         >
           <div className="space-y-2">
             <Label htmlFor={urlId}>{t("convene.connection.url")}</Label>
-            <Input
-              id={urlId}
-              placeholder="https://convene.example.com"
+            <Autocomplete
+              items={platformUrls}
+              mode="none"
               value={baseUrl}
-              onChange={(event) => setBaseUrl(event.target.value)}
+              onValueChange={(value, details) => {
+                if (details.reason !== "escape-key") setBaseUrl(value);
+              }}
               disabled={busy || !permitted}
-            />
+            >
+              <AutocompleteInput
+                id={urlId}
+                showTrigger
+                placeholder="https://convene.example.com"
+                onKeyDown={(event) => {
+                  // Enter selects a suggestion; connecting requires a separate submit.
+                  if (
+                    event.key === "Enter" &&
+                    event.currentTarget.getAttribute("aria-expanded") === "true"
+                  )
+                    event.preventDefault();
+                }}
+              />
+              <AutocompletePopup>
+                <AutocompleteList>
+                  {(url: string) => (
+                    <AutocompleteItem key={url} value={url}>
+                      {url}
+                    </AutocompleteItem>
+                  )}
+                </AutocompleteList>
+              </AutocompletePopup>
+            </Autocomplete>
           </div>
           <Button type="submit" disabled={busy || !baseUrl.trim() || !permitted || status === null}>
             {busy ? t("convene.connection.requesting") : t("convene.connection.connect")}

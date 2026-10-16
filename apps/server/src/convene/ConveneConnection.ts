@@ -18,6 +18,8 @@ import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as PubSub from "effect/PubSub";
+import * as Path from "effect/Path";
+import * as ServerConfig from "../config.ts";
 import * as Queue from "effect/Queue";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import * as Socket from "effect/socket/Socket";
@@ -69,11 +71,12 @@ export class ConveneConnection extends Context.Service<
     readonly synchronize: Effect.Effect<void, ConveneIntegrationError>;
   }
 >()("t3/convene/ConveneConnection") {}
+type ConnectionState = Omit<ConveneStatus, "platformUrls">;
 type ReportWaiter = Deferred.Deferred<void, ConveneIntegrationError>;
 
 /** One module owns the outward connection; native commands remain in T3 services. */
 const start = (
-  state: SubscriptionRef.SubscriptionRef<ConveneStatus>,
+  state: SubscriptionRef.SubscriptionRef<ConnectionState>,
   requests: Queue.Queue<ReportWaiter>,
 ) =>
   Effect.gen(function* () {
@@ -325,9 +328,31 @@ const start = (
     );
   });
 
+export const readConvenePlatformUrls = Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const server = yield* ServerConfig.ServerConfig;
+  // Deployment-local configuration stays outside source code and distributable artifacts.
+  const filename = path.join(server.stateDir, "convene-platforms.json");
+  return (yield* fs.exists(filename))
+    ? yield* fs.readFileString(filename).pipe(
+        Effect.flatMap(
+          Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Array(Schema.String))),
+        ),
+        Effect.catch(() =>
+          Effect.logWarning(
+            "Could not read Convene platform presets; custom addresses remain available.",
+          ).pipe(Effect.as([])),
+        ),
+      )
+    : [];
+});
+
 const make = Effect.gen(function* () {
+  const platformUrls = yield* readConvenePlatformUrls;
+  const withPresets = (value: ConnectionState): ConveneStatus => ({ ...value, platformUrls });
   const platform = yield* ConvenePlatform.ConvenePlatform;
-  const state = yield* SubscriptionRef.make<ConveneStatus>({
+  const state = yield* SubscriptionRef.make<ConnectionState>({
     phase: "unpaired",
     baseUrl: null,
     runnerId: null,
@@ -347,8 +372,8 @@ const make = Effect.gen(function* () {
     }
   }).pipe(Effect.forkScoped);
   return ConveneConnection.of({
-    status: SubscriptionRef.get(state),
-    changes: SubscriptionRef.changes(state),
+    status: SubscriptionRef.get(state).pipe(Effect.map(withPresets)),
+    changes: SubscriptionRef.changes(state).pipe(Stream.map(withPresets)),
     synchronize: Effect.gen(function* () {
       if ((yield* SubscriptionRef.get(state)).phase !== "online")
         return yield* new ConveneIntegrationError({ operation: "refresh", code: "OFFLINE" });
