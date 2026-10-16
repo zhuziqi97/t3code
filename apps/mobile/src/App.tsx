@@ -9,7 +9,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { createStaticNavigation } from "@react-navigation/native";
 
 import { RegistryContext, useAtomValue } from "@effect/atom-react";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { resolveLanguage } from "@t3tools/client-runtime/i18n";
 import { changeLanguage, i18n } from "./i18n";
 import { mobilePreferencesAtom } from "./state/preferences";

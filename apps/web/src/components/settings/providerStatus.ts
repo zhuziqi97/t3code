@@ -11,6 +11,8 @@ import type {
  * the default-driver card and per-instance cards share the same language.
  */
 export const PROVIDER_STATUS_STYLES = {
+  checking: { dot: "bg-muted-foreground/50" },
+  cancelled: { dot: "bg-muted-foreground/50" },
   disabled: {
     dot: "bg-muted-foreground/50",
   },
@@ -162,9 +164,9 @@ export function formatProviderStatusMessage(message: string, translate: TFunctio
       return translate("provider.status.museTimeout");
     case "Muse Code CLI is installed but failed to run.":
       return translate("provider.status.museRunFailed");
-    case "Muse Code SDK could not read the model catalog. Check your Muse installation and run `muse login` on this T3 server host.":
+    case "Muse Code SDK could not read the model catalog.":
       return translate("provider.status.museCatalogFailed");
-    case "Muse Code returned no models. Run `muse login` on this T3 server host and refresh its status.":
+    case "Muse Code returned no models.":
       return translate("provider.status.museNoModels");
   }
   const detailPrefixes = [
@@ -272,7 +274,7 @@ export function getProviderSummary(
   if (!provider) {
     return {
       headline: translate("provider.checking"),
-      detail: translate("provider.waiting"),
+      detail: null,
     };
   }
   const message =
@@ -285,7 +287,14 @@ export function getProviderSummary(
       detail: message ?? translate("provider.disabledDescription"),
     };
   }
-  if (!provider.installed) {
+  if (provider.status === "cancelled")
+    return { headline: translate("provider.cancelled"), detail: null };
+  if (
+    provider.status === "checking" ||
+    (provider.installed === null && provider.status !== "error")
+  )
+    return { headline: translate("provider.checking"), detail: null };
+  if (provider.installed === false) {
     return {
       headline: translate("provider.notFound"),
       detail: message ?? translate("provider.noCli"),

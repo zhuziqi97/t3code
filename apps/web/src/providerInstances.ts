@@ -30,6 +30,7 @@ import {
   resolveProviderInstanceDisplayName,
   shouldShowInstanceBadge,
 } from "@t3tools/client-runtime/state/provider-instance-display";
+import { canStartProviderSession } from "@t3tools/shared/providerReadiness";
 
 export { normalizeProviderAccentColor, shouldShowInstanceBadge };
 
@@ -60,7 +61,7 @@ export interface ProviderInstanceEntry {
   readonly acpRegistryIconUrl?: string | undefined;
   readonly continuationGroupKey?: string | undefined;
   readonly enabled: boolean;
-  readonly installed: boolean;
+  readonly installed: boolean | null;
   readonly status: ServerProviderState;
   /**
    * True when this entry is the default instance for its driver kind —
@@ -99,7 +100,9 @@ export function resolveProviderCatalogAvailability(input: {
  * `ready` probe status can remain in the streamed snapshot until reconciliation.
  */
 export function isProviderInstancePickerReady(entry: ProviderInstanceEntry): boolean {
-  return entry.enabled && entry.isAvailable && entry.status === "ready";
+  return (
+    entry.isAvailable && canStartProviderSession({ ...entry.snapshot, enabled: entry.enabled })
+  );
 }
 
 /** Picker rails contain configured, enabled instances only. */

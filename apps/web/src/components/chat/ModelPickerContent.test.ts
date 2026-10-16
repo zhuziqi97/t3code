@@ -79,7 +79,7 @@ describe("shouldIncludeModelPickerOption", () => {
       expect(
         shouldIncludeModelPickerOption({
           entry: providerEntry,
-          option: { slug: "stale/model", name: "Stale model" },
+          option: { slug: "stale/model", name: "Stale model", isUnavailable: true },
           activeInstanceId,
           activeModel,
         }),

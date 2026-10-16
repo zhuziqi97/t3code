@@ -1,3 +1,4 @@
+import { isProviderInstancePickerReady } from "../providerInstances";
 import { localizedProjectCloneProgressSummary } from "../lib/projectClonePresentation";
 import { i18n, useTranslate } from "../i18n";
 import {
@@ -9484,7 +9485,7 @@ export default function ChatView(props: ChatViewProps) {
       const provider = providerInstanceEntries.find(
         (entry) => entry.instanceId === selection.instanceId,
       );
-      if (!provider?.enabled || !provider.isAvailable || provider.status !== "ready") {
+      if (!provider || !isProviderInstancePickerReady(provider)) {
         setThreadError(
           threadIdForSend,
           t("chat.provider.modelUnavailable", { model: selection.model }),

@@ -32,7 +32,7 @@ describe("getOnboardingProviderState", () => {
     expect(getOnboardingProviderState(readyCodex)).toBe("ready");
   });
 
-  it("treats authenticated providers as ready only when their provider status is ready", () => {
+  it("keeps an authenticated provider usable when auxiliary discovery reports a warning", () => {
     expect(getOnboardingProviderState({ ...readyCodex, auth: { status: "authenticated" } })).toBe(
       "ready",
     );
@@ -49,7 +49,7 @@ describe("getOnboardingProviderState", () => {
         auth: { status: "authenticated" },
         status: "warning",
       }),
-    ).toBe("attention");
+    ).toBe("ready");
   });
 
   it("offers sign-in only when the server reports an authentication failure", () => {
@@ -61,7 +61,7 @@ describe("getOnboardingProviderState", () => {
       }),
     ).toBe("signIn");
     expect(getOnboardingProviderState({ ...readyCodex, status: "error" })).toBe("attention");
-    expect(getOnboardingProviderState({ ...readyCodex, status: "warning" })).toBe("attention");
+    expect(getOnboardingProviderState({ ...readyCodex, status: "warning" })).toBe("ready");
   });
 
   it("does not offer installation or sign-in for disabled providers", () => {

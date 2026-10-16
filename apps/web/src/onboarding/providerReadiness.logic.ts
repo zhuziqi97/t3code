@@ -7,6 +7,7 @@ import {
 } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import { isProviderReady } from "@t3tools/shared/providerReadiness";
 
 const decodeClaudeSettings = Schema.decodeUnknownOption(ClaudeSettings);
 const decodeCodexSettings = Schema.decodeUnknownOption(CodexSettings);
@@ -36,16 +37,21 @@ function quoteProviderBinary(
 export function getOnboardingProviderState(provider: ServerProvider | undefined) {
   if (provider === undefined) return "checking";
   if (!provider.enabled || provider.status === "disabled") return "disabled";
-  if (!provider.installed && provider.status === "warning" && provider.auth.status === "unknown")
+  if (provider.status === "cancelled") return "cancelled";
+  if (
+    provider.status === "checking" ||
+    (provider.installed === null && provider.status !== "error")
+  )
     return "checking";
   if (!provider.installed) return "install";
   if (provider.auth.status === "unauthenticated") return "signIn";
-  if (provider.status === "ready") return "ready";
+  if (isProviderReady(provider)) return "ready";
   return "attention";
 }
 
 const PROVIDER_STATE_PRIORITY = {
   checking: 0,
+  cancelled: 0,
   disabled: 1,
   install: 2,
   attention: 3,

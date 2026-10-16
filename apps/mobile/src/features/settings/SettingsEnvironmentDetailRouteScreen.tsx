@@ -60,6 +60,7 @@ function EnvironmentDetail({ environmentId }: { readonly environmentId: Environm
   const updateServer = useAtomCommand(serverEnvironment.updateServer);
   const updateProvider = useAtomCommand(serverEnvironment.updateProvider);
   const refreshProviders = useAtomCommand(serverEnvironment.refreshProviders);
+  const cancelProviderRefresh = useAtomCommand(serverEnvironment.cancelProviderRefresh);
   const [connectionExpanded, setConnectionExpanded] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
   const pendingRef = useRef(false);
@@ -323,13 +324,50 @@ function EnvironmentDetail({ environmentId }: { readonly environmentId: Environm
                             </Text>
                           </View>
                           <Text className="text-sm text-foreground-muted">
-                            {provider.installed
-                              ? (provider.version ?? "Version unknown")
-                              : "Not installed"}
+                            {provider.status === "cancelled"
+                              ? "Cancelled"
+                              : provider.status === "checking" ||
+                                  (provider.installed === null && provider.status !== "error")
+                                ? "Connecting…"
+                                : provider.installed
+                                  ? (provider.version ?? "Version unknown")
+                                  : "Not installed"}
                             {provider.versionAdvisory?.latestVersion
                               ? ` · Latest ${provider.versionAdvisory.latestVersion}`
                               : ""}
                           </Text>
+                          {[provider.operation, ...(provider.metadataOperations ?? [])]
+                            .filter((operation) => operation?.state === "running")
+                            .map((operation) => (
+                              <SettingsActionRow
+                                key={operation!.id}
+                                icon="xmark"
+                                label="Cancel"
+                                disabled={!canManageProviders}
+                                onPress={() => {
+                                  void cancelProviderRefresh({
+                                    environmentId,
+                                    input: {
+                                      instanceId: provider.instanceId,
+                                      operationId: operation!.id,
+                                    },
+                                  });
+                                }}
+                              />
+                            ))}
+                          {provider.status === "cancelled" ? (
+                            <SettingsActionRow
+                              icon="arrow.clockwise"
+                              label="Reconnect"
+                              disabled={!canManageProviders}
+                              onPress={() => {
+                                void refreshProviders({
+                                  environmentId,
+                                  input: { instanceId: provider.instanceId },
+                                });
+                              }}
+                            />
+                          ) : null}
                           {provider.updateState && provider.updateState.status !== "idle" ? (
                             <Text
                               selectable
