@@ -13,7 +13,7 @@ import {
   syncDocumentWindowControlsOverlayClass,
 } from "./lib/windowControlsOverlay";
 import { AppRoot } from "./AppRoot";
-import { clearChunkReloadGuard, reloadOnceForChunkLoadError } from "./lib/chunkReloadGuard";
+import { chunkLoadRecovery, clearChunkReloadGuard } from "./lib/chunkReloadGuard";
 
 prepareProviderAuthDelivery();
 
@@ -28,18 +28,6 @@ if (isElectron) {
 }
 
 const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined;
-
-// A failed split-chunk fetch usually means the hashed assets went stale under
-// a deploy; one guarded reload picks up the fresh index.html.
-let chunkLoadFailed = false;
-let reloadScheduled = false;
-window.addEventListener("vite:preloadError", (event) => {
-  chunkLoadFailed = true;
-  if (reloadOnceForChunkLoadError()) {
-    reloadScheduled = true;
-    event.preventDefault();
-  }
-});
 
 const app = <AppRoot router={router} />;
 
@@ -68,8 +56,8 @@ export const startup = Promise.all([
     // the lazy component and surfaces through the route error boundary. Skip the
     // paint when a reload is on its way, and only re-arm the guard after a boot
     // that fetched every chunk it asked for.
-    if (reloadScheduled) return;
-    if (!chunkLoadFailed) clearChunkReloadGuard();
+    if (chunkLoadRecovery.reloading) return;
+    if (!chunkLoadRecovery.failed) clearChunkReloadGuard();
     ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       <React.StrictMode>
         {ManagedAuthShell && clerkPublishableKey ? (
@@ -82,6 +70,6 @@ export const startup = Promise.all([
   })
   .catch((error: unknown) => {
     // Let the bootstrap entry show the error unless a reload is already scheduled.
-    if (reloadScheduled) return;
+    if (chunkLoadRecovery.reloading) return;
     throw error;
   });

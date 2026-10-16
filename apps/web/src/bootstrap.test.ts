@@ -32,6 +32,7 @@ describe("app startup failures", () => {
   beforeEach(() => {
     vi.resetModules();
     bootShell = new BootElement("div");
+    vi.stubGlobal("window", new EventTarget());
     vi.stubGlobal("document", {
       getElementById: () => bootShell,
       createElement: (tagName: string) => new BootElement(tagName),
@@ -60,7 +61,7 @@ describe("app startup failures", () => {
       throw new Error("@vitejs/plugin-react can't detect preamble. Something is wrong.");
     });
     const reload = vi.fn();
-    vi.stubGlobal("window", { location: { reload } });
+    vi.stubGlobal("window", Object.assign(new EventTarget(), { location: { reload } }));
 
     await import("./bootstrap");
     await vi.dynamicImportSettled();
@@ -73,6 +74,37 @@ describe("app startup failures", () => {
     reloadButton?.dispatchEvent(new Event("click"));
     expect(reload).toHaveBeenCalledOnce();
   });
+
+  it.each([false, true])(
+    "recovers a failed main preload once before main runs, reloaded=%s",
+    async (reloaded) => {
+      const storage = new Map<string, string>();
+      if (reloaded) storage.set("t3code:chunk-load-reloaded", "1");
+      const reload = vi.fn();
+      vi.stubGlobal(
+        "window",
+        Object.assign(new EventTarget(), {
+          location: { reload },
+          sessionStorage: {
+            getItem: (key: string) => storage.get(key) ?? null,
+            setItem: (key: string, value: string) => storage.set(key, value),
+          },
+        }),
+      );
+      vi.doMock("./main", () => {
+        const event = new Event("vite:preloadError", { cancelable: true });
+        window.dispatchEvent(event);
+        if (!event.defaultPrevented) throw new Error("Failed to fetch main chunk");
+        return { startup: Promise.resolve() };
+      });
+
+      await import("./bootstrap");
+      await vi.dynamicImportSettled();
+
+      expect(reload).toHaveBeenCalledTimes(reloaded ? 0 : 1);
+      expect(bootShell?.text.includes("T3 Code could not load.")).toBe(reloaded);
+    },
+  );
 
   it.each([true, false])("shows startup error details only in dev mode, DEV=%s", (dev) => {
     vi.stubEnv("DEV", dev);

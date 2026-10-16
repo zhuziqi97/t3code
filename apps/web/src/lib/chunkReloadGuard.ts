@@ -5,6 +5,19 @@
 // it so the next stale deploy gets its own single reload.
 const CHUNK_RELOAD_GUARD_KEY = "t3code:chunk-load-reloaded";
 
+export const chunkLoadRecovery = { failed: false, reloading: false };
+
+/** The bootstrap calls this before importing main and its preloaded assets. */
+export function watchChunkLoadErrors() {
+  window.addEventListener("vite:preloadError", (event) => {
+    chunkLoadRecovery.failed = true;
+    if (reloadOnceForChunkLoadError()) {
+      chunkLoadRecovery.reloading = true;
+      event.preventDefault();
+    }
+  });
+}
+
 /**
  * Called from the `vite:preloadError` listener. Reloads at most once per
  * failure streak and returns whether it did, so the caller knows whether to
