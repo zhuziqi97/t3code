@@ -1,3 +1,4 @@
+import { ProviderOperationActions } from "../ProviderOperationActions";
 import { Trans } from "react-i18next";
 import { useTranslate } from "../../i18n";
 import { AuthProvidersManageScope } from "@t3tools/contracts";
@@ -70,6 +71,9 @@ export function CodexSetupSection(props: CodexSetupSectionProps) {
   const content =
     props.mode === "existing" && props.presentation === "onboarding" ? (
       <CodexWelcomeCard
+        operationActions={
+          <ProviderOperationActions provider={props.provider} environmentId={props.environmentId} />
+        }
         title={props.displayName || props.provider?.displayName || "Codex"}
         description={
           existingReady ? (
@@ -93,8 +97,10 @@ export function CodexSetupSection(props: CodexSetupSectionProps) {
               t("setup.codex.existingConnected")
             )
           ) : existingChecking ? (
-            t("setup.codex.checkingCli")
-          ) : props.provider?.installed ? (
+            t("provider.checking")
+          ) : existingState === "cancelled" ||
+            existingState === "attention" ||
+            props.provider?.installed ? (
             existingSummary.headline
           ) : (
             t("setup.codex.subscription")
@@ -106,9 +112,9 @@ export function CodexSetupSection(props: CodexSetupSectionProps) {
               <CheckIcon className="size-3.5" />
               {t("wizard.ready")}
             </span>
-          ) : existingChecking ? (
-            <span className="text-xs text-muted-foreground">{t("wizard.checking")}</span>
-          ) : existingAuthenticated ? (
+          ) : existingChecking ||
+            existingState === "cancelled" ||
+            existingState === "attention" ? null : existingAuthenticated ? (
             <span className="text-xs text-muted-foreground">{existingSummary.headline}</span>
           ) : (
             <ChatGptConnectionButton
@@ -124,7 +130,11 @@ export function CodexSetupSection(props: CodexSetupSectionProps) {
           )
         }
         secondaryControl={
-          !existingAuthenticated && !existingReady && !existingChecking ? (
+          !existingAuthenticated &&
+          !existingReady &&
+          !existingChecking &&
+          existingState !== "cancelled" &&
+          existingState !== "attention" ? (
             <Button size="sm" variant="ghost-muted" onClick={() => props.onModeChange("existing")}>
               {t("setup.codex.useExistingCli")}
             </Button>
@@ -134,6 +144,12 @@ export function CodexSetupSection(props: CodexSetupSectionProps) {
     ) : props.mode === "existing" ? null : props.provider?.setup === undefined ? (
       props.presentation === "onboarding" ? (
         <CodexWelcomeCard
+          operationActions={
+            <ProviderOperationActions
+              provider={props.provider}
+              environmentId={props.environmentId}
+            />
+          }
           title={props.displayName || props.provider?.displayName || "Codex"}
           description={<CodexSignInDescription />}
           control={
@@ -806,6 +822,9 @@ function ManagedCodexSetup({
       <>
         {accountPicker}
         <CodexWelcomeCard
+          operationActions={
+            <ProviderOperationActions provider={provider} environmentId={environmentId} />
+          }
           title={displayName || provider?.displayName || "Codex"}
           description={
             installActive ? (
@@ -1166,8 +1185,10 @@ function CodexWelcomeCard({
   description,
   control,
   secondaryControl,
+  operationActions,
   children,
 }: {
+  readonly operationActions?: ReactNode;
   readonly title: string;
   readonly description: ReactNode;
   readonly control?: ReactNode;
@@ -1180,11 +1201,14 @@ function CodexWelcomeCard({
       <div className="flex flex-wrap items-center gap-3">
         <OpenAI className="size-5 shrink-0 fill-foreground" />
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-medium">{title}</h3>
+          <h3 className="truncate text-sm font-medium" title={title}>
+            {title}
+          </h3>
           <div className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{description}</div>
         </div>
-        {control || secondaryControl ? (
+        {control || secondaryControl || operationActions ? (
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 has-[button]:w-full has-[button]:flex-col-reverse has-[button]:items-end sm:has-[button]:w-auto sm:has-[button]:flex-row sm:has-[button]:items-center">
+            {operationActions}
             {secondaryControl}
             {control}
           </div>
