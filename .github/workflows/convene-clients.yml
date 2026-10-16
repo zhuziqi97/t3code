@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  APP_VERSION: 0.0.45-convene.18
+  APP_VERSION: 0.0.45-convene.19
 
 jobs:
   bundle:
@@ -117,7 +117,7 @@ jobs:
       arch: ${{ matrix.arch }}
       rust_target: ${{ matrix.rust_target }}
       resource_key: ${{ matrix.resource_key }}
-      version: 0.0.45-convene.18
+      version: 0.0.45-convene.19
       ref: ${{ github.sha }}
       release_channel: preview
       relay_client_tracing: false
