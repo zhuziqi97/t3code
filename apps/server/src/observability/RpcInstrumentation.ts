@@ -40,6 +40,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.conveneMutateProject]: "server",
   [WS_METHODS.conveneProjectOptions]: "server",
   [WS_METHODS.serverRefreshProviders]: "server",
+  [WS_METHODS.serverCancelProviderRefresh]: "server",
   [WS_METHODS.serverUpdateProvider]: "server",
   [WS_METHODS.providerAuthStart]: "provider",
   [WS_METHODS.providerConsumeResetCredit]: "provider",

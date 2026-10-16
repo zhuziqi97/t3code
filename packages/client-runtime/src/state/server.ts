@@ -1185,6 +1185,10 @@ export function createServerEnvironmentAtoms<R, E>(
           ]),
       },
     }),
+    cancelProviderRefresh: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:cancel-provider-refresh",
+      tag: WS_METHODS.serverCancelProviderRefresh,
+    }),
     updateProvider: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:update-provider",
       tag: WS_METHODS.serverUpdateProvider,

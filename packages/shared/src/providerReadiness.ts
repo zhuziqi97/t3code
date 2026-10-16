@@ -13,8 +13,15 @@ export function isProviderReady(
   );
 }
 
-export function isProviderChecking(
-  provider: Pick<ServerProvider, "status" | "operation">,
+/** A known selection can start while background discovery is still connecting. */
+export function canStartProviderSession(
+  provider: Pick<ServerProvider, "enabled" | "installed" | "status" | "auth" | "availability">,
 ): boolean {
-  return provider.status === "checking" || provider.operation?.state === "running";
+  return (
+    provider.enabled &&
+    provider.availability !== "unavailable" &&
+    provider.installed !== false &&
+    provider.auth.status !== "unauthenticated" &&
+    (provider.status === "checking" || isProviderReady(provider))
+  );
 }

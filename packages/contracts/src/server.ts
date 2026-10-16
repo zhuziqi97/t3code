@@ -61,6 +61,7 @@ export const ServerProviderState = Schema.Literals([
 export type ServerProviderState = typeof ServerProviderState.Type;
 
 export const ServerProviderOperation = Schema.Struct({
+  kind: Schema.Literals(["status", "workspace", "models"]),
   id: TrimmedNonEmptyString,
   state: Schema.Literals(["running", "completed", "cancelled", "failed"]),
   cwd: Schema.optionalKey(TrimmedNonEmptyString),
@@ -319,6 +320,7 @@ export const ServerProvider = Schema.Struct({
   version: Schema.NullOr(TrimmedNonEmptyString),
   status: ServerProviderState,
   operation: Schema.optionalKey(ServerProviderOperation),
+  metadataOperations: Schema.optionalKey(Schema.Array(ServerProviderOperation)),
   metadata: Schema.optionalKey(ServerProviderMetadataState),
   auth: ServerProviderAuth,
   checkedAt: IsoDateTime,

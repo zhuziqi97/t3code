@@ -1,3 +1,4 @@
+import type { ProviderDriverError } from "./errors.ts";
 import type { ProviderUsageLimitsUpdate, ServerProvider } from "@t3tools/contracts";
 import type * as Effect from "effect/Effect";
 import type * as Stream from "effect/Stream";
@@ -15,7 +16,13 @@ export interface ManagedServerProvider {
   readonly getSnapshot: Effect.Effect<ServerProvider>;
   readonly refresh: Effect.Effect<ServerProvider>;
   /** Start or join an instance-owned refresh without awaiting discovery. */
-  readonly startRefresh: Effect.Effect<ServerProvider>;
+  readonly startRefresh: (options?: {
+    readonly cwd?: string;
+    readonly kind?: "workspace" | "models";
+    readonly work?: (
+      check: Effect.Effect<ServerProvider>,
+    ) => Effect.Effect<unknown, ProviderDriverError>;
+  }) => Effect.Effect<ServerProvider>;
   readonly cancelRefresh: (operationId: string) => Effect.Effect<void>;
   readonly streamChanges: Stream.Stream<ServerProvider>;
   /**

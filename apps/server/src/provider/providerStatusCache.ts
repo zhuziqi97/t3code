@@ -84,18 +84,12 @@ export const hydrateCachedProvider = (input: {
   const hydratedProvider: ServerProvider = {
     ...fallbackWithoutMessage,
     models: mergeProviderModels(input.fallbackProvider.models, input.cachedProvider.models),
-    installed: input.cachedProvider.installed,
     version: input.cachedProvider.version,
-    status: input.cachedProvider.status,
-    auth: input.cachedProvider.auth,
-    checkedAt: input.cachedProvider.checkedAt,
     slashCommands: input.cachedProvider.slashCommands,
     skills: input.cachedProvider.skills,
   };
 
-  return input.cachedProvider.message
-    ? { ...hydratedProvider, message: input.cachedProvider.message }
-    : hydratedProvider;
+  return hydratedProvider;
 };
 
 /**
@@ -152,7 +146,13 @@ export const writeProviderStatusCache = (input: {
   readonly filePath: string;
   readonly provider: ServerProvider;
 }) => {
-  const { updateState: _updateState, ...cacheableProvider } = input.provider;
+  const {
+    updateState: _updateState,
+    operation: _operation,
+    metadataOperations: _metadataOperations,
+    metadata: _metadata,
+    ...cacheableProvider
+  } = input.provider;
   return writeFileStringAtomically({
     filePath: input.filePath,
     contents: `${JSON.stringify(cacheableProvider, null, 2)}\n`,

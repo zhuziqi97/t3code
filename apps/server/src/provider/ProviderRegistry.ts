@@ -51,6 +51,7 @@ import * as Stream from "effect/Stream";
 import * as Semaphore from "effect/Semaphore";
 
 import * as ModelManifest from "./ModelManifest.ts";
+import * as ProviderLatestVersions from "@t3tools/provider-core/server/ProviderLatestVersions";
 import { applyProviderCompatibility } from "./providerCompatibility.ts";
 import * as ServerConfig from "../config.ts";
 import * as ProviderInstanceRegistry from "./ProviderInstanceRegistry.ts";
@@ -83,6 +84,16 @@ export class ProviderRegistry extends Context.Service<
      * instances of the same driver) and disambiguate via `instanceId`.
      */
     readonly getProviders: Effect.Effect<ReadonlyArray<ServerProvider>>;
+    readonly startRefresh: (input: {
+      readonly instanceId?: ProviderInstanceId | undefined;
+      readonly cwd?: string | undefined;
+      readonly fresh?: boolean | undefined;
+      readonly refreshModels?: boolean | undefined;
+    }) => Effect.Effect<ReadonlyArray<ServerProvider>>;
+    readonly cancelRefresh: (
+      instanceId: ProviderInstanceId,
+      operationId: string,
+    ) => Effect.Effect<ReadonlyArray<ServerProvider>>;
 
     /**
      * Refresh all providers, or the default instance of the specified
@@ -240,8 +251,10 @@ const shouldRetainMissingProviderModels = (provider: ServerProvider): boolean =>
   const isPendingAntigravityAuthentication =
     isAntigravity && provider.status === "warning" && provider.auth.status === "unknown";
   const isPendingInitialProbe =
-    provider.enabled && !provider.installed && provider.status === "warning";
-  const didInstalledProviderProbeFail = provider.installed && provider.status === "error";
+    provider.status === "checking" ||
+    provider.metadata?.models?.state === "loading" ||
+    provider.metadata?.models?.state === "failed";
+  const didInstalledProviderProbeFail = provider.installed === true && provider.status === "error";
   return (
     isPendingAntigravityAuthentication || isPendingInitialProbe || didInstalledProviderProbeFail
   );
@@ -422,6 +435,8 @@ const buildSnapshotSource = (instance: ProviderInstance): ProviderSnapshotSource
   driverKind: instance.driverKind,
   getSnapshot: instance.snapshot.getSnapshot,
   refresh: instance.snapshot.refresh,
+  startRefresh: instance.snapshot.startRefresh,
+  cancelRefresh: instance.snapshot.cancelRefresh,
   streamChanges: instance.snapshot.streamChanges,
 });
 
@@ -430,6 +445,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const instanceRegistry = yield* ProviderInstanceRegistry.ProviderInstanceRegistry;
     const manifestService = yield* ModelManifest.ModelManifest;
+    const latestVersions = yield* ProviderLatestVersions.ProviderLatestVersions;
     const serviceScope = yield* Effect.scope;
     const config = yield* ServerConfig.ServerConfig;
     const fileSystem = yield* FileSystem.FileSystem;
@@ -1037,11 +1053,14 @@ export const layer = Layer.effect(
         Effect.map(([, nextProviders]) => nextProviders),
       );
 
-    const refreshWorkspaceSnapshot = Effect.fn("refreshWorkspaceSnapshot")(function* (input: {
-      readonly instanceId: ProviderInstanceId;
-      readonly cwd: string;
-      readonly fresh?: boolean;
-    }) {
+    const refreshWorkspaceSnapshot = Effect.fn("refreshWorkspaceSnapshot")(function* (
+      input: {
+        readonly instanceId: ProviderInstanceId;
+        readonly cwd: string;
+        readonly fresh?: boolean;
+      },
+      checkMachine?: Effect.Effect<unknown>,
+    ) {
       // Fresh scans drop other instances' snapshots for this cwd first, so a
       // composer on one of them scans again on next use, even when this
       // instance is gone or cannot be scanned.
@@ -1087,7 +1106,7 @@ export const layer = Layer.effect(
       // Fresh scans also re-read the machine snapshot after invalidating caches.
       const refreshMachineSnapshot = input.fresh
         ? (instance.invalidateCaches ?? Effect.void).pipe(
-            Effect.andThen(refreshInstance(input.instanceId)),
+            Effect.andThen(checkMachine ?? refreshInstance(input.instanceId)),
           )
         : Effect.void;
       return yield* refreshMachineSnapshot.pipe(
@@ -1131,6 +1150,61 @@ export const layer = Layer.effect(
 
     return {
       getProviders: Ref.get(providersRef),
+      startRefresh: (input) =>
+        Effect.gen(function* () {
+          const instances = yield* instanceRegistry.listInstances;
+          yield* Effect.forEach(
+            instances.filter(
+              (instance) =>
+                input.instanceId === undefined || instance.instanceId === input.instanceId,
+            ),
+            (instance) =>
+              instance.snapshot
+                .startRefresh({
+                  ...(input.cwd ? { cwd: input.cwd } : {}),
+                  ...(input.refreshModels ? { kind: "models" as const } : {}),
+                  ...(input.cwd || input.refreshModels
+                    ? {
+                        work: (check) =>
+                          Effect.gen(function* () {
+                            if (input.refreshModels) {
+                              yield* manifestService.forceRefresh;
+                              yield* instance.invalidateCaches ?? Effect.void;
+                              const maintenance = yield* instance.snapshot.resolveMaintenance({
+                                fresh: true,
+                              });
+                              if (maintenance.packageName)
+                                yield* latestVersions.invalidate(maintenance.packageName);
+                              yield* check;
+                              if (instance.refreshModels) yield* instance.refreshModels();
+                              yield* check;
+                            }
+                            if (input.cwd)
+                              yield* refreshWorkspaceSnapshot(
+                                {
+                                  instanceId: instance.instanceId,
+                                  cwd: input.cwd,
+                                  ...(input.fresh ? { fresh: true } : {}),
+                                },
+                                check,
+                              );
+                          }),
+                      }
+                    : {}),
+                })
+                .pipe(Effect.flatMap((provider) => syncProvider(provider))),
+            { concurrency: "unbounded", discard: true },
+          );
+          return yield* Ref.get(providersRef);
+        }),
+      cancelRefresh: (instanceId, operationId) =>
+        getLiveSources.pipe(
+          Effect.flatMap((sources) => {
+            const source = sources.find((candidate) => candidate.instanceId === instanceId);
+            return source ? source.cancelRefresh(operationId) : Effect.void;
+          }),
+          Effect.andThen(Ref.get(providersRef)),
+        ),
       refresh: (provider?: ProviderDriverKind) =>
         refresh(provider).pipe(Effect.catchCause(recoverRefreshFailure)),
       refreshInstance: (instanceId: ProviderInstanceId) =>

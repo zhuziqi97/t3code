@@ -45,6 +45,7 @@ export class UsageLimitSources extends Context.Service<
     readonly streamChanges: Stream.Stream<ReadonlyArray<UsageLimitSourceSnapshot>>;
     /** Re-read every source now. Never fails; failures land on the snapshot. */
     readonly refresh: Effect.Effect<void>;
+    readonly requestRefresh: Effect.Effect<void>;
     readonly consumeResetCredit: (
       input: UsageLimitSourceConsumeResetCreditInput,
     ) => Effect.Effect<ProviderConsumeResetCreditResult, UsageLimitSourceError>;
@@ -66,6 +67,8 @@ export const make = Effect.gen(function* () {
   const api = yield* makeCliproxyApi;
   const settingsService = yield* Settings.ServerSettingsService;
   const backgroundPolicy = yield* BackgroundPolicy.BackgroundPolicy;
+  const scope = yield* Effect.scope;
+  const refreshRequested = yield* Ref.make(false);
   const stateRef = yield* Ref.make<ReadonlyArray<UsageLimitSourceSnapshot>>([]);
   const changes = yield* Effect.acquireRelease(
     PubSub.unbounded<ReadonlyArray<UsageLimitSourceSnapshot>>(),
@@ -169,6 +172,17 @@ export const make = Effect.gen(function* () {
     current: Ref.get(stateRef),
     consumeResetCredit,
     refresh,
+    requestRefresh: Ref.getAndSet(refreshRequested, true).pipe(
+      Effect.flatMap((alreadyRequested) =>
+        alreadyRequested
+          ? Effect.void
+          : refresh.pipe(
+              Effect.ensuring(Ref.set(refreshRequested, false)),
+              Effect.forkIn(scope),
+              Effect.asVoid,
+            ),
+      ),
+    ),
     get streamChanges() {
       return Stream.unwrap(
         Effect.gen(function* () {

@@ -9,6 +9,7 @@ import { vi } from "vite-plus/test";
 import {
   AuthOrchestrationOperateScope,
   AuthSettingsWriteScope,
+  AuthProvidersManageScope,
   AuthEnvironmentMaintainScope,
   AuthSourceControlWriteScope,
   ThreadId,
@@ -60,6 +61,28 @@ const setup = Effect.gen(function* () {
 });
 
 describe("command permissions", () => {
+  it.effect("requires providers management on the destination to cancel discovery", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const registry = yield* setup;
+        const cancellation = createCommandPermissions(
+          runtime,
+          WS_METHODS.serverCancelProviderRefresh,
+        );
+        registry.set(sessions(env), AsyncResult.success(grant(true)));
+        expect(registry.get(cancellation.permissionAtom(env))).toBe(false);
+        const permitted = {
+          ...grant(false),
+          scopes: [AuthProvidersManageScope],
+          permissions: [AuthProvidersManageScope],
+        };
+        registry.set(sessions(env), AsyncResult.success(permitted));
+        expect(registry.get(cancellation.permissionAtom(env))).toBe(true);
+        expect(registry.get(cancellation.permissionAtom(other))).toBe(false);
+      }),
+    ),
+  );
+
   it.effect("requires the destination settings grant to run storage cleanup", () =>
     Effect.scoped(
       Effect.gen(function* () {
