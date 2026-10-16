@@ -82,7 +82,6 @@ export function resolveOpenCodeServerPassword(
     : input.environment.OPENCODE_SERVER_PASSWORD;
 }
 
-const DEFAULT_OPENCODE_SERVER_TIMEOUT_MS = 30_000;
 const DEFAULT_HOSTNAME = "127.0.0.1";
 const OPENCODE_SERVER_STARTUP_MAX_OUTPUT_CHARS = 64 * 1024;
 const OPENCODE_SKILL_DISCOVERY_MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
@@ -707,7 +706,7 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
               }),
           ),
         ));
-      const timeoutMs = input.timeoutMs ?? DEFAULT_OPENCODE_SERVER_TIMEOUT_MS;
+      const timeoutMs = input.timeoutMs;
       const args = ["serve", `--hostname=${hostname}`, `--port=${port}`];
       // One server runs every session of the instance, so its scope has no thread.
       const launch = yield* agentScope.wrap({
@@ -847,7 +846,9 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
       );
 
       const readyExit = yield* Effect.exit(
-        Deferred.await(readyDeferred).pipe(Effect.timeoutOption(timeoutMs)),
+        timeoutMs === undefined
+          ? Deferred.await(readyDeferred).pipe(Effect.asSome)
+          : Deferred.await(readyDeferred).pipe(Effect.timeoutOption(timeoutMs)),
       );
 
       if (Exit.isFailure(readyExit) || Option.isNone(readyExit.value)) {

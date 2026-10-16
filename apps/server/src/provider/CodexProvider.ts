@@ -1,3 +1,4 @@
+import { isCommandMissingCause } from "@t3tools/provider-core/server/snapshotProbe";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -37,7 +38,6 @@ import {
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
 import { codexAppServerArgs, resolveCodexLaunchArgs } from "./codexLaunchArgs.ts";
 import {
-  AUTH_PROBE_TIMEOUT_MS,
   buildServerProvider,
   COMPACT_SLASH_COMMAND,
   type ServerProviderDraft,
@@ -52,6 +52,8 @@ import {
 } from "./codexUsageLimits.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import packageJson from "../../package.json" with { type: "json" };
+import { reportProviderProgress } from "@t3tools/provider-core/server/managedProvider";
+
 const isCodexAppServerSpawnError = Schema.is(CodexErrors.CodexAppServerSpawnError);
 const RATE_LIMITS_PROBE_TIMEOUT_MS = 3_000;
 
@@ -495,14 +497,58 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
     } satisfies CodexAppServerProviderSnapshot;
   }
 
+  yield* reportProviderProgress({
+    installed: true,
+    version: version ?? null,
+    ...accountProbeStatus({ account: accountResponse, version, models: [], skills: [] }),
+    metadata: {
+      models: { state: "loading" },
+      skills: { state: "loading" },
+      defaultModel: { state: "loading" },
+    },
+  });
+  let reportedModels: ReadonlyArray<ServerProviderModel> = [];
+  let reportedDefault: string | null | undefined;
+  let configurationRead = false;
   const [skillsResponse, models, rateLimits, configuration] = yield* Effect.all(
     [
-      client.request("skills/list", {
-        cwds: [input.cwd],
-      }),
-      accountResponse.account?.type === "chatgpt"
+      client
+        .request("skills/list", {
+          cwds: [input.cwd],
+        })
+        .pipe(
+          Effect.tap((response) =>
+            reportProviderProgress({
+              skills: parseCodexSkillsListResponse(response, input.cwd),
+              metadata: { skills: { state: "ready" } },
+            }),
+          ),
+          Effect.catch(() =>
+            reportProviderProgress({ metadata: { skills: { state: "failed" } } }).pipe(
+              Effect.as({ data: [] }),
+            ),
+          ),
+        ),
+      (accountResponse.account?.type === "chatgpt"
         ? requestCodexChatGptModels({ client, codexHome: initialize.codexHome, spawnedAtMs })
-        : requestAllCodexModels(client),
+        : requestAllCodexModels(client)
+      ).pipe(
+        Effect.tap((models) => {
+          reportedModels = models;
+          return reportProviderProgress({
+            models: appendCustomCodexModels(
+              configurationRead
+                ? applyNativeCodexDefaultModel(models, reportedDefault)
+                : models.map((model) => ({ ...model, isDefault: false })),
+              input.customModels ?? [],
+            ),
+            metadata: { models: { state: "ready" } },
+          });
+        }),
+        Effect.catch(() =>
+          reportProviderProgress({ metadata: { models: { state: "failed" } } }).pipe(Effect.as([])),
+        ),
+      ),
       // Usage is an enrichment: a failure or a slow answer degrades to "no
       // usage this probe" rather than costing the account and models.
       input.skipNativeUsage
@@ -528,8 +574,26 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
           ),
       client.request("config/read", { cwd: input.cwd, includeLayers: false }).pipe(
         Effect.map((response) => ({ model: response.config.model })),
+        Effect.tap((configuration) => {
+          reportedDefault = configuration.model;
+          configurationRead = true;
+          return reportProviderProgress({
+            ...(reportedModels.length
+              ? {
+                  models: appendCustomCodexModels(
+                    applyNativeCodexDefaultModel(reportedModels, reportedDefault),
+                    input.customModels ?? [],
+                  ),
+                }
+              : {}),
+            metadata: { defaultModel: { state: "ready" } },
+          });
+        }),
         Effect.catch((error) =>
           Effect.logDebug("Codex default-model configuration read failed.", { cause: error }).pipe(
+            Effect.andThen(
+              reportProviderProgress({ metadata: { defaultModel: { state: "failed" } } }),
+            ),
             Effect.as(undefined),
           ),
         ),
@@ -598,11 +662,10 @@ const makePendingCodexProvider = (
       models,
       skills: [],
       probe: {
-        installed: false,
+        installed: null,
         version: null,
-        status: "warning",
+        status: "checking",
         auth: { status: "unknown" },
-        message: "Codex provider status has not been checked in this session yet.",
       },
     });
   });
@@ -692,15 +755,15 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
     customModels: codexSettings.customModels,
     environment: resolvedEnvironment,
     ...(managedAuth ? { skipNativeUsage: true } : {}),
-  }).pipe(
-    Effect.scoped,
-    Effect.timeoutOption(Duration.millis(AUTH_PROBE_TIMEOUT_MS)),
-    Effect.result,
-  );
+  }).pipe(Effect.scoped, Effect.result);
 
   if (Result.isFailure(probeResult)) {
     const error = probeResult.failure;
-    const installed = !isCodexAppServerSpawnError(error);
+    const installed = isCodexAppServerSpawnError(error)
+      ? isCommandMissingCause(error.cause)
+        ? false
+        : null
+      : true;
     return buildServerProvider({
       presentation: CODEX_PRESENTATION,
       enabled: codexSettings.enabled,
@@ -712,34 +775,18 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
         version: null,
         status: "error",
         auth: { status: "unknown" },
-        message: installed
-          ? `Codex app-server provider probe failed: ${error.message}.`
-          : `Could not start Codex CLI (\`${codexSettings.binaryPath}\`). Check Settings → Providers → Codex → Binary path on the server.` +
-            (codexSettings.binaryPath === "codex"
-              ? " Installing ChatGPT or Codex desktop may not add codex to PATH."
-              : " Make sure the configured executable exists and can be run."),
+        message:
+          installed === true
+            ? `Codex app-server provider probe failed: ${error.message}.`
+            : `Could not start Codex CLI (\`${codexSettings.binaryPath}\`). Check Settings → Providers → Codex → Binary path on the server.` +
+              (codexSettings.binaryPath === "codex"
+                ? " Installing ChatGPT or Codex desktop may not add codex to PATH."
+                : " Make sure the configured executable exists and can be run."),
       },
     });
   }
 
-  if (Option.isNone(probeResult.success)) {
-    return buildServerProvider({
-      presentation: CODEX_PRESENTATION,
-      enabled: codexSettings.enabled,
-      checkedAt,
-      models: emptyModels,
-      skills: [],
-      probe: {
-        installed: true,
-        version: null,
-        status: "error",
-        auth: { status: "unknown" },
-        message: "Timed out while checking Codex app-server provider status.",
-      },
-    });
-  }
-
-  const snapshot = probeResult.success.value;
+  const snapshot = probeResult.success;
   const accountStatus = managedAuth
     ? { status: "ready" as const, auth: managedAuth, message: undefined }
     : accountProbeStatus(snapshot);

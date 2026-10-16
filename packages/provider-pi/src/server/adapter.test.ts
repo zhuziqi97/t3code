@@ -1583,27 +1583,22 @@ describe("PiAdapterV2", () => {
       }).pipe(Effect.scoped, Effect.provide(layerTest)),
   );
 
-  it.effect("retires a timed-out lifecycle process before a late switch can race replacement", () =>
+  it.effect("keeps a slow resume pending and retires the process on explicit cancellation", () =>
     Effect.gen(function* () {
       const fake = yield* makeFakePi;
-      const { runtime, takeEvent } = yield* openRuntime(fake);
+      const { runtime } = yield* openRuntime(fake);
       const providerThread = yield* runtime.ensureThread({
         threadId: THREAD_ID,
         modelSelection: modelSelection("default"),
         runtimePolicy,
       });
       fake.deferNextLifecycle("switch_session");
-      const resumed = yield* runtime
-        .resumeThread({ providerThread })
-        .pipe(Effect.flip, Effect.forkChild);
+      const resumed = yield* runtime.resumeThread({ providerThread }).pipe(Effect.forkChild);
       const request = yield* fake.takeRequest("switch_session");
-      yield* TestClock.adjust(Duration.seconds(60));
-      const error = yield* Fiber.join(resumed);
-      assert.match(String(error.cause), /timed out after 60000ms/);
-      yield* takeEvent(
-        (event) =>
-          event.type === "provider_session.updated" && event.providerSession.status === "error",
-      );
+      yield* TestClock.adjust(Duration.seconds(91));
+      assert.isUndefined(yield* Effect.sync(() => resumed.pollUnsafe()));
+      yield* Fiber.interrupt(resumed);
+      // A late native response cannot revive the cancelled process or issue work.
       yield* fake.emit({
         type: "response",
         id: request.id,
@@ -1628,7 +1623,7 @@ describe("PiAdapterV2", () => {
   );
 
   it.effect(
-    "uses the lifecycle deadline for fresh sessions and drops replaced native metadata",
+    "accepts late initialization for fresh sessions and drops replaced native metadata",
     () =>
       Effect.gen(function* () {
         const fake = yield* makeFakePi;
@@ -1658,7 +1653,7 @@ describe("PiAdapterV2", () => {
           })
           .pipe(Effect.forkChild);
         const request = yield* fake.takeRequest("new_session");
-        yield* TestClock.adjust(Duration.millis(16_820));
+        yield* TestClock.adjust(Duration.seconds(91));
         yield* fake.emit({
           type: "response",
           id: request.id,

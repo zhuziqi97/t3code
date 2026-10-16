@@ -1,3 +1,4 @@
+import { reportProviderProgress } from "@t3tools/provider-core/server/managedProvider";
 import {
   type ModelCapabilities,
   type ServerProviderModel,
@@ -357,11 +358,10 @@ export const makePendingOpenCodeProvider = (
       checkedAt,
       models,
       probe: {
-        installed: false,
+        installed: null,
         version: null,
-        status: "warning",
+        status: "checking",
         auth: { status: "unknown" },
-        message: "OpenCode provider status has not been checked in this session yet.",
       },
     });
   });
@@ -526,6 +526,12 @@ const checkOpenCode2 = Effect.fn("checkOpenCode2")(function* (
   checkedAt: string,
   loadModels: Effect.Effect<ReadonlyArray<OpenCode2Model>, OpenCodeRuntime.OpenCodeRuntimeError>,
 ) {
+  yield* reportProviderProgress({
+    installed: true,
+    version,
+    status: "ready",
+    metadata: { models: { state: "loading" } },
+  });
   const result = yield* Effect.exit(loadModels);
   const probe = (status: "ready" | "warning" | "error", message: string) => ({
     installed: true,
@@ -535,6 +541,7 @@ const checkOpenCode2 = Effect.fn("checkOpenCode2")(function* (
     message,
   });
   if (result._tag === "Failure") {
+    yield* reportProviderProgress({ metadata: { models: { state: "failed" } } });
     // The detail can carry a response body; it stays in the log, not the status.
     yield* Effect.logWarning("OpenCode 2 model list failed", result.cause);
     return buildServerProvider({
@@ -548,9 +555,10 @@ const checkOpenCode2 = Effect.fn("checkOpenCode2")(function* (
       ),
       // Compaction does not depend on the model catalog.
       slashCommands: [COMPACT_SLASH_COMMAND],
-      probe: probe("error", "OpenCode could not load its model list."),
+      probe: probe("warning", "OpenCode could not load its model list."),
     });
   }
+  yield* reportProviderProgress({ metadata: { models: { state: "ready" } } });
   const models = providerModelsFromSettings(
     result.value
       .map((model) => {

@@ -11,7 +11,6 @@ import {
 import { AcpRegistrySettings } from "../settings.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { createModelCapabilities } from "@t3tools/shared/model";
-import * as Clock from "effect/Clock";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -26,7 +25,10 @@ import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import { AcpRegistryAdapterV2Driver, type AcpRegistryAdapterV2DriverEnv } from "./adapter.ts";
 import type { ProviderTextGeneration } from "@t3tools/provider-core/server/textGeneration";
 import { ProviderDriverError } from "@t3tools/provider-core/server/errors";
-import { makeManagedServerProvider } from "@t3tools/provider-core/server/managedProvider";
+import {
+  makeManagedServerProvider,
+  reportProviderProgress,
+} from "@t3tools/provider-core/server/managedProvider";
 import { mergeProviderInstanceEnvironment } from "@t3tools/provider-core/server/instanceEnvironment";
 import {
   defaultProviderContinuationIdentity,
@@ -60,11 +62,6 @@ import * as AcpRegistryAuthenticationState from "./authenticationState.ts";
 
 const DRIVER_KIND = ProviderDriverKind.make("acpRegistry");
 const decodeSettings = Schema.decodeSync(AcpRegistrySettings);
-// How long a successful discovery probe stays valid. Periodic health
-// refreshes reuse it instead of spawning a fresh disposable ACP session;
-// failed or unauthenticated probes are never cached so a completed sign-in
-// is detected on the next refresh.
-const PROBE_SUCCESS_TTL_MS = 15 * 60 * 1_000;
 const EMPTY_CAPABILITIES = createModelCapabilities({ optionDescriptors: [] });
 const MAINTENANCE = makeManualOnlyProviderMaintenanceCapabilities({
   provider: DRIVER_KIND,
@@ -190,7 +187,7 @@ function baseSnapshot(
   input: SnapshotIdentity & {
     readonly settings: AcpRegistrySettings;
     readonly checkedAt: string;
-    readonly installed: boolean;
+    readonly installed: boolean | null;
     readonly version: string | null;
     readonly status: ServerProvider["status"];
     readonly auth: ServerProvider["auth"];
@@ -226,7 +223,7 @@ function baseSnapshot(
       canInstall: false,
       ...(input.documentationUrl ? { documentationUrl: input.documentationUrl } : {}),
       canAuthenticate:
-        input.installed &&
+        input.installed === true &&
         (input.probe
           ? input.probe.probe.authMethods.length > 0
           : input.settings.source === "local"
@@ -539,7 +536,7 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
           if (input.auth.status === "unauthenticated") yield* confirmedAuthentication.set(false);
           const provider =
             input.enabled &&
-            input.installed &&
+            input.installed === true &&
             input.auth.status === "unknown" &&
             (yield* confirmedAuthentication.get)
               ? { ...input, auth: { ...input.auth, status: "authenticated" as const } }
@@ -585,7 +582,6 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
         readonly generation: number;
         readonly entry: {
           readonly provider: ServerProvider;
-          readonly expiresAt: number;
         } | null;
       }>({ generation: 0, entry: null });
       const liveSnapshotSemaphore = yield* Semaphore.make(1);
@@ -595,14 +591,9 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
       }));
       const enrichProviderCached = (baseSnapshot: ServerProvider) =>
         Effect.gen(function* () {
-          const now = yield* Clock.currentTimeMillis;
           const cacheState = yield* Ref.get(enrichmentCache);
           const cached = cacheState.entry;
-          if (
-            cached !== null &&
-            cached.expiresAt > now &&
-            cached.provider.version === baseSnapshot.version
-          ) {
+          if (cached !== null && cached.provider.version === baseSnapshot.version) {
             return {
               provider: { ...cached.provider, checkedAt: baseSnapshot.checkedAt },
               generation: cacheState.generation,
@@ -616,7 +607,6 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
                     ...current,
                     entry: {
                       provider: enriched,
-                      expiresAt: now + PROBE_SUCCESS_TTL_MS,
                     },
                   }
                 : current,
@@ -636,30 +626,13 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
         checkProvider,
         enrichSnapshot: ({ snapshot, getSnapshot, publishSnapshot }) => {
           if (!snapshot.installed) return Effect.void;
-          const publishEnrichment = (
-            Option.isSome(runtimeCoordinator)
-              ? runtimeCoordinator.value.runBackgroundProbe(
-                  effectiveConfig.source === "local"
-                    ? `local:${instanceId}`
-                    : effectiveConfig.agentId,
-                  enrichProviderCached(snapshot),
-                )
-              : enrichProviderCached(snapshot).pipe(Effect.map(Option.some))
-          ).pipe(
-            Effect.flatMap(
-              Option.match({
-                onNone: () => Effect.void,
-                onSome: ({ provider, generation }) =>
-                  liveSnapshotSemaphore.withPermit(
-                    Ref.get(enrichmentCache).pipe(
-                      Effect.flatMap((current) =>
-                        current.generation === generation
-                          ? withLiveRuntimeState(provider).pipe(Effect.flatMap(publishSnapshot))
-                          : Effect.void,
-                      ),
-                    ),
-                  ),
-              }),
+          // Background updates reuse discovered facts and native runtime events.
+          // Opening a disposable ACP session belongs only to explicit discovery.
+          const publishEnrichment = Ref.get(enrichmentCache).pipe(
+            Effect.flatMap(({ entry }) =>
+              entry
+                ? withLiveRuntimeState(entry.provider).pipe(Effect.flatMap(publishSnapshot))
+                : Effect.void,
             ),
           );
           if (Option.isNone(runtimeCoordinator)) return publishEnrichment;
@@ -809,6 +782,38 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
             Effect.tap(() => controller.refreshMethods ?? Effect.void),
           ),
         },
+        invalidateCaches: invalidateEnrichmentCache,
+        refreshModels: () =>
+          Effect.gen(function* () {
+            yield* reportProviderProgress({ metadata: { models: { state: "loading" } } });
+            const current = yield* snapshot.getSnapshot;
+            const discovered = yield* enrichProviderCached(current);
+            const valid = (yield* Ref.get(enrichmentCache)).generation === discovered.generation;
+            if (!valid) return;
+            if (discovered.provider.status !== "ready") {
+              yield* reportProviderProgress({
+                ...(discovered.provider.auth.status === "unauthenticated"
+                  ? { auth: discovered.provider.auth, status: "error" as const }
+                  : {}),
+                metadata: {
+                  models: {
+                    state: "failed",
+                    ...(discovered.provider.message
+                      ? { message: discovered.provider.message }
+                      : {}),
+                  },
+                },
+              });
+              return;
+            }
+            yield* reportProviderProgress({
+              models: discovered.provider.models,
+              skills: discovered.provider.skills,
+              slashCommands: discovered.provider.slashCommands,
+              auth: discovered.provider.auth,
+              metadata: { models: { state: "ready" } },
+            });
+          }),
         orchestrationAdapter,
         textGeneration: makeUnsupportedTextGeneration(),
         acpSessionManagement: {

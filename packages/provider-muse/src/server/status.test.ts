@@ -128,7 +128,7 @@ it.layer(NodeServices.layer)("Muse status", (it) => {
     ),
   );
 
-  it.effect("closes the host after malformed metadata and reports unavailable", () =>
+  it.effect("closes the host after malformed metadata without invalidating the CLI", () =>
     Effect.scoped(
       Effect.gen(function* () {
         const binaryPath = yield* fakeCli();
@@ -139,7 +139,7 @@ it.layer(NodeServices.layer)("Muse status", (it) => {
           undefined,
           async () => host,
         );
-        expect(snapshot.status).toBe("error");
+        expect(snapshot.status).toBe("warning");
         expect(snapshot.auth.status).toBe("unknown");
         expect(snapshot.models).toEqual([]);
         expect(host.close).toHaveBeenCalledOnce();

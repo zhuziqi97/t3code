@@ -112,7 +112,6 @@ const PI_INHERIT_MODEL_SLUG = "default";
 const STREAM_FLUSH_MS = 50;
 const PI_REQUEST_TIMEOUT_MS = 15_000;
 // Session lifecycle hooks reload extensions, MCP servers and language servers.
-const PI_SESSION_TIMEOUT_MS = 60_000;
 const PI_UNSOLICITED_ACTIVITY_ERROR =
   "Pi started agent work outside an active T3 turn. The session was stopped to prevent invisible tool execution.";
 const SETTLE_PROBE_MAX_ATTEMPTS = 3;
@@ -705,7 +704,7 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
         return ordinal;
       };
 
-      const request = (record: PiRpcRecord, timeoutMs = PI_REQUEST_TIMEOUT_MS) =>
+      const request = (record: PiRpcRecord, timeoutMs: number | null = PI_REQUEST_TIMEOUT_MS) =>
         connection.request(record, timeoutMs);
 
       const nonNegativeInteger = (input: unknown, key: string): number | undefined => {
@@ -733,9 +732,7 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
       };
 
       const lifecycleRequest = (record: PiRpcRecord) =>
-        request(record, PI_SESSION_TIMEOUT_MS).pipe(
-          // A local timeout does not cancel Pi's lifecycle hook. Retire the
-          // process before fallback can race its eventual switch/new-session.
+        request(record, null).pipe(
           Effect.tapError((error) =>
             Effect.logWarning("Pi session lifecycle request failed", {
               providerSessionId: input.providerSessionId,
@@ -743,10 +740,6 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
               errorTag: error._tag,
             }),
           ),
-          Effect.catchTags({
-            PiRpcTimeoutError: (error) =>
-              connection.terminate.pipe(Effect.andThen(Effect.fail(error))),
-          }),
           Effect.onInterrupt(() => connection.terminate),
         );
 
@@ -2328,7 +2321,7 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
         registrationAttempted = true;
         let initialState: unknown;
         if (!baselineCaptured) {
-          const initial = yield* request({ type: "get_state" });
+          const initial = yield* request({ type: "get_state" }, null);
           initialState = initial;
           const model = recordField(initial, "model");
           const provider = recordString(model, "provider");
@@ -2359,7 +2352,7 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
         const stateData =
           resumeId == null && !needsNewSession && initialState !== undefined
             ? initialState
-            : yield* request({ type: "get_state" });
+            : yield* request({ type: "get_state" }, null);
         if (!modelsDiscovered) {
           const modelsData = yield* request({ type: "get_available_models" }).pipe(
             Effect.orElseSucceed(() => undefined),
@@ -3239,7 +3232,7 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
                     return yield* protocolError("A Pi extension cancelled the session fork");
                   }
                 }
-                const state = yield* forkConnection.request({ type: "get_state" });
+                const state = yield* forkConnection.request({ type: "get_state" }, null);
                 const file = recordString(state, "sessionFile");
                 if (file === undefined || file === sourceFile) {
                   return yield* protocolError("Pi fork did not create a distinct session file");

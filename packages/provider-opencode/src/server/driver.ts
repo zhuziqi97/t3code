@@ -47,7 +47,10 @@ import {
   openCodeSkillsToServerProviderSkills,
   openCodeCommandsToServerProviderSlashCommands,
 } from "./status.ts";
-import { makeManagedServerProvider } from "@t3tools/provider-core/server/managedProvider";
+import {
+  makeManagedServerProvider,
+  reportProviderProgress,
+} from "@t3tools/provider-core/server/managedProvider";
 import * as OpenCodeRuntime from "./OpenCodeRuntime.ts";
 import {
   makeOpenCodeRuntimeProbe,
@@ -376,6 +379,18 @@ export const OpenCodeDriver: ProviderDriver<
             host.paths.cwd,
             runtimeProbe.refresh,
             loadOpenCode2Models,
+          ).pipe(
+            Effect.tap((provider) =>
+              reportProviderProgress({
+                installed: provider.installed,
+                version: provider.version,
+                status: provider.status,
+                auth: provider.auth,
+                models: provider.models,
+                skills: provider.skills,
+                slashCommands: provider.slashCommands,
+              }),
+            ),
           ),
           usageLimits: readOpenCodeGoUsageLimits({
             enabled: effectiveConfig.enabled,

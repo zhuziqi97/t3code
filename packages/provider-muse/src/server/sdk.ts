@@ -1,5 +1,5 @@
 // @effect-diagnostics globalTimers:off
-// The SDK owns process shutdown; native deadlines cover initialize before an Effect resource exists.
+// The SDK owns process shutdown, including cancellation before initialization finishes.
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- FileSystem.realPath is Node's JS realpath; museWorkspaceRoot needs the native one.
 import * as NodeFSP from "node:fs/promises";
 
@@ -201,11 +201,14 @@ export async function createMuseSdkHost(
   });
   options.signal?.addEventListener("abort", onAbort, { once: true });
   if (options.signal?.aborted) onAbort();
-  const timer = setTimeout(
-    () => rejectStartup(new Error("Muse SDK initialization timed out.")),
-    options.startupTimeoutMs ?? 20_000,
-  );
-  timer.unref();
+  const timer =
+    options.startupTimeoutMs === undefined
+      ? undefined
+      : setTimeout(
+          () => rejectStartup(new Error("Muse SDK metadata initialization timed out.")),
+          options.startupTimeoutMs,
+        );
+  timer?.unref();
   try {
     const host = await Promise.race([
       handshake.initialize(museInitializeParams(options.readOnly)),
@@ -227,7 +230,7 @@ export async function createMuseSdkHost(
     await close();
     throw error;
   } finally {
-    clearTimeout(timer);
+    if (timer) clearTimeout(timer);
   }
 }
 

@@ -27,7 +27,7 @@ it("reads legacy ACP model strings and preserves named capability overrides", ()
           {
             id: "effort",
             label: "Effort",
-            type: "select",
+            type: "select" as const,
             options: [{ id: "high", label: "High" }],
           },
         ],

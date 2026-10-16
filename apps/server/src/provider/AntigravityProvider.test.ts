@@ -161,7 +161,10 @@ const makeHarness = Effect.fn("makeAntigravityProviderHarness")(function* (
   );
   const initialUpdate = yield* Stream.toPull(
     provider.snapshot.streamChanges.pipe(
-      Stream.filter((snapshot) => snapshot.installed || snapshot.status === "error"),
+      Stream.filter(
+        (snapshot) =>
+          snapshot.operation?.state === "completed" || snapshot.operation?.state === "failed",
+      ),
     ),
   );
   const initialize = Deferred.succeed(initialProbe, initializeResult).pipe(
@@ -278,7 +281,7 @@ it.layer(layerTest)("Antigravity provider snapshots", (it) => {
         const snapshot = yield* harness.provider.snapshot.refresh;
         expect(snapshot).toMatchObject({
           enabled: false,
-          installed: false,
+          installed: null,
           status: "disabled",
           auth: { status: "unknown" },
           models: [],
@@ -303,7 +306,7 @@ it.layer(layerTest)("Antigravity provider snapshots", (it) => {
         const snapshot = yield* harness.provider.snapshot.refresh;
         expect(snapshot).toMatchObject({
           enabled: false,
-          installed: false,
+          installed: null,
           status: "disabled",
           auth: { status: "unknown" },
           models: [],
@@ -337,8 +340,8 @@ it.layer(layerTest)("Antigravity provider snapshots", (it) => {
       Effect.gen(function* () {
         const harness = yield* makeHarness();
         expect(yield* harness.provider.snapshot.getSnapshot).toMatchObject({
-          installed: false,
-          status: "warning",
+          installed: null,
+          status: "checking",
           auth: { status: "unknown" },
           models: [],
         });
@@ -540,7 +543,7 @@ it.layer(layerTest)("Antigravity provider snapshots", (it) => {
     ),
   );
 
-  it.effect("closes a stalled health probe at its deadline", () =>
+  it.effect("keeps stalled initialization pending until explicit cancellation releases it", () =>
     Effect.scoped(
       Effect.gen(function* () {
         const harness = yield* makeHarness();
@@ -556,11 +559,13 @@ it.layer(layerTest)("Antigravity provider snapshots", (it) => {
         );
         const refresh = yield* harness.provider.snapshot.refresh.pipe(Effect.forkChild);
         yield* Deferred.await(entered);
-        yield* TestClock.adjust("90 seconds");
-        const snapshot = yield* Fiber.join(refresh);
+        yield* TestClock.adjust("91 seconds");
+        expect(yield* Effect.sync(() => refresh.pollUnsafe())).toBeUndefined();
+        const running = yield* harness.provider.snapshot.getSnapshot;
+        yield* harness.provider.snapshot.cancelRefresh(running.operation!.id);
+        yield* Fiber.join(refresh);
         yield* Deferred.await(closed);
-        expect(snapshot.status).toBe("error");
-        expect(snapshot.message).toContain("90 seconds");
+        expect((yield* harness.provider.snapshot.getSnapshot).operation?.state).toBe("cancelled");
       }),
     ),
   );

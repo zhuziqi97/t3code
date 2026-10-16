@@ -15,6 +15,7 @@ import {
   RunAttemptId,
   RunId,
   ThreadId,
+  type ModelSelection,
   type OrchestrationV2AppThread,
   type OrchestrationV2ProviderThread,
 } from "@t3tools/contracts";

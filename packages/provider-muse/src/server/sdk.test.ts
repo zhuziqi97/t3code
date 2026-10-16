@@ -108,7 +108,26 @@ describe("Muse SDK host", () => {
     }
   });
 
-  it("bounds startup and waits for native shutdown after timeout", async () => {
+  it("keeps normal initialization pending beyond former deadlines and accepts the late handshake", async () => {
+    vi.useFakeTimers();
+    const fake = mockSpawn();
+    let settled = false;
+    const starting = createMuseSdkHost({ binaryPath: "muse" }).then((host) => {
+      settled = true;
+      return host;
+    });
+    await vi.advanceTimersByTimeAsync(91_000);
+    expect(settled).toBe(false);
+    expect(fake.close).not.toHaveBeenCalled();
+    fake.startup.resolve(fake.ready);
+    const host = await starting;
+    expect(settled).toBe(true);
+    fake.shutdown.resolve({ code: 0, signal: null });
+    await host.close();
+    expect(fake.close).toHaveBeenCalledOnce();
+  });
+
+  it("bounds explicit metadata startup and waits for native shutdown after timeout", async () => {
     vi.useFakeTimers();
     const fake = mockSpawn();
     const startup = createMuseSdkHost({ binaryPath: "muse", startupTimeoutMs: 30 });
@@ -126,7 +145,7 @@ describe("Muse SDK host", () => {
     expect(fake.close).toHaveBeenCalledOnce();
     expect(settled).toBe(false);
     fake.shutdown.resolve({ code: 0, signal: null });
-    expect(await outcome).toMatchObject({ message: "Muse SDK initialization timed out." });
+    expect(await outcome).toMatchObject({ message: "Muse SDK metadata initialization timed out." });
   });
 
   it("closes the pre-handshake host on abort and rejects only after shutdown", async () => {

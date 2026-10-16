@@ -11,7 +11,6 @@ import {
 import { mergeCustomModels, createModelCapabilities } from "@t3tools/shared/model";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
 import * as Result from "effect/Result";
 import * as Stream from "effect/Stream";
@@ -20,7 +19,10 @@ import type * as EffectAcpErrors from "effect-acp/errors";
 import type * as EffectAcpSchema from "effect-acp/compat";
 
 import type * as AcpSessionRuntime from "@t3tools/provider-acp/server/AcpSessionRuntime";
-import { makeManagedServerProvider } from "@t3tools/provider-core/server/managedProvider";
+import {
+  makeManagedServerProvider,
+  reportProviderProgress,
+} from "@t3tools/provider-core/server/managedProvider";
 import {
   makeManualOnlyProviderMaintenanceCapabilities,
   type ProviderMaintenanceCapabilities,
@@ -34,7 +36,6 @@ import { resolveUsageLimitsAfterProbe } from "@t3tools/provider-core/server/usag
 
 const EMPTY_MODEL_CAPABILITIES = createModelCapabilities({ optionDescriptors: [] });
 const MAX_WORKSPACE_SNAPSHOTS = 32;
-const HEALTH_CHECK_TIMEOUT = "90 seconds";
 const SIGN_IN_MESSAGE = "Sign in with Google to use Antigravity.";
 const AUTH_UNCHECKED_MESSAGE =
   "Antigravity is installed. Google account access is not checked yet.";
@@ -148,9 +149,9 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
       checkedAt,
       models: mergeCustomModels([], settings.customModels),
       probe: {
-        installed: false,
+        installed: null,
         version: null,
-        status: "warning",
+        status: "checking",
         // The configured method rides along so the registry can tell a saved
         // account for this method from one left by a previous configuration.
         auth: { status: "unknown", ...(options.auth ? { type: options.auth.type } : {}) },
@@ -179,12 +180,8 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
   const checkProvider = Effect.fn("checkAntigravityProvider")(function* () {
     if (!settings.enabled) return yield* getSnapshot;
     const before = yield* SubscriptionRef.get(metadata);
-    const result = yield* options.probe.pipe(
-      Effect.timeoutOption(HEALTH_CHECK_TIMEOUT),
-      Effect.result,
-    );
-    const initialized =
-      Result.isSuccess(result) && Option.isSome(result.success) ? result.success.value : undefined;
+    const result = yield* options.probe.pipe(Effect.result);
+    const initialized = Result.isSuccess(result) ? result.success : undefined;
     const failure = Result.isFailure(result) ? result.failure : undefined;
     const missingInstallation = failure !== undefined && isMissingInstallation(failure);
     const errorMessage =
@@ -196,9 +193,33 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
             ? "Antigravity is not installed or its executable could not be found."
             : failure
               ? "Antigravity could not complete its local health check."
-              : `Antigravity did not respond to its local health check within ${HEALTH_CHECK_TIMEOUT}.`;
+              : "Antigravity could not complete its local initialization.";
     const supportsTextGeneration =
       initialized !== undefined ? yield* options.supportsTextGeneration : false;
+    if (initialized !== undefined) {
+      const core = yield* SubscriptionRef.updateAndGet(metadata, (state) =>
+        state.authRevision !== before.authRevision
+          ? state
+          : {
+              ...state,
+              draft: {
+                ...state.draft,
+                installed: true,
+                version: initialized.agentInfo?.version || state.draft.version,
+                status:
+                  state.draft.auth.status === "authenticated"
+                    ? ("ready" as const)
+                    : ("warning" as const),
+              },
+            },
+      );
+      yield* reportProviderProgress({
+        installed: core.draft.installed,
+        version: core.draft.version,
+        status: core.draft.status,
+        auth: core.draft.auth,
+      });
+    }
     const usageLimits =
       initialized !== undefined && options.probeUsage ? yield* options.probeUsage : undefined;
     const updatedAt = DateTime.formatIso(yield* DateTime.now);
@@ -438,7 +459,15 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
   });
 
   return {
-    snapshot: { ...managed, getSnapshot },
+    snapshot: {
+      ...managed,
+      getSnapshot: Effect.zipWith(getSnapshot, managed.getSnapshot, (native, activity) => ({
+        ...native,
+        status: native.status === "checking" ? activity.status : native.status,
+        ...(activity.operation ? { operation: activity.operation } : {}),
+        ...(activity.metadataOperations ? { metadataOperations: activity.metadataOperations } : {}),
+      })),
+    },
     onSessionStarted,
     onConfigOptionsUpdated,
     onAvailableCommands,

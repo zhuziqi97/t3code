@@ -98,7 +98,8 @@ describe("buildInitialCursorProviderSnapshot", () => {
       const provider = yield* buildInitialCursorProviderSnapshot(baseCursorSettings);
 
       expect(provider).toMatchObject({
-        status: "warning",
+        installed: true,
+        status: "checking",
         message: "Checking Cursor SDK availability...",
       });
     }),
