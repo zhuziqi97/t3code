@@ -5,6 +5,7 @@ import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   CommandId,
+  ConveneNativeResult,
   EventId,
   MessageId,
   ProjectId,
@@ -19,6 +20,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as EventStore from "../persistence/OrchestrationEventStore.ts";
@@ -48,6 +50,8 @@ import * as ConveneWorkspaces from "./ConveneWorkspaces.ts";
 import * as ServerConfig from "../config.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
+
+const encodeNativeResult = Schema.encodeEffect(ConveneNativeResult);
 
 const replayLayer = Effect.fn("conveneReplayLayer")(function* (
   driver: "codex" | "claudeAgent",
@@ -235,13 +239,37 @@ it.live.each(["codex", "claudeAgent"] as const)(
           Stream.runHead,
         );
         assert.isTrue(Option.isSome(pending));
-        const before = yield* native.handle({ operation: "QUERY", ...destination, limit: 50 });
+        // Pending request details must not depend on the timeline page cursor.
+        const before = yield* native.handle({
+          operation: "QUERY",
+          ...destination,
+          afterPosition: 10000,
+          limit: 1,
+        });
         assert.equal(before.type, "snapshot");
         if (before.type !== "snapshot") return;
         assert.equal(before.thread.worktreePath, checkout);
         assert.equal(before.requests.length, 1, JSON.stringify(failures));
         const request = before.requests[0]!;
         assert.equal(request.status, "pending");
+        const encoded = yield* encodeNativeResult(before);
+        assert.equal(encoded.type, "snapshot");
+        if (encoded.type !== "snapshot") return;
+        const approval = encoded.requests[0]?.item;
+        assert.equal(approval?.type, "approval_request");
+        if (approval?.type !== "approval_request") return;
+        assert.equal(approval.requestId, request.id);
+        assert.isNotEmpty(approval.prompt);
+        if (driver === "codex") {
+          assert.include(approval.prompt, "printf");
+          const inbound = wire.entries.find(
+            (entry) => entry.type === "emit_inbound" && entry.label?.endsWith("requestApproval"),
+          );
+          const params = (inbound as { frame: { params: { cwd: string; reason: string } } }).frame
+            .params;
+          assert.include(approval.prompt, params.cwd);
+          assert.include(approval.prompt, params.reason);
+        }
         const command = {
           operation: "RESPOND" as const,
           ...destination,

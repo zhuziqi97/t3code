@@ -5190,7 +5190,11 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               requestKind: "command",
               ...((payload.reason ?? payload.command) === undefined
                 ? {}
-                : { prompt: payload.reason ?? payload.command }),
+                : {
+                    prompt: [payload.reason, payload.cwd, payload.command]
+                      .filter((value) => value !== undefined && value !== null && value !== "")
+                      .join("\n"),
+                  }),
             });
             const decision = yield* Deferred.make<ProviderApprovalDecision, never>();
             yield* Ref.update(pendingRuntimeRequests, (current) => {
@@ -5473,7 +5477,9 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               nativeItemId: payload.callId,
               nativeRequestId,
               requestKind: "command",
-              prompt: payload.reason ?? payload.command.join(" "),
+              prompt: [payload.reason, payload.cwd, payload.command.join(" ")]
+                .filter((value) => value !== undefined && value !== null && value !== "")
+                .join("\n"),
             });
             const decision = yield* Deferred.make<ProviderApprovalDecision, never>();
             yield* Ref.update(pendingRuntimeRequests, (current) => {

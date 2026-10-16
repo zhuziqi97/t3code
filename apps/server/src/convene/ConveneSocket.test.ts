@@ -1,3 +1,5 @@
+// A held Node upgrade is needed to exercise ws's pre-open close error.
+// @effect-diagnostics-next-line nodeBuiltinImport:off
 import * as NodeHttp from "node:http";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import { assert, it } from "@effect/vitest";

@@ -21,6 +21,7 @@ import {
   OrchestrationV2RunJson,
   OrchestrationV2RuntimeRequestJson,
   OrchestrationV2ThreadShellJson,
+  OrchestrationV2TurnItemJson,
 } from "./orchestrationV2.ts";
 
 const destination = {
@@ -90,7 +91,12 @@ export const ConveneNativeResult = Schema.Union([
     type: Schema.Literal("snapshot"),
     thread: OrchestrationV2AppThreadJson,
     runs: Schema.Array(OrchestrationV2RunJson),
-    requests: Schema.Array(OrchestrationV2RuntimeRequestJson),
+    requests: Schema.Array(
+      Schema.Struct({
+        ...OrchestrationV2RuntimeRequestJson.fields,
+        item: Schema.NullOr(OrchestrationV2TurnItemJson),
+      }),
+    ),
     items: Schema.Array(OrchestrationV2ProjectedTurnItemJson),
     sequence: Schema.Number,
     hasMore: Schema.Boolean,

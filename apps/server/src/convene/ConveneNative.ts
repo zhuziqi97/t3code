@@ -229,9 +229,17 @@ const make = Effect.gen(function* () {
           type: "snapshot" as const,
           thread: snapshot.projection.thread,
           runs: snapshot.projection.runs,
-          requests: snapshot.projection.runtimeRequests.filter(
-            (request) => request.status === "pending",
-          ),
+          requests: snapshot.projection.runtimeRequests
+            .filter((request) => request.status === "pending")
+            .map((request) => ({
+              ...request,
+              item:
+                snapshot.projection.turnItems.findLast(
+                  (item) =>
+                    (item.type === "approval_request" || item.type === "user_input_request") &&
+                    item.requestId === request.id,
+                ) ?? null,
+            })),
           items: page.items,
           sequence: snapshot.snapshotSequence,
           hasMore: page.hasMore,
