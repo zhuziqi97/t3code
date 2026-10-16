@@ -214,105 +214,131 @@ const start = (
             for (const config of next) configurations.set(config.client_project_id, config);
             yield* broker.configure([...configurations.values()]);
           });
-        let ready = false;
-        while (true) {
-          for (const frame of yield* pull) {
-            if (typeof frame !== "string" && !(frame instanceof Uint8Array)) continue;
-            const text = typeof frame === "string" ? frame : new TextDecoder().decode(frame);
-            const raw = yield* decodeMessageType(text);
-            if (raw.TYPE === "OPEN_DATA_CHANNEL" || raw.TYPE === "CANCEL_DATA_CHANNEL") {
-              const control = yield* decodeDataControl(text);
-              if (control.TYPE === "CANCEL_DATA_CHANNEL") {
-                const fiber = dataChannels.get(control.REQUEST_ID);
-                if (fiber) yield* Fiber.interrupt(fiber);
-              } else {
-                const fiber = yield* ConveneDataChannel.open(paired.baseUrl, control).pipe(
-                  Effect.provide(webContext),
-                  Effect.scoped,
-                  Effect.tapError((error) =>
-                    Effect.logWarning("Convene native data connection failed", error),
-                  ),
-                  Effect.ensuring(Effect.sync(() => dataChannels.delete(control.REQUEST_ID))),
+        const cacheUpdates = yield* Queue.unbounded<{
+          values: ReadonlyArray<typeof ConveneProjectConfiguration.Type>;
+          replace: boolean;
+          reportId?: string;
+        }>();
+        const persistConfigurations = Stream.fromQueue(cacheUpdates).pipe(
+          Stream.runForEach((update) =>
+            Effect.gen(function* () {
+              yield* configurationCache.record(update.values, update.replace);
+              if (update.reportId !== undefined) {
+                yield* SubscriptionRef.set(state, {
+                  phase: "online",
+                  baseUrl: paired.baseUrl,
+                  runnerId: paired.runnerId,
+                  error: null,
+                });
+                const waiter = pendingReports.get(update.reportId);
+                if (waiter) {
+                  yield* Deferred.succeed(waiter, undefined);
+                  pendingReports.delete(update.reportId);
+                }
+              }
+            }),
+          ),
+        );
+        const readControl = Effect.gen(function* () {
+          let ready = false;
+          while (true) {
+            for (const frame of yield* pull) {
+              if (typeof frame !== "string" && !(frame instanceof Uint8Array)) continue;
+              const text = typeof frame === "string" ? frame : new TextDecoder().decode(frame);
+              const raw = yield* decodeMessageType(text);
+              if (raw.TYPE === "OPEN_DATA_CHANNEL" || raw.TYPE === "CANCEL_DATA_CHANNEL") {
+                const control = yield* decodeDataControl(text);
+                if (control.TYPE === "CANCEL_DATA_CHANNEL") {
+                  const fiber = dataChannels.get(control.REQUEST_ID);
+                  if (fiber) yield* Fiber.interrupt(fiber).pipe(Effect.forkScoped);
+                } else {
+                  const fiber = yield* ConveneDataChannel.open(paired.baseUrl, control).pipe(
+                    Effect.provide(webContext),
+                    Effect.scoped,
+                    Effect.tapError((error) =>
+                      Effect.logWarning("Convene native data connection failed", error),
+                    ),
+                    Effect.ensuring(Effect.sync(() => dataChannels.delete(control.REQUEST_ID))),
+                    Effect.forkScoped,
+                  );
+                  dataChannels.set(control.REQUEST_ID, fiber);
+                }
+                continue;
+              }
+              const message = yield* decodeControlMessage(text);
+              if (message.TYPE === "HELLO_REJECT") {
+                yield* Effect.logWarning(
+                  "Convene rejected the integration protocol",
+                  message.PAYLOAD,
+                );
+                return yield* new ConveneIntegrationError({
+                  operation: "connect",
+                  code: "PROTOCOL_REJECTED",
+                });
+              }
+              if (message.TYPE === "HELLO_ACK" && !ready) {
+                const ack = yield* decodeHelloAck(message.PAYLOAD);
+                ready = true;
+                const afterSequence = yield* events.latestApplicationSequence;
+                yield* report();
+                yield* sendMessage("HEARTBEAT", {}).pipe(
+                  Effect.andThen(report()),
+                  Effect.repeat(Schedule.spaced(`${ack.HEARTBEAT_INTERVAL_SECONDS} seconds`)),
                   Effect.forkScoped,
                 );
-                dataChannels.set(control.REQUEST_ID, fiber);
+                yield* events.streamApplicationEvents({ afterSequence }).pipe(
+                  Stream.filter(
+                    (event) => "aggregateKind" in event && event.aggregateKind === "project",
+                  ),
+                  Stream.runForEach(() => report()),
+                  Effect.forkScoped,
+                );
+                yield* Stream.fromQueue(requests).pipe(
+                  Stream.runForEach((waiter) =>
+                    Effect.gen(function* () {
+                      const id = yield* crypto.randomUUIDv4();
+                      pendingReports.set(id, waiter);
+                      yield* report(id).pipe(
+                        Effect.catch((cause) =>
+                          Effect.gen(function* () {
+                            yield* Deferred.fail(
+                              waiter,
+                              new ConveneIntegrationError({
+                                operation: "refresh",
+                                code: "REPORT_FAILED",
+                                cause,
+                              }),
+                            );
+                            pendingReports.delete(id);
+                          }),
+                        ),
+                      );
+                    }),
+                  ),
+                  Effect.forkScoped,
+                );
+              } else if (message.TYPE === "TARGETS_REPORT_ACK") {
+                const ack = yield* decodeReportAck(message.PAYLOAD);
+                yield* applyConfigurations(ack.CONFIGURATIONS, true);
+                yield* Queue.offer(cacheUpdates, {
+                  values: ack.CONFIGURATIONS,
+                  replace: true,
+                  reportId: ack.REPORT_ID,
+                });
+              } else if (message.TYPE === "CONFIGURATION_CHANGED") {
+                const changed = yield* decodeConfigurationChanged(message.PAYLOAD);
+                yield* applyConfigurations([changed.CONFIGURATION], false);
+                yield* Queue.offer(cacheUpdates, {
+                  values: [changed.CONFIGURATION],
+                  replace: false,
+                });
               }
-              continue;
-            }
-            const message = yield* decodeControlMessage(text);
-            if (message.TYPE === "HELLO_REJECT") {
-              yield* Effect.logWarning(
-                "Convene rejected the integration protocol",
-                message.PAYLOAD,
-              );
-              return yield* new ConveneIntegrationError({
-                operation: "connect",
-                code: "PROTOCOL_REJECTED",
-              });
-            }
-            if (message.TYPE === "HELLO_ACK" && !ready) {
-              const ack = yield* decodeHelloAck(message.PAYLOAD);
-              ready = true;
-              const afterSequence = yield* events.latestApplicationSequence;
-              yield* report();
-              yield* sendMessage("HEARTBEAT", {}).pipe(
-                Effect.andThen(report()),
-                Effect.repeat(Schedule.spaced(`${ack.HEARTBEAT_INTERVAL_SECONDS} seconds`)),
-                Effect.forkScoped,
-              );
-              yield* events.streamApplicationEvents({ afterSequence }).pipe(
-                Stream.filter(
-                  (event) => "aggregateKind" in event && event.aggregateKind === "project",
-                ),
-                Stream.runForEach(() => report()),
-                Effect.forkScoped,
-              );
-              yield* Stream.fromQueue(requests).pipe(
-                Stream.runForEach((waiter) =>
-                  Effect.gen(function* () {
-                    const id = yield* crypto.randomUUIDv4();
-                    pendingReports.set(id, waiter);
-                    yield* report(id).pipe(
-                      Effect.catch((cause) =>
-                        Effect.gen(function* () {
-                          yield* Deferred.fail(
-                            waiter,
-                            new ConveneIntegrationError({
-                              operation: "refresh",
-                              code: "REPORT_FAILED",
-                              cause,
-                            }),
-                          );
-                          pendingReports.delete(id);
-                        }),
-                      ),
-                    );
-                  }),
-                ),
-                Effect.forkScoped,
-              );
-            } else if (message.TYPE === "TARGETS_REPORT_ACK") {
-              const ack = yield* decodeReportAck(message.PAYLOAD);
-              yield* applyConfigurations(ack.CONFIGURATIONS, true);
-              yield* configurationCache.record(ack.CONFIGURATIONS, true);
-              yield* SubscriptionRef.set(state, {
-                phase: "online",
-                baseUrl: paired.baseUrl,
-                runnerId: paired.runnerId,
-                error: null,
-              });
-              const waiter = pendingReports.get(ack.REPORT_ID);
-              if (waiter) {
-                yield* Deferred.succeed(waiter, undefined);
-                pendingReports.delete(ack.REPORT_ID);
-              }
-            } else if (message.TYPE === "CONFIGURATION_CHANGED") {
-              const changed = yield* decodeConfigurationChanged(message.PAYLOAD);
-              yield* applyConfigurations([changed.CONFIGURATION], false);
-              yield* configurationCache.record([changed.CONFIGURATION], false);
             }
           }
-        }
+        });
+        // Cache writes and cancelled HTTP finalizers must not hold up OPEN_DATA_CHANNEL.
+        // Both workers stay owned by this connection; a cache failure still reconnects it.
+        yield* Effect.raceFirst(readControl, persistConfigurations);
       }),
     );
     return yield* connect.pipe(
