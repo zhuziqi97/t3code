@@ -494,6 +494,10 @@
     "./conveneDesktopIdentity": {
       "types": "./src/conveneDesktopIdentity.ts",
       "import": "./src/conveneDesktopIdentity.ts"
+    },
+    "./providerReadiness": {
+      "types": "./src/providerReadiness.ts",
+      "import": "./src/providerReadiness.ts"
     }
   },
   "scripts": {

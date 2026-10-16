@@ -50,8 +50,35 @@ export type ServerConfigIssue = typeof ServerConfigIssue.Type;
 // decode over a kind they cannot render.
 const ServerConfigIssues = ForwardCompatibleArray(ServerConfigIssue);
 
-export const ServerProviderState = Schema.Literals(["ready", "warning", "error", "disabled"]);
+export const ServerProviderState = Schema.Literals([
+  "checking",
+  "ready",
+  "warning",
+  "error",
+  "disabled",
+  "cancelled",
+]);
 export type ServerProviderState = typeof ServerProviderState.Type;
+
+export const ServerProviderOperation = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  state: Schema.Literals(["running", "completed", "cancelled", "failed"]),
+  cwd: Schema.optionalKey(TrimmedNonEmptyString),
+  startedAt: IsoDateTime,
+});
+export type ServerProviderOperation = typeof ServerProviderOperation.Type;
+
+const ProviderMetadataResult = Schema.Struct({
+  state: Schema.Literals(["loading", "ready", "failed", "cancelled"]),
+  message: Schema.optionalKey(TrimmedNonEmptyString),
+});
+export const ServerProviderMetadataState = Schema.Struct({
+  models: Schema.optionalKey(ProviderMetadataResult),
+  defaultModel: Schema.optionalKey(ProviderMetadataResult),
+  skills: Schema.optionalKey(ProviderMetadataResult),
+  commands: Schema.optionalKey(ProviderMetadataResult),
+  usage: Schema.optionalKey(ProviderMetadataResult),
+});
 
 export const ServerProviderAuthStatus = Schema.Literals([
   "authenticated",
@@ -288,9 +315,11 @@ export const ServerProvider = Schema.Struct({
     }),
   ),
   enabled: Schema.Boolean,
-  installed: Schema.Boolean,
+  installed: Schema.NullOr(Schema.Boolean),
   version: Schema.NullOr(TrimmedNonEmptyString),
   status: ServerProviderState,
+  operation: Schema.optionalKey(ServerProviderOperation),
+  metadata: Schema.optionalKey(ServerProviderMetadataState),
   auth: ServerProviderAuth,
   checkedAt: IsoDateTime,
   message: Schema.optional(TrimmedNonEmptyString),

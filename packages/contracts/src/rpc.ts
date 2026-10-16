@@ -482,6 +482,7 @@ export const WS_METHODS = {
   serverProbe: "server.probe",
   serverGetConfig: "server.getConfig",
   serverRefreshProviders: "server.refreshProviders",
+  serverCancelProviderRefresh: "server.cancelProviderRefresh",
   serverUpdateProvider: "server.updateProvider",
   serverUpdateServer: "server.updateServer",
   serverUpdateServerWithProgress: "server.updateServerWithProgress",
@@ -636,6 +637,12 @@ const WsServerRefreshProvidersRpc = Rpc.make(WS_METHODS.serverRefreshProviders, 
   }),
   success: ServerProviderUpdatedPayload,
   error: Schema.Union([EnvironmentAuthorizationError, ProviderSetupError]),
+});
+
+const WsServerCancelProviderRefreshRpc = Rpc.make(WS_METHODS.serverCancelProviderRefresh, {
+  payload: Schema.Struct({ instanceId: ProviderInstanceId, operationId: TrimmedNonEmptyString }),
+  success: ServerProviderUpdatedPayload,
+  error: EnvironmentAuthorizationError,
 });
 
 const WsServerUpdateProviderRpc = Rpc.make(WS_METHODS.serverUpdateProvider, {
@@ -1917,6 +1924,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerProbeRpc,
   WsServerGetConfigRpc,
   WsServerRefreshProvidersRpc,
+  WsServerCancelProviderRefreshRpc,
   WsServerUpdateProviderRpc,
   WsProviderConsumeResetCreditRpc,
   WsProviderAuthStartRpc,
