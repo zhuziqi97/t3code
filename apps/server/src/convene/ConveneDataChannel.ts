@@ -36,7 +36,7 @@ export const open = Effect.fn("ConveneDataChannel.open")(function* (
   const token = yield* platform.accessToken;
   const rawSocket = yield* Effect.acquireRelease(
     Effect.sync(() => new NodeSocket.NodeWS.WebSocket(url)),
-    (socket) => Effect.sync(() => socket.close(1000)),
+    (socket) => Effect.sync(() => ConveneSocket.close(socket)),
   );
   const socket = yield* ConveneSocket.make(rawSocket);
   const writer = yield* socket.writer;

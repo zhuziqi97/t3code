@@ -122,7 +122,7 @@ const make = Effect.gen(function* () {
               headers: { authorization: `Bearer ${token}` },
             }),
         ),
-        (socket) => Effect.sync(() => socket.close(1000)),
+        (socket) => Effect.sync(() => ConveneSocket.close(socket)),
       );
       return yield* ConveneSocket.make(socket);
     }),

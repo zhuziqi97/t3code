@@ -3,6 +3,17 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Socket from "effect/socket/Socket";
 
+export const close = (socket: NodeSocket.NodeWS.WebSocket) => {
+  if (socket.readyState === NodeSocket.NodeWS.WebSocket.CLOSED) return;
+  // The Effect reader detaches before the owning scope closes the socket.
+  // Node ws emits an error when a pending handshake is closed, so retain a
+  // listener through the close event after the reader has reported its failure.
+  const onError = () => {};
+  socket.on("error", onError);
+  socket.once("close", () => socket.off("error", onError));
+  socket.close(1000);
+};
+
 /** Reverse data streams wait for each Node send to flush before pulling more. */
 export const make = (socket: NodeSocket.NodeWS.WebSocket) =>
   Effect.gen(function* () {
