@@ -355,50 +355,50 @@ export const layer: Layer.Layer<
         );
       });
 
-    const dismissNativeUserInputs = Effect.fn("ProviderEventIngestor.dismissNativeUserInputs")(
-      function* (
-        input: ProviderEventIngestInput,
-        providerTurnId: ProviderTurnId,
-        threadId = input.threadId,
-      ) {
-        const pending = yield* projections.getPendingNativeUserInputs(threadId, providerTurnId);
-        const now = yield* DateTime.now;
-        const events: Array<OrchestrationV2DomainEvent> = [];
-        for (const request of pending.runtimeRequests) {
-          events.push(
-            yield* makeDomainEvent(input, {
-              type: "runtime-request.updated",
-              threadId,
-              nodeId: request.nodeId,
-              payload: { ...request, status: "cancelled", resolvedAt: now },
-            }),
-          );
-        }
-        for (const node of pending.nodes) {
-          events.push(
-            yield* makeDomainEvent(input, {
-              type: "node.updated",
-              threadId,
-              nodeId: node.id,
-              runId: node.runId,
-              payload: { ...node, status: "cancelled", completedAt: now },
-            }),
-          );
-        }
-        for (const item of pending.turnItems) {
-          events.push(
-            yield* makeDomainEvent(input, {
-              type: "turn-item.updated",
-              threadId,
-              nodeId: item.nodeId,
-              runId: item.runId,
-              payload: { ...item, status: "cancelled", completedAt: now, updatedAt: now },
-            }),
-          );
-        }
-        return events;
-      },
-    );
+    const dismissNativeRuntimeRequests = Effect.fn(
+      "ProviderEventIngestor.dismissNativeRuntimeRequests",
+    )(function* (
+      input: ProviderEventIngestInput,
+      providerTurnId: ProviderTurnId,
+      threadId = input.threadId,
+    ) {
+      const pending = yield* projections.getPendingNativeRuntimeRequests(threadId, providerTurnId);
+      const now = yield* DateTime.now;
+      const events: Array<OrchestrationV2DomainEvent> = [];
+      for (const request of pending.runtimeRequests) {
+        events.push(
+          yield* makeDomainEvent(input, {
+            type: "runtime-request.updated",
+            threadId,
+            nodeId: request.nodeId,
+            payload: { ...request, status: "cancelled", resolvedAt: now },
+          }),
+        );
+      }
+      for (const node of pending.nodes) {
+        events.push(
+          yield* makeDomainEvent(input, {
+            type: "node.updated",
+            threadId,
+            nodeId: node.id,
+            runId: node.runId,
+            payload: { ...node, status: "cancelled", completedAt: now },
+          }),
+        );
+      }
+      for (const item of pending.turnItems) {
+        events.push(
+          yield* makeDomainEvent(input, {
+            type: "turn-item.updated",
+            threadId,
+            nodeId: item.nodeId,
+            runId: item.runId,
+            payload: { ...item, status: "cancelled", completedAt: now, updatedAt: now },
+          }),
+        );
+      }
+      return events;
+    });
 
     /**
      * A native subagent's thread starts on the parent's model when the
@@ -597,7 +597,7 @@ export const layer: Layer.Layer<
               ...(["completed", "interrupted", "failed", "cancelled"].includes(
                 input.event.providerTurn.status,
               )
-                ? yield* dismissNativeUserInputs(
+                ? yield* dismissNativeRuntimeRequests(
                     input,
                     input.event.providerTurn.id,
                     input.event.threadId,
@@ -691,7 +691,10 @@ export const layer: Layer.Layer<
             ];
           }
           case "turn.terminal":
-            const dismissed = yield* dismissNativeUserInputs(input, input.event.providerTurnId);
+            const dismissed = yield* dismissNativeRuntimeRequests(
+              input,
+              input.event.providerTurnId,
+            );
             if (input.event.status !== "failed") {
               return dismissed;
             }
