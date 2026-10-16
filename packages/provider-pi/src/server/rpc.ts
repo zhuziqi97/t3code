@@ -103,7 +103,7 @@ export interface PiRpcConnection {
    */
   readonly request: (
     record: PiRpcRecord,
-    timeoutMs?: number,
+    timeoutMs?: number | null,
   ) => Effect.Effect<unknown, PiRpcError | PiRpcTimeoutError>;
   /**
    * Session events (every non-response stdout record) in arrival order. The
@@ -452,7 +452,7 @@ export const makePiRpcConnection = Effect.fnUntraced(function* (options: PiRpcSp
 
   const request = (
     record: PiRpcRecord,
-    timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
+    timeoutMs: number | null = DEFAULT_REQUEST_TIMEOUT_MS,
   ): Effect.Effect<unknown, PiRpcError | PiRpcTimeoutError> =>
     Effect.gen(function* () {
       const id = `t3-${nextRequestId++}`;
@@ -465,17 +465,23 @@ export const makePiRpcConnection = Effect.fnUntraced(function* (options: PiRpcSp
       // registered (or between `send`'s check and its enqueue) would otherwise
       // leave the caller waiting out the full timeout for a reply that is
       // never coming.
-      return yield* Effect.raceFirst(Deferred.await(deferred), Deferred.await(transportDown)).pipe(
-        Effect.timeoutOrElse({
-          duration: Duration.millis(timeoutMs),
-          orElse: () =>
-            Effect.fail(
-              new PiRpcTimeoutError({
-                operation: String(record["type"] ?? "request"),
-                timeoutMs,
+      const pending = Effect.raceFirst(Deferred.await(deferred), Deferred.await(transportDown));
+      const waiting =
+        timeoutMs === null
+          ? pending
+          : pending.pipe(
+              Effect.timeoutOrElse({
+                duration: Duration.millis(timeoutMs),
+                orElse: () =>
+                  Effect.fail(
+                    new PiRpcTimeoutError({
+                      operation: String(record["type"] ?? "request"),
+                      timeoutMs,
+                    }),
+                  ),
               }),
-            ),
-        }),
+            );
+      return yield* waiting.pipe(
         Effect.onInterrupt(() => Effect.sync(() => pendingRequests.delete(id))),
         Effect.onError(() => Effect.sync(() => pendingRequests.delete(id))),
       );

@@ -1,3 +1,4 @@
+import { reportProviderProgress } from "@t3tools/provider-core/server/managedProvider";
 import { ServerProviderModel } from "@t3tools/contracts";
 import { MuseSettings } from "../settings.ts";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
@@ -41,9 +42,9 @@ export const makePendingMuseProvider = Effect.fn("makePendingMuseProvider")(func
     models: providerModelsFromSettings([], settings.customModels, FALLBACK_CAPABILITIES),
     slashCommands: settings.enabled ? [COMPACT_SLASH_COMMAND] : [],
     probe: {
-      installed: false,
+      installed: null,
       version: null,
-      status: "warning",
+      status: "checking",
       auth: { status: "unknown" },
       message: settings.enabled
         ? "Checking Muse Code CLI availability..."
@@ -101,7 +102,7 @@ export const checkMuseProviderStatus = Effect.fn("checkMuseProviderStatus")(func
     return snapshot({
       installed: true,
       version: null,
-      status: "error",
+      status: "warning",
       auth: { status: "unknown" },
       message: "Muse Code CLI version check timed out.",
     });
@@ -118,21 +119,28 @@ export const checkMuseProviderStatus = Effect.fn("checkMuseProviderStatus")(func
     });
   }
 
+  yield* reportProviderProgress({
+    installed: true,
+    version,
+    status: "ready",
+    metadata: { models: { state: "loading" } },
+  });
   const catalog = yield* discoverMuseModels(settings, museEnvironment, cwd, createHost).pipe(
     Effect.scoped,
     Effect.timeoutOption(12_000),
     Effect.result,
   );
   if (Result.isFailure(catalog) || Option.isNone(catalog.success)) {
+    yield* reportProviderProgress({ metadata: { models: { state: "failed" } } });
     return snapshot({
       installed: true,
       version,
-      status: "error",
+      status: "warning",
       auth: { status: "unknown" },
-      message:
-        "Muse Code SDK could not read the model catalog. Check your Muse installation and run `muse login` on this T3 server host.",
+      message: "Muse Code SDK could not read the model catalog.",
     });
   }
+  yield* reportProviderProgress({ metadata: { models: { state: "ready" } } });
   const models = catalog.success.value;
   // MSP has no auth signal, and model/list answers from Muse's cache even when logged out.
   // Auth failures surface on the first turn instead.
@@ -145,8 +153,7 @@ export const checkMuseProviderStatus = Effect.fn("checkMuseProviderStatus")(func
         ? { status: "ready" }
         : {
             status: "warning",
-            message:
-              "Muse Code returned no models. Run `muse login` on this T3 server host and refresh its status.",
+            message: "Muse Code returned no models.",
           }),
     },
     models,

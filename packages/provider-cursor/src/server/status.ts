@@ -1,3 +1,4 @@
+import { reportProviderProgress } from "@t3tools/provider-core/server/managedProvider";
 import type { SDKModel, SDKUser } from "@cursor/sdk";
 import type {
   ModelCapabilities,
@@ -65,7 +66,7 @@ export function buildInitialCursorProviderSnapshot(
       probe: {
         installed: true,
         version: null,
-        status: "warning",
+        status: "checking",
         auth: { status: "unknown" },
         message: "Checking Cursor SDK availability...",
       },
@@ -287,6 +288,7 @@ export const checkCursorProviderStatus = Effect.fn("checkCursorProviderStatus")(
     });
   }
 
+  yield* reportProviderProgress({ installed: true, metadata: { models: { state: "loading" } } });
   const sdkCatalog = yield* CursorSdkCatalog.CursorSdkCatalog;
   const catalogResult = yield* sdkCatalog
     .read(sdkApiKey)
@@ -297,6 +299,7 @@ export const checkCursorProviderStatus = Effect.fn("checkCursorProviderStatus")(
       cause: catalogResult.failure.cause,
     });
     const authenticationFailure = catalogResult.failure.authenticationFailure;
+    yield* reportProviderProgress({ metadata: { models: { state: "failed" } } });
     return buildServerProvider({
       presentation: CURSOR_PRESENTATION,
       enabled: cursorSettings.enabled,
@@ -305,7 +308,7 @@ export const checkCursorProviderStatus = Effect.fn("checkCursorProviderStatus")(
       probe: {
         installed: true,
         version: null,
-        status: "error",
+        status: authenticationFailure ? "error" : "warning",
         auth: { status: authenticationFailure ? "unauthenticated" : "unknown" },
         message: authenticationFailure
           ? authenticationType === "browser"
@@ -317,6 +320,7 @@ export const checkCursorProviderStatus = Effect.fn("checkCursorProviderStatus")(
   }
 
   if (Option.isNone(catalogResult.success)) {
+    yield* reportProviderProgress({ metadata: { models: { state: "failed" } } });
     return buildServerProvider({
       presentation: CURSOR_PRESENTATION,
       enabled: cursorSettings.enabled,
@@ -325,13 +329,14 @@ export const checkCursorProviderStatus = Effect.fn("checkCursorProviderStatus")(
       probe: {
         installed: true,
         version: null,
-        status: "error",
+        status: "warning",
         auth: { status: "unknown" },
         message: `Cursor SDK catalog request timed out after ${CURSOR_SDK_CATALOG_TIMEOUT_MS}ms.`,
       },
     });
   }
 
+  yield* reportProviderProgress({ metadata: { models: { state: "ready" } } });
   const snapshot = catalogResult.success.value;
   const discoveredModels = buildCursorDiscoveredModelsFromSdk(snapshot.models);
   return buildCursorProviderSnapshot({

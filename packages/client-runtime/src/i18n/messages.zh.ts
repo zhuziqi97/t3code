@@ -1666,7 +1666,9 @@ export const zh: Partial<Messages> = {
   "restore.deviceDefaults": "恢复设备默认设置",
   "wizard.import.permissionDenied": "此连接无权导入项目或会话记录。",
 
-  "provider.checking": "正在检查智能体提供方状态",
+  "provider.reconnect": "重新连接",
+  "provider.cancelled": "已取消",
+  "provider.checking": "正在连接…",
   "provider.waiting": "正在等待服务端报告安装与认证信息。",
   "provider.disabled": "已禁用",
   "provider.disabledDescription": "此智能体提供方已安装，但已禁止在 T3 Code 中用于新会话。",
@@ -7032,10 +7034,8 @@ export const zh: Partial<Messages> = {
     "无法执行 Muse Code CLI。请检查其在此 T3 服务端主机上的可执行文件路径。",
   "provider.status.museTimeout": "Muse Code CLI 版本检查超时。",
   "provider.status.museRunFailed": "Muse Code CLI 已安装，但无法运行。",
-  "provider.status.museCatalogFailed":
-    "Muse Code SDK 无法读取模型目录。请检查 Muse 的安装，并在此 T3 服务端主机上运行 `muse login`。",
-  "provider.status.museNoModels":
-    "Muse Code 未返回模型。请在此 T3 服务端主机上运行 `muse login` 后刷新状态。",
+  "provider.status.museCatalogFailed": "无法加载模型。",
+  "provider.status.museNoModels": "暂无可用模型。",
   "provider.status.cursorTimeout": "Cursor SDK 模型目录请求在 {{milliseconds}} 毫秒后超时。",
   "provider.status.opencodeInventoryDetail": "无法加载 OpenCode 智能体提供方清单：{{detail}}",
   "provider.status.opencodeHealthDetail": "无法执行 OpenCode CLI 健康检查：{{detail}}",

@@ -1,3 +1,4 @@
+import { ProviderOperationActions } from "../ProviderOperationActions";
 import { useTranslate } from "../../i18n";
 import {
   ANTIGRAVITY_DEFAULT_MODEL,
@@ -96,7 +97,8 @@ export function shouldIncludeModelPickerOption(input: {
   if (input.entry.driverKind === "antigravity" && input.option.slug === ANTIGRAVITY_DEFAULT_MODEL) {
     return false;
   }
-  if (isProviderInstancePickerReady(input.entry)) return true;
+  if (input.option.isUnavailable !== true && isProviderInstancePickerReady(input.entry))
+    return true;
   return (
     input.entry.enabled &&
     (input.entry.driverKind === "opencode" || input.entry.driverKind === "antigravity") &&
@@ -110,6 +112,7 @@ export function shouldOfferModelPickerSetup(
   entry: ProviderInstanceEntry,
   options: ReadonlyArray<ModelEsque>,
 ): boolean {
+  if (entry.status === "checking" || entry.snapshot.operation?.state === "running") return false;
   return (
     entry.enabled &&
     entry.status !== "disabled" &&
@@ -135,6 +138,8 @@ export function adjacentModelPickerProvider(input: {
         (entry) =>
           !input.disabledInstanceIds?.has(entry.instanceId) &&
           (isProviderInstancePickerReady(entry) ||
+            entry.status === "checking" ||
+            entry.status === "cancelled" ||
             input.selectableUnavailableInstanceIds?.has(entry.instanceId)),
       )
       .map((entry) => entry.instanceId),
@@ -1095,8 +1100,27 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                 ))}
               </div>
             ) : (
-              <ComboboxEmpty className="empty:h-0">{t("chat.model.noneFound")}</ComboboxEmpty>
+              <ComboboxEmpty className="empty:h-0">
+                {selectedEntry?.status === "checking" ||
+                selectedEntry?.snapshot.metadata?.models?.state === "loading"
+                  ? t("provider.checking")
+                  : t("chat.model.noneFound")}
+              </ComboboxEmpty>
             )}
+            {selectedEntry &&
+            props.environmentId &&
+            (selectedEntry.snapshot.operation?.state === "running" ||
+              selectedEntry.status === "cancelled" ||
+              selectedEntry.snapshot.metadataOperations?.some(
+                (operation) => operation.state === "running",
+              )) ? (
+              <div className="flex shrink-0 justify-end border-t border-border/70 px-2 py-1">
+                <ProviderOperationActions
+                  environmentId={props.environmentId}
+                  provider={selectedEntry.snapshot}
+                />
+              </div>
+            ) : null}
             {updateRequiredNotices.map(({ instanceId, notice }) => (
               <p
                 key={instanceId}

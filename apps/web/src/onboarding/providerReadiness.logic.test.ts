@@ -32,7 +32,7 @@ describe("getOnboardingProviderState", () => {
     expect(getOnboardingProviderState(readyCodex)).toBe("ready");
   });
 
-  it("treats authenticated providers as ready only when their provider status is ready", () => {
+  it("keeps an authenticated provider usable when auxiliary discovery reports a warning", () => {
     expect(getOnboardingProviderState({ ...readyCodex, auth: { status: "authenticated" } })).toBe(
       "ready",
     );
@@ -49,7 +49,7 @@ describe("getOnboardingProviderState", () => {
         auth: { status: "authenticated" },
         status: "warning",
       }),
-    ).toBe("attention");
+    ).toBe("ready");
   });
 
   it("offers sign-in only when the server reports an authentication failure", () => {
@@ -61,7 +61,7 @@ describe("getOnboardingProviderState", () => {
       }),
     ).toBe("signIn");
     expect(getOnboardingProviderState({ ...readyCodex, status: "error" })).toBe("attention");
-    expect(getOnboardingProviderState({ ...readyCodex, status: "warning" })).toBe("attention");
+    expect(getOnboardingProviderState({ ...readyCodex, status: "warning" })).toBe("ready");
   });
 
   it("does not offer installation or sign-in for disabled providers", () => {
@@ -74,6 +74,18 @@ describe("getOnboardingProviderState", () => {
   it("offers installation only when an enabled provider is missing", () => {
     expect(getOnboardingProviderState({ ...readyCodex, installed: false, status: "error" })).toBe(
       "install",
+    );
+  });
+
+  it("keeps explicit failure and cancellation distinct from unchecked installation", () => {
+    expect(getOnboardingProviderState({ ...readyCodex, installed: null, status: "error" })).toBe(
+      "attention",
+    );
+    expect(
+      getOnboardingProviderState({ ...readyCodex, installed: null, status: "cancelled" }),
+    ).toBe("cancelled");
+    expect(getOnboardingProviderState({ ...readyCodex, installed: null, status: "checking" })).toBe(
+      "checking",
     );
   });
 

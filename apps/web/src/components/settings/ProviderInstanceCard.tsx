@@ -1,4 +1,6 @@
 "use client";
+
+import { ProviderOperationActions } from "../ProviderOperationActions";
 import { Trans } from "react-i18next";
 import { useTranslate } from "../../i18n";
 
@@ -1146,6 +1148,9 @@ export function ProviderInstanceCard({
         aria-disabled={readOnly || undefined}
         className={cn("inline-flex items-center gap-1", readOnly && "opacity-50")}
       >
+        {environmentId ? (
+          <ProviderOperationActions provider={liveProvider} environmentId={environmentId} />
+        ) : null}
         {titleTailNode}
         {onDelete ? (
           <Button

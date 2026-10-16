@@ -160,8 +160,8 @@ it.layer(NodeServices.layer)("Muse text generation", (it) => {
           true,
           Effect.succeed([
             {
-              slug: modelSelection.model,
-              name: modelSelection.model,
+              slug: "muse-spark-1.3-contributor",
+              name: "muse-spark-1.3-contributor",
               isCustom: false,
               capabilities: museModelCapabilities(variants ? { variants } : undefined),
             },

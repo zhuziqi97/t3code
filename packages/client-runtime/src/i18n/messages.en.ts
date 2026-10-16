@@ -1795,7 +1795,9 @@ export const en = {
   "restore.deviceDefaults": "Restore device defaults",
   "wizard.import.permissionDenied": "This connection cannot import projects or thread history.",
 
-  "provider.checking": "Checking provider status",
+  "provider.reconnect": "Reconnect",
+  "provider.cancelled": "Cancelled",
+  "provider.checking": "Connecting…",
   "provider.waiting": "Waiting for the server to report installation and authentication details.",
   "provider.disabled": "Disabled",
   "provider.disabledDescription":
@@ -7523,10 +7525,8 @@ export const en = {
     "Failed to execute Muse Code CLI. Check its binary path on this T3 server host.",
   "provider.status.museTimeout": "Muse Code CLI version check timed out.",
   "provider.status.museRunFailed": "Muse Code CLI is installed but failed to run.",
-  "provider.status.museCatalogFailed":
-    "Muse Code SDK could not read the model catalog. Check your Muse installation and run `muse login` on this T3 server host.",
-  "provider.status.museNoModels":
-    "Muse Code returned no models. Run `muse login` on this T3 server host and refresh its status.",
+  "provider.status.museCatalogFailed": "Muse Code SDK could not read the model catalog.",
+  "provider.status.museNoModels": "Muse Code returned no models.",
   "provider.status.cursorTimeout": "Cursor SDK catalog request timed out after {{milliseconds}}ms.",
   "provider.status.opencodeInventoryDetail":
     "Failed to load OpenCode provider inventory: {{detail}}",

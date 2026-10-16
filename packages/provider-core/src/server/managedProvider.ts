@@ -1,3 +1,4 @@
+import type { ProviderDriverError } from "./errors.ts";
 import {
   DEFAULT_PROVIDER_HEALTH_REFRESH_INTERVAL,
   type ServerProvider,
@@ -5,6 +6,11 @@ import {
 } from "@t3tools/contracts";
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
 import * as Duration from "effect/Duration";
+import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
+import * as Context from "effect/Context";
+import * as Exit from "effect/Exit";
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Equal from "effect/Equal";
 import * as Fiber from "effect/Fiber";
@@ -18,6 +24,40 @@ import * as Semaphore from "effect/Semaphore";
 import * as ProviderHost from "./ProviderHost.ts";
 import { applyUsageLimitsUpdate, resolveUsageLimitsAfterProbe } from "./usageLimits.ts";
 import type { ManagedServerProvider } from "./snapshot.ts";
+import { randomUuidV4 } from "./randomUuid.ts";
+
+type SnapshotProgress = Partial<
+  Pick<
+    ServerProvider,
+    | "installed"
+    | "version"
+    | "status"
+    | "auth"
+    | "models"
+    | "skills"
+    | "slashCommands"
+    | "usageLimits"
+    | "metadata"
+    | "setup"
+    | "nativeSessions"
+    | "configurableProviders"
+  >
+>;
+
+class ProviderSnapshotProgress extends Context.Service<
+  ProviderSnapshotProgress,
+  {
+    readonly publish: (patch: SnapshotProgress) => Effect.Effect<void>;
+  }
+>()("@t3tools/provider-core/server/managedProvider/ProviderSnapshotProgress") {}
+
+/** Progress belongs to the managed instance; standalone probes need no publisher. */
+export const reportProviderProgress = (patch: SnapshotProgress) =>
+  Effect.serviceOption(ProviderSnapshotProgress).pipe(
+    Effect.flatMap((publisher) =>
+      publisher._tag === "Some" ? publisher.value.publish(patch) : Effect.void,
+    ),
+  );
 
 interface ProviderSnapshotState {
   readonly snapshot: ServerProvider;
@@ -73,6 +113,32 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
   const settingsRef = yield* Ref.make(initialSettings);
   const enrichmentFiberRef = yield* Ref.make<Fiber.Fiber<void, unknown> | null>(null);
   const scope = yield* Effect.scope;
+  const activeRefresh = yield* Ref.make(
+    new Map<
+      string,
+      {
+        readonly id: string;
+        readonly completion: Deferred.Deferred<ServerProvider>;
+        readonly fiber: Fiber.Fiber<void, never>;
+      }
+    >(),
+  );
+  const initialPreparationCancelled = yield* Ref.make(false);
+
+  const publishProgress = (patch: SnapshotProgress) =>
+    Effect.gen(function* () {
+      const next = yield* Ref.updateAndGet(snapshotStateRef, (state) => ({
+        ...state,
+        snapshot: {
+          ...(patch.status === "ready" && state.snapshot.status === "checking"
+            ? (({ message: _checkingMessage, ...facts }) => facts)(state.snapshot)
+            : state.snapshot),
+          ...patch,
+          metadata: { ...state.snapshot.metadata, ...patch.metadata },
+        },
+      }));
+      yield* PubSub.publish(changesPubSub, next.snapshot);
+    });
 
   const publishEnrichedSnapshot = Effect.fn("publishEnrichedSnapshot")(function* (
     generation: number,
@@ -84,7 +150,17 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
       }
       // Enrichment derives from the snapshot it was handed; a runtime usage
       // update that landed since must not be reverted by it.
-      const merged = withUsageLimits(nextSnapshot, state.snapshot.usageLimits);
+      const { operation: _previousOperation, ...enriched } = nextSnapshot;
+      const merged = withUsageLimits(
+        {
+          ...enriched,
+          ...(state.snapshot.operation ? { operation: state.snapshot.operation } : {}),
+          ...(state.snapshot.metadataOperations
+            ? { metadataOperations: state.snapshot.metadataOperations }
+            : {}),
+        },
+        state.snapshot.usageLimits,
+      );
       if (Equal.equals(state.snapshot, merged)) {
         return [null, state] as const;
       }
@@ -150,7 +226,9 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
       return state.snapshot;
     }
 
-    const probedSnapshot = yield* input.checkProvider;
+    const probedSnapshot = yield* input.checkProvider.pipe(
+      Effect.provideService(ProviderSnapshotProgress, { publish: publishProgress }),
+    );
     const { snapshot: nextSnapshot, generation: nextGeneration } = yield* Ref.modify(
       snapshotStateRef,
       (state) => {
@@ -175,10 +253,18 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
             });
         const workspaceId =
           usageLimits === probedSnapshot.usageLimits ? undefined : state.snapshot.auth.workspaceId;
+        const enrichedProbe = {
+          ...probedSnapshot,
+          ...(state.snapshot.operation ? { operation: state.snapshot.operation } : {}),
+          ...(state.snapshot.metadataOperations
+            ? { metadataOperations: state.snapshot.metadataOperations }
+            : {}),
+          metadata: { ...state.snapshot.metadata, ...probedSnapshot.metadata },
+        };
         const snapshot = withUsageLimits(
           workspaceId && !probedSnapshot.auth.workspaceId
-            ? { ...probedSnapshot, auth: { ...probedSnapshot.auth, workspaceId } }
-            : probedSnapshot,
+            ? { ...enrichedProbe, auth: { ...probedSnapshot.auth, workspaceId } }
+            : enrichedProbe,
           usageLimits,
         );
         return [
@@ -192,8 +278,175 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
     yield* restartSnapshotEnrichment(nextSettings, nextSnapshot, nextGeneration);
     return nextSnapshot;
   });
-  const applySnapshot = (nextSettings: Settings, options?: { readonly forceRefresh?: boolean }) =>
-    refreshSemaphore.withPermits(1)(applySnapshotBase(nextSettings, options));
+  const startSnapshot = (
+    nextSettings: Settings,
+    options?: {
+      readonly forceRefresh?: boolean;
+      readonly cwd?: string;
+      readonly kind?: "workspace" | "models";
+      readonly work?: (
+        check: Effect.Effect<ServerProvider>,
+      ) => Effect.Effect<unknown, ProviderDriverError>;
+    },
+  ) =>
+    refreshSemaphore.withPermits(1)(
+      Effect.gen(function* () {
+        const kind: "status" | "workspace" | "models" =
+          options?.kind ?? (options?.cwd ? "workspace" : "status");
+        const auxiliary = kind !== "status";
+        const key = auxiliary ? `${kind}:${options?.cwd ?? ""}` : "";
+        const active = (yield* Ref.get(activeRefresh)).get(key);
+        if (active) return active.completion;
+        const completion = yield* Deferred.make<ServerProvider>();
+        const id = yield* randomUuidV4;
+        const launched = yield* Deferred.make<void>();
+        const startedAt = DateTime.formatIso(yield* DateTime.now);
+        if (!auxiliary) yield* Ref.set(initialPreparationCancelled, false);
+        const running: NonNullable<ServerProvider["operation"]> = {
+          id,
+          kind,
+          state: "running" as const,
+          startedAt,
+          ...(options?.cwd ? { cwd: options.cwd } : {}),
+        };
+        const state = yield* Ref.updateAndGet(snapshotStateRef, (current) => ({
+          ...current,
+          snapshot: {
+            ...current.snapshot,
+            ...(auxiliary
+              ? {
+                  metadataOperations: [
+                    ...(current.snapshot.metadataOperations ?? []).filter(
+                      (op) =>
+                        (op.kind !== kind || op.cwd !== options?.cwd) && op.state === "running",
+                    ),
+                    running,
+                  ],
+                }
+              : {
+                  operation: running,
+                  ...(current.snapshot.installed === null ||
+                  current.snapshot.status === "cancelled" ||
+                  current.snapshot.status === "error"
+                    ? { status: "checking" as const }
+                    : {}),
+                }),
+          },
+        }));
+        yield* PubSub.publish(changesPubSub, state.snapshot);
+        let ownsInitialCheck = false;
+        const check = yield* Effect.cached(
+          Effect.gen(function* () {
+            const existing = auxiliary ? (yield* Ref.get(activeRefresh)).get("") : undefined;
+            if (existing) return yield* Deferred.await(existing.completion);
+            ownsInitialCheck =
+              auxiliary && (yield* Ref.get(snapshotStateRef)).snapshot.status === "checking";
+            return yield* applySnapshotBase(nextSettings, options);
+          }).pipe(Effect.orDie),
+        );
+        const work: Effect.Effect<void, ServerSettingsError | ProviderDriverError> = options?.work
+          ? options.work(check).pipe(Effect.asVoid)
+          : applySnapshotBase(nextSettings, options).pipe(Effect.asVoid);
+        const fiber = yield* Deferred.await(launched).pipe(
+          Effect.andThen(
+            work.pipe(
+              Effect.provideService(ProviderSnapshotProgress, { publish: publishProgress }),
+            ),
+          ),
+          Effect.onExit((exit) =>
+            Effect.gen(function* () {
+              const next = yield* Ref.updateAndGet(snapshotStateRef, (current) => {
+                const cancelled = Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause);
+                const completed =
+                  Exit.isSuccess(exit) && (auxiliary || current.snapshot.status !== "error");
+                const operation = {
+                  ...running,
+                  state: cancelled
+                    ? ("cancelled" as const)
+                    : completed
+                      ? ("completed" as const)
+                      : ("failed" as const),
+                };
+                if (auxiliary)
+                  return {
+                    ...current,
+                    snapshot: {
+                      ...current.snapshot,
+                      ...(cancelled && ownsInitialCheck && current.snapshot.status === "checking"
+                        ? { status: "cancelled" as const }
+                        : {}),
+                      metadataOperations: [
+                        ...(current.snapshot.metadataOperations ?? []).filter((op) => op.id !== id),
+                        operation,
+                      ],
+                    },
+                  };
+                return {
+                  ...current,
+                  enrichmentGeneration: cancelled
+                    ? current.enrichmentGeneration + 1
+                    : current.enrichmentGeneration,
+                  snapshot: {
+                    ...current.snapshot,
+                    operation,
+                    ...(cancelled && current.snapshot.metadata
+                      ? {
+                          metadata: Object.fromEntries(
+                            Object.entries(current.snapshot.metadata).map(([key, value]) => [
+                              key,
+                              value?.state === "loading" ? { state: "cancelled" as const } : value,
+                            ]),
+                          ),
+                        }
+                      : {}),
+                    ...(!completed && (!cancelled || current.snapshot.status === "checking")
+                      ? { status: cancelled ? ("cancelled" as const) : ("error" as const) }
+                      : {}),
+                  },
+                };
+              });
+              if (next.snapshot.status === "cancelled")
+                yield* Ref.set(initialPreparationCancelled, true);
+              yield* Ref.update(activeRefresh, (active) => {
+                const next = new Map(active);
+                next.delete(key);
+                return next;
+              });
+              yield* PubSub.publish(changesPubSub, next.snapshot);
+              yield* Deferred.succeed(completion, next.snapshot);
+            }),
+          ),
+          Effect.ignoreCause({ log: true }),
+          Effect.forkIn(scope),
+        );
+        yield* Ref.update(activeRefresh, (active) =>
+          new Map(active).set(key, { id, completion, fiber }),
+        );
+        yield* Deferred.succeed(launched, undefined);
+        return completion;
+      }),
+    );
+
+  const applySnapshot = (
+    settings: Settings,
+    options?: { readonly forceRefresh?: boolean },
+  ): Effect.Effect<ServerProvider, ServerSettingsError> =>
+    Effect.gen(function* () {
+      if (!options?.forceRefresh) {
+        const active = (yield* Ref.get(activeRefresh)).get("");
+        const previous = yield* Ref.get(settingsRef);
+        if (active && input.haveSettingsChanged(previous, settings)) {
+          yield* Deferred.await(active.completion);
+          return yield* applySnapshot(settings, options);
+        }
+        if (
+          !input.haveSettingsChanged(previous, settings) ||
+          input.checkProviderOnSettingsChange?.(previous, settings) === false
+        )
+          return yield* applySnapshotBase(settings, options);
+      }
+      return yield* startSnapshot(settings, options).pipe(Effect.flatMap(Deferred.await));
+    });
 
   /**
    * Runtime usage updates arrive between probes. They patch only
@@ -284,7 +537,13 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
             Duration.toMillis(Duration.fromInputUnsafe(refreshInterval)) > 0
               ? hasProviderStatusDemand.pipe(
                   Effect.flatMap((shouldRefresh) =>
-                    shouldRefresh ? refreshSnapshot().pipe(Effect.asVoid) : Effect.void,
+                    shouldRefresh
+                      ? Ref.get(initialPreparationCancelled).pipe(
+                          Effect.flatMap((cancelled) =>
+                            cancelled ? Effect.void : refreshSnapshot().pipe(Effect.asVoid),
+                          ),
+                        )
+                      : Effect.void,
                   ),
                 )
               : Effect.void,
@@ -304,6 +563,20 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
     resolveMaintenance: input.resolveMaintenance,
     getSnapshot: Ref.get(snapshotStateRef).pipe(Effect.map((state) => state.snapshot)),
     refresh: refreshSnapshot().pipe(Effect.tapError(Effect.logError), Effect.orDie),
+    startRefresh: (options) =>
+      input.getSettings.pipe(
+        Effect.flatMap((settings) => startSnapshot(settings, { ...options, forceRefresh: true })),
+        Effect.andThen(Ref.get(snapshotStateRef)),
+        Effect.map((state) => state.snapshot),
+        Effect.orDie,
+      ),
+    cancelRefresh: (operationId) =>
+      Ref.get(activeRefresh).pipe(
+        Effect.flatMap((active) => {
+          const operation = [...active.values()].find((entry) => entry.id === operationId);
+          return operation ? Fiber.interrupt(operation.fiber).pipe(Effect.asVoid) : Effect.void;
+        }),
+      ),
     applyUsageLimits,
     get streamChanges() {
       return Stream.fromPubSub(changesPubSub);

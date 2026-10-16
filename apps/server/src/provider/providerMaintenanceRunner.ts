@@ -266,7 +266,7 @@ function isOutdatedProvider(provider: ServerProvider | undefined): boolean {
 }
 
 function isStillInstalled(provider: ServerProvider): boolean {
-  return provider.installed;
+  return provider.installed === true;
 }
 
 function makeUpdateState(input: {

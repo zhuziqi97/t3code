@@ -23,7 +23,7 @@ function describeUnavailableInstance(entry: ProviderInstanceEntry, t: TFunction 
   if (!entry.enabled || entry.status === "disabled") {
     return t("chat.model.disabled", { provider: label });
   }
-  if (entry.status === "ready" && entry.isAvailable) {
+  if (isProviderInstancePickerReady(entry)) {
     return label;
   }
   const kind =
@@ -160,8 +160,13 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
             const isContextDisabled = props.disabledInstanceIds?.has(entry.instanceId) ?? false;
             const unavailableSelectionIsReachable =
               props.selectableUnavailableInstanceIds?.has(entry.instanceId) ?? false;
+            const isInspectable =
+              entry.status === "checking" ||
+              entry.status === "cancelled" ||
+              entry.snapshot.operation?.state === "running";
             const isDisabled =
-              (isUnavailable && !unavailableSelectionIsReachable) || isContextDisabled;
+              (isUnavailable && !unavailableSelectionIsReachable && !isInspectable) ||
+              isContextDisabled;
             const isSelected = props.selectedInstanceId === entry.instanceId;
             const isHovered = hoveredInstanceId === entry.instanceId;
             const showNewBadge = props.newBadgeInstanceIds?.has(entry.instanceId) ?? false;

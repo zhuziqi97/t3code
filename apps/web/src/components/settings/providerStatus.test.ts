@@ -212,16 +212,8 @@ describe("getProviderSummary", () => {
     ],
     ["muse", "Muse Code CLI version check timed out.", "Muse Code CLI 版本检查超时。"],
     ["muse", "Muse Code CLI is installed but failed to run.", "Muse Code CLI 已安装，但无法运行。"],
-    [
-      "muse",
-      "Muse Code SDK could not read the model catalog. Check your Muse installation and run `muse login` on this T3 server host.",
-      "Muse Code SDK 无法读取模型目录。请检查 Muse 的安装，并在此 T3 服务端主机上运行 `muse login`。",
-    ],
-    [
-      "muse",
-      "Muse Code returned no models. Run `muse login` on this T3 server host and refresh its status.",
-      "Muse Code 未返回模型。请在此 T3 服务端主机上运行 `muse login` 后刷新状态。",
-    ],
+    ["muse", "Muse Code SDK could not read the model catalog.", "无法加载模型。"],
+    ["muse", "Muse Code returned no models.", "暂无可用模型。"],
   ])("translates %s guidance in the settings summary: %s", (driver, message, chinese) => {
     const status = {
       ...provider,

@@ -38,8 +38,6 @@ const MAX_COMMANDS = 128;
 const MAX_COMMAND_LINE_LENGTH = 2_048;
 // Covers a cold package command launch and ACP initialization after registry
 // preparation globally installs the exact package.
-const PROBE_TIMEOUT_SECONDS = 60;
-const PROBE_TIMEOUT = `${PROBE_TIMEOUT_SECONDS} seconds`;
 const COMMAND_ADVERTISEMENT_GRACE = "500 millis";
 
 const boundedText = (value: string, maximumLength: number): string =>
@@ -417,16 +415,6 @@ export const probeAcpRegistryConfiguration = Effect.fn("AcpRegistryProbe.probeCo
       return { resolved, started, commands: yield* Ref.get(commandsRef) };
     }).pipe(
       Effect.scoped,
-      Effect.timeoutOrElse({
-        duration: PROBE_TIMEOUT,
-        orElse: () =>
-          Effect.fail(
-            new AcpRegistryOperationError({
-              reason: "probe_failed",
-              message: `The ACP agent did not resolve and create a test session within ${PROBE_TIMEOUT_SECONDS} seconds. Package installation or agent startup may be slow; this check retries on the next provider refresh.`,
-            }),
-          ),
-      }),
       Effect.mapError((error) =>
         error._tag === "AcpRegistryOperationError" ? error : acpRegistryProbeFailure(error),
       ),

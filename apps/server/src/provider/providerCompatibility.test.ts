@@ -1,3 +1,4 @@
+import * as ProviderLatestVersions from "@t3tools/provider-core/server/ProviderLatestVersions";
 import { assert, describe, it } from "@effect/vitest";
 import { ProviderDriverKind, ProviderInstanceId, type ServerProvider } from "@t3tools/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -320,6 +321,8 @@ it.effect("a remote policy refresh preserves a newer health result on the regist
       continuationIdentity: { driverKind: driver, continuationKey: "test-codex" },
       snapshot: {
         getSnapshot: Ref.get(health),
+        startRefresh: () => Ref.get(health),
+        cancelRefresh: () => Effect.void,
         refresh: Ref.get(health),
         streamChanges: Stream.empty,
         applyUsageLimits: () => Effect.void,
@@ -381,7 +384,14 @@ it.effect("a remote policy refresh preserves a newer health result on the regist
       assert.strictEqual(updated?.compatibilityAdvisory?.status, "supported");
       assert.strictEqual(updated?.status, "error");
       assert.strictEqual(updated?.message, "Authentication failed");
-    }).pipe(Effect.provide(ProviderRegistry.layer.pipe(Layer.provide(layerDependencies))));
+    }).pipe(
+      Effect.provide(
+        ProviderRegistry.layer.pipe(
+          Layer.provide(ProviderLatestVersions.layer),
+          Layer.provide(layerDependencies),
+        ),
+      ),
+    );
   }).pipe(Effect.scoped),
 );
 

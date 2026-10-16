@@ -76,7 +76,7 @@ export class ProviderCommandNotFoundError extends Schema.TaggedError<ProviderCom
 const isProviderCommandNotFoundError = Schema.is(ProviderCommandNotFoundError);
 
 export interface ProviderProbeResult {
-  readonly installed: boolean;
+  readonly installed: boolean | null;
   readonly version: string | null;
   readonly status: Exclude<ServerProviderState, "disabled">;
   readonly auth: ServerProviderAuth;

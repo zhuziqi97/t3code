@@ -867,7 +867,7 @@ it("offers a native default for every usable mobile instance", () => {
       models: [],
     })),
   } as unknown as ServerConfig;
-  const options = buildAllModelOptions(config, null);
+  const options = buildAllModelOptions(config, null, undefined, null);
   expect(options).toHaveLength(9);
   expect(options.every((option) => option.selection.model === null)).toBe(true);
   expect(

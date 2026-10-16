@@ -101,6 +101,10 @@ const withBundledCompatibility = (snapshot: ServerProvider) =>
     ModelManifest.BUNDLED_MODEL_MANIFEST.compatibility,
   );
 
+const layerProviderRegistryUnderTest = ProviderRegistry.layer.pipe(
+  Layer.provide(ProviderLatestVersions.layer),
+);
+
 // Provider metadata checks use a bundled manifest and stubbed HTTP.
 const layerTestHttpClient = Layer.succeed(
   HttpClient.HttpClient,
@@ -579,7 +583,12 @@ it.layer(
           return Effect.fail(
             new CodexErrors.CodexAppServerSpawnError({
               command: `${binaryPath} app-server`,
-              cause: new Error("spawn ENOENT"),
+              cause: PlatformError.systemError({
+                _tag: "NotFound",
+                module: "ChildProcess",
+                method: "spawn",
+                description: "Executable does not exist",
+              }),
             }),
           );
         });
@@ -596,30 +605,45 @@ it.layer(
       }),
     );
 
-    it.effect("closes the app-server probe scope when provider status times out", () =>
+    it.effect("does not infer an installation result from an unclassified spawn failure", () =>
       Effect.gen(function* () {
-        const killCalls = yield* Ref.make(0);
-        const statusFiber = yield* checkCodexProviderStatus(defaultCodexSettings).pipe(
-          Effect.provide(layerHangingScopedSpawner(killCalls)),
-          Effect.forkChild,
+        const status = yield* checkCodexProviderStatus(defaultCodexSettings, () =>
+          Effect.fail(
+            new CodexErrors.CodexAppServerSpawnError({
+              command: "codex app-server",
+              cause: new Error("spawn failed"),
+            }),
+          ),
         );
-
-        yield* Effect.yieldNow;
-        yield* TestClock.adjust("11 seconds");
-        yield* Effect.yieldNow;
-
-        const status = yield* Fiber.join(statusFiber);
         assert.strictEqual(status.status, "error");
-        assert.strictEqual(
-          status.message,
-          "Timed out while checking Codex app-server provider status.",
-        );
-        assert.strictEqual(yield* Ref.get(killCalls), 1);
+        assert.strictEqual(status.installed, null);
+        assert.strictEqual(status.auth.status, "unknown");
+        assert.include(status.message, "Could not start Codex CLI");
       }),
+    );
+
+    it.effect(
+      "keeps slow app-server initialization pending until cancellation closes its scope",
+      () =>
+        Effect.gen(function* () {
+          const killCalls = yield* Ref.make(0);
+          const statusFiber = yield* checkCodexProviderStatus(defaultCodexSettings).pipe(
+            Effect.provide(layerHangingScopedSpawner(killCalls)),
+            Effect.forkChild,
+          );
+
+          yield* Effect.yieldNow;
+          yield* TestClock.adjust("61 seconds");
+          yield* Effect.yieldNow;
+          assert.strictEqual(yield* Ref.get(killCalls), 0);
+          assert.isUndefined(yield* Effect.sync(() => statusFiber.pollUnsafe()));
+          yield* Fiber.interrupt(statusFiber);
+          assert.strictEqual(yield* Ref.get(killCalls), 1);
+        }),
     );
   });
 
-  describe("ProviderRegistry.layer", () => {
+  describe("layerProviderRegistryUnderTest", () => {
     it("stores workspace skills and commands without changing machine metadata", () => {
       const provider = {
         instanceId: ProviderInstanceId.make("codex"),
@@ -1035,8 +1059,8 @@ it.layer(
       } as const satisfies ServerProvider;
       const pendingProvider = {
         ...previousProvider,
-        status: "warning",
-        installed: false,
+        status: "checking",
+        installed: null,
         auth: { status: "unknown" },
         checkedAt: "2026-07-17T00:01:00.000Z",
         version: null,
@@ -1140,8 +1164,8 @@ it.layer(
       } satisfies ServerProvider;
       const pendingProvider = {
         ...cachedProvider,
-        status: "warning",
-        installed: false,
+        status: "checking",
+        installed: null,
         auth: { status: "unknown" },
         models: [customModel],
       } satisfies ServerProvider;
@@ -1224,6 +1248,8 @@ it.layer(
                   }),
                 ),
               getSnapshot: Effect.succeed(pendingProvider),
+              startRefresh: () => Effect.succeed(pendingProvider),
+              cancelRefresh: () => Effect.void,
               refresh: Ref.get(nextProvider),
               streamChanges: Stream.empty,
               applyUsageLimits: () => Effect.void,
@@ -1269,7 +1295,9 @@ it.layer(
                 retainedModels,
               );
             }).pipe(
-              Effect.provide(ProviderRegistry.layer.pipe(Layer.provide(layerInstanceRegistry))),
+              Effect.provide(
+                layerProviderRegistryUnderTest.pipe(Layer.provide(layerInstanceRegistry)),
+              ),
               Effect.scoped,
             );
           }
@@ -1599,6 +1627,8 @@ it.layer(
                 }),
               ),
             getSnapshot: Effect.succeed(initialProvider),
+            startRefresh: () => Effect.succeed(initialProvider),
+            cancelRefresh: () => Effect.void,
             refresh: Ref.update(refreshCalls, (count) => count + 1).pipe(
               Effect.andThen(Effect.never),
             ),
@@ -1622,7 +1652,7 @@ it.layer(
         const scope = yield* Scope.make();
         yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
         const runtimeServices = yield* Layer.build(
-          ProviderRegistry.layer.pipe(
+          layerProviderRegistryUnderTest.pipe(
             Layer.provideMerge(layerInstanceRegistry),
             Layer.provideMerge(
               ServerConfig.layerTest(process.cwd(), {
@@ -1705,6 +1735,8 @@ it.layer(
                 }),
               ),
             getSnapshot: Effect.succeed(provider),
+            startRefresh: () => Effect.succeed(provider),
+            cancelRefresh: () => Effect.void,
             refresh: Effect.succeed(provider),
             streamChanges: Stream.empty,
             applyUsageLimits: () => Effect.void,
@@ -1759,7 +1791,7 @@ it.layer(
         const scope = yield* Scope.make();
         yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
         const runtimeServices = yield* Layer.build(
-          ProviderRegistry.layer.pipe(
+          layerProviderRegistryUnderTest.pipe(
             Layer.provideMerge(layerInstanceRegistry),
             Layer.provideMerge(
               ServerConfig.layerTest(process.cwd(), {
@@ -1973,6 +2005,8 @@ it.layer(
                   }),
                 ),
               getSnapshot: Effect.succeed(codexProvider),
+              startRefresh: () => Effect.succeed(codexProvider),
+              cancelRefresh: () => Effect.void,
               refresh: Ref.update(codexRefreshCalls, (count) => count + 1).pipe(
                 Effect.as(codexProvider),
               ),
@@ -2000,6 +2034,8 @@ it.layer(
                   }),
                 ),
               getSnapshot: Effect.succeed(failedOpenCodeProvider),
+              startRefresh: () => Effect.succeed(failedOpenCodeProvider),
+              cancelRefresh: () => Effect.void,
               refresh: Ref.update(openCodeRefreshCalls, (count) => count + 1).pipe(
                 Effect.andThen(Ref.get(catalogSnapshot)),
               ),
@@ -2024,7 +2060,7 @@ it.layer(
         const scope = yield* Scope.make();
         yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
         const runtimeServices = yield* Layer.build(
-          ProviderRegistry.layer.pipe(
+          layerProviderRegistryUnderTest.pipe(
             Layer.provideMerge(layerInstanceRegistry),
             Layer.provideMerge(
               ServerConfig.layerTest(process.cwd(), {
@@ -2173,6 +2209,8 @@ it.layer(
                   }),
                 ),
               getSnapshot: Effect.succeed(provider),
+              startRefresh: () => Effect.succeed(provider),
+              cancelRefresh: () => Effect.void,
               refresh: Effect.gen(function* () {
                 yield* Ref.update(refreshCalls, (count) => count + 1);
                 yield* Deferred.succeed(probeStarted, undefined);
@@ -2200,7 +2238,7 @@ it.layer(
         const scope = yield* Scope.make();
         yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
         const runtimeServices = yield* Layer.build(
-          ProviderRegistry.layer.pipe(
+          layerProviderRegistryUnderTest.pipe(
             Layer.provideMerge(instanceRegistryLayer),
             Layer.provideMerge(
               ServerConfig.layerTest(process.cwd(), {
@@ -2283,6 +2321,8 @@ it.layer(
                 }),
               ),
             getSnapshot: Effect.succeed(initialProvider),
+            startRefresh: () => Effect.succeed(initialProvider),
+            cancelRefresh: () => Effect.void,
             refresh: Effect.succeed(refreshedProvider),
             streamChanges: Stream.fromPubSub(changes),
             applyUsageLimits: () => Effect.void,
@@ -2306,7 +2346,7 @@ it.layer(
         const scope = yield* Scope.make();
         yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
         const runtimeServices = yield* Layer.build(
-          ProviderRegistry.layer.pipe(
+          layerProviderRegistryUnderTest.pipe(
             Layer.provideMerge(layerInstanceRegistry),
             Layer.provideMerge(
               ServerConfig.layerTest(process.cwd(), {
@@ -2411,6 +2451,8 @@ it.layer(
                   }),
                 ),
               getSnapshot: Effect.succeed(initialProvider),
+              startRefresh: () => Effect.succeed(initialProvider),
+              cancelRefresh: () => Effect.void,
               refresh: Effect.succeed(authoritativeProvider),
               streamChanges: Stream.fromPubSub(changes),
               applyUsageLimits: () => Effect.void,
@@ -2434,7 +2476,7 @@ it.layer(
           const scope = yield* Scope.make();
           yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
           const runtimeServices = yield* Layer.build(
-            ProviderRegistry.layer.pipe(
+            layerProviderRegistryUnderTest.pipe(
               Layer.provideMerge(layerInstanceRegistry),
               Layer.provideMerge(
                 ServerConfig.layerTest(process.cwd(), {
@@ -2514,6 +2556,8 @@ it.layer(
                 }),
               ),
             getSnapshot: Effect.succeed(cachedProvider),
+            startRefresh: () => Effect.succeed(cachedProvider),
+            cancelRefresh: () => Effect.void,
             refresh: Effect.die(new Error("simulated refresh failure")),
             streamChanges: Stream.empty,
             applyUsageLimits: () => Effect.void,
@@ -2537,7 +2581,7 @@ it.layer(
         const scope = yield* Scope.make();
         yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
         const runtimeServices = yield* Layer.build(
-          ProviderRegistry.layer.pipe(
+          layerProviderRegistryUnderTest.pipe(
             Layer.provideMerge(layerInstanceRegistry),
             Layer.provideMerge(
               ServerConfig.layerTest(process.cwd(), {
@@ -2615,6 +2659,8 @@ it.layer(
                 }),
               ),
             getSnapshot: Effect.succeed(provider),
+            startRefresh: () => Effect.succeed(provider),
+            cancelRefresh: () => Effect.void,
             refresh: Effect.succeed(provider),
             streamChanges: Stream.empty,
             applyUsageLimits: () => Effect.void,
@@ -2653,7 +2699,7 @@ it.layer(
         const scope = yield* Scope.make();
         yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
         const runtimeServices = yield* Layer.build(
-          ProviderRegistry.layer.pipe(
+          layerProviderRegistryUnderTest.pipe(
             Layer.provideMerge(layerInstanceRegistry),
             Layer.provideMerge(
               ServerConfig.layerTest(process.cwd(), {
@@ -2742,7 +2788,7 @@ it.layer(
         );
         const scope = yield* Scope.make();
         yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
-        const layerProviderRegistry = ProviderRegistry.layer.pipe(
+        const layerProviderRegistry = layerProviderRegistryUnderTest.pipe(
           Layer.provideMerge(ProviderInstanceRegistryHydration.layer),
           Layer.provideMerge(AntigravityInstallation.AntigravityInstallation.layer),
           Layer.provideMerge(
@@ -2847,7 +2893,7 @@ it.layer(
         } satisfies ServerSettingsModule.ServerSettingsService["Service"];
         const scope = yield* Scope.make();
         yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
-        const layerProviderRegistry = ProviderRegistry.layer.pipe(
+        const layerProviderRegistry = layerProviderRegistryUnderTest.pipe(
           Layer.provideMerge(ProviderInstanceRegistryHydration.layer),
           Layer.provideMerge(AntigravityInstallation.AntigravityInstallation.layer),
           Layer.provideMerge(
@@ -2915,7 +2961,9 @@ it.layer(
 
           const pendingRebuild = yield* Stream.toPull(
             codexSnapshots.pipe(
-              Stream.filter((provider) => provider.status === "warning" && !provider.installed),
+              Stream.filter(
+                (provider) => provider.status === "checking" && provider.installed === null,
+              ),
             ),
           );
           yield* serverSettings.updateSettings({
@@ -2967,7 +3015,7 @@ it.layer(
         );
         const scope = yield* Scope.make();
         yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
-        const layerProviderRegistry = ProviderRegistry.layer.pipe(
+        const layerProviderRegistry = layerProviderRegistryUnderTest.pipe(
           Layer.provideMerge(ProviderInstanceRegistryHydration.layer),
           Layer.provideMerge(AntigravityInstallation.AntigravityInstallation.layer),
           Layer.provideMerge(
@@ -3027,7 +3075,7 @@ it.layer(
           let cursorSpawned = false;
           const scope = yield* Scope.make();
           yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
-          const layerProviderRegistry = ProviderRegistry.layer.pipe(
+          const layerProviderRegistry = layerProviderRegistryUnderTest.pipe(
             Layer.provideMerge(ProviderInstanceRegistryHydration.layer),
             Layer.provideMerge(AntigravityInstallation.AntigravityInstallation.layer),
             Layer.provideMerge(

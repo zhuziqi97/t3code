@@ -1,3 +1,4 @@
+import { reportProviderProgress } from "@t3tools/provider-core/server/managedProvider";
 import {
   type CustomModelSetting,
   type ModelCapabilities,
@@ -102,7 +103,7 @@ export function buildInitialGrokProviderSnapshot(
       probe: {
         installed: true,
         version: null,
-        status: "warning",
+        status: "checking",
         auth: { status: "unknown" },
         message: "Checking Grok CLI availability...",
       },
@@ -434,7 +435,7 @@ export const checkGrokProviderStatus = Effect.fn("checkGrokProviderStatus")(func
       probe: {
         installed: true,
         version: null,
-        status: "error",
+        status: "warning",
         auth: { status: "unknown" },
         message: "Grok CLI is installed but timed out while running `grok --version`.",
       },
@@ -464,6 +465,12 @@ export const checkGrokProviderStatus = Effect.fn("checkGrokProviderStatus")(func
     });
   }
 
+  yield* reportProviderProgress({
+    installed: true,
+    version,
+    status: "ready",
+    metadata: { models: { state: "loading" } },
+  });
   // `grok models` reports login state and model slugs without starting the agent.
   const modelsResult = yield* runGrokCliCommand(grokSettings, ["models"], environment).pipe(
     Effect.timeoutOption(AUTH_PROBE_TIMEOUT_MS),
@@ -498,6 +505,10 @@ export const checkGrokProviderStatus = Effect.fn("checkGrokProviderStatus")(func
         ? { status: "unauthenticated" }
         : { status: "unknown" };
 
+  yield* reportProviderProgress({
+    auth,
+    ...(auth.status === "unauthenticated" ? { status: "error" as const } : {}),
+  });
   const skills = yield* discoverGrokSkills(grokSettings, environment, cwd).pipe(
     Effect.tapError((cause) => Effect.logDebug("Grok skill discovery failed.", { cause })),
     Effect.orElseSucceed(() => []),
@@ -516,6 +527,10 @@ export const checkGrokProviderStatus = Effect.fn("checkGrokProviderStatus")(func
     });
   }
 
+  yield* reportProviderProgress({
+    auth,
+    metadata: { models: { state: acpFailed && !modelsOutput ? "failed" : "ready" } },
+  });
   const discoveredModels = acpModels.length > 0 ? acpModels : cliModels.models;
   const models =
     discoveredModels.length > 0

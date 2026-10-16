@@ -1,3 +1,4 @@
+import { reportProviderProgress } from "@t3tools/provider-core/server/managedProvider";
 /**
  * PiProvider — snapshot/probe layer for the Pi coding agent.
  *
@@ -258,7 +259,7 @@ export function buildInitialPiProviderSnapshot(
       probe: {
         installed: true,
         version: null,
-        status: "warning",
+        status: "checking",
         auth: { status: "unknown" },
         message: "Checking Pi CLI availability...",
       },
@@ -324,7 +325,7 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(function
       probe: {
         installed: true,
         version: null,
-        status: "error",
+        status: "warning",
         auth: { status: "unknown" },
         message: "Pi CLI is installed but timed out while running `pi --version`.",
       },
@@ -398,6 +399,12 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(function
     });
   }
 
+  yield* reportProviderProgress({
+    installed: true,
+    version,
+    status: "ready",
+    metadata: { models: { state: "loading" } },
+  });
   const discoveryExit = yield* discoverPiViaRpc(
     piSettings,
     environment,
@@ -405,6 +412,7 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(function
     cwd,
   ).pipe(Effect.timeoutOption(PI_RPC_DISCOVERY_TIMEOUT_MS), Effect.exit);
   if (Exit.isFailure(discoveryExit)) {
+    yield* reportProviderProgress({ metadata: { models: { state: "failed" } } });
     yield* Effect.logWarning("Pi RPC discovery failed.", {
       errorTag: causeErrorTag(discoveryExit.cause),
     });
@@ -424,6 +432,7 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(function
     });
   }
   if (Option.isNone(discoveryExit.value)) {
+    yield* reportProviderProgress({ metadata: { models: { state: "failed" } } });
     return buildServerProvider({
       presentation: PI_PRESENTATION,
       enabled: piSettings.enabled,
@@ -440,6 +449,7 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(function
     });
   }
 
+  yield* reportProviderProgress({ metadata: { models: { state: "ready" } } });
   const discovery = discoveryExit.value.value;
   const models = piModelsFromSettings(piSettings.customModels, discovery.models);
   return buildServerProvider({

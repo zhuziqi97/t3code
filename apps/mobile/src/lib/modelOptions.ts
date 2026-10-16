@@ -170,10 +170,9 @@ export function isModelSelectionUnavailable(
   return (
     driver === "antigravity" &&
     (!provider ||
-      !provider.installed ||
+      provider.installed === false ||
       provider.auth.status === "unauthenticated" ||
-      provider.availability === "unavailable" ||
-      false)
+      provider.availability === "unavailable")
   );
 }
 
@@ -222,7 +221,7 @@ export function resolveSelectableModelSelection(
   }
   return provider &&
     isProviderEnabledForProject(config, provider, projectId) &&
-    provider.installed &&
+    provider.installed !== false &&
     provider.auth.status !== "unauthenticated"
     ? selection
     : null;
@@ -281,7 +280,7 @@ export function buildModelOptions(
     if (
       (providerInstanceId !== undefined && provider.instanceId !== providerInstanceId) ||
       !isProviderEnabledForProject(config, provider, projectId) ||
-      !provider.installed ||
+      provider.installed === false ||
       provider.auth.status === "unauthenticated" ||
       (provider.driver === "antigravity" && provider.availability === "unavailable")
     ) {
@@ -346,9 +345,10 @@ export function buildModelOptions(
     fallbackModelSelection &&
     (providerInstanceId === undefined ||
       fallbackModelSelection.instanceId === providerInstanceId) &&
-    (!config?.settings?.providerModelPreferences?.[
-      fallbackModelSelection.instanceId
-    ]?.hiddenModels.includes(fallbackModelSelection.model) ||
+    (fallbackModelSelection.model === null ||
+      !config?.settings?.providerModelPreferences?.[
+        fallbackModelSelection.instanceId
+      ]?.hiddenModels.includes(fallbackModelSelection.model) ||
       config?.providers
         .find((provider) => provider.instanceId === fallbackModelSelection.instanceId)
         ?.models.find((model) => model.slug === fallbackModelSelection.model)?.isCustom)

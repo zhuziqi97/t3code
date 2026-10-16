@@ -404,13 +404,50 @@ it.effect("asks for usage without the local transcript scan", () =>
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
 
-it.effect("returns initialization while native gateway discovery finishes in the background", () =>
+it.effect("accepts a late SDK initialization without the former overall deadline", () =>
   Effect.gen(function* () {
+    const entered = Promise.withResolvers<void>();
+    const initialized = Promise.withResolvers<{ commands: never[] }>();
     let abortSignal: AbortSignal | undefined;
     const query = vi.spyOn(ClaudeSdk, "query").mockImplementation(({ options }) => {
       abortSignal = options?.abortController?.signal;
       return {
+        initializationResult: () => {
+          entered.resolve();
+          return initialized.promise;
+        },
         getContextUsage: async () => ({ model: "native-default" }),
+      } as unknown as ReturnType<typeof ClaudeSdk.query>;
+    });
+    yield* Effect.addFinalizer(() => Effect.sync(() => query.mockRestore()));
+    const running = yield* probeClaudeCapabilities(
+      decodeClaudeSettings({ binaryPath: "claude" }),
+      {},
+      "/tmp",
+      false,
+    ).pipe(Effect.forkChild);
+    yield* Effect.promise(() => entered.promise);
+    yield* TestClock.adjust("61 seconds");
+    assert.isUndefined(yield* Effect.sync(() => running.pollUnsafe()));
+    assert.equal(abortSignal?.aborted, false);
+    initialized.resolve({ commands: [] });
+    const capabilities = yield* Fiber.join(running);
+    assert.equal(capabilities?.defaultModel, "native-default");
+    assert.equal(abortSignal?.aborted, true);
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+it.effect("owns the native gateway discovery grace and closes its process before completion", () =>
+  Effect.gen(function* () {
+    const contextRead = Promise.withResolvers<void>();
+    let abortSignal: AbortSignal | undefined;
+    const query = vi.spyOn(ClaudeSdk, "query").mockImplementation(({ options }) => {
+      abortSignal = options?.abortController?.signal;
+      return {
+        getContextUsage: async () => {
+          contextRead.resolve();
+          return { model: "native-default" };
+        },
         initializationResult: async () => ({
           commands: [],
           models: [
@@ -426,7 +463,7 @@ it.effect("returns initialization while native gateway discovery finishes in the
       } as unknown as ReturnType<typeof ClaudeSdk.query>;
     });
     yield* Effect.addFinalizer(() => Effect.sync(() => query.mockRestore()));
-    const capabilities = yield* probeClaudeCapabilities(
+    const running = yield* probeClaudeCapabilities(
       decodeClaudeSettings({ binaryPath: "claude" }),
       {
         ANTHROPIC_BASE_URL: "http://127.0.0.1:12345",
@@ -435,10 +472,12 @@ it.effect("returns initialization while native gateway discovery finishes in the
       },
       "/tmp",
       false,
-    );
-    assert.equal(capabilities?.models?.[0]?.displayName, "Gateway Native");
+    ).pipe(Effect.forkChild);
+    yield* Effect.promise(() => contextRead.promise);
     assert.equal(abortSignal?.aborted, false);
     yield* TestClock.adjust("3 seconds");
+    const capabilities = yield* Fiber.join(running);
+    assert.equal(capabilities?.models?.[0]?.displayName, "Gateway Native");
     assert.equal(abortSignal?.aborted, true);
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );

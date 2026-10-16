@@ -365,7 +365,7 @@ export const makeMuseAdapterV2 = Effect.fn("makeMuseAdapterV2")(function* (
         Schema.decodeUnknownEffect(schema)(data).pipe(
           Effect.mapError((cause) => protocolError("Invalid Muse protocol response", cause)),
         );
-      const request = (
+      const callHost = (
         method: string,
         params: Record<string, unknown>,
         command = true,
@@ -393,7 +393,14 @@ export const makeMuseAdapterV2 = Effect.fn("makeMuseAdapterV2")(function* (
                 : `Muse ${method} failed`,
               cause,
             ),
-        }).pipe(
+        });
+      const request = (
+        method: string,
+        params: Record<string, unknown>,
+        command = true,
+        commandId?: string,
+      ) =>
+        callHost(method, params, command, commandId).pipe(
           Effect.timeout(options.requestTimeoutMs ?? 30_000),
           Effect.catchTags({
             TimeoutError: (cause) =>
@@ -1796,7 +1803,7 @@ export const makeMuseAdapterV2 = Effect.fn("makeMuseAdapterV2")(function* (
           // Resume selects it too, since the thread may predate it or its mode changed.
           // `session/setPermissionProfile` would need Muse's experimental API.
           const permissionProfile = musePermissionProfile(args.runtimePolicy.runtimeMode);
-          const result = yield* request(
+          const result = yield* callHost(
             requestedId ? "session/resume" : "session/start",
             requestedId
               ? // T3 already has the transcript; skip Muse's history payload.

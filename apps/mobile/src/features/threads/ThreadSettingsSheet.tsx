@@ -403,7 +403,7 @@ function ThreadSettingsSessionProvider(
   );
   const toggleFavorite = useCallback(
     async (option: ModelOption) => {
-      if (!favoritesLoaded || !props.environmentId) return;
+      if (!favoritesLoaded || !props.environmentId || option.selection.model === null) return;
       const currentSettings = registry
         .get(environmentServerConfigsAtom)
         .get(props.environmentId)?.settings;
@@ -476,6 +476,7 @@ function ThreadSettingsSessionProvider(
         !settings ||
         !props.environmentId ||
         !option.canHide ||
+        option.selection.model === null ||
         pendingHidden.current.has(option.key)
       )
         return;

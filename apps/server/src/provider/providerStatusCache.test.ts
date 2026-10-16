@@ -151,7 +151,9 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
           capabilities: emptyCapabilities,
         },
       ],
-      message: "Pending refresh",
+      installed: null,
+      status: "checking",
+      auth: { status: "unknown" },
     });
 
     assert.deepStrictEqual(
@@ -170,14 +172,9 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
             capabilities: emptyCapabilities,
           },
         ],
-        installed: cachedCodex.installed,
         version: cachedCodex.version,
-        status: cachedCodex.status,
-        auth: cachedCodex.auth,
-        checkedAt: cachedCodex.checkedAt,
         slashCommands: cachedCodex.slashCommands,
         skills: cachedCodex.skills,
-        message: cachedCodex.message,
       },
     );
   });

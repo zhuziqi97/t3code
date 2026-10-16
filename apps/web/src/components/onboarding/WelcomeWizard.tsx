@@ -1,3 +1,4 @@
+import { ProviderOperationActions } from "../ProviderOperationActions";
 import {
   LANGUAGE_LABELS,
   SUPPORTED_LANGUAGES,
@@ -891,6 +892,7 @@ function ConnectedAgentsStep({
             />
           ) : (
             <AgentCard
+              environmentId={environmentId}
               key={driver}
               driver={driver}
               provider={provider}
@@ -1021,6 +1023,7 @@ function OnboardingCodexSetup({
   };
   return existingChosen ? (
     <AgentCard
+      environmentId={environmentId}
       driver="codex"
       provider={provider}
       terminalOpen={terminalOpen}
@@ -1044,12 +1047,14 @@ function OnboardingCodexSetup({
 }
 
 function AgentCard({
+  environmentId,
   driver,
   provider,
   terminalOpen,
   terminalAvailable,
   onOpenTerminal,
 }: {
+  readonly environmentId: EnvironmentId;
   readonly driver: OnboardingAgentDriver;
   readonly provider: ServerProvider | undefined;
   readonly terminalOpen: boolean;
@@ -1079,7 +1084,8 @@ function AgentCard({
           {providerState !== "ready" && summary.detail ? ` · ${summary.detail}` : ""}
         </p>
       </div>
-      <div className="shrink-0">
+      <div className="flex shrink-0 items-center gap-2">
+        <ProviderOperationActions provider={provider} environmentId={environmentId} />
         {providerState === "ready" ? (
           <span className="inline-flex items-center gap-1.5 text-xs font-medium text-success-foreground">
             <CheckIcon className="size-3.5" />

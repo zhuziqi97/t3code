@@ -75,7 +75,6 @@ export type AcpSessionRuntimeEvent =
       readonly error: EffectAcpErrors.AcpError;
     };
 
-const defaultSessionLoadTimeout = Duration.seconds(90);
 const defaultSessionLoadReplayIdleGap = Duration.seconds(2);
 const defaultCancelTimeout = Duration.seconds(15);
 const maxStartupMetadataUpdates = 32;
@@ -2072,9 +2071,7 @@ export const make = (
     ): Effect.Effect<EffectAcpSchema.LoadSessionResponse, EffectAcpErrors.AcpError> =>
       sessionLoadSemaphore.withPermits(1)(
         Effect.gen(function* () {
-          const sessionLoadTimeout = Duration.fromInputUnsafe(
-            options.sessionLoadTimeout ?? defaultSessionLoadTimeout,
-          );
+          const sessionLoadTimeout = options.sessionLoadTimeout;
           const sessionLoadReplayIdleGap = Duration.fromInputUnsafe(
             options.sessionLoadReplayIdleGap ?? defaultSessionLoadReplayIdleGap,
           );
@@ -2100,12 +2097,15 @@ export const make = (
             const idleFiber = yield* waitForSessionLoadReplayIdle({
               gateRef: sessionLoadGateRef,
             }).pipe(Effect.forkIn(runtimeScope));
-            const loaded = yield* Effect.raceFirst(
+            const loading = Effect.raceFirst(
               acp.agent.loadSession(loadPayload),
               Fiber.join(idleFiber),
+            ).pipe(Effect.ensuring(Fiber.interrupt(idleFiber).pipe(Effect.ignore)));
+            const loaded = yield* (
+              sessionLoadTimeout === undefined
+                ? loading.pipe(Effect.asSome)
+                : loading.pipe(Effect.timeoutOption(sessionLoadTimeout))
             ).pipe(
-              Effect.ensuring(Fiber.interrupt(idleFiber).pipe(Effect.ignore)),
-              Effect.timeoutOption(sessionLoadTimeout),
               Effect.flatMap((result) =>
                 Option.match(result, {
                   onNone: () =>

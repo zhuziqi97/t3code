@@ -8,7 +8,6 @@ import {
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
-import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
@@ -201,13 +200,14 @@ function claudeAuthStatus(
     : "unauthenticated";
 }
 
+import { reportProviderProgress } from "@t3tools/provider-core/server/managedProvider";
+
 // ── SDK capability probe ────────────────────────────────────────────
 
 // Amazon Bedrock initializes far slower than first-party auth: the SDK boots the
 // Bedrock backend and runs the `awsAuthRefresh` credential hook before returning
 // account info. The previous 8s budget expired mid-init, so the probe returned
 // `undefined` and left the provider unverified and unselectable in the picker.
-const CAPABILITIES_PROBE_TIMEOUT_MS = 25_000;
 
 /**
  * Keep workspace-scoped command discovery intact while isolating the periodic
@@ -426,9 +426,30 @@ const probeClaudeCapabilities = (
       return { q, init };
     });
   }).pipe(
-    Effect.timeout(CAPABILITIES_PROBE_TIMEOUT_MS),
     Effect.flatMap(({ q, init }) =>
       Effect.gen(function* () {
+        const account = init.account as
+          | {
+              readonly email?: string;
+              readonly subscriptionType?: string;
+              readonly tokenSource?: string;
+              readonly apiKeySource?: string;
+              readonly apiProvider?: string;
+            }
+          | undefined;
+        const authStatus = claudeAuthStatus({
+          email: account?.email,
+          subscriptionType: account?.subscriptionType,
+          tokenSource: account?.tokenSource,
+          apiKeySource: account?.apiKeySource,
+          apiProvider: account?.apiProvider,
+        });
+        yield* reportProviderProgress({
+          installed: true,
+          status: authStatus === "unauthenticated" ? "error" : "ready",
+          auth: { status: authStatus },
+          slashCommands: parseClaudeInitializationCommands(init.commands),
+        });
         // Ask the CLI for its effective model without sending a prompt or token-count request.
         const context = yield* Effect.tryPromise(() =>
           q.getContextUsage({ detail: "summary" }),
@@ -449,15 +470,6 @@ const probeClaudeCapabilities = (
                 rate_limits: usageResult.success.rate_limits,
               }
             : undefined;
-        const account = init.account as
-          | {
-              readonly email?: string;
-              readonly subscriptionType?: string;
-              readonly tokenSource?: string;
-              readonly apiKeySource?: string;
-              readonly apiProvider?: string;
-            }
-          | undefined;
         return {
           email: account?.email,
           subscriptionType: account?.subscriptionType,
@@ -471,17 +483,9 @@ const probeClaudeCapabilities = (
         } satisfies ClaudeCapabilitiesProbe;
       }),
     ),
-    Effect.ensuring(
-      Effect.suspend(() =>
-        discoveryGraceMs > 0
-          ? Effect.sleep(discoveryGraceMs).pipe(
-              Effect.andThen(abortProbe),
-              Effect.forkDetach,
-              Effect.asVoid,
-            )
-          : abortProbe,
-      ),
-    ),
+    // Native gateway discovery remains owned by this operation and is cancellable.
+    Effect.tap(() => (discoveryGraceMs > 0 ? Effect.sleep(discoveryGraceMs) : Effect.void)),
+    Effect.ensuring(abortProbe),
     Effect.result,
     Effect.map((result) => (Result.isSuccess(result) ? result.success : undefined)),
   );
@@ -587,7 +591,7 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
     ["--version"],
     resolvedEnvironment,
     cwd,
-  ).pipe(Effect.timeoutOption(DEFAULT_TIMEOUT_MS), Effect.result);
+  ).pipe(Effect.result);
 
   if (Result.isFailure(versionProbe)) {
     const error = versionProbe.failure;
@@ -611,24 +615,7 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
     });
   }
 
-  if (Option.isNone(versionProbe.success)) {
-    return buildServerProvider({
-      presentation: CLAUDE_PRESENTATION,
-      enabled: claudeSettings.enabled,
-      checkedAt,
-      models: allModels,
-      probe: {
-        installed: true,
-        version: null,
-        status: "error",
-        auth: { status: "unknown" },
-        message:
-          "Claude Agent CLI is installed but failed to run. Timed out while running command.",
-      },
-    });
-  }
-
-  const version = versionProbe.success.value;
+  const version = versionProbe.success;
   const parsedVersion = parseGenericCliVersion(`${version.stdout}\n${version.stderr}`);
   if (version.code !== 0) {
     yield* Effect.logWarning("Claude Agent CLI version probe exited with a non-zero status.", {
@@ -659,6 +646,7 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
   const updateRequiredModels = resolveClaudeUpdateRequiredModels(modelCatalog, parsedVersion);
   const versionUpgradeMessage = formatClaudeVersionUpgradeMessage(modelCatalog, parsedVersion);
 
+  yield* reportProviderProgress({ installed: true, version: parsedVersion });
   const capabilities = resolveCapabilities
     ? yield* resolveCapabilities(claudeSettings).pipe(Effect.orElseSucceed(() => undefined))
     : undefined;
@@ -799,9 +787,9 @@ export const makePendingClaudeProvider = (
       checkedAt,
       models,
       probe: {
-        installed: false,
+        installed: null,
         version: null,
-        status: "warning",
+        status: "checking",
         auth: { status: "unknown" },
         message: "Claude provider status has not been checked in this session yet.",
       },
