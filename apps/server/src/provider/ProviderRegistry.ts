@@ -1059,7 +1059,7 @@ export const layer = Layer.effect(
         readonly cwd: string;
         readonly fresh?: boolean;
       },
-      checkMachine?: Effect.Effect<unknown>,
+      refreshMachine?: Effect.Effect<unknown>,
     ) {
       // Fresh scans drop other instances' snapshots for this cwd first, so a
       // composer on one of them scans again on next use, even when this
@@ -1105,9 +1105,10 @@ export const layer = Layer.effect(
       if (!claimed && !input.fresh) return yield* Ref.get(providersRef);
       // Fresh scans also re-read the machine snapshot after invalidating caches.
       const refreshMachineSnapshot = input.fresh
-        ? (instance.invalidateCaches ?? Effect.void).pipe(
-            Effect.andThen(checkMachine ?? refreshInstance(input.instanceId)),
-          )
+        ? (refreshMachine ??
+          (instance.invalidateCaches ?? Effect.void).pipe(
+            Effect.andThen(refreshInstance(input.instanceId)),
+          ))
         : Effect.void;
       return yield* refreshMachineSnapshot.pipe(
         Effect.andThen(instance.snapshotForCwd(input.cwd)),
@@ -1177,7 +1178,6 @@ export const layer = Layer.effect(
                                 yield* latestVersions.invalidate(maintenance.packageName);
                               yield* check;
                               if (instance.refreshModels) yield* instance.refreshModels();
-                              yield* check;
                             }
                             if (input.cwd)
                               yield* refreshWorkspaceSnapshot(
@@ -1186,7 +1186,11 @@ export const layer = Layer.effect(
                                   cwd: input.cwd,
                                   ...(input.fresh ? { fresh: true } : {}),
                                 },
-                                check,
+                                input.refreshModels
+                                  ? Effect.void
+                                  : (instance.invalidateCaches ?? Effect.void).pipe(
+                                      Effect.andThen(check),
+                                    ),
                               );
                           }),
                       }

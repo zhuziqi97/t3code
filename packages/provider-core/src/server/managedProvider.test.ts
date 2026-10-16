@@ -263,6 +263,35 @@ describe("makeManagedServerProvider", () => {
     ).pipe(Effect.provide(layerAlwaysRunTest)),
   );
 
+  it.effect("reuses the native check across consumers in one discovery operation", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const calls = yield* Ref.make(0);
+        const finished = yield* Deferred.make<void>();
+        const provider = yield* makeManagedServerProvider({
+          resolveMaintenance: () => Effect.succeed(maintenanceCapabilities),
+          getSettings: Effect.succeed({ enabled: true }),
+          streamSettings: Stream.empty,
+          haveSettingsChanged: () => false,
+          initialSnapshot: () => Effect.succeed(initialSnapshot),
+          checkProvider: Ref.update(calls, (n) => n + 1).pipe(Effect.as(refreshedSnapshot)),
+          refreshInterval: "1 hour",
+        });
+        yield* provider.refresh;
+        const before = yield* Ref.get(calls);
+        yield* provider.startRefresh({
+          kind: "models",
+          work: (check) =>
+            Effect.all([check, check], { concurrency: "unbounded" }).pipe(
+              Effect.andThen(Deferred.succeed(finished, undefined)),
+            ),
+        });
+        yield* Deferred.await(finished);
+        assert.strictEqual((yield* Ref.get(calls)) - before, 1);
+      }),
+    ).pipe(Effect.provide(layerAlwaysRunTest)),
+  );
+
   it.effect("keeps one preparation beyond the old budgets and accepts its late success", () =>
     Effect.scoped(
       Effect.gen(function* () {

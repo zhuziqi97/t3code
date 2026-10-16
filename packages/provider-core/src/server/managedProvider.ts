@@ -38,6 +38,9 @@ type SnapshotProgress = Partial<
     | "slashCommands"
     | "usageLimits"
     | "metadata"
+    | "setup"
+    | "nativeSessions"
+    | "configurableProviders"
   >
 >;
 
@@ -332,13 +335,15 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
         }));
         yield* PubSub.publish(changesPubSub, state.snapshot);
         let ownsInitialCheck = false;
-        const check = Effect.gen(function* () {
-          const existing = auxiliary ? (yield* Ref.get(activeRefresh)).get("") : undefined;
-          if (existing) return yield* Deferred.await(existing.completion);
-          ownsInitialCheck =
-            auxiliary && (yield* Ref.get(snapshotStateRef)).snapshot.status === "checking";
-          return yield* applySnapshotBase(nextSettings, options);
-        }).pipe(Effect.orDie);
+        const check = yield* Effect.cached(
+          Effect.gen(function* () {
+            const existing = auxiliary ? (yield* Ref.get(activeRefresh)).get("") : undefined;
+            if (existing) return yield* Deferred.await(existing.completion);
+            ownsInitialCheck =
+              auxiliary && (yield* Ref.get(snapshotStateRef)).snapshot.status === "checking";
+            return yield* applySnapshotBase(nextSettings, options);
+          }).pipe(Effect.orDie),
+        );
         const work: Effect.Effect<void, ServerSettingsError | ProviderDriverError> = options?.work
           ? options.work(check).pipe(Effect.asVoid)
           : applySnapshotBase(nextSettings, options).pipe(Effect.asVoid);

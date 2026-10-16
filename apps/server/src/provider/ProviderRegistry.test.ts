@@ -583,7 +583,12 @@ it.layer(
           return Effect.fail(
             new CodexErrors.CodexAppServerSpawnError({
               command: `${binaryPath} app-server`,
-              cause: new Error("spawn ENOENT"),
+              cause: PlatformError.systemError({
+                _tag: "NotFound",
+                module: "ChildProcess",
+                method: "spawn",
+                description: "Executable does not exist",
+              }),
             }),
           );
         });
@@ -597,6 +602,23 @@ it.layer(
           binaryPath === "codex",
         );
         assert.strictEqual(settings.binaryPath, binaryPath);
+      }),
+    );
+
+    it.effect("does not infer an installation result from an unclassified spawn failure", () =>
+      Effect.gen(function* () {
+        const status = yield* checkCodexProviderStatus(defaultCodexSettings, () =>
+          Effect.fail(
+            new CodexErrors.CodexAppServerSpawnError({
+              command: "codex app-server",
+              cause: new Error("spawn failed"),
+            }),
+          ),
+        );
+        assert.strictEqual(status.status, "error");
+        assert.strictEqual(status.installed, null);
+        assert.strictEqual(status.auth.status, "unknown");
+        assert.include(status.message, "Could not start Codex CLI");
       }),
     );
 

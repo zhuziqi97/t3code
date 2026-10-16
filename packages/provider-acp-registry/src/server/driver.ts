@@ -808,6 +808,13 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
               skills: discovered.provider.skills,
               slashCommands: discovered.provider.slashCommands,
               auth: discovered.provider.auth,
+              ...(discovered.provider.setup ? { setup: discovered.provider.setup } : {}),
+              ...(discovered.provider.nativeSessions
+                ? { nativeSessions: discovered.provider.nativeSessions }
+                : {}),
+              ...(discovered.provider.configurableProviders !== undefined
+                ? { configurableProviders: discovered.provider.configurableProviders }
+                : {}),
               metadata: { models: { state: "ready" } },
             });
           }),
