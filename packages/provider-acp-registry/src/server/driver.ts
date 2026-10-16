@@ -291,13 +291,10 @@ const buildInitialAcpRegistrySnapshot = Effect.fn("AcpRegistryDriver.buildInitia
     return baseSnapshot({
       ...input,
       checkedAt,
-      installed: false,
+      installed: null,
       version: null,
-      status: "warning",
+      status: "checking",
       auth: { status: "unknown" },
-      message: input.settings.enabled
-        ? "Checking ACP Registry agent readiness..."
-        : "ACP Registry is disabled in T3 Code settings.",
     });
   },
 );
@@ -622,7 +619,7 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
         getSettings: snapshotSettings.getSettings,
         streamSettings: snapshotSettings.streamSettings,
         haveSettingsChanged: haveProviderSnapshotSettingsChanged,
-        initialSnapshot: () => checkProvider,
+        initialSnapshot: () => buildInitialAcpRegistrySnapshot(readinessInput),
         checkProvider,
         enrichSnapshot: ({ snapshot, getSnapshot, publishSnapshot }) => {
           if (!snapshot.installed) return Effect.void;

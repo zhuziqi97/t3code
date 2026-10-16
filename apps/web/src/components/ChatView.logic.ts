@@ -642,7 +642,7 @@ export function getAntigravitySendBlockReason(
   _model: string | null,
 ): string | null {
   if (provider?.driver !== "antigravity") return null;
-  if (!provider.installed) {
+  if (provider.installed === false) {
     return "Install Antigravity in provider settings before sending.";
   }
   if (provider.auth.status === "unauthenticated") {

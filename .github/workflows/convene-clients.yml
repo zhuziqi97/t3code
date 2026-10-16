@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  APP_VERSION: 0.0.45-convene.21
+  APP_VERSION: 0.0.45-convene.22
 
 jobs:
   bundle:

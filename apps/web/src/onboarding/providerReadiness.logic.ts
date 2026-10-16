@@ -43,7 +43,7 @@ export function getOnboardingProviderState(provider: ServerProvider | undefined)
     (provider.installed === null && provider.status !== "error")
   )
     return "checking";
-  if (!provider.installed) return "install";
+  if (provider.installed === false) return "install";
   if (provider.auth.status === "unauthenticated") return "signIn";
   if (isProviderReady(provider)) return "ready";
   return "attention";

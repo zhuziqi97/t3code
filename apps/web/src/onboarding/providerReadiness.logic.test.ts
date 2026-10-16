@@ -77,6 +77,18 @@ describe("getOnboardingProviderState", () => {
     );
   });
 
+  it("keeps explicit failure and cancellation distinct from unchecked installation", () => {
+    expect(getOnboardingProviderState({ ...readyCodex, installed: null, status: "error" })).toBe(
+      "attention",
+    );
+    expect(
+      getOnboardingProviderState({ ...readyCodex, installed: null, status: "cancelled" }),
+    ).toBe("cancelled");
+    expect(getOnboardingProviderState({ ...readyCodex, installed: null, status: "checking" })).toBe(
+      "checking",
+    );
+  });
+
   it("waits for a provider snapshot before offering an action", () => {
     expect(getOnboardingProviderState(undefined)).toBe("checking");
   });

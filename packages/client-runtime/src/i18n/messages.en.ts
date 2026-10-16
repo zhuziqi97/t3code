@@ -7525,8 +7525,8 @@ export const en = {
     "Failed to execute Muse Code CLI. Check its binary path on this T3 server host.",
   "provider.status.museTimeout": "Muse Code CLI version check timed out.",
   "provider.status.museRunFailed": "Muse Code CLI is installed but failed to run.",
-  "provider.status.museCatalogFailed": "Could not load models.",
-  "provider.status.museNoModels": "No models available.",
+  "provider.status.museCatalogFailed": "Muse Code SDK could not read the model catalog.",
+  "provider.status.museNoModels": "Muse Code returned no models.",
   "provider.status.cursorTimeout": "Cursor SDK catalog request timed out after {{milliseconds}}ms.",
   "provider.status.opencodeInventoryDetail":
     "Failed to load OpenCode provider inventory: {{detail}}",
