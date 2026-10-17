@@ -240,6 +240,13 @@ jobs:
         with:
           name: js-bundle
           path: apps
+      - name: Restore shared Convene build identity
+        shell: bash
+        run: |
+          if [[ -f apps/server/dist/client/convene-build.json ]]; then
+            mkdir -p .generated
+            cp apps/server/dist/client/convene-build.json .generated/convene-build.json
+          fi
 
       # Only the resource monitor build needs these libraries. With a cached
       # monitor, the desktop build's preflight skips its MSVC check, and node-pty
@@ -592,6 +599,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release-publish
+          if [[ -f apps/server/dist/client/convene-build.json ]]; then
+            cp apps/server/dist/client/convene-build.json release-publish/
+          fi
 
           shopt -s nullglob
           patterns=(

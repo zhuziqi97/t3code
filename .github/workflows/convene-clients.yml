@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  APP_VERSION: 0.0.45-convene.22
+  APP_VERSION: 0.0.45-convene.23
 
 jobs:
   bundle:
@@ -52,10 +52,22 @@ jobs:
         # Addresses are runtime-only private configuration. No deployment secrets
         # or local configuration files are passed to any build or artifact.
         run: vp run build:desktop
+      - name: Apply the same release branding as desktop packaging
+        run: node scripts/apply-web-brand-assets.ts --channel latest apps/server/dist/client
+      - name: Export matching Web resources
+        run: node scripts/convene-web-build.mjs export
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: convene-web
+          path: release-web/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 3
       - name: Upload shared bundle
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: js-bundle
+          include-hidden-files: true
           path: |
             apps/server/dist
             apps/desktop/dist-electron
@@ -153,6 +165,10 @@ jobs:
         with:
           pattern: desktop-*
           path: accepted-desktop
+      - uses: actions/download-artifact@v8
+        with:
+          name: convene-web
+          path: accepted-desktop/convene-web
       - name: Write publication metadata from this run
         env:
           ACCEPTED_VERSION: ${{ needs.bundle.outputs.version }}
@@ -163,6 +179,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: convene-client-publication
+          include-hidden-files: true
           path: convene-clients/
           if-no-files-found: error
           retention-days: 3

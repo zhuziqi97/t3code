@@ -1,6 +1,6 @@
 {
   "name": "@t3tools/contracts",
-  "version": "0.0.45-convene.22",
+  "version": "0.0.45-convene.23",
   "private": true,
   "files": [
     "dist"
