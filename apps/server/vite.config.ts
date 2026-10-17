@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
+// @effect-diagnostics-next-line nodeBuiltinImport:off - Build bootstrap reads metadata before an Effect runtime exists.
+import * as NodeFS from "node:fs";
 import { resolveConveneVersion } from "@t3tools/shared/conveneDesktopIdentity";
 import "vite-plus/test/config";
 import { defineConfig, mergeConfig } from "vite-plus";
@@ -24,8 +25,8 @@ import {
 export { shouldBundleCliDependency };
 
 const buildInfoUrl = new URL("../../.generated/convene-build.json", import.meta.url);
-const conveneBuildId = existsSync(buildInfoUrl)
-  ? (JSON.parse(readFileSync(buildInfoUrl, "utf8")) as { build_id: string }).build_id
+const conveneBuildId = NodeFS.existsSync(buildInfoUrl)
+  ? (JSON.parse(NodeFS.readFileSync(buildInfoUrl, "utf8")) as { build_id: string }).build_id
   : null;
 const repoEnv = loadRepoEnv();
 const cliBuildChannel = /^[^-+]+-(?:nightly|preview)\./.test(packageJson.version)

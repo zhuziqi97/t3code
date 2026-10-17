@@ -1,8 +1,8 @@
 /** 将同一次 Actions 的桌面工件整理为平台下载发布输入。 */
-import { copyFile, cp, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
-import { parseArgs } from "node:util";
+import * as NodeFSP from "node:fs/promises";
+import * as NodePath from "node:path";
+import * as NodeURL from "node:url";
+import * as NodeUtil from "node:util";
 import { CONVENE_SUPPORTED_PROTOCOLS } from "../packages/contracts/src/conveneProtocol.ts";
 
 const targets = [
@@ -19,35 +19,40 @@ const targets = [
 ];
 
 export async function prepareConveneRelease({ artifacts, output, version, commit, runId }) {
-  const web = join(artifacts, "convene-web");
-  const build = JSON.parse(await readFile(join(web, "convene-build.json"), "utf8"));
+  const web = NodePath.join(artifacts, "convene-web");
+  const build = JSON.parse(
+    await NodeFSP.readFile(NodePath.join(web, "convene-build.json"), "utf8"),
+  );
   if (build.version !== version || build.source_commit !== commit || build.github_run_id !== runId)
     throw new Error("Web build metadata does not match accepted candidate");
   // 先收齐四包，避免缺包时写出一份看似完整的发行输入。
   const packages = [];
   for (const [artifact, platform, formats] of targets) {
-    const directory = join(artifacts, artifact);
-    const desktop = JSON.parse(await readFile(join(directory, "convene-build.json"), "utf8"));
+    const directory = NodePath.join(artifacts, artifact);
+    const desktop = JSON.parse(
+      await NodeFSP.readFile(NodePath.join(directory, "convene-build.json"), "utf8"),
+    );
     if (JSON.stringify(desktop) !== JSON.stringify(build))
       throw new Error(`${platform}: Web build mismatch`);
-    const names = await readdir(directory);
+    const names = await NodeFSP.readdir(directory);
     for (const [extension, format] of formats) {
       const matches = names.filter((name) => name.endsWith(extension));
       if (matches.length !== 1 || !matches[0].includes(`-${version}-`)) {
         throw new Error(`${platform}: expected one ${version} ${extension} package`);
       }
-      const source = join(directory, matches[0]);
-      if ((await stat(source)).size === 0) throw new Error(`${platform}: empty package`);
+      const source = NodePath.join(directory, matches[0]);
+      if ((await NodeFSP.stat(source)).size === 0) throw new Error(`${platform}: empty package`);
       packages.push({ platform, source, name: matches[0], format });
     }
   }
   for (const [, platform] of targets) {
-    const directory = join(output, platform);
-    await mkdir(directory, { recursive: true });
+    const directory = NodePath.join(output, platform);
+    await NodeFSP.mkdir(directory, { recursive: true });
     const selected = packages.filter((item) => item.platform === platform);
-    for (const item of selected) await copyFile(item.source, join(directory, item.name));
-    await writeFile(
-      join(directory, "build-info.json"),
+    for (const item of selected)
+      await NodeFSP.copyFile(item.source, NodePath.join(directory, item.name));
+    await NodeFSP.writeFile(
+      NodePath.join(directory, "build-info.json"),
       JSON.stringify(
         {
           product: "T3 Code for Convene",
@@ -68,11 +73,14 @@ export async function prepareConveneRelease({ artifacts, output, version, commit
       ) + "\n",
     );
   }
-  await cp(web, join(output, "web"), { recursive: true });
+  await NodeFSP.cp(web, NodePath.join(output, "web"), { recursive: true });
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const { values } = parseArgs({
+if (
+  process.argv[1] &&
+  import.meta.url === NodeURL.pathToFileURL(NodePath.resolve(process.argv[1])).href
+) {
+  const { values } = NodeUtil.parseArgs({
     options: Object.fromEntries(
       ["artifacts", "output", "version", "commit", "run-id"].map((key) => [
         key,
