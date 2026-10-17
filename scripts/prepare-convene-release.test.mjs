@@ -21,6 +21,16 @@ async function fixture(t) {
     await mkdir(join(artifacts, artifact), { recursive: true });
     await writeFile(join(artifacts, artifact, name), name);
   }
+  const build = {
+    build_id: "convene-123-1",
+    version,
+    source_commit: "accepted-commit",
+    github_run_id: "123",
+  };
+  for (const directory of ["convene-web", ...new Set(files.map(([dir]) => dir))]) {
+    await mkdir(join(artifacts, directory), { recursive: true });
+    await writeFile(join(artifacts, directory, "convene-build.json"), JSON.stringify(build));
+  }
   return { artifacts, output, version, commit: "accepted-commit", runId: "123", files };
 }
 
@@ -65,6 +75,15 @@ test("mixed versions cannot be labelled as one accepted candidate", async (t) =>
   const input = await fixture(t);
   await assert.rejects(
     prepareConveneRelease({ ...input, version: "0.0.45-convene.24" }),
-    /expected one/,
+    /Web build metadata/,
   );
+});
+
+test("rejects a desktop package built against a different Web", async (t) => {
+  const input = await fixture(t);
+  await writeFile(
+    join(input.artifacts, "desktop-win-x64", "convene-build.json"),
+    JSON.stringify({ build_id: "other" }),
+  );
+  await assert.rejects(prepareConveneRelease(input), /Web build mismatch/);
 });

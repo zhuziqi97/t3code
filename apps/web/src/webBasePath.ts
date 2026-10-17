@@ -2,6 +2,7 @@ declare global {
   interface Window {
     /** Injected only when the native Web app is mounted by Convene. */
     __T3_BASE_PATH__?: string;
+    __T3_ASSET_BASE_PATH__?: string;
     __T3_INITIAL_PROJECT_ID__?: string | null;
   }
 }

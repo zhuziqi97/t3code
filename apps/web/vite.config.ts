@@ -242,7 +242,7 @@ export default defineConfig(() => {
       renderBuiltUrl(filename, { hostType }) {
         if (hostType === "js")
           return {
-            runtime: `(window.__T3_BASE_PATH__ ?? "") + ${JSON.stringify("/" + filename)}`,
+            runtime: `(window.__T3_ASSET_BASE_PATH__ ?? window.__T3_BASE_PATH__ ?? "") + ${JSON.stringify("/" + filename)}`,
           };
         return hostType === "css" ? { relative: true } : "/" + filename;
       },

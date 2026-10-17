@@ -75,6 +75,8 @@ export class ConveneConnection extends Context.Service<
 type ConnectionState = Omit<ConveneStatus, "platformUrls">;
 type ReportWaiter = Deferred.Deferred<void, ConveneIntegrationError>;
 
+declare const __CONVENE_BUILD_ID__: string | null;
+
 /** One module owns the outward connection; native commands remain in T3 services. */
 const start = (
   state: SubscriptionRef.SubscriptionRef<ConnectionState>,
@@ -190,7 +192,9 @@ const start = (
         yield* sendMessage("HELLO", {
           CLIENT_TYPE: "t3",
           CLIENT_VERSION: packageJson.version,
-          RUNNER_BUILD_ID: `convene-t3-${packageJson.version}`,
+          RUNNER_BUILD_ID:
+            (typeof __CONVENE_BUILD_ID__ !== "undefined" && __CONVENE_BUILD_ID__) ||
+            `convene-t3-${packageJson.version}`,
           SUPPORTED_PROTOCOLS: CONVENE_SUPPORTED_PROTOCOLS,
         });
         const configurations = new Map<string, ConvenePlatform.Configuration>();

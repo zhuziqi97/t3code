@@ -1,5 +1,5 @@
 /** 将同一次 Actions 的桌面工件整理为平台下载发布输入。 */
-import { copyFile, mkdir, readdir, stat, writeFile } from "node:fs/promises";
+import { copyFile, cp, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
@@ -19,10 +19,17 @@ const targets = [
 ];
 
 export async function prepareConveneRelease({ artifacts, output, version, commit, runId }) {
+  const web = join(artifacts, "convene-web");
+  const build = JSON.parse(await readFile(join(web, "convene-build.json"), "utf8"));
+  if (build.version !== version || build.source_commit !== commit || build.github_run_id !== runId)
+    throw new Error("Web build metadata does not match accepted candidate");
   // 先收齐四包，避免缺包时写出一份看似完整的发行输入。
   const packages = [];
   for (const [artifact, platform, formats] of targets) {
     const directory = join(artifacts, artifact);
+    const desktop = JSON.parse(await readFile(join(directory, "convene-build.json"), "utf8"));
+    if (JSON.stringify(desktop) !== JSON.stringify(build))
+      throw new Error(`${platform}: Web build mismatch`);
     const names = await readdir(directory);
     for (const [extension, format] of formats) {
       const matches = names.filter((name) => name.endsWith(extension));
@@ -45,6 +52,7 @@ export async function prepareConveneRelease({ artifacts, output, version, commit
         {
           product: "T3 Code for Convene",
           client_type: "t3",
+          ...build,
           version,
           source_commit: commit,
           github_run_id: runId,
@@ -60,6 +68,7 @@ export async function prepareConveneRelease({ artifacts, output, version, commit
       ) + "\n",
     );
   }
+  await cp(web, join(output, "web"), { recursive: true });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

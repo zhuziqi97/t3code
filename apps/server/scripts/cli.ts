@@ -96,6 +96,10 @@ const buildCmd = Command.make(
       if (yield* fs.exists(webDist)) {
         yield* fs.copy(webDist, clientTarget);
         yield* applyDevelopmentIconOverrides(repoRoot, serverDir);
+        const buildInfo = path.join(repoRoot, ".generated/convene-build.json");
+        if (yield* fs.exists(buildInfo)) {
+          yield* fs.copyFile(buildInfo, path.join(clientTarget, "convene-build.json"));
+        }
         yield* Effect.log("[cli] Bundled web app into dist/client");
       } else {
         yield* Effect.logWarning("[cli] Web dist not found — skipping client bundle.");

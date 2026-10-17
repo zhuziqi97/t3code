@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import { resolveConveneVersion } from "@t3tools/shared/conveneDesktopIdentity";
 import "vite-plus/test/config";
 import { defineConfig, mergeConfig } from "vite-plus";
@@ -22,6 +23,10 @@ import {
 
 export { shouldBundleCliDependency };
 
+const buildInfoUrl = new URL("../../.generated/convene-build.json", import.meta.url);
+const conveneBuildId = existsSync(buildInfoUrl)
+  ? (JSON.parse(readFileSync(buildInfoUrl, "utf8")) as { build_id: string }).build_id
+  : null;
 const repoEnv = loadRepoEnv();
 const cliBuildChannel = /^[^-+]+-(?:nightly|preview)\./.test(packageJson.version)
   ? "nightly"
@@ -112,6 +117,7 @@ export default mergeConfig(
         js: "#!/usr/bin/env node\n",
       },
       define: {
+        __CONVENE_BUILD_ID__: JSON.stringify(conveneBuildId),
         __T3CODE_CONVENE_VERSION__: JSON.stringify(
           process.env.APP_VERSION?.trim() || resolveConveneVersion(packageJson.version),
         ),

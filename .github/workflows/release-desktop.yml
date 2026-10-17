@@ -592,6 +592,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release-publish
+          if [[ -f apps/server/dist/client/convene-build.json ]]; then
+            cp apps/server/dist/client/convene-build.json release-publish/
+          fi
 
           shopt -s nullglob
           patterns=(
