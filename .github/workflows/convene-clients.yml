@@ -48,8 +48,6 @@ jobs:
         run: |
           node scripts/update-release-package-versions.ts "$APP_VERSION"
           echo "version=$APP_VERSION" >> "$GITHUB_OUTPUT"
-      - name: Prepare shared build identity
-        run: node scripts/convene-web-build.mjs prepare
       - name: Build shared desktop bundle
         # Addresses are runtime-only private configuration. No deployment secrets
         # or local configuration files are passed to any build or artifact.
@@ -67,6 +65,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: js-bundle
+          include-hidden-files: true
           path: |
             apps/server/dist
             apps/desktop/dist-electron
