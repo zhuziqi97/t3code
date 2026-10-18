@@ -363,7 +363,9 @@ export const readConvenePlatformUrls = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const server = yield* ServerConfig.ServerConfig;
-  // An environment-local override wins over the private defaults bundled with the desktop.
+  // A configured distribution owns its presets; stale QA files must not hide them.
+  // Generic development builds can still supply their environment-local configuration.
+  if (server.convenePlatformUrls?.length) return server.convenePlatformUrls;
   const filename = path.join(server.stateDir, "convene-platforms.json");
   return (yield* fs.exists(filename))
     ? yield* fs.readFileString(filename).pipe(

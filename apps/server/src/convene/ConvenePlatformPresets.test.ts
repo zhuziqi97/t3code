@@ -26,7 +26,7 @@ it.effect("loads environment-local presets and uses no built-in deployment addre
   }).pipe(Effect.provide(layer)),
 );
 
-it.effect("uses packaged defaults on a fresh environment and preserves a local override", () =>
+it.effect("keeps packaged production presets even when an old QA preset file remains", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -44,6 +44,6 @@ it.effect("uses packaged defaults on a fresh environment and preserves a local o
       path.join(config.stateDir, "convene-platforms.json"),
       '["http://127.0.0.1:12345"]',
     );
-    assert.deepEqual(yield* read, ["http://127.0.0.1:12345"]);
+    assert.deepEqual(yield* read, defaults);
   }).pipe(Effect.provide(layer)),
 );
