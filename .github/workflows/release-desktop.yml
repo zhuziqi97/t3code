@@ -9,6 +9,10 @@ name: Release desktop build
 on:
   workflow_call:
     secrets:
+      CONVENE_PLATFORM_URLS:
+        required: false
+      CONVENE_PACKAGE_TRANSPORT_KEY:
+        required: false
       CSC_LINK:
         required: false
       CSC_KEY_PASSWORD:
@@ -36,6 +40,10 @@ on:
       AZURE_TRUSTED_SIGNING_PUBLISHER_NAME:
         required: false
     inputs:
+      convene_private_distribution:
+        type: boolean
+        required: false
+        default: false
       label:
         required: true
         type: string
@@ -410,6 +418,14 @@ jobs:
           name: cli-linux-${{ inputs.arch }}
           path: wsl-runtime
 
+      - name: Stage private platform presets
+        if: inputs.convene_private_distribution
+        shell: bash
+        env:
+          CONVENE_PLATFORM_URLS: ${{ secrets.CONVENE_PLATFORM_URLS }}
+        run: |
+          node scripts/convene-private-package.mjs presets "$RUNNER_TEMP/convene-platforms.json"
+          echo "CONVENE_PLATFORM_PRESETS_FILE=$RUNNER_TEMP/convene-platforms.json" >> "$GITHUB_ENV"
       - name: Build desktop artifact
         shell: bash
         env:
@@ -655,7 +671,22 @@ jobs:
           mkdir -p "$target_dir"
           cp "$source_path" "$target_dir/$binary_name"
 
+      - name: Encrypt private build artifacts
+        if: inputs.convene_private_distribution
+        shell: bash
+        env:
+          CONVENE_PACKAGE_TRANSPORT_KEY: ${{ secrets.CONVENE_PACKAGE_TRANSPORT_KEY }}
+        run: node scripts/convene-private-package.mjs encrypt release-publish package.enc
+      - name: Upload private build artifacts
+        if: inputs.convene_private_distribution
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: desktop-${{ inputs.platform }}-${{ inputs.arch }}
+          path: package.enc
+          if-no-files-found: error
+          retention-days: 1
       - name: Upload build artifacts
+        if: ${{ !inputs.convene_private_distribution }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: desktop-${{ inputs.platform }}-${{ inputs.arch }}
