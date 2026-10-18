@@ -5,6 +5,10 @@
 Agent 生命周期实施计划：[convene-agent-lifecycle-plan.md](../plan/convene-agent-lifecycle-plan.md)。
 用户明确要求本地 fork 保存计划与合并决定；这些文档随 Convene 分支提交，不提交上游。
 
+2026-10-19 后续稳定发行固定上游 `v0.1.0`，不将最新 main 当作正式发行基线。
+具体冲突裁决及各适配的上游状态见 [V2 稳定版合入核查](convene-v010-upstream-review.md)；
+实施由 [T3Code Issue #8](convene://issues/zzq/software-factory/t3code/8) 追踪。
+
 ## 产品与范围
 
 - 近期基于 T3 发布 Runner，不等待 Happier；手机、远程主机、自动化为第二期。
@@ -26,6 +30,8 @@ Agent 生命周期实施计划：[convene-agent-lifecycle-plan.md](../plan/conve
 ### 连接体验
 
 - 首次引导顶部始终提供以当前语言自称（English／中文）显示的手动选择入口，不显示额外语言标签或“系统默认”选项，复用现有客户端语言偏好并立即生效；自动识别不能替代手动入口。
+
+- 用户 2026-10-19 确认技术术语保留英文：Pull Request/Pull Requests/PR 不译为“拉取请求”；Thinking、Effort 及强度选项使用 Provider/上游原英文名称。中文句子仍翻译，不改协议值或语言识别；[Issue #6](convene://issues/zzq/software-factory/t3code/6) 负责后续界面修订。
 
 - 连接放在初始设置／独立 Convene 设置入口，引导可连接，不放高级设置。项目设置不嵌入连接信息或配对表单；加载中不推断为未连接，确认未配对或离线后仅提供带当前环境的连接设置入口，跳转时关闭项目弹窗。
 - 主页使用与设置、分支、用量同排的连接图标，悬停显示状态，点击进入对应环境设置；不独占一行说明。
