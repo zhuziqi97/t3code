@@ -2,7 +2,7 @@
 
 **T3 Code for Convene** installs alongside T3 Code. Its desktop data is stored in `~/.convene-code`, with a separate desktop profile and `t3code-convene://` links. An explicit `T3CODE_HOME` still selects a different data directory. Existing T3 Code data is not imported automatically.
 
-In **Settings → General**, install the `t3code-convene` command to run the bundled CLI from a terminal. The original `t3` command remains separate. This local preview has no automatic update feed; replace its AppImage with a newer Convene build to update, keeping the data directory.
+In **Settings → General**, install the `t3code-convene` command to run the bundled CLI from a terminal. The original `t3` command remains separate. Download the Convene installer from the platform's T3 Code help page and keep the data directory when updating. The Convene build has no automatic update feed. Windows and macOS packages are previews.
 
 Connecting Convene is optional. Local projects, providers and sessions remain available without it.
 
