@@ -339,7 +339,6 @@ export function ProviderUpdatePrimaryNotification() {
           }
         />
       ),
-      timeout: 0,
       actionProps:
         oneClickProviders.length > 0
           ? {

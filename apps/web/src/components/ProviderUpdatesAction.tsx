@@ -26,7 +26,6 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
  * toast, for a caller that reports the results itself.
  */
 export function useProviderUpdates() {
-  const t = useTranslate();
   const { environments } = useEnvironments();
   const updateProvider = useAtomCommand(serverEnvironment.updateProvider, {
     reportFailure: false,
@@ -68,7 +67,18 @@ export function useProviderUpdates() {
       toastManager.add(
         stackedThreadToast({
           ...view,
-          description: <span className="whitespace-pre-line">{view.description}</span>,
+          title: (
+            <ProviderUpdateText
+              render={(t) => getProviderUpdateRunToastView(runs, t)?.title ?? ""}
+            />
+          ),
+          description: (
+            <span className="whitespace-pre-line">
+              <ProviderUpdateText
+                render={(t) => getProviderUpdateRunToastView(runs, t)?.description ?? ""}
+              />
+            </span>
+          ),
         }),
       );
     }

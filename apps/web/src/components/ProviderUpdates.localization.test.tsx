@@ -253,8 +253,8 @@ beforeEach(async () => {
     publish();
     return id;
   });
-  state.update.mockImplementation((id: string, options: ToastOptions) => {
-    state.toasts.set(id, options);
+  state.update.mockImplementation((id: string, options: Partial<ToastOptions>) => {
+    state.toasts.set(id, { ...state.toasts.get(id)!, ...options });
     publish();
   });
   state.close.mockImplementation((id: string) => {

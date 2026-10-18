@@ -178,10 +178,13 @@ function ProviderUpdateEnvironmentsNotification() {
           <ProviderUpdateEnvironmentRows
             onInteract={() => {
               hasInteractedRef.current = true;
+              const active = activeToastRef.current;
+              if (active !== null) {
+                toastManager.update(active.toastId, { timeout: 0 });
+              }
             }}
           />
         ),
-        timeout: 0,
         actionProps: {
           children: <ProviderUpdateText render={(t) => t("providerUpdate.action.settings")} />,
           onClick: openProviderSettings,
