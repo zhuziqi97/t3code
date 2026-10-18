@@ -1,4 +1,5 @@
 import * as NodeTest from "node:test";
+import * as NodeURL from "node:url";
 import * as NodeAssert from "node:assert/strict";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
@@ -15,7 +16,7 @@ NodeTest.test(
     );
     const key = NodeCrypto.randomBytes(32).toString("hex");
     const run = (...args) =>
-      NodeChildProcess.spawnSync(process.execPath, [helper.pathname, ...args], {
+      NodeChildProcess.spawnSync(process.execPath, [NodeURL.fileURLToPath(helper), ...args], {
         env: { ...process.env, CONVENE_PACKAGE_TRANSPORT_KEY: key },
         encoding: "utf8",
       });
@@ -44,7 +45,7 @@ NodeTest.test(
       const wrong = NodeChildProcess.spawnSync(
         process.execPath,
         [
-          helper.pathname,
+          NodeURL.fileURLToPath(helper),
           "decrypt",
           NodePath.join(dir, "package.enc"),
           NodePath.join(dir, "wrong"),
@@ -72,7 +73,7 @@ NodeTest.test(
     try {
       const result = NodeChildProcess.spawnSync(
         process.execPath,
-        [helper.pathname, "presets", NodePath.join(dir, "presets.json")],
+        [NodeURL.fileURLToPath(helper), "presets", NodePath.join(dir, "presets.json")],
         { env: { ...process.env, CONVENE_PLATFORM_URLS: "" }, stdio: "ignore" },
       );
       NodeAssert.notEqual(result.status, 0);
