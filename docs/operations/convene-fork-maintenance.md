@@ -10,7 +10,7 @@ Agent 生命周期实施计划：[convene-agent-lifecycle-plan.md](../plan/conve
 - 近期基于 T3 发布 Runner，不等待 Happier；手机、远程主机、自动化为第二期。
 - 产品名称 T3 Code for Convene；保持独立应用标识、CLI、协议、profile 和 `~/.convene-code`。不得覆盖上游 T3 用户数据或使用上游更新包。
 - main 只跟踪上游，定制在 `codex/convene-integration`。共享分支使用 merge，不反复 rebase。发布、推送、部署独立记录。
-- 2026-10-16 用户确认：本次替换平台现有 Dextra，发布目录／存储源改为 `t3code`，旧 Dextra 发行及专有支持不保留；复用现有下载服务与共享 Runner owner，不并列维护两个客户端。实施与上线尚待平台 R1 执行，不将原生历史伪装迁入 T3。
+- 2026-10-16 用户确认：本次替换平台现有 Dextra，发布目录／存储源改为 `t3code`，旧 Dextra 发行及专有支持不保留；复用现有下载服务与共享 Runner owner，不并列维护两个客户端。替换实现与隔离验收已完成，生产切换仍待授权；不将原生历史伪装迁入 T3。
 - 中文已纳入首版：早期“只提交上游，等合并”的决定已被用户后续要求替代。
 
 ## 必须保留的行为
