@@ -16,6 +16,7 @@ function key() {
 function tar(args) {
   // Git Bash's GNU tar treats native drive letters as remote archive hosts.
   const executable =
+    // oxlint-disable-next-line t3code/no-global-process-runtime -- Standalone transport also runs outside the workspace without Effect services.
     process.platform === "win32"
       ? NodePath.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe")
       : "tar";
