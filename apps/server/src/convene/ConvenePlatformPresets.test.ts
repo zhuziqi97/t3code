@@ -25,3 +25,25 @@ it.effect("loads environment-local presets and uses no built-in deployment addre
     assert.deepEqual(yield* readConvenePlatformUrls, []);
   }).pipe(Effect.provide(layer)),
 );
+
+it.effect("uses packaged defaults on a fresh environment and preserves a local override", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const config = yield* ServerConfig.ServerConfig;
+    const defaults = ["https://production.example.test", "https://remote.example.test/"];
+    const read = readConvenePlatformUrls.pipe(
+      Effect.provideService(ServerConfig.ServerConfig, {
+        ...config,
+        convenePlatformUrls: defaults,
+      }),
+    );
+    assert.deepEqual(yield* read, defaults);
+    yield* fs.makeDirectory(config.stateDir, { recursive: true });
+    yield* fs.writeFileString(
+      path.join(config.stateDir, "convene-platforms.json"),
+      '["http://127.0.0.1:12345"]',
+    );
+    assert.deepEqual(yield* read, ["http://127.0.0.1:12345"]);
+  }).pipe(Effect.provide(layer)),
+);

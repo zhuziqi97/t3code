@@ -267,6 +267,7 @@ const readBackendObservabilitySettings = Effect.gen(function* () {
 interface SharedBootstrapInput {
   readonly bootstrapToken: string;
   readonly bootstrapSecret: string;
+  readonly convenePlatformUrls: ReadonlyArray<string>;
   readonly observabilitySettings: BackendObservabilitySettings;
 }
 
@@ -567,6 +568,7 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
       host: backendExposure.bindHost,
       desktopBootstrapToken: input.bootstrapToken,
       desktopBootstrapSecret: input.bootstrapSecret,
+      convenePlatformUrls: input.convenePlatformUrls,
       // DesktopApp installs the shell environment into process.env before any
       // backend starts, and this child extends it (extendEnv below). WSL gets
       // a different environment, so its bootstrap never sets this.
@@ -655,6 +657,7 @@ const resolveWslStartConfig = Effect.fn("desktop.backendConfiguration.resolveWsl
     host: wslBindHost,
     desktopBootstrapToken: input.bootstrapToken,
     desktopBootstrapSecret: input.bootstrapSecret,
+    convenePlatformUrls: input.convenePlatformUrls,
     // PortSchema rejects 0, so when tailscale serve is disabled we still
     // need a valid number in this slot. The backend reads tailscaleServePort
     // only when tailscaleServeEnabled is true, so the actual value here is
@@ -855,6 +858,23 @@ export const make = Effect.gen(function* () {
   // backends deriving mismatched tokens and breaking the shared-token
   // invariant the renderer relies on. modifyEffect serializes the whole
   // get-or-create so the first caller wins and the rest reuse its secret.
+  const presetsPath = environment.path.join(environment.resourcesPath, "convene-platforms.json");
+  const convenePlatformUrls = yield* fileSystem.exists(presetsPath).pipe(
+    Effect.flatMap((exists) =>
+      exists
+        ? fileSystem
+            .readFileString(presetsPath)
+            .pipe(
+              Effect.flatMap(
+                Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Array(Schema.String))),
+              ),
+            )
+        : Effect.succeed([] as ReadonlyArray<string>),
+    ),
+    Effect.catch(() =>
+      Effect.logWarning("Could not read bundled Convene platform presets.").pipe(Effect.as([])),
+    ),
+  );
   const secretRef = yield* SynchronizedRef.make(Option.none<string>());
   const getOrCreateBootstrapSecret = SynchronizedRef.modifyEffect(secretRef, (current) =>
     Option.match(current, {
@@ -887,6 +907,7 @@ export const make = Effect.gen(function* () {
     return {
       bootstrapToken,
       bootstrapSecret,
+      convenePlatformUrls,
       observabilitySettings,
     } satisfies SharedBootstrapInput;
   });

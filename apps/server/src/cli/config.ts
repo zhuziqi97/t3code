@@ -470,6 +470,9 @@ export const resolveServerConfig = (
       desktopBootstrapToken,
       ...(desktopBootstrapSecret === undefined ? {} : { desktopBootstrapSecret }),
       ...(shellEnvironmentPrepared === undefined ? {} : { shellEnvironmentPrepared }),
+      ...(bootstrap?.convenePlatformUrls === undefined
+        ? {}
+        : { convenePlatformUrls: bootstrap.convenePlatformUrls }),
       desktopTelemetryFd,
       desktopTelemetryControlFd,
       desktopBrowserFd,

@@ -287,6 +287,12 @@ describe("DesktopBackendConfiguration", () => {
         prefix: "t3-desktop-backend-config-test-",
       });
       const resourcesPath = path.join(baseDir, "resources");
+      const presets = ["https://production.example.test", "https://remote.example.test/"];
+      yield* fileSystem.makeDirectory(resourcesPath, { recursive: true });
+      yield* fileSystem.writeFileString(
+        path.join(resourcesPath, "convene-platforms.json"),
+        JSON.stringify(presets),
+      );
 
       const config = yield* Effect.gen(function* () {
         const configuration = yield* DesktopBackendConfiguration.DesktopBackendConfiguration;
@@ -322,6 +328,7 @@ describe("DesktopBackendConfiguration", () => {
         path.join(resourcesPath, "server.asar/apps/server/dist/bin.mjs"),
       );
       assert.equal(config.env.ELECTRON_RUN_AS_NODE, "1");
+      assert.deepEqual(config.bootstrap.convenePlatformUrls, presets);
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 

@@ -363,7 +363,7 @@ export const readConvenePlatformUrls = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const server = yield* ServerConfig.ServerConfig;
-  // Deployment-local configuration stays outside source code and distributable artifacts.
+  // An environment-local override wins over the private defaults bundled with the desktop.
   const filename = path.join(server.stateDir, "convene-platforms.json");
   return (yield* fs.exists(filename))
     ? yield* fs.readFileString(filename).pipe(
@@ -376,7 +376,7 @@ export const readConvenePlatformUrls = Effect.gen(function* () {
           ).pipe(Effect.as([])),
         ),
       )
-    : [];
+    : (server.convenePlatformUrls ?? []);
 });
 
 const make = Effect.gen(function* () {
