@@ -14,7 +14,12 @@ function key() {
   return Buffer.from(value, "hex");
 }
 function tar(args) {
-  const result = NodeChildProcess.spawnSync("tar", args, { stdio: "inherit" });
+  // Git Bash's GNU tar treats native drive letters as remote archive hosts.
+  const executable =
+    process.platform === "win32"
+      ? NodePath.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe")
+      : "tar";
+  const result = NodeChildProcess.spawnSync(executable, args, { stdio: "inherit" });
   if (result.status !== 0) throw new Error("Private package archive operation failed");
 }
 const [mode, input, output] = process.argv.slice(2);

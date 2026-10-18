@@ -418,6 +418,10 @@ jobs:
           name: cli-linux-${{ inputs.arch }}
           path: wsl-runtime
 
+      - name: Verify private package transport
+        if: inputs.convene_private_distribution
+        shell: bash
+        run: node --test scripts/convene-private-package.test.mjs
       - name: Stage private platform presets
         if: inputs.convene_private_distribution
         shell: bash
