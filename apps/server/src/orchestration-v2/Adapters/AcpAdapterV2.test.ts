@@ -31,6 +31,8 @@ import {
   type ProviderOptionDescriptor,
 } from "@t3tools/contracts";
 import { GrokSettings } from "@t3tools/provider-grok/settings";
+import { AcpRegistrySettings } from "@t3tools/provider-acp-registry/settings";
+import * as AcpRegistrySupport from "@t3tools/provider-acp-registry/server/AcpRegistrySupport";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { resolveSelfInvocation } from "@t3tools/shared/nodeRuntime";
 import * as DateTime from "effect/DateTime";
@@ -99,10 +101,12 @@ import {
 import { makeGrokAdapterV2 } from "@t3tools/provider-grok/testing";
 import {
   acpRegistryPromptFailure,
+  makeAcpRegistryAdapterV2,
   registerMistralVibeAcpExtensions,
 } from "@t3tools/provider-acp-registry/testing";
 
 const DEFAULT_GROK_SETTINGS = Schema.decodeSync(GrokSettings)({});
+const MCP_REGISTRY_SETTINGS = Schema.decodeSync(AcpRegistrySettings)({ agentId: "fixture-agent" });
 
 const layerHost = TestProviderHost.layer().pipe(Layer.provide(NodeServices.layer));
 
@@ -3542,6 +3546,88 @@ describe("AcpAdapterV2", () => {
       const finalizerMethods = yield* pollProtocolMethods(protocolEvents);
       assert.equal(finalizerMethods.filter((method) => method === "session/close").length, 1);
     }).pipe(Effect.provide(layerTest)),
+  );
+
+  it.effect.each(["grok", "registry"] as const)(
+    "%s sends both built-in and project MCP through the real ACP session request",
+    (provider) =>
+      Effect.gen(function* () {
+        const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+        const path = yield* Path.Path;
+        const protocolEvents = yield* Queue.unbounded<EffectAcpProtocol.AcpProtocolLogEvent>();
+        const instanceId = ProviderInstanceId.make(`mcp-${provider}`);
+        const threadId = ThreadId.make(`mcp-${provider}-thread`);
+        yield* (yield* McpProviderSessions.McpProviderSessions).set({
+          environmentId: EnvironmentId.make("provider-mcp-test"),
+          threadId,
+          providerInstanceId: instanceId,
+          providerSessionId: "test-credential",
+          endpoint: "http://127.0.0.1/t3",
+          authorizationHeader: "Bearer builtin",
+          browserToolsAvailable: false,
+          additionalServers: {
+            convene: {
+              endpoint: "http://127.0.0.1/project",
+              authorizationHeader: "Bearer project",
+            },
+          },
+        });
+        const common = {
+          instanceId,
+          selfInvocation: yield* resolveSelfInvocation(),
+          environment: {},
+          makeRuntime: makeMockRuntime({
+            childProcessSpawner,
+            protocolEvents,
+            mockAgentPath: yield* path.fromFileUrl(
+              new URL("../../../scripts/acp-mock-agent.ts", import.meta.url),
+            ),
+          }),
+        };
+        const adapter = yield* provider === "grok"
+          ? makeGrokAdapterV2({
+              ...common,
+              settings: DEFAULT_GROK_SETTINGS,
+              hostPlatform: yield* HostProcess.Platform,
+            })
+          : makeAcpRegistryAdapterV2({ ...common, settings: MCP_REGISTRY_SETTINGS }).pipe(
+              Effect.provide(
+                Layer.mock(AcpRegistrySupport.AcpRegistryCatalog)({
+                  resolve: () => Effect.die("Injected runtime"),
+                }),
+              ),
+            );
+        yield* adapter.openSession({
+          threadId,
+          providerSessionId: ProviderSessionId.make(`mcp-${provider}-session`),
+          modelSelection: { instanceId, model: provider === "grok" ? "grok-build" : "default" },
+          runtimePolicy: ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            cwd: process.cwd(),
+          }),
+        });
+        const request = (yield* Queue.takeAll(protocolEvents))
+          .map(rawProtocolRequest)
+          .find((request) => request?.method === "session/new");
+        const servers = (
+          request?.params as
+            | {
+                mcpServers?: Array<{ name: string; env: Array<{ name: string; value: string }> }>;
+              }
+            | undefined
+        )?.mcpServers;
+        assert.deepEqual(
+          servers?.map((server) => server.name),
+          ["t3-code", "convene"],
+        );
+        assert.isTrue(
+          servers?.[1]?.env.some(
+            (entry) =>
+              entry.name === "T3_ACP_MCP_AUTHORIZATION" && entry.value === "Bearer project",
+          ),
+        );
+      }).pipe(Effect.provide(layerTest), Effect.scoped),
   );
 
   it.effect.each(["grok-build", "composer-2", null])(
