@@ -207,15 +207,18 @@ export function cursorMcpServers(
   if (session === undefined) {
     return undefined;
   }
-  return {
-    "t3-code": {
-      type: "http",
-      url: session.endpoint,
-      headers: {
-        Authorization: session.authorizationHeader,
+  return Object.fromEntries(
+    Object.entries({ "t3-code": session, ...session.additionalServers }).map(([name, server]) => [
+      name,
+      {
+        type: "http",
+        url: server.endpoint,
+        headers: {
+          Authorization: server.authorizationHeader,
+        },
       },
-    },
-  };
+    ]),
+  );
 }
 
 function providerSession(input: {

@@ -39,6 +39,109 @@ import * as CursorAgentSdk from "./CursorAgentSdk.ts";
 const decodeCursorSettings = Schema.decodeEffect(CursorSettings);
 
 describe("CursorAdapterV2", () => {
+  it.effect("rebuilds project MCP grants on resume without changing native setting sources", () =>
+    Effect.gen(function* () {
+      const instanceId = ProviderInstanceId.make("cursor");
+      const threadId = ThreadId.make("cursor-mcp-resume");
+      const sessions = yield* McpProviderSessions.McpProviderSessions;
+      const modelSelection = { instanceId, model: null };
+      const runtimePolicy = ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        cwd: "/workspace",
+      });
+      const opened: Array<{ operation: string; servers: unknown }> = [];
+      const adapter = yield* makeCursorAdapterV2({
+        instanceId,
+        settings: yield* decodeCursorSettings({}),
+        environment: {},
+      }).pipe(
+        Effect.provideService(CursorAgentSdk.CursorAgentSdkRunner, {
+          assertComplete: Effect.void,
+          open: (input) => {
+            opened.push({ operation: input.operation, servers: input.options.mcpServers });
+            assert.deepEqual(input.options.local?.settingSources, [
+              "project",
+              "user",
+              "team",
+              "mdm",
+              "plugins",
+            ]);
+            return Effect.succeed({
+              agentId: "cursor-native-mcp",
+              listMessages: Effect.succeed([]),
+              close: Effect.void,
+              send: () => Effect.die("unexpected model call"),
+            });
+          },
+        }),
+        Effect.provide(TestProviderHost.layer({ cwd: "/workspace" })),
+      );
+      const open = (id: string) =>
+        adapter.openSession({
+          threadId,
+          providerSessionId: ProviderSessionId.make(id),
+          modelSelection,
+          runtimePolicy,
+        });
+      const fresh = yield* open("cursor-mcp-create");
+      const thread = yield* fresh.ensureThread({ threadId, modelSelection, runtimePolicy });
+      for (const token of ["first", "replacement", undefined]) {
+        yield* sessions.set({
+          environmentId: EnvironmentId.make("cursor-mcp-env"),
+          threadId,
+          providerSessionId: "cursor-mcp",
+          providerInstanceId: instanceId,
+          endpoint: "http://builtin.invalid/mcp",
+          authorizationHeader: "Bearer builtin",
+          browserToolsAvailable: false,
+          ...(token === undefined
+            ? {}
+            : {
+                additionalServers: {
+                  convene: {
+                    endpoint: "http://project.invalid/mcp",
+                    authorizationHeader: `Bearer ${token}`,
+                  },
+                },
+              }),
+        });
+        const restored = yield* open(`cursor-mcp-resume-${token}`);
+        yield* restored.resumeThread({
+          providerThread: thread,
+          threadId,
+          modelSelection,
+          runtimePolicy,
+        });
+        assert.deepEqual(opened.at(-1), {
+          operation: "resume",
+          servers: {
+            "t3-code": {
+              type: "http",
+              url: "http://builtin.invalid/mcp",
+              headers: { Authorization: "Bearer builtin" },
+            },
+            ...(token === undefined
+              ? {}
+              : {
+                  convene: {
+                    type: "http",
+                    url: "http://project.invalid/mcp",
+                    headers: { Authorization: `Bearer ${token}` },
+                  },
+                }),
+          },
+        });
+      }
+      assert.deepEqual(opened[0], { operation: "create", servers: undefined });
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.mergeAll(NodeServices.layer, IdAllocator.layer, McpProviderSessions.layer),
+      ),
+    ),
+  );
+
   it.effect.each([
     { status: "finished", model: undefined, lateModel: undefined },
     { status: "cancelled", model: "claude-opus-4-6", lateModel: undefined },
@@ -64,6 +167,12 @@ describe("CursorAdapterV2", () => {
           endpoint: "http://127.0.0.1:43123/mcp",
           authorizationHeader: "Bearer synthetic-cursor-token",
           browserToolsAvailable: true,
+          additionalServers: {
+            convene: {
+              endpoint: "http://project.invalid/mcp",
+              authorizationHeader: "Bearer project-cursor-token",
+            },
+          },
         });
         let sentWithMcpOverride = true;
         const modelSelection = { instanceId, model: "composer-2.5" };
@@ -79,8 +188,27 @@ describe("CursorAdapterV2", () => {
         }).pipe(
           Effect.provideService(CursorAgentSdk.CursorAgentSdkRunner, {
             assertComplete: Effect.void,
-            open: () =>
-              Effect.succeed({
+            open: (opened) => {
+              assert.deepEqual(opened.options.mcpServers, {
+                "t3-code": {
+                  type: "http",
+                  url: "http://127.0.0.1:43123/mcp",
+                  headers: { Authorization: "Bearer synthetic-cursor-token" },
+                },
+                convene: {
+                  type: "http",
+                  url: "http://project.invalid/mcp",
+                  headers: { Authorization: "Bearer project-cursor-token" },
+                },
+              });
+              assert.deepEqual(opened.options.local?.settingSources, [
+                "project",
+                "user",
+                "team",
+                "mdm",
+                "plugins",
+              ]);
+              return Effect.succeed({
                 agentId: "native-cursor-lifecycle",
                 listMessages: Effect.succeed([]),
                 close: Effect.void,
@@ -135,7 +263,8 @@ describe("CursorAdapterV2", () => {
                       cancel: Effect.void,
                     };
                   }),
-              }),
+              });
+            },
           }),
           Effect.provide(TestProviderHost.layer({ cwd: workspace })),
         );
@@ -907,9 +1036,20 @@ describe("CursorAdapterV2", () => {
       endpoint: "http://127.0.0.1:43123/mcp",
       authorizationHeader: "Bearer secret-cursor-mcp-token",
       browserToolsAvailable: true,
+      additionalServers: {
+        convene: {
+          endpoint: "http://project.invalid/mcp",
+          authorizationHeader: "Bearer secret-project-token",
+        },
+      },
     };
 
     assert.deepEqual(cursorMcpServers(mcpSession), {
+      convene: {
+        type: "http",
+        url: "http://project.invalid/mcp",
+        headers: { Authorization: "Bearer secret-project-token" },
+      },
       "t3-code": {
         type: "http",
         url: "http://127.0.0.1:43123/mcp",
@@ -938,6 +1078,7 @@ describe("CursorAdapterV2", () => {
     const logged = JSON.stringify(CursorAgentSdk.loggedCursorAgentOptions(options));
     assert.notInclude(logged, "secret-cursor-api-key");
     assert.notInclude(logged, "secret-cursor-mcp-token");
+    assert.notInclude(logged, "secret-project-token");
   });
 
   it("recognizes direct and SDK-wrapped abort failures as cancellation", () => {
