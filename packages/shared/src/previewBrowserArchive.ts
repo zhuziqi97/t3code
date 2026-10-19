@@ -1,4 +1,5 @@
-// @effect-diagnostics nodeBuiltinImport:off - Pinned archives use an incremental digest.
+// @effect-diagnostics nodeBuiltinImport:off - Pinned archives use an incremental digest and Electron's ASAR-aware fs.
+import * as NodeStream from "@effect/platform-node/NodeStream";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -6,6 +7,9 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 import * as NodeCrypto from "node:crypto";
+// Electron patches the default fs object for ASAR, but its ESM named exports remain unpatched.
+// oxlint-disable-next-line t3code/namespace-node-imports -- ASAR reads need Electron's patched default export.
+import NodeFS from "node:fs";
 
 // The one browser T3 installs on a host. HTML render previews and server
 // browser tabs both run this pinned Chrome for Testing headless shell. Release
@@ -108,15 +112,15 @@ export const downloadPreviewBrowserArchive = Effect.fn("PreviewBrowser.downloadA
     const path = yield* Path.Path;
     const release = input.release;
     const bundled =
-      input.bundledDirectory !== undefined && (yield* fs.exists(input.bundledDirectory));
+      input.bundledDirectory !== undefined && NodeFS.existsSync(input.bundledDirectory);
     const source = bundled
-      ? fs
-          .stream(path.join(input.bundledDirectory!, release.version, `${release.platform}.zip`))
-          .pipe(
-            Stream.mapError(
-              wrapPreviewBrowserFailure("Could not read the bundled browser component."),
+      ? NodeStream.fromReadable<Uint8Array, PreviewBrowserInstallError>({
+          evaluate: () =>
+            NodeFS.createReadStream(
+              path.join(input.bundledDirectory!, release.version, `${release.platform}.zip`),
             ),
-          )
+          onError: wrapPreviewBrowserFailure("Could not read the bundled browser component."),
+        })
       : (yield* Effect.gen(function* () {
           const http = yield* HttpClient.HttpClient;
           const response = yield* http
