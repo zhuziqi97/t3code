@@ -15,10 +15,12 @@ import {
   type PreviewStreamPointer,
   type PreviewStreamViewport,
   previewStreamHostSetupMessage,
+  previewStreamStatusMessage,
 } from "@t3tools/client-runtime/preview/server-browser-stream";
 import type {
   EnvironmentId,
   PreviewStreamHostSetup,
+  PreviewStreamStatus,
   PreviewViewportSetting,
 } from "@t3tools/contracts";
 import {
@@ -64,7 +66,7 @@ const PROBE_REUSE_MS = 10_000;
 const INPUT_SENTINEL = "\u200b";
 const BACKSPACE = { key: "Backspace", code: "Backspace", keyCode: 8 } as const;
 const DELETE = { key: "Delete", code: "Delete", keyCode: 46 } as const;
-const MAX_UNAUTHORIZED_REFUSALS = 3;
+const MAX_CONNECTION_FAILURES = 3;
 const TAP_SLOP_PX = 8;
 const MULTI_CLICK_MS = 500;
 const MULTI_CLICK_SLOP_PX = 4;
@@ -175,7 +177,7 @@ export function ServerBrowserSurface(props: {
     className,
     ref,
   } = props;
-  const access = usePreviewStreamAccess(environmentId);
+  const { access, failed: accessFailed } = usePreviewStreamAccess(environmentId);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const keySentRef = useRef(false);
@@ -201,9 +203,18 @@ export function ServerBrowserSurface(props: {
       }),
     );
   };
-  const unauthorizedRef = useRef(0);
-  const [accessDenied, setAccessDenied] = useState(false);
+  const connectionFailuresRef = useRef(0);
+  const [connectionError, setConnectionError] = useState<"unauthorized" | "connection" | null>(
+    null,
+  );
+  const [streamStatus, setStreamStatus] = useState<PreviewStreamStatus | null>(null);
   const [hostSetup, setHostSetup] = useState<PreviewStreamHostSetup | null>(null);
+  const streamBlocked = Boolean(
+    connectionError ||
+    hostSetup ||
+    streamStatus?.state === "failed" ||
+    streamStatus?.state === "installing",
+  );
   const pendingMoveRef = useRef<MouseInput | null>(null);
   const pendingWheelRef = useRef<WheelInput | null>(null);
   const inputFrameRef = useRef<number | null>(null);
@@ -383,18 +394,31 @@ export function ServerBrowserSurface(props: {
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!visible || accessDenied || hostSetup || !access || !cap || !canvas) return;
+    if (!visible || streamBlocked || !access || !cap || !canvas) return;
+    setStreamStatus(null);
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
     const painter = createPreviewFramePainter(canvas, () => {
       if (hasFrameRef.current) return;
       hasFrameRef.current = true;
       firstFrame();
     });
+    const retryConnection = (reason: "unauthorized" | "connection") => {
+      const failures = ++connectionFailuresRef.current;
+      if (failures >= MAX_CONNECTION_FAILURES) {
+        inputRef.current?.blur();
+        setConnectionError(reason);
+        return;
+      }
+      refreshTimer = setTimeout(
+        () => refreshPreviewStreamAccess(environmentId),
+        failures === 1 ? 0 : 1_000 * 2 ** (failures - 1),
+      );
+    };
     const client = createPreviewStreamClient(
       { access, threadId, tabId, maxWidth: cap.width, maxHeight: cap.height },
       {
         onFrame: (jpeg) => {
-          unauthorizedRef.current = 0;
+          connectionFailuresRef.current = 0;
           painter.paint(jpeg);
         },
         onProbe: (result) => {
@@ -448,19 +472,9 @@ export function ServerBrowserSurface(props: {
           clearInput();
         },
         onHostSetup: setHostSetup,
-        onUnauthorized: () => {
-          // Fresh tickets re-run this effect. Repeated refusals need an explicit retry.
-          const refusals = ++unauthorizedRef.current;
-          if (refusals >= MAX_UNAUTHORIZED_REFUSALS) {
-            inputRef.current?.blur();
-            setAccessDenied(true);
-            return;
-          }
-          refreshTimer = setTimeout(
-            () => refreshPreviewStreamAccess(environmentId),
-            refusals === 1 ? 0 : 1_000 * 2 ** (refusals - 1),
-          );
-        },
+        onStatus: setStreamStatus,
+        onConnectionFailure: () => retryConnection("connection"),
+        onUnauthorized: () => retryConnection("unauthorized"),
       },
     );
     clientRef.current = client;
@@ -474,25 +488,17 @@ export function ServerBrowserSurface(props: {
       controlChanged(null);
       clearInput();
     };
-  }, [
-    access,
-    accessDenied,
-    cap,
-    clearInput,
-    environmentId,
-    followSize,
-    hostSetup,
-    tabId,
-    threadId,
-    visible,
-  ]);
+  }, [access, streamBlocked, cap, clearInput, environmentId, followSize, tabId, threadId, visible]);
 
   useEffect(() => {
-    if (!visible || accessDenied || access !== null) return;
-    // A failed ticket mint, e.g. while the server restarts, never retries on its own.
-    const timer = setInterval(() => refreshPreviewStreamAccess(environmentId), ACCESS_RETRY_MS);
-    return () => clearInterval(timer);
-  }, [access, accessDenied, environmentId, visible]);
+    if (!visible || streamBlocked || access !== null || !accessFailed) return;
+    if (++connectionFailuresRef.current >= MAX_CONNECTION_FAILURES) {
+      setConnectionError("connection");
+      return;
+    }
+    const timer = setTimeout(() => refreshPreviewStreamAccess(environmentId), ACCESS_RETRY_MS);
+    return () => clearTimeout(timer);
+  }, [access, accessFailed, streamBlocked, environmentId, visible]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -889,6 +895,13 @@ export function ServerBrowserSurface(props: {
           </div>
         ) : null}
       </div>
+      {visible && !streamBlocked && streamStatus?.state === "preparing" ? (
+        <div className="pointer-events-none visible absolute inset-0 z-20 flex items-center justify-center bg-background p-3 text-center">
+          <p role="status" className="text-xs text-muted-foreground">
+            {t("browser.preparing")}
+          </p>
+        </div>
+      ) : null}
       {visible && hostSetup ? (
         <div className="visible absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-background p-4 text-center">
           <p role="alert" className="max-w-sm text-sm text-muted-foreground">
@@ -900,18 +913,31 @@ export function ServerBrowserSurface(props: {
           </Button>
         </div>
       ) : null}
-      {visible && accessDenied ? (
+      {visible &&
+      !hostSetup &&
+      (connectionError ||
+        streamStatus?.state === "failed" ||
+        streamStatus?.state === "installing") ? (
         // The page can be invisible beneath an empty or unreachable state; reconnect must remain reachable.
         <div className="visible absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-background p-3 text-center">
           <p role="alert" className="text-xs text-muted-foreground">
-            {t("browser.refused")}
+            {connectionError
+              ? t(
+                  connectionError === "unauthorized"
+                    ? "browser.refused"
+                    : "browser.connectionFailed",
+                )
+              : streamStatus
+                ? previewStreamStatusMessage(streamStatus, t)
+                : null}
           </p>
           <Button
             variant="outline"
             size="sm"
             onClick={() => {
-              unauthorizedRef.current = 0;
-              setAccessDenied(false);
+              connectionFailuresRef.current = 0;
+              setConnectionError(null);
+              setStreamStatus(null);
               refreshPreviewStreamAccess(environmentId);
             }}
           >

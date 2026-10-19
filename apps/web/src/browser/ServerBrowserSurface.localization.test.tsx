@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import type { DeviceHubAccess } from "@t3tools/client-runtime/device/hub-access";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { EnvironmentId } from "@t3tools/contracts";
@@ -12,12 +13,14 @@ const state = vi.hoisted(() => ({
   stop: vi.fn(),
   upload: vi.fn(),
   toast: vi.fn(),
+  failed: false,
+  refresh: vi.fn(),
   access: {
     httpBase: "http://qa.test/stream",
     wsBase: "ws://qa.test/stream",
     query: {},
     credentials: true,
-  },
+  } as DeviceHubAccess | null,
 }));
 vi.mock("@t3tools/client-runtime/preview/server-browser-stream", async (original) => ({
   ...(await original<typeof import("@t3tools/client-runtime/preview/server-browser-stream")>()),
@@ -30,8 +33,8 @@ vi.mock("@t3tools/client-runtime/preview/server-browser-stream", async (original
   uploadPreviewStreamFiles: (...args: unknown[]) => state.upload(...args),
 }));
 vi.mock("~/state/previewStream", () => ({
-  usePreviewStreamAccess: () => state.access,
-  refreshPreviewStreamAccess: vi.fn(),
+  usePreviewStreamAccess: () => ({ access: state.access, failed: state.failed }),
+  refreshPreviewStreamAccess: () => state.refresh(),
 }));
 vi.mock("~/components/ui/toast", () => ({ toastManager: { add: state.toast } }));
 
@@ -69,14 +72,24 @@ beforeEach(async () => {
   vi.useFakeTimers();
   vi.clearAllMocks();
   state.events = null;
+  state.failed = false;
+  state.access = {
+    httpBase: "http://qa.test/stream",
+    wsBase: "ws://qa.test/stream",
+    query: {},
+    credentials: true,
+  };
   state.upload.mockResolvedValue(undefined);
   vi.stubGlobal(
     "ResizeObserver",
     class {
-      constructor(private readonly callback: () => void) {}
-      observe() {
-        this.callback();
+      constructor(private readonly callback: ResizeObserverCallback) {}
+      observe(target: Element) {
+        queueMicrotask(() =>
+          this.callback([{ target } as ResizeObserverEntry], this as unknown as ResizeObserver),
+        );
       }
+      unobserve() {}
       disconnect() {}
     },
   );
@@ -96,7 +109,7 @@ beforeEach(async () => {
   document.body.append(container);
   root = createRoot(container);
   await render();
-  await act(async () => vi.runOnlyPendingTimers());
+  await act(async () => vi.runAllTimers());
   expect(state.create).toHaveBeenCalledTimes(1);
 });
 afterEach(async () => {
@@ -202,4 +215,74 @@ it("retains a file request and reports an upload failure in the completion langu
   });
   expect(state.create).toHaveBeenCalledTimes(1);
   expect(state.stop).not.toHaveBeenCalled();
+});
+
+it("keeps the stream during preparation and exposes a translated launch failure with retry", async () => {
+  await act(async () => state.events!.onStatus!({ state: "preparing" }));
+  expect(container.textContent).toContain("Preparing browser");
+  expect(state.create).toHaveBeenCalledTimes(1);
+  await act(async () => changeLanguage("zh"));
+  expect(container.textContent).toContain("正在准备浏览器");
+  await act(async () => state.events!.onStatus!({ state: "failed", reason: "launch" }));
+  expect(container.querySelector('[role="alert"]')?.textContent).toBe("浏览器无法启动。");
+  await click("重新连接");
+  expect(state.create).toHaveBeenCalledTimes(2);
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+});
+it.each(["connection", "unauthorized"] as const)(
+  "bounds %s failures and clears the counter on explicit reconnect",
+  async (reason) => {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await act(async () =>
+        reason === "connection"
+          ? state.events!.onConnectionFailure!()
+          : state.events!.onUnauthorized(),
+      );
+      if (attempt < 2) {
+        await act(async () => vi.runOnlyPendingTimers());
+        state.access = { ...state.access! };
+        await render();
+      }
+    }
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(
+      reason === "connection"
+        ? "Could not connect to the browser."
+        : "Browser connection was refused.",
+    );
+    const before = state.create.mock.calls.length;
+    await click("Reconnect");
+    expect(state.create).toHaveBeenCalledTimes(before + 1);
+    await act(async () => state.events!.onConnectionFailure!());
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+  },
+);
+
+it("bounds failed access acquisition and recovers when fresh access becomes available", async () => {
+  state.access = null;
+  for (let failure = 0; failure < 3; failure++) {
+    state.failed = true;
+    await render();
+    await act(async () => vi.runOnlyPendingTimers());
+    if (failure < 2) {
+      state.failed = false;
+      await render();
+    }
+  }
+  expect(state.refresh).toHaveBeenCalledTimes(2);
+  expect(container.querySelector('[role="alert"]')?.textContent).toBe(
+    "Could not connect to the browser.",
+  );
+  await act(async () => vi.runAllTimers());
+  expect(state.refresh).toHaveBeenCalledTimes(2);
+  await click("Reconnect");
+  state.access = {
+    httpBase: "http://qa.test/stream",
+    wsBase: "ws://qa.test/stream",
+    query: {},
+    credentials: true,
+  };
+  state.failed = false;
+  await render();
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+  expect(state.create).toHaveBeenCalledTimes(2);
 });

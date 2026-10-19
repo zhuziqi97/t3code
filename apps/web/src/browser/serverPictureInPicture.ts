@@ -94,6 +94,14 @@ export async function openServerPictureInPicture(input: {
   const onLeave = () => {
     if (active === current) closeServerPictureInPicture();
   };
+  const retry = () => {
+    if (stopped) return;
+    if (refusals >= 3) {
+      onLeave();
+      return;
+    }
+    retryTimer = setTimeout(() => void connect(true), 1_000 * 2 ** refusals++);
+  };
   const connect = async (refresh: boolean) => {
     const access = await readPreviewStreamAccess(input.environmentId, refresh);
     if (stopped) return;
@@ -117,13 +125,11 @@ export async function openServerPictureInPicture(input: {
         },
         onViewport: () => undefined,
         onConnectedChange: () => undefined,
-        onUnauthorized: () => {
-          if (stopped) return;
-          if (refusals >= 5) {
-            onLeave();
-            return;
-          }
-          retryTimer = setTimeout(() => void connect(true), 1_000 * 2 ** refusals++);
+        onUnauthorized: retry,
+        onConnectionFailure: retry,
+        onHostSetup: onLeave,
+        onStatus: (status) => {
+          if (status.state === "failed" || status.state === "installing") onLeave();
         },
         onGone: onLeave,
       },

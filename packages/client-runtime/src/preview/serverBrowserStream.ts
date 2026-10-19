@@ -1,8 +1,10 @@
+import * as Schema from "effect/Schema";
 // @effect-diagnostics globalTimers:off globalFetch:off - This browser and WebView transport runs without an Effect runtime.
 import type { TFunction } from "i18next";
 import { type DeviceHubAccess, withDeviceHubQuery } from "../device/hubAccess.ts";
 import {
   PREVIEW_STREAM_HOST_SETUP_CLOSE_CODE,
+  PreviewStreamStatus,
   type PreviewStreamHostSetup,
   type PreviewViewportSetting,
 } from "@t3tools/contracts";
@@ -213,7 +215,10 @@ export interface PreviewStreamEvents {
   readonly onFileChooser?: (chooser: PreviewStreamFileChooser | null) => void;
   /** Input sent while disconnected is dropped. */
   readonly onConnectedChange: (connected: boolean) => void;
-  /** The upgrade was refused; refresh access and start a new client. */
+  readonly onStatus?: (status: PreviewStreamStatus) => void;
+  /** Obtain fresh stream access before reconnecting. */
+  readonly onConnectionFailure?: () => void;
+  /** An explicit authorization denial; refresh access and start a new client. */
   readonly onUnauthorized: () => void;
   /** The tab was closed on the server. The client has stopped. */
   readonly onGone?: () => void;
@@ -227,6 +232,7 @@ export interface PreviewStreamClient {
   readonly stop: () => void;
 }
 
+const isPreviewStreamStatus = Schema.is(PreviewStreamStatus);
 const ACK_MESSAGE = JSON.stringify({ type: "ack" });
 export function createPreviewStreamClient(
   target: PreviewStreamTarget,
@@ -274,6 +280,17 @@ export function createPreviewStreamClient(
         return;
       }
       if (typeof message !== "object" || message === null) return;
+      if (
+        "type" in message &&
+        message.type === "status" &&
+        "status" in message &&
+        isPreviewStreamStatus(message.status)
+      ) {
+        events.onStatus?.(message.status);
+        if (message.status.state === "failed" || message.status.state === "installing")
+          stopped = true;
+        return;
+      }
       const {
         type,
         x,
@@ -381,13 +398,21 @@ export function createPreviewStreamClient(
         events.onHostSetup?.(decodeHostSetup(event.reason));
         return;
       }
-      // Rejected upgrades surface as 1006 before open for both cookies and tickets.
-      if (event.code === 1008 || event.code === 4401 || (!opened && event.code === 1006)) {
+      if (event.code === 1008 || event.code === 4401) {
         stopped = true;
         events.onUnauthorized();
         return;
       }
-      retryTimer = setTimeout(connect, Math.min(500 * 2 ** failures++, 10_000));
+      if (events.onConnectionFailure) {
+        stopped = true;
+        events.onConnectionFailure();
+        return;
+      }
+      if (++failures >= 3) {
+        stopped = true;
+        return;
+      }
+      retryTimer = setTimeout(connect, Math.min(500 * 2 ** (failures - 1), 10_000));
     });
     ws.addEventListener("error", () => ws.close());
   };
@@ -486,3 +511,23 @@ export const previewStreamHostSetupMessage = (setup: PreviewStreamHostSetup, t?:
       "This server's host blocks the sandbox its browser runs in. Run this once on the host, then try again:")
     : (t?.("browser.setup.libraries") ??
       "This server's host is missing libraries its browser needs. Run this once on the host, then try again:");
+
+/** Shared viewer copy; native clients use English until they provide a translator. */
+export function previewStreamStatusMessage(status: PreviewStreamStatus, t?: TFunction): string {
+  switch (status.state) {
+    case "preparing":
+      return t?.("browser.preparing") ?? "Preparing browser…";
+    case "ready":
+      return "";
+    case "installing":
+      return status.unpacking
+        ? (t?.("browser.unpacking") ?? "Unpacking the browser component. Try again shortly.")
+        : (t?.("browser.installing") ?? "Installing the browser component. Try again shortly.");
+    case "failed":
+      return status.reason === "install"
+        ? (t?.("browser.installFailed") ?? "The browser component could not be installed.")
+        : status.reason === "unsupported"
+          ? (t?.("browser.unsupportedHost") ?? "The browser is unavailable on this host.")
+          : (t?.("browser.launchFailed") ?? "The browser could not start.");
+  }
+}

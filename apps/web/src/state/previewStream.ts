@@ -26,9 +26,12 @@ const previewStreamAccessAtom = Atom.family((environmentId: EnvironmentId) =>
     .pipe(Atom.setIdleTTL(60_000), Atom.withLabel(`preview-stream-access:${environmentId}`)),
 );
 
-export function usePreviewStreamAccess(environmentId: EnvironmentId): DeviceHubAccess | null {
+export function usePreviewStreamAccess(environmentId: EnvironmentId) {
   const result = useAtomValue(previewStreamAccessAtom(environmentId));
-  return AsyncResult.isSuccess(result) ? result.value : null;
+  return {
+    access: AsyncResult.isSuccess(result) ? result.value : null,
+    failed: AsyncResult.isFailure(result) && !AsyncResult.isWaiting(result),
+  };
 }
 
 export function refreshPreviewStreamAccess(environmentId: EnvironmentId): void {

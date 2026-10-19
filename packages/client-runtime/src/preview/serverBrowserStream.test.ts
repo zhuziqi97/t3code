@@ -237,3 +237,65 @@ describe("viewer presentation", () => {
     expect(setup.command).toBe("sudo npx t3 browser setup --原文");
   });
 });
+
+describe("preview connection failures and readiness", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.stubGlobal("WebSocket", FakeSocket);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+  const connect = () => {
+    const events = {
+      onFrame: vi.fn(),
+      onViewport: vi.fn(),
+      onConnectedChange: vi.fn(),
+      onUnauthorized: vi.fn(),
+      onConnectionFailure: vi.fn(),
+      onStatus: vi.fn(),
+    };
+    const client = createPreviewStreamClient(target, events);
+    return { client, events, socket: FakeSocket.current };
+  };
+  it.each([1006, 1011, 1012])(
+    "requests fresh access for transport close %s without claiming unauthorized",
+    (code) => {
+      const { client, events, socket } = connect();
+      socket.dispatchEvent(Object.assign(new Event("close"), { code, reason: "" }));
+      expect(events.onUnauthorized).not.toHaveBeenCalled();
+      expect(events.onConnectionFailure).toHaveBeenCalledOnce();
+      vi.runAllTimers();
+      expect(FakeSocket.current).toBe(socket);
+      expect(client.send({ type: "text", text: "dropped" })).toBe(false);
+      client.stop();
+    },
+  );
+  it.each([1008, 4401])("preserves explicit authorization denial %s", (code) => {
+    const { events, socket, client } = connect();
+    socket.dispatchEvent(Object.assign(new Event("close"), { code, reason: "" }));
+    expect(events.onUnauthorized).toHaveBeenCalledOnce();
+    expect(events.onConnectionFailure).not.toHaveBeenCalled();
+    client.stop();
+  });
+  it("reports preparation then readiness, and does not retry known launch failures", () => {
+    const { events, socket, client } = connect();
+    for (const state of ["preparing", "ready"])
+      socket.message(JSON.stringify({ type: "status", status: { state } }));
+    socket.message(
+      JSON.stringify({ type: "status", status: { state: "failed", reason: "launch" } }),
+    );
+    socket.dispatchEvent(Object.assign(new Event("close"), { code: 1011, reason: "" }));
+    vi.runAllTimers();
+    expect(events.onStatus.mock.calls.map(([value]) => value.state)).toEqual([
+      "preparing",
+      "ready",
+      "failed",
+    ]);
+    expect(events.onUnauthorized).not.toHaveBeenCalled();
+    expect(events.onConnectionFailure).not.toHaveBeenCalled();
+    expect(FakeSocket.current).toBe(socket);
+    client.stop();
+  });
+});

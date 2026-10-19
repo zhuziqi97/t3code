@@ -124,7 +124,7 @@ function ServerTabFileNotShown(props: {
   readonly url: string;
   readonly download: { readonly id: string; readonly fileName: string };
 }) {
-  const access = usePreviewStreamAccess(props.threadRef.environmentId);
+  const { access } = usePreviewStreamAccess(props.threadRef.environmentId);
   return (
     <PreviewFileNotShown
       url={props.url}

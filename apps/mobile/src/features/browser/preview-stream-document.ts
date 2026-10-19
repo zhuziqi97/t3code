@@ -1,5 +1,5 @@
 import type { DeviceHubAccess } from "@t3tools/client-runtime/device/hub-access";
-import type { PreviewStreamHostSetup } from "@t3tools/contracts";
+import type { PreviewStreamHostSetup, PreviewStreamStatus } from "@t3tools/contracts";
 import type {
   PreviewStreamControl,
   PreviewStreamDownload,
@@ -24,6 +24,8 @@ export type PreviewStreamMessage =
       readonly detail?: string;
     }
   | { readonly type: "unauthorized" }
+  | { readonly type: "connectionFailure" }
+  | { readonly type: "readiness"; readonly status: PreviewStreamStatus }
   | { readonly type: "gone" }
   | ({ readonly type: "hostSetup" } & PreviewStreamHostSetup)
   | { readonly type: "viewport"; readonly width: number; readonly height: number }

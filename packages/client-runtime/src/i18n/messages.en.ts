@@ -3847,6 +3847,13 @@ export const en = {
   "browser.accept": "Accept",
   "browser.controlToRespond": "Take control to respond.",
   "browser.refused": "Browser connection was refused.",
+  "browser.preparing": "Preparing browser…",
+  "browser.installing": "Installing the browser component. Try again shortly.",
+  "browser.unpacking": "Unpacking the browser component. Try again shortly.",
+  "browser.connectionFailed": "Could not connect to the browser.",
+  "browser.launchFailed": "The browser could not start.",
+  "browser.installFailed": "The browser component could not be installed.",
+  "browser.unsupportedHost": "The browser is unavailable on this host.",
   "browser.reconnect": "Reconnect",
   "browser.empty": "No preview yet",
   "browser.emptyHint":

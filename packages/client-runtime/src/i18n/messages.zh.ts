@@ -3634,6 +3634,13 @@ export const zh: Partial<Messages> = {
   "browser.accept": "确认",
   "browser.controlToRespond": "取得控制权后即可回复。",
   "browser.refused": "浏览器连接被拒绝。",
+  "browser.preparing": "正在准备浏览器…",
+  "browser.installing": "正在安装浏览器组件，请稍后重试。",
+  "browser.unpacking": "正在解压浏览器组件，请稍后重试。",
+  "browser.connectionFailed": "无法连接到浏览器。",
+  "browser.launchFailed": "浏览器无法启动。",
+  "browser.installFailed": "浏览器组件安装失败。",
+  "browser.unsupportedHost": "此执行主机暂不支持浏览器。",
   "browser.reconnect": "重新连接",
   "browser.empty": "尚无预览",
   "browser.emptyHint":

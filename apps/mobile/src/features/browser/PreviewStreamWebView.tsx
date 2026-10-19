@@ -2,6 +2,7 @@ import previewStreamScript from "@t3tools/mobile-preview-stream";
 import {
   previewStreamControlLabel,
   previewStreamHostSetupMessage,
+  previewStreamStatusMessage,
   type PreviewStreamControl,
   type PreviewStreamDownload,
   type PreviewStreamFileChooser,
@@ -253,6 +254,7 @@ function PreviewStreamDocumentView({
   const failed = useRef(false);
   const [status, setStatus] = useState<"connecting" | "streaming" | "error">("connecting");
   const [error, setError] = useState<string | null>(null);
+  const [preparing, setPreparing] = useState(false);
   const [gone, setGone] = useState(false);
   const [hostSetup, setHostSetup] = useState<PreviewStreamHostSetup | null>(null);
   const [started, setStarted] = useState(false);
@@ -381,6 +383,17 @@ function PreviewStreamDocumentView({
               onControl?.(message);
               return;
             }
+            case "readiness":
+              setStarted(true);
+              setPreparing(message.status.state === "preparing");
+              if (message.status.state === "failed" || message.status.state === "installing") {
+                fail(previewStreamStatusMessage(message.status));
+              }
+              return;
+            case "connectionFailure":
+              if (!onUnauthorized())
+                fail("Could not connect to the browser. Reconnect to try again.");
+              return;
             case "unauthorized":
               if (!onUnauthorized()) {
                 fail("This session can't open the browser stream. Reconnect to try again.");
@@ -507,7 +520,11 @@ function PreviewStreamDocumentView({
               accessibilityLiveRegion="polite"
               className="text-center text-sm text-foreground-muted"
             >
-              {status === "error" ? error : "Connecting to browser..."}
+              {status === "error"
+                ? error
+                : preparing
+                  ? previewStreamStatusMessage({ state: "preparing" })
+                  : "Connecting to browser..."}
             </AppText>
           )}
           {status === "error" && hostSetup && !compact ? (

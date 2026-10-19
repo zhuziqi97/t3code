@@ -235,6 +235,8 @@ export function start(configuration: PreviewStreamConfiguration) {
           }
         },
         onUnauthorized: () => post({ type: "unauthorized" }),
+        onConnectionFailure: () => post({ type: "connectionFailure" }),
+        onStatus: (status) => post({ type: "readiness", status }),
         onGone: () => post({ type: "gone" }),
         onHostSetup: (setup) => post({ type: "hostSetup", ...setup }),
       },
