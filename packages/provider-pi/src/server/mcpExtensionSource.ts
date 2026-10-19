@@ -170,6 +170,7 @@ function isMcpToolError(result: unknown): boolean {
 function createMcpClient(endpoint: string, authorization: string) {
   let nextId = 1;
   let sessionId: string | undefined;
+  let protocolVersion = PROTOCOL;
 
   const headers = (): Record<string, string> => {
     const next: Record<string, string> = {
@@ -179,7 +180,7 @@ function createMcpClient(endpoint: string, authorization: string) {
       // Effect's HTTP MCP rejects post-initialize requests without this
       // (400). The worktree client in McpHttpServer tests sends the same
       // header; initialize itself does not require it.
-      "mcp-protocol-version": PROTOCOL,
+      "mcp-protocol-version": protocolVersion,
     };
     if (sessionId !== undefined) next["mcp-session-id"] = sessionId;
     return next;
@@ -216,9 +217,18 @@ function createMcpClient(endpoint: string, authorization: string) {
     });
   };
 
+  const disconnect = async (signal?: AbortSignal) => {
+    if (sessionId === undefined) return;
+    const previousHeaders = headers();
+    sessionId = undefined;
+    await fetch(endpoint, { method: "DELETE", headers: previousHeaders, signal: signal ?? AbortSignal.timeout(5_000) });
+  };
+
   return {
     async connect(signal?: AbortSignal) {
-      await request(
+      await disconnect(signal).catch(() => undefined);
+      protocolVersion = PROTOCOL;
+      const initialized = await request(
         "initialize",
         {
           protocolVersion: PROTOCOL,
@@ -227,6 +237,9 @@ function createMcpClient(endpoint: string, authorization: string) {
         },
         signal,
       );
+      if (typeof initialized === "object" && initialized !== null && !Array.isArray(initialized) && typeof initialized.protocolVersion === "string") {
+        protocolVersion = initialized.protocolVersion;
+      }
       await notify("notifications/initialized", {}, signal).catch(() => undefined);
     },
     async listTools(signal?: AbortSignal) {
@@ -246,11 +259,7 @@ function createMcpClient(endpoint: string, authorization: string) {
     async callTool(name: string, args: Record<string, unknown>, signal?: AbortSignal) {
       return request("tools/call", { name, arguments: args }, signal);
     },
-    async disconnect() {
-      if (sessionId === undefined) return;
-      await fetch(endpoint, { method: "DELETE", headers: headers(), signal: AbortSignal.timeout(5_000) });
-      sessionId = undefined;
-    },
+    disconnect,
   };
 }
 

@@ -4,17 +4,60 @@ import { assert, describe, expect, it } from "@effect/vitest";
 import { loadMcpBridge } from "./mcpBridge.testkit.ts";
 
 describe("Pi project MCP HTTP bridge", () => {
+  it("retries a failed catalog with a fresh protocol session", async () => {
+    let initializations = 0;
+    const closed: string[] = [];
+    const fixtureFetch: typeof fetch = async (_input, init) => {
+      const headers = init?.headers as Record<string, string>;
+      if (init?.method === "DELETE") {
+        closed.push(headers["mcp-session-id"]!);
+        return new Response(null, { status: 204 });
+      }
+      const message = JSON.parse(String(init?.body)) as { id?: number; method: string };
+      if (message.method === "initialize") {
+        if (headers["mcp-session-id"] !== undefined)
+          return new Response("Expired session", { status: 404 });
+        initializations += 1;
+        return Response.json(
+          { jsonrpc: "2.0", id: message.id, result: { protocolVersion: "2025-03-26" } },
+          { headers: { "mcp-session-id": `session-${initializations}` } },
+        );
+      }
+      if (message.method === "tools/list" && initializations === 1)
+        return new Response("Catalog unavailable", { status: 503 });
+      return Response.json({
+        jsonrpc: "2.0",
+        id: message.id,
+        result:
+          message.method === "tools/list"
+            ? { tools: [{ name: "read", inputSchema: { type: "object" } }] }
+            : { content: [{ type: "text", text: "recovered" }] },
+      });
+    };
+    const bridge = await loadMcpBridge({ fetch: fixtureFetch });
+    assert.equal(bridge.tools.length, 0);
+    await bridge.handlers.get("session_start")!(
+      { systemPrompt: "" },
+      { ui: { notify: assert.fail } },
+    );
+    assert.equal(initializations, 2);
+    assert.deepEqual(closed, ["session-1"]);
+    assert.equal((await bridge.tools[0]!.execute("recovered", {})).content[0]?.text, "recovered");
+  });
+
   it.each([false, true])(
     "routes identical tools with independent credentials and sessions, modern=%s",
     async (modern) => {
       const requests: Array<{ path: string; method: string; session?: string }> = [];
       const server = NodeHttp.createServer(async (request, response) => {
         const path = request.url!;
+        const protocolVersion = path === "/builtin" ? "2025-06-18" : "2025-03-26";
         assert.equal(
           request.headers.authorization,
           path === "/builtin" ? "Bearer builtin" : "Token project",
         );
         if (request.method === "DELETE") {
+          assert.equal(request.headers["mcp-protocol-version"], protocolVersion);
           requests.push({
             path,
             method: "DELETE",
@@ -35,6 +78,13 @@ describe("Pi project MCP HTTP bridge", () => {
           method: message.method,
           ...(session === undefined ? {} : { session }),
         });
+        if (
+          message.method !== "initialize" &&
+          request.headers["mcp-protocol-version"] !== protocolVersion
+        ) {
+          response.writeHead(400).end("Wrong negotiated MCP protocol version");
+          return;
+        }
         if (message.method !== "initialize") assert.equal(session, `session${path}`);
         if (message.id === undefined) {
           response.writeHead(202).end();
@@ -54,7 +104,7 @@ describe("Pi project MCP HTTP bridge", () => {
             : message.method === "tools/call"
               ? { content: [{ type: "text", text: path }] }
               : {
-                  protocolVersion: "2025-06-18",
+                  protocolVersion,
                   capabilities: {},
                   serverInfo: { name: path, version: "1" },
                 };
@@ -84,6 +134,7 @@ describe("Pi project MCP HTTP bridge", () => {
         });
         const builtin = bridge.tools.find((tool) => tool.name === "mcp__t3-code__read")!;
         const project = bridge.tools.find((tool) => tool.name === "mcp__convene__read")!;
+        assert.isDefined(project, "The project catalog must use its negotiated protocol version");
         assert.equal(builtin.exposure, modern ? "deferred" : undefined);
         assert.equal(project.exposure, modern ? "deferred" : undefined);
         assert.equal((await builtin.execute("builtin-read", {})).content[0]?.text, "/builtin");
