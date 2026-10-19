@@ -135,6 +135,9 @@ export function useNewThreadHandler() {
           candidate.id === projectRef.projectId &&
           candidate.environmentId === projectRef.environmentId,
       );
+      if (project === undefined) {
+        return Promise.reject(new Error("This project is no longer available."));
+      }
       // Removal can land while the project file is read; a draft opened
       // after that belongs to a project that no longer exists.
       const abandonedSinceRequest = () =>
@@ -213,6 +216,39 @@ export function useNewThreadHandler() {
         !composerDraftHasUserContent(getComposerDraft(reusableStoredDraftThread.draftId))
           ? reusableStoredDraftThread
           : null;
+      // The index landing and desktop activation can open the first project
+      // together. If the other request already opened our draft, acknowledge
+      // it without resetting its context or navigating again.
+      const openedConcurrentDraft = async () => {
+        if (
+          hasBranchOption ||
+          hasWorktreePathOption ||
+          hasEnvModeOption ||
+          hasStartFromOriginOption ||
+          readProject(projectRef) === null
+        ) {
+          return null;
+        }
+        // The location changes before lazy route loading commits its params.
+        await router.latestLoadPromise;
+        const routeTargetNow = getCurrentRouteTarget();
+        const draft = getDraftSessionByLogicalProjectKey(logicalProjectKey);
+        if (
+          routeTargetNow?.kind !== "draft" ||
+          draft === null ||
+          routeTargetNow.draftId !== draft.draftId ||
+          router.state.location.pathname !== `/draft/${draft.draftId}` ||
+          draft.environmentId !== projectRef.environmentId ||
+          draft.projectId !== projectRef.projectId ||
+          readProject(projectRef) === null ||
+          draft.promotedTo != null ||
+          readThreadShell(scopeThreadRef(draft.environmentId, draft.threadId)) !== null ||
+          (draft.draftId === storedDraftThread?.draftId && emptyStoredDraftThread === null)
+        ) {
+          return null;
+        }
+        return { draftId: draft.draftId, threadId: draft.threadId };
+      };
       const latestActiveDraftThread: DraftThreadState | null = currentRouteTarget
         ? currentRouteTarget.kind === "server"
           ? getDraftThread(currentRouteTarget.threadRef)
@@ -243,7 +279,7 @@ export function useNewThreadHandler() {
           } else if (!isDraftAlreadyOpen) {
             const defaultEnvMode = await resolveDefaultEnvMode();
             if (abandonedSinceRequest()) {
-              return null;
+              return openedConcurrentDraft();
             }
             // The await yields. If the draft was opened (a concurrent
             // invocation's navigation landed), promoted to a real thread,
@@ -267,7 +303,7 @@ export function useNewThreadHandler() {
               getComposerDraft(emptyStoredDraftThread.draftId),
             );
             if (openedMeanwhile || promotedMeanwhile || remappedMeanwhile || investedMeanwhile) {
-              return null;
+              return openedMeanwhile ? openedConcurrentDraft() : null;
             }
             workspaceContext = {
               branch: null,
@@ -382,7 +418,7 @@ export function useNewThreadHandler() {
       return (async () => {
         const initialEnvMode = options?.envMode ?? (await resolveDefaultEnvMode());
         if (abandonedSinceRequest()) {
-          return null;
+          return openedConcurrentDraft();
         }
         // The await yields, so a concurrent invocation may have registered a
         // draft for this logical project in the meantime. Registering ours
