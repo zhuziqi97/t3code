@@ -866,8 +866,10 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
     t3McpServerName(threadId).pipe(Effect.provideService(Crypto.Crypto, crypto));
   // Keep every contribution inside the existing thread-scoped namespace: the
   // directory registry is shared, and the session rules deny other threads.
+  // Put the contribution first so the built-in server's wildcard cannot also
+  // allow it after its own permission is removed.
   const mcpNameFor = (threadId: string, name: string) =>
-    mcpServerNameFor(name === "t3-code" ? threadId : `${threadId}:${name}`);
+    mcpServerNameFor(name === "t3-code" ? threadId : `${name}:${threadId}`);
   const mcpNamesFor = Effect.fnUntraced(function* (threadId: ThreadId) {
     const session = yield* mcpSessions.read(threadId);
     return yield* Effect.forEach(
@@ -3427,6 +3429,12 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
       // T3's tools are an addition: a server that cannot add them still runs the turn.
       // Re-register each turn: OpenCode may evict an idle directory's registry.
       for (const contribution of wanted) {
+        // The runtime may apply the config before the response fails or is
+        // cancelled. Keep cleanup ownership for every attempted registration.
+        state.mcp = [
+          ...state.mcp.filter((entry) => entry.name !== contribution.name),
+          contribution,
+        ];
         const added = yield* client.mcp
           .add({
             server: contribution.name,
@@ -3447,13 +3455,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
               }).pipe(Effect.as(false)),
             ),
           );
-        if (added) {
-          state.mcp = [
-            ...state.mcp.filter((entry) => entry.name !== contribution.name),
-            contribution,
-          ];
-          if (contribution.key === "t3-code") hasT3Mcp = true;
-        }
+        if (added && contribution.key === "t3-code") hasT3Mcp = true;
       }
       const instructions = [
         buildRuntimeInstructions({ harness: "OpenCode", model: turnInput.modelSelection.model }),

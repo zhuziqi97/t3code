@@ -3476,7 +3476,7 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
         yield* setGrant("first");
         yield* Effect.addFinalizer(() => sessions.clear(threadId));
         const builtin = "t3-code-thread_opencode2-adapter";
-        const project = "t3-code-thread_opencode2-adapter_convene";
+        const project = "t3-code-convene_thread_opencode2-adapter";
         const permissions = [
           ...t3Rules,
           { action: `${project}_*`, resource: "*", effect: "allow" },
@@ -3540,64 +3540,72 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
       }).pipe(Effect.scoped),
   );
 
-  it.effect("continues the turn when an optional project MCP registration is rejected", () =>
-    Effect.gen(function* () {
-      const sessions = yield* McpProviderSessions.McpProviderSessions;
-      yield* sessions.set({
-        environmentId: EnvironmentId.make("opencode2-failed-project"),
-        threadId,
-        providerSessionId: "opencode2-project-failure",
-        providerInstanceId: instanceId,
-        endpoint: "http://builtin.invalid/mcp",
-        authorizationHeader: "Bearer builtin",
-        browserToolsAvailable: false,
-        additionalServers: {
-          convene: {
-            endpoint: "http://project.invalid/mcp",
-            authorizationHeader: "Bearer project",
+  it.effect(
+    "continues the turn and cleans attempted project MCP registrations after an add error",
+    () =>
+      Effect.gen(function* () {
+        const sessions = yield* McpProviderSessions.McpProviderSessions;
+        yield* sessions.set({
+          environmentId: EnvironmentId.make("opencode2-failed-project"),
+          threadId,
+          providerSessionId: "opencode2-project-failure",
+          providerInstanceId: instanceId,
+          endpoint: "http://builtin.invalid/mcp",
+          authorizationHeader: "Bearer builtin",
+          browserToolsAvailable: false,
+          additionalServers: {
+            convene: {
+              endpoint: "http://project.invalid/mcp",
+              authorizationHeader: "Bearer project",
+            },
           },
-        },
-      });
-      yield* Effect.addFinalizer(() => sessions.clear(threadId));
-      const builtin = "t3-code-thread_opencode2-adapter";
-      const project = "t3-code-thread_opencode2-adapter_convene";
-      const { runtime, thread } = yield* resumed(
-        [
-          out("mcp.add", {
-            server: builtin,
-            "location[directory]": WORK,
-            config: {
-              type: "remote",
-              url: "http://builtin.invalid/mcp",
-              headers: { Authorization: "Bearer builtin" },
-              oauth: false,
-            },
-          }),
-          reply("mcp.add", null),
-          out("mcp.add", {
-            server: project,
-            "location[directory]": WORK,
-            config: {
-              type: "remote",
-              url: "http://project.invalid/mcp",
-              headers: { Authorization: "Bearer project" },
-              oauth: false,
-            },
-          }),
-          reply("mcp.add", { status: 401, body: { message: "Unauthorized" } }),
-          out("session.prompt", { sessionID: SESSION, text: "<any>" }),
-          promptAccepted,
-          event("session.execution.succeeded", { sessionID: SESSION }),
-          out("mcp.remove", { server: builtin, "location[directory]": WORK }),
-          reply("mcp.remove", null),
-        ],
-        { permissions: [...t3Rules, { action: `${project}_*`, resource: "*", effect: "allow" }] },
-      );
-      const terminal = yield* terminalOf(runtime).pipe(Effect.forkScoped);
-      yield* runtime.startTurn(turnInput(thread));
-      assert.equal((yield* Fiber.join(terminal))?.status, "completed");
-      yield* runtime.unloadThread!({ providerThread: thread });
-    }).pipe(Effect.scoped),
+        });
+        yield* Effect.addFinalizer(() => sessions.clear(threadId));
+        const builtin = "t3-code-thread_opencode2-adapter";
+        const project = "t3-code-convene_thread_opencode2-adapter";
+        const { runtime, thread } = yield* resumed(
+          [
+            out("mcp.add", {
+              server: builtin,
+              "location[directory]": WORK,
+              config: {
+                type: "remote",
+                url: "http://builtin.invalid/mcp",
+                headers: { Authorization: "Bearer builtin" },
+                oauth: false,
+              },
+            }),
+            reply("mcp.add", null),
+            out("mcp.add", {
+              server: project,
+              "location[directory]": WORK,
+              config: {
+                type: "remote",
+                url: "http://project.invalid/mcp",
+                headers: { Authorization: "Bearer project" },
+                oauth: false,
+              },
+            }),
+            // The server may have installed the config before its response failed.
+            reply("mcp.add", {
+              status: 500,
+              body: { message: "Connection failed after registration" },
+            }),
+            out("session.prompt", { sessionID: SESSION, text: "<any>" }),
+            promptAccepted,
+            event("session.execution.succeeded", { sessionID: SESSION }),
+            out("mcp.remove", { server: builtin, "location[directory]": WORK }),
+            reply("mcp.remove", null),
+            out("mcp.remove", { server: project, "location[directory]": WORK }),
+            reply("mcp.remove", null),
+          ],
+          { permissions: [...t3Rules, { action: `${project}_*`, resource: "*", effect: "allow" }] },
+        );
+        const terminal = yield* terminalOf(runtime).pipe(Effect.forkScoped);
+        yield* runtime.startTurn(turnInput(thread));
+        assert.equal((yield* Fiber.join(terminal))?.status, "completed");
+        yield* runtime.unloadThread!({ providerThread: thread });
+      }).pipe(Effect.scoped),
   );
 
   it.effect("registers a long thread id's MCP server under a name OpenCode accepts", () =>
