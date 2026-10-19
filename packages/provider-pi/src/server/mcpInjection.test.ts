@@ -10,6 +10,7 @@ import {
   T3_MCP_URL_ENV,
   T3_PI_RUNTIME_MODE_ENV,
   T3_PI_MCP_EXTENSION_PATH_ENV,
+  T3_PI_MCP_SERVERS_ENV,
 } from "./mcpExtensionSource.ts";
 import {
   buildPiRpcLaunch,
@@ -27,6 +28,12 @@ const mcpSession = {
   endpoint: "http://127.0.0.1:43123/mcp",
   authorizationHeader: "Bearer secret-pi-token",
   browserToolsAvailable: true,
+  additionalServers: {
+    convene: {
+      endpoint: "http://project.invalid/mcp",
+      authorizationHeader: "Bearer project-pi-token",
+    },
+  },
 };
 
 describe("pi T3 MCP injection", () => {
@@ -65,6 +72,8 @@ describe("pi T3 MCP injection", () => {
     assert.notInclude(launch.args, "--no-extensions");
     assert.equal(launch.env[T3_MCP_URL_ENV], "http://127.0.0.1:43123/mcp");
     assert.equal(launch.env[T3_MCP_BEARER_ENV], "secret-pi-token");
+    assert.deepEqual(JSON.parse(launch.env[T3_PI_MCP_SERVERS_ENV]!), mcpSession.additionalServers);
+    assert.notInclude(launch.args.join(" "), "project-pi-token");
     assert.equal(launch.env[T3_PI_RUNTIME_MODE_ENV], "approval-required");
     assert.equal(launch.env[T3_PI_MCP_EXTENSION_PATH_ENV], "/tmp/cache/pi-t3-mcp-extension.ts");
 
@@ -74,6 +83,7 @@ describe("pi T3 MCP injection", () => {
         [T3_MCP_URL_ENV]: "http://127.0.0.1:9999/stale",
         [T3_MCP_BEARER_ENV]: "stale-token",
         [T3_PI_MCP_EXTENSION_PATH_ENV]: "/stale/extension.ts",
+        [T3_PI_MCP_SERVERS_ENV]: JSON.stringify(mcpSession.additionalServers),
       },
       mcpSession: undefined,
       extensionPath: "/tmp/cache/pi-t3-mcp-extension.ts",
@@ -88,6 +98,7 @@ describe("pi T3 MCP injection", () => {
     assert.isFalse(permissionOnly.hasT3Mcp);
     assert.isUndefined(permissionOnly.env[T3_MCP_URL_ENV]);
     assert.isUndefined(permissionOnly.env[T3_MCP_BEARER_ENV]);
+    assert.isUndefined(permissionOnly.env[T3_PI_MCP_SERVERS_ENV]);
     assert.equal(permissionOnly.env[T3_PI_RUNTIME_MODE_ENV], "auto-accept-edits");
     assert.equal(
       permissionOnly.env[T3_PI_MCP_EXTENSION_PATH_ENV],
@@ -168,8 +179,6 @@ describe("pi T3 MCP injection", () => {
       assert.include(mcpSource, "Allow ${event.toolName}?");
       assert.include(mcpSource, '"mcp-protocol-version"');
       assert.include(mcpSource, '"tools/call"');
-      assert.include(mcpSource, "mcp__t3-code__");
-      assert.include(mcpSource, "mcp__t3_code__");
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 });

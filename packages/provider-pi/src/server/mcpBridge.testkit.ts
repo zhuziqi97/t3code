@@ -44,6 +44,8 @@ export async function loadMcpBridge(
     readonly toolSearchDisabled?: boolean;
     readonly allowsTool?: (name: string) => boolean;
     readonly runtimeMode?: string;
+    readonly environment?: NodeJS.ProcessEnv;
+    readonly fetch?: typeof globalThis.fetch;
   } = {},
 ) {
   const handlers = new Map<string, AgentStartHook>();
@@ -88,37 +90,40 @@ export async function loadMcpBridge(
         T3_MCP_BEARER_TOKEN: "fixture-token",
         T3_PI_MCP_EXTENSION_PATH: "/fixture/pi-t3-extension.ts",
         T3_PI_RUNTIME_MODE: options.runtimeMode,
+        ...options.environment,
       },
     },
     AbortSignal,
     NodePath,
     Type: { Unsafe: (schema: unknown) => schema },
-    fetch: async (
-      url: string,
-      transport: { body: string; headers: Record<string, string>; signal?: AbortSignal },
-    ) => {
-      transport.signal?.throwIfAborted();
-      transports.push({
-        url,
-        authorization: transport.headers.authorization!,
-        signal: transport.signal,
-      });
-      const request = JSON.parse(transport.body) as {
-        id: number;
-        method: string;
-        params?: unknown;
-      };
-      requests.push(request);
-      const result =
-        request.method === "tools/list"
-          ? { tools: catalog }
-          : request.method === "tools/call"
-            ? (options.result ?? { content: [{ type: "text", text: "browser snapshot" }] })
-            : {};
-      return new Response(JSON.stringify({ jsonrpc: "2.0", id: request.id, result }), {
-        headers: { "content-type": "application/json" },
-      });
-    },
+    fetch:
+      options.fetch ??
+      (async (
+        url: string,
+        transport: { body: string; headers: Record<string, string>; signal?: AbortSignal },
+      ) => {
+        transport.signal?.throwIfAborted();
+        transports.push({
+          url,
+          authorization: transport.headers.authorization!,
+          signal: transport.signal,
+        });
+        const request = JSON.parse(transport.body) as {
+          id: number;
+          method: string;
+          params?: unknown;
+        };
+        requests.push(request);
+        const result =
+          request.method === "tools/list"
+            ? { tools: catalog }
+            : request.method === "tools/call"
+              ? (options.result ?? { content: [{ type: "text", text: "browser snapshot" }] })
+              : {};
+        return new Response(JSON.stringify({ jsonrpc: "2.0", id: request.id, result }), {
+          headers: { "content-type": "application/json" },
+        });
+      }),
     pi: {
       on: (name: string, handler: AgentStartHook) => handlers.set(name, handler),
       registerTool: (tool: RegisteredTool) => {
