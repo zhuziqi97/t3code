@@ -16,6 +16,7 @@ import { connectCommand } from "./cli/connect.ts";
 import { pairCommand } from "./cli/pair.ts";
 import { conveneCommand } from "./cli/convene.ts";
 import { hasCloudPublicConfig } from "./cloud/publicConfig.ts";
+import { keepOutboundFetchOnHttp1 } from "./outboundHttp.ts";
 import { sharedServerCommandFlags } from "./cli/config.ts";
 import { projectCommand } from "./cli/project.ts";
 import { runDefaultServerCommand, serveCommand, startCommand } from "./cli/server.ts";
@@ -97,6 +98,7 @@ export const cli = makeCli();
 declare const __T3CODE_CONVENE_VERSION__: string | undefined;
 
 export function runCli() {
+  keepOutboundFetchOnHttp1();
   const version =
     typeof __T3CODE_CONVENE_VERSION__ === "string"
       ? __T3CODE_CONVENE_VERSION__

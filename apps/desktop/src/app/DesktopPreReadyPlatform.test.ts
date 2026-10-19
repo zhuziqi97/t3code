@@ -175,7 +175,7 @@ describe("DesktopPreReadyPlatform", () => {
         const identity = yield* Effect.promise(() => portalIdentity);
         assert.equal(identity.desktopName, "tech.ziqi.t3code-convene.desktop");
         assert.include(identity.desktopEntry ?? "", 'Exec="/Applications/current.AppImage" %U');
-        assert.include(identity.desktopEntry ?? "", "Name=T3 Code for Convene (Alpha)");
+        assert.include(identity.desktopEntry ?? "", "Name=T3 Code for Convene (Beta)");
         assert.include(identity.desktopEntry ?? "", "MimeType=x-scheme-handler/t3code-convene;");
         assert.include(
           identity.desktopEntry ?? "",

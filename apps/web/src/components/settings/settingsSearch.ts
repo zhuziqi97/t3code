@@ -1206,6 +1206,16 @@ export const SETTINGS_SEARCH_ITEMS = [
     ],
   },
   {
+    id: "pull-request-links-open-in-app",
+    get title() {
+      return i18n.t("settings.search.pull-request-links-open-in-app.title");
+    },
+    to: "/settings/integrations",
+    searchTerms: [
+      "pr links github browser external click default pull request view panel PR 链接 打开 浏览器 应用内",
+    ],
+  },
+  {
     id: "browser-auto-show-floating-preview",
     get title() {
       return i18n.t("settings.search.browser-auto-show-floating-preview.title");

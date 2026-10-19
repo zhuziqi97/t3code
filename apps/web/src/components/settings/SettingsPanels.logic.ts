@@ -121,6 +121,7 @@ export type BrowserDefaultSettings = Pick<
   | "browserRecordingShowMousePresses"
   | "browserLinkTarget"
   | "browserAutoShowFloatingPreview"
+  | "pullRequestLinksOpenInApp"
 >;
 
 /**
@@ -171,6 +172,9 @@ export function getChangedBrowserSettingLabels(
     ...(settings.browserAutoShowFloatingPreview !==
     DEFAULT_UNIFIED_SETTINGS.browserAutoShowFloatingPreview
       ? [translate("restore.browserFloating")]
+      : []),
+    ...(settings.pullRequestLinksOpenInApp !== DEFAULT_UNIFIED_SETTINGS.pullRequestLinksOpenInApp
+      ? [translate("settings.search.pull-request-links-open-in-app.title")]
       : []),
   ];
 }

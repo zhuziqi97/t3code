@@ -850,6 +850,22 @@ describe("instance-scoped model selection", () => {
       ProviderInstanceId.make("acp_gemini"),
     );
   });
+  it("preserves a saved text generation model absent from the current catalog", () => {
+    const codex = provider({ instanceId: "codex", models: ["gpt-6-astra", "gpt-6-luna"] });
+    const providers = [
+      { ...codex, models: codex.models.map((m, i) => (i === 0 ? { ...m, isDefault: true } : m)) },
+    ];
+    const settings: UnifiedSettings = {
+      ...settingsWithProviderInstances(),
+      textGenerationModelSelection: createModelSelection(
+        ProviderInstanceId.make("codex"),
+        "gpt-5.6-luna",
+      ),
+    };
+
+    expect(resolveAppModelSelectionState(settings, providers).model).toBe("gpt-5.6-luna");
+  });
+
   it("does not select a provider that cannot generate system text", () => {
     const instanceId = ProviderInstanceId.make("antigravity");
     const unsupported = {

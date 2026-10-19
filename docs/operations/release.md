@@ -19,6 +19,11 @@ This is a build host dependency, not an application dependency. AppImages can be
 extracted with `--appimage-extract` when FUSE mounting is unavailable; run the
 extracted `t3code-convene` executable to use the same packaged application.
 
+Beta is the product label, not a release channel or version suffix. Release channels
+remain stable and nightly. To ship 0.1.0 Beta, use `channel=stable` and
+`version=0.1.0`. Removing the Beta label later is a branding change independent of
+the version.
+
 ## What the workflow does
 
 - Workflow: `.github/workflows/release.yml`

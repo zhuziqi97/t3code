@@ -253,6 +253,7 @@ describe("getChangedBrowserSettingLabels", () => {
           browserRecordingShowKeyPresses: true,
           browserRecordingShowMousePresses: true,
           browserLinkTarget: "app",
+          pullRequestLinksOpenInApp: false,
           browserAutoShowFloatingPreview: !DEFAULT_UNIFIED_SETTINGS.browserAutoShowFloatingPreview,
         },
         i18n.getFixedT("en"),
@@ -266,6 +267,7 @@ describe("getChangedBrowserSettingLabels", () => {
       "Recording mouse presses",
       "Open links in",
       "Floating preview",
+      "Open pull requests in T3 Code",
     ]);
   });
 });

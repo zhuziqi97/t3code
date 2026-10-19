@@ -544,146 +544,161 @@ export function useSettingsRestore(onRestored?: () => void) {
   );
   const isBackgroundActivityDirty = hasChangedBackgroundActivitySettings(settings);
 
-  const changedSettingLabels = [
-    ...(settings.languagePreference !== DEFAULT_UNIFIED_SETTINGS.languagePreference
-      ? [t("settings.language.title")]
-      : []),
-    ...(theme !== "system" ? [t("restore.theme")] : []),
-    ...(!followSystem ? [t("restore.followSystem")] : []),
-    ...(themeHalves !== null ? [t("restore.themeMix")] : []),
-    ...(settings.appearanceContrast !== DEFAULT_UNIFIED_SETTINGS.appearanceContrast
-      ? [t("settings.search.setting-appearance-contrast.title")]
-      : []),
-    ...(settings.glassOpacity !== DEFAULT_UNIFIED_SETTINGS.glassOpacity
-      ? [t("settings.search.setting-glass-opacity.title")]
-      : []),
-    ...(settings.diffColorScheme !== DEFAULT_UNIFIED_SETTINGS.diffColorScheme
-      ? [t("settings.search.diff-color-scheme.title")]
-      : []),
-    ...(settings.chatWidth !== DEFAULT_UNIFIED_SETTINGS.chatWidth
-      ? [t("settings.search.chat-width.title")]
-      : []),
-    ...(settings.panelAnimationDurationMs !== DEFAULT_UNIFIED_SETTINGS.panelAnimationDurationMs
-      ? [t("settings.search.panel-animations.title")]
-      : []),
-    ...(settings.environmentIdentificationMode !==
-    DEFAULT_UNIFIED_SETTINGS.environmentIdentificationMode
-      ? [t("settings.search.environment-identification.title")]
-      : []),
-    ...(settings.timestampFormat !== DEFAULT_UNIFIED_SETTINGS.timestampFormat
-      ? [t("settings.search.time-format.title")]
-      : []),
-    ...(settings.notificationMode !== DEFAULT_UNIFIED_SETTINGS.notificationMode
-      ? [t("settings.search.thread-notifications.title")]
-      : []),
-    ...(settings.inAppNotificationsEnabled !== DEFAULT_UNIFIED_SETTINGS.inAppNotificationsEnabled
-      ? [t("settings.search.in-app-notifications.title")]
-      : []),
-    ...(settings.sidebarThreadPreviewCount !== DEFAULT_UNIFIED_SETTINGS.sidebarThreadPreviewCount
-      ? [t("restore.visibleThreads")]
-      : []),
-    ...(settings.sidebarProjectGroupingMode !== DEFAULT_UNIFIED_SETTINGS.sidebarProjectGroupingMode
-      ? [t("settings.search.project-grouping.title")]
-      : []),
-    ...(settings.sidebarProjectSortOrder !== DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder
-      ? [t("settings.search.project-order.title")]
-      : []),
-    ...(settings.sidebarWorkingShelfEnabled !== DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled
-      ? [t("settings.search.working-shelf.title")]
-      : []),
-    ...(settings.sidebarAutoSettleAfterDays !== DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays
-      ? [t("settings.search.auto-settle-inactive-threads.title")]
-      : []),
-    ...(settings.sidebarAutoSettleOnMerge !== DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge
-      ? [t("settings.search.auto-settle-merged-threads.title")]
-      : []),
-    ...(settings.autoResumeLimitedThreads !== DEFAULT_UNIFIED_SETTINGS.autoResumeLimitedThreads
-      ? [t("settings.search.auto-resume-limited-threads.title")]
-      : []),
-    ...(settings.snoozeLimitedThreads !== DEFAULT_UNIFIED_SETTINGS.snoozeLimitedThreads
-      ? [t("settings.search.snooze-limited-threads.title")]
-      : []),
-    ...(settings.wordWrap !== DEFAULT_UNIFIED_SETTINGS.wordWrap
-      ? [t("settings.search.word-wrap.title")]
-      : []),
-    ...(settings.persistComposerContextStrip !==
-    DEFAULT_UNIFIED_SETTINGS.persistComposerContextStrip
-      ? [t("restore.composerContext")]
-      : []),
-    ...getChangedTypographySettingLabels(settings, t),
-    ...(settings.diffFilesCollapsed !== DEFAULT_UNIFIED_SETTINGS.diffFilesCollapsed
-      ? [t("settings.search.default-diff-file-state.title")]
-      : []),
-    ...(settings.diffIgnoreWhitespace !== DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace
-      ? [t("settings.search.hide-whitespace-changes.title")]
-      : []),
-    ...(settings.diffLayout !== DEFAULT_UNIFIED_SETTINGS.diffLayout
-      ? [t("settings.search.diff-layout.title")]
-      : []),
-    ...(settings.proactivePanelsEnabled !== DEFAULT_UNIFIED_SETTINGS.proactivePanelsEnabled
-      ? [t("settings.search.proactive-panels.title")]
-      : []),
-    ...(settings.showSkillsInSlashMenu !== DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu
-      ? [t("settings.search.skills-in-slash-menu.title")]
-      : []),
-    ...(settings.composerCollapseOnScroll !== DEFAULT_UNIFIED_SETTINGS.composerCollapseOnScroll
-      ? [t("settings.search.composer-collapse.title")]
-      : []),
-    ...(settings.composerRichTextEnabled !== DEFAULT_UNIFIED_SETTINGS.composerRichTextEnabled
-      ? [t("settings.search.composer-rich-text.title")]
-      : []),
-    ...(settings.sendShortcut !== DEFAULT_UNIFIED_SETTINGS.sendShortcut
-      ? [t("settings.search.send-shortcut.title")]
-      : []),
-    ...(settings.followUpBehavior !== DEFAULT_UNIFIED_SETTINGS.followUpBehavior
-      ? [t("settings.search.follow-up-behavior.title")]
-      : []),
-    ...(settings.contextWindowMeterEnabled !== DEFAULT_UNIFIED_SETTINGS.contextWindowMeterEnabled
-      ? [t("settings.search.legacy-context-window-indicator.title")]
-      : []),
-    ...(settings.responseStreamingMode !== DEFAULT_UNIFIED_SETTINGS.responseStreamingMode
-      ? [t("settings.search.response-streaming.title")]
-      : []),
-    ...(settings.enableProviderUpdateChecks !== DEFAULT_UNIFIED_SETTINGS.enableProviderUpdateChecks
-      ? [t("settings.search.provider-update-checks.title")]
-      : []),
-    ...(settings.continueThreadsAfterServerUpdate !==
-    DEFAULT_UNIFIED_SETTINGS.continueThreadsAfterServerUpdate
-      ? [t("settings.search.continue-threads-after-server-update.title")]
-      : []),
-    ...(isBackgroundActivityDirty ? [t("settings.search.background-activity.title")] : []),
-    ...(settings.defaultThreadEnvMode !== DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode
-      ? [t("settings.search.new-threads.title")]
-      : []),
-    ...(settings.newWorktreesStartFromOrigin !==
-    DEFAULT_UNIFIED_SETTINGS.newWorktreesStartFromOrigin
-      ? [t("settings.search.start-from-origin.title")]
-      : []),
-    ...(settings.addProjectBaseDirectory !== DEFAULT_UNIFIED_SETTINGS.addProjectBaseDirectory
-      ? [t("general.baseDirectory.label")]
-      : []),
-    ...(settings.confirmThreadUnpin !== DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin
-      ? [t("settings.search.unpin-confirmation.title")]
-      : []),
-    ...(settings.confirmThreadArchive !== DEFAULT_UNIFIED_SETTINGS.confirmThreadArchive
-      ? [t("settings.search.archive-confirmation.title")]
-      : []),
-    ...(settings.confirmThreadDelete !== DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete
-      ? [t("settings.search.delete-confirmation.title")]
-      : []),
-    ...(settings.confirmQuit !== DEFAULT_UNIFIED_SETTINGS.confirmQuit
-      ? [t("settings.search.quit-confirmation.title")]
-      : []),
-    ...(isTextGenerationModelDirty ? [t("settings.search.text-generation-model.title")] : []),
-    ...getChangedBrowserSettingLabels(settings, t),
-    ...(settings.enableAgentBrowserAccess !== DEFAULT_UNIFIED_SETTINGS.enableAgentBrowserAccess
-      ? [t("defaults.browser.title")]
-      : []),
-    ...(settings.sidebarAutoSettleKeepPullRequests !==
-    DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleKeepPullRequests
-      ? ["Keep threads with a PR"]
-      : []),
-  ];
+  const changedSettingLabels = useMemo(
+    () => [
+      ...(settings.languagePreference !== DEFAULT_UNIFIED_SETTINGS.languagePreference
+        ? [t("settings.language.title")]
+        : []),
+      ...(theme !== "system" ? [t("restore.theme")] : []),
+      ...(!followSystem ? [t("restore.followSystem")] : []),
+      ...(themeHalves !== null ? [t("restore.themeMix")] : []),
+      ...(settings.appearanceContrast !== DEFAULT_UNIFIED_SETTINGS.appearanceContrast
+        ? [t("settings.search.setting-appearance-contrast.title")]
+        : []),
+      ...(settings.glassOpacity !== DEFAULT_UNIFIED_SETTINGS.glassOpacity
+        ? [t("settings.search.setting-glass-opacity.title")]
+        : []),
+      ...(settings.diffColorScheme !== DEFAULT_UNIFIED_SETTINGS.diffColorScheme
+        ? [t("settings.search.diff-color-scheme.title")]
+        : []),
+      ...(settings.chatWidth !== DEFAULT_UNIFIED_SETTINGS.chatWidth
+        ? [t("settings.search.chat-width.title")]
+        : []),
+      ...(settings.panelAnimationDurationMs !== DEFAULT_UNIFIED_SETTINGS.panelAnimationDurationMs
+        ? [t("settings.search.panel-animations.title")]
+        : []),
+      ...(settings.environmentIdentificationMode !==
+      DEFAULT_UNIFIED_SETTINGS.environmentIdentificationMode
+        ? [t("settings.search.environment-identification.title")]
+        : []),
+      ...(settings.timestampFormat !== DEFAULT_UNIFIED_SETTINGS.timestampFormat
+        ? [t("settings.search.time-format.title")]
+        : []),
+      ...(settings.notificationMode !== DEFAULT_UNIFIED_SETTINGS.notificationMode
+        ? [t("settings.search.thread-notifications.title")]
+        : []),
+      ...(settings.inAppNotificationsEnabled !== DEFAULT_UNIFIED_SETTINGS.inAppNotificationsEnabled
+        ? [t("settings.search.in-app-notifications.title")]
+        : []),
+      ...(settings.sidebarThreadPreviewCount !== DEFAULT_UNIFIED_SETTINGS.sidebarThreadPreviewCount
+        ? [t("restore.visibleThreads")]
+        : []),
+      ...(settings.sidebarProjectGroupingMode !==
+      DEFAULT_UNIFIED_SETTINGS.sidebarProjectGroupingMode
+        ? [t("settings.search.project-grouping.title")]
+        : []),
+      ...(settings.sidebarProjectSortOrder !== DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder
+        ? [t("settings.search.project-order.title")]
+        : []),
+      ...(settings.sidebarWorkingShelfEnabled !==
+      DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled
+        ? [t("settings.search.working-shelf.title")]
+        : []),
+      ...(settings.sidebarAutoSettleAfterDays !==
+      DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays
+        ? [t("settings.search.auto-settle-inactive-threads.title")]
+        : []),
+      ...(settings.sidebarAutoSettleOnMerge !== DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge
+        ? [t("settings.search.auto-settle-merged-threads.title")]
+        : []),
+      ...(settings.autoResumeLimitedThreads !== DEFAULT_UNIFIED_SETTINGS.autoResumeLimitedThreads
+        ? [t("settings.search.auto-resume-limited-threads.title")]
+        : []),
+      ...(settings.snoozeLimitedThreads !== DEFAULT_UNIFIED_SETTINGS.snoozeLimitedThreads
+        ? [t("settings.search.snooze-limited-threads.title")]
+        : []),
+      ...(settings.wordWrap !== DEFAULT_UNIFIED_SETTINGS.wordWrap
+        ? [t("settings.search.word-wrap.title")]
+        : []),
+      ...(settings.persistComposerContextStrip !==
+      DEFAULT_UNIFIED_SETTINGS.persistComposerContextStrip
+        ? [t("restore.composerContext")]
+        : []),
+      ...getChangedTypographySettingLabels(settings, t),
+      ...(settings.diffFilesCollapsed !== DEFAULT_UNIFIED_SETTINGS.diffFilesCollapsed
+        ? [t("settings.search.default-diff-file-state.title")]
+        : []),
+      ...(settings.diffIgnoreWhitespace !== DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace
+        ? [t("settings.search.hide-whitespace-changes.title")]
+        : []),
+      ...(settings.diffLayout !== DEFAULT_UNIFIED_SETTINGS.diffLayout
+        ? [t("settings.search.diff-layout.title")]
+        : []),
+      ...(settings.proactivePanelsEnabled !== DEFAULT_UNIFIED_SETTINGS.proactivePanelsEnabled
+        ? [t("settings.search.proactive-panels.title")]
+        : []),
+      ...(settings.showSkillsInSlashMenu !== DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu
+        ? [t("settings.search.skills-in-slash-menu.title")]
+        : []),
+      ...(settings.composerCollapseOnScroll !== DEFAULT_UNIFIED_SETTINGS.composerCollapseOnScroll
+        ? [t("settings.search.composer-collapse.title")]
+        : []),
+      ...(settings.composerRichTextEnabled !== DEFAULT_UNIFIED_SETTINGS.composerRichTextEnabled
+        ? [t("settings.search.composer-rich-text.title")]
+        : []),
+      ...(settings.sendShortcut !== DEFAULT_UNIFIED_SETTINGS.sendShortcut
+        ? [t("settings.search.send-shortcut.title")]
+        : []),
+      ...(settings.followUpBehavior !== DEFAULT_UNIFIED_SETTINGS.followUpBehavior
+        ? [t("settings.search.follow-up-behavior.title")]
+        : []),
+      ...(settings.contextWindowMeterEnabled !== DEFAULT_UNIFIED_SETTINGS.contextWindowMeterEnabled
+        ? [t("settings.search.legacy-context-window-indicator.title")]
+        : []),
+      ...(settings.responseStreamingMode !== DEFAULT_UNIFIED_SETTINGS.responseStreamingMode
+        ? [t("settings.search.response-streaming.title")]
+        : []),
+      ...(settings.enableProviderUpdateChecks !==
+      DEFAULT_UNIFIED_SETTINGS.enableProviderUpdateChecks
+        ? [t("settings.search.provider-update-checks.title")]
+        : []),
+      ...(settings.continueThreadsAfterServerUpdate !==
+      DEFAULT_UNIFIED_SETTINGS.continueThreadsAfterServerUpdate
+        ? [t("settings.search.continue-threads-after-server-update.title")]
+        : []),
+      ...(isBackgroundActivityDirty ? [t("settings.search.background-activity.title")] : []),
+      ...(settings.defaultThreadEnvMode !== DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode
+        ? [t("settings.search.new-threads.title")]
+        : []),
+      ...(settings.newWorktreesStartFromOrigin !==
+      DEFAULT_UNIFIED_SETTINGS.newWorktreesStartFromOrigin
+        ? [t("settings.search.start-from-origin.title")]
+        : []),
+      ...(settings.addProjectBaseDirectory !== DEFAULT_UNIFIED_SETTINGS.addProjectBaseDirectory
+        ? [t("general.baseDirectory.label")]
+        : []),
+      ...(settings.confirmThreadUnpin !== DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin
+        ? [t("settings.search.unpin-confirmation.title")]
+        : []),
+      ...(settings.confirmThreadArchive !== DEFAULT_UNIFIED_SETTINGS.confirmThreadArchive
+        ? [t("settings.search.archive-confirmation.title")]
+        : []),
+      ...(settings.confirmThreadDelete !== DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete
+        ? [t("settings.search.delete-confirmation.title")]
+        : []),
+      ...(settings.confirmQuit !== DEFAULT_UNIFIED_SETTINGS.confirmQuit
+        ? [t("settings.search.quit-confirmation.title")]
+        : []),
+      ...(isTextGenerationModelDirty ? [t("settings.search.text-generation-model.title")] : []),
+      ...getChangedBrowserSettingLabels(settings, t),
+      ...(settings.enableAgentBrowserAccess !== DEFAULT_UNIFIED_SETTINGS.enableAgentBrowserAccess
+        ? [t("defaults.browser.title")]
+        : []),
+      ...(settings.sidebarAutoSettleKeepPullRequests !==
+      DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleKeepPullRequests
+        ? ["Keep threads with a PR"]
+        : []),
+    ],
+    [
+      settings,
+      theme,
+      followSystem,
+      themeHalves,
+      isTextGenerationModelDirty,
+      isBackgroundActivityDirty,
+      t,
+    ],
+  );
 
   const restoreDefaults = useCallback(async () => {
     if (changedSettingLabels.length === 0) return;
@@ -810,6 +825,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       browserRecordingShowMousePresses: DEFAULT_UNIFIED_SETTINGS.browserRecordingShowMousePresses,
       browserLinkTarget: DEFAULT_UNIFIED_SETTINGS.browserLinkTarget,
       browserAutoShowFloatingPreview: DEFAULT_UNIFIED_SETTINGS.browserAutoShowFloatingPreview,
+      pullRequestLinksOpenInApp: DEFAULT_UNIFIED_SETTINGS.pullRequestLinksOpenInApp,
       // Re-granted like any other default. The confirmation dialog lists it by
       // name, so a user restoring defaults is told the agent regains access
       // rather than discovering it later.

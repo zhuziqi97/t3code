@@ -1,3 +1,5 @@
+import { i18n } from "~/i18n";
+import type { TFunction } from "i18next";
 import type { ServerUpdateState } from "@t3tools/client-runtime/state/server";
 import type { EnvironmentId, ServerConfig } from "@t3tools/contracts";
 import { cliReleaseChannelOf } from "@t3tools/shared/cliRelease";
@@ -186,17 +188,35 @@ export interface UpdateRunMachine {
   readonly environmentId: EnvironmentId;
   readonly label: string;
   readonly updatesProviders: boolean;
-  readonly updatesServer: boolean;
+  /** The server update this machine runs, kept so a failure can be retried.
+      Null for a provider-only machine, or a server this app handed off before
+      it relaunched. */
+  readonly server: ServerUpdateTarget | null;
+  /** The version a handed-off server comes back on. This app relaunched while
+      that server restarted, so its version is the only signal left. */
+  readonly handedOffVersion: string | null;
+  /** When its current update started, for the elapsed time. */
+  readonly startedAt: number;
   /** Set when every update for this machine has finished. */
   readonly result: "done" | "failed" | null;
+  /** Why it failed, when `result` is "failed". */
+  readonly failure: string | null;
+  /** This machine's provider failure, kept apart so a server retry does not clear it. */
+  readonly providerFailure: string | null;
 }
 
-/** A running "update everything" pass, kept while it runs. */
+/**
+ * A running "update everything" pass, kept until every machine finished. A
+ * failed machine keeps it open, so the sidebar can offer a retry.
+ */
 export interface UpdateEverythingRun {
-  /** The version this app installs last, or null when it does not install. */
+  /** The version this app installs, or null when it does not install (or the
+      user chose to restart later). */
   readonly localVersion: string | null;
-  /** Providers update first. Servers update after every provider finished. */
-  readonly phase: "providers" | "servers" | "installing";
+  /** Providers update first, then servers. "countdown" waits `restartAt` to
+      relaunch this app, which can still be postponed. */
+  readonly phase: "providers" | "servers" | "countdown" | "installing";
+  readonly restartAt: number | null;
   readonly machines: ReadonlyArray<UpdateRunMachine>;
 }
 
@@ -207,37 +227,142 @@ export function resolveUpdateRunMachineStatus(
   serverState: ServerUpdateState,
 ): UpdateRunMachineStatus {
   if (machine.result !== null) return machine.result;
+  if (machine.handedOffVersion !== null) return "restarting";
   if (phase === "providers" && machine.updatesProviders) return "providers";
-  if (machine.updatesServer && serverState.status === "running") {
+  if (machine.server !== null && serverState.status === "running") {
     return serverState.stage === "resuming" ? "restarting" : "downloading";
   }
   return "waiting";
 }
 
-const RUN_STATUS_LABELS: Record<UpdateRunMachineStatus, string> = {
-  providers: "updating providers",
-  waiting: "waiting",
-  downloading: "downloading",
-  restarting: "restarting",
-  done: "done",
-  failed: "failed",
-};
+/** A server is handed off once it restarts into its update: it finishes
+    without this app, so this app can relaunch. */
+export function isServerUpdateHandedOff(state: ServerUpdateState): boolean {
+  return state.status === "running" && state.stage === "resuming";
+}
+
+/** Ends the run once nothing is left to show: every machine done and this
+    app not installing. Failures keep it open. */
+export function closeFinishedUpdateRun(run: UpdateEverythingRun): UpdateEverythingRun | null {
+  return run.phase === "servers" &&
+    run.localVersion === null &&
+    run.machines.every((machine) => machine.result === "done")
+    ? null
+    : run;
+}
+
+/** An update this long is slower than usual, so the sidebar points it out. */
+export const UPDATE_SLOW_AFTER_MS = 3 * 60 * 1000;
+
+/** Elapsed time in whole minutes, such as "6m" or "1h 4m". */
+export function formatUpdateElapsed(ms: number): string {
+  const minutes = Math.floor(ms / 60_000);
+  if (minutes < 1) return "<1m";
+  if (minutes < 60) return `${minutes}m`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
+export interface UpdateRunMachineView {
+  readonly machine: UpdateRunMachine;
+  readonly status: UpdateRunMachineStatus;
+}
+
+/** This app's own part of a run, for the sidebar. */
+export type UpdateRunLocalState =
+  | { readonly status: "downloading"; readonly percent: number | null }
+  | { readonly status: "waiting" }
+  | null;
+
+/** What the expanded sidebar update button says, and its inline action. */
+export interface UpdateCapsuleView {
+  readonly tone: "default" | "slow" | "failed";
+  readonly label: string;
+  /** For a slow machine, its status and elapsed time, such as "restarting" and "6m". */
+  readonly slow?: { readonly status: string; readonly elapsed: string };
+  readonly action: "later" | "retry" | "dismiss" | null;
+}
+
+const isActive = (status: UpdateRunMachineStatus) => status !== "done" && status !== "failed";
 
 /**
- * Tooltip lines for a running pass, such as "alvin: restarting". `local` is
- * this app's own state, such as "downloading 40%", or null when it does not
- * install.
+ * The one line the expanded update button shows for a run, most urgent
+ * first: this app's restart countdown, a slow machine, overall progress, and
+ * last any failure once nothing else is running.
  */
-export function describeUpdateRun(
-  machines: ReadonlyArray<{ readonly label: string; readonly status: UpdateRunMachineStatus }>,
-  local: string | null,
-): ReadonlyArray<string> {
-  return [
-    "Updating…",
-    ...(local === null ? [] : [`This app: ${local}`]),
-    ...machines.map((machine) => `${machine.label}: ${RUN_STATUS_LABELS[machine.status]}`),
-  ];
+export function describeUpdateCapsule(
+  run: UpdateEverythingRun,
+  machines: ReadonlyArray<UpdateRunMachineView>,
+  local: UpdateRunLocalState,
+  now: number,
+  translate: TFunction = i18n.t,
+): UpdateCapsuleView {
+  if (run.phase === "countdown" && run.restartAt !== null) {
+    const seconds = Math.max(0, Math.ceil((run.restartAt - now) / 1000));
+    return {
+      tone: "default",
+      label: translate("update.run.restartIn", { seconds }),
+      action: "later",
+    };
+  }
+  if (run.phase === "installing") {
+    return { tone: "default", label: translate("update.run.restarting"), action: null };
+  }
+  const active = machines.filter(({ status }) => isActive(status) && status !== "waiting");
+  const slowest = active.toSorted((a, b) => a.machine.startedAt - b.machine.startedAt)[0];
+  if (slowest && now - slowest.machine.startedAt >= UPDATE_SLOW_AFTER_MS) {
+    return {
+      tone: "slow",
+      label: slowest.machine.label,
+      slow: {
+        status: translate(RUN_STATUS_LABELS[slowest.status]),
+        elapsed: formatUpdateElapsed(now - slowest.machine.startedAt),
+      },
+      action: null,
+    };
+  }
+  const done = machines.filter(({ status }) => status === "done").length;
+  if (machines.some(({ status }) => isActive(status))) {
+    return {
+      tone: "default",
+      label: translate("update.run.progress", { done, total: machines.length }),
+      action: null,
+    };
+  }
+  if (local?.status === "downloading") {
+    return {
+      tone: "default",
+      label: translate("update.run.downloading", {
+        progress: local.percent === null ? "" : ` ${Math.floor(local.percent)}%`,
+      }),
+      action: null,
+    };
+  }
+  const failed = machines.filter(({ status }) => status === "failed");
+  if (failed.length > 0) {
+    return {
+      tone: "failed",
+      label:
+        failed.length === 1
+          ? translate("update.run.machineFailed", { name: failed[0]!.machine.label })
+          : translate("update.run.failedCount", { count: failed.length }),
+      action: failed.some(({ machine }) => machine.server !== null) ? "retry" : "dismiss",
+    };
+  }
+  return {
+    tone: "default",
+    label: translate("update.run.progress", { done, total: machines.length }),
+    action: null,
+  };
 }
+
+export const RUN_STATUS_LABELS: Record<UpdateRunMachineStatus, string> = {
+  providers: "update.run.status.providers",
+  waiting: "update.run.status.waiting",
+  downloading: "update.run.status.downloading",
+  restarting: "update.run.status.restarting",
+  done: "update.run.status.done",
+  failed: "update.run.status.failed",
+};
 
 /** What one pass did. It is saved before this app installs, so it outlives the relaunch. */
 export interface UpdateEverythingResult {
@@ -247,6 +372,8 @@ export interface UpdateEverythingResult {
   readonly updatedProviders: number;
   /** One line per failure, each naming its machine. */
   readonly failures: ReadonlyArray<string>;
+  /** Servers still restarting into their update when this app relaunched. */
+  readonly restarting: ReadonlyArray<string>;
 }
 
 /** Counts what a pass updated and lists each failure with its machine. */
@@ -267,8 +394,9 @@ export function collectUpdateEverythingResult(input: {
     localVersion: input.localVersion,
     updatedServers: input.servers.filter(({ outcome }) => outcome.status === "updated").length,
     updatedProviders: input.providers.filter((outcome) => outcome.status === "updated").length,
+    restarting: [],
     failures: [
-      ...input.localFailures.map((failure) => `This app: ${failure}`),
+      ...input.localFailures.map((failure) => `${i18n.t("update.run.thisApp")}: ${failure}`),
       ...input.servers.flatMap(({ label, outcome }) =>
         outcome.status === "failed" ? [`${label}: ${outcome.message}`] : [],
       ),
@@ -293,17 +421,36 @@ export function getUpdateEverythingToastView(
   readonly description?: string;
 } | null {
   const parts = [
-    result.localVersion !== null && result.localVersion === appVersion ? "this app" : null,
+    result.localVersion !== null && result.localVersion === appVersion
+      ? i18n.t("update.everything.thisApp")
+      : null,
     countLabel(result.updatedServers, "server"),
     countLabel(result.updatedProviders, "provider"),
   ].filter((part) => part !== null);
+  const restarting =
+    result.restarting.length === 0
+      ? []
+      : [
+          i18n.t("update.everything.stillRestarting", {
+            names: joinList(result.restarting),
+            count: result.restarting.length,
+          }),
+        ];
   if (result.failures.length === 0) {
-    return parts.length === 0 ? null : { type: "success", title: `Updated ${joinList(parts)}` };
+    if (parts.length === 0) return null;
+    return {
+      type: "success",
+      title: i18n.t("update.everything.updated", { items: joinList(parts) }),
+      ...(restarting.length === 0 ? {} : { description: restarting.join("\n") }),
+    };
   }
   return {
     type: "error",
-    title: parts.length === 0 ? "Update failed" : `Updated ${joinList(parts)}`,
-    description: result.failures.join("\n"),
+    title:
+      parts.length === 0
+        ? i18n.t("update.everything.failed")
+        : i18n.t("update.everything.updated", { items: joinList(parts) }),
+    description: [...result.failures, ...restarting].join("\n"),
   };
 }
 
@@ -322,12 +469,14 @@ export interface UpdateEverythingPlan {
 }
 
 function countLabel(count: number, noun: string): string | null {
-  return count === 0 ? null : `${count} ${noun}${count === 1 ? "" : "s"}`;
+  return count === 0 ? null : i18n.t(`update.everything.${noun}`, { count });
 }
 
 function joinList(parts: ReadonlyArray<string>): string {
-  if (parts.length <= 2) return parts.join(" and ");
-  return `${parts.slice(0, -1).join(", ")}, and ${parts.at(-1)}`;
+  return new Intl.ListFormat(i18n.resolvedLanguage ?? "en", {
+    style: "long",
+    type: "conjunction",
+  }).format(parts);
 }
 
 /**
@@ -343,13 +492,15 @@ export function describeUpdateEverything(plan: UpdateEverythingPlan): {
     (count, machine) => count + machine.providers.length,
     0,
   );
-  const summary = `Update ${joinList(
-    [
-      plan.localVersion ? "this app" : null,
-      countLabel(plan.servers.length, "server"),
-      countLabel(providerCount, "provider"),
-    ].filter((part) => part !== null),
-  )}`;
+  const summary = i18n.t("update.everything.update", {
+    items: joinList(
+      [
+        plan.localVersion ? i18n.t("update.everything.thisApp") : null,
+        countLabel(plan.servers.length, "server"),
+        countLabel(providerCount, "provider"),
+      ].filter((part) => part !== null),
+    ),
+  });
 
   const machines = new Map<EnvironmentId, { label: string; items: string[] }>();
   const itemsFor = (environmentId: EnvironmentId, label: string) => {
@@ -364,8 +515,8 @@ export function describeUpdateEverything(plan: UpdateEverythingPlan): {
     // offers, so it has no target version to show.
     itemsFor(server.environmentId, server.serverLabel).push(
       server.selfUpdate === "desktop-managed"
-        ? "desktop app update"
-        : `server to ${server.targetVersion}`,
+        ? i18n.t("update.everything.desktopApp")
+        : i18n.t("update.everything.serverTo", { version: server.targetVersion }),
     );
   }
   for (const machine of plan.providerMachines) {
@@ -375,7 +526,9 @@ export function describeUpdateEverything(plan: UpdateEverythingPlan): {
   return {
     summary,
     lines: [
-      ...(plan.localVersion ? [`This app: ${plan.localVersion}, restarts last`] : []),
+      ...(plan.localVersion
+        ? [i18n.t("update.everything.localPlan", { version: plan.localVersion })]
+        : []),
       ...Array.from(machines.values(), ({ label, items }) => `${label}: ${items.join(", ")}`),
     ],
   };

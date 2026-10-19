@@ -144,11 +144,7 @@ import {
   getSidebarProjectSettingsKey,
   type SidebarProjectSnapshot,
 } from "../sidebarProjectGrouping";
-import {
-  legacyProjectCwdPreferenceKey,
-  resolveProjectExpanded,
-  useUiStateStore,
-} from "../uiStateStore";
+import { resolveProjectExpanded, useUiStateStore } from "../uiStateStore";
 import {
   getThreadKeysToDeselectAfterDelete,
   useThreadSelectionStore,
@@ -159,7 +155,6 @@ import { useSidebarProjectGroups } from "../hooks/useSidebarProjectGroups";
 import { useTerminalFocus } from "../hooks/useTerminalFocus";
 import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
 import { registerSettleAndAdvance } from "../settleAndAdvance";
-import { startNewThreadFromContext } from "../lib/chatThreadActions";
 import { useClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
@@ -271,6 +266,7 @@ import {
   type ProviderInstanceEntry,
 } from "../providerInstances";
 import { useThreadRunningTerminalIds } from "../state/terminalSessions";
+import { useStableCallback } from "../hooks/useStableCallback";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { Button, InlineButton } from "./ui/button";
 import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
@@ -1049,8 +1045,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   const t = useTranslate();
   const {
     isRenaming,
-    changeRequestSnapshot,
-    onChangeRequestSnapshot,
     onCancelRename,
     onCommitRename,
     onContextMenu,
@@ -1135,8 +1129,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // switching sidebars must not light up every historical thread as unread.
   const isUnread = hasUnseenCompletion({ ...thread, lastVisitedAt });
   const status = resolveSidebarThreadStatus(thread);
-  const isInFlight =
-    status === "working" || status === "waiting" || status === "approval" || status === "input";
   // A woken thread reappears at its original position (the sort is
   // deliberately static), so the pill has to carry the weight. Snoozing is
   // an explicit act, so the pill clears only when the user re-engages:
@@ -1416,8 +1408,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     canOperateThread &&
     props.snoozeSupported &&
     canSnooze(thread, { now: new Date().toISOString() });
-  const showHoverActions =
-    (canOperateThread && props.settlementSupported) || showSnoozeButton || hasUnsentDraft;
   // If the thread becomes blocked while the popover is open, the button
   // unmounts without firing onOpenChange(false). Deriving the flag keeps a
   // stale true from permanently hiding the status label / pinning the
@@ -2518,20 +2508,19 @@ export default function Sidebar() {
     [projectGroups, t],
   );
 
-  const scratchMachineLabelFor = useCallback(
-    (thread: Pick<SidebarThreadSummary, "environmentId" | "projectId">) => {
-      if (!showProjectEnvironments) return null;
-      const project = projectByKey.get(`${thread.environmentId}:${thread.projectId}`);
-      if (
-        !project ||
-        !isScratchProject(project, serverConfigs.get(thread.environmentId)?.scratchWorkspaceRoot)
-      ) {
-        return null;
-      }
-      return environmentLabelById.get(thread.environmentId) ?? null;
-    },
-    [environmentLabelById, projectByKey, serverConfigs, showProjectEnvironments],
-  );
+  const scratchMachineLabelFor = (
+    thread: Pick<SidebarThreadSummary, "environmentId" | "projectId">,
+  ) => {
+    if (!showProjectEnvironments) return null;
+    const project = projectByKey.get(`${thread.environmentId}:${thread.projectId}`);
+    if (
+      !project ||
+      !isScratchProject(project, serverConfigs.get(thread.environmentId)?.scratchWorkspaceRoot)
+    ) {
+      return null;
+    }
+    return environmentLabelById.get(thread.environmentId) ?? null;
+  };
   const scopedProjectGroup = useMemo(
     () =>
       projectScopeKey === null
@@ -2584,7 +2573,7 @@ export default function Sidebar() {
     }
     return count;
   });
-  const openProjectSettings = useCallback(
+  const openProjectSettings = useStableCallback(
     (projectGroup: SidebarProjectSnapshot, projectRef?: ScopedProjectRef) => {
       if (isMobile) {
         setOpenMobile(false);
@@ -2601,7 +2590,6 @@ export default function Sidebar() {
         },
       });
     },
-    [isMobile, projectGroupingSettings, projects, router, setOpenMobile],
   );
 
   const [optimisticDrop, setOptimisticDrop] = useState<{
@@ -3517,7 +3505,7 @@ export default function Sidebar() {
     action: SidebarSweepAction;
     keys: ReadonlySet<string>;
   } | null>(null);
-  const startActionSweep = useCallback(
+  const startActionSweep = useStableCallback(
     (threadRef: ScopedThreadRef, action: SidebarSweepAction, event: PointerEvent) => {
       const originKey = scopedThreadKey(threadRef);
       const originSection = sectionByThreadKeyRef.current.get(originKey);
@@ -3578,7 +3566,6 @@ export default function Sidebar() {
         onAbort: () => {},
       });
     },
-    [attemptUnsettle, attemptUnsnooze, serverConfigs, settleThreads],
   );
   const pinnedKeys = useMemo(
     () =>
@@ -4175,7 +4162,7 @@ export default function Sidebar() {
   );
 
   const removeFromSelection = useThreadSelectionStore((s) => s.removeFromSelection);
-  const handleMultiSelectContextMenu = useCallback(
+  const handleMultiSelectContextMenu = useStableCallback(
     async (position: { x: number; y: number }) => {
       const api = readLocalApi();
       if (!api) return;
@@ -4437,23 +4424,9 @@ export default function Sidebar() {
         }),
       );
     },
-    [
-      attemptUnpin,
-      clearSelection,
-      confirmThreadDelete,
-      deleteThread,
-      markThreadUnread,
-      performSnooze,
-      removeFromSelection,
-      serverConfigs,
-      settleThreads,
-      updateThreadMetadata,
-      timestampFormat,
-      t,
-    ],
   );
 
-  const handleDraftContextMenu = useCallback(
+  const handleDraftContextMenu = useStableCallback(
     (draftId: DraftId, position: { x: number; y: number }) => {
       void (async () => {
         const api = readLocalApi();
@@ -4506,10 +4479,9 @@ export default function Sidebar() {
         }
       })();
     },
-    [copyBranchToClipboard, copyPathToClipboard, openProjectSettings, projectByKey, t],
   );
 
-  const handleThreadContextMenu = useCallback(
+  const handleThreadContextMenu = useStableCallback(
     (threadRef: ScopedThreadRef, position: { x: number; y: number }) => {
       void (async () => {
         const api = readLocalApi();
@@ -4795,34 +4767,6 @@ export default function Sidebar() {
         }
       })();
     },
-    [
-      archiveThread,
-      attemptPin,
-      attemptSettle,
-      attemptSnooze,
-      attemptUnpin,
-      attemptUnsettle,
-      attemptUnsnooze,
-      confirmThreadArchive,
-      confirmThreadDelete,
-      copyBranchToClipboard,
-      copyPathToClipboard,
-      copyThreadIdToClipboard,
-      deleteThread,
-      handleMultiSelectContextMenu,
-      markThreadUnread,
-      openProjectSettings,
-      projectScopeKey,
-      projectByKey,
-      serverConfigs,
-      setProjectScopeKey,
-      setProjectExpanded,
-      setThreadAutoSettle,
-      startThreadRename,
-      updateThreadMetadata,
-      timestampFormat,
-      t,
-    ],
   );
 
   // Thread jump (cmd+1..9) and prev/next traversal reuse the same commands as

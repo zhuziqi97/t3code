@@ -1,3 +1,4 @@
+import { readLocalApi } from "~/localApi";
 import type { MessageKey } from "@t3tools/client-runtime/i18n";
 import { useTranslate, i18n } from "~/i18n";
 import { parseChangeRequestUrl } from "@t3tools/shared/changeRequestUrl";
@@ -47,6 +48,7 @@ import {
   PlayIcon,
   RotateCcwIcon,
   SparklesIcon,
+  Trash2Icon,
   TriangleAlertIcon,
 } from "lucide-react";
 import {
@@ -166,6 +168,7 @@ import {
   resolveDisplayedPullRequestDetail,
   resolvePullRequestPrimaryControl,
   allowsSinglePullRequestMerge,
+  canDeletePullRequestBranch,
   resolveBaseFreshness,
   resolvePullRequestMergeMethod,
   type PullRequestFinding,
@@ -210,6 +213,7 @@ const ACTION_FAILURE_LABELS: Record<PullRequestAction, MessageKey> = {
   "disable-auto-merge": "pullRequest.flow.action.autoOffFailed",
   revert: "pullRequest.flow.action.revertFailed",
   "approve-workflows": "pullRequest.flow.action.approveFailed",
+  "delete-branch": "pullRequest.flow.action.deleteBranchFailed",
 };
 
 /** What to try, for the times the host says only that it refused. */
@@ -228,6 +232,7 @@ const ACTION_FAILURE_HINTS: Record<PullRequestAction, MessageKey> = {
   "disable-auto-merge": "pullRequest.flow.action.autoOffHint",
   revert: "pullRequest.flow.action.revertHint",
   "approve-workflows": "pullRequest.flow.action.approveHint",
+  "delete-branch": "pullRequest.flow.action.deleteBranchHint",
 };
 
 /**
@@ -1038,6 +1043,9 @@ export function PullRequestDetailPanel({
     if (action === "revert") {
       toastManager.add({ type: "success", title: t("pullRequest.flow.action.reverted") });
     }
+    if (action === "delete-branch") {
+      toastManager.add({ type: "success", title: t("pullRequest.flow.action.branchDeleted") });
+    }
     // A branch update moves the head commit, which leaves the diff atom pointed at a comparison
     // that no longer exists — the same staleness the manual refresh button fixes, so it goes
     // through that path rather than a second one. Every other action here only changes metadata;
@@ -1655,6 +1663,25 @@ export function PullRequestDetailPanel({
   const statePresentation = detail
     ? resolvePullRequestState({ state: detail.state, isDraft: detail.isDraft }, t)
     : null;
+  const showsDeleteBranch = detail !== null && canDeletePullRequestBranch(detail);
+  const environmentConnected = environments.some(
+    (environment) =>
+      environment.environmentId === environmentId && environment.connection.phase === "connected",
+  );
+  const confirmDeleteBranch = async () => {
+    if (detail === null) return;
+    const confirmed = await readLocalApi()?.dialogs.confirm(
+      [
+        t("pullRequest.flow.deleteBranch.confirm", { branch: detail.headBranch }),
+        t("pullRequest.flow.deleteBranch.detail", {
+          branch: detail.headBranch,
+          repository: detail.headRepositoryNameWithOwner ?? detail.repository,
+        }),
+      ].join("\n"),
+      { variant: "destructive" },
+    );
+    if (confirmed) void perform("delete-branch");
+  };
   const showsApproveWorkflows =
     workflowApprovalsRequired > 0 && !checksStale && can("approve-workflows");
   const checksSummary = checksStale
@@ -1884,6 +1911,9 @@ export function PullRequestDetailPanel({
                       <button
                         type="button"
                         onClick={() => void openPullRequestExternal(detail.url)}
+                        onAuxClick={(event) => {
+                          if (event.button === 1) void openPullRequestExternal(detail.url);
+                        }}
                         onContextMenu={(event) => openNumberContextMenu(event, detail)}
                         className={cn(
                           "inline-flex shrink-0 cursor-pointer items-center gap-0.5 font-medium underline-offset-2 hover:underline",
@@ -1939,6 +1969,9 @@ export function PullRequestDetailPanel({
                         type="button"
                         tabIndex={condensed ? 0 : -1}
                         onClick={() => void openPullRequestExternal(detail.url)}
+                        onAuxClick={(event) => {
+                          if (event.button === 1) void openPullRequestExternal(detail.url);
+                        }}
                         onContextMenu={(event) => openNumberContextMenu(event, detail)}
                         className={cn(
                           "inline-flex shrink-0 cursor-pointer items-center gap-0.5 font-medium underline-offset-2 hover:underline",
@@ -2483,6 +2516,30 @@ export function PullRequestDetailPanel({
                         {inlineConfirm.isArmed("revert")
                           ? "Confirm revert?"
                           : t("pullRequest.flow.revert")}
+                      </MenuItem>
+                    </>
+                  ) : null}
+                  {showsDeleteBranch ? (
+                    <>
+                      <MenuSeparator />
+                      <MenuItem
+                        variant="destructive"
+                        disabled={actionPending || !environmentConnected}
+                        onClick={() => void confirmDeleteBranch()}
+                      >
+                        <Trash2Icon className="mt-1 size-3.5 shrink-0 self-start" />
+                        <span className="flex min-w-0 flex-col">
+                          <span>
+                            {pendingAction === "delete-branch"
+                              ? t("pullRequest.flow.deleteBranch.deleting")
+                              : t("pullRequest.flow.deleteBranch.label")}
+                          </span>
+                          <span className="truncate text-xs text-muted-foreground">
+                            {environmentConnected
+                              ? detail.headBranch
+                              : "Reconnect to delete this branch"}
+                          </span>
+                        </span>
                       </MenuItem>
                     </>
                   ) : null}

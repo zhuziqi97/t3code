@@ -41,7 +41,6 @@ import { createModelSelection, normalizeCustomModelSlug } from "@t3tools/shared/
 import { useMemo } from "react";
 import { getLocalStorageItem } from "./hooks/useLocalStorage";
 import { readThreadPreviewState } from "./previewStateStore";
-import { resolveAppModelSelection, resolveAppModelSelectionForInstance } from "./modelSelection";
 import {
   DEFAULT_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
@@ -60,8 +59,6 @@ import {
   ensureInlineContextReferences,
   formatInlineContextReference,
   removeInlineContextReference,
-  toComposerContextId,
-  toKindScopedComposerContextId,
 } from "./lib/composerContextReferences";
 import {
   fileContextReference,
@@ -76,8 +73,11 @@ import { create } from "zustand";
 import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
 import { createDeferredStorage, createMemoryStorage } from "./lib/storage";
-
-import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
+import {
+  replaceComposerContextReferences,
+  toComposerContextId,
+  toKindScopedComposerContextId,
+} from "@t3tools/shared/composerContextReferences";
 import { UnifiedSettings } from "@t3tools/contracts/settings";
 import { ReviewCommentContextSchema, type ReviewCommentContext } from "./reviewCommentContext";
 const isRuntimeMode = Schema.is(RuntimeMode);

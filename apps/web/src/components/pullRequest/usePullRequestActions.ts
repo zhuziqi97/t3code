@@ -89,6 +89,7 @@ const ACTION_SUCCESS_LABELS: Record<PullRequestAction, MessageKey> = {
   "enable-auto-merge": "pullRequest.flow.action.autoEnabled",
   "disable-auto-merge": "pullRequest.flow.action.autoDisabled",
   revert: "pullRequest.flow.action.reverted",
+  "delete-branch": "pullRequest.flow.action.branchDeleted",
   "approve-workflows": "pullRequest.flow.action.workflowsApproved",
 };
 
@@ -103,6 +104,7 @@ const ACTION_FAILURE_LABELS: Record<PullRequestAction, MessageKey> = {
   "enable-auto-merge": "pullRequest.flow.action.autoEnableFailed",
   "disable-auto-merge": "pullRequest.flow.action.autoDisableFailed",
   revert: "pullRequest.flow.action.revertFailed",
+  "delete-branch": "pullRequest.flow.action.deleteBranchFailed",
   "approve-workflows": "pullRequest.flow.action.approveFailed",
 };
 
@@ -117,6 +119,7 @@ const ACTION_FAILURE_HINTS: Record<PullRequestAction, MessageKey> = {
   "enable-auto-merge": "pullRequest.flow.action.quickAutoHint",
   "disable-auto-merge": "pullRequest.flow.action.writeHint",
   revert: "pullRequest.flow.action.revertHint",
+  "delete-branch": "pullRequest.flow.action.deleteBranchHint",
   "approve-workflows": "pullRequest.flow.action.approveHint",
 };
 

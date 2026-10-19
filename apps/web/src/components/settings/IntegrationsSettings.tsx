@@ -647,6 +647,36 @@ function BrowserLinkTargetSetting({ disabled }: { readonly disabled: boolean }) 
   );
 }
 
+function PullRequestLinksOpenInAppSetting() {
+  const t = useTranslate();
+  const openInApp = useClientSettings((settings) => settings.pullRequestLinksOpenInApp);
+  const updateSettings = useUpdatePrimarySettings();
+
+  return (
+    <SettingsRow
+      {...searchableSetting("pull-request-links-open-in-app")}
+      description={t("integrations.pullRequestLinks.description")}
+      resetAction={
+        openInApp ? null : (
+          <SettingResetButton
+            label={t("settings.search.pull-request-links-open-in-app.title")}
+            onClick={() => updateSettings({ pullRequestLinksOpenInApp: true })}
+          />
+        )
+      }
+      control={
+        <Switch
+          checked={openInApp}
+          onCheckedChange={(checked) =>
+            updateSettings({ pullRequestLinksOpenInApp: Boolean(checked) })
+          }
+          aria-label={t("settings.search.pull-request-links-open-in-app.title")}
+        />
+      }
+    />
+  );
+}
+
 function DeviceIntegrationSettings() {
   const t = useTranslate();
   const { search, environment: selected } = useSettingsScope();
@@ -1605,6 +1635,7 @@ export function IntegrationsSettingsPanel() {
         ) : (
           previewDefaults
         )}
+        <PullRequestLinksOpenInAppSetting />
       </SettingsSection>
       <DeviceIntegrationSettings />
     </SettingsPageContainer>

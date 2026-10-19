@@ -93,6 +93,7 @@ import {
   reusePullRequestEntries,
   settlePullRequestOverrides,
   pullRequestHostActions,
+  largestPullRequestReadCount,
 } from "../components/pullRequest/pullRequestList.logic";
 import {
   pullRequestListPreferences,
@@ -1267,7 +1268,8 @@ function PullRequestsRouteView() {
       return;
     }
     if (related.length > 0) listQuery.refresh(related);
-    const loadedCount = ordered?.key === filterKey ? ordered.entries.length : pageSize;
+    const loadedCount =
+      ordered?.key === filterKey ? largestPullRequestReadCount(ordered.entries) : pageSize;
     setPage({
       key: filterKey,
       regrown: [],

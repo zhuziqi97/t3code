@@ -2749,7 +2749,7 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 export function resolveDesktopProductName(version: string): string {
   return resolveDesktopUpdateChannel(version) === "nightly"
     ? `${CONVENE_DESKTOP_IDENTITY.name} (Nightly)`
-    : `${CONVENE_DESKTOP_IDENTITY.name} (Alpha)`;
+    : `${CONVENE_DESKTOP_IDENTITY.name} (Beta)`;
 }
 
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
