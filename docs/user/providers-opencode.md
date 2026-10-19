@@ -37,6 +37,10 @@ fail, check the URL, credentials, and OpenCode version, then refresh provider st
 After a lost connection, send another prompt to reconnect to the same OpenCode
 session.
 
+T3 Code's tools and project Convene MCP are supplied when T3 Code starts OpenCode
+locally. An external **Server URL** uses that server's own MCP configuration;
+T3 Code does not forward its local MCP connections to it.
+
 ## Approvals
 
 OpenCode follows the shared [permission modes](./permission-modes.md). **Auto** has

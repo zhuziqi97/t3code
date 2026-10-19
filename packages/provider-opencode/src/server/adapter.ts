@@ -972,17 +972,22 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
         const hasT3Mcp = mcpSession !== undefined && !connection.external;
         const orchestrationSystemPrompt = t3OrchestrationSystemPrompt(hasT3Mcp);
         if (hasT3Mcp) {
-          yield* OpenCodeRuntime.runOpenCodeSdk("mcp.add", () =>
-            client.mcp.add({
-              name: "t3-code",
-              config: {
-                type: "remote",
-                url: mcpSession.endpoint,
-                headers: { Authorization: mcpSession.authorizationHeader },
-                oauth: false,
-              },
-            }),
-          );
+          for (const [name, server] of Object.entries({
+            "t3-code": mcpSession,
+            ...mcpSession.additionalServers,
+          })) {
+            yield* OpenCodeRuntime.runOpenCodeSdk("mcp.add", () =>
+              client.mcp.add({
+                name,
+                config: {
+                  type: "remote",
+                  url: server.endpoint,
+                  headers: { Authorization: server.authorizationHeader },
+                  oauth: false,
+                },
+              }),
+            );
+          }
         }
 
         const now = yield* DateTime.now;

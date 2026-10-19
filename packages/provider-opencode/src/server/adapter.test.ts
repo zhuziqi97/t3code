@@ -3,6 +3,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import type { OpencodeClient, ToolPart } from "@opencode-ai/sdk/v2";
 import {
   CheckpointId,
+  EnvironmentId,
   NodeId,
   ProjectId,
   ProviderInstanceId,
@@ -148,6 +149,7 @@ const makeOpenCodeRuntimeHarness = Effect.fn("makeOpenCodeRuntimeHarness")(funct
   suffix: string,
   nativeSessionId: string,
   client: object,
+  external = true,
 ) {
   const instanceId = ProviderInstanceId.make(`opencode-${suffix}`);
   const threadId = ThreadId.make(`thread-opencode-${suffix}`);
@@ -163,7 +165,8 @@ const makeOpenCodeRuntimeHarness = Effect.fn("makeOpenCodeRuntimeHarness")(funct
     environment: {},
   }).pipe(
     Effect.provideService(OpenCodeRuntime.OpenCodeRuntime, {
-      connectToOpenCodeServer: () => Effect.succeed({ url: "http://test.invalid", external: true }),
+      connectToOpenCodeServer: () =>
+        Effect.succeed({ url: "http://test.invalid", external, exitCode: null }),
       createOpenCodeSdkClient: () => client,
     } as unknown as OpenCodeRuntime.OpenCodeRuntime["Service"]),
     Effect.provideService(ProviderHost.ProviderHost, {
@@ -241,6 +244,91 @@ const makeOpenCodeRuntimeHarness = Effect.fn("makeOpenCodeRuntimeHarness")(funct
 });
 
 describe("OpenCodeAdapterV2", () => {
+  it.effect("registers current project MCP only on local 1.x servers", () =>
+    Effect.gen(function* () {
+      const sessions = yield* McpProviderSessions.McpProviderSessions;
+      for (const [suffix, token, external] of [
+        ["first", "first-token", false],
+        ["replacement", "new-token", false],
+        ["disabled", undefined, false],
+        ["external", "remote-token", true],
+      ] as const) {
+        const threadId = ThreadId.make(`thread-opencode-${suffix}`);
+        yield* sessions.set({
+          environmentId: EnvironmentId.make("opencode-mcp-test"),
+          threadId,
+          providerSessionId: `session-${suffix}`,
+          providerInstanceId: ProviderInstanceId.make(`opencode-${suffix}`),
+          endpoint: "http://builtin.invalid/mcp",
+          authorizationHeader: "Bearer builtin",
+          browserToolsAvailable: false,
+          ...(token === undefined
+            ? {}
+            : {
+                additionalServers: {
+                  convene: {
+                    endpoint: "http://project.invalid/mcp",
+                    authorizationHeader: `Bearer ${token}`,
+                  },
+                },
+              }),
+        });
+        const added: unknown[] = [];
+        yield* makeOpenCodeRuntimeHarness(
+          suffix,
+          `native-${suffix}`,
+          {
+            mcp: {
+              add: async (input: unknown) => {
+                added.push(input);
+                return { data: true };
+              },
+            },
+            event: { subscribe: async () => ({ stream: asyncEventStream().stream }) },
+            session: {
+              create: async () => ({
+                data: { id: `native-${suffix}`, time: { created: 1, updated: 1 } },
+              }),
+            },
+          },
+          external,
+        );
+        assert.deepEqual(
+          added,
+          external
+            ? []
+            : [
+                {
+                  name: "t3-code",
+                  config: {
+                    type: "remote",
+                    url: "http://builtin.invalid/mcp",
+                    headers: { Authorization: "Bearer builtin" },
+                    oauth: false,
+                  },
+                },
+                ...(token === undefined
+                  ? []
+                  : [
+                      {
+                        name: "convene",
+                        config: {
+                          type: "remote",
+                          url: "http://project.invalid/mcp",
+                          headers: { Authorization: `Bearer ${token}` },
+                          oauth: false,
+                        },
+                      },
+                    ]),
+              ],
+        );
+      }
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(Layer.merge(IdAllocator.layer, McpProviderSessions.layer)),
+    ),
+  );
+
   it.effect.each(["completed", "failed", "unresolved", "unavailable", "reconnect"] as const)(
     "normalizes OpenCode step usage for %s turns",
     (ending) =>
