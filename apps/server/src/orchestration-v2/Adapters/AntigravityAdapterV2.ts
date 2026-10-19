@@ -13,6 +13,7 @@ import * as Path from "effect/Path";
 import * as Exit from "effect/Exit";
 import * as Scope from "effect/Scope";
 import * as EffectAcpErrors from "effect-acp/errors";
+import type * as EffectAcpSchema from "effect-acp/compat";
 
 import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import type { AntigravityAuth } from "../../provider/AntigravityAuth.ts";
@@ -61,6 +62,7 @@ const AntigravityProviderCapabilitiesV2 = {
 } satisfies OrchestrationV2ProviderCapabilities;
 
 export interface AntigravityAdapterV2Options {
+  readonly userMcpServers: (cwd: string) => Effect.Effect<ReadonlyArray<EffectAcpSchema.McpServer>>;
   readonly instanceId: ProviderInstanceId;
   readonly selfInvocation: SelfInvocation;
   /** Spawns the official agent with the instance's Google profile. */
@@ -133,18 +135,47 @@ export function makeAntigravityAcpAdapterFlavor(
       // AcpAdapterV2 owns the runtime scope; sign-in and sign-out stop the
       // process by closing a child of it, and the adapter respawns on the next turn.
       const scope = yield* Scope.fork(yield* Effect.scope);
+      const systemServers = yield* options.userMcpServers(input.cwd);
       const runtime = yield* options
         .withProcess(
           Scope.close(scope, Exit.void),
           options.makeRuntime({
             ...input,
+            mcpServers: [...systemServers, ...input.mcpServers],
+            acpMcpServers: [...systemServers, ...(input.acpMcpServers ?? input.mcpServers)],
             clientFileSystem: true,
             additionalDirectories: [options.host.paths.attachmentsDir],
           }),
         )
         .pipe(Effect.provideService(Scope.Scope, scope));
+      // New activations re-read the source. The native merge keeps the last
+      // client definition of a name, including a project's injected service.
+      const systemMcpActivation = (
+        activation: AcpSessionRuntime.AcpSessionActivationOptions | undefined,
+      ) =>
+        options.userMcpServers(input.cwd).pipe(
+          Effect.map((servers) => ({
+            mcpServers: [...servers, ...(activation?.mcpServers ?? input.mcpServers)],
+            acpMcpServers: [
+              ...servers,
+              ...(activation?.acpMcpServers ?? input.acpMcpServers ?? input.mcpServers),
+            ],
+          })),
+        );
       return {
         ...runtime,
+        loadSession: (id, activation) =>
+          systemMcpActivation(activation).pipe(
+            Effect.flatMap((options) => runtime.loadSession(id, options)),
+          ),
+        resumeSession: (id, activation) =>
+          systemMcpActivation(activation).pipe(
+            Effect.flatMap((options) => runtime.resumeSession(id, options)),
+          ),
+        forkSession: (id, activation) =>
+          systemMcpActivation(activation).pipe(
+            Effect.flatMap((options) => runtime.forkSession(id, options)),
+          ),
         start: () =>
           runtime
             .start()
@@ -153,7 +184,7 @@ export function makeAntigravityAcpAdapterFlavor(
                 (started) => options.onSessionStarted?.(started, input.cwd) ?? Effect.void,
               ),
             ),
-      };
+      } satisfies AcpSessionRuntime.AcpSessionRuntime["Service"];
     }).pipe(
       Effect.provideService(Crypto.Crypto, options.crypto),
       Effect.mapError((cause): EffectAcpErrors.AcpError =>

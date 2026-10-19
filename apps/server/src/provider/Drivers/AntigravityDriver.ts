@@ -55,6 +55,7 @@ import { makeAcpNativeLoggerFactory } from "@t3tools/provider-acp/server/nativeL
 import { ProviderDriverError } from "../Errors.ts";
 import { makeAntigravityProvider } from "../AntigravityProvider.ts";
 import { makeAntigravityUsageProbe } from "../antigravityUsageLimits.ts";
+import { readAntigravityUserMcpServers } from "../antigravityMcpSupport.ts";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
 import * as ModelCatalog from "@t3tools/provider-core/server/ModelCatalog";
 import {
@@ -421,6 +422,11 @@ export const AntigravityDriver: ProviderDriver<
       );
       const defaultModel = currentCatalog.pipe(Effect.map((catalog) => catalog?.defaultChatModel));
       const orchestrationAdapter = yield* makeAntigravityAdapterV2({
+        userMcpServers: (cwd) =>
+          readAntigravityUserMcpServers(userHome, processEnvironment.GEMINI_HOME, cwd).pipe(
+            Effect.provideService(FileSystem.FileSystem, fileSystem),
+            Effect.provideService(Path.Path, path),
+          ),
         instanceId,
         selfInvocation,
         makeRuntime,

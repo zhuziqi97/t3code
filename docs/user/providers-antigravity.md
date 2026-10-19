@@ -4,6 +4,21 @@ T3 Code runs Google's official Antigravity ACP agent on your selected environmen
 It has its own sign-in, separate from the Antigravity IDE or CLI. Google controls
 which models and account access are available through this agent.
 
+## Existing MCP servers
+
+Normal chat sessions read `~/.gemini/config/mcp_config.json` on the environment
+running Antigravity, or `config/mcp_config.json` under its configured `GEMINI_HOME`.
+No Convene pairing is needed. T3 Code leaves the source file
+unchanged; edits apply when starting or restarting an agent session. Same-name
+servers follow the native precedence: session-injected servers override system
+entries. Rename entries in your own configuration if you want both available.
+
+The supported configuration is stdio `command`/`args`/`env`, or remote
+`serverUrl` (also `url`) with `headers`. Disabled servers are omitted. The current
+ACP runtime cannot preserve OAuth/Google MCP authentication, a server-specific
+`cwd`, or `disabledTools`; those entries are omitted with a server log warning.
+Account setup and short text generation do not inherit these MCP servers.
+
 ## Set up Antigravity
 
 On web or desktop, open **Settings > Providers**, choose the environment that runs

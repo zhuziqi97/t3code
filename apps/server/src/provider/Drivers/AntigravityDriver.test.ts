@@ -55,7 +55,11 @@ function shellQuote(value: string): string {
 }
 
 const makeHarness = Effect.fn("makeAntigravityDriverHarness")(function* (
-  options: { readonly config?: Partial<AntigravitySettings>; readonly enabled?: boolean } = {},
+  options: {
+    readonly config?: Partial<AntigravitySettings>;
+    readonly enabled?: boolean;
+    readonly systemMcp?: boolean;
+  } = {},
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -64,6 +68,14 @@ const makeHarness = Effect.fn("makeAntigravityDriverHarness")(function* (
   const nodePath = yield* HostProcess.ExecutablePath;
   const baseEnv = yield* HostProcess.Environment;
   const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-antigravity-driver-" });
+  const userHome = path.join(root, "user-home");
+  yield* fs.makeDirectory(path.join(userHome, ".gemini", "config"), { recursive: true });
+  if (options.systemMcp) {
+    yield* fs.writeFileString(
+      path.join(userHome, ".gemini", "config", "mcp_config.json"),
+      '{"mcpServers":{"personal":{"command":"must-not-run-in-helper"}}}',
+    );
+  }
   const instanceId = ProviderInstanceId.make(path.basename(root));
   const mockAgentPath = yield* path.fromFileUrl(
     new URL("../../../scripts/acp-mock-agent.ts", import.meta.url),
@@ -190,6 +202,8 @@ const makeHarness = Effect.fn("makeAntigravityDriverHarness")(function* (
     enabled: options.enabled ?? true,
     config: { ...AntigravityDriver.defaultConfig(), ...options.config },
     environment: [
+      { name: "HOME", value: userHome },
+      { name: "USERPROFILE", value: userHome },
       { name: "PATH", value: instancePath },
       { name: "T3_ACP_ANTIGRAVITY", value: "1" },
       { name: "T3_ACP_REQUEST_LOG_PATH", value: requestLog },
@@ -325,7 +339,7 @@ it.layer(layerTest)("AntigravityDriver", (it) => {
     "refreshes through the selected executable and personal Google ACP",
     () =>
       Effect.gen(function* () {
-        const h = yield* makeHarness();
+        const h = yield* makeHarness({ systemMcp: true });
         yield* h.refresh();
         const snapshot = yield* h.instance.snapshot.getSnapshot;
         expect(snapshot.status).toBe("ready");

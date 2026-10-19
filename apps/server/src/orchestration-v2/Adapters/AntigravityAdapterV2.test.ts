@@ -1,6 +1,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import {
+  EnvironmentId,
   MessageId,
   NodeId,
   ProjectId,
@@ -18,6 +19,7 @@ import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { ChildProcessSpawner } from "effect/process";
 import type * as EffectAcpSchema from "effect-acp/compat";
@@ -27,6 +29,7 @@ import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderS
 import * as TestProviderHost from "@t3tools/provider-testing/TestProviderHost";
 import type * as AcpSessionRuntime from "@t3tools/provider-acp/server/AcpSessionRuntime";
 import { makeAntigravityAcpRuntime } from "../../provider/acp/AntigravityAcpSupport.ts";
+import { readAntigravityUserMcpServers } from "../../provider/antigravityMcpSupport.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import {
@@ -34,7 +37,19 @@ import {
   makeAntigravityAdapterV2,
 } from "./AntigravityAdapterV2.ts";
 
+const decodeMcpRequest = Schema.decodeUnknownSync(
+  Schema.fromJsonString(
+    Schema.Struct({
+      method: Schema.String,
+      params: Schema.optional(
+        Schema.Struct({ mcpServers: Schema.optional(Schema.Array(Schema.Unknown)) }),
+      ),
+    }),
+  ),
+);
+
 const flavor = makeAntigravityAcpAdapterFlavor({
+  userMcpServers: () => Effect.succeed([]),
   instanceId: ProviderInstanceId.make("antigravity-test"),
   crypto: undefined as never,
   fileSystem: undefined as never,
@@ -135,6 +150,136 @@ const layerSession = Layer.mergeAll(
 );
 
 describe("AntigravityAdapterV2 client file system", () => {
+  it.effect(
+    "loads system MCP without project pairing and refreshes it on native fork and resume",
+    () =>
+      Effect.gen(function* () {
+        const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const crypto = yield* Crypto.Crypto;
+        const home = yield* fs.makeTempDirectoryScoped({ prefix: "t3-system-mcp-" });
+        const configPath = path.join(home, ".gemini", "config", "mcp_config.json");
+        const requestLog = path.join(home, "requests.jsonl");
+        yield* fs.makeDirectory(path.dirname(configPath), { recursive: true });
+        const source =
+          '{"mcpServers":{"personal":{"command":"personal-tool","args":["read"]},"convene":{"serverUrl":"http://127.0.0.1/personal","headers":{"Authorization":"Bearer personal"}}}}\n';
+        yield* fs.writeFileString(configPath, source);
+        const instanceId = ProviderInstanceId.make("system-mcp-test");
+        const mockAgentPath = yield* path.fromFileUrl(
+          new URL("../../../scripts/acp-mock-agent.ts", import.meta.url),
+        );
+        const adapter = yield* makeAntigravityAdapterV2({
+          userMcpServers: () =>
+            readAntigravityUserMcpServers(home).pipe(
+              Effect.provideService(FileSystem.FileSystem, fs),
+              Effect.provideService(Path.Path, path),
+            ),
+          instanceId,
+          selfInvocation: yield* resolveSelfInvocation(),
+          withProcess: (_stop, task) => task,
+          defaultModel: Effect.succeed(undefined),
+          makeRuntime: (input) =>
+            makeAntigravityAcpRuntime({
+              ...input,
+              childProcessSpawner,
+              spawn: {
+                command: process.execPath,
+                args: [mockAgentPath],
+                cwd: input.cwd,
+                env: {
+                  T3_ACP_ANTIGRAVITY: "1",
+                  T3_ACP_SESSION_LIFECYCLE: "1",
+                  T3_ACP_REQUEST_LOG_PATH: requestLog,
+                },
+              },
+            }).pipe(Effect.provideService(Crypto.Crypto, crypto)),
+        });
+        const threadId = ThreadId.make("system-only-thread");
+        const runtimePolicy = ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          cwd: home,
+        });
+        const modelSelection = { instanceId, model: null } as const;
+        const runtime = yield* adapter.openSession({
+          threadId,
+          providerSessionId: ProviderSessionId.make("system-mcp-session"),
+          modelSelection,
+          runtimePolicy,
+        });
+        const providerThread = yield* runtime.ensureThread({
+          threadId,
+          modelSelection,
+          runtimePolicy,
+        });
+        const readRequests = () =>
+          fs.readFileString(requestLog).pipe(
+            Effect.map((text) =>
+              text
+                .trim()
+                .split("\n")
+                .map((line) => decodeMcpRequest(line)),
+            ),
+          );
+        const initial = (yield* readRequests()).find((request) => request.method === "session/new");
+        assert.deepEqual(initial?.params?.mcpServers, [
+          { type: "stdio", name: "personal", command: "personal-tool", args: ["read"], env: [] },
+          {
+            type: "http",
+            name: "convene",
+            url: "http://127.0.0.1/personal",
+            headers: [{ name: "Authorization", value: "Bearer personal" }],
+          },
+        ]);
+        assert.equal(yield* fs.readFileString(configPath), source);
+        const edited =
+          '{"mcpServers":{"updated":{"command":"updated-tool"},"convene":{"serverUrl":"http://127.0.0.1/personal"}}}\n';
+        yield* fs.writeFileString(configPath, edited);
+        const targetThreadId = ThreadId.make("system-fork");
+        yield* (yield* McpProviderSessions.McpProviderSessions).set({
+          environmentId: EnvironmentId.make("system-mcp-environment"),
+          threadId: targetThreadId,
+          providerSessionId: "project-credential",
+          providerInstanceId: instanceId,
+          endpoint: "http://127.0.0.1/t3",
+          authorizationHeader: "Bearer builtin",
+          browserToolsAvailable: false,
+          additionalServers: {
+            convene: {
+              endpoint: "http://127.0.0.1/project",
+              authorizationHeader: "Bearer project",
+            },
+          },
+        });
+        yield* runtime.forkThread({
+          sourceProviderThread: providerThread,
+          targetThreadId,
+        });
+        const fork = (yield* readRequests()).find((request) => request.method === "session/fork");
+        const forkServers = fork?.params?.mcpServers as Array<{
+          name: string;
+          env?: Array<{ name: string; value: string }>;
+        }>;
+        assert.deepEqual(
+          forkServers.map((server) => server.name),
+          ["updated", "convene", "t3-code", "convene"],
+        );
+        assert.deepInclude(forkServers.at(-1)?.env ?? [], {
+          name: "T3_ACP_MCP_AUTHORIZATION",
+          value: "Bearer project",
+        });
+        yield* fs.writeFileString(configPath, "{}");
+        yield* runtime.readThreadSnapshot({ providerThread });
+        const resumed = (yield* readRequests()).findLast(
+          (request) => request.method === "session/resume",
+        );
+        assert.isDefined(resumed, "Expected native resume");
+        assert.deepEqual(resumed?.params?.mcpServers, []);
+        assert.equal(yield* fs.readFileString(configPath), "{}");
+      }).pipe(Effect.provide(layerSession), Effect.scoped),
+  );
+
   it.effect("confines agent file requests to the workspace under full access", () =>
     Effect.gen(function* () {
       const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -151,6 +296,7 @@ describe("AntigravityAdapterV2 client file system", () => {
       const crypto = yield* Crypto.Crypto;
       const instanceId = ProviderInstanceId.make("antigravity-containment-test");
       const adapter = yield* makeAntigravityAdapterV2({
+        userMcpServers: () => Effect.succeed([]),
         instanceId,
         selfInvocation: yield* resolveSelfInvocation(),
         makeRuntime: (input) =>
@@ -297,6 +443,7 @@ describe("AntigravityAdapterV2 workspace changes", () => {
       let readTextFile: Parameters<RuntimeService["handleReadTextFile"]>[0] | undefined;
       const instanceId = ProviderInstanceId.make("antigravity-workspace-change-test");
       const adapter = yield* makeAntigravityAdapterV2({
+        userMcpServers: () => Effect.succeed([]),
         instanceId,
         selfInvocation: yield* resolveSelfInvocation(),
         makeRuntime: (input) =>
@@ -441,6 +588,7 @@ describe("AntigravityAdapterV2 client file system under restrictive policies", (
         let writeTextFile: Parameters<RuntimeService["handleWriteTextFile"]>[0] | undefined;
         const instanceId = ProviderInstanceId.make(`antigravity-restrictive-${policy.runtimeMode}`);
         const adapter = yield* makeAntigravityAdapterV2({
+          userMcpServers: () => Effect.succeed([]),
           instanceId,
           selfInvocation: yield* resolveSelfInvocation(),
           makeRuntime: (input) =>
