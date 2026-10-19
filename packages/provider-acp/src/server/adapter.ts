@@ -680,9 +680,8 @@ function negotiatedCapabilities(
 interface AcpMcpContext {
   readonly servers: ReadonlyArray<EffectAcpSchema.McpServer>;
   readonly acpServers: ReadonlyArray<EffectAcpSchema.McpServer>;
+  readonly httpServers: Readonly<Record<string, McpProviderSession.McpHttpContribution>>;
   readonly processEnvironment?: NodeJS.ProcessEnv;
-  readonly endpoint?: string;
-  readonly authorization?: string;
 }
 
 function acpMcpContext(
@@ -690,7 +689,7 @@ function acpMcpContext(
   self: SelfInvocation,
 ): AcpMcpContext {
   if (session === undefined) {
-    return { servers: [], acpServers: [] };
+    return { servers: [], acpServers: [], httpServers: {} };
   }
   // Stdio is ACP's required baseline MCP transport. Agents that advertise
   // optional http support still routinely fail to wire injected http servers
@@ -698,22 +697,37 @@ function acpMcpContext(
   // every ACP session gets the `t3 acp-mcp-bridge` stdio server, which
   // forwards JSON-RPC to T3's authenticated MCP endpoint. The credential
   // travels via environment variables, never the command line.
+  const httpServers = {
+    "t3-code": {
+      endpoint: session.endpoint,
+      authorizationHeader: session.authorizationHeader,
+    },
+    ...session.additionalServers,
+  };
   return {
-    servers: [
-      {
-        name: "t3-code",
-        command: self.command,
-        args: [...selfInvocationArgs(self, ["acp-mcp-bridge"])],
-        env: [
-          { name: "ELECTRON_RUN_AS_NODE", value: "1" },
-          { name: "T3_ACP_MCP_ENDPOINT", value: session.endpoint },
-          { name: "T3_ACP_MCP_AUTHORIZATION", value: session.authorizationHeader },
-        ],
-      },
-    ],
-    acpServers: [{ type: "acp", name: "t3-code", serverId: "t3-code" }],
-    endpoint: session.endpoint,
-    authorization: session.authorizationHeader,
+    // The protocol ID is private to this credential; the agent still sees the
+    // configured name. Native forks share a runtime but not project authority.
+    httpServers: Object.fromEntries(
+      Object.entries(httpServers).map(([name, server]) => [
+        `${session.providerSessionId}:${name}`,
+        server,
+      ]),
+    ),
+    servers: Object.entries(httpServers).map(([name, server]) => ({
+      name,
+      command: self.command,
+      args: [...selfInvocationArgs(self, ["acp-mcp-bridge"])],
+      env: [
+        { name: "ELECTRON_RUN_AS_NODE", value: "1" },
+        { name: "T3_ACP_MCP_ENDPOINT", value: server.endpoint },
+        { name: "T3_ACP_MCP_AUTHORIZATION", value: server.authorizationHeader },
+      ],
+    })),
+    acpServers: Object.keys(httpServers).map((name) => ({
+      type: "acp",
+      name,
+      serverId: `${session.providerSessionId}:${name}`,
+    })),
     processEnvironment: {
       T3_ACP_MCP_ENDPOINT: session.endpoint,
       T3_ACP_MCP_AUTHORIZATION: session.authorizationHeader,
@@ -2203,6 +2217,10 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
         let runtimeScope: Scope.Closeable | undefined;
         let runtime!: AcpSessionRuntime.AcpSessionRuntime["Service"];
         let runtimeMcpBridge: AcpMcpOverAcpBridge | undefined;
+        const activateMcpContext = (context: AcpMcpContext) =>
+          (runtimeMcpBridge?.registerServers(context.httpServers) ?? Effect.void).pipe(
+            Effect.as(acpMcpActivation(context)),
+          );
         yield* Effect.addFinalizer(() =>
           runtimeScope === undefined
             ? Effect.void
@@ -6000,12 +6018,11 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
           mcpContext: AcpMcpContext,
           scope: Scope.Scope,
         ) {
-          if (mcpContext.endpoint === undefined || mcpContext.authorization === undefined) {
+          if (Object.keys(mcpContext.httpServers).length === 0) {
             return undefined;
           }
           const mcpBridge = yield* makeAcpMcpOverAcpBridge({
-            endpoint: mcpContext.endpoint,
-            authorization: mcpContext.authorization,
+            servers: mcpContext.httpServers,
             allocateConnectionId: crypto.randomUUIDv4().pipe(Effect.orDie),
           });
           yield* Scope.addFinalizer(scope, mcpBridge.dispose);
@@ -6269,7 +6286,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
             return yield* initialFailure;
           }
           const mcpContext = yield* readMcpContext(threadId);
-          const activationOptions = acpMcpActivation(mcpContext);
+          const activationOptions = yield* activateMcpContext(mcpContext);
           prepareTerminalEnvironment(mcpContext, sessionId);
           const activated = canLoadSession
             ? yield* runtime.loadSession(sessionId, activationOptions)
@@ -7838,7 +7855,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                     prepareTerminalEnvironment(mcpContext, sessionId);
                     const activated = yield* runtime.loadSession(
                       sessionId,
-                      acpMcpActivation(mcpContext),
+                      yield* activateMcpContext(mcpContext),
                     );
                     rememberTerminalEnvironment(
                       activated.sessionId,
@@ -8004,7 +8021,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                   prepareTerminalEnvironment(mcpContext);
                   const forked = yield* runtime.forkSession(
                     sourceSessionId,
-                    acpMcpActivation(mcpContext),
+                    yield* activateMcpContext(mcpContext),
                   );
                   rememberTerminalEnvironment(
                     forked.sessionId,

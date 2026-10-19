@@ -9,6 +9,7 @@ import {
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
+import * as NodeHttp from "node:http";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
@@ -730,6 +731,12 @@ describe("AcpAdapterV2", () => {
         endpoint: "http://127.0.0.1:43123/mcp",
         authorizationHeader: "Bearer self-contained-mcp-bridge-token",
         browserToolsAvailable: false,
+        additionalServers: {
+          convene: {
+            endpoint: "http://127.0.0.1:43124/convene/mcp",
+            authorizationHeader: "Bearer project-test",
+          },
+        },
       });
 
       let runtimeInput: AcpAdapterV2RuntimeInput | undefined;
@@ -767,6 +774,161 @@ describe("AcpAdapterV2", () => {
       assert.deepEqual(mcpServer.args, ["acp-mcp-bridge"]);
       assert.equal(runtimeInput?.processEnvironment?.T3_ACP_MCP_NODE, process.execPath);
       assert.equal(runtimeInput?.processEnvironment?.T3_ACP_MCP_ENTRYPOINT, undefined);
+      const projectServer = runtimeInput?.mcpServers.find((server) => server.name === "convene");
+      assert.isDefined(projectServer);
+      if (projectServer === undefined || !("command" in projectServer))
+        return yield* Effect.die("Missing project bridge");
+      assert.equal(projectServer.command, mcpServer.command);
+      assert.deepEqual(projectServer.args, mcpServer.args);
+      assert.deepEqual(projectServer.env, [
+        { name: "ELECTRON_RUN_AS_NODE", value: "1" },
+        { name: "T3_ACP_MCP_ENDPOINT", value: "http://127.0.0.1:43124/convene/mcp" },
+        { name: "T3_ACP_MCP_AUTHORIZATION", value: "Bearer project-test" },
+      ]);
+      assert.deepEqual(runtimeInput?.acpMcpServers, [
+        {
+          type: "acp",
+          name: "t3-code",
+          serverId: "mcp-session-acp-self-contained-mcp-bridge:t3-code",
+        },
+        {
+          type: "acp",
+          name: "convene",
+          serverId: "mcp-session-acp-self-contained-mcp-bridge:convene",
+        },
+      ]);
+    }).pipe(Effect.provide(layerTest), Effect.scoped),
+  );
+
+  it.live("calls project MCP with the target credential after a native fork", () =>
+    Effect.gen(function* () {
+      const server = NodeHttp.createServer(async (request, response) => {
+        let body = "";
+        for await (const chunk of request) body += String(chunk);
+        const rpc = JSON.parse(body) as { id: number; method: string };
+        response.setHeader("content-type", "application/json");
+        response.end(
+          JSON.stringify({
+            jsonrpc: "2.0",
+            id: rpc.id,
+            result:
+              rpc.method === "initialize"
+                ? { protocolVersion: "2025-06-18" }
+                : rpc.method === "tools/list"
+                  ? { tools: [{ name: "read", inputSchema: { type: "object" } }] }
+                  : { content: [{ type: "text", text: request.headers.authorization }] },
+          }),
+        );
+      });
+      yield* Effect.acquireRelease(
+        Effect.promise(
+          () => new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve)),
+        ),
+        () =>
+          Effect.promise(
+            () =>
+              new Promise<void>((resolve, reject) => {
+                server.close((error) => (error ? reject(error) : resolve()));
+                server.closeAllConnections();
+              }),
+          ),
+      );
+      const address = server.address();
+      if (address === null || typeof address === "string")
+        return yield* Effect.die("Missing test port");
+      const endpoint = `http://127.0.0.1:${address.port}/mcp`;
+      const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+      const path = yield* Path.Path;
+      const instanceId = ProviderInstanceId.make("acp-project-fork");
+      const sourceThreadId = ThreadId.make("source-project");
+      const targetThreadId = ThreadId.make("target-project");
+      const sessions = yield* McpProviderSessions.McpProviderSessions;
+      for (const threadId of [sourceThreadId, targetThreadId]) {
+        yield* sessions.set({
+          environmentId: EnvironmentId.make("test"),
+          threadId,
+          providerInstanceId: instanceId,
+          providerSessionId: threadId,
+          endpoint,
+          authorizationHeader: "Bearer builtin",
+          browserToolsAvailable: false,
+          additionalServers: { convene: { endpoint, authorizationHeader: `Bearer ${threadId}` } },
+        });
+      }
+      type Runtime = AcpSessionRuntime.AcpSessionRuntime["Service"];
+      let connect: Parameters<Runtime["handleMcpConnect"]>[0] | undefined;
+      let message: Parameters<Runtime["handleMcpMessage"]>[0] | undefined;
+      const mockAgentPath = yield* path.fromFileUrl(
+        new URL("../../../scripts/acp-mock-agent.ts", import.meta.url),
+      );
+      const adapter = yield* makeAcpAdapterV2({
+        instanceId,
+        selfInvocation: yield* resolveSelfInvocation(),
+        flavor: {
+          driver: ACP_TEST_DRIVER,
+          capabilities: AcpProviderCapabilitiesV2,
+          makeRuntime: makeMockRuntime({
+            childProcessSpawner: spawner,
+            mockAgentPath,
+            environment: { T3_ACP_MCP_ACP: "1" },
+            wrapRuntime: (runtime) => ({
+              ...runtime,
+              handleMcpConnect: (handler) => {
+                connect = handler;
+                return runtime.handleMcpConnect(handler);
+              },
+              handleMcpMessage: (handler) => {
+                message = handler;
+                return runtime.handleMcpMessage(handler);
+              },
+            }),
+          }),
+        },
+      });
+      const runtimePolicy = ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        cwd: process.cwd(),
+      });
+      const modelSelection = { instanceId, model: "default" } as const;
+      const runtime = yield* adapter.openSession({
+        threadId: sourceThreadId,
+        providerSessionId: ProviderSessionId.make("fork-test"),
+        modelSelection,
+        runtimePolicy,
+      });
+      const sourceProviderThread = yield* runtime.ensureThread({
+        threadId: sourceThreadId,
+        modelSelection,
+        runtimePolicy,
+      });
+      yield* runtime.forkThread({ sourceProviderThread, targetThreadId });
+      if (connect === undefined || message === undefined)
+        return yield* Effect.die("Missing MCP handlers");
+      for (const threadId of [sourceThreadId, targetThreadId]) {
+        const connection = yield* connect(
+          { serverId: `${threadId}:convene` },
+          { requestId: "connect", method: "mcp/connect" },
+        );
+        yield* message(
+          { ...connection, method: "initialize" },
+          { requestId: "initialize", method: "mcp/message" },
+        );
+        assert.deepInclude(
+          yield* message(
+            { ...connection, method: "tools/list" },
+            { requestId: "list", method: "mcp/message" },
+          ),
+          { tools: [{ name: "read", inputSchema: { type: "object" } }] },
+        );
+        assert.deepEqual(
+          yield* message(
+            { ...connection, method: "tools/call", params: { name: "read", arguments: {} } },
+            { requestId: "call", method: "mcp/message" },
+          ),
+          { content: [{ type: "text", text: `Bearer ${threadId}` }] },
+        );
+      }
     }).pipe(Effect.provide(layerTest), Effect.scoped),
   );
 

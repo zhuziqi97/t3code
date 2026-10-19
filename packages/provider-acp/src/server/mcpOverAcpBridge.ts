@@ -6,6 +6,7 @@ import * as Stream from "effect/Stream";
 import type * as AcpSchema from "effect-acp/compat";
 
 import { responsePayloads } from "@t3tools/shared/mcpResponsePayloads";
+import type { McpHttpContribution } from "@t3tools/provider-core/server/mcpSession";
 
 const MAX_CONNECTIONS = 16;
 const MAX_MESSAGE_BYTES = 8 * 1024 * 1024;
@@ -18,6 +19,7 @@ interface JsonRpcEnvelope {
 }
 
 interface Connection {
+  readonly server: McpHttpContribution;
   readonly mutex: Semaphore.Semaphore;
   sessionId: string | null;
   protocolVersion: string | null;
@@ -57,13 +59,15 @@ function errorMessage(error: unknown): string {
 }
 
 export interface AcpMcpOverAcpBridgeOptions {
-  readonly endpoint: string;
-  readonly authorization: string;
+  readonly servers: Readonly<Record<string, McpHttpContribution>>;
   readonly allocateConnectionId: Effect.Effect<string>;
   readonly fetchImplementation?: (url: string, init?: RequestInit) => Promise<Response>;
 }
 
 export interface AcpMcpOverAcpBridge {
+  readonly registerServers: (
+    servers: Readonly<Record<string, McpHttpContribution>>,
+  ) => Effect.Effect<void>;
   readonly connect: (
     request: AcpSchema.ConnectMcpRequest,
   ) => Effect.Effect<AcpSchema.ConnectMcpResponse, AcpMcpOverAcpError>;
@@ -84,6 +88,7 @@ export const makeAcpMcpOverAcpBridge = Effect.fn("AcpMcpOverAcpBridge.make")(fun
   options: AcpMcpOverAcpBridgeOptions,
 ): Effect.fn.Return<AcpMcpOverAcpBridge> {
   const fetchImplementation = options.fetchImplementation ?? fetch;
+  const servers = new Map(Object.entries(options.servers));
   const connections = new Map<string, Connection>();
 
   const connectionFor = (connectionId: string): Effect.Effect<Connection, AcpMcpOverAcpError> =>
@@ -106,13 +111,13 @@ export const makeAcpMcpOverAcpBridge = Effect.fn("AcpMcpOverAcpBridge.make")(fun
         }
         const response = yield* Effect.tryPromise({
           try: (signal) =>
-            fetchImplementation(options.endpoint, {
+            fetchImplementation(connection.server.endpoint, {
               method: "POST",
               signal,
               headers: {
                 "content-type": "application/json",
                 accept: "application/json, text/event-stream",
-                authorization: options.authorization,
+                authorization: connection.server.authorizationHeader,
                 ...(connection.sessionId === null
                   ? {}
                   : { "mcp-session-id": connection.sessionId }),
@@ -151,11 +156,11 @@ export const makeAcpMcpOverAcpBridge = Effect.fn("AcpMcpOverAcpBridge.make")(fun
       if (sessionId !== null) {
         const response = yield* Effect.tryPromise({
           try: (signal) =>
-            fetchImplementation(options.endpoint, {
+            fetchImplementation(connection.server.endpoint, {
               method: "DELETE",
               signal,
               headers: {
-                authorization: options.authorization,
+                authorization: connection.server.authorizationHeader,
                 "mcp-session-id": sessionId,
                 ...(connection.protocolVersion === null
                   ? {}
@@ -179,9 +184,14 @@ export const makeAcpMcpOverAcpBridge = Effect.fn("AcpMcpOverAcpBridge.make")(fun
     });
 
   return {
+    registerServers: (additional) =>
+      Effect.sync(() => {
+        for (const [id, server] of Object.entries(additional)) servers.set(id, server);
+      }),
     connect: (request) =>
       Effect.gen(function* () {
-        if (request.serverId !== "t3-code") {
+        const server = servers.get(request.serverId);
+        if (server === undefined) {
           return yield* Effect.fail(
             new AcpMcpOverAcpError(`Unknown ACP MCP server "${request.serverId}".`),
           );
@@ -191,6 +201,7 @@ export const makeAcpMcpOverAcpBridge = Effect.fn("AcpMcpOverAcpBridge.make")(fun
         }
         const connectionId = yield* options.allocateConnectionId;
         connections.set(connectionId, {
+          server,
           mutex: yield* Semaphore.make(1),
           sessionId: null,
           protocolVersion: null,
