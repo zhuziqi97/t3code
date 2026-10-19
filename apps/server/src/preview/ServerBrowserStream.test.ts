@@ -1,3 +1,5 @@
+import { PreviewBrowserInstallError } from "@t3tools/shared/previewBrowserArchive";
+import * as PreviewBrowser from "./PreviewBrowser.ts";
 import * as NodeHttpPlatform from "@effect/platform-node/NodeHttpPlatform";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -11,6 +13,8 @@ import {
   PreviewStreamHostSetup,
   type AuthEnvironmentScope,
 } from "@t3tools/contracts";
+import * as Deferred from "effect/Deferred";
+import * as TestClock from "effect/testing/TestClock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -137,7 +141,11 @@ it.effect.each([
     // proving all preceding inputs were processed, without a timing sleep.
     yield* Effect.promise(() => acked.promise);
     expect(frames).toEqual([frame]);
-    expect(viewports).toEqual([{ type: "viewport", width: 1280, height: 800 }]);
+    expect(viewports).toEqual([
+      { type: "status", status: { state: "preparing" } },
+      { type: "status", status: { state: "ready" } },
+      { type: "viewport", width: 1280, height: 800 },
+    ]);
     expect(inputs).toEqual(canOperate ? [...mutations, null] : []);
     expect(attachments).toEqual([
       {
@@ -361,5 +369,125 @@ it.effect.each([
       need,
       command: "sudo t3 browser setup",
     });
+  }).pipe(Effect.scoped),
+);
+
+it.effect.each([false, true])(
+  "upgrades before slow preparation and cancels on close (close=%s)",
+  (closeEarly) =>
+    Effect.gen(function* () {
+      const ready = yield* Deferred.make<void>();
+      const released = yield* Deferred.make<void>();
+      const output = yield* Queue.make<ServerBrowser.ServerBrowserViewerOutput>();
+      yield* Queue.offer(output, { _tag: "viewport", width: 800, height: 600 });
+      const browser = Layer.mock(ServerBrowser.ServerBrowser, {
+        attachViewer: () =>
+          Effect.gen(function* () {
+            yield* Effect.addFinalizer(() => Deferred.succeed(released, undefined));
+            yield* Deferred.await(ready);
+            return { output, input: () => Effect.void };
+          }),
+      });
+      const services = yield* Layer.build(
+        HttpRouter.serve(routeLayer.pipe(Layer.provide(browser), Layer.provide(platformLayer)), {
+          disableListenLog: true,
+        }).pipe(
+          Layer.provideMerge(NodeHttpServer.layerTest),
+          Layer.provide(makeAuth([AuthOrchestrationReadScope]).layer),
+        ),
+      );
+      const server = Context.get(services, HttpServer.HttpServer);
+      const origin = HttpServer.formatAddress(server.address).replace(/^http/, "ws");
+      const preparing = Promise.withResolvers<void>();
+      const frame = Promise.withResolvers<void>();
+      const socket = yield* Effect.acquireRelease(
+        Effect.sync(() => {
+          const socket = new WebSocket(`${origin}/api/preview-stream/ws?threadId=thread&tabId=tab`);
+          socket.addEventListener("message", (event) => {
+            if (typeof event.data !== "string") return;
+            const message = JSON.parse(event.data);
+            if (message.type === "status" && message.status.state === "preparing")
+              preparing.resolve();
+            if (message.type === "viewport") frame.resolve();
+          });
+          return socket;
+        }),
+        (socket) => Effect.sync(() => socket.close()),
+      );
+      yield* Effect.promise(() => preparing.promise);
+      // Advance the old handshake budget while browser readiness remains blocked.
+      yield* TestClock.adjust("11 seconds");
+      expect(socket.readyState).toBe(WebSocket.OPEN);
+      if (!closeEarly) {
+        yield* Deferred.succeed(ready, undefined);
+        yield* Effect.promise(() => frame.promise);
+      }
+      socket.close();
+      yield* Deferred.await(released);
+    }).pipe(Effect.scoped),
+);
+
+it.effect.each([
+  {
+    cause: new PreviewBrowserInstallError({ detail: "fixture archive missing" }),
+    status: { state: "failed", reason: "install" },
+    code: 1011,
+  },
+  {
+    cause: new PreviewBrowser.PreviewBrowserUnsupportedError({
+      platform: "fixture",
+      arch: "fixture",
+    }),
+    status: { state: "failed", reason: "unsupported" },
+    code: 1011,
+  },
+  {
+    cause: new PreviewBrowser.PreviewBrowserInstallingError({
+      downloadedBytes: 4,
+      totalBytes: 10,
+      unpacking: true,
+    }),
+    status: { state: "installing", downloadedBytes: 4, totalBytes: 10, unpacking: true },
+    code: 1013,
+  },
+])("reports component readiness after upgrade ($status.state)", ({ cause, status, code }) =>
+  Effect.gen(function* () {
+    const services = yield* Layer.build(
+      HttpRouter.serve(
+        routeLayer.pipe(
+          Layer.provide(
+            Layer.mock(ServerBrowser.ServerBrowser, {
+              attachViewer: () =>
+                Effect.fail(new ServerBrowser.ServerBrowserLaunchError({ cause })),
+            }),
+          ),
+          Layer.provide(platformLayer),
+        ),
+        { disableListenLog: true },
+      ).pipe(
+        Layer.provideMerge(NodeHttpServer.layerTest),
+        Layer.provide(makeAuth([AuthOrchestrationReadScope]).layer),
+      ),
+    );
+    const server = Context.get(services, HttpServer.HttpServer);
+    const origin = HttpServer.formatAddress(server.address).replace(/^http/, "ws");
+    const messages: unknown[] = [];
+    const closed = Promise.withResolvers<number>();
+    yield* Effect.acquireRelease(
+      Effect.sync(() => {
+        const socket = new WebSocket(`${origin}/api/preview-stream/ws?threadId=thread&tabId=tab`);
+        socket.addEventListener("message", (event) =>
+          messages.push(JSON.parse(String(event.data))),
+        );
+        socket.addEventListener("close", (event) => closed.resolve(event.code));
+        return socket;
+      }),
+      (socket) => Effect.sync(() => socket.close()),
+    );
+    expect(yield* Effect.promise(() => closed.promise)).toBe(code);
+    expect(messages).toEqual([
+      { type: "status", status: { state: "preparing" } },
+      { type: "status", status },
+    ]);
   }).pipe(Effect.scoped),
 );

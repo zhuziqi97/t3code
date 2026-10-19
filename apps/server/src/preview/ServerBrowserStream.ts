@@ -1,9 +1,11 @@
+import { PreviewBrowserInstallError } from "@t3tools/shared/previewBrowserArchive";
 import * as NodeHttpServerRequest from "@effect/platform-node/NodeHttpServerRequest";
 import {
   AuthOrchestrationReadScope,
   AuthPreviewOperateScope,
   PREVIEW_STREAM_HOST_SETUP_CLOSE_CODE,
   PreviewStreamHostSetup,
+  PreviewStreamStatus,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -22,6 +24,7 @@ import * as Socket from "effect/socket/Socket";
 
 import { authenticateMediaRequest } from "../auth/http.ts";
 import { assetResponseHeaders } from "../http.ts";
+import * as PreviewBrowser from "./PreviewBrowser.ts";
 import * as PreviewBrowserHost from "./PreviewBrowserHost.ts";
 import * as ServerBrowser from "./ServerBrowser.ts";
 
@@ -81,27 +84,6 @@ const makeHandler = (browser: ServerBrowser.ServerBrowser["Service"]) =>
     }
     return yield* Effect.scoped(
       Effect.gen(function* () {
-        const attached = yield* browser
-          .attachViewer({
-            threadId,
-            tabId,
-            canOperate,
-            maxWidth: intParam(params, "maxWidth", 1280, 7680),
-            maxHeight: intParam(params, "maxHeight", 800, 4320),
-            quality: intParam(params, "quality", DEFAULT_QUALITY, 100),
-          })
-          .pipe(
-            Effect.map((viewer) => ({ _tag: "attached" as const, viewer })),
-            Effect.catchTags({
-              ServerBrowserTabNotFoundError: () => Effect.succeed({ _tag: "gone" as const }),
-              ServerBrowserLaunchError: (error) => {
-                const setup = hostSetup(error.cause);
-                return setup === undefined
-                  ? Effect.fail(error)
-                  : Effect.succeed({ _tag: "hostSetup" as const, reason: encodeHostSetup(setup) });
-              },
-            }),
-          );
         const incoming = NodeHttpServerRequest.toIncomingMessage(request);
         // JPEGs are already compressed. Disabling deflate also keeps all
         // pending writes in the socket buffer we bound below, not a zlib queue.
@@ -111,20 +93,6 @@ const makeHandler = (browser: ServerBrowser.ServerBrowser["Service"]) =>
         // The reader performs the upgrade; writes wait for it.
         const reader = yield* socket.reader;
         const writer = yield* socket.writer;
-        // A refused upgrade reads as an auth failure to ticket clients, so a
-        // missing tab is a close code they stop on.
-        const gone = writer.write(new Socket.CloseEvent(TAB_GONE_CODE, "tab closed"));
-        if (attached._tag === "gone") {
-          yield* gone;
-          return HttpServerResponse.empty();
-        }
-        if (attached._tag === "hostSetup") {
-          yield* writer.write(
-            new Socket.CloseEvent(PREVIEW_STREAM_HOST_SETUP_CLOSE_CODE, attached.reason),
-          );
-          return HttpServerResponse.empty();
-        }
-        const viewer = attached.viewer;
         // `write` returns once the frame is queued, so Chromium's ack for each
         // frame waits for the viewer's `ack` message instead.
         const unacknowledged: Array<Effect.Effect<void>> = [];
@@ -140,38 +108,9 @@ const makeHandler = (browser: ServerBrowser.ServerBrowser["Service"]) =>
             }
             return writer.write(data);
           });
-        const sendOutput = Queue.take(viewer.output).pipe(
-          Effect.flatMap((output) => {
-            switch (output._tag) {
-              case "frame":
-                if (unacknowledged.length >= MAX_UNACKNOWLEDGED_FRAMES) {
-                  return disconnectSlowViewer;
-                }
-                return write(output.data).pipe(
-                  Effect.andThen(Effect.sync(() => unacknowledged.push(output.ack))),
-                );
-              case "viewport":
-              case "control":
-              case "clipboard":
-              case "download":
-              case "fileChooser":
-              case "fileChooserClosed":
-              case "popup":
-              case "pointer":
-              case "probe": {
-                const { _tag: type, ...data } = output;
-                return write(JSON.stringify({ type, ...data }));
-              }
-              case "gone":
-                return gone.pipe(Effect.andThen(Effect.interrupt));
-              case "reconnect":
-                return writer
-                  .write(new Socket.CloseEvent(1012, "reconnect"))
-                  .pipe(Effect.andThen(Effect.interrupt));
-            }
-          }),
-        );
+        let viewer: ServerBrowser.ServerBrowserViewer | undefined;
         const receive = (chunk: Uint8Array | string) => {
+          if (!viewer) return Effect.void;
           const message = parseMessage(chunk);
           // Ownership serializes actions in the service. Keep reading so dialog
           // replies and takeover can unblock an action already waiting on the page.
@@ -186,15 +125,114 @@ const makeHandler = (browser: ServerBrowser.ServerBrowser["Service"]) =>
         const receiveInput = reader.pull.pipe(
           Effect.flatMap((chunks) => Effect.forEach(chunks, receive, { discard: true })),
         );
-        return yield* Effect.raceFirst(Effect.forever(sendOutput), Effect.forever(receiveInput));
+        const prepare = Effect.gen(function* () {
+          const status = (status: PreviewStreamStatus) =>
+            writer.write(encodeStatus({ type: "status", status }));
+          yield* status({ state: "preparing" });
+          const attached = yield* browser
+            .attachViewer({
+              threadId,
+              tabId,
+              canOperate,
+              maxWidth: intParam(params, "maxWidth", 1280, 7680),
+              maxHeight: intParam(params, "maxHeight", 800, 4320),
+              quality: intParam(params, "quality", DEFAULT_QUALITY, 100),
+            })
+            .pipe(
+              Effect.map((viewer) => ({ _tag: "attached" as const, viewer })),
+              Effect.catchTags({
+                ServerBrowserTabNotFoundError: () => Effect.succeed({ _tag: "gone" as const }),
+                ServerBrowserLaunchError: (error) => {
+                  const setup = hostSetup(error.cause);
+                  return setup === undefined
+                    ? Effect.fail(error)
+                    : Effect.succeed({
+                        _tag: "hostSetup" as const,
+                        reason: encodeHostSetup(setup),
+                      });
+                },
+              }),
+            );
+          // A refused upgrade reads as an auth failure to ticket clients, so a
+          // missing tab is a close code they stop on.
+          const gone = writer.write(new Socket.CloseEvent(TAB_GONE_CODE, "tab closed"));
+          if (attached._tag === "gone") {
+            yield* gone;
+            return HttpServerResponse.empty();
+          }
+          if (attached._tag === "hostSetup") {
+            yield* writer.write(
+              new Socket.CloseEvent(PREVIEW_STREAM_HOST_SETUP_CLOSE_CODE, attached.reason),
+            );
+            return HttpServerResponse.empty();
+          }
+          viewer = attached.viewer;
+          yield* status({ state: "ready" });
+          const sendOutput = Queue.take(attached.viewer.output).pipe(
+            Effect.flatMap((output) => {
+              switch (output._tag) {
+                case "frame":
+                  if (unacknowledged.length >= MAX_UNACKNOWLEDGED_FRAMES) {
+                    return disconnectSlowViewer;
+                  }
+                  return write(output.data).pipe(
+                    Effect.andThen(Effect.sync(() => unacknowledged.push(output.ack))),
+                  );
+                case "viewport":
+                case "control":
+                case "clipboard":
+                case "download":
+                case "fileChooser":
+                case "fileChooserClosed":
+                case "popup":
+                case "pointer":
+                case "probe": {
+                  const { _tag: type, ...data } = output;
+                  return write(JSON.stringify({ type, ...data }));
+                }
+                case "gone":
+                  return gone.pipe(Effect.andThen(Effect.interrupt));
+                case "reconnect":
+                  return writer
+                    .write(new Socket.CloseEvent(1012, "reconnect"))
+                    .pipe(Effect.andThen(Effect.interrupt));
+              }
+            }),
+          );
+          return yield* Effect.forever(sendOutput);
+        }).pipe(
+          Effect.catchTags({
+            ServerBrowserLaunchError: (error) =>
+              Effect.gen(function* () {
+                const cause = error.cause;
+                const installing = isInstallingError(cause);
+                const status: PreviewStreamStatus = installing
+                  ? {
+                      state: "installing",
+                      downloadedBytes: cause.downloadedBytes,
+                      totalBytes: cause.totalBytes,
+                      unpacking: cause.unpacking,
+                    }
+                  : {
+                      state: "failed",
+                      reason: isInstallError(cause)
+                        ? "install"
+                        : isUnsupportedError(cause)
+                          ? "unsupported"
+                          : "launch",
+                    };
+                yield* writer.write(encodeStatus({ type: "status", status }));
+                yield* writer.write(
+                  new Socket.CloseEvent(installing ? 1013 : 1011, "browser unavailable"),
+                );
+                yield* Effect.logWarning("server preview browser failed to start", { cause });
+                return HttpServerResponse.empty();
+              }),
+          }),
+        );
+        return yield* Effect.raceFirst(prepare, Effect.forever(receiveInput));
       }),
     ).pipe(
-      Effect.catchTags({
-        ServerBrowserLaunchError: (error) =>
-          Effect.logWarning("server preview browser failed to start", { cause: error.cause }).pipe(
-            Effect.as(HttpServerResponse.text("Service Unavailable", { status: 503 })),
-          ),
-      }),
       // A dropped socket is a normal end of viewing.
       Effect.catch(() => Effect.succeed(HttpServerResponse.empty())),
     );
@@ -209,7 +247,18 @@ const hostSetup = (cause: unknown): PreviewStreamHostSetup | undefined =>
       : undefined;
 const isSandboxError = Schema.is(PreviewBrowserHost.PreviewBrowserSandboxError);
 const isLibrariesError = Schema.is(PreviewBrowserHost.PreviewBrowserLibrariesError);
+const isInstallingError = Schema.is(PreviewBrowser.PreviewBrowserInstallingError);
+const isInstallError = Schema.is(PreviewBrowserInstallError);
+const isUnsupportedError = Schema.is(PreviewBrowser.PreviewBrowserUnsupportedError);
 const encodeHostSetup = Schema.encodeSync(Schema.fromJsonString(PreviewStreamHostSetup));
+const encodeStatus = Schema.encodeSync(
+  Schema.fromJsonString(
+    Schema.Struct({
+      type: Schema.Literal("status"),
+      status: PreviewStreamStatus,
+    }),
+  ),
+);
 
 /** `GET /api/preview-stream/download?threadId&tabId&id`: a file a server tab downloaded. */
 const serveDownload = (browser: ServerBrowser.ServerBrowser["Service"], params: URLSearchParams) =>

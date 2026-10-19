@@ -194,6 +194,22 @@ export const PreviewStreamHostSetup = Schema.Struct({
 export type PreviewStreamHostSetup = typeof PreviewStreamHostSetup.Type;
 export const PREVIEW_STREAM_HOST_SETUP_CLOSE_CODE = 4503;
 
+/** Browser readiness travels after the authenticated stream upgrade. */
+export const PreviewStreamStatus = Schema.Union([
+  Schema.Struct({ state: Schema.Literals(["preparing", "ready"]) }),
+  Schema.Struct({
+    state: Schema.Literal("installing"),
+    downloadedBytes: Schema.Number,
+    totalBytes: Schema.Number,
+    unpacking: Schema.Boolean,
+  }),
+  Schema.Struct({
+    state: Schema.Literal("failed"),
+    reason: Schema.Literals(["launch", "install", "unsupported"]),
+  }),
+]);
+export type PreviewStreamStatus = typeof PreviewStreamStatus.Type;
+
 export const PreviewSessionSnapshot = Schema.Struct({
   threadId: TrimmedNonEmptyString,
   tabId: PreviewTabId,
