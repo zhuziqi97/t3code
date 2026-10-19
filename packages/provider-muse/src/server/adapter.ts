@@ -1787,16 +1787,21 @@ export const makeMuseAdapterV2 = Effect.fn("makeMuseAdapterV2")(function* (
             );
           const config = mcpSession
             ? {
-                mcpServers: {
-                  // Muse defaults to "required", which fails the whole run when T3's
-                  // tools cannot be reached. The agent should still work without them.
-                  "t3-code": {
-                    transport: "streamableHttp",
-                    mode: "optional",
-                    url: mcpSession.endpoint,
-                    headers: { Authorization: mcpSession.authorizationHeader },
-                  },
-                },
+                mcpServers: Object.fromEntries(
+                  Object.entries({ "t3-code": mcpSession, ...mcpSession.additionalServers }).map(
+                    ([name, server]) => [
+                      name,
+                      {
+                        // Muse defaults to "required", which fails the whole run when T3's
+                        // tools cannot be reached. The agent should still work without them.
+                        transport: "streamableHttp",
+                        mode: "optional",
+                        url: server.endpoint,
+                        headers: { Authorization: server.authorizationHeader },
+                      },
+                    ],
+                  ),
+                ),
               }
             : undefined;
           const startModel = yield* resolveModel(args.modelSelection);
