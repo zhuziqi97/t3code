@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { previewBrowserRelease } from "@t3tools/shared/previewBrowserArchive";
+import { FetchHttpClient } from "effect/http";
+import { stagePreviewBrowserArchives } from "./lib/bundled-preview-browser.ts";
 // @effect-diagnostics nodeBuiltinImport:off - Node's typed junction API avoids Windows symlink privileges while keeping the probe isolated.
 
 import * as NodeFSP from "node:fs/promises";
@@ -3116,6 +3119,18 @@ export const stageWindowsServerSidecar = Effect.fn("stageWindowsServerSidecar")(
   const serverStageDir = path.join(input.stageRoot, "server");
   yield* fs.makeDirectory(path.join(serverStageDir, "apps/server"), { recursive: true });
   yield* fs.copy(input.serverDistDir, path.join(serverStageDir, "apps/server/dist"));
+  const browserDestination = path.join(serverStageDir, "apps/server/dist/browser");
+  yield* fs.remove(browserDestination, { recursive: true, force: true });
+  yield* stagePreviewBrowserArchives({
+    destination: browserDestination,
+    platform: "win",
+    arch: input.arch,
+  });
+  yield* stagePreviewBrowserArchives({
+    destination: browserDestination,
+    platform: "linux",
+    arch: input.arch,
+  });
 
   const sidecarDependencies = {
     ...input.runtimeExternalDependencies,
@@ -3485,7 +3500,13 @@ export const validateWindowsPackagedPayload = Effect.fn(
         ),
       );
     }
-    const requiredMembers = [`${stem}/t3`, `${stem}/client`, `${stem}/node_modules`];
+    const browser = previewBrowserRelease("linux", input.targetArch === "arm64" ? "arm64" : "x64");
+    const requiredMembers = [
+      `${stem}/t3`,
+      `${stem}/client`,
+      `${stem}/node_modules`,
+      ...(browser ? [`${stem}/browser/${browser.version}/${browser.platform}.zip`] : []),
+    ];
     const missingMembers = requiredMembers.filter((member) => !members.includes(member));
     // node-pty can load a source build or the prebuild for the WSL target.
     const ptyCandidates = [
@@ -3804,6 +3825,16 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   );
 
   // electron-builder is filtering out stageResourcesDir directory in the AppImage for production
+  if (options.platform !== "win") {
+    const destination = path.join(stageAppDir, "apps/server/dist/browser");
+    yield* fs.remove(destination, { recursive: true, force: true });
+    yield* stagePreviewBrowserArchives({
+      destination,
+      platform: options.platform,
+      arch: options.arch,
+    });
+  }
+
   const stageProdResourcesDir = path.join(stageAppDir, "apps/desktop/prod-resources");
   yield* fs.copy(stageResourcesDir, stageProdResourcesDir);
 
@@ -4171,7 +4202,11 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
   Command.withHandler((input) => Effect.flatMap(resolveBuildOptions(input), buildDesktopArtifact)),
 );
 
-const cliRuntimeLayer = Layer.mergeAll(Logger.layer([Logger.consolePretty()]), NodeServices.layer);
+const cliRuntimeLayer = Layer.mergeAll(
+  Logger.layer([Logger.consolePretty()]),
+  NodeServices.layer,
+  FetchHttpClient.layer,
+);
 
 if (import.meta.main) {
   Command.run(buildDesktopArtifactCli, { version: "0.0.0" }).pipe(

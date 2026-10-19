@@ -1,3 +1,10 @@
+import {
+  PreviewBrowserInstallError,
+  previewBrowserRelease,
+  type PreviewBrowserRelease,
+  downloadPreviewBrowserArchive,
+  wrapPreviewBrowserFailure as wrapFailure,
+} from "@t3tools/shared/previewBrowserArchive";
 // @effect-diagnostics nodeBuiltinImport:off - Effect has no incremental digest.
 import * as EffectNodeStream from "@effect/platform-node/NodeStream";
 import * as HostProcess from "@t3tools/shared/HostProcess";
@@ -15,96 +22,12 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
-import * as NodeCrypto from "node:crypto";
+import { HttpClient } from "effect/http";
 
 import * as ServerConfig from "../config.ts";
 import { openZipArchive } from "../zipArchive.ts";
 
-// The one browser T3 installs on a host. HTML render previews and server
-// browser tabs both run this pinned Chrome for Testing headless shell, so a host
-// downloads it once; neither uses a browser the user installed. To bump the pin, pick a version
-// from https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json,
-// download each platform's chrome-headless-shell zip, and replace the version
-// and every byte count and SHA-256 below. Hosts drop the old build after the
-// new one installs.
-const VERSION = "154.0.8037.92";
-const ARCHIVES = {
-  linux64: {
-    bytes: 120_477_194,
-    sha256: "636aa5c79f2693632e9921b8bbb050038ba11672e02346c06c20f991aed096f9",
-  },
-  "linux-arm64": {
-    bytes: 121_182_296,
-    sha256: "0ed0e47d9e9f639197f508d62ada09e5c6b4c4c60edab3160a9312a733091df6",
-  },
-  "mac-arm64": {
-    bytes: 99_221_129,
-    sha256: "77da14e75d7f2568e6f7898d3df7cdc6faac74b15e903b2c9d486ebb6ca9b929",
-  },
-  "mac-x64": {
-    bytes: 104_748_425,
-    sha256: "a54292aaacbb77f76f6ef47558e7c51ab884044e0adacca315567f83c060bcc4",
-  },
-  win32: {
-    bytes: 114_295_943,
-    sha256: "56b30d2d6c35775ebf8dc3618680f6529e1c38c87f7feb28a16e9904273d51f7",
-  },
-  win64: {
-    bytes: 120_822_223,
-    sha256: "3ac2561f02d9d87aadc0399d00b9002d718a4c365624fa67db9e7bfaf6b1a568",
-  },
-} as const;
-
-const chromePlatform = (platform: NodeJS.Platform, arch: NodeJS.Architecture) => {
-  switch (platform) {
-    case "linux":
-      return arch === "x64" ? "linux64" : arch === "arm64" ? "linux-arm64" : null;
-    case "darwin":
-      return arch === "arm64" ? "mac-arm64" : arch === "x64" ? "mac-x64" : null;
-    case "win32":
-      // There is no Windows arm64 build; Windows on Arm runs the x64 one under emulation.
-      return arch === "ia32" ? "win32" : arch === "x64" || arch === "arm64" ? "win64" : null;
-    default:
-      return null;
-  }
-};
-
-export interface PreviewBrowserRelease {
-  readonly version: string;
-  /** Chrome for Testing's platform name, which also names the archive's top directory. */
-  readonly platform: string;
-  readonly url: string;
-  readonly bytes: number;
-  readonly sha256: string;
-}
-
-export const previewBrowserRelease = (
-  platform: NodeJS.Platform,
-  arch: NodeJS.Architecture,
-): PreviewBrowserRelease | null => {
-  const chrome = chromePlatform(platform, arch);
-  return chrome === null
-    ? null
-    : {
-        version: VERSION,
-        platform: chrome,
-        url: `https://storage.googleapis.com/chrome-for-testing-public/${VERSION}/${chrome}/chrome-headless-shell-${chrome}.zip`,
-        ...ARCHIVES[chrome],
-      };
-};
-
 const megabytes = (bytes: number) => Math.round(bytes / 1_000_000);
-
-export class PreviewBrowserInstallError extends Schema.TaggedError<PreviewBrowserInstallError>()(
-  "PreviewBrowserInstallError",
-  { detail: Schema.String, cause: Schema.optional(Schema.Defect()) },
-) {
-  override get message(): string {
-    return `T3 could not install its headless browser: ${this.detail} Try again.`;
-  }
-}
-const isInstallError = Schema.is(PreviewBrowserInstallError);
 
 export class PreviewBrowserInstallingError extends Schema.TaggedError<PreviewBrowserInstallingError>()(
   "PreviewBrowserInstallingError",
@@ -146,17 +69,15 @@ export class PreviewBrowser extends Context.Service<
 
 export interface PreviewBrowserOptions {
   readonly baseDir: string;
+  /** Archives delivered with the executable/server bundle. Absent in source development. */
+  readonly bundledDirectory?: string | undefined;
   readonly release?: PreviewBrowserRelease | null;
   /** How long a caller waits on an install in progress. Provider tool calls time out near 60s. */
   readonly wait?: Duration.Input;
 }
 
-const DOWNLOAD_TIMEOUT = "15 minutes";
 // Longer than any install can run: the download times out at 15 minutes.
 const STAGING_STALE_AFTER_MS = 60 * 60_000;
-
-const wrapFailure = (detail: string) => (cause: unknown) =>
-  isInstallError(cause) ? cause : new PreviewBrowserInstallError({ detail, cause });
 
 type InstallState =
   | { readonly _tag: "idle" }
@@ -206,53 +127,19 @@ export const makePreviewBrowser = Effect.fn("PreviewBrowser.make")(function* (
     );
   };
 
-  const download = Effect.fn("PreviewBrowser.download")(
-    function* (release: PreviewBrowserRelease, archivePath: string) {
-      const response = yield* http
-        .execute(HttpClientRequest.get(release.url))
-        .pipe(Effect.flatMap(HttpClientResponse.filterStatusOk));
-      const contentLength = response.headers["content-length"];
-      const contentEncoding = response.headers["content-encoding"]?.trim().toLowerCase();
-      if (
-        (contentEncoding === undefined || contentEncoding === "identity") &&
-        contentLength !== undefined &&
-        Number(contentLength) !== release.bytes
-      ) {
-        return yield* new PreviewBrowserInstallError({
-          detail: "The download size did not match the pinned release.",
-        });
-      }
-      const hash = NodeCrypto.createHash("sha256");
-      yield* response.stream.pipe(
-        Stream.tap((chunk) =>
-          Effect.suspend(() => {
-            progress.downloadedBytes += chunk.byteLength;
-            if (progress.downloadedBytes > release.bytes) {
-              return Effect.fail(
-                new PreviewBrowserInstallError({
-                  detail: "The download was larger than the pinned release.",
-                }),
-              );
-            }
-            hash.update(chunk);
-            return Effect.void;
-          }),
-        ),
-        Stream.run(fs.sink(archivePath, { flag: "wx", mode: 0o600 })),
-      );
-      if (progress.downloadedBytes !== release.bytes || hash.digest("hex") !== release.sha256) {
-        return yield* new PreviewBrowserInstallError({
-          detail: "The download failed its size or SHA-256 check. Nothing was installed.",
-        });
-      }
-    },
-    Effect.timeout(DOWNLOAD_TIMEOUT),
-    Effect.mapError(
-      wrapFailure(
-        "The download from storage.googleapis.com failed. Check this machine's network access.",
-      ),
-    ),
-  );
+  const download = (release: PreviewBrowserRelease, archivePath: string) =>
+    downloadPreviewBrowserArchive({
+      release,
+      archivePath,
+      bundledDirectory: options.bundledDirectory,
+      onProgress: (bytes) => {
+        progress.downloadedBytes = bytes;
+      },
+    }).pipe(
+      Effect.provideService(FileSystem.FileSystem, fs),
+      Effect.provideService(Path.Path, path),
+      Effect.provideService(HttpClient.HttpClient, http),
+    );
 
   const extract = Effect.fn("PreviewBrowser.extract")(
     function* (release: PreviewBrowserRelease, archivePath: string, destination: string) {
@@ -458,6 +345,14 @@ export const layer = Layer.effect(
   PreviewBrowser,
   Effect.gen(function* () {
     const config = yield* ServerConfig.ServerConfig;
-    return yield* makePreviewBrowser({ baseDir: config.baseDir });
+    const path = yield* Path.Path;
+    const executable = yield* HostProcess.IsExecutable;
+    const entry = executable
+      ? yield* HostProcess.ExecutablePath
+      : (yield* HostProcess.Arguments)[1];
+    return yield* makePreviewBrowser({
+      baseDir: config.baseDir,
+      ...(entry ? { bundledDirectory: path.join(path.dirname(entry), "browser") } : {}),
+    });
   }),
 );

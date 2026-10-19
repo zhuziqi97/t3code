@@ -498,6 +498,10 @@
     "./providerReadiness": {
       "types": "./src/providerReadiness.ts",
       "import": "./src/providerReadiness.ts"
+    },
+    "./previewBrowserArchive": {
+      "types": "./src/previewBrowserArchive.ts",
+      "import": "./src/previewBrowserArchive.ts"
     }
   },
   "scripts": {

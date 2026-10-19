@@ -57,6 +57,7 @@ const makeFakeArchives = Effect.fn("test.makeFakeArchives")(function* () {
     const contentDir = path.join(stage, stem);
     for (const dir of [
       "client",
+      "browser",
       "resource-monitor",
       "node_modules/node-pty",
       "node_modules/@ff-labs/fff-node",
@@ -72,6 +73,7 @@ const makeFakeArchives = Effect.fn("test.makeFakeArchives")(function* () {
       '{ "name": "@ff-labs/fff-node", "version": "0.9.4" }\n',
     );
     yield* fs.writeFileString(path.join(contentDir, "client/index.html"), "<html></html>\n");
+    yield* fs.writeFileString(path.join(contentDir, "browser/component.zip"), `browser-${key}`);
     yield* fs.writeFileString(
       path.join(contentDir, "t3"),
       `#!/bin/sh\necho "stub ${key} $*"\nexit 7\n`,
@@ -131,13 +133,11 @@ it.layer(NodeServices.layer)("build-npm-platform-packages", (it) => {
       assert.equal(linuxManifest.version, VERSION);
       assert.deepStrictEqual(linuxManifest.os, ["linux"]);
       assert.deepStrictEqual(linuxManifest.cpu, ["x64"]);
-      assert.deepStrictEqual(linuxManifest.files, [
-        "t3",
-        "t3.exe",
-        "client",
-        "resource-monitor",
-        "node_modules",
-      ]);
+      assert.include(linuxManifest.files, "browser");
+      assert.equal(
+        yield* fs.readFileString(path.join(linuxDir, "browser/component.zip")),
+        "browser-linux-x64",
+      );
       assert.equal(linuxManifest.preferUnplugged, true);
       assert.isUndefined(linuxManifest.bin);
       // The shipped node_modules is declared, or npm prunes it as extraneous

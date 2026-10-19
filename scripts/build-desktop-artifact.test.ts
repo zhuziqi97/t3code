@@ -1,3 +1,4 @@
+import { previewBrowserRelease } from "@t3tools/shared/previewBrowserArchive";
 // @effect-diagnostics nodeBuiltinImport:off - Tests use Node's glob matcher to verify electron-builder exclusions.
 import * as NodeCrypto from "node:crypto";
 import * as NodePath from "node:path";
@@ -120,6 +121,7 @@ const makeLinuxCliArchiveFixture = Effect.fn("test.makeLinuxCliArchiveFixture")(
   const members = [
     `${input.stem}/t3`,
     `${input.stem}/client/index.html`,
+    `${input.stem}/browser/${previewBrowserRelease("linux", input.stem.endsWith("-arm64") ? "arm64" : "x64")!.version}/${previewBrowserRelease("linux", input.stem.endsWith("-arm64") ? "arm64" : "x64")!.platform}.zip`,
     `${input.stem}/node_modules/node-pty/package.json`,
     `${input.stem}/node_modules/node-pty/build/Release/pty.node`,
     ...(input.extraMembers ?? []),

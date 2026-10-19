@@ -1,3 +1,4 @@
+import { PreviewBrowserInstallError } from "@t3tools/shared/previewBrowserArchive";
 import type { ThreadId } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import {
@@ -117,7 +118,7 @@ export class HtmlRender extends Context.Service<
     }) => Effect.Effect<
       HtmlPreview,
       | Exclude<HtmlRenderPrepareError, HtmlRenderImagesNotFoundError>
-      | PreviewBrowser.PreviewBrowserInstallError
+      | PreviewBrowserInstallError
       | PreviewBrowser.PreviewBrowserInstallingError
       | PreviewBrowser.PreviewBrowserUnsupportedError
       | PreviewBrowserHost.PreviewBrowserHostError

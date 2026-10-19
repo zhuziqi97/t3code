@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { FetchHttpClient } from "effect/http";
+import { stagePreviewBrowserArchives } from "./lib/bundled-preview-browser.ts";
 /**
  * Packages the server single-executable into a self-contained per-platform
  * archive: the `t3` binary, the web client, the resource monitor, and a
@@ -509,6 +511,11 @@ const buildCliArchive = Effect.fn("buildCliArchive")(function* (input: {
   yield* fs.copyFile(builtExecutable, path.join(contentDir, executableName));
   yield* stageWebClient(webClient, path.join(contentDir, "client"));
   yield* fs.copy(resourceMonitorDir, path.join(contentDir, "resource-monitor"));
+  yield* stagePreviewBrowserArchives({
+    destination: path.join(contentDir, "browser"),
+    platform: input.platform,
+    arch: input.arch,
+  });
   yield* stageRuntimeExternals({
     repoRoot,
     stageDir: contentDir,
@@ -585,7 +592,13 @@ const command = Command.make(
 
 if (import.meta.main) {
   Command.run(command, { version: "0.0.0" }).pipe(
-    Effect.provide(Layer.mergeAll(Logger.layer([Logger.consolePretty()]), NodeServices.layer)),
+    Effect.provide(
+      Layer.mergeAll(
+        Logger.layer([Logger.consolePretty()]),
+        NodeServices.layer,
+        FetchHttpClient.layer,
+      ),
+    ),
     NodeRuntime.runMain,
   );
 }
