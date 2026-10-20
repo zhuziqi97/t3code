@@ -5,11 +5,13 @@
 This document covers the unified release workflow for stable and nightly desktop releases.
 
 The Convene fork ships as **T3 Code for Convene** with its own app ID, protocol,
-desktop profile and `t3code-convene` executable. Local builds have no update feed.
-For a published fork release, explicitly set
-`T3CODE_DESKTOP_UPDATE_REPOSITORY=zhuziqi97/t3code`; the artifact builder does not
-infer an update repository from `GITHUB_REPOSITORY`. Publish the Convene installer
-and its matching update metadata together before enabling that feed.
+desktop profile and `t3code-convene` executable. Its desktop checks the release
+manifest on the Convene platform paired with its primary local environment;
+downloads and installation remain manual. Build candidates with
+`.github/workflows/convene-clients.yml` and publish the accepted packages and
+matching Web through Convene's `docker/t3code-downloads/publish.py`. Do not
+configure a GitHub updater feed for Convene packages. The upstream release and
+auto-update procedures below apply to upstream distributions.
 
 Linux packaging needs Rust 1.95 or newer for the current resource monitor.
 The builder selects each crate's output directory explicitly. On Arch Linux,
