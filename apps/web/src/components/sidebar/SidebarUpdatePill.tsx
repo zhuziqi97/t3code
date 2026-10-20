@@ -299,7 +299,7 @@ function SidebarUpdateControl() {
       void bridge
         .downloadUpdate()
         .then((result) => {
-          if (!result.completed)
+          if (shouldToastDesktopUpdateActionResult(result))
             showDesktopUpdateErrorToast(
               "about.updateDownload.error",
               result.state.message,

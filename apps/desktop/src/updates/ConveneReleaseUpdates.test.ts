@@ -48,6 +48,7 @@ const harness = (
     release?: typeof ConveneRelease.Type;
     buildId?: string | null;
     open?: boolean;
+    blockOpen?: boolean;
     http?: ReturnType<typeof HttpClient.make>;
   } = {},
 ) =>
@@ -57,6 +58,9 @@ const harness = (
     const releaseA = yield* Deferred.make<void>();
     const blockOld = yield* Ref.make(false);
     const opened: string[] = [];
+    const openResult = yield* Ref.make(options.open ?? true);
+    const openStarted = yield* Deferred.make<void>();
+    const releaseOpen = yield* Deferred.make<boolean>();
     const requests: string[] = [];
     const remoteRequests = yield* Queue.unbounded<DesktopTelemetryRequestDesktopUpdate>();
     const reported = yield* Deferred.make<DesktopUpdateStatusReport>();
@@ -113,9 +117,10 @@ const harness = (
       Layer.mock(ElectronWindow.ElectronWindow)({ sendAll: () => Effect.void }),
       Layer.mock(ElectronShell.ElectronShell)({
         openExternal: (url) =>
-          Effect.sync(() => {
+          Effect.gen(function* () {
             opened.push(String(url));
-            return options.open ?? true;
+            yield* Deferred.succeed(openStarted, undefined);
+            return yield* options.blockOpen ? Deferred.await(releaseOpen) : Ref.get(openResult);
           }),
       }),
       FileSystem.layerNoop({
@@ -137,6 +142,9 @@ const harness = (
       releaseA,
       blockOld,
       opened,
+      openResult,
+      openStarted,
+      releaseOpen,
       requests,
       publisher,
       remoteRequests,
@@ -274,26 +282,52 @@ it.effect.each([
     ),
 );
 
-it.effect("keeps a failed external download retryable without entering install state", () =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      const h = yield* harness({ open: false });
-      yield* h.updates.configure;
-      const { changes } = yield* h.updates.subscribe;
-      const checked = yield* changes.pipe(
-        Stream.filter((s) => s.status === "available"),
-        Stream.runHead,
-        Effect.forkChild,
-      );
-      yield* SubscriptionRef.set(h.source, "https://platform.example/b");
-      yield* Fiber.join(checked);
-      const action = yield* h.updates.download;
-      assert.isFalse(action.completed);
-      assert.equal(action.state.errorContext, "download");
-      assert.isNull(action.state.downloadedVersion);
-      assert.isFalse((yield* h.updates.install).accepted);
-    }),
-  ),
+it.effect.each([
+  {
+    name: "newer release",
+    published: release("0.1.0-convene.10"),
+    message: "install it when you are ready",
+  },
+  {
+    name: "same-version revision",
+    published: release("0.1.0-convene.2", "revision"),
+    message: "different build",
+  },
+  {
+    name: "no matching package",
+    published: { ...release("0.1.0-convene.10"), packages: [] },
+    message: "no matching package",
+  },
+])(
+  "clears an external-open error after retry for $name without entering install state",
+  ({ published, message }) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const h = yield* harness({ open: false, release: published });
+        yield* h.updates.configure;
+        const { changes } = yield* h.updates.subscribe;
+        const checked = yield* changes.pipe(
+          Stream.filter((s) => s.status === "available"),
+          Stream.runHead,
+          Effect.forkChild,
+        );
+        yield* SubscriptionRef.set(h.source, "https://platform.example/b");
+        yield* Fiber.join(checked);
+        const action = yield* h.updates.download;
+        assert.isFalse(action.completed);
+        assert.equal(action.state.errorContext, "download");
+        assert.isNull(action.state.downloadedVersion);
+        assert.isFalse((yield* h.updates.install).accepted);
+        yield* Ref.set(h.openResult, true);
+        const retry = yield* h.updates.download;
+        assert.isTrue(retry.completed);
+        assert.equal(retry.state.status, "available");
+        assert.isNull(retry.state.errorContext);
+        assert.isFalse(retry.state.canRetry);
+        assert.include(retry.state.message, message);
+        assert.isNull(retry.state.downloadedVersion);
+      }),
+    ),
 );
 
 it.effect(
@@ -370,4 +404,40 @@ it.live(
         assert.isFalse((yield* h.updates.install).accepted);
       }),
     ).pipe(Effect.provide(NodeServices.layer)),
+);
+
+it.effect("does not restore the old platform when its OS open fails after switching sources", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const h = yield* harness({ blockOpen: true });
+      yield* h.updates.configure;
+      const { changes } = yield* h.updates.subscribe;
+      const first = yield* changes.pipe(
+        Stream.filter((s) => s.status === "available"),
+        Stream.runHead,
+        Effect.forkChild,
+      );
+      yield* SubscriptionRef.set(h.source, "https://platform.example/a");
+      yield* Fiber.join(first);
+      const opening = yield* h.updates.download.pipe(Effect.forkChild);
+      yield* Deferred.await(h.openStarted);
+      const second = yield* changes.pipe(
+        Stream.filter(
+          (s) => s.status === "available" && s.convene?.baseUrl?.endsWith("/b") === true,
+        ),
+        Stream.runHead,
+        Effect.forkChild,
+      );
+      yield* SubscriptionRef.set(h.source, "https://platform.example/b");
+      yield* Fiber.join(second);
+      yield* Deferred.succeed(h.releaseOpen, false);
+      const result = yield* Fiber.join(opening);
+      assert.isFalse(result.accepted);
+      assert.isFalse(result.completed);
+      assert.equal(result.state.convene?.baseUrl, "https://platform.example/b");
+      assert.equal(result.state.availableVersion, "0.1.0-convene.10");
+      assert.equal(result.state.status, "available");
+      assert.isNull(result.state.errorContext);
+    }),
+  ),
 );

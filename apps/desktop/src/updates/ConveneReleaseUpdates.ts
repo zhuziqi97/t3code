@@ -29,6 +29,18 @@ const NO_PACKAGE =
   "This release has no matching package for this installation. Open your platform downloads for details.";
 const CurrentBuild = Schema.Struct({ build_id: Schema.NonEmptyString });
 
+function releaseMessage(release: ConveneDesktopUpdate) {
+  const available = release.relation === "newer" || release.relation === "different-build";
+  if (available && release.downloadUrl === null) return NO_PACKAGE;
+  if (release.relation === "different-build")
+    return "Your platform offers a different build of the same version.";
+  if (release.relation === "older")
+    return "Your platform offers an older version than this installation.";
+  if (release.relation === "unknown-build")
+    return "The local build identity is unavailable. Check your platform downloads.";
+  return available ? MANUAL_INSTALL : null;
+}
+
 /** The platform release transport for the existing DesktopUpdates owner. */
 export const make = Effect.gen(function* () {
   const config = yield* DesktopConfig.DesktopConfig;
@@ -128,18 +140,6 @@ export const make = Effect.gen(function* () {
       } else {
         const release = result.value;
         const available = release.relation === "newer" || release.relation === "different-build";
-        const message =
-          available && release.downloadUrl === null
-            ? NO_PACKAGE
-            : release.relation === "different-build"
-              ? "Your platform offers a different build of the same version."
-              : release.relation === "older"
-                ? "Your platform offers an older version than this installation."
-                : release.relation === "unknown-build"
-                  ? "The local build identity is unavailable. Check your platform downloads."
-                  : available
-                    ? MANUAL_INSTALL
-                    : null;
         yield* setState({
           ...previous,
           status: available
@@ -149,7 +149,7 @@ export const make = Effect.gen(function* () {
               : "up-to-date",
           availableVersion: available ? release.releaseVersion : null,
           checkedAt: timestamp,
-          message,
+          message: releaseMessage(release),
           errorContext: null,
           canRetry: false,
           convene: release,
@@ -215,15 +215,20 @@ export const make = Effect.gen(function* () {
     check,
     download: Effect.gen(function* () {
       const current = yield* getState;
-      const url = current.convene?.downloadUrl ?? current.convene?.downloadsUrl;
+      const release = current.convene;
+      const url = release?.downloadUrl ?? release?.downloadsUrl;
       if (
+        !release ||
         (current.status !== "available" && current.errorContext !== "download") ||
         !url ||
-        current.convene?.baseUrl !== baseUrl
+        release.baseUrl !== baseUrl
       ) {
         return { accepted: false, completed: false, state: current };
       }
+      const epoch = generation;
       const opened = yield* shell.openExternal(url);
+      if (epoch !== generation)
+        return { accepted: false, completed: false, state: yield* getState };
       if (!opened)
         yield* setState({
           ...current,
@@ -231,6 +236,14 @@ export const make = Effect.gen(function* () {
           errorContext: "download",
           canRetry: true,
           message: "Could not open the platform download. Please try again.",
+        });
+      else if (current.errorContext === "download")
+        yield* setState({
+          ...current,
+          status: "available",
+          errorContext: null,
+          canRetry: false,
+          message: releaseMessage(release),
         });
       return { accepted: true, completed: opened, state: yield* getState };
     }),

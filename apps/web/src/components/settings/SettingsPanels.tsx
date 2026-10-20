@@ -64,6 +64,7 @@ import { IS_NIGHTLY_BUILD, NightlyMobileBetaRow } from "../NightlyMobileBeta";
 import { CliCommandSettingsRow } from "./CliCommandSettingsRow";
 import {
   canCheckForUpdate,
+  shouldToastDesktopUpdateActionResult,
   getDesktopUpdateButtonTooltip,
   getDesktopUpdateInstallConfirmationMessage,
   isDesktopUpdateButtonDisabled,
@@ -337,7 +338,7 @@ function AboutVersionSection() {
       void bridge
         .downloadUpdate()
         .then((result) => {
-          if (result.state.convene && !result.completed) {
+          if (result.state.convene && shouldToastDesktopUpdateActionResult(result)) {
             showDesktopUpdateErrorToast(
               "about.updateDownload.error",
               result.state.message,
