@@ -70,6 +70,7 @@ function layerMenu(input: {
   readonly dialog?: Deferred.Deferred<Electron.MessageBoxOptions>;
   readonly disabledReason?: string;
   readonly check?: DesktopUpdates.DesktopUpdates["Service"]["check"];
+  readonly download?: DesktopUpdates.DesktopUpdates["Service"]["download"];
 }) {
   const dependencies = Layer.mergeAll(
     input.settings
@@ -105,6 +106,7 @@ function layerMenu(input: {
     Layer.mock(DesktopUpdates.DesktopUpdates)({
       disabledReason: Effect.succeed(Option.fromNullishOr(input.disabledReason)),
       check: input.check ?? (() => Effect.die("unexpected update check")),
+      download: input.download ?? Effect.die("unexpected download"),
     }),
     Layer.mock(ElectronDialog.ElectronDialog)({
       showMessageBox: (options) =>
@@ -137,20 +139,20 @@ describe("DesktopApplicationMenu language preference", () => {
           const template = templates[0]!;
           assert.deepEqual(
             template.map((item) => item.label),
-            ["T3 Code (Nightly)", "文件", "编辑", "视图", "窗口", "帮助"],
+            ["T3 Code for Convene (Nightly)", "文件", "编辑", "视图", "窗口", "帮助"],
           );
-          const application = submenu(template, "T3 Code (Nightly)");
+          const application = submenu(template, "T3 Code for Convene (Nightly)");
           assert.equal(
             application.find((item) => item.role === "about")?.label,
-            "关于 T3 Code (Nightly)",
+            "关于 T3 Code for Convene (Nightly)",
           );
           assert.equal(
             application.find((item) => item.role === "hide")?.label,
-            "隐藏 T3 Code (Nightly)",
+            "隐藏 T3 Code for Convene (Nightly)",
           );
           assert.equal(
             application.find((item) => item.role === "quit")?.label,
-            "退出 T3 Code (Nightly)",
+            "退出 T3 Code for Convene (Nightly)",
           );
           assert.equal(template.find((item) => item.label === "窗口")?.role, "windowMenu");
           assert.deepEqual(
@@ -243,6 +245,53 @@ describe("DesktopApplicationMenu language preference", () => {
         }),
       ),
     );
+  });
+
+  it.effect("opens a platform download only after a menu confirmation", () => {
+    const templates: MenuTemplate[] = [];
+    return Effect.gen(function* () {
+      const dialog = yield* Deferred.make<Electron.MessageBoxOptions>();
+      const downloaded = yield* Deferred.make<void>();
+      const state: DesktopUpdateState = {
+        ...baseUpdateState,
+        status: "available",
+        availableVersion: "1.3.0",
+        message:
+          "Download the package from your Convene platform and install it when you are ready.",
+        convene: {
+          baseUrl: "https://primary.example/prefix",
+          currentBuildId: "local",
+          releaseVersion: "1.3.0",
+          releaseBuildId: "release",
+          relation: "newer",
+          downloadUrl: "https://primary.example/prefix/downloads/file/versions/build/client.deb",
+          downloadsUrl: "https://primary.example/prefix/downloads/latest",
+          helpUrl: "https://primary.example/prefix/help/t3code",
+        },
+      };
+      yield* Effect.gen(function* () {
+        const menu = yield* DesktopApplicationMenu.DesktopApplicationMenu;
+        yield* menu.configure;
+        click(submenu(templates[0]!, "帮助")[0]);
+        const options = yield* Deferred.await(dialog);
+        assert.deepEqual(options.buttons, ["前往下载", "取消"]);
+        assert.include(options.detail, "https://primary.example/prefix");
+        assert.notInclude(options.message, "重新启动");
+        yield* Deferred.await(downloaded);
+      }).pipe(
+        Effect.provide(
+          layerMenu({
+            templates,
+            dialog,
+            initialSettings: chineseSettings,
+            check: () => Effect.succeed({ checked: true, state }),
+            download: Deferred.succeed(downloaded, undefined).pipe(
+              Effect.as({ accepted: true, completed: true, state }),
+            ),
+          }),
+        ),
+      );
+    });
   });
 
   it.effect.each([

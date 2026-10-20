@@ -173,6 +173,9 @@ export class DesktopTelemetryReceiver extends Context.Service<
     readonly setDiagnosticsDemand: (
       enabled: boolean,
     ) => Effect.Effect<void, DesktopTelemetryControlError>;
+    readonly setConveneUpdateSource: (
+      baseUrl: string | null,
+    ) => Effect.Effect<void, DesktopTelemetryControlError>;
     /** Asks the desktop app supervising this server to update itself. The
         desktop answers with desktopUpdateStatus reports carrying the same
         requestId. */
@@ -645,6 +648,8 @@ export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")
     health: Ref.get(health),
     subscribeHealth: subscribeBeforeSnapshotWithoutMutex(healthChanges, Ref.get(health)),
     setDiagnosticsDemand,
+    setConveneUpdateSource: (baseUrl) =>
+      sendControlMessage({ version: 1, type: "conveneUpdateSource", baseUrl }),
     requestDesktopUpdate: (requestId) =>
       sendControlMessage({
         version: 1,
@@ -703,6 +708,7 @@ export const layerTest = (
           })),
         ),
       setDiagnosticsDemand: () => Effect.void,
+      setConveneUpdateSource: () => Effect.void,
       requestDesktopUpdate: () => Effect.void,
       commitDesktopUpdate: () => Effect.void,
       cancelDesktopUpdate: () => Effect.void,

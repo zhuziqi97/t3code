@@ -1,4 +1,5 @@
 import {
+  PRIMARY_LOCAL_ENVIRONMENT_ID,
   DesktopHostTelemetryMessage,
   type DesktopHostTelemetrySnapshot,
   type DesktopTelemetryControlMessage,
@@ -20,6 +21,7 @@ import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import * as SubscriptionRef from "effect/SubscriptionRef";
 
 import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronPowerMonitor from "../electron/ElectronPowerMonitor.ts";
@@ -69,6 +71,8 @@ export class DesktopTelemetryPublisher extends Context.Service<
       message: DesktopTelemetryControlMessage,
     ) => Effect.Effect<void>;
     readonly removeControlSource: (sourceId: string) => Effect.Effect<void>;
+    /** Only the primary backend can select the installed desktop app's release source. */
+    readonly conveneUpdateSources: Stream.Stream<string | null>;
     /** Sends the report to the attached backend and replays the latest one
         to backends that attach later (including the one spawned after a
         relaunch). */
@@ -171,6 +175,7 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
   const powerEvents = yield* Queue.unbounded<PowerEvent>();
   const sampleTriggers = yield* Queue.sliding<void>(1);
   const diagnosticsDemandSources = yield* Ref.make<ReadonlySet<string>>(new Set());
+  const conveneUpdateSource = yield* SubscriptionRef.make<string | null>(null);
   const latest = yield* Ref.make(Option.none<DesktopHostTelemetrySnapshot>());
   const changes = yield* PubSub.sliding<DesktopHostTelemetrySnapshot>(8);
   const sequence = yield* Ref.make(0);
@@ -325,6 +330,10 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
     message,
   ) => {
     switch (message.type) {
+      case "conveneUpdateSource":
+        return sourceId === PRIMARY_LOCAL_ENVIRONMENT_ID
+          ? SubscriptionRef.set(conveneUpdateSource, message.baseUrl)
+          : Effect.void;
       case "setDiagnosticsDemand":
         return Ref.modify(diagnosticsDemandSources, (sources) => {
           const previous = sources.size > 0;
@@ -368,6 +377,11 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
         previous === enabled
           ? Effect.void
           : Queue.offer(sampleTriggers, undefined).pipe(Effect.asVoid),
+      ),
+      Effect.andThen(
+        sourceId === PRIMARY_LOCAL_ENVIRONMENT_ID
+          ? SubscriptionRef.set(conveneUpdateSource, null)
+          : Effect.void,
       ),
     );
 
@@ -415,6 +429,7 @@ export const make = Effect.fn("desktop.telemetryPublisher.make")(function* () {
     );
 
   return DesktopTelemetryPublisher.of({
+    conveneUpdateSources: SubscriptionRef.changes(conveneUpdateSource),
     latest: Ref.get(latest),
     changes: Stream.fromPubSub(changes),
     encoded,

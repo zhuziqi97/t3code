@@ -37,6 +37,43 @@ const baseState: DesktopUpdateState = {
 };
 
 describe("desktop update button state", () => {
+  it("opens only the paired platform download and never offers install for Convene", () => {
+    const state: DesktopUpdateState = {
+      ...baseState,
+      status: "available",
+      availableVersion: "1.1.0",
+      downloadedVersion: "1.0.1",
+      convene: {
+        baseUrl: "https://platform.example/prefix",
+        currentBuildId: "local",
+        releaseVersion: "1.1.0",
+        releaseBuildId: "release",
+        relation: "newer",
+        downloadUrl: "https://platform.example/prefix/downloads/file/versions/build/client.deb",
+        downloadsUrl: "https://platform.example/prefix/downloads/latest",
+        helpUrl: "https://platform.example/prefix/help/t3code",
+      },
+    };
+    expect(resolveDesktopUpdateButtonAction(state)).toBe("open-download");
+    expect(resolveDesktopUpdateButtonAction({ ...state, status: "downloaded" })).toBe("none");
+    expect(
+      resolveDesktopUpdateButtonAction({
+        ...state,
+        convene: { ...state.convene!, downloadUrl: null },
+      }),
+    ).toBe("open-download");
+    expect(getDesktopUpdateReleaseUrl("1.1.0", state)).toBe(state.convene?.helpUrl);
+    expect(getDesktopUpdateReleaseHistoryUrl(state)).toBe(
+      "https://platform.example/prefix/downloads/versions",
+    );
+    expect(
+      getDesktopUpdateReleaseHistoryUrl({
+        ...state,
+        convene: { ...state.convene!, baseUrl: null },
+      }),
+    ).toBeNull();
+  });
+
   it("shows a download action when an update is available", () => {
     const state: DesktopUpdateState = {
       ...baseState,

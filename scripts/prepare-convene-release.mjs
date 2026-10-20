@@ -18,16 +18,30 @@ const targets = [
   ["desktop-mac-arm64", "macos-arm64", [[".dmg", "dmg"]]],
 ];
 
-export async function prepareConveneRelease({ artifacts, output, version, commit, runId }) {
+export async function prepareConveneRelease({
+  artifacts,
+  output,
+  version,
+  commit,
+  runId,
+  platforms,
+}) {
+  const selected = platforms ?? targets.map(([, platform]) => platform);
+  if (
+    selected.length === 0 ||
+    selected.some((platform) => !targets.some(([, name]) => name === platform))
+  )
+    throw new Error("Select at least one supported publication platform");
+  const selectedTargets = targets.filter(([, platform]) => selected.includes(platform));
   const web = NodePath.join(artifacts, "convene-web");
   const build = JSON.parse(
     await NodeFSP.readFile(NodePath.join(web, "convene-build.json"), "utf8"),
   );
   if (build.version !== version || build.source_commit !== commit || build.github_run_id !== runId)
     throw new Error("Web build metadata does not match accepted candidate");
-  // 先收齐四包，避免缺包时写出一份看似完整的发行输入。
+  // 先收齐本次选定平台的所有包，避免写出不完整的发行输入。
   const packages = [];
-  for (const [artifact, platform, formats] of targets) {
+  for (const [artifact, platform, formats] of selectedTargets) {
     const directory = NodePath.join(artifacts, artifact);
     const desktop = JSON.parse(
       await NodeFSP.readFile(NodePath.join(directory, "convene-build.json"), "utf8"),
@@ -45,7 +59,7 @@ export async function prepareConveneRelease({ artifacts, output, version, commit
       packages.push({ platform, source, name: matches[0], format });
     }
   }
-  for (const [, platform] of targets) {
+  for (const [, platform] of selectedTargets) {
     const directory = NodePath.join(output, platform);
     await NodeFSP.mkdir(directory, { recursive: true });
     const selected = packages.filter((item) => item.platform === platform);
@@ -81,14 +95,17 @@ if (
   import.meta.url === NodeURL.pathToFileURL(NodePath.resolve(process.argv[1])).href
 ) {
   const { values } = NodeUtil.parseArgs({
-    options: Object.fromEntries(
-      ["artifacts", "output", "version", "commit", "run-id"].map((key) => [
-        key,
-        { type: "string" },
-      ]),
-    ),
+    options: {
+      ...Object.fromEntries(
+        ["artifacts", "output", "version", "commit", "run-id"].map((key) => [
+          key,
+          { type: "string" },
+        ]),
+      ),
+      platform: { type: "string", multiple: true },
+    },
   });
-  if (Object.keys(values).length !== 5)
+  if (["artifacts", "output", "version", "commit", "run-id"].some((key) => !values[key]))
     throw new Error("Required: --artifacts --output --version --commit --run-id");
   await prepareConveneRelease({
     artifacts: values.artifacts,
@@ -96,5 +113,6 @@ if (
     version: values.version,
     commit: values.commit,
     runId: values["run-id"],
+    platforms: values.platform,
   });
 }

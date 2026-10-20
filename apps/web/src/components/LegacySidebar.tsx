@@ -3030,7 +3030,7 @@ function SortableProjectItem({
 interface SidebarProjectsContentProps {
   showArm64IntelBuildWarning: boolean;
   arm64IntelBuildWarningDescription: string | null;
-  desktopUpdateButtonAction: "download" | "install" | "none";
+  desktopUpdateButtonAction: "download" | "open-download" | "install" | "none";
   desktopUpdateButtonDisabled: boolean;
   desktopUpdateActionPending: boolean;
   handleDesktopUpdateButtonClick: () => void;
@@ -3836,11 +3836,11 @@ export default function LegacySidebar() {
 
     setDesktopUpdateActionPending(true);
 
-    if (desktopUpdateButtonAction === "download") {
+    if (desktopUpdateButtonAction === "download" || desktopUpdateButtonAction === "open-download") {
       void bridge
         .downloadUpdate()
         .then((result) => {
-          if (result.completed) {
+          if (result.completed && !result.state.convene) {
             showDesktopUpdateDownloadedToast(bridge, result.state);
           }
           if (!shouldToastDesktopUpdateActionResult(result)) return;

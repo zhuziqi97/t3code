@@ -23,6 +23,7 @@ import * as Path from "effect/Path";
 import * as ServerConfig from "../config.ts";
 import * as Queue from "effect/Queue";
 import * as SubscriptionRef from "effect/SubscriptionRef";
+import * as DesktopTelemetryReceiver from "../resourceTelemetry/DesktopTelemetryReceiver.ts";
 import * as Socket from "effect/socket/Socket";
 
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
@@ -391,6 +392,22 @@ const make = Effect.gen(function* () {
     runnerId: null,
     error: null,
   });
+  const desktop = yield* DesktopTelemetryReceiver.DesktopTelemetryReceiver;
+  yield* SubscriptionRef.changes(state).pipe(
+    Stream.map((connection) => connection.baseUrl),
+    Stream.changes,
+    Stream.runForEach((baseUrl) =>
+      desktop.setConveneUpdateSource(baseUrl).pipe(
+        Effect.catchTags({
+          DesktopTelemetryControlFailed: () =>
+            Effect.logWarning("Could not report the Convene update source to the desktop."),
+          DesktopTelemetryControlStalled: () =>
+            Effect.logWarning("Could not report the Convene update source to the desktop."),
+        }),
+      ),
+    ),
+    Effect.forkScoped,
+  );
   const requests = yield* Queue.unbounded<ReportWaiter>();
   const changes = yield* PubSub.subscribe(platform.changes);
   yield* Effect.gen(function* () {

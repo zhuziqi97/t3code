@@ -193,11 +193,18 @@ export const make = Effect.gen(function* () {
   const label = yield* resolveServerEnvironmentLabel({ cwdBaseName });
   const machine = yield* detectServerEnvironmentMachineKind();
   const launcher = yield* resolveServiceLauncherMode();
-  const serverSelfUpdate = resolveServerSelfUpdateCapability({
-    desktopManaged: serverConfig.mode === "desktop",
-    launcherManaged: launcher.managed,
-  });
-  const serverInstallation = serverSelfUpdate === null ? yield* resolveServerInstallation : null;
+  // Convene desktop releases are installed by the user; do not advertise the
+  // upstream remote quit-and-install capability to Web or other machines.
+  const manualDesktopRelease =
+    serverConfig.mode === "desktop" && packageJson.version.includes("convene.");
+  const serverSelfUpdate = manualDesktopRelease
+    ? null
+    : resolveServerSelfUpdateCapability({
+        desktopManaged: serverConfig.mode === "desktop",
+        launcherManaged: launcher.managed,
+      });
+  const serverInstallation =
+    serverSelfUpdate === null && !manualDesktopRelease ? yield* resolveServerInstallation : null;
   // Static is correct: the control fd is known at bootstrap, and the desktop
   // app and its bundled server ship in one artifact, so a present fd means
   // the app speaks the requestDesktopUpdate protocol. WSL backends never get

@@ -54,6 +54,7 @@ function runRemoteUpdatesTest(
       const cancellations = yield* Queue.unbounded<DesktopTelemetryCancelDesktopUpdate>();
       const reports: DesktopUpdateStatusReport[] = [];
       const publisher = DesktopTelemetryPublisher.DesktopTelemetryPublisher.of({
+        conveneUpdateSources: Stream.empty,
         latest: Effect.succeedNone,
         changes: Stream.empty,
         encoded: Stream.empty,

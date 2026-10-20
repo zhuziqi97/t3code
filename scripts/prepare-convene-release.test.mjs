@@ -102,3 +102,33 @@ NodeTest.test("rejects a desktop package built against a different Web", async (
   );
   await NodeAssert.rejects(prepareConveneRelease(input), /Web build mismatch/);
 });
+
+NodeTest.test(
+  "a Linux-only publication requires both Linux packages and emits no unselected platform",
+  async (t) => {
+    const input = await fixture(t);
+    await NodeFSP.rm(NodePath.join(input.artifacts, "desktop-win-x64"), { recursive: true });
+    await NodeFSP.rm(NodePath.join(input.artifacts, "desktop-mac-arm64"), { recursive: true });
+    await prepareConveneRelease({ ...input, platforms: ["linux-x64"] });
+    const output = await NodeFSP.readdir(input.output);
+    NodeAssert.deepEqual(output.sort(), ["linux-x64", "web"]);
+    const info = JSON.parse(
+      await NodeFSP.readFile(NodePath.join(input.output, "linux-x64", "build-info.json")),
+    );
+    NodeAssert.deepEqual(
+      info.packages.map((p) => p.format),
+      ["deb", "appimage"],
+    );
+  },
+);
+
+NodeTest.test("an empty or unknown publication selection never writes output", async (t) => {
+  const input = await fixture(t);
+  for (const platforms of [[], ["unknown"]]) {
+    await NodeAssert.rejects(
+      prepareConveneRelease({ ...input, platforms }),
+      /supported publication platform/,
+    );
+  }
+  await NodeAssert.rejects(NodeFSP.stat(input.output), { code: "ENOENT" });
+});

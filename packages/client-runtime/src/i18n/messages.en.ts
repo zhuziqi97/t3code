@@ -14,6 +14,25 @@
  * rename another product or rewrite a command it tells the user to run.
  */
 export const en = {
+  "update.platform.download": "Go to download",
+  "update.platform.downloads": "Platform downloads",
+  "update.platform.source": "Convene update source",
+  "update.platform.publishedVersion": "Platform version: {{version}}",
+  "update.platform.checkedAt": "Last checked: {{date}}",
+  "update.platform.connectFirst":
+    "Connect the desktop primary environment to Convene to check for updates.",
+  "update.platform.manualInstall":
+    "Download the package from your Convene platform and install it when you are ready.",
+  "update.platform.checkFailed": "Could not check the Convene release. Please try again.",
+  "update.platform.noPackage":
+    "This release has no matching package for this installation. Open your platform downloads for details.",
+  "update.platform.revision": "Your platform offers a different build of the same version.",
+  "update.platform.older": "Your platform offers an older version than this installation.",
+  "update.platform.current":
+    "This installation matches the version and build offered by your platform.",
+  "update.platform.openFailed": "Could not open the platform download. Please try again.",
+  "update.platform.unknownBuild":
+    "The local build identity is unavailable. Check your platform downloads.",
   "common.later": "Later",
   "chat.timeline.fromQueue": "From queue",
   "pullRequest.flow.action.branchDeleted": "Branch deleted",

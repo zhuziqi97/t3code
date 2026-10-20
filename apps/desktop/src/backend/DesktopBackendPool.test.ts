@@ -67,6 +67,7 @@ function layerPool(labelRef: Ref.Ref<string>): Layer.Layer<DesktopBackendPool.De
             } satisfies DesktopObservability.DesktopBackendOutputLogShape),
         } satisfies DesktopObservability.DesktopBackendOutputLogFactory["Service"]),
         Layer.succeed(DesktopTelemetryPublisher.DesktopTelemetryPublisher, {
+          conveneUpdateSources: Stream.empty,
           latest: Effect.succeedNone,
           changes: Stream.empty,
           encoded: Stream.empty,

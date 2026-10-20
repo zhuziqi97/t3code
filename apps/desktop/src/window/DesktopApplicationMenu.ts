@@ -85,6 +85,24 @@ const checkForUpdatesFromMenu = Effect.fn("desktop.menu.checkForUpdates")(functi
   const updateState = result.state;
   const t = getTranslate();
 
+  if (updateState.convene) {
+    const canDownload =
+      updateState.status === "available" && Boolean(updateState.convene.downloadsUrl);
+    const response = yield* electronDialog.showMessageBox({
+      type: updateState.status === "error" ? "warning" : "info",
+      title: t("menu.checkForUpdates"),
+      message: updateState.message
+        ? formatDesktopUpdateMessage(updateState.message, t)
+        : t("update.platform.current"),
+      ...(updateState.convene.baseUrl
+        ? { detail: `${t("update.platform.source")}: ${updateState.convene.baseUrl}` }
+        : {}),
+      buttons: canDownload ? [t("update.platform.download"), t("common.cancel")] : [t("common.ok")],
+    });
+    if (canDownload && response.response === 0) yield* updates.download;
+    return;
+  }
+
   if (updateState.status === "up-to-date") {
     yield* electronDialog.showMessageBox({
       type: "info",

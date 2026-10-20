@@ -54,6 +54,7 @@ export function SidebarUpdateReleaseNotes({
   readonly tooltip: string;
 }) {
   const t = useTranslate();
+  const historyUrl = getDesktopUpdateReleaseHistoryUrl(state);
   if (state.channel !== "nightly" || state.releaseNotes.length === 0) {
     return <>{tooltip}</>;
   }
@@ -78,7 +79,7 @@ export function SidebarUpdateReleaseNotes({
       </div>
       <div className="min-h-0 max-h-[min(28rem,calc(100vh-6rem))] overflow-y-auto px-1 pt-4 pb-1">
         {state.releaseNotes.map((releaseNote, index) => {
-          const releaseUrl = getDesktopUpdateReleaseUrl(releaseNote.version);
+          const releaseUrl = getDesktopUpdateReleaseUrl(releaseNote.version, state);
           const omittedItemCount = Math.max(0, releaseNote.totalItems - releaseNote.items.length);
           const linkLabel =
             omittedItemCount === 0
@@ -110,10 +111,10 @@ export function SidebarUpdateReleaseNotes({
             </div>
           );
         })}
-        {state.omittedReleaseCount > 0 ? (
+        {state.omittedReleaseCount > 0 && historyUrl ? (
           <div>
             <Separator className="my-3" />
-            <ReleaseLink releaseUrl={getDesktopUpdateReleaseHistoryUrl()} shell={shell}>
+            <ReleaseLink releaseUrl={historyUrl} shell={shell}>
               {t("update.notes.older", { count: state.omittedReleaseCount })}
             </ReleaseLink>
           </div>

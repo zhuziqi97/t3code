@@ -165,6 +165,7 @@ function makeTestInstance(input: MakeInstanceInput) {
       forInstance: () => Effect.succeed(stubLog),
     } satisfies DesktopObservability.DesktopBackendOutputLogFactory["Service"]),
     Layer.succeed(DesktopTelemetryPublisher.DesktopTelemetryPublisher, {
+      conveneUpdateSources: Stream.empty,
       latest: Effect.succeedNone,
       changes: Stream.empty,
       encoded: input.desktopTelemetryStream ?? Stream.empty,

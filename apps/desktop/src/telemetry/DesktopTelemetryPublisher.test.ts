@@ -1,4 +1,4 @@
-import { DesktopHostTelemetryMessage } from "@t3tools/contracts";
+import { DesktopHostTelemetryMessage, PRIMARY_LOCAL_ENVIRONMENT_ID } from "@t3tools/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
@@ -61,6 +61,52 @@ function layerElectronApp(
 }
 
 describe("DesktopTelemetryPublisher", () => {
+  it.effect(
+    "keeps the primary Convene source when WSL or remote environments report or disconnect",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const layerPower = Layer.mock(ElectronPowerMonitor.ElectronPowerMonitor)({
+            isOnBatteryPower: Effect.succeed(false),
+            getSystemIdleTime: Effect.succeed(0),
+            getSystemIdleState: () => Effect.succeed("active"),
+            getCurrentThermalState: Effect.succeed("nominal"),
+            onSimpleEvent: () => Effect.void,
+            onThermalStateChange: () => Effect.void,
+            onSpeedLimitChange: () => Effect.void,
+          });
+          const layer = DesktopTelemetryPublisher.layer.pipe(
+            Layer.provide(Layer.mergeAll(layerElectronApp([]), layerPower, layerHistory)),
+          );
+          yield* Effect.gen(function* () {
+            const publisher = yield* DesktopTelemetryPublisher.DesktopTelemetryPublisher;
+            yield* publisher.handleControlForSource(PRIMARY_LOCAL_ENVIRONMENT_ID, {
+              version: 1,
+              type: "conveneUpdateSource",
+              baseUrl: "https://primary.example/prefix",
+            });
+            for (const source of ["wsl:Ubuntu", "remote-environment"]) {
+              yield* publisher.handleControlForSource(source, {
+                version: 1,
+                type: "conveneUpdateSource",
+                baseUrl: "https://other.example",
+              });
+              yield* publisher.removeControlSource(source);
+              assert.deepEqual(
+                yield* publisher.conveneUpdateSources.pipe(Stream.runHead),
+                Option.some("https://primary.example/prefix"),
+              );
+            }
+            yield* publisher.removeControlSource(PRIMARY_LOCAL_ENVIRONMENT_ID);
+            assert.deepEqual(
+              yield* publisher.conveneUpdateSources.pipe(Stream.runHead),
+              Option.some(null),
+            );
+          }).pipe(Effect.provide(layer));
+        }),
+      ),
+  );
+
   it.effect("stops when its scope closes during an Electron telemetry sample", () =>
     Effect.gen(function* () {
       const pollStarted = yield* Deferred.make<void>();

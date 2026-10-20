@@ -3,7 +3,7 @@ import type { TFunction } from "i18next";
 import { i18n } from "../i18n";
 import type { DesktopUpdateActionResult, DesktopUpdateState } from "@t3tools/contracts";
 
-export type DesktopUpdateButtonAction = "download" | "install" | "none";
+export type DesktopUpdateButtonAction = "download" | "open-download" | "install" | "none";
 
 const DESKTOP_RELEASE_HISTORY_URL = "https://github.com/pingdotgg/t3code/releases";
 const DESKTOP_RELEASE_TAG_URL = `${DESKTOP_RELEASE_HISTORY_URL}/tag`;
@@ -18,19 +18,33 @@ export function getDesktopUpdateDownloadedVersion(state: DesktopUpdateState): st
 }
 
 /** Release notes for an exact downloaded build; nightly suffixes are part of the tag. */
-export function getDesktopUpdateReleaseUrl(version: string | null): string | null {
+export function getDesktopUpdateReleaseUrl(
+  version: string | null,
+  state?: DesktopUpdateState,
+): string | null {
+  if (state?.convene) return state.convene.helpUrl;
   const normalizedVersion = version?.trim();
   if (!normalizedVersion) return null;
   return `${DESKTOP_RELEASE_TAG_URL}/v${encodeURIComponent(normalizedVersion)}`;
 }
 
-export function getDesktopUpdateReleaseHistoryUrl(): string {
+export function getDesktopUpdateReleaseHistoryUrl(state?: DesktopUpdateState): string | null {
+  if (state?.convene)
+    return state.convene.baseUrl
+      ? `${state.convene.baseUrl.replace(/\/$/, "")}/downloads/versions`
+      : null;
   return DESKTOP_RELEASE_HISTORY_URL;
 }
 
 export function resolveDesktopUpdateButtonAction(
   state: DesktopUpdateState,
 ): DesktopUpdateButtonAction {
+  if (state.convene) {
+    return (state.status === "available" || state.errorContext === "download") &&
+      (state.convene.downloadUrl !== null || state.convene.downloadsUrl !== null)
+      ? "open-download"
+      : "none";
+  }
   if (
     state.downloadedVersion &&
     (state.status === "downloaded" ||
@@ -80,6 +94,14 @@ export function getDesktopUpdateButtonTooltip(
   state: DesktopUpdateState,
   translate: TFunction = i18n.t,
 ): string {
+  if (state.convene) {
+    if (state.status === "checking") return translate("update.checking");
+    if (state.message) return formatDesktopUpdateMessage(state.message, translate);
+    if (state.status === "up-to-date") return translate("update.platform.current");
+    return state.availableVersion
+      ? translate("update.availableVersion", { version: state.availableVersion })
+      : translate("update.check");
+  }
   if (
     state.notAppliedVersion !== undefined &&
     (state.status === "available" || state.status === "downloaded") &&

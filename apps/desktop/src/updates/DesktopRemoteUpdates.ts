@@ -134,6 +134,19 @@ export const listen: Effect.Effect<
   const handleRequest = (request: DesktopTelemetryRequestDesktopUpdate): Effect.Effect<void> =>
     Effect.scoped(
       Effect.gen(function* () {
+        if ((yield* updates.getState).convene) {
+          yield* updates.check("remote-update");
+          yield* publishReport(
+            yield* updates.getState,
+            {
+              outcome: "failed",
+              reason:
+                "Download the package from your Convene platform and install it when you are ready.",
+            },
+            request.requestId,
+          );
+          return;
+        }
         const cancellation = yield* Deferred.make<void>();
         const shouldStart = yield* Ref.modify(requestControlRef, (control) => {
           if (control.cancelledBeforeStart.includes(request.requestId)) {

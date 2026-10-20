@@ -355,7 +355,14 @@ export const DesktopTelemetryCancelDesktopUpdate = Schema.Struct({
 });
 export type DesktopTelemetryCancelDesktopUpdate = typeof DesktopTelemetryCancelDesktopUpdate.Type;
 
+export const DesktopTelemetryConveneUpdateSource = Schema.Struct({
+  version: Schema.Literal(1),
+  type: Schema.Literal("conveneUpdateSource"),
+  baseUrl: Schema.NullOr(Schema.String),
+});
+
 export const DesktopTelemetryControlMessage = Schema.Union([
+  DesktopTelemetryConveneUpdateSource,
   DesktopTelemetrySetDiagnosticsDemand,
   DesktopTelemetrySetHostPowerIntervals,
   DesktopTelemetryRequestDesktopUpdate,

@@ -104,7 +104,7 @@ function resolveSidebarUpdatePresentation({
           ? "everything"
           : action === "install"
             ? "downloaded"
-            : action === "download"
+            : action === "download" || action === "open-download"
               ? "available"
               : "idle";
 
@@ -232,7 +232,7 @@ function SidebarUpdateControl() {
   const isDownloading = state?.status === "downloading";
   // Remote servers follow this app to the version it is about to install.
   const localUpdateVersion =
-    state && action !== "none" ? getDesktopUpdateDownloadedVersion(state) : null;
+    state && !state.convene && action !== "none" ? getDesktopUpdateDownloadedVersion(state) : null;
   const everything = useUpdateEverything(localUpdateVersion);
   const runsEverything = everything.hasUpdates && !isDownloading;
   // Providers leave the list once queued, so the run keeps its own state.
@@ -294,6 +294,28 @@ function SidebarUpdateControl() {
 
     if (!bridge || !state) return;
     setIsActionPending(true);
+
+    if (action === "open-download") {
+      void bridge
+        .downloadUpdate()
+        .then((result) => {
+          if (!result.completed)
+            showDesktopUpdateErrorToast(
+              "about.updateDownload.error",
+              result.state.message,
+              "update.unexpected",
+            );
+        })
+        .catch((error: unknown) => {
+          showDesktopUpdateErrorToast(
+            "about.updateDownload.error",
+            error instanceof Error ? error.message : null,
+            "update.unexpected",
+          );
+        })
+        .finally(() => setIsActionPending(false));
+      return;
+    }
 
     if (action === "download") {
       void downloadLocalUpdate(bridge, { notifyDownloaded: true }).finally(() =>
@@ -361,7 +383,7 @@ function SidebarUpdateControl() {
                 downloadLocalUpdate(bridge, { notifyDownloaded: false, reportError }),
             }
           : {}),
-        ...(bridge && action !== "none"
+        ...(bridge && (action === "download" || action === "install")
           ? { installLocal: (reportError) => installLocalUpdate(bridge, reportError) }
           : {}),
       });

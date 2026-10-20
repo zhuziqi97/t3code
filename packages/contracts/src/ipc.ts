@@ -267,6 +267,20 @@ export interface DesktopRuntimeInfo {
   runningUnderArm64Translation: boolean;
 }
 
+export const ConveneDesktopUpdateSchema = Schema.Struct({
+  baseUrl: Schema.NullOr(Schema.String),
+  currentBuildId: Schema.NullOr(Schema.String),
+  releaseVersion: Schema.NullOr(Schema.String),
+  releaseBuildId: Schema.NullOr(Schema.String),
+  relation: Schema.NullOr(
+    Schema.Literals(["newer", "same", "older", "different-build", "unknown-build"]),
+  ),
+  downloadUrl: Schema.NullOr(Schema.String),
+  downloadsUrl: Schema.NullOr(Schema.String),
+  helpUrl: Schema.NullOr(Schema.String),
+});
+export type ConveneDesktopUpdate = typeof ConveneDesktopUpdateSchema.Type;
+
 export interface DesktopUpdateState {
   enabled: boolean;
   status: DesktopUpdateStatus;
@@ -284,6 +298,8 @@ export interface DesktopUpdateState {
   message: string | null;
   errorContext: "check" | "download" | "install" | null;
   canRetry: boolean;
+  /** Platform-managed releases are downloaded and installed by the user. */
+  convene?: ConveneDesktopUpdate;
   /**
    * The version the last install handed to the OS installer that did not
    * apply: the app came back on its old version. Server-triggered updates do
@@ -321,6 +337,7 @@ export const DesktopUpdateStateSchema = Schema.Struct({
   message: Schema.NullOr(Schema.String),
   errorContext: Schema.NullOr(Schema.Literals(["check", "download", "install"])),
   canRetry: Schema.Boolean,
+  convene: Schema.optionalKey(ConveneDesktopUpdateSchema),
   notAppliedVersion: Schema.optionalKey(Schema.String),
 });
 

@@ -3,6 +3,18 @@ import type { TFunction } from "i18next";
 /** Translate messages owned by the current desktop updater; native diagnostics stay verbatim. */
 export function formatDesktopUpdateMessage(message: string, translate: TFunction): string {
   const fixed: Readonly<Record<string, string>> = {
+    "Connect the desktop primary environment to Convene to check for updates.":
+      "update.platform.connectFirst",
+    "Download the package from your Convene platform and install it when you are ready.":
+      "update.platform.manualInstall",
+    "Could not check the Convene release. Please try again.": "update.platform.checkFailed",
+    "This release has no matching package for this installation. Open your platform downloads for details.":
+      "update.platform.noPackage",
+    "Your platform offers a different build of the same version.": "update.platform.revision",
+    "Your platform offers an older version than this installation.": "update.platform.older",
+    "Could not open the platform download. Please try again.": "update.platform.openFailed",
+    "The local build identity is unavailable. Check your platform downloads.":
+      "update.platform.unknownBuild",
     "Automatic updates are not available because no update feed is configured.":
       "update.disabled.feed",
     "Automatic updates are only available in packaged production builds.":

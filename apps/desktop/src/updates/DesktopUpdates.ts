@@ -33,6 +33,7 @@ import * as ElectronUpdater from "../electron/ElectronUpdater.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as IpcChannels from "../ipc/channels.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
+import * as ConveneReleaseUpdates from "./ConveneReleaseUpdates.ts";
 import { normalizeDesktopUpdateReleaseNotes } from "./releaseNotes.ts";
 import { resolveDefaultDesktopUpdateChannel } from "./updateChannels.ts";
 import {
@@ -341,7 +342,7 @@ function isArm64HostRunningIntelBuild(runtimeInfo: DesktopRuntimeInfo): boolean 
 }
 
 /** @public Service construction is part of the canonical Effect module API. */
-export const make = Effect.gen(function* () {
+const makeFeedUpdates = Effect.gen(function* () {
   const config = yield* DesktopConfig.DesktopConfig;
   const pool = yield* DesktopBackendPool.DesktopBackendPool;
   const desktopState = yield* DesktopState.DesktopState;
@@ -1175,6 +1176,15 @@ export const make = Effect.gen(function* () {
     ),
     installPrepared: (expectedVersion) => installWithExpectedVersion(expectedVersion),
   });
+});
+
+/** Production releases always use the paired Convene platform. The existing
+ * mock-feed mode remains available for the upstream installer test harness. */
+export const make = Effect.gen(function* () {
+  const config = yield* DesktopConfig.DesktopConfig;
+  return config.mockUpdates
+    ? yield* makeFeedUpdates
+    : DesktopUpdates.of(yield* ConveneReleaseUpdates.make);
 });
 
 export const layer = Layer.effect(DesktopUpdates, make);

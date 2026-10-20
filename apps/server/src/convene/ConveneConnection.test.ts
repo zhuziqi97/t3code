@@ -20,6 +20,7 @@ import * as ConveneMcp from "./ConveneMcp.ts";
 import * as ConveneNative from "./ConveneNative.ts";
 import * as ConvenePlatform from "./ConvenePlatform.ts";
 import * as ConveneWorkspaces from "./ConveneWorkspaces.ts";
+import * as DesktopTelemetryReceiver from "../resourceTelemetry/DesktopTelemetryReceiver.ts";
 
 const decode = Schema.decodeUnknownEffect(
   Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)),
@@ -30,6 +31,7 @@ it.live("opens a data channel while a configuration cache write is waiting", () 
     const cacheStarted = yield* Deferred.make<void>();
     const releaseCache = yield* Deferred.make<void>();
     const dataBound = yield* Deferred.make<void>();
+    const updateSource = yield* Deferred.make<string>();
     const routes = Layer.mergeAll(
       HttpRouter.add(
         "GET",
@@ -116,6 +118,7 @@ it.live("opens a data channel while a configuration cache write is waiting", () 
     yield* Effect.gen(function* () {
       const connection = yield* ConveneConnection.ConveneConnection;
       yield* Deferred.await(dataBound);
+      assert.equal(yield* Deferred.await(updateSource), HttpServer.formatAddress(server.address));
       assert.equal((yield* connection.status).phase, "connecting");
       yield* Deferred.succeed(releaseCache, undefined);
       const online = yield* connection.changes.pipe(
@@ -124,7 +127,21 @@ it.live("opens a data channel while a configuration cache write is waiting", () 
         Stream.runCollect,
       );
       assert.equal(online.length, 1);
-    }).pipe(Effect.provide(ConveneConnection.layer.pipe(Layer.provide(dependencies))));
+    }).pipe(
+      Effect.provide(
+        ConveneConnection.layer.pipe(
+          Layer.provide(dependencies),
+          Layer.provide(
+            DesktopTelemetryReceiver.layerTest({
+              setConveneUpdateSource: (baseUrl) =>
+                baseUrl === null
+                  ? Effect.void
+                  : Deferred.succeed(updateSource, baseUrl).pipe(Effect.asVoid),
+            }),
+          ),
+        ),
+      ),
+    );
   }).pipe(
     Effect.provide(
       ServerConfig.layerTest(process.cwd(), { prefix: "t3-control-" }).pipe(

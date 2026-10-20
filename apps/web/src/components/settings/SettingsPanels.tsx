@@ -333,14 +333,25 @@ function AboutVersionSection() {
 
     const action = updateState ? resolveDesktopUpdateButtonAction(updateState) : "none";
 
-    if (action === "download") {
-      void bridge.downloadUpdate().catch((error: unknown) => {
-        showDesktopUpdateErrorToast(
-          "about.updateDownload.error",
-          error instanceof Error ? error.message : null,
-          "about.updateDownload.failed",
-        );
-      });
+    if (action === "download" || action === "open-download") {
+      void bridge
+        .downloadUpdate()
+        .then((result) => {
+          if (result.state.convene && !result.completed) {
+            showDesktopUpdateErrorToast(
+              "about.updateDownload.error",
+              result.state.message,
+              "about.updateDownload.failed",
+            );
+          }
+        })
+        .catch((error: unknown) => {
+          showDesktopUpdateErrorToast(
+            "about.updateDownload.error",
+            error instanceof Error ? error.message : null,
+            "about.updateDownload.failed",
+          );
+        });
       return;
     }
 
@@ -410,6 +421,7 @@ function AboutVersionSection() {
       : isDesktopUpdateButtonDisabled(updateState);
 
   const actionLabel: Record<string, string> = {
+    "open-download": t("update.platform.download"),
     download: t("about.download"),
     install: t("about.install"),
   };
@@ -420,8 +432,10 @@ function AboutVersionSection() {
   };
   const buttonLabel =
     actionLabel[action] ?? statusLabel[updateState?.status ?? ""] ?? t("about.updateCheck");
-  const description =
-    action === "download" || action === "install"
+  const platformDownloadsUrl = updateState?.convene?.downloadsUrl;
+  const description = updateState?.convene
+    ? getDesktopUpdateButtonTooltip(updateState, t)
+    : action === "download" || action === "install"
       ? t("about.updateAvailable")
       : t("about.version.description");
 
@@ -449,7 +463,43 @@ function AboutVersionSection() {
           </Tooltip>
         }
       />
-      {hasDesktopBridge ? (
+      {updateState?.convene ? (
+        <SettingsRow
+          title={t("update.platform.source")}
+          description={
+            <div className="space-y-1 break-all">
+              <p>{updateState.convene.baseUrl ?? t("update.platform.connectFirst")}</p>
+              {updateState.convene.releaseVersion ? (
+                <p>
+                  {t("update.platform.publishedVersion", {
+                    version: updateState.convene.releaseVersion,
+                  })}
+                </p>
+              ) : null}
+              {updateState.checkedAt ? (
+                <p>
+                  {t("update.platform.checkedAt", {
+                    date: new Date(updateState.checkedAt).toLocaleString(),
+                  })}
+                </p>
+              ) : null}
+            </div>
+          }
+          control={
+            platformDownloadsUrl ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  void window.desktopBridge?.openExternal(platformDownloadsUrl);
+                }}
+              >
+                {t("update.platform.downloads")}
+              </Button>
+            ) : null
+          }
+        />
+      ) : hasDesktopBridge ? (
         <SettingsRow
           {...searchableSetting("update-track", t)}
           title={t("about.updateTrack")}

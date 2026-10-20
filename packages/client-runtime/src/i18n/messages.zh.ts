@@ -14,6 +14,20 @@
 import type { Messages } from "./messages.en.ts";
 
 export const zh: Partial<Messages> = {
+  "update.platform.download": "前往下载",
+  "update.platform.downloads": "平台下载页",
+  "update.platform.source": "Convene 更新来源",
+  "update.platform.publishedVersion": "平台提供版本：{{version}}",
+  "update.platform.checkedAt": "上次检查：{{date}}",
+  "update.platform.connectFirst": "请先将本机桌面主环境连接到 Convene，再检查更新。",
+  "update.platform.manualInstall": "请从当前 Convene 平台下载安装包，在方便时手动安装。",
+  "update.platform.checkFailed": "检查 Convene 版本失败，请稍后重试。",
+  "update.platform.noPackage": "此版本没有适合当前安装方式的包，请查看平台下载页。",
+  "update.platform.revision": "平台提供了同一版本的不同构建，可按需手动下载安装。",
+  "update.platform.older": "平台提供的版本低于当前安装版本。",
+  "update.platform.current": "当前安装版本和构建与平台提供的一致。",
+  "update.platform.openFailed": "无法打开平台下载入口，请重试。",
+  "update.platform.unknownBuild": "无法确认本机构建信息，请查看平台下载页。",
   "common.later": "稍后",
   "chat.timeline.fromQueue": "来自队列",
   "pullRequest.flow.action.branchDeleted": "已删除分支",
