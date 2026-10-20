@@ -2902,10 +2902,8 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     const path = yield* Path.Path;
     const repoRoot = yield* RepoRoot;
     buildConfig.linux = {
-      // The .deb is built from the same unpacked app after the AppImage.
-      // electron-builder lists both in latest-linux.yml and writes
-      // resources/package-type into the .deb only, so electron-updater updates
-      // each install in its own format.
+      // Build both formats from the same unpacked app. The DEB adds its own
+      // package marker below, including builds without a GitHub update feed.
       target: target === "AppImage" ? [target, "deb"] : [target],
       executableName: CONVENE_DESKTOP_IDENTITY.executableName,
       icon: "icons",
@@ -2932,6 +2930,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       // FPM runs outside the staged app directory, so source paths must be absolute.
       // AppStream consumers associate this metadata with our t3code.desktop entry.
       fpm: [
+        `${path.join(repoRoot, "apps/desktop/resources/linux/deb-package-type")}=/opt/${resolveDesktopProductName(version)}/resources/package-type`,
         `${path.join(repoRoot, "apps/desktop/resources/linux/tech.ziqi.t3code-convene.metainfo.xml")}=/usr/share/metainfo/tech.ziqi.t3code-convene.metainfo.xml`,
         `${path.join(repoRoot, "LICENSE")}=/usr/share/doc/t3code-convene/copyright`,
       ],
