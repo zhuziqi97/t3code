@@ -635,7 +635,8 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.sidebarProjectGroupingMode !== DEFAULT_UNIFIED_SETTINGS.sidebarProjectGroupingMode
       ? [t("settings.search.project-grouping.title")]
       : []),
-    ...(settings.sidebarProjectSortOrder !== DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder
+    ...(settings.legacySidebarEnabled &&
+    settings.sidebarProjectSortOrder !== DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder
       ? [t("settings.search.project-order.title")]
       : []),
     ...(settings.sidebarWorkingShelfEnabled !== DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled
@@ -660,7 +661,9 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.snoozeLimitedThreads !== DEFAULT_UNIFIED_SETTINGS.snoozeLimitedThreads
       ? [t("general.snooze.label")]
       : []),
-    ...(settings.wordWrap !== DEFAULT_UNIFIED_SETTINGS.wordWrap ? [t("settings.search.word-wrap.title")] : []),
+    ...(settings.wordWrap !== DEFAULT_UNIFIED_SETTINGS.wordWrap
+      ? [t("settings.search.word-wrap.title")]
+      : []),
     ...(settings.persistComposerContextStrip !==
     DEFAULT_UNIFIED_SETTINGS.persistComposerContextStrip
       ? [t("restore.composerContext")]
@@ -672,7 +675,9 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.diffIgnoreWhitespace !== DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace
       ? [t("general.whitespace.label")]
       : []),
-    ...(settings.diffLayout !== DEFAULT_UNIFIED_SETTINGS.diffLayout ? [t("general.diffLayout.label")] : []),
+    ...(settings.diffLayout !== DEFAULT_UNIFIED_SETTINGS.diffLayout
+      ? [t("general.diffLayout.label")]
+      : []),
     ...(settings.proactivePanelsEnabled !== DEFAULT_UNIFIED_SETTINGS.proactivePanelsEnabled
       ? [t("general.proactive.label")]
       : []),
@@ -685,7 +690,9 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.composerRichTextEnabled !== DEFAULT_UNIFIED_SETTINGS.composerRichTextEnabled
       ? [t("general.richText.label")]
       : []),
-    ...(settings.sendShortcut !== DEFAULT_UNIFIED_SETTINGS.sendShortcut ? [t("general.send.label")] : []),
+    ...(settings.sendShortcut !== DEFAULT_UNIFIED_SETTINGS.sendShortcut
+      ? [t("general.send.label")]
+      : []),
     ...(settings.followUpBehavior !== DEFAULT_UNIFIED_SETTINGS.followUpBehavior
       ? [t("general.followUp.label")]
       : []),
@@ -722,7 +729,9 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.confirmThreadDelete !== DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete
       ? [t("settings.search.delete-confirmation.title")]
       : []),
-    ...(settings.confirmQuit !== DEFAULT_UNIFIED_SETTINGS.confirmQuit ? [t("settings.search.quit-confirmation.title")] : []),
+    ...(settings.confirmQuit !== DEFAULT_UNIFIED_SETTINGS.confirmQuit
+      ? [t("settings.search.quit-confirmation.title")]
+      : []),
     ...(isTextGenerationModelDirty ? [t("settings.search.text-generation-model.title")] : []),
     ...getChangedBrowserSettingLabels(settings),
     ...(settings.enableAgentBrowserAccess !== DEFAULT_UNIFIED_SETTINGS.enableAgentBrowserAccess
@@ -2311,10 +2320,15 @@ export function GeneralSettingsPanel() {
         />
         <SettingsRow
           {...searchableSetting("project-order", t)}
-          description={t("general.projectOrder.description")}
+          description={t(
+            settings.legacySidebarEnabled
+              ? "general.projectOrder.description"
+              : "general.projectOrder.stableDescription",
+          )}
           resetAction={
+            settings.legacySidebarEnabled &&
             settings.sidebarProjectSortOrder !==
-            DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder ? (
+              DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder ? (
               <SettingResetButton
                 label={t("general.projectOrder.reset")}
                 onClick={() =>
@@ -2326,31 +2340,33 @@ export function GeneralSettingsPanel() {
             ) : null
           }
           control={
-            <Select
-              value={settings.sidebarProjectSortOrder}
-              onValueChange={(value) => {
-                if (isSidebarProjectSortOrder(value)) {
-                  updateSettings({ sidebarProjectSortOrder: value });
-                }
-              }}
-            >
-              <SelectTrigger
-                size="sm"
-                className="w-full sm:w-44"
-                aria-label={t("general.projectOrder.label")}
+            settings.legacySidebarEnabled ? (
+              <Select
+                value={settings.sidebarProjectSortOrder}
+                onValueChange={(value) => {
+                  if (isSidebarProjectSortOrder(value)) {
+                    updateSettings({ sidebarProjectSortOrder: value });
+                  }
+                }}
               >
-                <SelectValue>
-                  {t(SIDEBAR_PROJECT_SORT_ORDER_LABELS[settings.sidebarProjectSortOrder])}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectPopup align="end" alignItemWithTrigger={false}>
-                {SidebarProjectSortOrder.literals.map((sortOrder) => (
-                  <SelectItem hideIndicator key={sortOrder} value={sortOrder}>
-                    {t(SIDEBAR_PROJECT_SORT_ORDER_LABELS[sortOrder])}
-                  </SelectItem>
-                ))}
-              </SelectPopup>
-            </Select>
+                <SelectTrigger
+                  size="sm"
+                  className="w-full sm:w-44"
+                  aria-label={t("general.projectOrder.label")}
+                >
+                  <SelectValue>
+                    {t(SIDEBAR_PROJECT_SORT_ORDER_LABELS[settings.sidebarProjectSortOrder])}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectPopup align="end" alignItemWithTrigger={false}>
+                  {SidebarProjectSortOrder.literals.map((sortOrder) => (
+                    <SelectItem hideIndicator key={sortOrder} value={sortOrder}>
+                      {t(SIDEBAR_PROJECT_SORT_ORDER_LABELS[sortOrder])}
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
+            ) : null
           }
         />
 
@@ -3746,8 +3762,7 @@ export function ArchivedThreadsPanel() {
                         stackedThreadToast({
                           type: "error",
                           title: t("archive.actionFailed"),
-                          description:
-                            error instanceof Error ? error.message : t("common.error"),
+                          description: error instanceof Error ? error.message : t("common.error"),
                         }),
                       );
                     }
@@ -3757,7 +3772,8 @@ export function ArchivedThreadsPanel() {
                 description={
                   <span className={hasMultipleEnvironments ? "block truncate" : undefined}>
                     {hasMultipleEnvironments ? `${thread.environmentLabel} · ` : null}
-                    {t("archive.archivedAt")} <RelativeTime timestamp={thread.archivedAt ?? thread.createdAt} />
+                    {t("archive.archivedAt")}{" "}
+                    <RelativeTime timestamp={thread.archivedAt ?? thread.createdAt} />
                     {t("archive.createdAt")}
                     <RelativeTime timestamp={thread.createdAt} />
                   </span>

@@ -91,6 +91,34 @@ describe("restoring V2 settings", () => {
     expect(state.update.mock.calls[0]?.[0][key]).toBe(DEFAULT_UNIFIED_SETTINGS[key]);
   });
 
+  it.each([false, true])(
+    "only restores a changed legacy project sort preference in legacy mode (%s)",
+    async (legacySidebarEnabled) => {
+      await using lifecycle = await setupLifecycle();
+
+      setup();
+      state.settings = {
+        ...DEFAULT_UNIFIED_SETTINGS,
+        legacySidebarEnabled,
+        sidebarProjectSortOrder: "manual",
+      };
+      await using screen = await renderRestore();
+      await act(() => screen.restore.restoreDefaults());
+
+      if (legacySidebarEnabled) {
+        expect(screen.restore.changedSettingLabels).toEqual(["Project order"]);
+        expect(state.confirm).toHaveBeenCalledOnce();
+        expect(state.update.mock.calls[0]?.[0].sidebarProjectSortOrder).toBe(
+          DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder,
+        );
+      } else {
+        expect(screen.restore.changedSettingLabels).toEqual([]);
+        expect(state.confirm).not.toHaveBeenCalled();
+        expect(state.update).not.toHaveBeenCalled();
+      }
+    },
+  );
+
   it("does not reset settings after cancellation", async () => {
     await using lifecycle = await setupLifecycle();
 
