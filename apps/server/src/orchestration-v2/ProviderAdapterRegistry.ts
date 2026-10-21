@@ -46,6 +46,9 @@ export const ProviderAdapterRegistryV2Error = Schema.Union([
 export type ProviderAdapterRegistryV2Error = typeof ProviderAdapterRegistryV2Error.Type;
 
 export interface ProviderAdapterRegistryV2Shape {
+  readonly beforeInstanceClose?: (
+    release: (instanceId: ProviderInstanceId) => Effect.Effect<void>,
+  ) => Effect.Effect<void, never, Scope.Scope>;
   readonly get: (
     instanceId: ProviderInstanceId,
   ) => Effect.Effect<ProviderAdapter.ProviderAdapterV2["Service"], ProviderAdapterRegistryV2Error>;
@@ -80,6 +83,7 @@ export const layerFromProviderInstanceRegistry: Layer.Layer<
   Effect.gen(function* () {
     const instances = yield* ProviderInstanceRegistry.ProviderInstanceRegistry;
     return ProviderAdapterRegistryV2.of({
+      beforeInstanceClose: instances.beforeInstanceClose,
       get: (instanceId) =>
         instances.getInstance(instanceId).pipe(
           Effect.flatMap((instance) => {

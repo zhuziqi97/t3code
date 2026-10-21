@@ -126,6 +126,10 @@ export class ProviderInstanceRegistry extends Context.Service<
      * between "fiber scheduled" and "fiber starts running".
      */
     readonly subscribeChanges: Effect.Effect<PubSub.Subscription<void>, never, Scope.Scope>;
+    /** Release instance-owned sessions before remove/rebuild closes its driver scope. */
+    readonly beforeInstanceClose: (
+      release: (instanceId: ProviderInstanceId) => Effect.Effect<void>,
+    ) => Effect.Effect<void, never, Scope.Scope>;
   }
 >()("t3/provider/ProviderInstanceRegistry") {}
 
@@ -148,6 +152,7 @@ interface RegistryState {
   readonly entries: Ref.Ref<ReadonlyMap<ProviderInstanceId, LiveEntry>>;
   readonly unavailable: Ref.Ref<ReadonlyMap<ProviderInstanceId, ServerProvider>>;
   readonly changes: PubSub.PubSub<void>;
+  readonly beforeClose: Set<(instanceId: ProviderInstanceId) => Effect.Effect<void>>;
 }
 
 /**
@@ -313,7 +318,14 @@ const makeReconcile = <R>(input: {
           replacedIds.add(instanceId);
         }
       }
+      // Stop admitting new sessions on a retiring instance before its owners drain.
+      yield* Ref.update(state.entries, (current) => {
+        const remaining = new Map(current);
+        for (const id of [...removedIds, ...replacedIds]) remaining.delete(id);
+        return remaining;
+      });
       for (const id of [...removedIds, ...replacedIds]) {
+        yield* Effect.forEach(state.beforeClose, (release) => release(id), { discard: true });
         const live = previousEntries.get(id);
         if (live) {
           yield* Scope.close(live.scope, Exit.void).pipe(Effect.ignore);
@@ -435,7 +447,8 @@ export const makeProviderInstanceRegistry = <R>(input: {
     const changes = yield* PubSub.unbounded<void>();
     yield* Effect.addFinalizer(() => PubSub.shutdown(changes));
 
-    const state: RegistryState = { entries, unavailable, changes };
+    const beforeClose = new Set<(instanceId: ProviderInstanceId) => Effect.Effect<void>>();
+    const state: RegistryState = { entries, unavailable, changes, beforeClose };
     const reconcileWithR = makeReconcile({ state, driversById, parentScope });
     const reconcile: ProviderInstanceRegistryMutator.ProviderInstanceRegistryMutatorShape["reconcile"] =
       (configMap) => reconcileWithR(configMap).pipe(Effect.provideContext(driverContext));
@@ -445,6 +458,16 @@ export const makeProviderInstanceRegistry = <R>(input: {
     yield* reconcile(input.configMap);
 
     const registry: ProviderInstanceRegistry["Service"] = {
+      beforeInstanceClose: (release) =>
+        Effect.acquireRelease(
+          Effect.sync(() => {
+            beforeClose.add(release);
+          }),
+          () =>
+            Effect.sync(() => {
+              beforeClose.delete(release);
+            }),
+        ),
       getInstance: (id) => Ref.get(entries).pipe(Effect.map((map) => map.get(id)?.instance)),
       listInstances: Ref.get(entries).pipe(
         Effect.map(

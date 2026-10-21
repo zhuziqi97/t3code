@@ -57,6 +57,7 @@ const makeStubRegistry = (
     streamChanges: Stream.empty,
     // Tests never drive changes through this stub; acquire a throwaway
     // subscription on an unused PubSub so the shape is satisfied.
+    beforeInstanceClose: () => Effect.void,
     subscribeChanges: Effect.flatMap(PubSub.unbounded<void>(), (pubsub) =>
       PubSub.subscribe(pubsub),
     ),

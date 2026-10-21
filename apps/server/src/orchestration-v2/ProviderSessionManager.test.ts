@@ -17,7 +17,11 @@ import {
   type ProviderSessionId,
   ThreadId,
 } from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
 import * as Cause from "effect/Cause";
+import type { ProviderDriver, ProviderInstance } from "@t3tools/provider-core/server/driver";
+import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
+import * as ProviderInstanceRegistryMutator from "../provider/ProviderInstanceRegistryMutator.ts";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -498,6 +502,12 @@ function layerTest(input: {
   readonly serverSettingsLayer?: ReturnType<typeof ServerSettings.layerTest>;
   readonly projectServiceLayer?: Layer.Layer<ProjectService.ProjectService>;
   readonly conveneMcp?: ConveneMcp.ConveneMcp["Service"];
+  readonly instanceRegistryLayer?: Layer.Layer<
+    | ProviderInstanceRegistry.ProviderInstanceRegistry
+    | ProviderInstanceRegistryMutator.ProviderInstanceRegistryMutator,
+    never,
+    McpProviderSessions.McpProviderSessions
+  >;
 }) {
   const layerConfiguredEventSink =
     input.flakyReleaseWrites !== undefined
@@ -509,32 +519,40 @@ function layerTest(input: {
           : input.failReleaseEventWrites
             ? layerFailingReleaseEventSink
             : layerTestEventSink;
-  const layerRegistry = Layer.unwrap(
-    makeProviderAdapter(input.state, {
-      failEventStream: input.failEventStream ?? false,
-      ...(input.capabilities === undefined ? {} : { capabilities: input.capabilities }),
-      ...(input.mcpConfigs === undefined ? {} : { mcpConfigs: input.mcpConfigs }),
-      ...(input.beforeOpen === undefined ? {} : { beforeOpen: input.beforeOpen }),
-      ...(input.hasPendingBackgroundWork === undefined
-        ? {}
-        : { hasPendingBackgroundWork: input.hasPendingBackgroundWork }),
-      ...(input.hasPendingBackgroundWorkForThread === undefined
-        ? {}
-        : { hasPendingBackgroundWorkForThread: input.hasPendingBackgroundWorkForThread }),
-      ...(input.backgroundTasksEndWithProcess === undefined
-        ? {}
-        : { backgroundTasksEndWithProcess: input.backgroundTasksEndWithProcess }),
-      ...(input.hangSessionScopeClose === undefined
-        ? {}
-        : { hangSessionScopeClose: input.hangSessionScopeClose }),
-      ...(input.startTurn === undefined ? {} : { startTurn: input.startTurn }),
-      ...(input.beforeUnload === undefined ? {} : { beforeUnload: input.beforeUnload }),
-      ...(input.spawnBeforeOpen === undefined ? {} : { spawnBeforeOpen: input.spawnBeforeOpen }),
-      ...(input.scopeCloseReached === undefined
-        ? {}
-        : { scopeCloseReached: input.scopeCloseReached }),
-    }).pipe(Effect.map(ProviderAdapterRegistry.layerSingle)),
-  );
+  const layerRegistry =
+    input.instanceRegistryLayer !== undefined
+      ? ProviderAdapterRegistry.layerFromProviderInstanceRegistry.pipe(
+          Layer.provideMerge(input.instanceRegistryLayer),
+        )
+      : Layer.unwrap(
+          makeProviderAdapter(input.state, {
+            failEventStream: input.failEventStream ?? false,
+            ...(input.capabilities === undefined ? {} : { capabilities: input.capabilities }),
+            ...(input.mcpConfigs === undefined ? {} : { mcpConfigs: input.mcpConfigs }),
+            ...(input.beforeOpen === undefined ? {} : { beforeOpen: input.beforeOpen }),
+            ...(input.hasPendingBackgroundWork === undefined
+              ? {}
+              : { hasPendingBackgroundWork: input.hasPendingBackgroundWork }),
+            ...(input.hasPendingBackgroundWorkForThread === undefined
+              ? {}
+              : { hasPendingBackgroundWorkForThread: input.hasPendingBackgroundWorkForThread }),
+            ...(input.backgroundTasksEndWithProcess === undefined
+              ? {}
+              : { backgroundTasksEndWithProcess: input.backgroundTasksEndWithProcess }),
+            ...(input.hangSessionScopeClose === undefined
+              ? {}
+              : { hangSessionScopeClose: input.hangSessionScopeClose }),
+            ...(input.startTurn === undefined ? {} : { startTurn: input.startTurn }),
+            ...(input.beforeUnload === undefined ? {} : { beforeUnload: input.beforeUnload }),
+            ...(input.spawnBeforeOpen === undefined
+              ? {}
+              : { spawnBeforeOpen: input.spawnBeforeOpen }),
+            ...(input.scopeCloseReached === undefined
+              ? {}
+              : { scopeCloseReached: input.scopeCloseReached }),
+          }).pipe(Effect.map(ProviderAdapterRegistry.layerSingle)),
+        );
+  const layerRegistryWithMcp = layerRegistry.pipe(Layer.provideMerge(McpProviderSessions.layer));
   const layerConfiguredMcpRegistry =
     input.pauseResolve === undefined
       ? layerTestMcpRegistry
@@ -551,6 +569,10 @@ function layerTest(input: {
   );
   return Layer.mergeAll(
     layerTestStores,
+    layerRegistryWithMcp,
+    ...(input.instanceRegistryLayer === undefined
+      ? []
+      : [input.instanceRegistryLayer.pipe(Layer.provide(McpProviderSessions.layer))]),
     layerConfiguredEventSink,
     IdAllocator.layer,
     layerConfiguredMcpRegistry,
@@ -561,7 +583,7 @@ function layerTest(input: {
     }).pipe(
       Layer.provide(
         Layer.mergeAll(
-          layerRegistry.pipe(Layer.provideMerge(McpProviderSessions.layer)),
+          layerRegistryWithMcp,
           layerConfiguredEventSink,
           IdAllocator.layer,
           layerProviderEventIngestorTest,
@@ -5113,4 +5135,272 @@ it.effect(
       });
       assert.isFalse(denied?.capabilities?.has("device"));
     }),
+);
+
+const otherLifecycleInstance = ProviderInstanceId.make("codex_other");
+const lifecycleConfig = (revision = 1) => ({
+  [modelSelection.instanceId]: { driver: CODEX_DRIVER, config: { revision } },
+  [otherLifecycleInstance]: { driver: CODEX_DRIVER, config: { revision: 1 } },
+});
+
+function instanceLifecycleRegistry(input: {
+  state: Ref.Ref<TestProviderRuntimeState>;
+  otherState: Ref.Ref<TestProviderRuntimeState>;
+  beforeOpen?: () => Effect.Effect<void>;
+  spawnBeforeOpen?: boolean;
+}) {
+  const driver: ProviderDriver<
+    { readonly revision: number },
+    McpProviderSessions.McpProviderSessions
+  > = {
+    driverKind: CODEX_DRIVER,
+    metadata: { displayName: "Lifecycle fixture" },
+    configSchema: Schema.Struct({ revision: Schema.Number }),
+    defaultConfig: () => ({ revision: 1 }),
+    create: ({ instanceId, config }) =>
+      Effect.gen(function* () {
+        const adapter = yield* makeProviderAdapter(
+          instanceId === otherLifecycleInstance ? input.otherState : input.state,
+          {
+            ...(instanceId === otherLifecycleInstance || input.beforeOpen === undefined
+              ? {}
+              : { beforeOpen: input.beforeOpen }),
+            ...(input.spawnBeforeOpen === undefined
+              ? {}
+              : { spawnBeforeOpen: input.spawnBeforeOpen }),
+          },
+        );
+        return {
+          instanceId,
+          driverKind: CODEX_DRIVER,
+          enabled: true,
+          displayName: undefined,
+          continuationIdentity: {
+            driverKind: CODEX_DRIVER,
+            continuationKey: `test:${instanceId}:${config.revision}`,
+          },
+          snapshot: {} as ProviderInstance["snapshot"],
+          textGeneration: {} as ProviderInstance["textGeneration"],
+          orchestrationAdapter: {
+            ...adapter,
+            instanceId,
+            openSession: (args) =>
+              adapter.openSession(args).pipe(
+                Effect.map((runtime) => ({
+                  ...runtime,
+                  instanceId,
+                  providerSession: { ...runtime.providerSession, providerInstanceId: instanceId },
+                })),
+              ),
+          },
+        };
+      }),
+  };
+  return ProviderInstanceRegistry.layer({ drivers: [driver], configMap: lifecycleConfig() });
+}
+
+it.effect.each(["delete-idle", "delete-running", "replace"] as const)(
+  "instance lifecycle %s revokes only its sessions and preserves other threads",
+  (scenario) =>
+    Effect.gen(function* () {
+      const state = yield* Ref.make(emptyState),
+        otherState = yield* Ref.make(emptyState);
+      const leases = new Set<string>();
+      const key = (threadId: ThreadId, credentialId: string) => `${threadId}:${credentialId}`;
+      const conveneMcp = ConveneMcp.ConveneMcp.of({
+        configure: () => Effect.void,
+        forward: () => Effect.die("unused"),
+        prepare: (threadId, credentialId) =>
+          Effect.sync(() => {
+            leases.add(key(threadId, credentialId));
+            return {
+              convene: {
+                endpoint: "http://local/convene/mcp",
+                authorizationHeader: `Bearer ${credentialId}`,
+              },
+            };
+          }),
+        release: (threadId, credentialId) =>
+          Effect.sync(() => {
+            if (credentialId) leases.delete(key(threadId, credentialId));
+          }),
+      });
+      yield* Effect.gen(function* () {
+        const sink = yield* EventSink.EventSinkV2,
+          ids = yield* IdAllocator.IdAllocatorV2;
+        const manager = yield* ProviderSessionManager.ProviderSessionManagerV2;
+        const mutator = yield* ProviderInstanceRegistryMutator.ProviderInstanceRegistryMutator;
+        const mcpSessions = yield* McpProviderSessions.McpProviderSessions;
+        const native = yield* McpSessionRegistry.McpSessionRegistry;
+        const opened = [];
+        for (const [index, instanceId] of [
+          modelSelection.instanceId,
+          modelSelection.instanceId,
+          otherLifecycleInstance,
+        ].entries()) {
+          const threadId = ThreadId.make(`thread-lifecycle-${scenario}-${index}`);
+          const event = yield* makeThreadCreatedEvent({
+            idAllocator: ids,
+            threadId,
+            now: yield* DateTime.now,
+          });
+          yield* sink.write({
+            events: [
+              {
+                ...event,
+                payload: {
+                  ...event.payload,
+                  providerInstanceId: instanceId,
+                  modelSelection: { ...modelSelection, instanceId },
+                },
+              },
+            ],
+          });
+          const providerSessionId = yield* ids.allocate.providerSession({
+            providerInstanceId: instanceId,
+            threadId,
+          });
+          const runtime = yield* manager.open({
+            threadId,
+            providerSessionId,
+            modelSelection: { ...modelSelection, instanceId },
+            runtimePolicy,
+          });
+          if (scenario === "delete-running" && index === 0) {
+            const runId = ids.derive.run({ threadId, ordinal: 1 });
+            yield* runtime.startTurn({
+              appThread: event.payload,
+              threadId,
+              runId,
+              runOrdinal: 1,
+              providerTurnOrdinal: 1,
+              modelSelection,
+              runtimePolicy,
+              attemptId: ids.derive.runAttempt({ runId, attemptOrdinal: 1 }),
+              rootNodeId: ids.derive.rootNode({ runId }),
+              providerThread: makeProviderThread({
+                idAllocator: ids,
+                threadId,
+                providerSessionId,
+                now: yield* DateTime.now,
+              }),
+              message: {
+                createdBy: "user",
+                creationSource: "web",
+                messageId: yield* ids.allocate.message({ threadId, ordinal: 1 }),
+                text: "hold running",
+                attachments: [],
+              },
+            });
+          }
+          opened.push({
+            threadId,
+            providerSessionId,
+            config: (yield* mcpSessions.read(threadId))!,
+          });
+        }
+        const next = lifecycleConfig(scenario === "replace" ? 2 : 1);
+        if (scenario !== "replace") delete next[modelSelection.instanceId];
+        yield* mutator.reconcile(next);
+        for (const old of opened.slice(0, 2)) {
+          assert.isFalse(yield* manager.isLive(old.providerSessionId));
+          assert.isFalse(leases.has(key(old.threadId, old.config.providerSessionId)));
+          assert.isUndefined(
+            yield* native.resolve(old.config.authorizationHeader.replace(/^Bearer\s+/, "")),
+          );
+        }
+        const other = opened[2]!;
+        assert.isTrue(yield* manager.isLive(other.providerSessionId));
+        assert.isTrue(leases.has(key(other.threadId, other.config.providerSessionId)));
+        assert.isDefined(
+          yield* native.resolve(other.config.authorizationHeader.replace(/^Bearer\s+/, "")),
+        );
+        assert.equal((yield* Ref.get(state)).closeCount, 2);
+        assert.equal((yield* Ref.get(otherState)).closeCount, 0);
+        if (scenario === "replace") {
+          const old = opened[0]!;
+          yield* manager.open({
+            threadId: old.threadId,
+            providerSessionId: old.providerSessionId,
+            modelSelection,
+            runtimePolicy,
+          });
+          const replacement = (yield* mcpSessions.read(old.threadId))!;
+          assert.notEqual(replacement.providerSessionId, old.config.providerSessionId);
+          yield* mutator.reconcile(next);
+          assert.isTrue(leases.has(key(old.threadId, replacement.providerSessionId)));
+          assert.isTrue(yield* manager.isLive(old.providerSessionId));
+          assert.isDefined(
+            yield* native.resolve(replacement.authorizationHeader.replace(/^Bearer\s+/, "")),
+          );
+        }
+      }).pipe(
+        Effect.provide(
+          layerTest({
+            state,
+            idleTimeoutMs: 60_000,
+            conveneMcp,
+            instanceRegistryLayer: instanceLifecycleRegistry({ state, otherState }),
+          }),
+        ),
+      );
+    }).pipe(Effect.scoped),
+);
+
+it.effect(
+  "instance removal interrupts a pending open and revokes its prepared MCP credential",
+  () =>
+    Effect.gen(function* () {
+      const state = yield* Ref.make(emptyState),
+        otherState = yield* Ref.make(emptyState);
+      const started = yield* Deferred.make<void>();
+      const beforeOpen = () =>
+        Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never));
+      yield* Effect.gen(function* () {
+        const sink = yield* EventSink.EventSinkV2,
+          ids = yield* IdAllocator.IdAllocatorV2;
+        const manager = yield* ProviderSessionManager.ProviderSessionManagerV2;
+        const mutator = yield* ProviderInstanceRegistryMutator.ProviderInstanceRegistryMutator;
+        const mcpSessions = yield* McpProviderSessions.McpProviderSessions;
+        const native = yield* McpSessionRegistry.McpSessionRegistry;
+        const threadId = ThreadId.make("thread-instance-removal-during-open");
+        yield* sink.write({
+          events: [
+            yield* makeThreadCreatedEvent({ idAllocator: ids, threadId, now: yield* DateTime.now }),
+          ],
+        });
+        const providerSessionId = yield* ids.allocate.providerSession({
+          providerInstanceId: modelSelection.instanceId,
+          threadId,
+        });
+        const open = yield* manager
+          .open({ threadId, providerSessionId, modelSelection, runtimePolicy })
+          .pipe(Effect.forkScoped);
+        yield* Deferred.await(started);
+        const credential = (yield* mcpSessions.read(threadId))!;
+        const next = lifecycleConfig();
+        delete next[modelSelection.instanceId];
+        yield* mutator.reconcile(next);
+        assert.equal((yield* Ref.get(state)).closeCount, 1);
+        assert.isTrue(Exit.hasInterrupts(yield* Fiber.await(open)));
+        assert.isFalse(yield* manager.isLive(providerSessionId));
+        assert.isUndefined(yield* mcpSessions.read(threadId));
+        assert.isUndefined(
+          yield* native.resolve(credential.authorizationHeader.replace(/^Bearer\s+/, "")),
+        );
+      }).pipe(
+        Effect.provide(
+          layerTest({
+            state,
+            idleTimeoutMs: 60_000,
+            instanceRegistryLayer: instanceLifecycleRegistry({
+              state,
+              otherState,
+              beforeOpen,
+              spawnBeforeOpen: true,
+            }),
+          }),
+        ),
+      );
+    }).pipe(Effect.scoped),
 );

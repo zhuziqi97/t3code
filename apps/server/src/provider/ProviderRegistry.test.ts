@@ -1265,6 +1265,7 @@ it.layer(
               listInstances: Effect.succeed([instance]),
               listUnavailable: Effect.succeed([]),
               streamChanges: Stream.empty,
+              beforeInstanceClose: () => Effect.void,
               subscribeChanges: Effect.flatMap(PubSub.unbounded<void>(), PubSub.subscribe),
             },
           );
@@ -1646,6 +1647,7 @@ it.layer(
             listInstances: Effect.succeed([instance]),
             listUnavailable: Effect.succeed([]),
             streamChanges: Stream.empty,
+            beforeInstanceClose: () => Effect.void,
             subscribeChanges: Effect.flatMap(PubSub.unbounded<void>(), PubSub.subscribe),
           },
         );
@@ -1785,6 +1787,7 @@ it.layer(
             listInstances: Ref.get(instancesRef),
             listUnavailable: Effect.succeed([]),
             streamChanges: Stream.fromPubSub(registryChanges),
+            beforeInstanceClose: () => Effect.void,
             subscribeChanges: PubSub.subscribe(registryChanges),
           },
         );
@@ -2054,6 +2057,7 @@ it.layer(
             listInstances: Effect.succeed(instances),
             listUnavailable: Effect.succeed([]),
             streamChanges: Stream.empty,
+            beforeInstanceClose: () => Effect.void,
             subscribeChanges: Effect.flatMap(PubSub.unbounded<void>(), PubSub.subscribe),
           },
         );
@@ -2232,6 +2236,7 @@ it.layer(
             listInstances: Effect.succeed(instances),
             listUnavailable: Effect.succeed([]),
             streamChanges: Stream.empty,
+            beforeInstanceClose: () => Effect.void,
             subscribeChanges: Effect.flatMap(PubSub.unbounded<void>(), PubSub.subscribe),
           },
         );
@@ -2338,6 +2343,7 @@ it.layer(
             listInstances: Effect.succeed([instance]),
             listUnavailable: Effect.succeed([]),
             streamChanges: Stream.empty,
+            beforeInstanceClose: () => Effect.void,
             subscribeChanges: Effect.flatMap(PubSub.unbounded<void>(), (pubsub) =>
               PubSub.subscribe(pubsub),
             ),
@@ -2468,6 +2474,7 @@ it.layer(
               listInstances: Effect.succeed([instance]),
               listUnavailable: Effect.succeed([]),
               streamChanges: Stream.empty,
+              beforeInstanceClose: () => Effect.void,
               subscribeChanges: Effect.flatMap(PubSub.unbounded<void>(), (pubsub) =>
                 PubSub.subscribe(pubsub),
               ),
@@ -2573,6 +2580,7 @@ it.layer(
             listInstances: Effect.succeed([instance]),
             listUnavailable: Effect.succeed([]),
             streamChanges: Stream.empty,
+            beforeInstanceClose: () => Effect.void,
             subscribeChanges: Effect.flatMap(PubSub.unbounded<void>(), (pubsub) =>
               PubSub.subscribe(pubsub),
             ),
@@ -2693,6 +2701,7 @@ it.layer(
             }),
             listUnavailable: Effect.succeed([]),
             streamChanges: Stream.fromPubSub(changes),
+            beforeInstanceClose: () => Effect.void,
             subscribeChanges: PubSub.subscribe(changes),
           },
         );

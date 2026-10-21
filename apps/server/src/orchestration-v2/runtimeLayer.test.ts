@@ -159,6 +159,7 @@ const layerTestProviderInstanceRegistry = Layer.succeed(
     listInstances: Effect.succeed([providerInstance, alternateProviderInstance]),
     listUnavailable: Effect.succeed([]),
     streamChanges: Stream.empty,
+    beforeInstanceClose: () => Effect.void,
     subscribeChanges: Effect.never,
   },
 );

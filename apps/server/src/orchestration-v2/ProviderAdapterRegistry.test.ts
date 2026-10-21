@@ -68,6 +68,7 @@ const instances = [
   makeInstance(workId, workAdapter),
 ] as const;
 const layerInstanceRegistry = Layer.succeed(ProviderInstanceRegistry.ProviderInstanceRegistry, {
+  beforeInstanceClose: () => Effect.void,
   getInstance: (instanceId) =>
     Effect.succeed(instances.find((instance) => instance.instanceId === instanceId)),
   listInstances: Effect.succeed(instances),
