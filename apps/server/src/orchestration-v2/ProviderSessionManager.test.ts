@@ -32,10 +32,11 @@ import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
 import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
+import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
-import { HttpServer } from "effect/http";
+import { HttpClient, HttpClientResponse, HttpServer, HttpServerRequest } from "effect/http";
 
 import { ProviderWorkspaceMissingError } from "../provider/Errors.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
@@ -44,6 +45,8 @@ import * as McpProviderSession from "@t3tools/provider-core/server/mcpSession";
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import * as McpSessionRegistry from "../mcp/McpSessionRegistry.ts";
 import * as ConveneMcp from "../convene/ConveneMcp.ts";
+import * as ConvenePlatform from "../convene/ConvenePlatform.ts";
+import * as ConveneWorkspaces from "../convene/ConveneWorkspaces.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
@@ -502,6 +505,7 @@ function layerTest(input: {
   readonly serverSettingsLayer?: ReturnType<typeof ServerSettings.layerTest>;
   readonly projectServiceLayer?: Layer.Layer<ProjectService.ProjectService>;
   readonly conveneMcp?: ConveneMcp.ConveneMcp["Service"];
+  readonly conveneMcpLayer?: typeof layerLifecycleConvene;
   readonly instanceRegistryLayer?: Layer.Layer<
     | ProviderInstanceRegistry.ProviderInstanceRegistry
     | ProviderInstanceRegistryMutator.ProviderInstanceRegistryMutator,
@@ -569,6 +573,7 @@ function layerTest(input: {
   );
   return Layer.mergeAll(
     layerTestStores,
+    ...(input.conveneMcpLayer === undefined ? [] : [input.conveneMcpLayer]),
     layerRegistryWithMcp,
     ...(input.instanceRegistryLayer === undefined
       ? []
@@ -592,6 +597,7 @@ function layerTest(input: {
           ...(input.conveneMcp === undefined
             ? []
             : [Layer.succeed(ConveneMcp.ConveneMcp, input.conveneMcp)]),
+          ...(input.conveneMcpLayer === undefined ? [] : [input.conveneMcpLayer]),
           ...(input.serverSettingsLayer === undefined ? [] : [input.serverSettingsLayer]),
           ...(input.projectServiceLayer === undefined ? [] : [input.projectServiceLayer]),
         ),
@@ -2262,6 +2268,7 @@ it.effect(
         const eventSink = yield* EventSink.EventSinkV2;
         const idAllocator = yield* IdAllocator.IdAllocatorV2;
         const manager = yield* ProviderSessionManager.ProviderSessionManagerV2;
+        yield* (yield* ConveneMcp.ConveneMcp).configure(lifecycleConfigurations);
         const registry = yield* McpSessionRegistry.McpSessionRegistry;
         const mcpSessions = yield* McpProviderSessions.McpProviderSessions;
         const eventStore = yield* EventStore.EventStoreV2;
@@ -2273,8 +2280,18 @@ it.effect(
         });
         yield* eventSink.write({
           events: [
-            yield* makeThreadCreatedEvent({ idAllocator, threadId: owner, now }),
-            yield* makeThreadCreatedEvent({ idAllocator, threadId, now }),
+            yield* makeThreadCreatedEvent({
+              idAllocator,
+              threadId: owner,
+              now,
+              projectId: lifecycleProject,
+            }),
+            yield* makeThreadCreatedEvent({
+              idAllocator,
+              threadId,
+              now,
+              projectId: lifecycleProject,
+            }),
           ],
         });
         const runtime = yield* manager.open({
@@ -2313,6 +2330,7 @@ it.effect(
 
         yield* Fiber.interrupt(stale);
 
+        yield* assertLifecycleCredential(config!, true);
         // The replacement keeps the thread and its credential.
         assert.equal(
           (yield* mcpSessions.read(threadId))?.providerSessionId,
@@ -2341,7 +2359,12 @@ it.effect(
         assert.equal(yield* attachedEvents, attachedBefore);
       }).pipe(
         Effect.provide(
-          layerTest({ state, idleTimeoutMs: 60_000, pauseAttachWrite: { armed, paused } }),
+          layerTest({
+            conveneMcpLayer: layerLifecycleConvene,
+            state,
+            idleTimeoutMs: 60_000,
+            pauseAttachWrite: { armed, paused },
+          }),
         ),
       );
     }),
@@ -2707,6 +2730,7 @@ it.effect(
         const eventSink = yield* EventSink.EventSinkV2;
         const idAllocator = yield* IdAllocator.IdAllocatorV2;
         const manager = yield* ProviderSessionManager.ProviderSessionManagerV2;
+        yield* (yield* ConveneMcp.ConveneMcp).configure(lifecycleConfigurations);
         const registry = yield* McpSessionRegistry.McpSessionRegistry;
         const mcpSessions = yield* McpProviderSessions.McpProviderSessions;
         const now = yield* DateTime.now;
@@ -2721,10 +2745,18 @@ it.effect(
         });
 
         yield* eventSink.write({
-          events: [yield* makeThreadCreatedEvent({ idAllocator, threadId, now })],
+          events: [
+            yield* makeThreadCreatedEvent({
+              idAllocator,
+              threadId,
+              now,
+              projectId: lifecycleProject,
+            }),
+          ],
         });
         yield* manager.open({ threadId, providerSessionId: s1, modelSelection, runtimePolicy });
         const original = (yield* Ref.get(mcpConfigs)).at(-1);
+        yield* assertLifecycleCredential(original!, true);
         const originalToken = original?.authorizationHeader.replace(/^Bearer\s+/, "");
         assert.isDefined(originalToken);
         yield* manager.detach({ providerSessionId: s1, threadId });
@@ -2737,6 +2769,7 @@ it.effect(
         yield* Ref.set(duringOpen, manager.close(s1).pipe(Effect.orDie));
         yield* manager.open({ threadId, providerSessionId: s2, modelSelection, runtimePolicy });
 
+        yield* assertLifecycleCredential(original!, true);
         const slot = yield* mcpSessions.read(threadId);
         assert.equal(
           slot?.providerSessionId,
@@ -2754,6 +2787,7 @@ it.effect(
       yield* effect.pipe(
         Effect.provide(
           layerTest({
+            conveneMcpLayer: layerLifecycleConvene,
             state,
             idleTimeoutMs: 1_000,
             mcpConfigs,
@@ -5347,100 +5381,353 @@ it.effect.each(["delete-idle", "delete-running", "replace"] as const)(
     }).pipe(Effect.scoped),
 );
 
-it.effect.each(["remove", "replace"] as const)(
-  "instance %s after a thread switches instances revokes its old lease and preserves new credentials",
-  (change) =>
+// Exercise the real broker lease map and forwarding boundary. Only the remote
+// platform and workspace lookup are controlled; session ownership is real.
+const layerLifecycleConvene = ConveneMcp.layer.pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      layerTestStores,
+      Layer.succeed(HttpServer.HttpServer, fakeHttpServer),
+      Layer.mock(ConveneWorkspaces.ConveneWorkspaces)({
+        threadKey: () => Effect.succeed("root"),
+        rememberThread: () => Effect.void,
+      }),
+      Layer.unwrap(
+        PubSub.unbounded<void>().pipe(
+          Effect.map((changes) =>
+            Layer.mock(ConvenePlatform.ConvenePlatform)({
+              changes,
+              credential: (projectId) =>
+                Effect.succeed({
+                  mcp_url: `http://platform.test/${projectId}`,
+                  access_token: `project:${projectId}`,
+                  expires_at: "2099-01-01T00:00:00Z",
+                }),
+            }),
+          ),
+        ),
+      ),
+      Layer.succeed(
+        HttpClient.HttpClient,
+        HttpClient.make((request) =>
+          Effect.succeed(HttpClientResponse.fromWeb(request, new Response(request.url))),
+        ),
+      ),
+    ),
+  ),
+  Layer.provide(NodeServices.layer),
+);
+
+const lifecycleProject = ProjectId.make("lifecycle-project");
+const otherLifecycleProject = ProjectId.make("lifecycle-other-project");
+const lifecycleConfigurations = [lifecycleProject, otherLifecycleProject].map((projectId) => ({
+  client_project_id: projectId,
+  project: { native_project_id: projectId },
+  mcp_enabled: true,
+  targets: [
+    {
+      target_id: `target:${projectId}`,
+      native_workspace_key: "root",
+      path: null,
+      availability: "AVAILABLE" as const,
+    },
+  ],
+}));
+const forwardLifecycleMcp = (config: McpProviderSession.McpProviderSessionConfig) =>
+  Effect.gen(function* () {
+    const broker = yield* ConveneMcp.ConveneMcp;
+    const contribution = config.additionalServers!.convene!;
+    return yield* broker.forward(
+      HttpServerRequest.fromWeb(
+        new Request(contribution.endpoint, {
+          method: "POST",
+          headers: { Authorization: contribution.authorizationHeader },
+          body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+        }),
+      ),
+    );
+  });
+const assertLifecycleCredential = (
+  config: McpProviderSession.McpProviderSessionConfig,
+  valid: boolean,
+) =>
+  Effect.gen(function* () {
+    const native = yield* McpSessionRegistry.McpSessionRegistry;
+    assert.equal(
+      (yield* native.resolve(config.authorizationHeader.replace(/^Bearer\s+/, ""))) !== undefined,
+      valid,
+    );
+    assert.equal((yield* forwardLifecycleMcp(config)).status, valid ? 200 : 401);
+  });
+
+it.effect.each([
+  { change: "remove", hops: 1 },
+  { change: "replace", hops: 1 },
+  { change: "remove", hops: 3 },
+  { change: "replace", hops: 3 },
+] as const)(
+  "instance $change after $hops switches retires every old credential and preserves other threads",
+  ({ change, hops }) =>
     Effect.gen(function* () {
       const state = yield* Ref.make(emptyState),
         otherState = yield* Ref.make(emptyState);
-      const leases = new Set<string>();
-      const conveneMcp = ConveneMcp.ConveneMcp.of({
-        configure: () => Effect.void,
-        forward: () => Effect.die("unused"),
-        prepare: (_threadId, credentialId) =>
-          Effect.sync(() => {
-            leases.add(credentialId);
-            return {
-              convene: {
-                endpoint: "http://local/convene/mcp",
-                authorizationHeader: `Bearer ${credentialId}`,
-              },
-            };
-          }),
-        release: (_threadId, credentialId) =>
-          Effect.sync(() => {
-            if (credentialId !== undefined) leases.delete(credentialId);
-          }),
-      });
       yield* Effect.gen(function* () {
         const manager = yield* ProviderSessionManager.ProviderSessionManagerV2;
         const mutator = yield* ProviderInstanceRegistryMutator.ProviderInstanceRegistryMutator;
         const sink = yield* EventSink.EventSinkV2;
         const ids = yield* IdAllocator.IdAllocatorV2;
         const configs = yield* McpProviderSessions.McpProviderSessions;
-        const native = yield* McpSessionRegistry.McpSessionRegistry;
-        const threadId = ThreadId.make(`thread-instance-switch-${change}`);
-        yield* sink.write({
-          events: [
-            yield* makeThreadCreatedEvent({ idAllocator: ids, threadId, now: yield* DateTime.now }),
-          ],
-        });
-        const oldId = yield* ids.allocate.providerSession({
-          providerInstanceId: modelSelection.instanceId,
-          threadId,
-        });
-        yield* manager.open({ threadId, providerSessionId: oldId, modelSelection, runtimePolicy });
-        const old = (yield* configs.read(threadId))!;
-        // A shared process retains this credential record after the thread moves away.
-        yield* manager.detach({ providerSessionId: oldId, threadId });
-        assert.isTrue(yield* manager.isLive(oldId));
-        const newId = yield* ids.allocate.providerSession({
-          providerInstanceId: otherLifecycleInstance,
-          threadId,
-        });
-        yield* manager.open({
-          threadId,
-          providerSessionId: newId,
-          modelSelection: { ...modelSelection, instanceId: otherLifecycleInstance },
-          runtimePolicy,
-        });
-        const fresh = (yield* configs.read(threadId))!;
-        assert.notEqual(fresh.providerSessionId, old.providerSessionId);
-        assert.isTrue(leases.has(old.providerSessionId));
+        yield* (yield* ConveneMcp.ConveneMcp).configure(lifecycleConfigurations);
+        const threadId = ThreadId.make(`thread-instance-switch-${change}-${hops}`);
+        const siblingId = ThreadId.make(`${threadId}-same-project`);
+        const otherId = ThreadId.make(`${threadId}-other-project`);
+        for (const id of [threadId, siblingId, otherId]) {
+          yield* sink.write({
+            events: [
+              yield* makeThreadCreatedEvent({
+                idAllocator: ids,
+                threadId: id,
+                now: yield* DateTime.now,
+                projectId: id === otherId ? otherLifecycleProject : lifecycleProject,
+              }),
+            ],
+          });
+        }
+        const oldId = ids.derive.providerSession({ providerInstanceId: modelSelection.instanceId });
+        const newId = ids.derive.providerSession({ providerInstanceId: otherLifecycleInstance });
+        const open = (id: ThreadId, inOld: boolean) =>
+          manager.open({
+            threadId: id,
+            providerSessionId: inOld ? oldId : newId,
+            modelSelection: inOld
+              ? modelSelection
+              : { ...modelSelection, instanceId: otherLifecycleInstance },
+            runtimePolicy,
+          });
+        yield* open(siblingId, true);
+        yield* open(otherId, false);
+        const sibling = (yield* configs.read(siblingId))!;
+        const other = (yield* configs.read(otherId))!;
+        yield* open(threadId, true);
+        const retired: Array<McpProviderSession.McpProviderSessionConfig> = [];
+        let fresh = (yield* configs.read(threadId))!;
+        for (let hop = 0; hop < hops; hop++) {
+          retired.push(fresh);
+          yield* manager.detach({ providerSessionId: hop % 2 === 0 ? oldId : newId, threadId });
+          // Detach alone retains a live process's usable credential.
+          yield* assertLifecycleCredential(fresh, true);
+          yield* open(threadId, hop % 2 !== 0);
+          fresh = (yield* configs.read(threadId))!;
+          assert.notEqual(fresh.providerSessionId, retired.at(-1)!.providerSessionId);
+          for (const credential of retired) yield* assertLifecycleCredential(credential, false);
+          yield* assertLifecycleCredential(fresh, true);
+          yield* assertLifecycleCredential(sibling, true);
+          yield* assertLifecycleCredential(other, true);
+        }
         const next = lifecycleConfig(change === "replace" ? 2 : 1);
         if (change === "remove") delete next[modelSelection.instanceId];
         yield* mutator.reconcile(next);
-
         assert.isFalse(yield* manager.isLive(oldId));
         assert.equal((yield* Ref.get(state)).closeCount, 1);
-        assert.isFalse(leases.has(old.providerSessionId));
-        assert.isUndefined(
-          yield* native.resolve(old.authorizationHeader.replace(/^Bearer\s+/, "")),
-        );
+        for (const credential of [...retired, sibling])
+          yield* assertLifecycleCredential(credential, false);
         assert.isTrue(yield* manager.isLive(newId));
         assert.equal((yield* Ref.get(otherState)).closeCount, 0);
         assert.deepEqual(yield* configs.read(threadId), fresh);
-        assert.isTrue(leases.has(fresh.providerSessionId));
-        assert.isDefined(
-          yield* native.resolve(fresh.authorizationHeader.replace(/^Bearer\s+/, "")),
-        );
+        yield* assertLifecycleCredential(fresh, true);
+        yield* assertLifecycleCredential(other, true);
+        if (change === "replace") {
+          yield* open(siblingId, true);
+          const replacement = (yield* configs.read(siblingId))!;
+          assert.notEqual(replacement.providerSessionId, sibling.providerSessionId);
+          yield* mutator.reconcile(next);
+          yield* assertLifecycleCredential(replacement, true);
+          yield* assertLifecycleCredential(fresh, true);
+          yield* manager.close(oldId);
+          yield* assertLifecycleCredential(replacement, false);
+          yield* assertLifecycleCredential(fresh, true);
+        }
         yield* manager.close(newId);
-        assert.isFalse(leases.has(fresh.providerSessionId));
+        yield* assertLifecycleCredential(fresh, false);
+        yield* assertLifecycleCredential(other, false);
         assert.isUndefined(yield* configs.read(threadId));
-        assert.isUndefined(
-          yield* native.resolve(fresh.authorizationHeader.replace(/^Bearer\s+/, "")),
-        );
       }).pipe(
         Effect.provide(
           layerTest({
             state,
             idleTimeoutMs: 60_000,
-            conveneMcp,
+            conveneMcpLayer: layerLifecycleConvene,
             instanceRegistryLayer: instanceLifecycleRegistry({ state, otherState }),
           }),
         ),
       );
     }).pipe(Effect.scoped),
+);
+
+it.effect.each(["open", "attach"] as const)(
+  "failed %s after switching instances releases both credentials and allows recovery",
+  (failure) =>
+    Effect.gen(function* () {
+      const state = yield* Ref.make(emptyState),
+        otherState = yield* Ref.make(emptyState);
+      const armed = yield* Ref.make(false);
+      const paused = yield* Deferred.make<void>();
+      const threadId = ThreadId.make(`thread-instance-failed-${failure}`);
+      let failOpen = false;
+      let failed: McpProviderSession.McpProviderSessionConfig | undefined;
+      let configs: McpProviderSessions.McpProviderSessions["Service"];
+      const beforeOpen = () =>
+        Effect.gen(function* () {
+          if (!failOpen) return;
+          failed = yield* configs.read(threadId);
+          return yield* Effect.die("controlled provider open failure");
+        });
+      yield* Effect.gen(function* () {
+        const manager = yield* ProviderSessionManager.ProviderSessionManagerV2;
+        const sink = yield* EventSink.EventSinkV2;
+        const ids = yield* IdAllocator.IdAllocatorV2;
+        configs = yield* McpProviderSessions.McpProviderSessions;
+        yield* (yield* ConveneMcp.ConveneMcp).configure(lifecycleConfigurations);
+        const siblingId = ThreadId.make(`${threadId}-other`);
+        const ownerId = ThreadId.make(`${threadId}-owner`);
+        for (const id of [threadId, siblingId, ownerId]) {
+          yield* sink.write({
+            events: [
+              yield* makeThreadCreatedEvent({
+                idAllocator: ids,
+                threadId: id,
+                now: yield* DateTime.now,
+                projectId: id === siblingId ? otherLifecycleProject : lifecycleProject,
+              }),
+            ],
+          });
+        }
+        const a = ids.derive.providerSession({ providerInstanceId: modelSelection.instanceId });
+        const b = ids.derive.providerSession({ providerInstanceId: otherLifecycleInstance });
+        const open = (id: ThreadId, inA: boolean) =>
+          manager.open({
+            threadId: id,
+            providerSessionId: inA ? a : b,
+            modelSelection: inA
+              ? modelSelection
+              : { ...modelSelection, instanceId: otherLifecycleInstance },
+            runtimePolicy,
+          });
+        yield* open(threadId, false);
+        yield* open(siblingId, false);
+        const previous = (yield* configs.read(threadId))!;
+        const sibling = (yield* configs.read(siblingId))!;
+        yield* manager.detach({ providerSessionId: b, threadId });
+        let owner: McpProviderSession.McpProviderSessionConfig | undefined;
+        if (failure === "attach") {
+          yield* open(ownerId, true);
+          owner = (yield* configs.read(ownerId))!;
+          yield* Ref.set(armed, true);
+          const pending = yield* open(threadId, true).pipe(Effect.forkChild);
+          yield* Deferred.await(paused);
+          failed = yield* configs.read(threadId);
+          yield* Fiber.interrupt(pending);
+          assert.isTrue(Exit.hasInterrupts(yield* Fiber.await(pending)));
+        } else {
+          failOpen = true;
+          assert.isTrue(Exit.isFailure(yield* open(threadId, true).pipe(Effect.exit)));
+          failOpen = false;
+        }
+        assert.isDefined(failed);
+        yield* assertLifecycleCredential(previous, false);
+        yield* assertLifecycleCredential(failed!, false);
+        yield* assertLifecycleCredential(sibling, true);
+        if (owner) yield* assertLifecycleCredential(owner, true);
+        assert.isUndefined(yield* configs.read(threadId));
+        yield* open(threadId, true);
+        const recovered = (yield* configs.read(threadId))!;
+        assert.notEqual(recovered.providerSessionId, failed!.providerSessionId);
+        yield* assertLifecycleCredential(recovered, true);
+        yield* manager.close(b);
+        yield* assertLifecycleCredential(recovered, true);
+        yield* assertLifecycleCredential(sibling, false);
+        yield* manager.close(a);
+        yield* assertLifecycleCredential(recovered, false);
+      }).pipe(
+        Effect.provide(
+          layerTest({
+            state,
+            idleTimeoutMs: 60_000,
+            conveneMcpLayer: layerLifecycleConvene,
+            pauseAttachWrite: { armed, paused },
+            instanceRegistryLayer: instanceLifecycleRegistry({ state, otherState, beforeOpen }),
+          }),
+        ),
+      );
+    }).pipe(Effect.scoped),
+);
+
+it.effect("a failed opening session preserves the credential its replacement already uses", () =>
+  Effect.gen(function* () {
+    const state = yield* Ref.make(emptyState);
+    const duringOpen = yield* Ref.make<Effect.Effect<void>>(Effect.void);
+    yield* Effect.gen(function* () {
+      const manager = yield* ProviderSessionManager.ProviderSessionManagerV2;
+      const sink = yield* EventSink.EventSinkV2;
+      const ids = yield* IdAllocator.IdAllocatorV2;
+      const configs = yield* McpProviderSessions.McpProviderSessions;
+      yield* (yield* ConveneMcp.ConveneMcp).configure(lifecycleConfigurations);
+      const threadId = ThreadId.make("thread-failed-open-transfer");
+      yield* sink.write({
+        events: [
+          yield* makeThreadCreatedEvent({
+            idAllocator: ids,
+            threadId,
+            now: yield* DateTime.now,
+            projectId: lifecycleProject,
+          }),
+        ],
+      });
+      const first = yield* ids.allocate.providerSession({
+        providerInstanceId: modelSelection.instanceId,
+        threadId,
+      });
+      const replacement = yield* ids.allocate.providerSession({
+        providerInstanceId: modelSelection.instanceId,
+        threadId,
+      });
+      let original: McpProviderSession.McpProviderSessionConfig | undefined;
+      yield* Ref.set(
+        duringOpen,
+        Effect.gen(function* () {
+          original = yield* configs.read(threadId);
+          yield* manager.open({
+            threadId,
+            providerSessionId: replacement,
+            modelSelection,
+            runtimePolicy,
+          });
+          return yield* Effect.die("controlled predecessor open failure");
+        }).pipe(Effect.orDie),
+      );
+      const result = yield* manager
+        .open({ threadId, providerSessionId: first, modelSelection, runtimePolicy })
+        .pipe(Effect.exit);
+      assert.isTrue(Exit.isFailure(result));
+      assert.isFalse(yield* manager.isLive(first));
+      assert.isTrue(yield* manager.isLive(replacement));
+      assert.isDefined(original);
+      assert.equal((yield* configs.read(threadId))?.providerSessionId, original!.providerSessionId);
+      yield* assertLifecycleCredential(original!, true);
+      yield* manager.close(replacement);
+      yield* assertLifecycleCredential(original!, false);
+    }).pipe(
+      Effect.provide(
+        layerTest({
+          state,
+          idleTimeoutMs: 60_000,
+          conveneMcpLayer: layerLifecycleConvene,
+          beforeOpen: () => Ref.getAndSet(duringOpen, Effect.void).pipe(Effect.flatten),
+          spawnBeforeOpen: true,
+        }),
+      ),
+    );
+  }).pipe(Effect.scoped),
 );
 
 it.effect(
