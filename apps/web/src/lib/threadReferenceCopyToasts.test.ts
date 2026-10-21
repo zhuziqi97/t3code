@@ -10,7 +10,7 @@ import {
 afterEach(async () => changeLanguage("en"));
 
 it.each([
-  ["pull-request", "https://github.com/acme/raw/pull/3", "已复制拉取请求链接"],
+  ["pull-request", "https://github.com/acme/raw/pull/3", "已复制 PR 链接"],
   ["thread", "thread:raw/原文", "已复制会话 ID"],
 ] as const)(
   "uses the current language for a %s copy and preserves its value",
@@ -31,9 +31,9 @@ it.each([
   [
     "pull-request",
     "pull request link",
-    "复制拉取请求链接失败",
-    "复制拉取请求链接时，剪贴板接口不可用。",
-    "无法将拉取请求链接复制到剪贴板。",
+    "复制 PR 链接失败",
+    "复制 Pull Request 链接时，剪贴板接口不可用。",
+    "无法将 Pull Request 链接复制到剪贴板。",
   ],
   [
     "thread",

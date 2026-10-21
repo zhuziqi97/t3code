@@ -367,7 +367,7 @@ it("keeps separate comment and review drafts across mode and language changes", 
     "Review 原文",
   );
   await click("评论");
-  expect(document.querySelector<HTMLTextAreaElement>('[aria-label="评论此拉取请求"]')!.value).toBe(
+  expect(document.querySelector<HTMLTextAreaElement>('[aria-label="评论此 Pull Request"]')!.value).toBe(
     "Comment 原文 /tmp/raw",
   );
   expect(fixture.post).not.toHaveBeenCalled();
@@ -436,7 +436,7 @@ it("uses the settled review language and leaves summary changes made during subm
   await act(async () => pending.finish({ _tag: "Success" }));
   expect(fixture.toast).toHaveBeenCalledExactlyOnceWith({
     type: "success",
-    title: "拉取请求已获批准",
+    title: "Pull Request 已获批准",
   });
   expect(usePullRequestReviewStore.getState().summaries[pullRequestReviewKey(reference)]).toBe(
     "New draft 原文",

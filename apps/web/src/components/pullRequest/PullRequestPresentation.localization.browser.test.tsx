@@ -199,7 +199,7 @@ it("keeps the current loading tab and copied code when their labels change", asy
   );
   await act(async () => changeLanguage("zh"));
   expect(container.querySelector('[role="status"]')?.getAttribute("aria-label")).toBe(
-    "正在加载拉取请求",
+    "正在加载 Pull Request",
   );
   const timeline = [...container.querySelectorAll("button")].find(
     (button) => button.textContent === "时间线",

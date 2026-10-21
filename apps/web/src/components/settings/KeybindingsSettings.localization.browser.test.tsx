@@ -209,7 +209,7 @@ it("keeps Chinese searches working after switching to English and preserves the 
   await render();
   await language("zh");
   await type(search(), "复制链接");
-  expect(container.textContent).toContain("拉取请求：复制链接或会话 ID");
+  expect(container.textContent).toContain("Pull Request：复制链接或会话 ID");
   const row = container.querySelector("#keybinding-thread\\.copyReference");
   await language("en");
   expect(search().value).toBe("复制链接");

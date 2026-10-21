@@ -60,7 +60,7 @@ it("reports a pending external PR link failure in the new language with the raw 
     expect(add).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "error",
-        title: "无法打开拉取请求链接",
+        title: "无法打开 Pull Request 链接",
         description: "Raw open diagnostic 原文",
       }),
     );

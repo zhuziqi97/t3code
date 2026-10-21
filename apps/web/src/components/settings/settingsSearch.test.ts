@@ -769,7 +769,7 @@ it("retranslates command results and keeps bilingual and native searches at the 
     expect(searchSettings(query)).toContainEqual(
       expect.objectContaining({
         id: "keybinding-thread.copyReference",
-        title: "拉取请求：复制链接或会话 ID",
+        title: "Pull Request：复制链接或会话 ID",
         to: "/settings/keybindings",
       }),
     );

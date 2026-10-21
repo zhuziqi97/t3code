@@ -74,7 +74,7 @@ it("keeps a typed host query when its input switches language", async () => {
   });
   await act(async () => changeLanguage("zh"));
   expect(input.value).toBe(query);
-  expect(input.getAttribute("aria-label")).toBe("搜索拉取请求");
+  expect(input.getAttribute("aria-label")).toBe("搜索 Pull Request");
   expect(input.placeholder).toContain("label:bug");
   await act(async () => changeLanguage("en"));
   expect(input.value).toBe(query);
@@ -140,7 +140,7 @@ it("keeps loading controls disabled and enables the translated pagination action
   await act(async () =>
     root.rerender(<PullRequestListEmptyState {...emptyProps} onLoadMore={load} />),
   );
-  await clickText("button", "加载更多拉取请求");
+  await clickText("button", "加载更多 Pull Request");
   expect(load).toHaveBeenCalledOnce();
 });
 
@@ -159,7 +159,7 @@ it("translates retry without changing a server diagnostic or its host link", asy
     ),
   );
   await act(async () => changeLanguage("zh"));
-  expect(container.textContent).toContain("无法加载拉取请求");
+  expect(container.textContent).toContain("无法加载 Pull Request");
   expect(container.textContent).toContain("Raw host diagnostic 原文");
   expect(container.querySelector("a")?.href).toBe(url);
   await clickText("button", "重试");
