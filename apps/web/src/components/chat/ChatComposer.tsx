@@ -2955,20 +2955,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     : null;
   const showResumeAction =
     canResume && !composerDraftHasUserContent(composerDraft) && !isEditingQueuedMessage;
-  const collapsedComposerPrimaryActionDisabled =
-    phase === "running" ||
-    isSendBusy ||
-    isSendDisabled ||
-    isConnecting ||
-    noProviderAvailable ||
-    projectSelectionRequired ||
-    environmentUnavailable !== null ||
-    (!composerSendState.hasSendableContent && !showResumeAction);
-  const collapsedComposerPrimaryActionLabel = showResumeAction
-    ? t("chat.resume")
-    : props.resumeCompactionTokens !== null && !props.keepFullHistory
-      ? t("chat.composer.openToCompact")
-      : t("chat.send");
   const showMobilePendingAnswerActions =
     isMobileViewport && !isComposerCollapsedMobile && pendingPrimaryAction !== null;
 
@@ -6407,6 +6393,43 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     ],
   );
 
+  const composerPrimaryActionProps = {
+    canOperateThread,
+    pendingAction: pendingPrimaryAction,
+    isRunning: phase === "running",
+    canInterrupt,
+    followUpBehavior: settings.followUpBehavior,
+    canSteer: !isCompacting,
+    alternateShortcutLabel: shortcutLabelForCommand(keybindings, "composer.sendAlternate", {
+      context: {
+        composerFocus: true,
+        draftThreadRoute: routeKind === "draft",
+        turnRunning: true,
+        composerRequiresModifier: composerRequiresModifier(settings.sendShortcut, prompt),
+      },
+    }),
+    showPlanFollowUpPrompt: pendingUserInputs.length === 0 && showPlanFollowUpPrompt,
+    promptHasText: prompt.trim().length > 0,
+    isSendBusy,
+    sendDisabledReason: sendDisabledReason,
+    isConnecting,
+    isEnvironmentUnavailable:
+      environmentUnavailable !== null || noProviderAvailable || projectSelectionRequired,
+    isPreparingWorktree,
+    hasSendableContent: composerSendState.hasSendableContent,
+    canResume: showResumeAction,
+    preserveComposerFocusOnPointerDown: isMobileViewport || isComposerResting,
+    isEditingQueuedMessage,
+    onSubmitMessage: handleSubmitMessageStable,
+    onResume,
+    onPreviousPendingQuestion: onPreviousActivePendingUserInputQuestion,
+    onInterrupt: handleInterruptPrimaryActionStable,
+    onImplementPlanInNewThread: handleImplementPlanInNewThreadPrimaryActionStable,
+    compactBeforeSendTokens: props.resumeCompactionTokens,
+    keepFullHistory: props.keepFullHistory,
+    onToggleKeepFullHistory: props.onToggleKeepFullHistory,
+  } satisfies Omit<React.ComponentProps<typeof ComposerPrimaryActions>, "compact">;
+
   return (
     <form
       ref={composerFormRef}
@@ -6725,35 +6748,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                         : t("chat.prompt.placeholder"))}
                 </button>
                 {collapsedComposerImagePreviews}
-                <button
-                  type="button"
-                  data-chat-composer-transition-actions="true"
-                  className="flex size-8 shrink-0 items-center justify-center rounded-full bg-message-action text-message-action-foreground hover:bg-message-action-hover disabled:opacity-64"
-                  disabled={collapsedComposerPrimaryActionDisabled}
-                  aria-label={collapsedComposerPrimaryActionLabel}
-                  onPointerDown={(event) => event.preventDefault()}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    if (showResumeAction) onResume();
-                    else if (props.resumeCompactionTokens !== null && !props.keepFullHistory)
-                      expandMobileComposer();
-                    else submitComposer();
-                  }}
-                >
-                  {showResumeAction ? (
-                    <PlayIcon className="size-4 fill-current" aria-hidden="true" />
-                  ) : (
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                      <path
-                        d="M8 3L8 13M8 3L4 7M8 3L12 7"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  )}
-                </button>
+                <div data-chat-composer-transition-actions="true" className="shrink-0">
+                  <ComposerPrimaryActions
+                    {...composerPrimaryActionProps}
+                    compact
+                    preserveComposerFocusOnPointerDown
+                    onExpandForCompaction={expandMobileComposerStable}
+                  />
+                </div>
               </div>
             ) : null}
 
@@ -7416,57 +7418,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   ) : null}
                   <ComposerFooterPrimaryActions
                     compact={isComposerResting || isComposerPrimaryActionsCompact}
-                    canOperateThread={canOperateThread}
                     activeContextWindow={
                       settings.contextWindowMeterEnabled ? activeContextWindow : null
                     }
                     reserveContextWindowMeter={reserveContextWindowMeter}
                     activeThreadModelDisplayName={activeThreadModelDisplayName}
-                    pendingAction={pendingPrimaryAction}
-                    isRunning={phase === "running"}
-                    canInterrupt={canInterrupt}
-                    followUpBehavior={settings.followUpBehavior}
-                    canSteer={!isCompacting}
-                    alternateShortcutLabel={shortcutLabelForCommand(
-                      keybindings,
-                      "composer.sendAlternate",
-                      {
-                        context: {
-                          composerFocus: true,
-                          draftThreadRoute: routeKind === "draft",
-                          turnRunning: true,
-                          composerRequiresModifier: composerRequiresModifier(
-                            settings.sendShortcut,
-                            prompt,
-                          ),
-                        },
-                      },
-                    )}
-                    showPlanFollowUpPrompt={
-                      pendingUserInputs.length === 0 && showPlanFollowUpPrompt
-                    }
-                    promptHasText={prompt.trim().length > 0}
-                    isSendBusy={isSendBusy}
-                    sendDisabledReason={sendDisabledReason}
-                    isConnecting={isConnecting}
-                    isEnvironmentUnavailable={
-                      environmentUnavailable !== null ||
-                      noProviderAvailable ||
-                      projectSelectionRequired
-                    }
-                    isPreparingWorktree={isPreparingWorktree}
-                    hasSendableContent={composerSendState.hasSendableContent}
-                    canResume={showResumeAction}
-                    preserveComposerFocusOnPointerDown={isMobileViewport || isComposerResting}
-                    isEditingQueuedMessage={isEditingQueuedMessage}
-                    onSubmitMessage={handleSubmitMessageStable}
-                    onResume={onResume}
-                    onPreviousPendingQuestion={onPreviousActivePendingUserInputQuestion}
-                    onInterrupt={handleInterruptPrimaryActionStable}
-                    onImplementPlanInNewThread={handleImplementPlanInNewThreadPrimaryActionStable}
-                    compactBeforeSendTokens={props.resumeCompactionTokens}
-                    keepFullHistory={props.keepFullHistory}
-                    onToggleKeepFullHistory={props.onToggleKeepFullHistory}
+                    {...composerPrimaryActionProps}
                     compactDisabled={
                       compactDisabled || noProviderAvailable || isSendBusy || isConnecting
                     }

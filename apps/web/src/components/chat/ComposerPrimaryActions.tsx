@@ -47,6 +47,7 @@ interface ComposerPrimaryActionsProps {
   preserveComposerFocusOnPointerDown?: boolean;
   isEditingQueuedMessage?: boolean;
   onSubmitMessage?: MouseEventHandler<HTMLButtonElement>;
+  onExpandForCompaction?: () => void;
   onResume?: () => void;
   onPreviousPendingQuestion: () => void;
   onInterrupt: () => void;
@@ -86,6 +87,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   preserveComposerFocusOnPointerDown = false,
   isEditingQueuedMessage = false,
   onSubmitMessage,
+  onExpandForCompaction,
   onResume,
   onPreviousPendingQuestion,
   onInterrupt,
@@ -243,7 +245,10 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
                   "h-9 rounded-l-none border-l border-message-action-foreground/20 px-2 sm:h-8",
                 )}
                 aria-label={t("chat.primary.implementationActions")}
-                {...pointerFocusProps}
+                // Canceling pointerdown also suppresses the mousedown that opens the menu.
+                onMouseDown={
+                  preserveComposerFocusOnPointerDown ? (event) => event.preventDefault() : undefined
+                }
                 disabled={isSendBusy || isSendDisabled || isConnecting || isEnvironmentUnavailable}
               />
             }
@@ -276,13 +281,16 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
       ? formatContextWindowTokens(compactBeforeSendTokens)
       : null;
   const compactsBeforeSend = compactTokens !== null && !keepFullHistory;
+  const opensForCompaction = compactsBeforeSend && onExpandForCompaction !== undefined;
 
   const submitLabel = showResume
     ? t("chat.primary.resume")
     : isEditingQueuedMessage
       ? t("chat.primary.updateQueued")
       : compactsBeforeSend
-        ? t("chat.primary.compactSend")
+        ? opensForCompaction
+          ? t("chat.composer.openToCompact")
+          : t("chat.primary.compactSend")
         : isQueuing
           ? t("chat.primary.queue")
           : isRunning
@@ -314,7 +322,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
 
   const sendButton = (
     <button
-      type={showResume ? "button" : "submit"}
+      type={showResume || opensForCompaction ? "button" : "submit"}
       className={cn(
         "relative isolate flex h-9 w-9 items-center justify-center overflow-hidden rounded-full shadow-xs transition-all duration-150 enabled:cursor-pointer enabled:inset-shadow-control-highlight hover:scale-105 active:inset-shadow-control-pressed active:shadow-none disabled:pointer-events-none disabled:opacity-64 disabled:shadow-none disabled:hover:scale-100 sm:h-8 sm:w-8 [&_svg]:pointer-events-none",
         stageBackdropVariant
@@ -322,7 +330,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
           : "bg-message-action text-message-action-foreground enabled:shadow-message-action/24 hover:bg-message-action-hover",
       )}
       {...pointerFocusProps}
-      onClick={showResume ? onResume : onSubmitMessage}
+      onClick={showResume ? onResume : opensForCompaction ? onExpandForCompaction : onSubmitMessage}
       disabled={
         isSendBusy ||
         isSendDisabled ||
@@ -365,7 +373,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
       <TooltipPopup>{submitTooltip}</TooltipPopup>
     </Tooltip>
   );
-  if (compactTokens === null) return submit;
+  if (compactTokens === null || onExpandForCompaction !== undefined) return submit;
 
   return (
     <div data-chat-composer-compact-send="true" className="flex items-center gap-2">
