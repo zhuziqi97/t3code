@@ -178,7 +178,7 @@ export interface ProviderSessionManagerV2Shape {
   readonly close: (
     providerSessionId: ProviderSessionId,
   ) => Effect.Effect<void, ProviderSessionManagerV2Error>;
-  /** Closes every live runtime owned by one provider instance. */
+  /** Refuses new opens while draining this instance's pending and live sessions. */
   readonly closeInstance: (
     instanceId: ProviderInstanceId,
   ) => Effect.Effect<void, ProviderSessionManagerV2Error>;
@@ -2141,12 +2141,22 @@ export const layerWithOptions = (
           >;
         }
       >();
+      // Direct closes (e.g. ACP configuration) do not remove the canonical
+      // instance. Keep admission closed until every overlapping drain finishes.
+      const closingInstances = new Map<ProviderInstanceId, number>();
       const trackOpen = (
         input: Parameters<ProviderSessionManagerV2Shape["open"]>[0],
         operation: ReturnType<ProviderSessionManagerV2Shape["open"]>,
       ) =>
         Effect.uninterruptibleMask((restore) =>
           Effect.gen(function* () {
+            if (closingInstances.has(input.modelSelection.instanceId)) {
+              return yield* new ProviderSessionOpenError({
+                instanceId: input.modelSelection.instanceId,
+                providerSessionId: input.providerSessionId,
+                cause: `Provider instance ${input.modelSelection.instanceId} is closing.`,
+              });
+            }
             const id = Symbol();
             const fiber = yield* operation.pipe(Effect.forkIn(layerScope));
             opening.set(id, { instanceId: input.modelSelection.instanceId, fiber });
@@ -2161,30 +2171,42 @@ export const layerWithOptions = (
           }),
         );
       const closeInstance = (instanceId: ProviderInstanceId) =>
-        Effect.gen(function* () {
-          yield* Effect.forEach(
-            [...opening.values()].filter((entry) => entry.instanceId === instanceId),
-            (entry) => Fiber.interrupt(entry.fiber),
-            { concurrency: "unbounded", discard: true },
-          );
-          const active = [...(yield* Ref.get(sessions)).values()].filter(
-            (entry) => entry.runtime.instanceId === instanceId,
-          );
-          const outcomes = yield* Effect.forEach(
-            active,
-            (entry) =>
-              releaseEntry({
-                providerSessionId: entry.runtime.providerSessionId,
-                reason: "manual_shutdown",
-                detail: `Provider instance ${instanceId} closed.`,
-              }).pipe(Effect.exit),
-            { concurrency: "unbounded" },
-          );
-          const failure = outcomes.find(Exit.isFailure);
-          if (failure !== undefined && Exit.isFailure(failure)) {
-            return yield* Effect.failCause(failure.cause);
-          }
-        }).pipe(
+        Effect.acquireUseRelease(
+          Effect.sync(() => {
+            closingInstances.set(instanceId, (closingInstances.get(instanceId) ?? 0) + 1);
+          }),
+          () =>
+            Effect.gen(function* () {
+              yield* Effect.forEach(
+                [...opening.values()].filter((entry) => entry.instanceId === instanceId),
+                (entry) => Fiber.interrupt(entry.fiber),
+                { concurrency: "unbounded", discard: true },
+              );
+              const active = [...(yield* Ref.get(sessions)).values()].filter(
+                (entry) => entry.runtime.instanceId === instanceId,
+              );
+              const outcomes = yield* Effect.forEach(
+                active,
+                (entry) =>
+                  releaseEntry({
+                    providerSessionId: entry.runtime.providerSessionId,
+                    reason: "manual_shutdown",
+                    detail: `Provider instance ${instanceId} closed.`,
+                  }).pipe(Effect.exit),
+                { concurrency: "unbounded" },
+              );
+              const failure = outcomes.find(Exit.isFailure);
+              if (failure !== undefined && Exit.isFailure(failure)) {
+                return yield* Effect.failCause(failure.cause);
+              }
+            }).pipe(Effect.uninterruptible),
+          () =>
+            Effect.sync(() => {
+              const remaining = closingInstances.get(instanceId)! - 1;
+              if (remaining === 0) closingInstances.delete(instanceId);
+              else closingInstances.set(instanceId, remaining);
+            }),
+        ).pipe(
           Effect.mapError(
             (cause) =>
               new ProviderSessionCloseError({
@@ -2217,6 +2239,18 @@ export const layerWithOptions = (
             sessionOpen.withLock(
               input.providerSessionId,
               Effect.gen(function* () {
+                // A reusable runtime is not authority to reopen a removed or
+                // replaced instance while its canonical scope is closing.
+                const adapter = yield* registry.get(input.modelSelection.instanceId).pipe(
+                  Effect.mapError(
+                    (cause) =>
+                      new ProviderSessionOpenError({
+                        instanceId: input.modelSelection.instanceId,
+                        providerSessionId: input.providerSessionId,
+                        cause,
+                      }),
+                  ),
+                );
                 const cwd = input.runtimePolicy.cwd;
                 if (cwd !== null) {
                   const workspaceIsDirectory = yield* fileSystem.stat(cwd).pipe(
@@ -2252,16 +2286,6 @@ export const layerWithOptions = (
                   return existing.exposedRuntime;
                 }
 
-                const adapter = yield* registry.get(input.modelSelection.instanceId).pipe(
-                  Effect.mapError(
-                    (cause) =>
-                      new ProviderSessionOpenError({
-                        instanceId: input.modelSelection.instanceId,
-                        providerSessionId: input.providerSessionId,
-                        cause,
-                      }),
-                  ),
-                );
                 return yield* Effect.uninterruptibleMask((restore) =>
                   Effect.gen(function* () {
                     const sessionScope = yield* Scope.fork(sessionScopes);
