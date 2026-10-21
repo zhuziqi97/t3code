@@ -60,7 +60,8 @@ import { createModelSelection } from "@t3tools/shared/model";
 import * as Duration from "effect/Duration";
 import * as Equal from "effect/Equal";
 import * as Schema from "effect/Schema";
-import { APP_VERSION, UPSTREAM_VERSION, HOSTED_APP_CHANNEL } from "../../branding";
+import { HOSTED_APP_CHANNEL } from "../../branding";
+import { AboutVersionTitle } from "./AboutVersionTitle";
 import { CliCommandSettingsRow } from "./CliCommandSettingsRow";
 import { MobileAppSettingsRow } from "./MobileAppSettingsRow";
 import {
@@ -275,19 +276,6 @@ function backgroundActivityProfileSettings(profile: BackgroundActivityProfile) {
       overrides: {},
     },
   };
-}
-
-function AboutVersionTitle() {
-  const t = useTranslate();
-  return (
-    <span className="inline-flex flex-wrap items-baseline gap-2">
-      <span>{t("about.version")}</span>
-      <code className="text-2xs font-medium text-muted-foreground">{APP_VERSION}</code>
-      <span className="text-2xs text-muted-foreground">
-        {t("convene.about.upstream", { version: UPSTREAM_VERSION })}
-      </span>
-    </span>
-  );
 }
 
 function AboutVersionSection() {

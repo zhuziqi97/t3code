@@ -2965,6 +2965,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     // dynamically loads the system libfuse2 library. Pin the static runtime so
     // the AppImage also launches on distributions that only provide FUSE 3.
     buildConfig.toolsets = { appimage: "1.0.3" };
+    // FPM derives /opt, maintainer scripts and AppArmor from productName.
+    // Keep that identity stable; the desktop entry owns the channel display name.
+    buildConfig.productName = CONVENE_DESKTOP_IDENTITY.executableName;
     const path = yield* Path.Path;
     const repoRoot = yield* RepoRoot;
     buildConfig.linux = {
@@ -2986,6 +2989,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       ],
       desktop: {
         entry: {
+          Name: resolveDesktopProductName(version),
           StartupWMClass: CONVENE_DESKTOP_IDENTITY.executableName,
         },
       },
@@ -2993,7 +2997,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     buildConfig.deb = {
       // FPM runs outside the staged app directory, so source paths must be absolute.
       fpm: [
-        `${path.join(repoRoot, "apps/desktop/resources/linux/deb-package-type")}=/opt/${resolveDesktopProductName(version)}/resources/package-type`,
+        `${path.join(repoRoot, "apps/desktop/resources/linux/deb-package-type")}=/opt/${CONVENE_DESKTOP_IDENTITY.executableName}/resources/package-type`,
         `${path.join(repoRoot, "apps/desktop/resources/linux/tech.ziqi.t3code-convene.metainfo.xml")}=/usr/share/metainfo/tech.ziqi.t3code-convene.metainfo.xml`,
         `${path.join(repoRoot, "LICENSE")}=/usr/share/doc/t3code-convene/copyright`,
       ],

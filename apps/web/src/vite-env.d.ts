@@ -16,6 +16,8 @@ interface ImportMetaEnv {
   readonly T3CODE_DESKTOP_UPDATE_REPOSITORY: string;
   readonly APP_VERSION: string;
   readonly UPSTREAM_VERSION: string;
+  readonly CONVENE_BUILD_ID: string;
+  readonly CONVENE_SOURCE_COMMIT: string;
 }
 
 interface ImportMeta {

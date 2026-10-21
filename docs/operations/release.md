@@ -26,6 +26,30 @@ remain stable and nightly. To ship 0.1.0 Beta, use `channel=stable` and
 `version=0.1.0`. Removing the Beta label later is a branding change independent of
 the version.
 
+## Convene Linux installation and candidate notes
+
+Linux DEB installation uses `/opt/t3code-convene/t3code-convene`. The Linux
+builder's `productName` is the stable installation identity; the desktop entry's
+`Name` and runtime branding retain the Beta/Nightly display name. Keep the app ID,
+desktop IDs, CLI and URL schemes, desktop profile and user data identities when
+changing that label. The same installation identity feeds FPM, CLI alternatives,
+the package-type marker and AppArmor. The app rewrites its own user URL handler
+on launch; installation does not scan users' homes or edit unknown shortcuts.
+
+Before publishing the next candidate, verify new DEB installs and actual old
+Alpha/Beta upgrades on Ubuntu 22.04 and 24.04 (Wayland/Xorg) and 26.04 (Wayland).
+Include first menu and protocol launches with old entries retained, CLI,
+AppArmor, visible usable windows, quit/reopen and retained data. Verify the
+[old entry and favorites recovery steps](../user/updating.md#linux-menu-entries-after-an-alpha-or-beta-upgrade)
+against that candidate, then include them in its release notes. These steps and
+the OS matrix remain pending; generated configuration or script fixtures do not
+establish installation acceptance. Windows/macOS configuration checks likewise
+do not establish native acceptance.
+
+AppImage integration and sandbox behavior need separate evidence. Its launcher
+can add `--no-sandbox` on newer Ubuntu; opening successfully does not demonstrate
+an enabled sandbox. GBM or DBus warnings are not evidence of the old Exec defect.
+
 ## What the workflow does
 
 - Workflow: `.github/workflows/release.yml`
