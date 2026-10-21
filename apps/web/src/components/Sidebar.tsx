@@ -2123,7 +2123,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             {terminalStatusIcon}
             {isRegeneratingTitle ? (
               <span role="status" className="sr-only">
-                Regenerating title
+                {t("thread.title.regenerating")}
               </span>
             ) : null}
             {prBadge}
@@ -2213,7 +2213,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                 ) : (
                   <button
                     type="button"
-                    aria-label="Settle thread"
+                    aria-label={t("thread.settle")}
                     onClick={handleSettleClick}
                     onPointerDown={handleActionPointerDown}
                     className={cn(
@@ -2409,7 +2409,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                             render={
                               <button
                                 type="button"
-                                aria-label="Settle thread"
+                                aria-label={t("thread.settle")}
                                 onClick={handleSettleClick}
                                 onPointerDown={handleActionPointerDown}
                                 className="-mr-1 inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground"
@@ -2419,7 +2419,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                             <CheckIcon className="size-3.5" />
                             {t("thread.settle.short")}
                           </TooltipTrigger>
-                          <TooltipPopup>Settle thread</TooltipPopup>
+                          <TooltipPopup>{t("thread.settle")}</TooltipPopup>
                         </Tooltip>
                       ) : null}
                     </span>
@@ -2432,7 +2432,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               {title}
               {isRegeneratingTitle ? (
                 <span role="status" className="sr-only">
-                  Regenerating title
+                  {t("thread.title.regenerating")}
                 </span>
               ) : null}
             </div>
