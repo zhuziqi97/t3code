@@ -502,6 +502,16 @@ export const SETTINGS_SEARCH_ITEMS = [
     scope: "project-defaults",
   },
   {
+    id: "keep-threads-with-pr",
+    get title() {
+      return i18n.t("settings.search.keep-threads-with-pr.title");
+    },
+    to: "/settings/general",
+    searchTerms: ["PR pull request inactivity merge close 保留 不活跃 自动完成"],
+    requiresThreadAutoSettlement: true,
+    scope: "project-defaults",
+  },
+  {
     id: "compact-idle-threads",
     title: "Compact idle Claude threads (beta)",
     to: "/settings/general",
