@@ -318,12 +318,6 @@ const makeReconcile = <R>(input: {
           replacedIds.add(instanceId);
         }
       }
-      // Stop admitting new sessions on a retiring instance before its owners drain.
-      yield* Ref.update(state.entries, (current) => {
-        const remaining = new Map(current);
-        for (const id of [...removedIds, ...replacedIds]) remaining.delete(id);
-        return remaining;
-      });
       for (const id of [...removedIds, ...replacedIds]) {
         yield* Effect.forEach(state.beforeClose, (release) => release(id), { discard: true });
         const live = previousEntries.get(id);

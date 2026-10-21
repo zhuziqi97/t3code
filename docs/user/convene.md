@@ -22,4 +22,9 @@ Project configuration has separate **Module bindings** and **Convene MCP** tabs.
 
 Cached configuration remains readable while unavailable. Platform writes require a current configuration and a connected environment. There is no automatic offline write replay: reconnect, refresh and explicitly retry. The platform enforces saved MCP access, including permission reductions; configuration changes do not restart active provider processes.
 
+To reload MCP after changing its setup, or if a connection still fails after recovery,
+use **Restart agent session** in the web or desktop command palette. Your next message
+reopens the agent with the updated setup and keeps the conversation. Refreshing the
+browser page does not restart the agent.
+
 Convene execution currently supports native Codex and Claude providers. Other providers keep their upstream native functionality without a Convene execution support claim.

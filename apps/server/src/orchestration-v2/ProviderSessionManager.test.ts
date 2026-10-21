@@ -5301,6 +5301,10 @@ function instanceLifecycleRegistry(input: {
   otherState: Ref.Ref<TestProviderRuntimeState>;
   beforeOpen?: () => Effect.Effect<void, never, Scope.Scope>;
   spawnBeforeOpen?: boolean;
+  runtimeMethods?: Pick<
+    ProviderAdapter.ProviderAdapterV2SessionRuntime,
+    "ensureThread" | "resumeThread" | "forkThread" | "startTurn"
+  >;
 }) {
   const driver: ProviderDriver<
     { readonly revision: number },
@@ -5341,6 +5345,7 @@ function instanceLifecycleRegistry(input: {
               adapter.openSession(args).pipe(
                 Effect.map((runtime) => ({
                   ...runtime,
+                  ...input.runtimeMethods,
                   instanceId,
                   providerSession: { ...runtime.providerSession, providerInstanceId: instanceId },
                 })),
@@ -5853,64 +5858,6 @@ it.effect("a failed opening session preserves the credential its replacement alr
       ),
     );
   }).pipe(Effect.scoped),
-);
-
-it.effect(
-  "instance removal interrupts a pending open and revokes its prepared MCP credential",
-  () =>
-    Effect.gen(function* () {
-      const state = yield* Ref.make(emptyState),
-        otherState = yield* Ref.make(emptyState);
-      const started = yield* Deferred.make<void>();
-      const beforeOpen = () =>
-        Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never));
-      yield* Effect.gen(function* () {
-        const sink = yield* EventSink.EventSinkV2,
-          ids = yield* IdAllocator.IdAllocatorV2;
-        const manager = yield* ProviderSessionManager.ProviderSessionManagerV2;
-        const mutator = yield* ProviderInstanceRegistryMutator.ProviderInstanceRegistryMutator;
-        const mcpSessions = yield* McpProviderSessions.McpProviderSessions;
-        const native = yield* McpSessionRegistry.McpSessionRegistry;
-        const threadId = ThreadId.make("thread-instance-removal-during-open");
-        yield* sink.write({
-          events: [
-            yield* makeThreadCreatedEvent({ idAllocator: ids, threadId, now: yield* DateTime.now }),
-          ],
-        });
-        const providerSessionId = yield* ids.allocate.providerSession({
-          providerInstanceId: modelSelection.instanceId,
-          threadId,
-        });
-        const open = yield* manager
-          .open({ threadId, providerSessionId, modelSelection, runtimePolicy })
-          .pipe(Effect.forkScoped);
-        yield* Deferred.await(started);
-        const credential = (yield* mcpSessions.read(threadId))!;
-        const next = lifecycleConfig();
-        delete next[modelSelection.instanceId];
-        yield* mutator.reconcile(next);
-        assert.equal((yield* Ref.get(state)).closeCount, 1);
-        assert.isTrue(Exit.hasInterrupts(yield* Fiber.await(open)));
-        assert.isFalse(yield* manager.isLive(providerSessionId));
-        assert.isUndefined(yield* mcpSessions.read(threadId));
-        assert.isUndefined(
-          yield* native.resolve(credential.authorizationHeader.replace(/^Bearer\s+/, "")),
-        );
-      }).pipe(
-        Effect.provide(
-          layerTest({
-            state,
-            idleTimeoutMs: 60_000,
-            instanceRegistryLayer: instanceLifecycleRegistry({
-              state,
-              otherState,
-              beforeOpen,
-              spawnBeforeOpen: true,
-            }),
-          }),
-        ),
-      );
-    }).pipe(Effect.scoped),
 );
 
 it.effect.each([
@@ -6442,339 +6389,258 @@ it.effect.each(["abort-0-first", "abort-1-first", "one-survives"] as const)(
     }).pipe(Effect.scoped),
 );
 
-it.effect.each(["remove", "replace"] as const)(
-  "MCP acquisition: canonical instance %s during preparation",
-  (change) =>
+it.effect.each(["ensureThread", "resumeThread", "forkThread", "startTurn"] as const)(
+  "runtime %s reports attachment failure and recovers through normal reopen",
+  (method) =>
     Effect.gen(function* () {
-      const rememberThread = yield* Ref.make<
-        Effect.Effect<void, ConveneWorkspaces.ConveneWorkspaceError>
-      >(Effect.void);
       const state = yield* Ref.make(emptyState),
         otherState = yield* Ref.make(emptyState),
-        entered = yield* Deferred.make<void>();
+        failPrepare = yield* Ref.make(false),
+        calls = yield* Ref.make<ReadonlyArray<string>>([]);
+      const record = (name: string) => Ref.update(calls, (current) => [...current, name]);
+      const runtimeMethods = {
+        ensureThread: (input) =>
+          record("ensureThread").pipe(
+            Effect.andThen(
+              input.existingProviderThread === undefined
+                ? unimplemented("Existing fixture thread required")
+                : Effect.succeed(input.existingProviderThread),
+            ),
+          ),
+        resumeThread: (input) => record("resumeThread").pipe(Effect.as(input.providerThread)),
+        forkThread: (input) =>
+          record("forkThread").pipe(
+            Effect.as({
+              ...input.sourceProviderThread,
+              appThreadId: input.targetThreadId,
+            }),
+          ),
+        startTurn: () => record("startTurn"),
+      } satisfies Pick<
+        ProviderAdapter.ProviderAdapterV2SessionRuntime,
+        "ensureThread" | "resumeThread" | "forkThread" | "startTurn"
+      >;
+      const threadId = ThreadId.make(`runtime-recovery-${method}`);
       yield* Effect.gen(function* () {
         const manager = yield* ProviderSessionManager.ProviderSessionManagerV2,
-          mutator = yield* ProviderInstanceRegistryMutator.ProviderInstanceRegistryMutator,
-          sink = yield* EventSink.EventSinkV2,
-          ids = yield* IdAllocator.IdAllocatorV2,
           configs = yield* McpProviderSessions.McpProviderSessions,
-          native = yield* McpSessionRegistry.McpSessionRegistry;
+          sink = yield* EventSink.EventSinkV2,
+          ids = yield* IdAllocator.IdAllocatorV2;
         yield* (yield* ConveneMcp.ConveneMcp).configure(lifecycleConfigurations);
-        const t = ThreadId.make(`acquisition-canonical-${change}`),
-          owner = ThreadId.make(`${t}-owner`),
-          other = ThreadId.make(`${t}-other`);
-        for (const id of [t, owner, other])
+        const owner = ThreadId.make(`${threadId}-owner`),
+          other = ThreadId.make(`${threadId}-other`);
+        for (const id of [threadId, owner, other])
           yield* sink.write({
             events: [
               yield* makeThreadCreatedEvent({
                 idAllocator: ids,
                 threadId: id,
-                projectId: lifecycleProject,
+                projectId: id === other ? otherLifecycleProject : lifecycleProject,
                 now: yield* DateTime.now,
               }),
             ],
           });
         const shared = ids.derive.providerSession({
-            providerInstanceId: modelSelection.instanceId,
-          }),
-          otherSession = ids.derive.providerSession({ providerInstanceId: otherLifecycleInstance });
-        yield* manager.open({
-          threadId: owner,
-          providerSessionId: shared,
-          modelSelection,
-          runtimePolicy,
+          providerInstanceId: modelSelection.instanceId,
         });
-        yield* manager.open({
-          threadId: other,
-          providerSessionId: otherSession,
-          modelSelection: { ...modelSelection, instanceId: otherLifecycleInstance },
-          runtimePolicy,
-        });
-        const unaffected = (yield* configs.read(other))!;
-        yield* Ref.set(
-          rememberThread,
-          Deferred.succeed(entered, undefined).pipe(Effect.andThen(Effect.never)),
-        );
-        const pending = yield* manager
-          .open({ threadId: t, providerSessionId: shared, modelSelection, runtimePolicy })
-          .pipe(Effect.forkChild);
-        yield* Deferred.await(entered);
-        const prepared = (yield* configs.read(t))!;
-        const next = lifecycleConfig(change === "replace" ? 2 : 1);
-        if (change === "remove") delete next[modelSelection.instanceId];
-        yield* mutator.reconcile(next);
-        assert.isTrue(Exit.hasInterrupts(yield* Fiber.await(pending)));
-        yield* Ref.set(rememberThread, Effect.void);
-        assert.isFalse(yield* manager.isLive(shared));
-        assert.isUndefined(yield* configs.read(t));
-        assert.isUndefined(
-          yield* native.resolve(prepared.authorizationHeader.replace(/^Bearer\s+/, "")),
-        );
-        yield* assertLifecycleCredential(unaffected, true);
-        if (change === "replace") {
-          yield* manager.open({
-            threadId: owner,
+        const open = (id: ThreadId) =>
+          manager.open({
+            threadId: id,
             providerSessionId: shared,
             modelSelection,
             runtimePolicy,
           });
-          yield* assertLifecycleCredential((yield* configs.read(owner))!, true);
-        }
+        const runtime = yield* open(owner);
+        yield* open(threadId);
+        const original = (yield* configs.read(threadId))!,
+          ownerCredential = (yield* configs.read(owner))!;
+        yield* manager.detach({ providerSessionId: shared, threadId });
+        yield* manager.open({
+          threadId: other,
+          providerSessionId: ids.derive.providerSession({
+            providerInstanceId: otherLifecycleInstance,
+          }),
+          modelSelection: { ...modelSelection, instanceId: otherLifecycleInstance },
+          runtimePolicy,
+        });
+        const unaffected = (yield* configs.read(other))!;
+        const providerThread = makeProviderThread({
+          idAllocator: ids,
+          threadId,
+          providerSessionId: shared,
+          now: yield* DateTime.now,
+        });
+        const appThread = yield* (yield* ProjectionStore.ProjectionStoreV2).getThread(threadId);
+        const runId = ids.derive.run({ threadId, ordinal: 1 });
+        const messageId = yield* ids.allocate.message({ threadId, ordinal: 1 });
+        const invoke = (session: ProviderAdapter.ProviderAdapterV2SessionRuntime) => {
+          switch (method) {
+            case "ensureThread":
+              return session
+                .ensureThread({
+                  threadId,
+                  providerSessionId: shared,
+                  modelSelection,
+                  runtimePolicy,
+                  existingProviderThread: providerThread,
+                })
+                .pipe(Effect.asVoid);
+            case "resumeThread":
+              return session
+                .resumeThread({ threadId, providerThread, modelSelection, runtimePolicy })
+                .pipe(Effect.asVoid);
+            case "forkThread":
+              return session
+                .forkThread({
+                  sourceProviderThread: providerThread,
+                  targetThreadId: threadId,
+                  modelSelection,
+                  runtimePolicy,
+                })
+                .pipe(Effect.asVoid);
+            case "startTurn":
+              return session.startTurn({
+                appThread,
+                threadId,
+                runId,
+                runOrdinal: 1,
+                providerTurnOrdinal: 1,
+                attemptId: ids.derive.runAttempt({ runId, attemptOrdinal: 1 }),
+                rootNodeId: ids.derive.rootNode({ runId }),
+                providerThread,
+                message: {
+                  createdBy: "user",
+                  creationSource: "web",
+                  messageId,
+                  text: "controlled recovery",
+                  attachments: [],
+                },
+                modelSelection,
+                runtimePolicy,
+              });
+          }
+        };
+        yield* Ref.set(failPrepare, true);
+        const failed = yield* Effect.result(invoke(runtime));
+        assert.equal(failed._tag, "Failure");
+        if (failed._tag === "Failure")
+          assert.equal(
+            failed.failure._tag,
+            {
+              ensureThread: "ProviderAdapterEnsureThreadError",
+              resumeThread: "ProviderAdapterResumeThreadError",
+              forkThread: "ProviderAdapterForkThreadError",
+              startTurn: "ProviderAdapterTurnStartError",
+            }[method],
+          );
+        assert.deepEqual(yield* Ref.get(calls), []);
+        yield* assertLifecycleCredential(original, true);
+        yield* assertLifecycleCredential(ownerCredential, true);
+        yield* Ref.set(failPrepare, false);
+        yield* invoke(runtime);
+        assert.equal(
+          (yield* configs.read(threadId))!.providerSessionId,
+          original.providerSessionId,
+        );
+        yield* assertLifecycleCredential(original, true);
+        assert.deepEqual(yield* Ref.get(calls), [method]);
+        yield* manager.close(shared);
+        yield* assertLifecycleCredential(original, false);
+        const stale = yield* Effect.result(invoke(runtime));
+        assert.equal(stale._tag, "Failure");
+        assert.deepEqual(yield* Ref.get(calls), [method]);
+        const recoveredRuntime = yield* open(threadId);
+        yield* invoke(recoveredRuntime);
+        const recovered = (yield* configs.read(threadId))!;
+        assert.notEqual(recovered.providerSessionId, original.providerSessionId);
+        yield* assertLifecycleCredential(recovered, true);
+        yield* assertLifecycleCredential(unaffected, true);
+        yield* assertLifecycleCredential(original, false);
+        assert.deepEqual(yield* Ref.get(calls), [method, method]);
       }).pipe(
         Effect.provide(
           layerTest({
             state,
             idleTimeoutMs: 60000,
-            conveneMcpLayer: makeLifecycleConveneLayer(() =>
-              Ref.get(rememberThread).pipe(Effect.flatten),
+            instanceRegistryLayer: instanceLifecycleRegistry({ state, otherState, runtimeMethods }),
+            conveneMcpLayer: makeLifecycleConveneLayer((project, id) =>
+              id === threadId
+                ? Ref.get(failPrepare).pipe(
+                    Effect.flatMap((fail) =>
+                      fail
+                        ? Effect.fail(
+                            new ConveneWorkspaces.ConveneWorkspaceError({ projectId: project }),
+                          )
+                        : Effect.void,
+                    ),
+                  )
+                : Effect.void,
             ),
-            instanceRegistryLayer: instanceLifecycleRegistry({ state, otherState }),
           }),
         ),
       );
     }).pipe(Effect.scoped),
 );
 
-it.effect.each([
-  ...(["remove", "replace", "close"] as const).flatMap((change) =>
-    (["attached", "detached", "join", "new-runtime"] as const).map((opening) => ({
-      change,
-      opening,
-      completion: "complete" as const,
-    })),
-  ),
-  ...(["cancel", "overlap", "fail", "timeout"] as const).map((completion) => ({
-    change: "close" as const,
-    opening: "detached" as const,
-    completion,
-  })),
-])(
-  "instance $change refuses late $opening opens through $completion drain",
-  ({ change, opening, completion }) =>
-    Effect.gen(function* () {
-      const t = ThreadId.make(`instance-drain-${change}-${opening}-${completion}`);
-      const state = yield* Ref.make(emptyState),
-        otherState = yield* Ref.make(emptyState),
-        beforeOpen = yield* Ref.make<Effect.Effect<void, never, Scope.Scope>>(Effect.void),
-        prepare = yield* Ref.make<Effect.Effect<void>>(Effect.void),
-        started = yield* Deferred.make<void>(),
-        closing = yield* Deferred.make<void>(),
-        finishClose = yield* Deferred.make<void>(),
-        lateEntered = yield* Deferred.make<void>(),
-        liveClosing = yield* Deferred.make<void>(),
-        finishLiveClose = yield* Deferred.make<void>(),
-        failing = yield* Ref.make<"none" | "session" | "session-and-requests">("none"),
-        failures = yield* Queue.unbounded<void>();
-      yield* Effect.gen(function* () {
-        const manager = yield* ProviderSessionManager.ProviderSessionManagerV2,
-          registry = yield* ProviderInstanceRegistry.ProviderInstanceRegistry,
-          mutator = yield* ProviderInstanceRegistryMutator.ProviderInstanceRegistryMutator,
-          sink = yield* EventSink.EventSinkV2,
-          ids = yield* IdAllocator.IdAllocatorV2,
-          configs = yield* McpProviderSessions.McpProviderSessions,
-          native = yield* McpSessionRegistry.McpSessionRegistry;
-        yield* (yield* ConveneMcp.ConveneMcp).configure(lifecycleConfigurations);
-        const owner = ThreadId.make(`${t}-owner`),
-          pendingThread = ThreadId.make(`${t}-opening`),
-          other = ThreadId.make(`${t}-other`),
-          otherJoin = ThreadId.make(`${t}-other-join`);
-        for (const threadId of [t, owner, pendingThread, other, otherJoin])
-          yield* sink.write({
-            events: [
-              yield* makeThreadCreatedEvent({
-                idAllocator: ids,
-                threadId,
-                projectId: lifecycleProject,
-                now: yield* DateTime.now,
-              }),
-            ],
-          });
-        const shared = ids.derive.providerSession({
-            providerInstanceId: modelSelection.instanceId,
-          }),
-          otherSession = ids.derive.providerSession({ providerInstanceId: otherLifecycleInstance }),
-          pendingId = yield* ids.allocate.providerSession({
-            providerInstanceId: modelSelection.instanceId,
-            threadId: pendingThread,
-          }),
-          lateId =
-            opening === "new-runtime"
-              ? yield* ids.allocate.providerSession({
-                  providerInstanceId: modelSelection.instanceId,
-                  threadId: t,
-                })
-              : shared;
-        const open = (threadId: ThreadId, providerSessionId: ProviderSessionId) =>
-          manager.open({ threadId, providerSessionId, modelSelection, runtimePolicy });
-        const openOther = (threadId: ThreadId) =>
-          manager.open({
-            threadId,
-            providerSessionId: otherSession,
-            modelSelection: { ...modelSelection, instanceId: otherLifecycleInstance },
-            runtimePolicy,
-          });
-        if (completion === "overlap" || completion === "timeout") {
-          yield* Ref.set(
-            beforeOpen,
-            Effect.addFinalizer(() =>
-              Deferred.succeed(liveClosing, undefined).pipe(
-                Effect.andThen(Deferred.await(finishLiveClose)),
-              ),
-            ),
-          );
-        }
-        yield* open(owner, shared);
-        yield* Ref.set(beforeOpen, Effect.void);
-        if (opening === "attached" || opening === "detached") yield* open(t, shared);
-        const original = yield* configs.read(t),
-          ownerCredential = (yield* configs.read(owner))!;
-        if (opening === "detached")
-          yield* manager.detach({ providerSessionId: shared, threadId: t });
-        yield* openOther(other);
-        const unaffected = (yield* configs.read(other))!;
-        // Hold the first, already admitted open in its scope finalizer. An
-        // instance drain must reject every later shape, including runtime reuse.
-        yield* Ref.set(
-          beforeOpen,
-          Effect.gen(function* () {
-            yield* Effect.addFinalizer(() =>
-              Deferred.succeed(closing, undefined).pipe(
-                Effect.andThen(Deferred.await(finishClose)),
-              ),
-            );
-            yield* Deferred.succeed(started, undefined);
-            return yield* Effect.never;
-          }),
-        );
-        const pending = yield* open(pendingThread, pendingId).pipe(Effect.forkChild);
-        yield* Deferred.await(started);
-        const pendingCredential = (yield* configs.read(pendingThread))!;
-        yield* Ref.set(beforeOpen, Effect.void);
-        const next = lifecycleConfig(change === "replace" ? 2 : 1);
-        if (change === "remove") delete next[modelSelection.instanceId];
-        const retiring = yield* (
-          change === "close"
-            ? manager.closeInstance(modelSelection.instanceId)
-            : mutator.reconcile(next)
-        ).pipe(Effect.forkChild);
-        yield* Deferred.await(closing);
-        const overlapping =
-          completion === "overlap"
-            ? yield* manager
-                .closeInstance(modelSelection.instanceId)
-                .pipe(Effect.forkChild({ startImmediately: true }))
-            : undefined;
-        if (completion === "cancel") yield* Effect.sync(() => retiring.interruptUnsafe());
-        const canonicalWhileClosing = yield* registry.getInstance(modelSelection.instanceId);
-        yield* Ref.set(
-          prepare,
-          Deferred.succeed(lateEntered, undefined).pipe(Effect.andThen(Effect.never)),
-        );
-        const late = yield* open(t, lateId).pipe(Effect.forkChild);
-        const admission = yield* Effect.raceFirst(
-          Fiber.await(late).pipe(
-            Effect.map((exit) => (Exit.isFailure(exit) ? "refused" : "returned-runtime")),
-          ),
-          Deferred.await(lateEntered).pipe(Effect.as("prepared-credential")),
-        );
-        // Another instance can both keep an existing authorization and acquire a
-        // new one while this instance is closing.
-        yield* openOther(otherJoin);
-        const otherNew = (yield* configs.read(otherJoin))!;
-        if (completion === "fail") yield* Ref.set(failing, "session");
-        yield* Deferred.succeed(finishClose, undefined);
-        let overlappingAdmission: string | undefined;
-        let completedWithinBudget = true;
-        if (completion === "timeout") {
-          yield* Deferred.await(liveClosing);
-          yield* TestClock.adjust("30 seconds");
-          completedWithinBudget = retiring.pollUnsafe() !== undefined;
-          // Even a broken deadline must not strand the fixture's finalizer.
-          yield* Deferred.succeed(finishLiveClose, undefined);
-        }
-        if (overlapping !== undefined) {
-          yield* Deferred.await(liveClosing);
-          // One drain has already returned while the other still owns the live
-          // runtime finalizer. Admission must remain closed for both callers.
-          yield* Effect.raceFirst(Fiber.await(retiring), Fiber.await(overlapping));
-          const later = yield* open(t, lateId).pipe(Effect.forkChild);
-          overlappingAdmission = yield* Effect.raceFirst(
-            Fiber.await(later).pipe(
-              Effect.map((exit) => (Exit.isFailure(exit) ? "refused" : "returned-runtime")),
-            ),
-            Deferred.await(lateEntered).pipe(Effect.as("prepared-credential")),
-          );
-          yield* Fiber.interrupt(later);
-          yield* Deferred.succeed(finishLiveClose, undefined);
-          yield* Fiber.join(overlapping);
-        }
-        const closeExit = yield* Fiber.await(retiring);
-        yield* Ref.set(failing, "none");
-        const lateCredential = yield* configs.read(t),
-          liveAfterDrain = yield* manager.isLive(shared),
-          lateLiveAfterDrain = yield* manager.isLive(lateId);
-        const afterDrain = yield* Effect.forEach(
-          [ownerCredential, pendingCredential, ...(original === undefined ? [] : [original])],
-          (credential) =>
-            Effect.gen(function* () {
-              const nativeValid =
-                (yield* native.resolve(
-                  credential.authorizationHeader.replace(/^Bearer\s+/, ""),
-                )) !== undefined;
-              return { nativeValid, brokerStatus: (yield* forwardLifecycleMcp(credential)).status };
+it.effect("normal session restart renews MCP without affecting another thread", () =>
+  Effect.gen(function* () {
+    const state = yield* Ref.make(emptyState);
+    yield* Effect.gen(function* () {
+      const manager = yield* ProviderSessionManager.ProviderSessionManagerV2,
+        configs = yield* McpProviderSessions.McpProviderSessions,
+        ids = yield* IdAllocator.IdAllocatorV2,
+        sink = yield* EventSink.EventSinkV2;
+      yield* (yield* ConveneMcp.ConveneMcp).configure(lifecycleConfigurations);
+      const t = ThreadId.make("normal-session-restart"),
+        other = ThreadId.make("normal-session-restart-other");
+      const sessions = [];
+      for (const threadId of [t, other]) {
+        yield* sink.write({
+          events: [
+            yield* makeThreadCreatedEvent({
+              idAllocator: ids,
+              threadId,
+              projectId: lifecycleProject,
+              now: yield* DateTime.now,
             }),
-        );
-        // Always release the controlled late prepare before asserting: a failure
-        // must not leave the test's external workspace operation running.
-        yield* Fiber.interrupt(late);
-        yield* Ref.set(prepare, Effect.void);
-        assert.isTrue(Exit.hasInterrupts(yield* Fiber.await(pending)));
-        yield* assertLifecycleCredential(pendingCredential, false);
-        yield* assertLifecycleCredential(ownerCredential, false);
-        if (original !== undefined) yield* assertLifecycleCredential(original, false);
-        yield* assertLifecycleCredential(unaffected, true);
-        yield* assertLifecycleCredential(otherNew, true);
-        // Removal is permanent until a real configuration restores the instance;
-        // direct close and replacement must admit a fresh, legitimate open.
-        if (change === "remove") {
-          assert.isTrue(Exit.isFailure(yield* Effect.exit(open(owner, shared))));
-          yield* mutator.reconcile(lifecycleConfig());
-        }
-        yield* open(owner, shared);
-        const recovered = (yield* configs.read(owner))!;
-        assert.notEqual(recovered.providerSessionId, ownerCredential.providerSessionId);
-        yield* assertLifecycleCredential(recovered, true);
-        yield* manager.detach({ providerSessionId: shared, threadId: t });
-        yield* assertLifecycleCredential(recovered, true);
-        assert.equal(canonicalWhileClosing !== undefined, change === "close");
-        assert.equal(admission, "refused");
-        assert.isTrue(completedWithinBudget);
-        if (completion === "overlap") assert.equal(overlappingAdmission, "refused");
-        if (completion === "cancel") assert.isTrue(Exit.hasInterrupts(closeExit));
-        else assert.equal(Exit.isFailure(closeExit), completion === "fail");
-        assert.isFalse(liveAfterDrain);
-        assert.isFalse(lateLiveAfterDrain);
-        assert.isUndefined(lateCredential);
-        assert.deepEqual(
-          afterDrain,
-          afterDrain.map(() => ({ nativeValid: false, brokerStatus: 401 })),
-        );
-      }).pipe(
-        Effect.provide(
-          layerTest({
-            state,
-            idleTimeoutMs: 60000,
-            ...(completion === "fail" ? { flakyReleaseWrites: { failing, failures } } : {}),
-            conveneMcpLayer: makeLifecycleConveneLayer((_project, threadId) =>
-              threadId === t ? Ref.get(prepare).pipe(Effect.flatten) : Effect.void,
-            ),
-            instanceRegistryLayer: instanceLifecycleRegistry({
-              state,
-              otherState,
-              beforeOpen: () => Ref.get(beforeOpen).pipe(Effect.flatten),
-            }),
-          }),
-        ),
-      );
-    }).pipe(Effect.scoped),
+          ],
+        });
+        const providerSessionId = yield* ids.allocate.providerSession({
+          providerInstanceId: modelSelection.instanceId,
+          threadId,
+        });
+        yield* manager.open({ threadId, providerSessionId, modelSelection, runtimePolicy });
+        sessions.push({ threadId, providerSessionId, config: (yield* configs.read(threadId))! });
+      }
+      const first = sessions[0]!,
+        unaffected = sessions[1]!;
+      yield* assertLifecycleCredential(first.config, true);
+      // Same owner operation used by the existing stopThreadSession command.
+      yield* manager.detach({ providerSessionId: first.providerSessionId, threadId: t });
+      yield* assertLifecycleCredential(first.config, false);
+      assert.isFalse(yield* manager.isLive(first.providerSessionId));
+      yield* assertLifecycleCredential(unaffected.config, true);
+      yield* manager.open({
+        threadId: t,
+        providerSessionId: first.providerSessionId,
+        modelSelection,
+        runtimePolicy,
+      });
+      const recovered = (yield* configs.read(t))!;
+      assert.notEqual(recovered.providerSessionId, first.config.providerSessionId);
+      yield* assertLifecycleCredential(recovered, true);
+      yield* assertLifecycleCredential(first.config, false);
+      yield* assertLifecycleCredential(unaffected.config, true);
+      assert.isTrue(yield* manager.isLive(unaffected.providerSessionId));
+    }).pipe(
+      Effect.provide(
+        layerTest({
+          state,
+          idleTimeoutMs: 60000,
+          capabilities: ExclusiveCapabilities,
+          conveneMcpLayer: layerLifecycleConvene,
+        }),
+      ),
+    );
+  }).pipe(Effect.scoped),
 );
