@@ -243,7 +243,7 @@ describe("DesktopLinuxUrlHandler", () => {
           recorded.files[0]?.content,
           "Exec=/home/alice/Applications/T3-Code.AppImage %U",
         );
-        assert.include(recorded.files[0]?.content, "MimeType=x-scheme-handler/t3code;");
+        assert.include(recorded.files[0]?.content, "MimeType=x-scheme-handler/t3code-convene;");
         assert.deepEqual(recorded.commands, [
           {
             command: "update-desktop-database",
@@ -251,7 +251,7 @@ describe("DesktopLinuxUrlHandler", () => {
           },
           {
             command: "xdg-mime",
-            args: ["default", "com.t3tools.T3Code.desktop", "x-scheme-handler/t3code"],
+            args: ["default", "com.t3tools.T3Code.desktop", "x-scheme-handler/t3code-convene"],
           },
         ]);
       });
@@ -269,7 +269,7 @@ describe("DesktopLinuxUrlHandler", () => {
         DesktopLinuxUrlHandler.renderUrlHandlerDesktopEntry({
           displayName: "T3 Code (Alpha)",
           execTarget: process.execPath,
-          scheme: "t3code",
+          scheme: "t3code-convene",
           iconPath: "/home/alice/.local/share/icons/com.t3tools.T3Code.desktop.png",
         }),
       );
@@ -284,7 +284,7 @@ describe("DesktopLinuxUrlHandler", () => {
         existingEntry: DesktopLinuxUrlHandler.renderUrlHandlerDesktopEntry({
           displayName: "T3 Code (Alpha)",
           execTarget: "/home/alice/Applications/T3-Code.AppImage",
-          scheme: "t3code",
+          scheme: "t3code-convene",
           iconPath: "/home/alice/.local/share/icons/com.t3tools.T3Code.desktop.png",
         }),
       });
@@ -298,7 +298,7 @@ describe("DesktopLinuxUrlHandler", () => {
         },
         {
           command: "xdg-mime",
-          args: ["default", "com.t3tools.T3Code.desktop", "x-scheme-handler/t3code"],
+          args: ["default", "com.t3tools.T3Code.desktop", "x-scheme-handler/t3code-convene"],
         },
       ]);
     });
@@ -313,7 +313,7 @@ describe("DesktopLinuxUrlHandler", () => {
         existingEntry: DesktopLinuxUrlHandler.renderUrlHandlerDesktopEntry({
           displayName: "T3 Code (Alpha)",
           execTarget: "/home/alice/Applications/T3-Code.AppImage",
-          scheme: "t3code",
+          scheme: "t3code-convene",
           iconPath,
         }),
       });
@@ -344,6 +344,39 @@ describe("DesktopLinuxUrlHandler", () => {
       );
     });
   });
+
+  it.effect.each(["Alpha", "Beta"])(
+    "refreshes only the owned URL entry after a %s DEB upgrade",
+    (stage) => {
+      const recorded = emptyRecording();
+      const desktopId = "tech.ziqi.t3code-convene.desktop";
+      const oldExec = `/opt/T3 Code for Convene (${stage})/t3code-convene`;
+      return Effect.gen(function* () {
+        yield* runRegister(recorded, {
+          environment: {
+            appImagePath: Option.none(),
+            displayName: "T3 Code for Convene (Beta)",
+            linuxDesktopEntryName: desktopId,
+          },
+          existingEntry: DesktopLinuxUrlHandler.renderUrlHandlerDesktopEntry({
+            displayName: `T3 Code for Convene (${stage})`,
+            execTarget: oldExec,
+            scheme: "t3code-convene",
+          }),
+        });
+        assert.equal(recorded.files.length, 1);
+        assert.equal(recorded.files[0]?.path, `/home/alice/.local/share/applications/${desktopId}`);
+        assert.include(recorded.files[0]?.content, `Exec=${process.execPath} %U`);
+        assert.notInclude(recorded.files[0]?.content, oldExec);
+        assert.include(recorded.files[0]?.content, "NoDisplay=true");
+        assert.include(recorded.files[0]?.content, "MimeType=x-scheme-handler/t3code-convene;");
+        assert.deepEqual(recorded.commands.at(-1), {
+          command: "xdg-mime",
+          args: ["default", desktopId, "x-scheme-handler/t3code-convene"],
+        });
+      });
+    },
+  );
 
   it.effect("writes the portal identity without claiming the URL scheme in development", () => {
     const nonLinux = emptyRecording();

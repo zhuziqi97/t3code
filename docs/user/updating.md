@@ -17,6 +17,36 @@ package is published, open **Platform downloads** for the available packages.
 An older client without update reminders needs one manual download from
 **Convene → Help → Desktop client** before it can check for future releases.
 
+## Linux menu entries after an Alpha or Beta upgrade
+
+The next DEB release uses `/opt/t3code-convene/t3code-convene` regardless of its
+version or Beta/Nightly display name. The recovery steps below are pending
+verification with that release's candidate package.
+
+1. Finish installing the new DEB. Launch `/opt/t3code-convene/t3code-convene`
+   as your normal user to confirm the new installation opens. This also refreshes
+   the app's own hidden URL handler entry.
+2. If a copied shortcut or user menu entry still names an old
+   `/opt/T3 Code for Convene (Alpha)/` or `(Beta)/` directory, back up that specific
+   T3 entry, then correct its `Exec` to
+   `Exec=/opt/t3code-convene/t3code-convene %U`. Correct an old `TryExec` too, if
+   present. A user entry in `${XDG_DATA_HOME:-$HOME/.local/share}/applications`
+   can override the system entry. Only edit or move aside the identified T3 file;
+   reinstall the DEB to restore a missing system entry.
+3. After correcting the entry, refresh desktop registration with
+   `update-desktop-database "${XDG_DATA_HOME:-$HOME/.local/share}/applications"`.
+   To refresh the DEB's system registration, use
+   `sudo update-desktop-database /usr/share/applications`. These commands are
+   provided by `desktop-file-utils`.
+4. Remove the old T3 item from GNOME favorites, find the updated application in
+   the menu, and pin it again. If GNOME still shows the old item, log out and back in.
+
+Refreshing registration cannot rewrite an incorrect `Exec`. Fix or recreate the
+entry first; refreshing the MIME database alone does not repair copied shortcuts
+or GNOME favorites. Keep your T3 data, sessions, projects, credentials and desktop
+profile. AppImage locations remain your choice; update their integration entry
+to the actual AppImage path instead of using the DEB path above.
+
 ## Where updates come from
 
 The source is the Convene platform paired with this desktop's primary environment.
