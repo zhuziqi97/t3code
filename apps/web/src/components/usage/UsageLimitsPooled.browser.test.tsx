@@ -73,7 +73,10 @@ function setup() {
   consume.mockReset();
 }
 const initial = () => (
-  <UsageLimitsPooled presentations={presentations("2026-09-03T14:00:00Z", 1)} now={0} />
+  <UsageLimitsPooled
+    presentations={presentations("2026-09-03T14:00:00Z", 1)}
+    now={Date.parse("2026-09-03T11:00:00Z")}
+  />
 );
 
 async function click(label: string) {
@@ -81,6 +84,7 @@ async function click(label: string) {
     (node) => node.textContent === label || node.getAttribute("aria-label")?.startsWith(label),
   );
   expect(button).toBeDefined();
+  await expect.element(button!).toBeVisible();
   await userEvent.click(button!);
 }
 
@@ -119,6 +123,7 @@ it.each([
   },
 ])("keeps pending feedback outside the closed popup until $label", async ({ result, text }) => {
   setup();
+  await page.viewport(1440, 900);
   await using _screen = await render(initial());
   let answer!: (result: unknown) => void;
   consume.mockReturnValue(new Promise((resolve) => (answer = resolve)));
