@@ -53,6 +53,19 @@ in a new thread's model picker to add or remove them. A regular click returns to
 single model. Choose a base branch and send. Each selection starts a separate thread
 and worktree while you stay in the new thread composer. This requires a Git project.
 
+## Recover an unavailable workspace
+
+When a thread's folder is missing, sending a message can restore its managed
+worktree from the original local branch. If that branch was deleted or is in use,
+T3 Code stops before starting the provider rather than rebuilding the branch from
+the project's current checkout.
+
+Use the recovery prompt above the composer to choose the project checkout or
+another available worktree from the same project. The conversation and model
+selection stay with the thread; the provider may start a new native session.
+Recovery does not resend the failed turn. Send a message when you are ready to
+continue in the selected workspace.
+
 ## Notice when a turn ends
 
 The latest turn's end state stays visible below the conversation, with its end
