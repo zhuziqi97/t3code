@@ -314,6 +314,7 @@ describe("DesktopServerExposure", () => {
       cause: diskFailure,
     });
     const layerSettings = Layer.succeed(DesktopAppSettings.DesktopAppSettings, {
+      markTrayCloseNoticeShown: Effect.die("unexpected close notice update"),
       get: Effect.succeed(DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS),
       load: Effect.succeed(DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS),
       setMainWindowBounds: () => Effect.die("unexpected main window bounds update"),

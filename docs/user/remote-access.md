@@ -3,6 +3,17 @@
 Connect a phone, browser, or another desktop app to T3 Code running on a different
 machine. That machine must stay running and reachable while you work.
 
+## Keep a desktop host running
+
+Closing the desktop window keeps its hosted environments and tasks running. Reopen
+it from the tray or menu bar, or launch the app again. On Linux the window stays
+in the taskbar or application list so you can find it even without a visible tray.
+The app explains this the first time you close its window.
+
+Use the app's Quit command or **Quit T3 Code completely** in the tray menu to stop
+the desktop and the environments it hosts. Independently running remote servers
+continue running.
+
 ## T3 Connect
 
 T3 Connect makes an environment available to your other devices without setting
