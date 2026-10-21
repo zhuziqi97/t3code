@@ -6,6 +6,7 @@ import {
 } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import type { TFunction } from "i18next";
 
 export const DEFAULT_WEBHOOK_PROMPT = "Handle this webhook:\n{{body}}";
 
@@ -76,9 +77,14 @@ const decodeFilter = Schema.decodeUnknownOption(ScheduledTaskWebhookFilter);
  */
 export function parseWebhookFilterDrafts(
   drafts: ReadonlyArray<WebhookFilterDraft>,
+  translate?: TFunction,
 ): { readonly filters: ReadonlyArray<ScheduledTaskWebhookFilter> } | { readonly error: string } {
   if (drafts.length > MAX_WEBHOOK_FILTERS) {
-    return { error: `Use at most ${MAX_WEBHOOK_FILTERS} filters.` };
+    return {
+      error:
+        translate?.("scheduled.filterLimit", { count: MAX_WEBHOOK_FILTERS }) ??
+        `Use at most ${MAX_WEBHOOK_FILTERS} filters.`,
+    };
   }
   const filters: ScheduledTaskWebhookFilter[] = [];
   for (const [index, draft] of drafts.entries()) {
@@ -99,13 +105,18 @@ export function parseWebhookFilterDrafts(
     );
     if (Option.isNone(filter)) {
       return {
-        error: `Filter ${index + 1} needs a path under body, headers or query${
-          draft.op === "exists"
-            ? "."
-            : draft.op === "in"
-              ? ", and at least one value."
-              : ", and a value."
-        }`,
+        error:
+          translate?.(
+            `scheduled.filterInvalid.${draft.op === "exists" ? "path" : draft.op === "in" ? "values" : "value"}`,
+            { number: index + 1 },
+          ) ??
+          `Filter ${index + 1} needs a path under body, headers or query${
+            draft.op === "exists"
+              ? "."
+              : draft.op === "in"
+                ? ", and at least one value."
+                : ", and a value."
+          }`,
       };
     }
     filters.push(filter.value);

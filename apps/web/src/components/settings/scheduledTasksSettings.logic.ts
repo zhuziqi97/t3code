@@ -1,4 +1,5 @@
 import { isWebhookDedupeTemplate } from "@t3tools/contracts";
+import type { TFunction } from "i18next";
 import {
   EnvironmentId,
   MAX_WEBHOOK_DELIVERY_AGE_MINUTES,
@@ -99,40 +100,52 @@ export const WEBHOOK_SIGNATURE_DEFAULTS = {
   signaturePrefix: "sha256=",
 } as const;
 
-export function webhookDraftErrors(draft: DraftState) {
+export function webhookDraftErrors(draft: DraftState, translate?: TFunction) {
   if (draft.scheduleMode !== "webhook") return [];
   if (parseMaxDeliveryAge(draft.maxDeliveryAgeMinutes) === undefined)
     return [
       {
-        title: "Invalid age limit",
-        description: `Enter whole minutes from 1 to ${MAX_WEBHOOK_DELIVERY_AGE_MINUTES}, or leave it blank.`,
+        title: translate?.("scheduled.invalidAgeLimit") ?? "Invalid age limit",
+        description:
+          translate?.("scheduled.enterAgeLimit", { max: MAX_WEBHOOK_DELIVERY_AGE_MINUTES }) ??
+          `Enter whole minutes from 1 to ${MAX_WEBHOOK_DELIVERY_AGE_MINUTES}, or leave it blank.`,
       },
     ];
   const errors: Array<{ title: string; description: string }> = [];
   for (const [label, value] of [
-    ["Replay key", draft.replayKey],
-    ["Coalesce key", draft.coalesceKey],
+    [translate?.("scheduled.replayKey") ?? "Replay key", draft.replayKey],
+    [translate?.("scheduled.coalesceKey") ?? "Coalesce key", draft.coalesceKey],
   ] as const) {
     if (value.trim() && !isWebhookDedupeTemplate(value.trim()))
       errors.push({
-        title: "Invalid webhook settings",
-        description: `${label} must contain a valid request placeholder.`,
+        title: translate?.("scheduled.invalidWebhookSettings") ?? "Invalid webhook settings",
+        description:
+          translate?.("scheduled.invalidRequestPlaceholder", { label }) ??
+          `${label} must contain a valid request placeholder.`,
       });
   }
   const window = draft.coalesceWindowSeconds.trim();
   if (window && (!Number.isInteger(Number(window)) || Number(window) < 10 || Number(window) > 3600))
     errors.push({
-      title: "Invalid webhook settings",
-      description: "Coalesce window must be whole seconds from 10 to 3600.",
+      title: translate?.("scheduled.invalidWebhookSettings") ?? "Invalid webhook settings",
+      description:
+        translate?.("scheduled.invalidCoalesceWindow") ??
+        "Coalesce window must be whole seconds from 10 to 3600.",
     });
   return errors;
 }
 
-export function webhookDeliveryLabel(delivery: {
-  readonly outcome: string;
-  readonly pendingWindow?: boolean | undefined;
-}) {
-  if (delivery.outcome === "accepted") return delivery.pendingWindow ? "Opened window" : "Ran";
+export function webhookDeliveryLabel(
+  delivery: {
+    readonly outcome: string;
+    readonly pendingWindow?: boolean | undefined;
+  },
+  translate?: TFunction,
+) {
+  if (delivery.outcome === "accepted")
+    return delivery.pendingWindow
+      ? (translate?.("scheduled.delivery.openedWindow") ?? "Opened window")
+      : (translate?.("scheduled.delivery.ran") ?? "Ran");
   const labels: Record<string, string> = {
     dispatch_failed: "Run failed",
     duplicate: "Duplicate",
@@ -143,7 +156,8 @@ export function webhookDeliveryLabel(delivery: {
     rate_limited: "Rate limited",
     expired: "Too old",
   };
-  return labels[delivery.outcome] ?? delivery.outcome.replaceAll("_", " ");
+  const label = labels[delivery.outcome] ?? delivery.outcome.replaceAll("_", " ");
+  return translate?.(`scheduled.delivery.${delivery.outcome}`, { defaultValue: label }) ?? label;
 }
 
 export function scheduleFromDraft(draft: DraftState): ScheduledTaskUpsertSchedule | null {

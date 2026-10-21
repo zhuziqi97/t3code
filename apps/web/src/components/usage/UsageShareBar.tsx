@@ -1,5 +1,6 @@
 import { formatPercent } from "@t3tools/shared/usageFormat";
 import type { ReactNode } from "react";
+import { useTranslate } from "~/i18n";
 
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
@@ -20,7 +21,13 @@ export function UsageShareBar({
   readonly format: (value: number) => string;
   readonly aside?: ReactNode;
 }) {
-  const visible = segments.filter((segment) => segment.value > 0);
+  const t = useTranslate();
+  const visible = segments
+    .filter((segment) => segment.value > 0)
+    .map((segment) => ({
+      ...segment,
+      label: t(`usage.segment.${segment.label}`, { defaultValue: segment.label }),
+    }));
   const total = visible.reduce((sum, segment) => sum + segment.value, 0);
   if (total <= 0) return null;
 
