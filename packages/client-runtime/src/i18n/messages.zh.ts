@@ -657,6 +657,8 @@ export const zh: Partial<Messages> = {
   "settings.sections.convene": "Convene",
   "convene.project.rootFolder": "项目文件夹",
   "convene.about.upstream": "上游基础版本 {{version}}",
+  "convene.about.build": "构建 {{buildId}}",
+  "convene.about.sourceCommit": "源码提交 {{commit}}",
   "convene.connection.description":
     "将此环境连接到 Convene 账户，即可配置项目模块与 MCP 访问权限。未连接时仍可进行本地开发。",
   "convene.error.connection": "无法更新 Convene 连接。",

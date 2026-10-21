@@ -679,6 +679,8 @@ export const en = {
   "settings.sections.convene": "Convene",
   "convene.project.rootFolder": "Project folder",
   "convene.about.upstream": "Upstream base {{version}}",
+  "convene.about.build": "Build {{buildId}}",
+  "convene.about.sourceCommit": "Source {{commit}}",
   "convene.connection.description":
     "Connect this environment to your Convene account to configure project modules and MCP access. Local development remains available without a connection.",
   "convene.error.connection": "Could not update the Convene connection.",
