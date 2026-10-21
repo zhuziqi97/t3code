@@ -14,6 +14,7 @@
  * rename another product or rewrite a command it tells the user to run.
  */
 export const en = {
+  "scheduled.providerUnavailable": "The selected provider is unavailable ({{instanceId}}).",
   "common.open": "Open",
   "scheduled.filterLimit": "Use at most {{count}} filters.",
   "scheduled.filterInvalid.path": "Filter {{number}} needs a path under body, headers or query.",
