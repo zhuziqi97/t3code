@@ -6,10 +6,6 @@ import type {
   ServerProviderCompatibilityAdvisory,
 } from "@t3tools/contracts";
 
-/**
- * Visual treatment for each server-reported provider status. Centralized so
- * the default-driver card and per-instance cards share the same language.
- */
 export const PROVIDER_STATUS_STYLES = {
   checking: { dot: "bg-muted-foreground/50" },
   cancelled: { dot: "bg-muted-foreground/50" },
@@ -18,6 +14,9 @@ export const PROVIDER_STATUS_STYLES = {
   },
   error: {
     dot: "bg-destructive",
+  },
+  neutral: {
+    dot: "bg-muted-foreground",
   },
   ready: {
     dot: "bg-success",
@@ -267,6 +266,26 @@ export function formatProviderAuthLabel(
  * driver this build does not ship. A ready provider without account metadata
  * remains available and does not imply an authentication failure.
  */
+// Antigravity's local health check verifies installation, not Google sign-in.
+// API-key and Agent Platform warnings still need attention.
+function isAntigravitySignInUnchecked(provider: ServerProvider): boolean {
+  return (
+    provider.driver === "antigravity" &&
+    provider.installed === true &&
+    provider.status === "warning" &&
+    provider.auth.status === "unknown" &&
+    (provider.auth.type === undefined ||
+      provider.auth.type === "oauth-personal" ||
+      provider.auth.type === "oauth-business")
+  );
+}
+
+export function getProviderStatusKey(provider: ServerProvider | undefined): ProviderStatusKey {
+  if (provider && !provider.enabled) return "disabled";
+  if (provider && isAntigravitySignInUnchecked(provider)) return "neutral";
+  return provider?.status ?? "warning";
+}
+
 export function getProviderSummary(
   provider: ServerProvider | undefined,
   translate: TFunction = i18n.t,
@@ -309,6 +328,12 @@ export function getProviderSummary(
       detail: message ?? null,
     };
   }
+  if (isAntigravitySignInUnchecked(provider)) {
+    return {
+      headline: "Installed · Sign-in not checked",
+      detail: provider.message ?? null,
+    };
+  }
   if (provider.status === "warning") {
     return {
       headline: translate("provider.needsAttention"),
@@ -336,21 +361,14 @@ export function getProviderSummary(
   };
 }
 
-/**
- * Normalize a version string for display. Adds the `v` prefix when the
- * driver reported a bare version (e.g. `1.2.3`) so cards render
- * consistently regardless of driver.
- */
 export function getProviderVersionLabel(version: string | null | undefined) {
   if (!version) return null;
   // Antigravity reports a release tag such as `agy_acp_server_20260818_01_RC01`.
-  // Show the date and candidate so the row title keeps room for the name.
   const antigravity = /^agy_acp_server_(\d{4})(\d{2})(\d{2})_\d+(?:_(\w+))?$/.exec(version);
   if (antigravity) {
     const [, year, month, day, candidate] = antigravity;
     return `${year}-${month}-${day}${candidate ? ` ${candidate}` : ""}`;
   }
-  // Only bare semver-like versions get a `v` prefix. Other tags are shown as-is.
   return /^\d/.test(version) ? `v${version}` : version;
 }
 
@@ -360,7 +378,6 @@ const COMPATIBILITY_TITLE_KEYS = {
   broken: "provider.version.broken",
 } as const;
 
-/** Compatibility guidance shares the version popover, with safe install actions. */
 export function getProviderVersionAdvisoryPresentation(
   advisory: ServerProviderVersionAdvisory | undefined,
   compatibility?: ServerProviderCompatibilityAdvisory | undefined,
@@ -385,6 +402,9 @@ export function getProviderVersionAdvisoryPresentation(
   ) {
     const targetVersion = compatibility.recommendedVersion;
     const recommendation = getProviderVersionLabel(targetVersion) ?? compatibility.recommendedRange;
+    // An installed version that is already the package's latest cannot be fixed by
+    // updating it, e.g. when the recommendation needs a different package.
+    const isAlreadyLatest = advisory?.status === "current";
     return {
       title: translate(COMPATIBILITY_TITLE_KEYS[compatibility.status]),
       detail:
@@ -393,7 +413,9 @@ export function getProviderVersionAdvisoryPresentation(
           ? translate("provider.version.recommended", { version: recommendation })
           : translate("provider.version.updateSupport")),
       updateCommand:
-        targetVersion || latestIsIncompatible ? null : (advisory?.updateCommand ?? null),
+        targetVersion || latestIsIncompatible || isAlreadyLatest
+          ? null
+          : (advisory?.updateCommand ?? null),
       emphasis: compatibility.status === "graceful" ? "normal" : "strong",
       targetVersion,
     };

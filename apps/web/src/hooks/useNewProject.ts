@@ -9,7 +9,6 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentId } from "@t3tools/contracts";
-import { useCallback } from "react";
 
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
 import { waitForProject } from "~/state/entities";
@@ -25,14 +24,6 @@ function errorMessage(error: unknown): string {
     : i18n.t("common.error");
 }
 
-/**
- * Starts a project from just a name. The server makes a folder under its
- * `newProjectsRoot` with a README, an icon, and a first commit; this then
- * opens a new thread draft in it. With `publishTo`, it also publishes the
- * repository as private on that host, without holding up the draft.
- *
- * Resolves to whether the project was created.
- */
 export function useNewProject() {
   const t = useTranslate();
   const createNew = useAtomCommand(projectEnvironment.createNew, { reportFailure: false });
@@ -41,124 +32,118 @@ export function useNewProject() {
   });
   const handleNewThread = useNewThreadHandler();
 
-  const publishNewRepository = useCallback(
-    async (input: {
-      readonly environmentId: EnvironmentId;
-      readonly workspaceRoot: string;
-      readonly target: NewProjectPublishTarget;
-    }) => {
-      const { label } = input.target.definition;
-      const result = await publishRepository({
-        environmentId: input.environmentId,
-        input: {
-          cwd: input.workspaceRoot,
-          provider: input.target.definition.kind,
-          repository: getNewProjectRepository(input.target, input.workspaceRoot),
-          visibility: "private",
-        },
-      });
-      if (result._tag === "Failure") {
-        if (!isAtomCommandInterrupted(result)) {
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: t("project.new.hostFailed", { host: label }),
-              description: t("project.new.publishedRetry", {
-                error: errorMessage(squashAtomCommandFailure(result)),
-              }),
+  const publishNewRepository = async (input: {
+    readonly environmentId: EnvironmentId;
+    readonly workspaceRoot: string;
+    readonly target: NewProjectPublishTarget;
+  }) => {
+    const { label } = input.target.definition;
+    const result = await publishRepository({
+      environmentId: input.environmentId,
+      input: {
+        cwd: input.workspaceRoot,
+        provider: input.target.definition.kind,
+        repository: getNewProjectRepository(input.target, input.workspaceRoot),
+        visibility: "private",
+      },
+    });
+    if (result._tag === "Failure") {
+      if (!isAtomCommandInterrupted(result)) {
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: t("project.new.hostFailed", { host: label }),
+            description: t("project.new.publishedRetry", {
+              error: errorMessage(squashAtomCommandFailure(result)),
             }),
-          );
-        }
-        return;
+          }),
+        );
       }
+      return;
+    }
+    toastManager.add(
+      stackedThreadToast({
+        type: "success",
+        title: t("project.new.hostPublished", { host: label }),
+        description: result.value.repository.nameWithOwner,
+      }),
+    );
+  };
+
+  return async (input: {
+    readonly environmentId: EnvironmentId;
+    readonly name: string;
+    readonly publishTo: NewProjectPublishTarget | null;
+  }): Promise<boolean> => {
+    const result = await createNew({
+      environmentId: input.environmentId,
+      input: { name: input.name },
+    });
+    if (result._tag === "Failure") {
+      if (!isAtomCommandInterrupted(result)) {
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: t("project.new.failed"),
+            description: errorMessage(squashAtomCommandFailure(result)),
+          }),
+        );
+      }
+      return false;
+    }
+
+    const { projectId, workspaceRoot, commitError } = result.value;
+    openConveneProjectConfiguration({ environmentId: input.environmentId, projectId });
+    // The folder sits in T3 Code's data directory, so always say where.
+    toastManager.add(
+      stackedThreadToast(
+        commitError === undefined
+          ? {
+              type: "success",
+              title: t("project.new.created", { name: input.name }),
+              description: workspaceRoot,
+            }
+          : {
+              type: "warning",
+              title: t("project.new.noCommit", { name: input.name }),
+              description: t("project.new.commitFailure", {
+                error: commitError,
+                path: workspaceRoot,
+              }),
+            },
+      ),
+    );
+    if (input.publishTo) {
+      void publishNewRepository({
+        environmentId: input.environmentId,
+        workspaceRoot,
+        target: input.publishTo,
+      });
+    }
+
+    const projectRef = scopeProjectRef(input.environmentId, projectId);
+    // Drafts key off the project's stored path, so wait for the create event
+    // to reach the store before opening one.
+    const project = await waitForProject(projectRef).catch((error: unknown) => {
       toastManager.add(
         stackedThreadToast({
-          type: "success",
-          title: t("project.new.hostPublished", { host: label }),
-          description: result.value.repository.nameWithOwner,
+          type: "error",
+          title: t("project.openFailed"),
+          description: t("project.new.waitForClient", { error: errorMessage(error) }),
         }),
       );
-    },
-    [publishRepository, t],
-  );
-
-  return useCallback(
-    async (input: {
-      readonly environmentId: EnvironmentId;
-      readonly name: string;
-      readonly publishTo: NewProjectPublishTarget | null;
-    }): Promise<boolean> => {
-      const result = await createNew({
-        environmentId: input.environmentId,
-        input: { name: input.name },
-      });
-      if (result._tag === "Failure") {
-        if (!isAtomCommandInterrupted(result)) {
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: t("project.new.failed"),
-              description: errorMessage(squashAtomCommandFailure(result)),
-            }),
-          );
-        }
-        return false;
-      }
-
-      const { projectId, workspaceRoot, commitError } = result.value;
-      openConveneProjectConfiguration({ environmentId: input.environmentId, projectId });
-      // The folder sits in T3 Code's data directory, so always say where.
+      return null;
+    });
+    if (project === null) return true;
+    await handleNewThread(projectRef).catch((error: unknown) => {
       toastManager.add(
-        stackedThreadToast(
-          commitError === undefined
-            ? {
-                type: "success",
-                title: t("project.new.created", { name: input.name }),
-                description: workspaceRoot,
-              }
-            : {
-                type: "warning",
-                title: t("project.new.noCommit", { name: input.name }),
-                description: t("project.new.commitFailure", {
-                  error: commitError,
-                  path: workspaceRoot,
-                }),
-              },
-        ),
+        stackedThreadToast({
+          type: "error",
+          title: t("project.openFailed"),
+          description: errorMessage(error),
+        }),
       );
-      if (input.publishTo) {
-        void publishNewRepository({
-          environmentId: input.environmentId,
-          workspaceRoot,
-          target: input.publishTo,
-        });
-      }
-
-      const projectRef = scopeProjectRef(input.environmentId, projectId);
-      // Drafts key off the project's stored path, so wait for the create event
-      // to reach the store before opening one.
-      const project = await waitForProject(projectRef).catch((error: unknown) => {
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: t("project.openFailed"),
-            description: t("project.new.waitForClient", { error: errorMessage(error) }),
-          }),
-        );
-        return null;
-      });
-      if (project === null) return true;
-      await handleNewThread(projectRef).catch((error: unknown) => {
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: t("project.openFailed"),
-            description: errorMessage(error),
-          }),
-        );
-      });
-      return true;
-    },
-    [createNew, handleNewThread, publishNewRepository, t],
-  );
+    });
+    return true;
+  };
 }

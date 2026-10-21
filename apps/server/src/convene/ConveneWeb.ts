@@ -1,4 +1,4 @@
-import { AuthAdministrativeScopes } from "@t3tools/contracts";
+import { AuthStandardClientScopes } from "@t3tools/contracts";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -65,7 +65,7 @@ const make = Effect.gen(function* () {
         session = yield* auth.issueSession({
           subject: "convene-web",
           label: "Convene Web",
-          scopes: AuthAdministrativeScopes,
+          scopes: AuthStandardClientScopes,
           ttl: Duration.hours(12),
         });
         return session.token;

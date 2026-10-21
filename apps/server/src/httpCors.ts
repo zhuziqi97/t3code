@@ -12,4 +12,7 @@ export const browserApiCorsAllowedHeaders = [
 ] as const;
 
 /** Origins of the Electron renderer, packaged and dev. */
-export const DESKTOP_RENDERER_ORIGINS = [`${CONVENE_DESKTOP_IDENTITY.scheme}://app`, `${CONVENE_DESKTOP_IDENTITY.developmentScheme}://app`];
+export const DESKTOP_RENDERER_ORIGINS = [
+  `${CONVENE_DESKTOP_IDENTITY.scheme}://app`,
+  `${CONVENE_DESKTOP_IDENTITY.developmentScheme}://app`,
+];

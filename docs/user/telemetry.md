@@ -7,6 +7,7 @@ The analytics service does not read provider account identifiers or create an an
 Local diagnostic logs and resource monitoring remain available for troubleshooting. This does
 not change requests sent to the agents and model providers you configure, or to a Convene
 platform you choose to connect to.
+
 ## Export diagnostics to your own receiver
 
 To send traces, metrics, or logs to an OpenTelemetry receiver, open

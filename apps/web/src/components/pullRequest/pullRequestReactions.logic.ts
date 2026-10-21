@@ -3,7 +3,6 @@ import type { TFunction } from "i18next";
 import { i18n } from "~/i18n";
 import type { PullRequestReaction, PullRequestReactionContent } from "@t3tools/contracts";
 
-/** The picker's order, which is GitHub's: the two verdicts first, then the rest as it lists them. */
 export const PULL_REQUEST_REACTION_ORDER: ReadonlyArray<PullRequestReactionContent> = [
   "thumbs-up",
   "thumbs-down",
@@ -49,7 +48,6 @@ export function pullRequestReactionName(
   return t(REACTION_NAME[content]);
 }
 
-/** Past three names the sentence stops being readable and starts being a list. */
 const NAMED_ACTOR_LIMIT = 3;
 
 function joinNames(parts: ReadonlyArray<string>): string {
@@ -64,16 +62,12 @@ function countRemainder(count: number, named: boolean, t: TFunction): string {
 }
 
 /**
- * Who reacted, in GitHub's sentence. The viewer reads as "You" and comes first, because that is
- * the name they are looking for; a compliant host already leaves the viewer's own login out of
- * `actors` when they have reacted, leaving room for "You" without ever exceeding `count`. This
- * function has no viewer login to match against `actors`, so it cannot tell a non-compliant host
- * apart by name — but such a host gives itself away by leaving no room: `actors` alone already
- * accounts for everyone `count` claims. Then the viewer is already in `actors` under their own
- * login, and naming them "You" too would either invent a person or hide a real one, so `actors`
- * is named as given instead. The cap still guards further: the sentence never names more people
- * than `count` claims, and the remainder is counted rather than named — a host reports fewer
- * logins than it counts, so `count` is the only trustworthy total.
+ * The viewer reads as "You" and comes first, because that is the name they are looking for; a
+ * compliant host already leaves the viewer's own login out of `actors` when they have reacted,
+ * leaving room for "You" without ever exceeding `count`. This function has no viewer login to
+ * match against `actors`, so it cannot tell a non-compliant host apart by name — but such a host
+ * gives itself away by leaving no room: `actors` alone already accounts for everyone `count`
+ * claims.
  */
 export function pullRequestReactionTooltip(
   reaction: PullRequestReaction,
@@ -93,11 +87,6 @@ export function pullRequestReactionTooltip(
   });
 }
 
-/**
- * The list as it should be drawn while a reaction is still in flight. Reading a change request
- * back from the host takes seconds, and a pill that does not move until then reads as a press
- * that did nothing.
- */
 export function applyPendingPullRequestReactions(
   reactions: ReadonlyArray<PullRequestReaction>,
   pending: ReadonlyMap<PullRequestReactionContent, boolean>,

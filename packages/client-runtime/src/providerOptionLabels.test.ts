@@ -20,9 +20,9 @@ const reasoning: Extract<ProviderOptionDescriptor, { type: "select" }> = {
     { id: "xhigh", label: "Extra High" },
   ],
 };
-it("translates known reasoning metadata while retaining its raw values", () => {
-  expect(formatProviderOptionName(reasoning, t)).toBe("推理强度");
-  expect(getLocalizedProviderOptionCurrentLabel(reasoning, t)).toBe("中");
+it("preserves native reasoning labels and raw values in a Chinese interface", () => {
+  expect(formatProviderOptionName(reasoning, t)).toBe("Reasoning");
+  expect(getLocalizedProviderOptionCurrentLabel(reasoning, t)).toBe("Medium");
   const selection = {
     instanceId: ProviderInstanceId.make("raw-instance"),
     model: "raw-model",
@@ -32,7 +32,7 @@ it("translates known reasoning metadata while retaining its raw values", () => {
     caps: { optionDescriptors: [reasoning] },
     selections: selection.options,
   })[0]!;
-  expect(getLocalizedProviderOptionCurrentLabel(resolved, t, selection)).toBe("超高");
+  expect(getLocalizedProviderOptionCurrentLabel(resolved, t, selection)).toBe("Extra High");
   expect(selection.options[0]?.value).toBe("xhigh");
   expect(reasoning.currentValue).toBe("medium");
 });
@@ -53,7 +53,7 @@ it("preserves custom labels, unknown option ids and context sizes", () => {
     currentValue: "1m",
     options: [{ id: "1m", label: "1M" }],
   };
-  expect(formatProviderOptionName(context, t)).toBe("上下文窗口");
+  expect(formatProviderOptionName(context, t)).toBe("Context Window");
   expect(getLocalizedProviderOptionCurrentLabel(context, t)).toBe("1M");
 });
 it("uses the native reported-default and unknown resolution", () => {
@@ -79,22 +79,22 @@ it("uses the native reported-default and unknown resolution", () => {
     getLocalizedProviderOptionCurrentLabel({ ...reasoning, currentValue: "", options: [] }, t),
   ).toBeUndefined();
 });
-it("translates speed tiers, booleans and T3-owned descriptions without changing native diagnostics", () => {
+it("preserves native speed and boolean labels while translating T3-owned descriptions", () => {
   const speed = {
     ...reasoning,
     id: "serviceTier",
     currentValue: "ultrafast",
     options: [{ id: "ultrafast", label: "Ultrafast" }],
   };
-  expect(getLocalizedProviderOptionCurrentLabel(speed, t)).toBe("极速");
+  expect(getLocalizedProviderOptionCurrentLabel(speed, t)).toBe("Ultrafast");
   const thinking = {
     id: "thinking",
     label: "Thinking",
     type: "boolean" as const,
     currentValue: true,
   };
-  expect(formatProviderOptionName(thinking, t)).toBe("思考");
-  expect(getLocalizedProviderOptionCurrentLabel(thinking, t)).toBe("开启");
+  expect(formatProviderOptionName(thinking, t)).toBe("Thinking");
+  expect(getLocalizedProviderOptionCurrentLabel(thinking, t)).toBe("On");
   expect(formatProviderOptionDescription("Even faster, more expensive", t)).toBe(
     "速度更快，费用更高",
   );

@@ -62,7 +62,6 @@ export class PreviewBrowser extends Context.Service<
       string,
       PreviewBrowserInstallError | PreviewBrowserInstallingError | PreviewBrowserUnsupportedError
     >;
-    /** The installed headless shell, if any. Never starts or waits on an install. */
     readonly installed: Effect.Effect<Option.Option<string>>;
   }
 >()("t3/preview/PreviewBrowser") {}
@@ -77,6 +76,7 @@ export interface PreviewBrowserOptions {
 }
 
 // Longer than any install can run: the download times out at 15 minutes.
+const DOWNLOAD_TIMEOUT = "15 minutes";
 const STAGING_STALE_AFTER_MS = 60 * 60_000;
 
 type InstallState =
@@ -113,8 +113,6 @@ export const makePreviewBrowser = Effect.fn("PreviewBrowser.make")(function* (
   let state: InstallState = { _tag: "idle" };
   const progress = { downloadedBytes: 0, unpacking: false };
 
-  // The version directory appears by one rename of a fully unpacked tree, so a
-  // runnable binary there is the complete-install marker.
   const installedExecutable = (release: PreviewBrowserRelease) => {
     const executable = path.join(installRoot, release.version, executableName);
     return fs.stat(executable).pipe(
@@ -159,7 +157,6 @@ export const makePreviewBrowser = Effect.fn("PreviewBrowser.make")(function* (
         const unixMode = entry.externalFileAttributes >>> 16;
         const unixType = unixMode & 0o170000;
         const isDirectory = entry.fileName.endsWith("/");
-        // Everything sits under the one top directory, which is stripped.
         const relative = entry.fileName.startsWith(root) ? entry.fileName.slice(root.length) : null;
         const target = relative === null ? null : path.resolve(destination, relative);
         if (
@@ -218,13 +215,11 @@ export const makePreviewBrowser = Effect.fn("PreviewBrowser.make")(function* (
         progress.unpacking = true;
         yield* extract(release, archivePath, unpacked);
         const destination = path.join(installRoot, release.version);
-        // A directory left without a runnable binary would block the rename.
         yield* fs.remove(destination, { recursive: true, force: true });
         yield* fs.rename(unpacked, destination);
       }).pipe(Effect.scoped);
-      // Older builds and abandoned staging directories. Two servers can share a
-      // home, so a staging directory touched within the last hour may be another
-      // server's install in progress and stays.
+      // Two servers can share a home, so a staging directory touched within the
+      // last hour may be another server's install in progress and stays.
       const entries = yield* fs.readDirectory(installRoot);
       const now = yield* Clock.currentTimeMillis;
       yield* Effect.forEach(
@@ -253,7 +248,6 @@ export const makePreviewBrowser = Effect.fn("PreviewBrowser.make")(function* (
     Effect.mapError(wrapFailure("Could not save the browser in T3's home directory.")),
   );
 
-  // Joins the current install or starts one. A failure is reported once, then cleared.
   const join = (release: PreviewBrowserRelease) =>
     gate.withPermit(
       Effect.gen(function* () {
@@ -292,7 +286,6 @@ export const makePreviewBrowser = Effect.fn("PreviewBrowser.make")(function* (
               .pipe(Effect.andThen(Deferred.done(done, exit))),
           ),
           Effect.ignoreCause,
-          // Server shutdown closes the service scope and stops an install in progress.
           Effect.interruptible,
           Effect.forkIn(serviceScope),
         );
@@ -300,7 +293,6 @@ export const makePreviewBrowser = Effect.fn("PreviewBrowser.make")(function* (
       }),
     );
 
-  // A waiter that saw the failure has reported it; the next call retries.
   const clearFailure = (error: PreviewBrowserInstallError) =>
     gate.withPermit(
       Effect.sync(() => {

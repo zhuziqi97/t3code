@@ -1,4 +1,3 @@
-// The bridge forwards opaque JSON-RPC values without interpreting their schemas.
 // @effect-diagnostics preferSchemaOverJson:off
 import * as Effect from "effect/Effect";
 import * as Semaphore from "effect/Semaphore";
@@ -83,7 +82,6 @@ export interface AcpMcpOverAcpBridge {
   readonly dispose: Effect.Effect<void>;
 }
 
-/** Bridges the unstable ACP transport to T3's authenticated streamable-HTTP MCP endpoint. */
 export const makeAcpMcpOverAcpBridge = Effect.fn("AcpMcpOverAcpBridge.make")(function* (
   options: AcpMcpOverAcpBridgeOptions,
 ): Effect.fn.Return<AcpMcpOverAcpBridge> {
@@ -146,100 +144,96 @@ export const makeAcpMcpOverAcpBridge = Effect.fn("AcpMcpOverAcpBridge.make")(fun
       }).pipe(Effect.mapError(bridgeError)),
     );
 
-  const disconnect = (
+  const disconnect = Effect.fn("mcpOverAcpBridge.disconnect")(function* (
     request: AcpSchema.DisconnectMcpRequest,
-  ): Effect.Effect<AcpSchema.DisconnectMcpResponse, AcpMcpOverAcpError> =>
-    Effect.gen(function* () {
-      const connection = yield* connectionFor(request.connectionId);
-      connections.delete(request.connectionId);
-      const sessionId = connection.sessionId;
-      if (sessionId !== null) {
-        const response = yield* Effect.tryPromise({
-          try: (signal) =>
-            fetchImplementation(connection.server.endpoint, {
-              method: "DELETE",
-              signal,
-              headers: {
-                authorization: connection.server.authorizationHeader,
-                "mcp-session-id": sessionId,
-                ...(connection.protocolVersion === null
-                  ? {}
-                  : { "mcp-protocol-version": connection.protocolVersion }),
-              },
-            }),
-          catch: bridgeError,
-        });
-        if (!response.ok && response.status !== 404) {
-          return yield* Effect.fail(
-            new AcpMcpOverAcpError(
-              `T3 Code MCP endpoint rejected disconnect with HTTP ${response.status}.`,
-            ),
-          );
-        }
-        yield* Effect.promise(
-          () => response.body?.cancel().catch(() => undefined) ?? Promise.resolve(),
+  ): Effect.fn.Return<AcpSchema.DisconnectMcpResponse, AcpMcpOverAcpError> {
+    const connection = yield* connectionFor(request.connectionId);
+    connections.delete(request.connectionId);
+    const sessionId = connection.sessionId;
+    if (sessionId !== null) {
+      const response = yield* Effect.tryPromise({
+        try: (signal) =>
+          fetchImplementation(connection.server.endpoint, {
+            method: "DELETE",
+            signal,
+            headers: {
+              authorization: connection.server.authorizationHeader,
+              "mcp-session-id": sessionId,
+              ...(connection.protocolVersion === null
+                ? {}
+                : { "mcp-protocol-version": connection.protocolVersion }),
+            },
+          }),
+        catch: bridgeError,
+      });
+      if (!response.ok && response.status !== 404) {
+        return yield* Effect.fail(
+          new AcpMcpOverAcpError(
+            `T3 Code MCP endpoint rejected disconnect with HTTP ${response.status}.`,
+          ),
         );
       }
-      return {};
-    });
+      yield* Effect.promise(
+        () => response.body?.cancel().catch(() => undefined) ?? Promise.resolve(),
+      );
+    }
+    return {};
+  });
 
   return {
     registerServers: (additional) =>
       Effect.sync(() => {
         for (const [id, server] of Object.entries(additional)) servers.set(id, server);
       }),
-    connect: (request) =>
-      Effect.gen(function* () {
-        const server = servers.get(request.serverId);
-        if (server === undefined) {
-          return yield* Effect.fail(
-            new AcpMcpOverAcpError(`Unknown ACP MCP server "${request.serverId}".`),
-          );
-        }
-        if (connections.size >= MAX_CONNECTIONS) {
-          return yield* Effect.fail(new AcpMcpOverAcpError("Too many MCP-over-ACP connections."));
-        }
-        const connectionId = yield* options.allocateConnectionId;
-        connections.set(connectionId, {
-          server,
-          mutex: yield* Semaphore.make(1),
-          sessionId: null,
-          protocolVersion: null,
-          nextRequestId: 0,
-        });
-        return { connectionId };
-      }),
-    message: (request) =>
-      Effect.gen(function* () {
-        const connection = yield* connectionFor(request.connectionId);
-        const id = ++connection.nextRequestId;
-        const payloads = yield* send(connection, {
-          jsonrpc: "2.0",
-          id,
-          method: request.method,
-          ...(request.params == null ? {} : { params: request.params }),
-        });
-        const response = payloads.find((payload) => asEnvelope(payload)?.id === id);
-        const envelope = asEnvelope(response);
-        if (envelope === null) {
-          return yield* Effect.fail(
-            new AcpMcpOverAcpError("MCP server did not return a matching response."),
-          );
-        }
-        if (envelope.error !== undefined) {
-          return yield* Effect.fail(new AcpMcpOverAcpError(errorMessage(envelope.error)));
-        }
-        return (envelope.result ?? null) as AcpSchema.MessageMcpResponse;
-      }),
-    notification: (request) =>
-      Effect.gen(function* () {
-        const connection = yield* connectionFor(request.connectionId);
-        yield* send(connection, {
-          jsonrpc: "2.0",
-          method: request.method,
-          ...(request.params == null ? {} : { params: request.params }),
-        });
-      }),
+    connect: Effect.fn("mcpOverAcpBridge.connect")(function* (request) {
+      const server = servers.get(request.serverId);
+      if (server === undefined) {
+        return yield* Effect.fail(
+          new AcpMcpOverAcpError(`Unknown ACP MCP server "${request.serverId}".`),
+        );
+      }
+      if (connections.size >= MAX_CONNECTIONS) {
+        return yield* Effect.fail(new AcpMcpOverAcpError("Too many MCP-over-ACP connections."));
+      }
+      const connectionId = yield* options.allocateConnectionId;
+      connections.set(connectionId, {
+        server,
+        mutex: yield* Semaphore.make(1),
+        sessionId: null,
+        protocolVersion: null,
+        nextRequestId: 0,
+      });
+      return { connectionId };
+    }),
+    message: Effect.fn("mcpOverAcpBridge.message")(function* (request) {
+      const connection = yield* connectionFor(request.connectionId);
+      const id = ++connection.nextRequestId;
+      const payloads = yield* send(connection, {
+        jsonrpc: "2.0",
+        id,
+        method: request.method,
+        ...(request.params == null ? {} : { params: request.params }),
+      });
+      const response = payloads.find((payload) => asEnvelope(payload)?.id === id);
+      const envelope = asEnvelope(response);
+      if (envelope === null) {
+        return yield* Effect.fail(
+          new AcpMcpOverAcpError("MCP server did not return a matching response."),
+        );
+      }
+      if (envelope.error !== undefined) {
+        return yield* Effect.fail(new AcpMcpOverAcpError(errorMessage(envelope.error)));
+      }
+      return (envelope.result ?? null) as AcpSchema.MessageMcpResponse;
+    }),
+    notification: Effect.fn("mcpOverAcpBridge.notification")(function* (request) {
+      const connection = yield* connectionFor(request.connectionId);
+      yield* send(connection, {
+        jsonrpc: "2.0",
+        method: request.method,
+        ...(request.params == null ? {} : { params: request.params }),
+      });
+    }),
     disconnect,
     dispose: Effect.suspend(() =>
       Effect.forEach(

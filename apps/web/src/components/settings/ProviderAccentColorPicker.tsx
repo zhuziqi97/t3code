@@ -2,7 +2,7 @@
 import { useTranslate } from "../../i18n";
 
 import { PlusIcon, XIcon } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { hexToHsv, hsvToHex, type HsvColor } from "../../lib/color";
 import { ColorHueSlider, ColorSaturationValuePlane } from "../ui/color-picker";
@@ -23,13 +23,10 @@ function ProviderCustomColorPanel(props: {
   const currentColor = hsvToHex(hsv.h, hsv.s, hsv.v);
   const [hexDraft, setHexDraft] = useState<string | null>(null);
 
-  const commitHsv = useCallback(
-    (nextHsv: HsvColor) => {
-      setHsv(nextHsv);
-      onCommit(hsvToHex(nextHsv.h, nextHsv.s, nextHsv.v));
-    },
-    [onCommit],
-  );
+  const commitHsv = (nextHsv: HsvColor) => {
+    setHsv(nextHsv);
+    onCommit(hsvToHex(nextHsv.h, nextHsv.s, nextHsv.v));
+  };
 
   return (
     <div className="w-56 bg-popover">
@@ -130,7 +127,6 @@ export function ProviderAccentColorPicker(props: {
   readonly onCommit: (value: string) => void;
   readonly description?: string;
   readonly commitDelayMs?: number;
-  /** `inline` renders only the swatch row, for callers that supply their own label. */
   readonly layout?: "stacked" | "inline";
 }) {
   const t = useTranslate();
@@ -168,36 +164,33 @@ export function ProviderAccentColorPicker(props: {
     };
   }, []);
 
-  const commitAccentColor = useCallback(
-    (value: string) => {
-      const normalizedValue = normalizeProviderAccentColor(value) ?? "";
-      setOptimisticValue(normalizedValue);
+  const commitAccentColor = (value: string) => {
+    const normalizedValue = normalizeProviderAccentColor(value) ?? "";
+    setOptimisticValue(normalizedValue);
 
-      if (commitDelayMs <= 0) {
-        pendingCommitRef.current = null;
-        if (commitTimeoutRef.current !== null) {
-          clearTimeout(commitTimeoutRef.current);
-          commitTimeoutRef.current = null;
-        }
-        onCommit(normalizedValue);
-        return;
-      }
-
-      pendingCommitRef.current = normalizedValue;
+    if (commitDelayMs <= 0) {
+      pendingCommitRef.current = null;
       if (commitTimeoutRef.current !== null) {
         clearTimeout(commitTimeoutRef.current);
-      }
-      commitTimeoutRef.current = setTimeout(() => {
         commitTimeoutRef.current = null;
-        const pendingCommit = pendingCommitRef.current;
-        pendingCommitRef.current = null;
-        if (pendingCommit !== null) {
-          onCommitRef.current(pendingCommit);
-        }
-      }, commitDelayMs);
-    },
-    [commitDelayMs, onCommit],
-  );
+      }
+      onCommit(normalizedValue);
+      return;
+    }
+
+    pendingCommitRef.current = normalizedValue;
+    if (commitTimeoutRef.current !== null) {
+      clearTimeout(commitTimeoutRef.current);
+    }
+    commitTimeoutRef.current = setTimeout(() => {
+      commitTimeoutRef.current = null;
+      const pendingCommit = pendingCommitRef.current;
+      pendingCommitRef.current = null;
+      if (pendingCommit !== null) {
+        onCommitRef.current(pendingCommit);
+      }
+    }, commitDelayMs);
+  };
 
   const normalized = normalizeProviderAccentColor(optimisticValue);
   const picker = (

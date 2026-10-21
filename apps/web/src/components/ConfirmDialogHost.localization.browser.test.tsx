@@ -1,0 +1,84 @@
+import "~/index.css";
+import { act, render as renderTestUi, type Screen } from "../../test/render";
+
+import { expect, it, vi } from "vite-plus/test";
+import { requestConfirmDialog, resetConfirmDialogForTests } from "../confirmDialog";
+import { changeLanguage } from "../i18n";
+import { ConfirmDialogHost } from "./ConfirmDialogHost";
+
+let root: Screen;
+let container: HTMLDivElement;
+
+it.each([
+  ["确认", true],
+  ["取消", false],
+] as const)(
+  "shows the Chinese restore question as the title and responds to %s",
+  async (label, confirmed) => {
+    await using _lifecycle = await setupLifecycle();
+
+    let answer: Promise<boolean> | undefined;
+    await act(async () => {
+      answer = requestConfirmDialog("恢复默认设置？\n以下设置将被重置：语言。");
+    });
+    expect(document.querySelector('[role="alertdialog"] h2')?.textContent).toBe("恢复默认设置？");
+    expect(document.body.textContent).toContain("以下设置将被重置：语言。");
+    const button = [...document.querySelectorAll("button")].find(
+      (element) => element.textContent === label,
+    )!;
+    await act(async () => button.click());
+    await expect(answer).resolves.toBe(confirmed);
+  },
+);
+
+it("updates generic confirmation controls with the language while preserving the caller message", async () => {
+  await using _lifecycle = await setupLifecycle();
+
+  await act(async () => {
+    requestConfirmDialog("raw operation details");
+  });
+  expect(document.body.textContent).toContain("确认操作");
+  await act(async () => {
+    await changeLanguage("en");
+  });
+  expect(document.body.textContent).toContain("Confirm action");
+  expect(document.body.textContent).toContain("raw operation details");
+  expect([...document.querySelectorAll("button")].map((element) => element.textContent)).toEqual(
+    expect.arrayContaining(["Confirm", "Cancel"]),
+  );
+});
+
+let renderStack: AsyncDisposableStack;
+async function setupLifecycle() {
+  await using stack = new AsyncDisposableStack();
+  renderStack = stack;
+  stack.defer(async () => {
+    await act(async () => root.unmount());
+    container.remove();
+    resetConfirmDialogForTests();
+    await changeLanguage("en");
+    vi.unstubAllGlobals();
+  });
+
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+  Object.defineProperty(Element.prototype, "getAnimations", {
+    configurable: true,
+    value: () => [],
+  });
+  resetConfirmDialogForTests();
+  await changeLanguage("zh");
+  container = document.createElement("div");
+  document.body.append(container);
+  root = renderStack.use(await renderTestUi(null, { container: container, router: false }));
+  await act(async () => root.rerender(<ConfirmDialogHost />));
+
+  renderStack = stack.move();
+  return renderStack;
+}

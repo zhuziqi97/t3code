@@ -6,7 +6,7 @@ import type { ProviderMaintenanceCapabilities } from "./maintenance.ts";
 
 export interface ManagedServerProvider {
   /**
-   * Ownership-derived update capabilities. Cached between reads; pass
+   * Cached between reads; pass
    * `{ fresh: true }` before executing an update so it never trusts a
    * resolution older than the click.
    */
@@ -26,8 +26,7 @@ export interface ManagedServerProvider {
   readonly cancelRefresh: (operationId: string) => Effect.Effect<void>;
   readonly streamChanges: Stream.Stream<ServerProvider>;
   /**
-   * Fold a runtime rate-limit update into the published snapshot without
-   * waiting for the next status probe. Sparse: windows merge by id and an
+   * Sparse: windows merge by id and an
    * update with no usable window leaves the snapshot untouched.
    */
   readonly applyUsageLimits: (

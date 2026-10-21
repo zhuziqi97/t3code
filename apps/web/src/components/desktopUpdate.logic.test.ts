@@ -8,6 +8,8 @@ import {
   getArm64IntelBuildWarningDescription,
   getDesktopUpdateActionError,
   getDesktopUpdateButtonTooltip,
+  getDesktopUpdateDisabledReason,
+  getDesktopUpdateIdleTooltip,
   getDesktopUpdateInstallConfirmationMessage,
   getDesktopUpdateReleaseHistoryUrl,
   getDesktopUpdateReleaseUrl,
@@ -239,16 +241,41 @@ describe("getDesktopUpdateActionError", () => {
 });
 
 describe("desktop update UI helpers", () => {
+  const t = i18n.getFixedT("en");
   it("builds the stable release URL for a downloaded version", () => {
-    expect(getDesktopUpdateReleaseUrl("0.0.30")).toBe(
+    expect(getDesktopUpdateReleaseUrl("0.0.30", undefined, "pingdotgg/t3code")).toBe(
       "https://github.com/pingdotgg/t3code/releases/tag/v0.0.30",
     );
   });
 
-  it("builds the nightly release URL without dropping its version suffix", () => {
-    expect(getDesktopUpdateReleaseUrl("0.0.30-nightly.20260728.931")).toBe(
-      "https://github.com/pingdotgg/t3code/releases/tag/v0.0.30-nightly.20260728.931",
+  it("uses the configured desktop update repository for release URLs", () => {
+    expect(getDesktopUpdateReleaseUrl("1.2.3", undefined, "JustYannicc/t3code")).toBe(
+      "https://github.com/JustYannicc/t3code/releases/tag/v1.2.3",
     );
+    expect(getDesktopUpdateReleaseHistoryUrl(undefined, "JustYannicc/t3code")).toBe(
+      "https://github.com/JustYannicc/t3code/releases",
+    );
+  });
+
+  it.each([
+    "owner/repo/extra",
+    "owner#notes/repo",
+    "owner/repo#notes",
+    "owner?tab=notes/repo",
+    "owner/repo?tab=notes",
+  ])("falls back to upstream for an invalid configured repository: %s", (repository) => {
+    expect(getDesktopUpdateReleaseHistoryUrl(undefined, repository)).toBe(
+      "https://github.com/pingdotgg/t3code/releases",
+    );
+    expect(getDesktopUpdateReleaseUrl("1.2.3", undefined, repository)).toBe(
+      "https://github.com/pingdotgg/t3code/releases/tag/v1.2.3",
+    );
+  });
+
+  it("builds the nightly release URL without dropping its version suffix", () => {
+    expect(
+      getDesktopUpdateReleaseUrl("0.0.30-nightly.20260728.931", undefined, "pingdotgg/t3code"),
+    ).toBe("https://github.com/pingdotgg/t3code/releases/tag/v0.0.30-nightly.20260728.931");
   });
 
   it("omits the release URL when the updater does not report a version", () => {
@@ -257,7 +284,7 @@ describe("desktop update UI helpers", () => {
   });
 
   it("builds the release history URL", () => {
-    expect(getDesktopUpdateReleaseHistoryUrl()).toBe(
+    expect(getDesktopUpdateReleaseHistoryUrl(undefined, "pingdotgg/t3code")).toBe(
       "https://github.com/pingdotgg/t3code/releases",
     );
   });
@@ -407,53 +434,84 @@ describe("getDesktopUpdateButtonTooltip", () => {
   });
 });
 
-describe("desktop updater message ownership", () => {
-  const t = i18n.getFixedT("zh");
-  it("formats native T3 disabled reasons and preserves arbitrary updater diagnostics", () => {
-    expect(
-      formatDesktopUpdateMessage(
-        "Automatic updates are not available because no update feed is configured.",
-        t,
-      ),
-    ).toBe("未配置更新源，无法自动更新。");
-    expect(
-      formatDesktopUpdateMessage(
-        "Automatic updates are only available in packaged production builds.",
-        t,
-      ),
-    ).toBe("仅打包后的正式构建支持自动更新。");
-    expect(
-      formatDesktopUpdateMessage(
-        "Automatic updates are disabled by the T3CODE_DISABLE_AUTO_UPDATE setting.",
-        t,
-      ),
-    ).toBe("T3CODE_DISABLE_AUTO_UPDATE 设置已禁用自动更新。");
-    expect(
-      formatDesktopUpdateMessage(
-        "Automatic updates on Linux require the AppImage or the .deb package.",
-        t,
-      ),
-    ).toBe("Linux 自动更新需要使用 AppImage 或 .deb 软件包。");
-    expect(formatDesktopUpdateMessage("Network download error /tmp/原文 404", t)).toBe(
-      "Network download error /tmp/原文 404",
+describe("disabled update reason", () => {
+  const disabledState: DesktopUpdateState = {
+    ...baseState,
+    enabled: false,
+    status: "disabled",
+    message: "Automatic updates are only available in packaged production builds.",
+  };
+
+  it("explains why checking is unavailable", () => {
+    expect(getDesktopUpdateDisabledReason(disabledState)).toBe(
+      "Automatic updates are only available in packaged production builds.",
     );
-    expect(formatDesktopUpdateMessage("", t)).toBe("");
+    expect(getDesktopUpdateIdleTooltip(disabledState)).toEqual({
+      title: "Updates unavailable",
+      detail: "Automatic updates are only available in packaged production builds.",
+    });
+    expect(getDesktopUpdateDisabledReason({ ...disabledState, message: null })).toBe(
+      "Automatic updates are not available in this build.",
+    );
   });
-  it("formats the exact channel and action templates emitted by the desktop updater", () => {
-    expect(
-      formatDesktopUpdateMessage(
-        "Cannot change the desktop update channel to nightly while an update download action is in progress.",
-        t,
-      ),
-    ).toBe("正在执行更新下载操作，无法将桌面更新通道切换为 nightly。");
-    expect(
-      formatDesktopUpdateMessage("Failed to persist the latest desktop update channel.", t),
-    ).toBe("无法保存桌面更新通道 latest。");
-    expect(
-      formatDesktopUpdateMessage("Desktop updater background operation reported an error.", t),
-    ).toBe("桌面更新程序的后台操作报告了错误。");
-    expect(
-      formatDesktopUpdateMessage("Desktop update install action failed unexpectedly.", t),
-    ).toBe("桌面更新的安装操作意外失败。");
+
+  it("keeps the check prompt when updates are available", () => {
+    expect(getDesktopUpdateDisabledReason(baseState)).toBeNull();
+    expect(getDesktopUpdateDisabledReason(null)).toBeNull();
+    expect(getDesktopUpdateIdleTooltip(baseState)).toEqual({
+      title: "Check for updates",
+      detail: null,
+    });
   });
+});
+
+it("formats native T3 disabled reasons and preserves arbitrary updater diagnostics", () => {
+  const t = i18n.getFixedT("zh");
+  expect(
+    formatDesktopUpdateMessage(
+      "Automatic updates are not available because no update feed is configured.",
+      t,
+    ),
+  ).toBe("未配置更新源，无法自动更新。");
+  expect(
+    formatDesktopUpdateMessage(
+      "Automatic updates are only available in packaged production builds.",
+      t,
+    ),
+  ).toBe("仅打包后的正式构建支持自动更新。");
+  expect(
+    formatDesktopUpdateMessage(
+      "Automatic updates are disabled by the T3CODE_DISABLE_AUTO_UPDATE setting.",
+      t,
+    ),
+  ).toBe("T3CODE_DISABLE_AUTO_UPDATE 设置已禁用自动更新。");
+  expect(
+    formatDesktopUpdateMessage(
+      "Automatic updates on Linux require the AppImage or the .deb package.",
+      t,
+    ),
+  ).toBe("Linux 自动更新需要使用 AppImage 或 .deb 软件包。");
+  expect(formatDesktopUpdateMessage("Network download error /tmp/原文 404", t)).toBe(
+    "Network download error /tmp/原文 404",
+  );
+  expect(formatDesktopUpdateMessage("", t)).toBe("");
+});
+
+it("formats the exact channel and action templates emitted by the desktop updater", () => {
+  const t = i18n.getFixedT("zh");
+  expect(
+    formatDesktopUpdateMessage(
+      "Cannot change the desktop update channel to nightly while an update download action is in progress.",
+      t,
+    ),
+  ).toBe("正在执行更新下载操作，无法将桌面更新通道切换为 nightly。");
+  expect(
+    formatDesktopUpdateMessage("Failed to persist the latest desktop update channel.", t),
+  ).toBe("无法保存桌面更新通道 latest。");
+  expect(
+    formatDesktopUpdateMessage("Desktop updater background operation reported an error.", t),
+  ).toBe("桌面更新程序的后台操作报告了错误。");
+  expect(formatDesktopUpdateMessage("Desktop update install action failed unexpectedly.", t)).toBe(
+    "桌面更新的安装操作意外失败。",
+  );
 });

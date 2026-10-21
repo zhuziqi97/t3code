@@ -2,7 +2,6 @@ import { useTranslate } from "../../i18n";
 import { useEffect, useRef } from "react";
 import { DiffFileHeaderSkeleton } from "../DiffPanelShell";
 
-/** Load the next batch before the reader reaches the end of the current files. */
 export function DiffFileLoadingBoundary({ load, count }: { load: () => void; count: number }) {
   const t = useTranslate();
   const ref = useRef<HTMLDivElement>(null);

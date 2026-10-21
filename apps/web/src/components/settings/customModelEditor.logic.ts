@@ -7,7 +7,6 @@ import {
 } from "@t3tools/contracts";
 import { type CustomModelDefinition, createModelCapabilities } from "@t3tools/shared/model";
 
-/** Editable mirror of a `ProviderOptionChoice`. `key` is only a React key. */
 export interface EditorChoice {
   readonly key: string;
   readonly id: string;
@@ -16,7 +15,6 @@ export interface EditorChoice {
   readonly description?: string;
 }
 
-/** Editable mirror of a `ProviderOptionDescriptor`. `key` is only a React key. */
 export interface EditorDescriptor {
   readonly key: string;
   readonly type: "select" | "boolean";
@@ -48,11 +46,6 @@ const EFFORT_CHOICES = [
   { id: "xhigh", label: "Extra High" },
 ] as const;
 
-/**
- * Option ids each adapter actually reads off a turn's model selection, with
- * the usual choices pre-filled. Anything else the user types is stored
- * verbatim but will be ignored by the driver.
- */
 export const DESCRIPTOR_PRESETS_BY_KIND: Partial<
   Record<ProviderDriverKind, ReadonlyArray<DescriptorPreset>>
 > = {
@@ -255,7 +248,6 @@ export function validateDraft(draft: CustomModelDraft, t?: TFunction): string | 
   return null;
 }
 
-/** Convert a validated draft back into a definition. Blank name → slug. */
 export function definitionFromDraft(draft: CustomModelDraft): CustomModelDefinition {
   const descriptors: ProviderOptionDescriptor[] = draft.descriptors.map((descriptor) => {
     const id = descriptor.id.trim();

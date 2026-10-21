@@ -65,7 +65,6 @@ export interface AntigravityAdapterV2Options {
   readonly userMcpServers: (cwd: string) => Effect.Effect<ReadonlyArray<EffectAcpSchema.McpServer>>;
   readonly instanceId: ProviderInstanceId;
   readonly selfInvocation: SelfInvocation;
-  /** Spawns the official agent with the instance's Google profile. */
   readonly makeRuntime: (
     input: Omit<AntigravityAcpRuntimeInput, "spawn" | "childProcessSpawner">,
   ) => Effect.Effect<
@@ -73,9 +72,7 @@ export interface AntigravityAdapterV2Options {
     EffectAcpErrors.AcpError | ProviderSetupError,
     Scope.Scope
   >;
-  /** Serialises process ownership against sign-in and sign-out. */
   readonly withProcess: AntigravityAuth["withProcess"];
-  /** Model to select for the provider default alias, from the manifest. */
   readonly defaultModel: Effect.Effect<string | undefined>;
   readonly onSessionStarted?: (
     started: AcpSessionRuntime.AcpSessionRuntimeStartResult,
@@ -87,9 +84,8 @@ export interface AntigravityAdapterV2Options {
 }
 
 /**
- * ACP 1.1.1 exposes subagent invocations as ordinary `start_subagent` tools
- * without child session ids. Project them as subagent items keyed by the tool
- * call so the timeline shows them as delegated work.
+ * ACP 1.1.1 exposes subagent invocations as ordinary `start_subagent` tools without child
+ * session ids.
  */
 const extractAntigravitySubagentUpdate: NonNullable<AcpAdapterV2Flavor["extractSubagentUpdate"]> = (
   toolCall,
@@ -114,7 +110,6 @@ const extractAntigravitySubagentUpdate: NonNullable<AcpAdapterV2Flavor["extractS
   };
 };
 
-/** The services the Antigravity flavor runs its runtime and session files with. */
 interface AntigravityFlavorServices {
   readonly crypto: Crypto.Crypto;
   readonly fileSystem: FileSystem.FileSystem;
@@ -125,15 +120,10 @@ interface AntigravityFlavorServices {
 export function makeAntigravityAcpAdapterFlavor(
   options: AntigravityAdapterV2Options & AntigravityFlavorServices,
 ): AcpAdapterV2Flavor {
-  // The attachments dir grant lets the agent read pasted files at the paths
-  // the turn text references. It is a leaf directory of uploads. A session
-  // without a workspace gets no workspace root rather than the server's cwd.
   const antigravityClientFileRoots = (cwd: string | null) =>
     cwd === null ? [options.host.paths.attachmentsDir] : [cwd, options.host.paths.attachmentsDir];
-  const makeRuntime = (input: AcpAdapterV2RuntimeInput) =>
-    Effect.gen(function* () {
-      // AcpAdapterV2 owns the runtime scope; sign-in and sign-out stop the
-      // process by closing a child of it, and the adapter respawns on the next turn.
+  const makeRuntime = Effect.fn("AntigravityAdapterV2.makeRuntime")(
+    function* (input: AcpAdapterV2RuntimeInput) {
       const scope = yield* Scope.fork(yield* Effect.scope);
       const systemServers = yield* options.userMcpServers(input.cwd);
       const runtime = yield* options
@@ -164,15 +154,15 @@ export function makeAntigravityAcpAdapterFlavor(
         );
       return {
         ...runtime,
-        loadSession: (id, activation) =>
+        loadSession: (...[id, activation]: Parameters<typeof runtime.loadSession>) =>
           systemMcpActivation(activation).pipe(
             Effect.flatMap((options) => runtime.loadSession(id, options)),
           ),
-        resumeSession: (id, activation) =>
+        resumeSession: (...[id, activation]: Parameters<typeof runtime.resumeSession>) =>
           systemMcpActivation(activation).pipe(
             Effect.flatMap((options) => runtime.resumeSession(id, options)),
           ),
-        forkSession: (id, activation) =>
+        forkSession: (...[id, activation]: Parameters<typeof runtime.forkSession>) =>
           systemMcpActivation(activation).pipe(
             Effect.flatMap((options) => runtime.forkSession(id, options)),
           ),
@@ -184,15 +174,15 @@ export function makeAntigravityAcpAdapterFlavor(
                 (started) => options.onSessionStarted?.(started, input.cwd) ?? Effect.void,
               ),
             ),
-      } satisfies AcpSessionRuntime.AcpSessionRuntime["Service"];
-    }).pipe(
-      Effect.provideService(Crypto.Crypto, options.crypto),
-      Effect.mapError((cause): EffectAcpErrors.AcpError =>
-        cause._tag === "ProviderSetupError"
-          ? new EffectAcpErrors.AcpTransportError({ detail: cause.detail, cause })
-          : cause,
-      ),
-    );
+      };
+    },
+    Effect.provideService(Crypto.Crypto, options.crypto),
+    Effect.mapError((cause): EffectAcpErrors.AcpError =>
+      cause._tag === "ProviderSetupError"
+        ? new EffectAcpErrors.AcpTransportError({ detail: cause.detail, cause })
+        : cause,
+    ),
+  );
 
   return {
     driver: ANTIGRAVITY_PROVIDER,
@@ -204,19 +194,21 @@ export function makeAntigravityAcpAdapterFlavor(
     preferResumeSession: true,
     subagentsIdleOnTurnCompletion: true,
     ...(options.onSessionEvent === undefined ? {} : { onSessionEvent: options.onSessionEvent }),
-    applyModelSelection: ({ runtime, modelSelection }) =>
-      Effect.gen(function* () {
-        const defaultModel = yield* options.defaultModel;
-        return yield* applyAntigravityAcpModelSelection({
-          runtime,
-          model:
-            modelSelection.model === null || modelSelection.model === ANTIGRAVITY_DEFAULT_MODEL
-              ? undefined
-              : modelSelection.model,
-          defaultModel,
-          mapError: (cause) => cause,
-        });
-      }),
+    applyModelSelection: Effect.fn("AntigravityAdapterV2.applyModelSelection")(function* ({
+      runtime,
+      modelSelection,
+    }) {
+      const defaultModel = yield* options.defaultModel;
+      return yield* applyAntigravityAcpModelSelection({
+        runtime,
+        model:
+          modelSelection.model === null || modelSelection.model === ANTIGRAVITY_DEFAULT_MODEL
+            ? undefined
+            : modelSelection.model,
+        defaultModel,
+        mapError: (cause) => cause,
+      });
+    }),
     sessionModeForPolicy: (policy) => antigravityPermissionMode(policy.runtimeMode),
     clientFileSystem: {
       readTextFile: (request, cwd) =>

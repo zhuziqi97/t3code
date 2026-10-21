@@ -5843,7 +5843,7 @@ export const en = {
   "keybindings.command.diff.toggle": "Diff: Toggle",
   "keybindings.command.preview.toggle": "Preview: Toggle",
   "keybindings.command.preview.refresh": "Preview: Refresh",
-  "keybindings.command.preview.focusUrl": "Preview: Focus Url",
+  "keybindings.command.preview.focusUrl": "Preview: Focus URL",
   "keybindings.command.preview.zoomIn": "Preview: Zoom In",
   "keybindings.command.preview.zoomOut": "Preview: Zoom Out",
   "keybindings.command.preview.resetZoom": "Preview: Reset Zoom",

@@ -1,6 +1,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import { CodexSettings } from "@t3tools/contracts";
+import { getProviderOptionCurrentLabel } from "@t3tools/shared/model";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -27,24 +28,33 @@ const model = (tiers) => ({
   id: "gpt-6.1-sol", model: "gpt-6.1-sol", displayName: "GPT-6.1 Sol", description: "",
   hidden: false, isDefault: true, defaultReasoningEffort: "high",
   supportedReasoningEfforts: [{ reasoningEffort: "high", description: "" }],
-  serviceTiers: tiers.map((id) => ({ id, name: id, description: "" })),
+  serviceTiers: tiers.map((id) => ({ id, name: id === "priority" ? "Fast" : id, description: "" })),
 });
 setTimeout(() => {
   const tiers = ultrafast ? ["priority", "ultrafast"] : ["priority"];
-  fs.writeFileSync(cachePath, JSON.stringify({ fetched_at: new Date().toISOString(), models: [model(tiers)] }));
+  fs.writeFileSync(cachePath, JSON.stringify({ fetched_at: new Date().toISOString(), models: [model(tiers), { ...model(tiers), id: "gpt-6-luna", model: "gpt-6-luna", isDefault: false }] }));
 }, 300);
 const write = (message) => process.stdout.write(JSON.stringify(message) + "\n");
 readline.createInterface({ input: process.stdin }).on("line", (line) => {
-  const { id, method } = JSON.parse(line);
+  const { id, method, params } = JSON.parse(line);
   if (id === undefined) return;
   if (method === "initialize") {
     write({ id, result: { userAgent: "codex/0.162.0", codexHome: process.env.CODEX_HOME, platformFamily: "unix", platformOs: "macos" } });
   } else if (method === "account/read") {
     write({ id, result: { account: { type: "chatgpt", email: "test@example.com", planType: "promax" }, requiresOpenaiAuth: false } });
-  } else if (method === "config/read" && process.env.FAKE_CONFIG_READ !== "fail") {
-    write({ id, result: { config: { model: "custom-default" }, origins: {}, layers: null } });
   } else if (method === "skills/list") {
     write({ id, result: { data: [] } });
+  } else if (method === "config/read") {
+    if (params.cwd) {
+      if (process.env.FAKE_DEFAULT_MODEL === "error") write({ id, error: { code: -32601, message: "unsupported" } });
+      else write({ id, result: { config: { model: process.env.FAKE_DEFAULT_MODEL || null }, origins: {}, layers: null } });
+      return;
+    }
+    fs.writeFileSync(path.join(process.env.CODEX_HOME, "config-request.json"), JSON.stringify(params));
+    const tier = process.env.FAKE_SERVICE_TIER;
+    if (tier === "hang") return;
+    if (tier === "error") write({ id, error: { code: -32601, message: "unsupported" } });
+    else write({ id, result: { config: tier === "missing" ? {} : { service_tier: tier }, origins: {}, layers: null } });
   } else if (method === "model/list") {
     write({ id, result: { data: JSON.parse(fs.readFileSync(cachePath, "utf8")).models, nextCursor: null } });
   } else {
@@ -55,9 +65,10 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
 
 const decodeCodexSettings = Schema.decodeSync(CodexSettings);
 
-const solServiceTiers = Effect.fn("solServiceTiers")(function* (
+const probeCatalog = Effect.fn("probeCatalog")(function* (
   ultrafastEntitled: boolean,
-  configReadFails = false,
+  serviceTier = "error",
+  defaultModel = "",
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -65,8 +76,7 @@ const solServiceTiers = Effect.fn("solServiceTiers")(function* (
   const binaryPath = path.join(dir, "codex");
   yield* fs.writeFileString(binaryPath, FAKE_CODEX_APP_SERVER);
   yield* fs.chmod(binaryPath, 0o755);
-  // A fresh cache written by another client: the plain CLI's (no Ultrafast)
-  // when entitled, or a stale entitled catalog when the entitlement is gone.
+
   yield* fs.writeFileString(
     path.join(dir, "models_cache.json"),
     JSON.stringify({
@@ -82,7 +92,7 @@ const solServiceTiers = Effect.fn("solServiceTiers")(function* (
           defaultReasoningEffort: "high",
           supportedReasoningEfforts: [{ reasoningEffort: "high", description: "" }],
           serviceTiers: (ultrafastEntitled ? ["priority"] : ["priority", "ultrafast"]).map(
-            (id) => ({ id, name: id, description: "" }),
+            (id) => ({ id, name: id === "priority" ? "Fast" : id, description: "" }),
           ),
         },
       ],
@@ -96,17 +106,18 @@ const solServiceTiers = Effect.fn("solServiceTiers")(function* (
     {
       ...environment,
       FAKE_ULTRAFAST_ENTITLED: ultrafastEntitled ? "1" : "0",
-      FAKE_CONFIG_READ: configReadFails ? "fail" : "ok",
+      FAKE_SERVICE_TIER: serviceTier,
+      FAKE_DEFAULT_MODEL: defaultModel,
     },
   );
-  assert.strictEqual(provider.status, "ready");
-  assert.strictEqual(
-    provider.models.some((model) => model.isDefault),
-    !configReadFails,
-  );
-  if (!configReadFails) {
-    assert.strictEqual(provider.models.find((model) => model.isDefault)?.slug, "custom-default");
-  }
+  const configRequest = yield* fs.readFileString(path.join(dir, "config-request.json"));
+  assert.deepStrictEqual(JSON.parse(configRequest), { includeLayers: false });
+  assert.equal(provider.status, "ready");
+  return provider;
+});
+
+const solServiceTiers = Effect.fn("solServiceTiers")(function* (ultrafastEntitled: boolean) {
+  const provider = yield* probeCatalog(ultrafastEntitled);
   const serviceTier = provider.models
     .find((model) => model.slug === "gpt-6.1-sol")
     ?.capabilities?.optionDescriptors?.find((descriptor) => descriptor.id === "serviceTier");
@@ -114,6 +125,18 @@ const solServiceTiers = Effect.fn("solServiceTiers")(function* (
 });
 
 it.layer(NodeServices.layer, { excludeTestServices: true })("Codex catalog discovery", (it) => {
+  it.effect(
+    "uses the effective workspace default and keeps the provider available when it cannot be read",
+    () =>
+      Effect.gen(function* () {
+        const native = yield* probeCatalog(false, "missing", "custom-default");
+        assert.strictEqual(native.models.find((model) => model.isDefault)?.slug, "custom-default");
+        const failed = yield* probeCatalog(false, "missing", "error");
+        assert.strictEqual(failed.status, "ready");
+        assert.isFalse(failed.models.some((model) => model.isDefault));
+      }).pipe(Effect.scoped),
+  );
+
   it.effect("keeps Ultrafast when another Codex client wrote the shared catalog cache", () =>
     Effect.gen(function* () {
       assert.deepStrictEqual(yield* solServiceTiers(true), ["default", "priority", "ultrafast"]);
@@ -125,13 +148,48 @@ it.layer(NodeServices.layer, { excludeTestServices: true })("Codex catalog disco
       assert.deepStrictEqual(yield* solServiceTiers(false), ["default", "priority"]);
     }).pipe(Effect.scoped),
   );
-  it.effect("keeps Codex available when the default-model config request fails", () =>
+
+  it.effect("displays the inherited global Fast tier on every discovered model", () =>
     Effect.gen(function* () {
-      assert.deepStrictEqual(yield* solServiceTiers(true, true), [
-        "default",
-        "priority",
-        "ultrafast",
-      ]);
+      for (const tier of ["fast", "priority"]) {
+        const provider = yield* probeCatalog(false, tier);
+        assert.deepStrictEqual(
+          provider.models.map((model) => model.slug),
+          ["gpt-6.1-sol", "gpt-6-luna"],
+        );
+        for (const model of provider.models) {
+          const descriptors = model.capabilities?.optionDescriptors ?? [];
+          const serviceTier = descriptors.find((descriptor) => descriptor.id === "serviceTier");
+          assert.equal(serviceTier?.type, "select");
+          if (serviceTier?.type !== "select") return;
+          assert.equal(getProviderOptionCurrentLabel(serviceTier), "Fast");
+          assert.deepStrictEqual(
+            serviceTier.options.filter((option) => option.isDefault).map((option) => option.id),
+            ["priority"],
+          );
+          assert.equal(
+            descriptors.find((descriptor) => descriptor.id === "reasoningEffort")?.currentValue,
+            "high",
+          );
+        }
+        assert.equal(provider.models.find((model) => model.isDefault)?.slug, "gpt-6.1-sol");
+      }
     }).pipe(Effect.scoped),
+  );
+
+  it.effect(
+    "preserves the catalog when global tier config is missing, unknown, failing, or stalled",
+    () =>
+      Effect.gen(function* () {
+        const baseline = yield* probeCatalog(false, "missing");
+        const serviceTier = baseline.models[0]?.capabilities?.optionDescriptors?.find(
+          (descriptor) => descriptor.id === "serviceTier",
+        );
+        assert.equal(getProviderOptionCurrentLabel(serviceTier), "Standard");
+        for (const config of ["unsupported", "error", "hang"]) {
+          const provider = yield* probeCatalog(false, config);
+          assert.deepStrictEqual(provider.models, baseline.models, config);
+        }
+      }).pipe(Effect.scoped, Effect.timeout("8 seconds")),
   );
 });

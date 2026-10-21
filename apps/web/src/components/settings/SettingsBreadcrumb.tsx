@@ -6,10 +6,6 @@ import {
 } from "../WorkspaceBreadcrumb";
 import { SETTINGS_SECTION_LABELS, settingsSectionLabel, type SettingsPath } from "./settingsSearch";
 
-/**
- * `Settings / Section`. The scope a change applies to lives at the top of the
- * page content, see `SettingsScopeSentence`.
- */
 export function SettingsBreadcrumb({ pathname }: { pathname: string }) {
   const t = useTranslate();
   const labels: Readonly<Record<string, string>> = {

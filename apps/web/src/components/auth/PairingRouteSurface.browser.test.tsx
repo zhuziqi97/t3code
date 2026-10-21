@@ -1,0 +1,188 @@
+import "~/index.css";
+import { act, render as renderTestUi, type Screen } from "../../../test/render";
+
+import { expect, it, vi } from "vite-plus/test";
+
+const state = vi.hoisted(() => ({ connect: vi.fn(), submit: vi.fn(), token: "Raw-Pairing-Token" }));
+vi.mock("../../connection/onboarding", async (original) => ({
+  ...(await original<typeof import("../../connection/onboarding")>()),
+  connectPairing: {},
+}));
+vi.mock("../../state/use-atom-command", async (original) => ({
+  ...(await original<typeof import("../../state/use-atom-command")>()),
+  useAtomCommand: () => state.connect,
+}));
+vi.mock("../../environments/primary", async (original) => ({
+  ...(await original<typeof import("../../environments/primary")>()),
+  peekPairingTokenFromUrl: () => state.token,
+  stripPairingTokenFromUrl: vi.fn(),
+  submitServerAuthCredential: state.submit,
+}));
+vi.mock("../../hostedPairing", async (original) => ({
+  ...(await original<typeof import("../../hostedPairing")>()),
+  readHostedPairingRequest: () => ({
+    host: "https://host.example",
+    token: state.token,
+    label: "Build Host",
+  }),
+}));
+import { changeLanguage } from "../../i18n";
+import { HostedPairingRouteSurface, PairingRouteSurface } from "./PairingRouteSurface";
+import * as Cause from "effect/Cause";
+import { ConnectionTransientError } from "@t3tools/client-runtime/connection";
+function deferred<A>() {
+  let resolve!: (value: A) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<A>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+let root: Screen;
+let container: HTMLDivElement;
+
+it("relocalizes hosted pairing progress and completion without resubmitting the token", async () => {
+  await using _lifecycle = await setupLifecycle();
+
+  const result = deferred<{ _tag: "Success"; value: undefined }>();
+  state.connect.mockReturnValue(result.promise);
+  await act(async () => {
+    await root.rerender(<HostedPairingRouteSurface />);
+  });
+  expect(state.connect).toHaveBeenCalledExactlyOnceWith({
+    host: "https://host.example",
+    pairingCode: state.token,
+  });
+  await act(async () => {
+    await changeLanguage("zh");
+  });
+  expect(container.textContent).toContain("正在连接");
+  expect(container.textContent).toContain("https://host.example");
+  await act(async () => result.resolve({ _tag: "Success", value: undefined }));
+  expect(container.textContent).toContain("Build Host");
+  expect(container.textContent).toContain("已配对");
+  await act(async () => {
+    await changeLanguage("en");
+  });
+  expect(container.textContent).toContain("Backend paired");
+  expect(state.connect).toHaveBeenCalledTimes(1);
+});
+
+it("keeps a submitted credential and localizes unknown errors without restarting authentication", async () => {
+  await using _lifecycle = await setupLifecycle();
+
+  const result = deferred<void>();
+  state.submit.mockReturnValue(result.promise);
+  const authenticated = vi.fn();
+  await act(() =>
+    root.rerender(
+      <PairingRouteSurface
+        auth={{
+          policy: "loopback-browser",
+          bootstrapMethods: ["one-time-token"],
+          sessionMethods: ["browser-session-cookie"],
+          sessionCookieName: "test-session",
+        }}
+        onAuthenticated={authenticated}
+      />,
+    ),
+  );
+  expect(state.submit).toHaveBeenCalledExactlyOnceWith(state.token);
+  await act(async () => {
+    await changeLanguage("zh");
+  });
+  expect(container.querySelector<HTMLInputElement>("input")?.value).toBe(state.token);
+  await act(async () => result.reject({}));
+  expect(container.textContent).toContain("身份验证失败");
+  await act(async () => {
+    await changeLanguage("en");
+  });
+  expect(container.textContent).toContain("Authentication failed");
+  expect(state.submit).toHaveBeenCalledTimes(1);
+  expect(authenticated).not.toHaveBeenCalled();
+});
+
+it("relocalizes a failed hosted discovery and retries only when requested", async () => {
+  await using _lifecycle = await setupLifecycle();
+
+  const url = "https://host.example/.well-known/t3/environment";
+  const diagnostic = "ECONNREFUSED (原文 & <keep>)";
+  const message = `Failed to fetch remote environment endpoint ${url} (${diagnostic}).`;
+  state.connect.mockResolvedValue({
+    _tag: "Failure",
+    cause: Cause.fail(new ConnectionTransientError({ reason: "network", detail: message })),
+  });
+  await act(async () => {
+    await root.rerender(<HostedPairingRouteSurface />);
+  });
+  expect(container.textContent).toContain(message);
+  await act(async () => {
+    await changeLanguage("zh");
+  });
+  expect(container.textContent).toContain(`无法获取远程执行环境端点 ${url}（${diagnostic}）。`);
+  expect(container.querySelector("button")?.textContent).toBe("重试");
+  expect(state.connect).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    await changeLanguage("en");
+  });
+  expect(container.textContent).toContain(message);
+  state.connect.mockResolvedValue({ _tag: "Success", value: undefined });
+  await act(async () => {
+    container.querySelector<HTMLButtonElement>("button")!.click();
+  });
+  expect(state.connect).toHaveBeenCalledTimes(2);
+  expect(container.textContent).toContain("Backend paired");
+});
+
+it("relocalizes authentication rejection without consuming another credential", async () => {
+  await using _lifecycle = await setupLifecycle();
+
+  state.submit.mockRejectedValue(
+    new Error("Invalid pairing token. Check the token and try again."),
+  );
+  const authenticated = vi.fn();
+  await act(() =>
+    root.rerender(
+      <PairingRouteSurface
+        auth={{
+          policy: "loopback-browser",
+          bootstrapMethods: ["one-time-token"],
+          sessionMethods: ["browser-session-cookie"],
+          sessionCookieName: "test-session",
+        }}
+        onAuthenticated={authenticated}
+      />,
+    ),
+  );
+  expect(container.textContent).toContain("Invalid pairing token. Check the token and try again.");
+  await act(async () => {
+    await changeLanguage("zh");
+  });
+  expect(container.textContent).toContain("配对令牌无效，请检查后重试。");
+  expect(container.querySelector<HTMLInputElement>("input")?.value).toBe(state.token);
+  expect(state.submit).toHaveBeenCalledExactlyOnceWith(state.token);
+  expect(authenticated).not.toHaveBeenCalled();
+});
+
+let renderStack: AsyncDisposableStack;
+async function setupLifecycle() {
+  await using stack = new AsyncDisposableStack();
+  renderStack = stack;
+  stack.defer(async () => {
+    await act(() => root.unmount());
+    container.remove();
+    await changeLanguage("en");
+    vi.unstubAllGlobals();
+  });
+
+  state.connect.mockReset();
+  state.submit.mockReset();
+  await changeLanguage("en");
+  container = document.createElement("div");
+  document.body.append(container);
+  root = renderStack.use(await renderTestUi(null, { container: container, router: false }));
+
+  renderStack = stack.move();
+  return renderStack;
+}
