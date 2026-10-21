@@ -404,6 +404,26 @@ function sanitizedHtmlFrom(container: Element): string {
   return `<meta charset="utf-8">${container.innerHTML}`;
 }
 
+export function cloneMarkdownClipboardRange(range: Range): DocumentFragment {
+  const fragment = range.cloneContents();
+  const ancestor = range.commonAncestorContainer;
+  const element =
+    ancestor.nodeType === Node.ELEMENT_NODE ? (ancestor as Element) : ancestor.parentElement;
+  if (element?.closest("pre, [data-markdown-math], [data-markdown-mermaid]")) return fragment;
+  const owner = element?.closest("a[href], [data-markdown-copy]");
+  if (!owner) return fragment;
+
+  // cloneContents omits shared ancestors, including the link target or atomic chip's source.
+  // Restore those wrappers around only the selected contents.
+  for (let current = element; current; current = current.parentElement) {
+    const wrapper = current.cloneNode(false);
+    wrapper.appendChild(fragment);
+    fragment.appendChild(wrapper);
+    if (current === owner) break;
+  }
+  return fragment;
+}
+
 export function chatMarkdownClipboardPayload(
   selection: Selection,
 ): MarkdownClipboardPayload | null {
@@ -413,7 +433,7 @@ export function chatMarkdownClipboardPayload(
     const range = selection.getRangeAt(index);
     if (range.collapsed) continue;
     const container = document.createElement("div");
-    container.appendChild(range.cloneContents());
+    container.appendChild(cloneMarkdownClipboardRange(range));
     const ancestor = range.commonAncestorContainer;
     const ancestorElement =
       ancestor.nodeType === Node.ELEMENT_NODE ? (ancestor as Element) : ancestor.parentElement;
