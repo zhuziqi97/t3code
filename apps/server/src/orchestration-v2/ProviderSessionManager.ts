@@ -1164,9 +1164,8 @@ export const layerWithOptions = (
               onSome: (entry) =>
                 // Revoke every credential this session recorded, including for
                 // threads that detached without re-attaching: the provider
-                // process is gone, so nothing holds them anymore. Skip threads
-                // a live replacement session took over, since credential reuse
-                // means the replacement may hold this very credential.
+                // process is gone. Keep credentials that a live replacement
+                // session still holds, since it may reuse the same credential.
                 Ref.get(sessions).pipe(
                   Effect.flatMap((current) =>
                     Effect.forEach(
@@ -1185,8 +1184,7 @@ export const layerWithOptions = (
                           Array.from(current.values()).some(
                             (other) =>
                               other !== entry &&
-                              (other.attachedThreadIds.has(threadId) ||
-                                other.mcpCredentialIdByThread.get(threadId) === mcpCredentialId),
+                              other.mcpCredentialIdByThread.get(threadId) === mcpCredentialId,
                           );
                         return heldElsewhere
                           ? Effect.void

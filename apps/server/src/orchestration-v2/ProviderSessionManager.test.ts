@@ -5347,6 +5347,102 @@ it.effect.each(["delete-idle", "delete-running", "replace"] as const)(
     }).pipe(Effect.scoped),
 );
 
+it.effect.each(["remove", "replace"] as const)(
+  "instance %s after a thread switches instances revokes its old lease and preserves new credentials",
+  (change) =>
+    Effect.gen(function* () {
+      const state = yield* Ref.make(emptyState),
+        otherState = yield* Ref.make(emptyState);
+      const leases = new Set<string>();
+      const conveneMcp = ConveneMcp.ConveneMcp.of({
+        configure: () => Effect.void,
+        forward: () => Effect.die("unused"),
+        prepare: (_threadId, credentialId) =>
+          Effect.sync(() => {
+            leases.add(credentialId);
+            return {
+              convene: {
+                endpoint: "http://local/convene/mcp",
+                authorizationHeader: `Bearer ${credentialId}`,
+              },
+            };
+          }),
+        release: (_threadId, credentialId) =>
+          Effect.sync(() => {
+            if (credentialId !== undefined) leases.delete(credentialId);
+          }),
+      });
+      yield* Effect.gen(function* () {
+        const manager = yield* ProviderSessionManager.ProviderSessionManagerV2;
+        const mutator = yield* ProviderInstanceRegistryMutator.ProviderInstanceRegistryMutator;
+        const sink = yield* EventSink.EventSinkV2;
+        const ids = yield* IdAllocator.IdAllocatorV2;
+        const configs = yield* McpProviderSessions.McpProviderSessions;
+        const native = yield* McpSessionRegistry.McpSessionRegistry;
+        const threadId = ThreadId.make(`thread-instance-switch-${change}`);
+        yield* sink.write({
+          events: [
+            yield* makeThreadCreatedEvent({ idAllocator: ids, threadId, now: yield* DateTime.now }),
+          ],
+        });
+        const oldId = yield* ids.allocate.providerSession({
+          providerInstanceId: modelSelection.instanceId,
+          threadId,
+        });
+        yield* manager.open({ threadId, providerSessionId: oldId, modelSelection, runtimePolicy });
+        const old = (yield* configs.read(threadId))!;
+        // A shared process retains this credential record after the thread moves away.
+        yield* manager.detach({ providerSessionId: oldId, threadId });
+        assert.isTrue(yield* manager.isLive(oldId));
+        const newId = yield* ids.allocate.providerSession({
+          providerInstanceId: otherLifecycleInstance,
+          threadId,
+        });
+        yield* manager.open({
+          threadId,
+          providerSessionId: newId,
+          modelSelection: { ...modelSelection, instanceId: otherLifecycleInstance },
+          runtimePolicy,
+        });
+        const fresh = (yield* configs.read(threadId))!;
+        assert.notEqual(fresh.providerSessionId, old.providerSessionId);
+        assert.isTrue(leases.has(old.providerSessionId));
+        const next = lifecycleConfig(change === "replace" ? 2 : 1);
+        if (change === "remove") delete next[modelSelection.instanceId];
+        yield* mutator.reconcile(next);
+
+        assert.isFalse(yield* manager.isLive(oldId));
+        assert.equal((yield* Ref.get(state)).closeCount, 1);
+        assert.isFalse(leases.has(old.providerSessionId));
+        assert.isUndefined(
+          yield* native.resolve(old.authorizationHeader.replace(/^Bearer\s+/, "")),
+        );
+        assert.isTrue(yield* manager.isLive(newId));
+        assert.equal((yield* Ref.get(otherState)).closeCount, 0);
+        assert.deepEqual(yield* configs.read(threadId), fresh);
+        assert.isTrue(leases.has(fresh.providerSessionId));
+        assert.isDefined(
+          yield* native.resolve(fresh.authorizationHeader.replace(/^Bearer\s+/, "")),
+        );
+        yield* manager.close(newId);
+        assert.isFalse(leases.has(fresh.providerSessionId));
+        assert.isUndefined(yield* configs.read(threadId));
+        assert.isUndefined(
+          yield* native.resolve(fresh.authorizationHeader.replace(/^Bearer\s+/, "")),
+        );
+      }).pipe(
+        Effect.provide(
+          layerTest({
+            state,
+            idleTimeoutMs: 60_000,
+            conveneMcp,
+            instanceRegistryLayer: instanceLifecycleRegistry({ state, otherState }),
+          }),
+        ),
+      );
+    }).pipe(Effect.scoped),
+);
+
 it.effect(
   "instance removal interrupts a pending open and revokes its prepared MCP credential",
   () =>
