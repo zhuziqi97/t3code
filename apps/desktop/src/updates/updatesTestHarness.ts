@@ -188,6 +188,7 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     setUpdateChannelError || options.beforeSetUpdateChannel
       ? Layer.succeed(DesktopAppSettings.DesktopAppSettings, {
           get: Effect.sync(() => testSettings),
+          markTrayCloseNoticeShown: Effect.die("unexpected close notice update"),
           load: Effect.sync(() => testSettings),
           setMainWindowBounds: () => Effect.die("unexpected main window bounds update"),
           setServerExposureMode: () => Effect.die("unexpected server exposure update"),

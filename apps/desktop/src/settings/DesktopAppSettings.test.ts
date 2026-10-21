@@ -11,6 +11,7 @@ import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopAppSettings from "./DesktopAppSettings.ts";
 
 const DesktopSettingsPatch = Schema.Struct({
+  trayCloseNoticeShown: Schema.optionalKey(Schema.Boolean),
   linuxPasswordStore: Schema.optionalKey(
     Schema.Literals(["auto", "gnome-libsecret", "kwallet", "kwallet5", "kwallet6"]),
   ),
@@ -91,6 +92,18 @@ function writeSettingsPatch(patch: typeof DesktopSettingsPatch.Type) {
 }
 
 describe("DesktopSettings", () => {
+  it.effect("remembers the first close notice across reloads without changing other settings", () =>
+    withSettings(
+      Effect.gen(function* () {
+        const settings = yield* DesktopAppSettings.DesktopAppSettings;
+        const before = yield* settings.load;
+        assert.isFalse(before.trayCloseNoticeShown);
+        assert.isTrue((yield* settings.markTrayCloseNoticeShown).changed);
+        assert.deepEqual(yield* settings.load, { ...before, trayCloseNoticeShown: true });
+        assert.isFalse((yield* settings.markTrayCloseNoticeShown).changed);
+      }),
+    ),
+  );
   it.effect(
     "persists disabling and re-enabling local execution without clearing backend settings",
     () =>
@@ -124,6 +137,7 @@ describe("DesktopSettings", () => {
       DesktopAppSettings.resolveDefaultDesktopSettings("0.0.17-nightly.20260415.1"),
       {
         linuxPasswordStore: "auto",
+        trayCloseNoticeShown: false,
         localEnvironmentEnabled: true,
         mainWindowBounds: null,
         mainWindowMaximized: false,
@@ -154,6 +168,7 @@ describe("DesktopSettings", () => {
 
         assert.deepEqual(yield* settings.load, {
           linuxPasswordStore: "gnome-libsecret",
+          trayCloseNoticeShown: false,
           localEnvironmentEnabled: true,
           mainWindowBounds: null,
           mainWindowMaximized: false,
@@ -262,6 +277,7 @@ describe("DesktopSettings", () => {
 
         assert.deepEqual(yield* settings.load, {
           linuxPasswordStore: "auto",
+          trayCloseNoticeShown: false,
           localEnvironmentEnabled: true,
           mainWindowBounds: { x: 120, y: 80, width: 1280, height: 900 },
           mainWindowMaximized: false,
@@ -319,6 +335,7 @@ describe("DesktopSettings", () => {
 
           assert.deepEqual(yield* settings.load, {
             linuxPasswordStore: "auto",
+            trayCloseNoticeShown: false,
             localEnvironmentEnabled: true,
             mainWindowBounds: null,
             mainWindowMaximized: false,
@@ -396,6 +413,7 @@ describe("DesktopSettings", () => {
 
         assert.deepEqual(yield* settings.load, {
           linuxPasswordStore: "auto",
+          trayCloseNoticeShown: false,
           localEnvironmentEnabled: true,
           mainWindowBounds: null,
           mainWindowMaximized: false,
@@ -425,6 +443,7 @@ describe("DesktopSettings", () => {
 
         assert.deepEqual(yield* settings.load, {
           linuxPasswordStore: "auto",
+          trayCloseNoticeShown: false,
           localEnvironmentEnabled: true,
           mainWindowBounds: null,
           mainWindowMaximized: false,
@@ -453,6 +472,7 @@ describe("DesktopSettings", () => {
 
         assert.deepEqual(yield* settings.load, {
           linuxPasswordStore: "auto",
+          trayCloseNoticeShown: false,
           localEnvironmentEnabled: true,
           mainWindowBounds: null,
           mainWindowMaximized: false,

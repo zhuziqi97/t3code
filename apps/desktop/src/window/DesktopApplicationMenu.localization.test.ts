@@ -23,6 +23,7 @@ import * as DesktopSnapShot from "../snapShot/DesktopSnapShot.ts";
 import * as DesktopUpdates from "../updates/DesktopUpdates.ts";
 import * as DesktopApplicationMenu from "./DesktopApplicationMenu.ts";
 import * as DesktopWindow from "./DesktopWindow.ts";
+import * as DesktopTray from "./DesktopTray.ts";
 
 type MenuTemplate = readonly Electron.MenuItemConstructorOptions[];
 
@@ -97,6 +98,7 @@ function layerMenu(input: {
         }),
     }),
     Layer.mock(DesktopWindow.DesktopWindow)({
+      activate: Effect.void,
       ensureMain: Effect.succeed({} as Electron.BrowserWindow),
       dispatchMenuAction: (action) =>
         input.selectedAction
@@ -123,7 +125,11 @@ function layerMenu(input: {
         }),
     }),
   );
-  return DesktopApplicationMenu.layer.pipe(Layer.provideMerge(dependencies));
+  const tray = Layer.mock(DesktopTray.DesktopTray)({ syncLanguage: () => Effect.void });
+  return DesktopApplicationMenu.layer.pipe(
+    Layer.provideMerge(tray),
+    Layer.provideMerge(dependencies),
+  );
 }
 
 describe("DesktopApplicationMenu language preference", () => {

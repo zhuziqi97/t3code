@@ -56,6 +56,7 @@ import {
 } from "../ipc/channels.ts";
 import * as DesktopServerExposure from "../backend/DesktopServerExposure.ts";
 import * as DesktopWindow from "./DesktopWindow.ts";
+import * as DesktopTray from "./DesktopTray.ts";
 import * as PreviewManager from "../preview/Manager.ts";
 import * as PreviewPasskeys from "../preview/Passkeys.ts";
 
@@ -79,7 +80,7 @@ function makeFakeBrowserWindow() {
     copyImageAt: vi.fn(),
     focus: vi.fn(),
     isDestroyed: vi.fn(() => false),
-    getURL: vi.fn(() => "t3code-dev://app/"),
+    getURL: vi.fn(() => "t3code-convene-dev://app/"),
     getZoomLevel: vi.fn(() => zoomLevel),
     getZoomFactor: vi.fn(() => 1.2 ** zoomLevel),
     setZoomLevel: vi.fn((level: number) => {
@@ -236,11 +237,13 @@ function layerTest(input: {
   readonly onPopupTemplate?: (input: ElectronMenu.ElectronMenuTemplateInput) => Effect.Effect<void>;
   readonly previewZoomReapplies?: number[];
   readonly onReveal?: (window: Electron.BrowserWindow) => void;
+  readonly onBackgroundClose?: (window: Electron.BrowserWindow) => Effect.Effect<void>;
   readonly focusedWindow?: Electron.BrowserWindow;
 }) {
   let desktopSettings = input.desktopSettings ?? DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS;
   const layerDesktopAppSettings = Layer.succeed(DesktopAppSettings.DesktopAppSettings, {
     get: Effect.sync(() => desktopSettings),
+    markTrayCloseNoticeShown: Effect.die("unexpected close notice update"),
     load: Effect.sync(() => desktopSettings),
     setMainWindowBounds: (bounds, isMaximized) =>
       Effect.gen(function* () {
@@ -300,6 +303,11 @@ function layerTest(input: {
   return DesktopWindow.layer.pipe(
     Layer.provide(
       Layer.mergeAll(
+        Layer.succeed(DesktopTray.DesktopTray, {
+          configure: () => Effect.void,
+          syncLanguage: () => Effect.void,
+          closeMain: input.onBackgroundClose ?? (() => Effect.void),
+        }),
         layerDesktopAssets,
         Layer.succeed(DesktopRendererHistory.DesktopRendererHistory, {
           register: () => Effect.void,
@@ -421,6 +429,11 @@ const makeSplashScenario = (createOutcomes: readonly (Electron.BrowserWindow | n
     const layer = DesktopWindow.layer.pipe(
       Layer.provide(
         Layer.mergeAll(
+          Layer.succeed(DesktopTray.DesktopTray, {
+            configure: () => Effect.void,
+            syncLanguage: () => Effect.void,
+            closeMain: () => Effect.void,
+          }),
           layerDesktopAssets,
           Layer.succeed(DesktopRendererHistory.DesktopRendererHistory, {
             register: () => Effect.void,
@@ -463,6 +476,58 @@ const captureOne = DesktopSnapShotId.make("11111111-1111-4111-8111-111111111111"
 const captureTwo = DesktopSnapShotId.make("22222222-2222-4222-8222-222222222222");
 
 describe("DesktopWindow", () => {
+  it.effect(
+    "intercepts a normal close, reuses the main window on reopen, and allows explicit quit",
+    () =>
+      Effect.gen(function* () {
+        const fakeWindow = makeFakeBrowserWindow();
+        const createCount = yield* Ref.make(0);
+        const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+        const backgroundClose = yield* Deferred.make<void>();
+        let backgroundCloses = 0;
+        let reveals = 0;
+        const layer = layerTest({
+          window: fakeWindow.window,
+          createCount,
+          mainWindow,
+          onReveal: () => {
+            reveals += 1;
+          },
+          onBackgroundClose: () =>
+            Effect.sync(() => {
+              backgroundCloses += 1;
+            }).pipe(Effect.andThen(Deferred.succeed(backgroundClose, undefined)), Effect.asVoid),
+        });
+        yield* Effect.gen(function* () {
+          const desktopWindow = yield* DesktopWindow.DesktopWindow;
+          const state = yield* DesktopState.DesktopState;
+          yield* desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773"));
+          const close = fakeWindow.windowListeners.get("close")!;
+          let prevented = false;
+          close({
+            preventDefault: () => {
+              prevented = true;
+            },
+          });
+          assert.isTrue(prevented);
+          yield* Deferred.await(backgroundClose);
+          const creations = yield* Ref.get(createCount);
+          yield* desktopWindow.activate;
+          assert.equal(yield* Ref.get(createCount), creations);
+          assert.isAbove(reveals, 0);
+          yield* Ref.set(state.quitting, true);
+          prevented = false;
+          close({
+            preventDefault: () => {
+              prevented = true;
+            },
+          });
+          assert.isFalse(prevented);
+          assert.equal(backgroundCloses, 1);
+        }).pipe(Effect.provide(layer));
+      }),
+  );
+
   it.effect("shows native context menus for browser guests and sign-in popups", () =>
     Effect.gen(function* () {
       const host = makeFakeBrowserWindow();
@@ -665,7 +730,7 @@ describe("DesktopWindow", () => {
         assert.isTrue(createdWindowOptions[0]?.disableAutoHideCursor);
         assert.isFalse(createdWindowOptions[0]?.webPreferences?.backgroundThrottling);
         assert.deepEqual(fakeWindow.setAutoHideCursor.mock.calls, [[false]]);
-        assert.deepEqual(fakeWindow.loadURL.mock.calls[0], ["t3code-dev://app/"]);
+        assert.deepEqual(fakeWindow.loadURL.mock.calls[0], ["t3code-convene-dev://app/"]);
         assert.equal(fakeWindow.openDevTools.mock.calls.length, 1);
       }).pipe(Effect.provide(layer));
     }),
@@ -1190,7 +1255,7 @@ describe("DesktopWindow", () => {
         if (!close) {
           return yield* Effect.die("window close listener was not registered");
         }
-        close();
+        close({ preventDefault: () => {} });
         yield* Effect.promise(() => Promise.resolve());
 
         assert.deepEqual(mainWindowBoundsUpdates, [{ x: 220, y: 140, width: 1380, height: 920 }]);
@@ -1296,7 +1361,7 @@ describe("DesktopWindow", () => {
           return yield* Effect.die("window lifecycle listeners were not registered");
         }
 
-        close();
+        close({ preventDefault: () => {} });
         yield* Effect.promise(() => Promise.resolve());
         assert.deepEqual(mainWindowBoundsUpdates, []);
 
@@ -1459,7 +1524,7 @@ describe("DesktopWindow", () => {
         if (!close) {
           return yield* Effect.die("window close listener was not registered");
         }
-        close();
+        close({ preventDefault: () => {} });
         yield* Deferred.await(writeStarted);
         fakeWindow.isDestroyed.mockReturnValue(true);
 
@@ -1579,17 +1644,17 @@ describe("DesktopWindow", () => {
           return yield* Effect.die("renderer load listeners were not registered");
         }
 
-        didFailLoad({}, -9, "ERR_UNEXPECTED", "t3code-dev://app/", true);
+        didFailLoad({}, -9, "ERR_UNEXPECTED", "t3code-convene-dev://app/", true);
         assert.equal(fakeWindow.loadURL.mock.calls.length, 1);
 
         yield* TestClock.adjust(100);
         assert.deepEqual(fakeWindow.loadURL.mock.calls, [
-          ["t3code-dev://app/"],
-          ["t3code-dev://app/"],
+          ["t3code-convene-dev://app/"],
+          ["t3code-convene-dev://app/"],
         ]);
         assert.equal(fakeWindow.reload.mock.calls.length, 0);
 
-        didFailLoad({}, -9, "ERR_UNEXPECTED", "t3code-dev://app/", true);
+        didFailLoad({}, -9, "ERR_UNEXPECTED", "t3code-convene-dev://app/", true);
         didFinishLoad();
         yield* TestClock.adjust(250);
         assert.equal(fakeWindow.loadURL.mock.calls.length, 2);
@@ -1601,23 +1666,23 @@ describe("DesktopWindow", () => {
   it("retries only transient failures for the development renderer", () => {
     assert.isTrue(
       DesktopWindow.isRetryableDevelopmentRendererLoadFailure({
-        applicationUrl: "t3code-dev://app/",
+        applicationUrl: "t3code-convene-dev://app/",
         errorCode: -102,
         isMainFrame: true,
-        validatedUrl: "t3code-dev://app/",
+        validatedUrl: "t3code-convene-dev://app/",
       }),
     );
     assert.isFalse(
       DesktopWindow.isRetryableDevelopmentRendererLoadFailure({
-        applicationUrl: "t3code-dev://app/",
+        applicationUrl: "t3code-convene-dev://app/",
         errorCode: -3,
         isMainFrame: true,
-        validatedUrl: "t3code-dev://app/",
+        validatedUrl: "t3code-convene-dev://app/",
       }),
     );
     assert.isFalse(
       DesktopWindow.isRetryableDevelopmentRendererLoadFailure({
-        applicationUrl: "t3code-dev://app/",
+        applicationUrl: "t3code-convene-dev://app/",
         errorCode: -102,
         isMainFrame: true,
         validatedUrl: "https://example.com/",

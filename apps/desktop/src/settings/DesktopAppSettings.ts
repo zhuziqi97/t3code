@@ -26,6 +26,7 @@ import { resolveDefaultDesktopUpdateChannel } from "../updates/updateChannels.ts
 import { isValidDistroName } from "../wsl/wslPathParsing.ts";
 
 export interface DesktopSettings {
+  readonly trayCloseNoticeShown: boolean;
   readonly localEnvironmentEnabled: boolean;
   readonly linuxPasswordStore: LinuxPasswordStorePreference;
   readonly mainWindowBounds: DesktopWindowBounds | null;
@@ -65,6 +66,7 @@ export const DEFAULT_MAIN_WINDOW_SIZE = {
 } as const;
 
 export const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
+  trayCloseNoticeShown: false,
   localEnvironmentEnabled: true,
   linuxPasswordStore: DEFAULT_LINUX_PASSWORD_STORE,
   mainWindowBounds: null,
@@ -87,6 +89,7 @@ const DesktopWindowBoundsDocument = Schema.Struct({
 });
 
 const DesktopSettingsDocument = Schema.Struct({
+  trayCloseNoticeShown: Schema.optionalKey(Schema.Boolean),
   localEnvironmentEnabled: Schema.optionalKey(Schema.Boolean),
   linuxPasswordStore: Schema.optionalKey(Schema.Unknown),
   mainWindowBounds: Schema.optionalKey(Schema.NullOr(DesktopWindowBoundsDocument)),
@@ -144,6 +147,10 @@ export class DesktopAppSettings extends Context.Service<
   {
     readonly load: Effect.Effect<DesktopSettings>;
     readonly get: Effect.Effect<DesktopSettings>;
+    readonly markTrayCloseNoticeShown: Effect.Effect<
+      DesktopSettingsChange,
+      DesktopSettingsWriteError
+    >;
     readonly setLocalEnvironmentEnabled: (
       enabled: boolean,
     ) => Effect.Effect<DesktopSettingsChange, DesktopSettingsWriteError>;
@@ -216,6 +223,7 @@ function normalizeDesktopSettingsDocument(
     (parsed.wslBackendEnabled === undefined && parsed.wslMode === "wsl");
 
   return {
+    trayCloseNoticeShown: parsed.trayCloseNoticeShown === true,
     localEnvironmentEnabled: parsed.localEnvironmentEnabled !== false,
     linuxPasswordStore: normalizeLinuxPasswordStorePreference(parsed.linuxPasswordStore),
     mainWindowBounds,
@@ -239,6 +247,8 @@ function toDesktopSettingsDocument(
   defaults: DesktopSettings,
 ): DesktopSettingsDocument {
   const document: Mutable<DesktopSettingsDocument> = {};
+
+  if (settings.trayCloseNoticeShown) document.trayCloseNoticeShown = true;
 
   if (settings.localEnvironmentEnabled !== defaults.localEnvironmentEnabled) {
     document.localEnvironmentEnabled = settings.localEnvironmentEnabled;
@@ -515,6 +525,9 @@ export const make = Effect.gen(function* () {
 
   return DesktopAppSettings.of({
     get: SynchronizedRef.get(settingsRef),
+    markTrayCloseNoticeShown: persist((settings) =>
+      settings.trayCloseNoticeShown ? settings : { ...settings, trayCloseNoticeShown: true },
+    ).pipe(Effect.withSpan("desktop.settings.markTrayCloseNoticeShown")),
     load: Effect.gen(function* () {
       const settings = yield* readSettings(
         fileSystem,
@@ -595,6 +608,9 @@ export const layerTest = (initialSettings: DesktopSettings = DEFAULT_DESKTOP_SET
 
       return DesktopAppSettings.of({
         get: SynchronizedRef.get(settingsRef),
+        markTrayCloseNoticeShown: update((settings) =>
+          settings.trayCloseNoticeShown ? settings : { ...settings, trayCloseNoticeShown: true },
+        ),
         load: SynchronizedRef.get(settingsRef),
         setMainWindowBounds: (bounds, isMaximized) =>
           update((settings) => setMainWindowBounds(settings, bounds, isMaximized)),

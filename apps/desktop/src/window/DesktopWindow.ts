@@ -35,6 +35,7 @@ import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as DesktopRendererHistory from "../telemetry/DesktopRendererHistory.ts";
 import { makeQuitShortcutHandler } from "./QuitHold.ts";
 import { copyContextMenuImage } from "./ContextMenuImage.ts";
+import * as DesktopTray from "./DesktopTray.ts";
 
 const TITLEBAR_HEIGHT = 40;
 // Matches --workspace-topbar-height in apps/web/src/index.css. Native macOS
@@ -80,6 +81,7 @@ type DesktopWindowRuntimeServices =
   | ElectronTheme.ElectronTheme
   | ElectronWindow.ElectronWindow
   | DesktopRendererHistory.DesktopRendererHistory
+  | DesktopTray.DesktopTray
   | PreviewManager.PreviewManager;
 
 export type DesktopWindowError =
@@ -301,6 +303,7 @@ export const make = Effect.gen(function* () {
   const clientSettings = yield* DesktopClientSettings.DesktopClientSettings;
   const electronApp = yield* ElectronApp.ElectronApp;
   const rendererHistory = yield* DesktopRendererHistory.DesktopRendererHistory;
+  const tray = yield* DesktopTray.DesktopTray;
   const backendReadyRef = yield* Ref.make(false);
   const splashWindowRef = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
   const context = yield* Effect.context<DesktopWindowRuntimeServices>();
@@ -689,8 +692,12 @@ export const make = Effect.gen(function* () {
     window.on("move", scheduleBoundsPersist);
     window.on("maximize", scheduleBoundsPersist);
     window.on("unmaximize", scheduleBoundsPersist);
-    window.on("close", () => {
+    window.on("close", (event) => {
       runFork(flushBoundsPersist);
+      if (!Effect.runSyncWith(context)(Ref.get(desktopState.quitting))) {
+        event.preventDefault();
+        runFork(tray.closeMain(window));
+      }
     });
 
     if (environment.platform === "darwin") {

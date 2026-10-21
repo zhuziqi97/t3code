@@ -13,6 +13,7 @@ import * as DesktopShutdown from "./DesktopShutdown.ts";
 import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronTheme from "../electron/ElectronTheme.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
+import * as ElectronPowerMonitor from "../electron/ElectronPowerMonitor.ts";
 import * as DesktopState from "./DesktopState.ts";
 import * as DesktopWindow from "../window/DesktopWindow.ts";
 
@@ -38,10 +39,11 @@ export type DesktopLifecycleRuntimeServices =
 
 type DesktopLifecycleRegistrationServices =
   | DesktopLifecycleRuntimeServices
+  | ElectronPowerMonitor.ElectronPowerMonitor
   | ElectronWindow.ElectronWindow;
 
 /**
- * @effect-expect-leaking DesktopEnvironment | DesktopShutdown | DesktopState | DesktopWindow | ElectronApp | ElectronTheme | ElectronWindow
+ * @effect-expect-leaking DesktopEnvironment | DesktopShutdown | DesktopState | DesktopWindow | ElectronApp | ElectronTheme | ElectronWindow | ElectronPowerMonitor
  */
 export class DesktopLifecycle extends Context.Service<
   DesktopLifecycle,
@@ -194,10 +196,33 @@ export const make = DesktopLifecycle.of({
     const electronApp = yield* ElectronApp.ElectronApp;
     const electronTheme = yield* ElectronTheme.ElectronTheme;
     const environment = yield* DesktopEnvironment.DesktopEnvironment;
+    const state = yield* DesktopState.DesktopState;
+    const powerMonitor = yield* ElectronPowerMonitor.ElectronPowerMonitor;
     const context = yield* Effect.context<DesktopLifecycleRegistrationServices>();
     const runEffect = Effect.runPromiseWith(context);
     let quitAllowed = false;
     let updaterQuitAllowed = false;
+    const quitForSystemSession = () => {
+      // Windows session shutdown does not emit app.before-quit before closing windows.
+      // Mark it synchronously so a close listener cannot turn shutdown into residence.
+      if (Effect.runSyncWith(context)(Ref.getAndSet(state.quitting, true))) return;
+      void runEffect(electronApp.quit);
+    };
+    if (environment.platform === "win32") {
+      yield* electronApp.on(
+        "browser-window-created",
+        (_event: Electron.Event, window: Electron.BrowserWindow) => {
+          window.on("query-session-end", quitForSystemSession);
+          window.on("session-end", quitForSystemSession);
+          window.once("closed", () => {
+            window.removeListener("query-session-end", quitForSystemSession);
+            window.removeListener("session-end", quitForSystemSession);
+          });
+        },
+      );
+    } else {
+      yield* powerMonitor.onSimpleEvent("shutdown", quitForSystemSession);
+    }
     yield* electronTheme.onUpdated(() => {
       void runEffect(
         desktopWindow.syncAppearance.pipe(Effect.withSpan("desktop.lifecycle.themeUpdated")),
@@ -213,7 +238,8 @@ export const make = DesktopLifecycle.of({
       // and windows could still be open when the process exits (visible on
       // macOS). Destroy them inline.
       Effect.runSyncWith(context)(
-        electronWindow.destroyAll.pipe(
+        Ref.set(state.quitting, true).pipe(
+          Effect.andThen(electronWindow.destroyAll),
           Effect.andThen(logLifecycleInfo("allowing updater-controlled quit")),
           Effect.catchCause((cause) =>
             logLifecycleError("failed to destroy windows before updater quit", { cause }),

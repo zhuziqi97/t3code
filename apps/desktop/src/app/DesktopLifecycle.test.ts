@@ -5,8 +5,10 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 
 import type * as Electron from "electron";
+import * as NodeEvents from "node:events";
 
 import * as ElectronApp from "../electron/ElectronApp.ts";
+import * as ElectronPowerMonitor from "../electron/ElectronPowerMonitor.ts";
 import * as ElectronTheme from "../electron/ElectronTheme.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
@@ -103,6 +105,59 @@ function layerDesktopWindow(
 }
 
 describe("DesktopLifecycle", () => {
+  it.effect.each(["darwin", "linux", "win32"] satisfies NodeJS.Platform[])(
+    "exits instead of residing when the OS ends the session on %s",
+    (platform) =>
+      Effect.gen(function* () {
+        const listeners = new Map<string, (...args: readonly unknown[]) => void>();
+        const quitSeen = yield* Deferred.make<void>();
+        let shutdown: (() => void) | undefined;
+        const layer = DesktopLifecycle.layer.pipe(
+          Layer.provideMerge(
+            layerElectronApp(listeners, Deferred.succeed(quitSeen, undefined).pipe(Effect.asVoid)),
+          ),
+          Layer.provideMerge(layerElectronTheme),
+          Layer.provideMerge(
+            Layer.mock(ElectronPowerMonitor.ElectronPowerMonitor)({
+              onSimpleEvent: (event, listener) =>
+                Effect.sync(() => {
+                  if (event === "shutdown") shutdown = listener;
+                }),
+            }),
+          ),
+          Layer.provideMerge(layerElectronWindow()),
+          Layer.provideMerge(layerDesktopWindow()),
+          Layer.provideMerge(
+            Layer.succeed(DesktopEnvironment.DesktopEnvironment, {
+              platform,
+              isDevelopment: false,
+            } as DesktopEnvironment.DesktopEnvironment["Service"]),
+          ),
+          Layer.provideMerge(DesktopShutdown.layer),
+          Layer.provideMerge(DesktopState.layer),
+        );
+        yield* Effect.scoped(
+          Effect.gen(function* () {
+            const lifecycle = yield* DesktopLifecycle.DesktopLifecycle;
+            const state = yield* DesktopState.DesktopState;
+            yield* lifecycle.register;
+            if (platform === "win32") {
+              const window = new NodeEvents.EventEmitter();
+              listeners.get("browser-window-created")?.({}, window);
+              window.emit("query-session-end");
+              window.emit("session-end");
+              window.emit("closed");
+              assert.equal(window.listenerCount("query-session-end"), 0);
+            } else {
+              assert.isDefined(shutdown);
+              shutdown!();
+            }
+            assert.isTrue(yield* Ref.get(state.quitting));
+            yield* Deferred.await(quitSeen);
+          }).pipe(Effect.provide(layer)),
+        );
+      }),
+  );
   it.effect.each(["darwin", "win32", "linux"] satisfies ReadonlyArray<NodeJS.Platform>)(
     "lets the updater's quit event proceed on %s",
     (platform) => {
@@ -116,6 +171,11 @@ describe("DesktopLifecycle", () => {
       const layer = DesktopLifecycle.layer.pipe(
         Layer.provideMerge(layerElectronApp(appListeners)),
         Layer.provideMerge(layerElectronTheme),
+        Layer.provideMerge(
+          Layer.mock(ElectronPowerMonitor.ElectronPowerMonitor)({
+            onSimpleEvent: () => Effect.void,
+          }),
+        ),
         Layer.provideMerge(
           layerElectronWindow(
             Effect.sync(() => {
@@ -194,6 +254,11 @@ describe("DesktopLifecycle", () => {
       const layer = DesktopLifecycle.layer.pipe(
         Layer.provideMerge(layerElectronApp(appListeners, quit)),
         Layer.provideMerge(layerElectronTheme),
+        Layer.provideMerge(
+          Layer.mock(ElectronPowerMonitor.ElectronPowerMonitor)({
+            onSimpleEvent: () => Effect.void,
+          }),
+        ),
         Layer.provideMerge(layerElectronWindow(destroyAll)),
         Layer.provideMerge(layerDesktopWindow({ flushMainWindowBounds })),
         Layer.provideMerge(layerEnvironment),
@@ -235,6 +300,11 @@ describe("DesktopLifecycle", () => {
       const layer = DesktopLifecycle.layer.pipe(
         Layer.provideMerge(layerElectronApp(appListeners)),
         Layer.provideMerge(layerElectronTheme),
+        Layer.provideMerge(
+          Layer.mock(ElectronPowerMonitor.ElectronPowerMonitor)({
+            onSimpleEvent: () => Effect.void,
+          }),
+        ),
         Layer.provideMerge(layerElectronWindow()),
         Layer.provideMerge(layerDesktopWindow({ activate })),
         Layer.provideMerge(layerEnvironment),
