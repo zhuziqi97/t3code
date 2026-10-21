@@ -46,7 +46,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 
 import { TYPOGRAPHY_ADVANCED_STORAGE_KEY } from "../../appearanceFonts";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
-import { i18n, useTranslate } from "../../i18n";
+import { useResolvedLanguage, useTranslate } from "../../i18n";
 import { Trans } from "react-i18next";
 import { hasCloudPublicConfig } from "../../cloud/publicConfig";
 import { useT3ConnectAuthPrompt } from "../clerk/useT3ConnectAuthPrompt";
@@ -179,6 +179,7 @@ export function WelcomeWizard({
     setStep("agents");
   };
   const t = useTranslate();
+  const language = useResolvedLanguage() === "zh" ? "zh" : "en";
   const stageIndex = step === "agents" ? 1 : step === "convene" ? 2 : step === "import" ? 3 : 0;
   const finish = (
     projectRef?: ScopedProjectRef,
@@ -261,7 +262,7 @@ export function WelcomeWizard({
               </div>
               <div className="flex items-center gap-2">
                 <Select
-                  value={i18n.resolvedLanguage === "zh" ? "zh" : "en"}
+                  value={language}
                   onValueChange={(value) => {
                     if (!isLanguagePreference(value) || value === "system") return;
                     void updateClientSettings({ languagePreference: value }).catch(
@@ -276,9 +277,7 @@ export function WelcomeWizard({
                   }}
                 >
                   <SelectTrigger size="sm" aria-label="语言 / Language">
-                    <SelectValue>
-                      {LANGUAGE_LABELS[i18n.resolvedLanguage === "zh" ? "zh" : "en"]}
-                    </SelectValue>
+                    <SelectValue>{LANGUAGE_LABELS[language]}</SelectValue>
                   </SelectTrigger>
                   <SelectPopup align="end" alignItemWithTrigger={false}>
                     {SUPPORTED_LANGUAGES.map((language) => (

@@ -8,6 +8,7 @@
  * working unchanged.
  */
 import { getI18n, initReactI18next, setI18n, useTranslation } from "react-i18next";
+import { useSyncExternalStore } from "react";
 
 import { createI18n } from "@t3tools/client-runtime/i18n";
 import type { SupportedLanguage } from "@t3tools/client-runtime/i18n";
@@ -53,4 +54,16 @@ export function changeLanguage(language: SupportedLanguage): Promise<unknown> {
 /** Translate function bound to the active language. */
 export function useTranslate() {
   return useTranslation(undefined, { i18n }).t;
+}
+
+function subscribeToLanguage(onChange: () => void) {
+  i18n.on("languageChanged", onChange);
+  return () => i18n.off("languageChanged", onChange);
+}
+
+const readResolvedLanguage = () => i18n.resolvedLanguage;
+
+/** Expose a reactive value instead of the instance's mutable field to the compiler. */
+export function useResolvedLanguage() {
+  return useSyncExternalStore(subscribeToLanguage, readResolvedLanguage, readResolvedLanguage);
 }
