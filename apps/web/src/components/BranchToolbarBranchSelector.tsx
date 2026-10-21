@@ -11,6 +11,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import {
   AuthOrchestrationOperateScope,
+  CommandId,
   AuthSourceControlWriteScope,
   type ContextMenuItem,
   type EnvironmentId,
@@ -37,10 +38,11 @@ import { usePaginatedBranches } from "../state/queries";
 import { useProject, useQuietThreadShell } from "../state/entities";
 import { useEnvironmentQuery } from "../state/query";
 import { readEnvironmentScope, useEnvironmentScope } from "~/state/session";
+import { workspaceRecoveryEnvironment } from "../state/workspaceRecovery";
 import { threadEnvironment } from "../state/threads";
 import { useAtomCommand } from "../state/use-atom-command";
 import { vcsEnvironment } from "../state/vcs";
-import { cn } from "../lib/utils";
+import { cn, randomUUID } from "../lib/utils";
 import { THREAD_DETAILS_PANEL_ICON_CLASS } from "./chat/threadDetailsPanelStyles";
 import { ThreadDetailsPrRows } from "./chat/ThreadDetailsPrRows";
 import { parsePullRequestReference } from "@t3tools/client-runtime/pull-request-link-input";
@@ -117,7 +119,10 @@ export function BranchToolbarBranchSelector({
   const composerFloatingLayerProps = useComposerMenuProps();
   const canWriteSourceControl = useEnvironmentScope(environmentId, AuthSourceControlWriteScope);
   const canOperateThread = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
-  const stopThreadSession = useAtomCommand(threadEnvironment.stopSession, "thread session stop");
+  const recoverWorkspace = useAtomCommand(
+    workspaceRecoveryEnvironment.recover,
+    "thread workspace recovery",
+  );
   const updateThreadMetadata = useAtomCommand(
     threadEnvironment.updateMetadata,
     "thread metadata update",
@@ -178,11 +183,18 @@ export function BranchToolbarBranchSelector({
       (hasServerThread && !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope))
     )
       return;
-    if (serverSession && worktreePath !== activeWorktreePath) {
-      void stopThreadSession({
+    if (hasServerThread && worktreePath !== activeWorktreePath && !automatic) {
+      void recoverWorkspace({
         environmentId,
-        input: { threadId: activeThreadId },
+        input: {
+          threadId: activeThreadId,
+          worktreePath,
+          commandId: CommandId.make(randomUUID()),
+        },
+      }).then((result) => {
+        if (result._tag === "Success") onActiveThreadBranchOverrideChange?.(branch);
       });
+      return;
     }
     if (hasServerThread) {
       void (automatic ? updateEmptyThreadMetadata : updateThreadMetadata)({

@@ -2388,80 +2388,82 @@ it.effect(
     }),
 );
 
-it.effect("ProviderSessionManagerV2 duplicate detach preserves replacement MCP credentials", () =>
-  Effect.gen(function* () {
-    const state = yield* Ref.make(emptyState);
-    const mcpConfigs = yield* Ref.make<
-      ReadonlyArray<McpProviderSession.McpProviderSessionConfig | undefined>
-    >([]);
-    const effect = Effect.gen(function* () {
-      const eventSink = yield* EventSink.EventSinkV2;
-      const idAllocator = yield* IdAllocator.IdAllocatorV2;
-      const manager = yield* ProviderSessionManager.ProviderSessionManagerV2;
-      const registry = yield* McpSessionRegistry.McpSessionRegistry;
-      const mcpSessions = yield* McpProviderSessions.McpProviderSessions;
-      const now = yield* DateTime.now;
-      const threadId = ThreadId.make("thread-provider-session-manager-replacement-mcp");
-      const oldSessionId = yield* idAllocator.allocate.providerSession({
-        providerInstanceId: modelSelection.instanceId,
-        threadId,
-      });
-      const replacementSessionId = yield* idAllocator.allocate.providerSession({
-        providerInstanceId: modelSelection.instanceId,
-        threadId,
+it.effect.each([false, true])(
+  "ProviderSessionManagerV2 duplicate detach preserves replacement MCP credentials (revoke=%s)",
+  (revokeMcpCredential) =>
+    Effect.gen(function* () {
+      const state = yield* Ref.make(emptyState);
+      const mcpConfigs = yield* Ref.make<
+        ReadonlyArray<McpProviderSession.McpProviderSessionConfig | undefined>
+      >([]);
+      const effect = Effect.gen(function* () {
+        const eventSink = yield* EventSink.EventSinkV2;
+        const idAllocator = yield* IdAllocator.IdAllocatorV2;
+        const manager = yield* ProviderSessionManager.ProviderSessionManagerV2;
+        const registry = yield* McpSessionRegistry.McpSessionRegistry;
+        const mcpSessions = yield* McpProviderSessions.McpProviderSessions;
+        const now = yield* DateTime.now;
+        const threadId = ThreadId.make("thread-provider-session-manager-replacement-mcp");
+        const oldSessionId = yield* idAllocator.allocate.providerSession({
+          providerInstanceId: modelSelection.instanceId,
+          threadId,
+        });
+        const replacementSessionId = yield* idAllocator.allocate.providerSession({
+          providerInstanceId: modelSelection.instanceId,
+          threadId,
+        });
+
+        yield* eventSink.write({
+          events: [yield* makeThreadCreatedEvent({ idAllocator, threadId, now })],
+        });
+        yield* manager.open({
+          threadId,
+          providerSessionId: oldSessionId,
+          modelSelection,
+          runtimePolicy,
+        });
+        yield* manager.detach({ providerSessionId: oldSessionId, threadId });
+        yield* manager.open({
+          threadId,
+          providerSessionId: replacementSessionId,
+          modelSelection,
+          runtimePolicy,
+        });
+
+        const replacement = (yield* Ref.get(mcpConfigs)).at(-1);
+        assert.isDefined(replacement);
+        const replacementToken = replacement?.authorizationHeader.replace(/^Bearer\s+/, "");
+        assert.isDefined(replacementToken);
+        assert.equal(
+          (yield* mcpSessions.read(threadId))?.providerSessionId,
+          replacement?.providerSessionId,
+        );
+
+        yield* manager.detach({ providerSessionId: oldSessionId, threadId, revokeMcpCredential });
+
+        assert.equal(
+          (yield* mcpSessions.read(threadId))?.providerSessionId,
+          replacement?.providerSessionId,
+        );
+        assert.equal((yield* registry.resolve(replacementToken!))?.thread.threadId, threadId);
       });
 
-      yield* eventSink.write({
-        events: [yield* makeThreadCreatedEvent({ idAllocator, threadId, now })],
-      });
-      yield* manager.open({
-        threadId,
-        providerSessionId: oldSessionId,
-        modelSelection,
-        runtimePolicy,
-      });
-      yield* manager.detach({ providerSessionId: oldSessionId, threadId });
-      yield* manager.open({
-        threadId,
-        providerSessionId: replacementSessionId,
-        modelSelection,
-        runtimePolicy,
-      });
-
-      const replacement = (yield* Ref.get(mcpConfigs)).at(-1);
-      assert.isDefined(replacement);
-      const replacementToken = replacement?.authorizationHeader.replace(/^Bearer\s+/, "");
-      assert.isDefined(replacementToken);
-      assert.equal(
-        (yield* mcpSessions.read(threadId))?.providerSessionId,
-        replacement?.providerSessionId,
+      yield* effect.pipe(
+        Effect.provide(
+          layerTest({
+            state,
+            idleTimeoutMs: 1_000,
+            capabilities: ExclusiveCapabilities,
+            mcpConfigs,
+          }),
+        ),
       );
-
-      yield* manager.detach({ providerSessionId: oldSessionId, threadId });
-
-      assert.equal(
-        (yield* mcpSessions.read(threadId))?.providerSessionId,
-        replacement?.providerSessionId,
-      );
-      assert.equal((yield* registry.resolve(replacementToken!))?.thread.threadId, threadId);
-    });
-
-    yield* effect.pipe(
-      Effect.provide(
-        layerTest({
-          state,
-          idleTimeoutMs: 1_000,
-          capabilities: ExclusiveCapabilities,
-          mcpConfigs,
-        }),
-      ),
-    );
-  }),
+    }),
 );
 
-it.effect(
-  "ProviderSessionManagerV2 detach of a superseded live session preserves replacement MCP credentials",
-  () =>
+it.effect.each([false, true])(
+  "ProviderSessionManagerV2 detach of a superseded live session preserves replacement MCP credentials (revoke=%s)",
+  (revokeMcpCredential) =>
     Effect.gen(function* () {
       const state = yield* Ref.make(emptyState);
       const mcpConfigs = yield* Ref.make<
@@ -2509,7 +2511,7 @@ it.effect(
           replacement?.providerSessionId,
         );
 
-        yield* manager.detach({ providerSessionId: oldSessionId, threadId });
+        yield* manager.detach({ providerSessionId: oldSessionId, threadId, revokeMcpCredential });
 
         assert.equal(
           (yield* mcpSessions.read(threadId))?.providerSessionId,
@@ -5209,7 +5211,7 @@ it.effect.each(["missing", "file"] as const)(
           .pipe(Effect.flip);
         assert.instanceOf(error, ProviderWorkspaceMissingError);
         assert.include(error.message, cwd);
-        assert.include(error.message, "Restore the folder at this path before retrying.");
+        assert.include(error.message, "choose a checkout from this project");
         assert.equal((yield* Ref.get(state)).openCount, 0);
         assert.isTrue(Option.isNone(yield* manager.get(providerSessionId)));
         assert.deepEqual(
@@ -5519,6 +5521,17 @@ const makeLifecycleConveneLayer = (
         Layer.succeed(HttpServer.HttpServer, fakeHttpServer),
         Layer.mock(ConveneWorkspaces.ConveneWorkspaces)({
           threadKey: () => Effect.succeed("root"),
+          list: (projectId) =>
+            Effect.succeed([
+              {
+                projectId,
+                key: "root",
+                path: runtimePolicy.cwd!,
+                available: true,
+                branch: null,
+                displayName: "Project",
+              },
+            ]),
           rememberThread,
         }),
         Layer.unwrap(

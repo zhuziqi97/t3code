@@ -244,6 +244,65 @@ const makeOpenCodeRuntimeHarness = Effect.fn("makeOpenCodeRuntimeHarness")(funct
 });
 
 describe("OpenCodeAdapterV2", () => {
+  it.effect.each(["/workspace", "/old-workspace"])(
+    "resumes a native session only in its actual workspace: %s",
+    (directory) =>
+      Effect.gen(function* () {
+        const h = yield* makeOpenCodeRuntimeHarness("workspace-recovery", "native-current", {
+          event: { subscribe: async () => ({ stream: asyncEventStream().stream }) },
+          session: {
+            create: async () => ({
+              data: {
+                id: "native-current",
+                directory: "/workspace",
+                time: { created: 1, updated: 1 },
+              },
+            }),
+            get: async () => ({
+              data: { id: "native-old", directory, time: { created: 1, updated: 1 } },
+            }),
+          },
+        });
+        const resumed = yield* h.runtime
+          .resumeThread({
+            providerThread: {
+              ...h.providerThread,
+              nativeThreadRef: {
+                driver: OPENCODE_PROVIDER,
+                nativeId: "native-old",
+                strength: "strong",
+              },
+            },
+          })
+          .pipe(Effect.result);
+        if (directory === "/workspace") {
+          assert.equal(resumed._tag, "Success");
+          if (resumed._tag === "Success")
+            assert.equal(resumed.success.nativeThreadRef?.nativeId, "native-old");
+        } else {
+          assert.equal(resumed._tag, "Failure");
+          if (resumed._tag === "Failure")
+            assert.equal(resumed.failure._tag, "ProviderAdapterResumeThreadError");
+          const fresh = yield* h.runtime.ensureThread({
+            threadId: h.threadId,
+            modelSelection: {
+              instanceId: h.providerThread.providerInstanceId,
+              model: null,
+            },
+            runtimePolicy: h.policy,
+            existingProviderThread: { ...h.providerThread, nativeThreadRef: null },
+          });
+          assert.equal(fresh.id, h.providerThread.id);
+          assert.equal(fresh.nativeThreadRef?.nativeId, "native-current");
+        }
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(
+          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),
+        ),
+      ),
+  );
+
   it.effect("registers current project MCP only on local 1.x servers", () =>
     Effect.gen(function* () {
       const sessions = yield* McpProviderSessions.McpProviderSessions;

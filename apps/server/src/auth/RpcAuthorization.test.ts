@@ -5,6 +5,7 @@ import {
   AuthProvidersManageScope,
   AuthSettingsWriteScope,
   DEFAULT_SERVER_SETTINGS,
+  CommandId,
   ProviderInstanceId,
   ThreadId,
   AuthOrchestrationOperateScope,
@@ -440,6 +441,45 @@ describe("thread context authorization", () => {
       }).pipe(Effect.scoped),
   );
 });
+
+it.effect("checks workspace recovery permission before its handler", () =>
+  Effect.gen(function* () {
+    const group = WsRpcGroup.omit(
+      ...[...WsRpcGroup.requests.keys()].filter(
+        (
+          tag,
+        ): tag is Exclude<
+          keyof typeof RPC_REQUIRED_SCOPES,
+          typeof WS_METHODS.threadWorkspaceRecover
+        > => tag !== WS_METHODS.threadWorkspaceRecover,
+      ),
+    );
+    let handled = 0;
+    const handler = group.toLayerHandler(WS_METHODS.threadWorkspaceRecover, () =>
+      Effect.sync(() => {
+        handled++;
+        return { path: "/project", available: true, choices: [] };
+      }),
+    );
+    const input = {
+      commandId: CommandId.make("recover-permission"),
+      threadId: ThreadId.make("thread"),
+      worktreePath: null,
+    };
+    const reader = yield* RpcTest.makeClient(group).pipe(
+      Effect.provide(Layer.merge(handler, RpcAuthorization.layer([AuthOrchestrationReadScope]))),
+    );
+    expect(yield* reader[WS_METHODS.threadWorkspaceRecover](input).pipe(Effect.flip)).toMatchObject(
+      { requiredScope: AuthOrchestrationOperateScope },
+    );
+    expect(handled).toBe(0);
+    const operator = yield* RpcTest.makeClient(group).pipe(
+      Effect.provide(Layer.merge(handler, RpcAuthorization.layer([AuthOrchestrationOperateScope]))),
+    );
+    expect((yield* operator[WS_METHODS.threadWorkspaceRecover](input)).available).toBe(true);
+    expect(handled).toBe(1);
+  }).pipe(Effect.scoped),
+);
 
 it.effect("separates host file URLs from readable attachment URLs", () =>
   Effect.gen(function* () {

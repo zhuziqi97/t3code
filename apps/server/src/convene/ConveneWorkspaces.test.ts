@@ -14,7 +14,7 @@ import * as ConveneWorkspaces from "./ConveneWorkspaces.ts";
 const layer = ConveneWorkspaces.layer.pipe(
   Layer.provideMerge(ProjectStore.layer.pipe(Layer.provide(SqlitePersistence.layerMemory))),
   Layer.provideMerge(Git.layer.pipe(Layer.provide(VcsProcess.layer))),
-  Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-convene-workspaces-" })),
+  Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "t3-convene-workspaces-" })),
   Layer.provideMerge(NodeServices.layer),
 );
 
@@ -80,6 +80,7 @@ it.effect(
       assert.equal(linked.available, true);
       assert.equal((yield* workspaces.resolve(projectId, linked.key))?.key, linked.key);
       yield* workspaces.rememberThread(projectId, "original-thread", linked.key);
+      yield* workspaces.rememberThread(projectId, "other-thread", linked.key);
       yield* run(["worktree", "remove", "--force", checkout]);
       assert.equal((yield* workspaces.resolve(projectId, linked.key))?.available, false);
       assert.equal(yield* workspaces.resolve(projectId, "unknown-workspace"), null);
@@ -93,6 +94,30 @@ it.effect(
       // A second association cannot move a durable native thread to the replacement.
       yield* workspaces.rememberThread(projectId, "original-thread", replacement.key);
       assert.equal(yield* workspaces.threadKey(projectId, "original-thread"), linked.key);
+      const cachePath = `${(yield* ServerConfig.ServerConfig).stateDir}/convene-workspaces.json`;
+      yield* fs.rename(cachePath, `${cachePath}.saved`);
+      yield* fs.makeDirectory(cachePath);
+      assert.equal(
+        (yield* workspaces
+          .rebindThread(projectId, "original-thread", replacement.key)
+          .pipe(Effect.flip))._tag,
+        "ConveneWorkspaceError",
+      );
+      assert.equal(yield* workspaces.threadKey(projectId, "original-thread"), linked.key);
+      assert.equal(yield* workspaces.threadKey(projectId, "other-thread"), linked.key);
+      yield* fs.remove(cachePath, { recursive: true });
+      yield* fs.rename(`${cachePath}.saved`, cachePath);
+      yield* workspaces.rebindThread(projectId, "original-thread", replacement.key);
+      assert.equal(yield* workspaces.threadKey(projectId, "original-thread"), replacement.key);
+      assert.equal(yield* workspaces.threadKey(projectId, "other-thread"), linked.key);
+      const saved = yield* Effect.gen(function* () {
+        const restarted = yield* ConveneWorkspaces.ConveneWorkspaces;
+        return [
+          yield* restarted.threadKey(projectId, "original-thread"),
+          yield* restarted.threadKey(projectId, "other-thread"),
+        ];
+      }).pipe(Effect.provide(Layer.fresh(ConveneWorkspaces.layer)));
+      assert.deepEqual(saved, [replacement.key, linked.key]);
     }).pipe(Effect.provide(layer)),
   { timeout: 20_000 },
 );

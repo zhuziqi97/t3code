@@ -1,3 +1,6 @@
+import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
+import * as VcsProcess from "../vcs/VcsProcess.ts";
+import { GitCommandError } from "@t3tools/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it, vi } from "vite-plus/test";
 import { it as effectIt } from "@effect/vitest";
@@ -121,7 +124,13 @@ function startWithMissingWorktree(
   );
   const startRootRun = vi.fn(() => Effect.void);
   const pruneWorktrees = vi.fn(() => Effect.void);
-  const createWorktree = vi.fn(() => Effect.succeed({} as never));
+  let restored = false;
+  const createWorktree = vi.fn(() =>
+    Effect.sync(() => {
+      restored = true;
+      return {} as never;
+    }),
+  );
   const layer = ProviderTurnStart.layer.pipe(
     Layer.provide(
       Layer.mergeAll(
@@ -130,6 +139,16 @@ function startWithMissingWorktree(
         IdAllocator.layer,
         Layer.succeed(FileSystem.FileSystem, {
           exists: () => Effect.succeed(false),
+          stat: () =>
+            restored
+              ? Effect.succeed({ type: "Directory" } as never)
+              : Effect.fail(
+                  PlatformError.systemError({
+                    _tag: "NotFound",
+                    module: "FileSystem",
+                    method: "stat",
+                  }),
+                ),
           // Paths that exist on the fake disk, mapped to where their symlinks lead.
           realPath: (target: string) =>
             normalize(target) in realPaths
@@ -144,7 +163,12 @@ function startWithMissingWorktree(
                 ),
         } as never),
         layerWorktreeLocation(),
-        Layer.mock(GitWorkflow.GitWorkflowService)({ pruneWorktrees, createWorktree }),
+        Layer.mock(GitWorkflow.GitWorkflowService)({
+          pruneWorktrees,
+          createWorktree,
+          listLocalBranchNames: () => Effect.succeed(["feature/restore"]),
+          localStatus: ({ cwd }) => Effect.succeed({ workingTree: { rootPath: cwd } } as never),
+        }),
         Layer.mock(ProjectService.ProjectService)({
           getById: () =>
             Effect.succeed(
@@ -190,7 +214,7 @@ function startWithMissingWorktree(
   const start = Effect.gen(function* () {
     return yield* (yield* ProviderTurnStart.ProviderTurnStartServiceV2)
       .start({ threadId, runId })
-      .pipe(Effect.flip);
+      .pipe(Effect.result);
   }).pipe(Effect.provide(layer), Effect.runPromise);
   return {
     start,
@@ -207,7 +231,7 @@ it("does not commit running state when inherited background routing cannot be re
   const harness = startWithMissingWorktree(worktreePath);
   const error = await harness.start;
 
-  expect(error._tag).toBe("ProviderTurnStartError");
+  expect(error._tag).toBe("Failure");
   expect(harness.projectionReads()).toBe(3);
   expect(harness.pruneWorktrees).toHaveBeenCalledWith({ cwd: "/tmp/provider-turn-start-project" });
   expect(harness.createWorktree).toHaveBeenCalledWith({
@@ -279,6 +303,9 @@ function makeLocalCommandHarness(input: {
   readonly worktreePath?: string;
   readonly worktreesDir?: string;
   readonly fileSystem?: FileSystem.FileSystem;
+  readonly localBranches?: ReadonlyArray<string>;
+  readonly projectRoot?: string;
+  readonly restoreFailure?: string;
   readonly previousNativeSession?: boolean;
   readonly previousMessages?: ReadonlyArray<string>;
   readonly logoutFailure?: string;
@@ -606,7 +633,27 @@ function makeLocalCommandHarness(input: {
     ({ thread }: Parameters<RuntimePolicy.RuntimePolicyV2Shape["resolve"]>[0]) =>
       Effect.succeed({ cwd: thread.worktreePath ?? "/tmp/native-account-command" } as never),
   );
-  const createWorktree = vi.fn(() => Effect.succeed({} as never));
+  const createWorktree = vi.fn<GitWorkflow.GitWorkflowService["Service"]["createWorktree"]>(() =>
+    input.restoreFailure === undefined
+      ? Effect.succeed({} as never)
+      : Effect.fail(
+          new GitCommandError({
+            operation: "workspace-recovery-test",
+            command: "git worktree add",
+            cwd: input.worktreePath ?? "/tmp",
+            detail: input.restoreFailure,
+          }),
+        ),
+  );
+  const pruneWorktrees = vi.fn<GitWorkflow.GitWorkflowService["Service"]["pruneWorktrees"]>(
+    () => Effect.void,
+  );
+  const listLocalBranchNames = vi.fn<
+    GitWorkflow.GitWorkflowService["Service"]["listLocalBranchNames"]
+  >(() => Effect.succeed([...(input.localBranches ?? ["feature/restore"])]));
+  const localStatus = vi.fn<GitWorkflow.GitWorkflowService["Service"]["localStatus"]>(({ cwd }) =>
+    Effect.succeed({ workingTree: { rootPath: cwd } } as never),
+  );
   const getThreadRecords = vi.fn<ProjectionStore.ProjectionStoreV2Shape["getThreadRecords"]>(() =>
     Effect.succeed(projection),
   );
@@ -630,15 +677,24 @@ function makeLocalCommandHarness(input: {
         IdAllocator.layer,
         layerWorktreeLocation(input.worktreesDir),
         input.fileSystem === undefined
-          ? FileSystem.layerNoop({ exists: () => Effect.succeed(true) })
+          ? FileSystem.layerNoop({
+              exists: () => Effect.succeed(true),
+              stat: () => Effect.succeed({ type: "Directory" } as never),
+            })
           : Layer.succeed(FileSystem.FileSystem, input.fileSystem),
         Layer.mock(GitWorkflow.GitWorkflowService)({
-          pruneWorktrees: () => Effect.void,
+          pruneWorktrees,
           createWorktree,
+          listLocalBranchNames,
+          localStatus,
         }),
         Layer.mock(ProjectService.ProjectService)({
           getById: () =>
-            Effect.succeed(Option.some({ workspaceRoot: "/tmp/native-account-project" } as never)),
+            Effect.succeed(
+              Option.some({
+                workspaceRoot: input.projectRoot ?? "/tmp/native-account-project",
+              } as never),
+            ),
         }),
         Layer.mock(ProjectionStore.ProjectionStoreV2)({
           getThreadRecords,
@@ -672,6 +728,9 @@ function makeLocalCommandHarness(input: {
   return {
     getThreadRecords,
     getTurnStartContext,
+    pruneWorktrees,
+    listLocalBranchNames,
+    localStatus,
     setProjection: (next: OrchestrationV2ThreadProjection) => {
       projection = next;
     },
@@ -698,6 +757,196 @@ function makeLocalCommandHarness(input: {
     }).pipe(Effect.provide(layer)),
   };
 }
+
+effectIt.effect.each(["branch-deleted", "branch-occupied", "not-directory", "outside-managed"])(
+  "persists workspace failure before provider startup: %s",
+  (scenario) =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-recovery-failure-" });
+      const worktreePath =
+        scenario === "outside-managed" ? `${root}/external` : `${root}/project/worktree`;
+      if (scenario === "not-directory") {
+        yield* fs.makeDirectory(`${root}/project`);
+        yield* fs.writeFileString(worktreePath, "This is a file");
+      }
+      const h = makeLocalCommandHarness({
+        text: "Continue",
+        worktreePath,
+        worktreesDir: root,
+        fileSystem: fs,
+        localBranches: scenario === "branch-deleted" ? [] : ["feature/restore"],
+        ...(scenario === "branch-occupied"
+          ? { restoreFailure: "already checked out in another worktree" }
+          : {}),
+      });
+      yield* h.startWithRetry;
+      expect(h.open).not.toHaveBeenCalled();
+      expect(h.startRootRun).not.toHaveBeenCalled();
+      expect(h.projection().runs.at(-1)?.status).toBe("failed");
+      const failure = h.events.find(
+        (event) => event.type === "turn-item.updated" && event.payload.type === "error",
+      );
+      expect(failure).toBeDefined();
+      if (failure?.type === "turn-item.updated" && failure.payload.type === "error") {
+        expect(failure.payload.failure?.message).toContain("checkout from this project");
+      }
+      expect(h.createWorktree).toHaveBeenCalledTimes(scenario === "branch-occupied" ? 1 : 0);
+      expect(h.projection().thread.branch).toBe("feature/restore");
+      expect(h.projection().thread.worktreePath).toBe(worktreePath);
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+effectIt.effect(
+  "retries restoring the original branch without replacing the thread's history",
+  () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-recovery-retry-" });
+      const worktreePath = `${root}/project/worktree`;
+      const h = makeLocalCommandHarness({
+        text: "Continue",
+        previousMessages: ["Remember my earlier work"],
+        worktreePath,
+        worktreesDir: root,
+        fileSystem: fs,
+        openFailure: "mock provider boundary",
+      });
+      const messages = h.projection().messages;
+      h.createWorktree.mockImplementation(() =>
+        Effect.fail(
+          new GitCommandError({
+            operation: "workspace-recovery-test",
+            command: "git worktree add",
+            cwd: worktreePath,
+            detail: "branch occupied",
+          }),
+        ),
+      );
+      yield* h.start;
+      expect(h.open).not.toHaveBeenCalled();
+      h.setProjection({
+        ...h.projection(),
+        runs: h.projection().runs.map((run) => ({ ...run, status: "starting", completedAt: null })),
+      });
+      h.createWorktree.mockImplementation(() =>
+        fs
+          .makeDirectory(worktreePath, { recursive: true })
+          .pipe(Effect.orDie, Effect.as({} as never)),
+      );
+      yield* h.start;
+      expect(h.open).toHaveBeenCalledTimes(1);
+      expect(h.createWorktree).toHaveBeenLastCalledWith({
+        cwd: "/tmp/native-account-project",
+        refName: "feature/restore",
+        path: worktreePath,
+      });
+      expect(h.projection().messages).toEqual(messages);
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+effectIt.effect.each(["retained", "deleted", "occupied", "subdirectory"])(
+  "restores only the original local Git branch: %s",
+  (scenario) =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const git = yield* GitVcsDriver.GitVcsDriver;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-original-branch-" });
+      const repositoryRoot = `${root}/repository`;
+      const checkoutRoot = `${root}/managed/worktree`;
+      const projectRoot = scenario === "subdirectory" ? `${repositoryRoot}/src` : repositoryRoot;
+      const worktreePath = scenario === "subdirectory" ? `${checkoutRoot}/src` : checkoutRoot;
+      yield* fs.makeDirectory(projectRoot, { recursive: true });
+      const run = (args: string[]) =>
+        git.execute({ operation: "recovery-test", cwd: repositoryRoot, args });
+      yield* run(["init", "-b", "main"]);
+      yield* fs.writeFileString(`${projectRoot}/code.txt`, "original code");
+      yield* run(["add", "."]);
+      yield* run([
+        "-c",
+        "user.name=Recovery Test",
+        "-c",
+        "user.email=recovery@example.invalid",
+        "commit",
+        "-m",
+        "original",
+      ]);
+      yield* run(["branch", "feature/restore"]);
+      yield* fs.writeFileString(`${projectRoot}/code.txt`, "project current code");
+      yield* run([
+        "-c",
+        "user.name=Recovery Test",
+        "-c",
+        "user.email=recovery@example.invalid",
+        "commit",
+        "-am",
+        "project advanced",
+      ]);
+      if (scenario === "deleted") {
+        yield* run(["branch", "-D", "feature/restore"]);
+        yield* run(["update-ref", "refs/remotes/origin/feature/restore", "HEAD"]);
+      }
+      if (scenario === "occupied")
+        yield* run(["worktree", "add", `${root}/other`, "feature/restore"]);
+      const h = makeLocalCommandHarness({
+        text: "Continue",
+        worktreePath,
+        projectRoot,
+        worktreesDir: root,
+        fileSystem: fs,
+        openFailure: "mock provider boundary",
+      });
+      h.localStatus.mockImplementation(({ cwd }) =>
+        git
+          .execute({ operation: "recovery-test.root", cwd, args: ["rev-parse", "--show-toplevel"] })
+          .pipe(
+            Effect.map((result) => ({ workingTree: { rootPath: result.stdout.trim() } }) as never),
+          ),
+      );
+      h.pruneWorktrees.mockImplementation(({ cwd }) => git.pruneWorktrees({ cwd }));
+      h.listLocalBranchNames.mockImplementation((cwd) => git.listLocalBranchNames(cwd));
+      h.createWorktree.mockImplementation(({ cwd, refName, path }) =>
+        git
+          .execute({
+            operation: "recovery-test.add",
+            cwd,
+            args: ["worktree", "add", "--", path!, refName],
+          })
+          .pipe(Effect.as({} as never)),
+      );
+      yield* h.start;
+      if (scenario === "retained" || scenario === "subdirectory") {
+        expect(yield* fs.readFileString(`${worktreePath}/code.txt`)).toBe("original code");
+        expect(
+          (yield* git.execute({
+            operation: "recovery-test.branch",
+            cwd: worktreePath,
+            args: ["branch", "--show-current"],
+          })).stdout.trim(),
+        ).toBe("feature/restore");
+        expect(h.open).toHaveBeenCalledTimes(1);
+      } else {
+        expect(h.open).not.toHaveBeenCalled();
+        expect(h.projection().runs.at(-1)?.status).toBe("failed");
+        expect(yield* fs.exists(worktreePath)).toBe(false);
+      }
+      if (scenario === "deleted") {
+        expect(yield* git.listLocalBranchNames(projectRoot)).not.toContain("feature/restore");
+        expect(h.createWorktree).not.toHaveBeenCalled();
+      }
+      if (scenario === "occupied")
+        expect(yield* fs.readFileString(`${root}/other/code.txt`)).toBe("original code");
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        GitVcsDriver.layer.pipe(
+          Layer.provide(VcsProcess.layer),
+          Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "t3-recovery-git-" })),
+          Layer.provideMerge(NodeServices.layer),
+        ),
+      ),
+    ),
+);
 
 effectIt.effect.each(["cleanup-first", "startup-first"])(
   "coordinates provider startup with %s",

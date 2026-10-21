@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./state/workspaceRecovery": {
+      "types": "./src/state/workspaceRecovery.ts",
+      "default": "./src/state/workspaceRecovery.ts"
+    },
     "./state/convene": {
       "types": "./src/state/convene.ts",
       "default": "./src/state/convene.ts"

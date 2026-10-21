@@ -25,6 +25,11 @@ import * as Schema from "effect/Schema";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 
 import * as ServerConfig from "../config.ts";
+import * as ConveneWorkspaces from "../convene/ConveneWorkspaces.ts";
+import {
+  ProviderWorkspaceMissingError,
+  ProviderWorkspaceRestoreError,
+} from "../provider/Errors.ts";
 import { withWorkspaceLease } from "../workspace/workspaceLease.ts";
 import * as GitWorkflowService from "../git/GitWorkflowService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
@@ -68,6 +73,7 @@ export class ProviderTurnStartError extends Schema.TaggedError<ProviderTurnStart
 ) {}
 
 const isProviderTurnStartError = Schema.is(ProviderTurnStartError);
+const isWorkspaceRestoreError = Schema.is(ProviderWorkspaceRestoreError);
 
 /**
  * Claude refuses these before it reads the prompt: replacing a process running background work,
@@ -128,6 +134,7 @@ export const layer: Layer.Layer<
     const providerAuth = yield* ProviderAuthService.ProviderAuthService;
     const projectionStore = yield* ProjectionStore.ProjectionStoreV2;
     const providerSessions = yield* ProviderSessionManager.ProviderSessionManagerV2;
+    const conveneWorkspaces = yield* Effect.serviceOption(ConveneWorkspaces.ConveneWorkspaces);
     const runExecution = yield* RunExecutionService.RunExecutionServiceV2;
     const runtimePolicy = yield* RuntimePolicy.RuntimePolicyV2;
     const isManagedWorktreePath = yield* makeIsManagedWorktreePath;
@@ -472,42 +479,157 @@ export const layer: Layer.Layer<
           return;
         }
       }
-      const { worktreePath, branch } = projection.thread;
-      if (worktreePath !== null && branch !== null) {
-        const exists = yield* fileSystem
-          .exists(worktreePath)
-          .pipe(Effect.orElseSucceed(() => true));
-        if (!exists && (yield* isManagedWorktreePath(worktreePath))) {
-          const project = yield* projects.getById(projection.thread.projectId).pipe(
-            Effect.map(Option.getOrUndefined),
-            Effect.orElseSucceed(() => undefined),
+      const settleStartFailure = Effect.fn("ProviderTurnStartService.settleStartFailure")(
+        function* (failed: {
+          readonly signal: string;
+          readonly title: string;
+          readonly error: Error;
+        }) {
+          const nestedCause = "cause" in failed.error ? failed.error.cause : undefined;
+          yield* settleRunBeforeStart({
+            signal: failed.signal,
+            status: "failed",
+            now: yield* DateTime.now,
+            providerInstanceId: run.providerInstanceId,
+            itemProviderThreadId: providerThread.id,
+            item: {
+              type: "error",
+              title: failed.title,
+              failure: makeProviderFailure({
+                cause: failed.error,
+                message:
+                  knownProviderFailureMessage(failed.error) ??
+                  (isWorkspaceRestoreError(failed.error)
+                    ? failed.error.message
+                    : nestedCause instanceof Error
+                      ? nestedCause.message
+                      : typeof nestedCause === "string"
+                        ? nestedCause
+                        : failed.error.message),
+                class: "provider_error",
+              }),
+            },
+          });
+        },
+      );
+      const workspaceResult = yield* Effect.result(
+        Effect.gen(function* () {
+          const cwd = projection.thread.worktreePath;
+          if (cwd === null) return;
+          const stat = yield* fileSystem.stat(cwd).pipe(
+            Effect.catchTags({
+              PlatformError: (error) =>
+                error.reason._tag === "NotFound" ? Effect.succeed(null) : Effect.fail(error),
+            }),
           );
-          if (project !== undefined) {
-            yield* Effect.logWarning("provider turn start recreating missing worktree", {
+          if (stat?.type === "Directory") return;
+          const { worktreePath, branch } = projection.thread;
+          if (stat !== null || worktreePath === null || branch === null) {
+            return yield* new ProviderWorkspaceMissingError({
               threadId: projection.thread.id,
-              worktreePath,
-              branch,
+              cwd,
             });
-            yield* gitWorkflow.pruneWorktrees({ cwd: project.workspaceRoot }).pipe(
-              Effect.andThen(
-                gitWorkflow.createWorktree({
-                  cwd: project.workspaceRoot,
-                  refName: branch,
-                  path: worktreePath,
-                }),
-              ),
-              Effect.catchCause((cause) =>
-                Cause.hasInterruptsOnly(cause)
-                  ? Effect.failCause(cause)
-                  : Effect.logWarning("provider turn start failed to recreate worktree", {
-                      threadId: projection.thread.id,
-                      worktreePath,
-                      cause: Cause.pretty(cause),
-                    }),
-              ),
-            );
           }
-        }
+          const project = yield* projects.getById(projection.thread.projectId);
+          if (Option.isNone(project)) {
+            return yield* new ProviderWorkspaceMissingError({
+              threadId: projection.thread.id,
+              cwd,
+            });
+          }
+          const localBranches = yield* gitWorkflow.listLocalBranchNames(
+            project.value.workspaceRoot,
+          );
+          if (!localBranches.includes(branch)) {
+            return yield* new ProviderWorkspaceRestoreError({
+              threadId: projection.thread.id,
+              cwd,
+              branch,
+              reason: "branch_missing",
+            });
+          }
+          const status = yield* gitWorkflow.localStatus({ cwd: project.value.workspaceRoot });
+          const repositoryRoot = status.workingTree.rootPath;
+          if (repositoryRoot === undefined) {
+            return yield* new ProviderWorkspaceRestoreError({
+              threadId: projection.thread.id,
+              cwd,
+              branch,
+              reason: "restore_failed",
+            });
+          }
+          const projectRelativePath = path.relative(repositoryRoot, project.value.workspaceRoot);
+          let checkoutPath = worktreePath;
+          if (projectRelativePath !== "") {
+            const candidate = path.resolve(
+              worktreePath,
+              path.relative(project.value.workspaceRoot, repositoryRoot),
+            );
+            // A subdirectory project keeps its cwd inside the restored checkout.
+            if (path.join(candidate, projectRelativePath) === worktreePath)
+              checkoutPath = candidate;
+          }
+          if (!(yield* isManagedWorktreePath(checkoutPath))) {
+            return yield* new ProviderWorkspaceMissingError({
+              threadId: projection.thread.id,
+              cwd,
+            });
+          }
+          yield* gitWorkflow.pruneWorktrees({ cwd: project.value.workspaceRoot }).pipe(
+            Effect.andThen(
+              gitWorkflow.createWorktree({
+                cwd: project.value.workspaceRoot,
+                refName: branch,
+                path: checkoutPath,
+              }),
+            ),
+            Effect.mapError(
+              (cause) =>
+                new ProviderWorkspaceRestoreError({
+                  threadId: projection.thread.id,
+                  cwd,
+                  branch,
+                  reason: "restore_failed",
+                  cause,
+                }),
+            ),
+          );
+          const restored = yield* fileSystem.stat(cwd);
+          if (restored.type !== "Directory") {
+            return yield* new ProviderWorkspaceMissingError({
+              threadId: projection.thread.id,
+              cwd,
+            });
+          }
+          if (Option.isSome(conveneWorkspaces)) {
+            const locations = yield* conveneWorkspaces.value.list(projection.thread.projectId);
+            const target = locations.find(
+              (workspace) => workspace.available && workspace.path === cwd,
+            );
+            if (target !== undefined) {
+              for (const session of projection.providerSessions) {
+                yield* providerSessions.detach({
+                  threadId: projection.thread.id,
+                  providerSessionId: session.id,
+                  revokeMcpCredential: true,
+                });
+              }
+              yield* conveneWorkspaces.value.rebindThread(
+                projection.thread.projectId,
+                projection.thread.id,
+                target.key,
+              );
+            }
+          }
+        }),
+      );
+      if (workspaceResult._tag === "Failure") {
+        yield* settleStartFailure({
+          signal: "workspace-unavailable",
+          title: "Workspace unavailable",
+          error: workspaceResult.failure,
+        });
+        return;
       }
       const selectInheritedBackgroundItems = (
         current: ProjectionStore.ProjectionRuntimeRecoveryState,
@@ -560,37 +682,6 @@ export const layer: Layer.Layer<
                   providerThread.nativeMetadata.itemIdentityVersion,
               }),
         }),
-      );
-      const settleStartFailure = Effect.fn("ProviderTurnStartService.settleStartFailure")(
-        function* (failed: {
-          readonly signal: string;
-          readonly title: string;
-          readonly error: Error;
-        }) {
-          const nestedCause = "cause" in failed.error ? failed.error.cause : undefined;
-          yield* settleRunBeforeStart({
-            signal: failed.signal,
-            status: "failed",
-            now: yield* DateTime.now,
-            providerInstanceId: run.providerInstanceId,
-            itemProviderThreadId: providerThread.id,
-            item: {
-              type: "error",
-              title: failed.title,
-              failure: makeProviderFailure({
-                cause: failed.error,
-                message:
-                  knownProviderFailureMessage(failed.error) ??
-                  (nestedCause instanceof Error
-                    ? nestedCause.message
-                    : typeof nestedCause === "string"
-                      ? nestedCause
-                      : failed.error.message),
-                class: "provider_error",
-              }),
-            },
-          });
-        },
       );
       if (sessionResult._tag === "Failure") {
         if (input.willRetry === true) return yield* sessionResult.failure;

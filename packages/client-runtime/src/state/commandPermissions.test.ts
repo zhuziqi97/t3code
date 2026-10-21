@@ -63,6 +63,25 @@ const setup = Effect.gen(function* () {
 });
 
 describe("command permissions", () => {
+  it.effect(
+    "workspace recovery uses the destination operate grant for availability and execution",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const registry = yield* setup;
+          const recovery = createCommandPermissions(runtime, WS_METHODS.threadWorkspaceRecover);
+          registry.set(sessions(env), AsyncResult.success(grant(true)));
+          registry.set(sessions(other), AsyncResult.success(grant(false)));
+          expect(registry.get(recovery.permissionAtom(env))).toBe(true);
+          yield* recovery.authorize(registry, env);
+          expect(registry.get(recovery.permissionAtom(other))).toBe(false);
+          expect((yield* recovery.authorize(registry, other).pipe(Effect.flip))._tag).toBe(
+            "EnvironmentAuthorizationError",
+          );
+        }),
+      ),
+  );
+
   it.effect("requires the destination preview grant to close a browser tab", () =>
     Effect.scoped(
       Effect.gen(function* () {

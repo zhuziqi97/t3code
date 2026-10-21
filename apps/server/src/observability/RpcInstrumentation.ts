@@ -36,6 +36,8 @@ const RPC_AGGREGATES = {
   [WS_METHODS.conveneStatus]: "server",
   [WS_METHODS.conveneSubscribeStatus]: "server",
   [WS_METHODS.conveneManage]: "server",
+  [WS_METHODS.threadWorkspaceInspect]: "orchestration",
+  [WS_METHODS.threadWorkspaceRecover]: "orchestration",
   [WS_METHODS.conveneQueryProject]: "server",
   [WS_METHODS.conveneMutateProject]: "server",
   [WS_METHODS.conveneProjectOptions]: "server",
