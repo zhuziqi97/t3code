@@ -10,6 +10,9 @@ export const CONVENE_DESKTOP_IDENTITY = {
   developmentScheme: "t3code-convene-dev",
 } as const;
 
+// Release packaging rewrites package versions; this records the fixed upstream input.
+export const CONVENE_UPSTREAM_VERSION = "0.1.1";
+
 /** Default fork release for the checked-out upstream base. Explicit artifact versions override it. */
 export function resolveConveneVersion(upstreamVersion: string): string {
   if (upstreamVersion.includes("convene.")) return upstreamVersion;

@@ -1,4 +1,9 @@
-import { resolveConveneVersion } from "@t3tools/shared/conveneDesktopIdentity";
+// @effect-diagnostics nodeBuiltinImport:off - Build bootstrap reads existing optional build metadata before an Effect runtime exists.
+import {
+  CONVENE_UPSTREAM_VERSION,
+  resolveConveneVersion,
+} from "@t3tools/shared/conveneDesktopIdentity";
+import * as NodeFS from "node:fs";
 import * as NodeZlib from "node:zlib";
 
 import react from "@vitejs/plugin-react";
@@ -44,6 +49,13 @@ const configuredRelayTracingDataset = repoEnv.VITE_RELAY_OTLP_TRACES_DATASET?.tr
 const configuredRelayTracingToken = repoEnv.VITE_RELAY_OTLP_TRACES_TOKEN?.trim() || "";
 const configuredHostedAppChannel = process.env.VITE_HOSTED_APP_CHANNEL?.trim() || "";
 const configuredAppVersion = process.env.APP_VERSION?.trim() || resolveConveneVersion(pkg.version);
+const buildInfoUrl = new URL("../../.generated/convene-build.json", import.meta.url);
+const buildInfo = NodeFS.existsSync(buildInfoUrl)
+  ? (JSON.parse(NodeFS.readFileSync(buildInfoUrl, "utf8")) as {
+      build_id: string;
+      source_commit: string;
+    })
+  : undefined;
 const configuredDesktopUpdateRepository =
   process.env.T3CODE_DESKTOP_UPDATE_REPOSITORY?.trim() ||
   process.env.GITHUB_REPOSITORY?.trim() ||
@@ -237,7 +249,9 @@ export default defineConfig(() => {
         configuredDesktopUpdateRepository,
       ),
       "import.meta.env.APP_VERSION": JSON.stringify(configuredAppVersion),
-      "import.meta.env.UPSTREAM_VERSION": JSON.stringify(pkg.version),
+      "import.meta.env.UPSTREAM_VERSION": JSON.stringify(CONVENE_UPSTREAM_VERSION),
+      "import.meta.env.CONVENE_BUILD_ID": JSON.stringify(buildInfo?.build_id ?? ""),
+      "import.meta.env.CONVENE_SOURCE_COMMIT": JSON.stringify(buildInfo?.source_commit ?? ""),
     },
     resolve: {
       tsconfigPaths: true,
