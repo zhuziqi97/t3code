@@ -8,6 +8,7 @@ import { useDndAccessibility } from "../hooks/useDndAccessibility";
 import { useSidebarNewThread } from "../hooks/useSidebarNewThread";
 import {
   buildProjectTreeList,
+  sortProjectTreeActiveThreads,
   projectExpansionKeys,
   visibleProjectShelfThreads,
 } from "./sidebar/projectTree";
@@ -224,7 +225,6 @@ import {
   sidebarThreadKeyAtY,
   sortInboxThreadsByReturn,
   sortPinnedThreadsForSidebar,
-  sortThreadsForSidebar,
   sortWorkingThreadsBySend,
   useThreadJumpHintVisibility,
   useRetainedValue,
@@ -417,7 +417,10 @@ function resolveDraggedOrders(input: {
           [...others(activeThreads), applySidebarThreadDrop(thread, "active", drag.occurredAt)],
           inboxReturns.returnedAt,
         ).map(threadShellKey)
-      : undefined,
+      : sortProjectTreeActiveThreads([
+          ...others(activeThreads),
+          applySidebarThreadDrop(thread, "active", drag.occurredAt),
+        ]).map(threadShellKey),
   };
 }
 
@@ -649,7 +652,7 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
   const sortedPinned = sortPinnedThreadsForSidebar(pinned);
   const sortedActive = workingShelfEnabled
     ? sortInboxThreadsByReturn(active, inboxReturns.returnedAt)
-    : sortThreadsForSidebar(active);
+    : sortProjectTreeActiveThreads(active);
   return {
     pinnedThreads:
       optimisticDrop?.section !== "pinned" || optimisticDrop.order === null
@@ -1641,7 +1644,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     : null;
 
   const isUnread = hasUnseenCompletion({ ...thread, lastVisitedAt });
-  const status = resolveSidebarThreadStatus(thread);
+  const resolvedStatus = resolveSidebarThreadStatus(thread);
+  const status =
+    resolvedStatus === "ready" && thread.latestRun?.status === "failed" ? "failed" : resolvedStatus;
   const lastVisitedDate = lastVisitedAt === undefined ? null : parseTimestampDate(lastVisitedAt);
   const wokeAtDate = props.wokeAt === null ? null : parseTimestampDate(props.wokeAt);
   const isWoke =
@@ -1700,9 +1705,23 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                     }
                   : isUnread
                     ? {
-                        label: "Done",
-                        icon: "done" as const,
-                        className: "text-success",
+                        label:
+                          thread.latestRun?.status === "cancelled" ||
+                          thread.latestRun?.status === "interrupted"
+                            ? t("chat.status.stopped")
+                            : thread.latestRun?.status === "rolled_back"
+                              ? t("chat.timeline.runRolledBack", {
+                                  defaultValue: "Turn rolled back",
+                                })
+                              : t("chat.timeline.runEnded", { defaultValue: "Turn ended" }),
+                        icon:
+                          thread.latestRun?.status === "completed"
+                            ? ("done" as const)
+                            : ("stopped" as const),
+                        className:
+                          thread.latestRun?.status === "completed"
+                            ? "text-success"
+                            : "text-muted-foreground",
                       }
                     : null;
   const isWokeStatus = topStatus?.icon === "woke";
@@ -1997,6 +2016,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       </span>
     );
   const accessibleTitle = isRenaming ? null : <span className="sr-only">{thread.title}</span>;
+  const unreadIndicator = isUnread ? (
+    <span
+      role="img"
+      aria-label={t("thread.unreadCompletion", { defaultValue: "Unread turn result" })}
+      className="size-2 shrink-0 rounded-full bg-info"
+    />
+  ) : null;
 
   const prBadgeShape = supportsMultiplePullRequests
     ? resolveThreadPullRequestBadge(thread.pullRequests)
@@ -2119,6 +2145,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             </span>
             {draftIndicator}
             {title}
+            {unreadIndicator}
             {pinIndicator}
             {terminalStatusIcon}
             {isRegeneratingTitle ? (
@@ -2430,6 +2457,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             </div>
             <div className="mt-1 flex min-w-0">
               {title}
+              {unreadIndicator}
               {isRegeneratingTitle ? (
                 <span role="status" className="sr-only">
                   Regenerating title
@@ -3835,7 +3863,7 @@ export default function Sidebar() {
             activeOrder: activeOrderForThread(source),
             activeKeysById,
             activeReorderableKeys: activeReorderableThreadKeys,
-            activeTimeOrdered: workingShelfEnabled,
+            activeTimeOrdered: true,
           }).kind !== "none"
         );
       },
@@ -3870,7 +3898,7 @@ export default function Sidebar() {
       activeOrder: activeOrderForThread(activeThread),
       activeKeysById,
       activeReorderableKeys: activeReorderableThreadKeys,
-      activeTimeOrdered: workingShelfEnabled,
+      activeTimeOrdered: true,
     });
     if (plan.kind === "none") return;
     if (plan.kind === "settle" && settlingThreadKeysRef.current.has(activeKey)) return;

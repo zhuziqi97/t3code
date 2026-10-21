@@ -53,6 +53,17 @@ in a new thread's model picker to add or remove them. A regular click returns to
 single model. Choose a base branch and send. Each selection starts a separate thread
 and worktree while you stay in the new thread composer. This requires a Git project.
 
+## Notice when a turn ends
+
+The latest turn's end state stays visible below the conversation, with its end
+time when available. Failed and stopped turns have separate labels. An ended
+turn does not mean the whole task has passed acceptance.
+
+A blue dot marks another thread's unread result until you open it in a visible,
+focused window. Returning to the app reads only the open thread. System and
+in-app notifications and sounds follow your existing notification settings; the
+blue dot works even when system notifications are unavailable or disabled.
+
 ## Pin and reorder threads
 
 Pin a thread from its menu to keep it above your active work.
@@ -74,7 +85,7 @@ scroll position instead of following the thread to its new place in the list.
 
 Pinning does not prevent automatic settlement. Settling a thread removes its pin.
 
-On web and desktop, drag a thread within its project to change its order or state.
+On web and desktop, drag a thread within its project to change its state.
 Drag it into the pinned section to pin it at that position, or drag a pinned thread
 back into its own project's active list to unpin it. Drag onto the project's
 **Settled** header to settle it, or drag a settled thread into its active list to
@@ -83,9 +94,11 @@ menu because it needs a wake time. Drops onto another project are rejected and
 never change the thread's project. Unpinning by dragging does not ask for confirmation.
 
 Pinned threads can be reordered across projects in the global pinned section.
-Active threads can be reordered within their project. The drop preview shows the
-position and any state change before you release it. On
-mobile, open a thread's menu and choose **Arrange threads**. Drag a handle within or between
+In the web and desktop project tree, projects and pinned threads keep their order
+when messages arrive. Ordinary active threads rise only inside their own project
+when you send a message. Agent output, tool progress, and renaming do not move them.
+Working, snoozed, and settled sections keep their own order. The drop preview
+shows any state change before you release it. On mobile, open a thread's menu and choose **Arrange threads**. Drag a handle within or between
 **Pinned** and **Active** to reorder, pin, or unpin. Drop onto the **Settled** divider to
 settle a thread. The dragged card shows the action before you release it. Expand **Snoozed**
 or **Settled** to drag a parked thread back into either live section. Each drop saves; close the sheet to return to the thread list.

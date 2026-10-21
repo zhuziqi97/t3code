@@ -14,6 +14,7 @@ import {
   ShieldQuestionIcon,
 } from "lucide-react";
 import { useEffect, useRef } from "react";
+import { useTranslate } from "../i18n";
 
 import { getClientSettings, useClientSettings } from "../hooks/useSettings";
 import { useEnvironmentIds } from "../state/environments";
@@ -107,6 +108,7 @@ function EnvironmentNotifications({
   environmentId: EnvironmentId;
   onNotification: (environmentId: EnvironmentId, notification: Notification) => void;
 }) {
+  const t = useTranslate();
   const shell = useAtomValue(environmentShell.stateValueAtom(environmentId));
   const threads =
     shell.status === "live" && Option.isSome(shell.snapshot) ? shell.snapshot.value.threads : null;
@@ -160,14 +162,14 @@ function EnvironmentNotifications({
       if (!kind) continue;
       const title =
         kind === "completion"
-          ? "Thread completed"
+          ? t("notifications.threadEnded", { defaultValue: "Turn ended" })
           : status === "approval"
-            ? "Approval needed"
+            ? t("notifications.approvalNeeded", { defaultValue: "Approval needed" })
             : status === "limited"
-              ? "Usage limit reached"
+              ? t("notifications.usageLimitReached", { defaultValue: "Usage limit reached" })
               : status === "failed"
-                ? "Thread failed"
-                : "Input needed";
+                ? t("notifications.threadFailed", { defaultValue: "Turn failed" })
+                : t("notifications.inputNeeded", { defaultValue: "Input needed" });
       if (hasNotificationSound(mode)) {
         void playNotificationSound(kind, () =>
           hasNotificationSound(getClientSettings().notificationMode),
@@ -197,7 +199,7 @@ function EnvironmentNotifications({
               ),
           },
           actionProps: {
-            children: "Open thread",
+            children: t("notifications.openThread", { defaultValue: "Open thread" }),
             onClick: () => {
               toastManager.close(toastId);
               void navigate({
@@ -246,6 +248,7 @@ function EnvironmentNotifications({
     navigate,
     onNotification,
     threads,
+    t,
   ]);
 
   return null;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { buildSidebarProjectSnapshots } from "../../sidebarProjectGrouping";
-import { buildProjectTreeList } from "./projectTree";
+import { buildProjectTreeList, sortProjectTreeActiveThreads } from "./projectTree";
 import {
   resolveSidebarDropTarget,
   sidebarMarkerId,
@@ -149,4 +149,72 @@ it("pages settled history separately for each project and reveals a deep linked 
       routeThreadKey: null,
     }).map((entry) => entry.id),
   ).toEqual(["b1", "b2"]);
+});
+
+describe("project-local user message order", () => {
+  it("raises only the sending thread inside its project and keeps projects and pins stable", () => {
+    const at = (hour: number) => `2026-10-21T${String(hour).padStart(2, "0")}:00:00.000Z`;
+    const active = [
+      { ...thread("a1", "a"), createdAt: at(1), latestUserMessageAt: at(4), updatedAt: at(4) },
+      { ...thread("a2", "a"), createdAt: at(2), latestUserMessageAt: at(3), updatedAt: at(3) },
+      { ...thread("a3", "a"), createdAt: at(3), latestUserMessageAt: null, updatedAt: at(9) },
+      { ...thread("b1", "b"), createdAt: at(1), latestUserMessageAt: at(8), updatedAt: at(8) },
+      { ...thread("b2", "b"), createdAt: at(2), latestUserMessageAt: at(7), updatedAt: at(7) },
+      { ...thread("b3", "b"), createdAt: at(3), latestUserMessageAt: null, updatedAt: at(9) },
+    ];
+    const pins = [thread("pin-b", "b"), thread("pin-a", "a")];
+    const tree = (threads: typeof active, expandedById: Record<string, boolean> = {}) =>
+      buildProjectTreeList({
+        groups,
+        expandedById,
+        pinned: pins,
+        active: sortProjectTreeActiveThreads(threads),
+        working: [],
+        workingAll: [],
+        snoozed: [],
+        snoozedAll: [],
+        settled: [],
+        settledAll: [],
+      });
+    const ids = (items: ReturnType<typeof tree>) =>
+      items.filter((item) => item.kind === "thread").map(sidebarListItemId);
+    const initial = tree(active);
+    expect(ids(initial)).toEqual([
+      "local:pin-b",
+      "local:pin-a",
+      "local:a1",
+      "local:a2",
+      "local:a3",
+      "local:b1",
+      "local:b2",
+      "local:b3",
+    ]);
+    const sent = active.map((entry) =>
+      entry.id === "a2" ? { ...entry, latestUserMessageAt: at(10), updatedAt: at(10) } : entry,
+    );
+    expect(ids(tree(sent))).toEqual([
+      "local:pin-b",
+      "local:pin-a",
+      "local:a2",
+      "local:a1",
+      "local:a3",
+      "local:b1",
+      "local:b2",
+      "local:b3",
+    ]);
+    // Provider output, tools, renames, and reconnect snapshots can update/reorder shells.
+    const streamed = sent.map((entry) => ({ ...entry, updatedAt: at(22) })).toReversed();
+    expect(ids(tree(streamed))).toEqual(ids(tree(sent)));
+    expect(ids(tree(streamed, { [a]: false }))).toEqual([
+      "local:pin-b",
+      "local:pin-a",
+      "local:b1",
+      "local:b2",
+      "local:b3",
+    ]);
+    expect(ids(tree(streamed))).toEqual(ids(tree(sent)));
+    expect(
+      tree(sent).filter((item) => item.kind === "marker" && item.marker === "project-header"),
+    ).toEqual(initial.filter((item) => item.kind === "marker" && item.marker === "project-header"));
+  });
 });

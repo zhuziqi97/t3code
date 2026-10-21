@@ -1,3 +1,4 @@
+import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import { RegistryProvider } from "@effect/atom-react";
 import {
   ApprovalRequestId,
@@ -1681,14 +1682,14 @@ describe("localized work groups", () => {
       expect(group.getAttribute("aria-expanded")).toBe("false");
       await act(() => group.click());
       expect(group.getAttribute("aria-expanded")).toBe("true");
-      expect(container.textContent).toContain(commands[0]);
+      await expect.element(root.getByText(commands[0]!, { exact: true })).toBeVisible();
       await act(async () => {
         await i18n.changeLanguage("zh");
       });
       expect(container.querySelector('button[aria-label="运行了 2 条命令"]')).toBe(group);
       expect(group.getAttribute("aria-expanded")).toBe("true");
-      expect(container.textContent).toContain(commands[0]);
-      expect(container.textContent).toContain(commands[1]);
+      await expect.element(root.getByText(commands[0]!, { exact: true })).toBeVisible();
+      await expect.element(root.getByText(commands[1]!, { exact: true })).toBeVisible();
       await act(async () => {
         await i18n.changeLanguage("en");
       });
@@ -1776,5 +1777,98 @@ describe("localized work groups", () => {
       container.remove();
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe("latest run end feedback", () => {
+  it.each([
+    ["completed", "Turn ended"],
+    ["failed", "Turn failed"],
+    ["interrupted", "Turn stopped"],
+    ["cancelled", "Turn stopped"],
+  ] as const)("keeps %s feedback visible after the run settles", async (status, label) => {
+    const props = baseProps();
+    const entries = [
+      message("The final reply", {
+        role: "assistant",
+        runId: RunId.make("end-feedback"),
+        updatedAt: CREATED_AT,
+      }),
+    ];
+    const run = {
+      runId: RunId.make("end-feedback"),
+      status: "running" as const,
+      startedAt: CREATED_AT,
+      completedAt: null,
+    };
+    await using screen = await renderElement(
+      <MessagesTimeline
+        {...props}
+        timelineEntries={entries}
+        latestRun={run}
+        isWorking
+        activeTurnInProgress
+      />,
+    );
+    expect(screen.container.querySelector('[data-testid="latest-run-end-state"]')).toBeNull();
+    const completedAt = "2026-03-17T19:15:42.000Z";
+    await screen.rerender(
+      <MessagesTimeline
+        {...props}
+        timelineEntries={entries}
+        latestRun={{ ...run, status, completedAt }}
+      />,
+    );
+    const end = screen.container.querySelector<HTMLElement>(
+      '[data-testid="latest-run-end-state"]',
+    )!;
+    expect(end.textContent).toContain(label);
+    expect(end.querySelector("time")?.dateTime).toBe(completedAt);
+    expect(getComputedStyle(end).opacity).toBe("1");
+    expect(end.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })).toBe(true);
+    await userEvent.hover(screen.getByText("The final reply"));
+    expect(end.textContent).toContain(label);
+    await screen.rerender(
+      <MessagesTimeline
+        {...props}
+        timelineEntries={entries}
+        latestRun={{ ...run, status, completedAt: null }}
+      />,
+    );
+    expect(
+      screen.container.querySelector('[data-testid="latest-run-end-state"]')?.textContent,
+    ).toContain(label);
+    expect(screen.container.querySelector('[data-testid="latest-run-end-state"] time')).toBeNull();
+    await screen.rerender(
+      <MessagesTimeline
+        {...props}
+        timelineEntries={entries}
+        latestRun={{ ...run, status, completedAt }}
+        runlessWorkActive
+      />,
+    );
+    expect(screen.container.querySelector('[data-testid="latest-run-end-state"]')).toBeNull();
+    await screen.rerender(
+      <MessagesTimeline
+        {...props}
+        timelineEntries={entries}
+        latestRun={{ ...run, status, completedAt }}
+        completionHeld={backgroundWorkHoldsCompletion([{ kind: "monitor" }])}
+        footer={<p>Waiting for monitor</p>}
+      />,
+    );
+    expect(screen.container.querySelector('[data-testid="latest-run-end-state"]')).toBeNull();
+    expect(screen.container.textContent).toContain("Waiting for monitor");
+    await screen.rerender(
+      <MessagesTimeline
+        {...props}
+        timelineEntries={entries}
+        latestRun={{ ...run, status, completedAt }}
+        completionHeld={backgroundWorkHoldsCompletion([{ kind: "command" }])}
+      />,
+    );
+    expect(
+      screen.container.querySelector('[data-testid="latest-run-end-state"]')?.textContent,
+    ).toContain(label);
   });
 });
