@@ -1,4 +1,5 @@
 import { ThreadVisitWatermark } from "./ThreadVisitWatermark";
+import { ThreadWorkspaceRecovery } from "./ThreadWorkspaceRecovery";
 import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import { deriveThreadTitleSeed } from "@t3tools/client-runtime/operations/threadTitle";
 import { serverUpdateStageLabel } from "./ServerUpdateAction.logic";
@@ -8417,6 +8418,13 @@ export default function ChatView(props: ChatViewProps) {
                         />
                       </div>
                     </div>
+                  ) : null}
+                  {isServerThread && activeThread ? (
+                    <ThreadWorkspaceRecovery
+                      key={`${activeThread.environmentId}:${activeThread.id}`}
+                      environmentId={activeThread.environmentId}
+                      threadId={activeThread.id}
+                    />
                   ) : null}
                   <div
                     ref={draftHeroComposerAnchorRef}
