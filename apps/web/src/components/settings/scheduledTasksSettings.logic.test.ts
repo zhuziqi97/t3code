@@ -6,6 +6,7 @@ import {
   ProviderInstanceId,
   ScheduledTaskId,
   type ScheduledTask,
+  type ModelSelection,
 } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -325,7 +326,7 @@ describe("scheduled task model defaults", () => {
   } as unknown as ServerConfig;
   const resolve = (
     value: ServerConfig,
-    project: { id: typeof projectId; defaultModelSelection?: typeof projectSelection } | null,
+    project: { id: typeof projectId; defaultModelSelection?: ModelSelection | null } | null,
   ) =>
     scheduledTaskDefaultModel(
       value.settings,
@@ -391,6 +392,62 @@ describe("scheduled task model defaults", () => {
       ),
     ).toEqual(environmentSelection);
   });
+  it("ignores a stale legacy aggregate after project settings have been folded", () => {
+    expect(
+      resolve(
+        {
+          ...config,
+          settings: { ...config.settings, projectSettingsFolded: true },
+        },
+        { id: projectId, defaultModelSelection: projectSelection },
+      ),
+    ).toEqual(environmentSelection);
+  });
+  it("keeps an unavailable legacy selection until folded and lets stored overrides take precedence", () => {
+    const legacySelection = {
+      instanceId: ProviderInstanceId.make("legacy-unavailable"),
+      model: "legacy:model",
+      options: [{ id: "effort", value: "native-value" }],
+    };
+    const storedSelection = {
+      instanceId: ProviderInstanceId.make("stored-unavailable"),
+      model: null,
+      options: [{ id: "native-option", value: "native-value" }],
+    };
+    const project = { id: projectId, defaultModelSelection: legacySelection };
+    expect(resolve(config, project)).toEqual(legacySelection);
+    expect(
+      resolve(
+        {
+          ...config,
+          settings: {
+            ...config.settings,
+            projectSettingsOverrides: {
+              [projectId]: { defaultModelSelection: storedSelection },
+            },
+          },
+        },
+        project,
+      ),
+    ).toEqual(storedSelection);
+  });
+  it.each([false, true])(
+    "inherits the environment for a null project selection (folded=%s)",
+    (projectSettingsFolded) => {
+      const settings = {
+        ...config.settings,
+        projectSettingsFolded,
+        projectSettingsOverrides: {
+          [projectId]: { defaultModelSelection: null },
+        },
+      };
+      const project = { id: projectId, defaultModelSelection: projectSelection };
+      expect(resolve({ ...config, settings }, project)).toEqual(environmentSelection);
+      expect(
+        resolve({ ...config, settings: { ...settings, defaultModelSelection: null } }, project),
+      ).toEqual({ instanceId, model: null });
+    },
+  );
 });
 
 it("rejects dedupe templates without a request placeholder", () => {

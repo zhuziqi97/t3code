@@ -14,6 +14,7 @@
 import type { Messages } from "./messages.en.ts";
 
 export const zh: Partial<Messages> = {
+  "scheduled.providerUnavailable": "所选提供方不可用（{{instanceId}}）。",
   "common.open": "打开",
   "scheduled.filterLimit": "最多使用 {{count}} 个筛选条件。",
   "scheduled.filterInvalid.path": "条件 {{number}} 需要 body、headers 或 query 下的路径。",

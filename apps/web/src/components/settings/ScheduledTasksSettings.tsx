@@ -285,10 +285,10 @@ function Field({
 
 function splitModelKey(value: string): ModelSelection | null {
   const index = value.indexOf(":");
-  if (index <= 0 || index === value.length - 1) return null;
+  if (index <= 0) return null;
   return {
     instanceId: ProviderInstanceId.make(value.slice(0, index)),
-    model: value.slice(index + 1),
+    model: value.slice(index + 1) || null,
   };
 }
 
@@ -1177,13 +1177,18 @@ function ScheduledTaskEditorForm({
   const firstInstance = instanceEntries[0];
   const draftSelection = draft.modelKey ? splitModelKey(draft.modelKey) : null;
   const activeSelection =
-    draftSelection &&
-    instanceEntries.some((entry) => entry.instanceId === draftSelection.instanceId && entry.enabled)
-      ? draftSelection
-      : scheduledTaskDefaultModel(settings, selectedProject ?? null, instanceEntries);
+    draftSelection ?? scheduledTaskDefaultModel(settings, selectedProject ?? null, instanceEntries);
   const activeInstanceId =
     activeSelection?.instanceId ?? firstInstance?.instanceId ?? ("" as ProviderInstanceId);
   const activeModel = activeSelection?.model ?? "";
+  const activeEntry = instanceEntries.find((entry) => entry.instanceId === activeInstanceId);
+  const selectionUnavailable =
+    activeSelection !== null &&
+    (!activeEntry ||
+      !activeEntry.enabled ||
+      !activeEntry.installed ||
+      !activeEntry.isAvailable ||
+      activeEntry.snapshot.auth.status === "unauthenticated");
   const modelOptionsByInstance = getCustomModelOptionsByInstance(
     settings,
     providers,
@@ -1516,6 +1521,11 @@ function ScheduledTaskEditorForm({
                 }
               />
             </div>
+            {selectionUnavailable ? (
+              <p className="text-xs text-warning-foreground" role="status">
+                {t("scheduled.providerUnavailable", { instanceId: activeInstanceId })}
+              </p>
+            ) : null}
           </Field>
 
           <div className="space-y-3">

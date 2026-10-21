@@ -281,8 +281,10 @@ export function scheduledTaskDefaultModel(
       entry.isAvailable &&
       entry.snapshot.auth.status !== "unauthenticated",
   );
-  const configured = resolveProjectSettings(settings, project?.id ?? null, project).settings
-    .defaultModelSelection;
+  const resolved = resolveProjectSettings(settings, project?.id ?? null, project);
+  // Effective settings can hide an unavailable instance; tasks must keep their explicit route.
+  const configured =
+    resolved.overrides.defaultModelSelection ?? resolved.settings.defaultModelSelection;
   if (configured) return configured;
   if (settings.defaultModelSelection) return settings.defaultModelSelection;
   return available[0] ? { instanceId: available[0].instanceId, model: null } : null;
