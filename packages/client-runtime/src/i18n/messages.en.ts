@@ -14,6 +14,84 @@
  * rename another product or rewrite a command it tells the user to run.
  */
 export const en = {
+  "pullRequest.linkDialog.noProject": "No project in this environment can read {{repository}}.",
+  "pullRequest.linkDialog.noRepository":
+    "Paste the full pull request URL; this thread has no repository to resolve the number against.",
+  "pullRequest.linkDialog.unknownHost":
+    "Paste a full URL; this project's host has no known pull request URL.",
+  "general.projectOrder.stableDescription":
+    "Projects and pinned threads keep their saved order. Other active threads move to the top of their project when you send a message.",
+  "desktop.tray.open": "Open T3 Code",
+  "desktop.tray.quit": "Quit T3 Code completely",
+  "desktop.tray.notice.title": "T3 Code keeps running",
+  "desktop.tray.notice.message":
+    "Closing the window keeps your hosted environments and tasks running.",
+  "desktop.tray.notice.taskbar":
+    "Reopen T3 Code from the taskbar or app launcher. Use Quit T3 Code completely in the app or tray menu to stop this desktop and its hosted environments.",
+  "desktop.tray.notice.tray":
+    "Reopen T3 Code from its tray or menu bar icon, or launch the app again. Use Quit T3 Code completely in the app or tray menu to stop this desktop and its hosted environments.",
+  "chat.timeline.runEnded": "Turn ended",
+  "chat.timeline.runFailed": "Turn failed",
+  "chat.timeline.runStopped": "Turn stopped",
+  "chat.timeline.runRolledBack": "Turn rolled back",
+  "thread.unreadCompletion": "Unread turn result",
+  "notifications.threadEnded": "Turn ended",
+  "notifications.threadFailed": "Turn failed",
+  "notifications.approvalNeeded": "Approval needed",
+  "notifications.usageLimitReached": "Usage limit reached",
+  "notifications.inputNeeded": "Input needed",
+  "notifications.openThread": "Open thread",
+  "workspaceRecovery.title": "Workspace unavailable",
+  "workspaceRecovery.description":
+    "Choose a checkout from this project to continue the same thread. Your conversation history is kept; the provider may start a new native session.",
+  "workspaceRecovery.checkout": "Project checkout or worktree",
+  "workspaceRecovery.choose": "Choose a workspace…",
+  "workspaceRecovery.reconnect": "Use selected workspace",
+  "workspaceRecovery.refresh": "Refresh workspaces",
+  "workspaceRecovery.failed": "Could not reconnect this workspace. Try again.",
+  "workspaceRecovery.use": "Use {{workspace}}",
+  "integrations.search.description":
+    "What the address bar searches when you type something that isn't a URL.",
+  "integrations.search.reset": "search engine",
+  "integrations.search.customUrl": "Custom search URL",
+  "integrations.search.customHint": "Use %s where the search terms go.",
+  "integrations.search.invalidUrl":
+    "Enter an http or https URL containing %s. Searches use DuckDuckGo until then.",
+  "sourceControl.guide.description":
+    "Adds a Guide tab to pull requests: an agent writes a tour of the change, stop by stop, with the calls a maintainer should make.",
+  "sourceControl.guide.label": "Review guides",
+  "sourceControl.guide.modelDescription":
+    "Model that reads a pull request to write its review guide. It reads the change itself over many steps, so a stronger model helps. Off uses the source control writer model.",
+  "sourceControl.guide.separateModel": "Use a separate review guide model",
+  "sourceControl.guide.instructionsDescription":
+    "Your preferences for review guides: what to show first, dwell on, or skip. The guide's format and coverage stay the same.",
+  "sourceControl.guide.instructionsReset": "review guide instructions",
+  "sourceControl.guide.connect": "Connect an environment to choose its review guide model.",
+  "sourceControl.guide.modelNotSaved": "Review guide model not saved",
+  "sourceControl.guide.instructionsMixed":
+    "Mixed. Enter instructions to apply to all selected targets.",
+  "sourceControl.guide.instructionsPlaceholder":
+    "Show service interfaces before implementations. Skip test files unless they change behavior. Keep summaries to two sentences.",
+  "storage.database.title": "Database",
+  "storage.database.reclaim": "Reclaim {{size}} GiB on {{environment}}",
+  "storage.database.description":
+    "Old history is cleaned up automatically, but this database still holds the freed space. Run the command on {{environment}} to return it to disk; it pauses and restarts the background service. Quit the desktop app first if it hosts this environment.",
+  "storage.database.copyCommand": "Copy command",
+  "files.breadcrumbs.label": "File path",
+  "pullRequest.linkDialog.description":
+    "Attach a pull request to this thread by its URL, or by its number for this thread's repository.",
+  "pullRequest.linkDialog.placeholder": "Pull request URL or #42",
+  "pullRequest.linkDialog.failed": "Could not link the pull request.",
+  "pullRequest.linkDialog.required": "Paste a pull request URL or enter 123 / #123.",
+  "pullRequest.linkDialog.invalid": "Use a pull request URL, 123, or #123.",
+  "pullRequest.linkDialog.linking": "Linking...",
+  "pullRequest.linkDialog.link": "Link",
+  "pullRequest.breakdown.code": "Code",
+  "pullRequest.breakdown.tests": "Tests",
+  "pullRequest.breakdown.mocks": "Mocks",
+  "pullRequest.breakdown.generated": "Generated",
+  "pullRequest.breakdown.docs": "Docs",
+  "pullRequest.breakdown.total": "Total",
   "settings.search.storage-delete-now.title": "Delete now",
   "settings.search.project-overview.title": "Project overview",
   "settings.search.math-rendering.title": "Render math",
@@ -30,10 +108,13 @@ export const en = {
   "settings.search.project-actions.title": "Actions",
   "settings.search.archive.title": "Archived threads",
   "settings.search.keep-threads-with-pr.title": "Keep threads with a PR",
-  "general.keepPr.description": "Inactivity does not settle threads with a pull request. Merge and close still do.",
-  "appearance.math.description": "Typeset LaTeX math, such as $x^2$ or \\[x^2\\], in messages and Markdown previews. The composer keeps TeX source editable.",
+  "general.keepPr.description":
+    "Inactivity does not settle threads with a pull request. Merge and close still do.",
+  "appearance.math.description":
+    "Typeset LaTeX math, such as $x^2$ or \\[x^2\\], in messages and Markdown previews. The composer keeps TeX source editable.",
   "appearance.math.reset": "math rendering",
-  "general.compactIdle.description": "Compact long idle Claude threads just before their prompt cache expires, so coming back costs less.",
+  "general.compactIdle.description":
+    "Compact long idle Claude threads just before their prompt cache expires, so coming back costs less.",
   "general.compactIdle.reset": "compact idle Claude threads",
   "restore.newThreadMode": "New thread mode",
   "restore.newWorktreesRemote": "New worktrees start from remote",

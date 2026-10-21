@@ -1,4 +1,5 @@
 import { pullRequestHostOf, type RepositoryIdentity } from "@t3tools/contracts";
+import type { TFunction } from "i18next";
 import { parseChangeRequestUrl } from "@t3tools/shared/changeRequestUrl";
 
 import { sourceControlClients } from "./sourceControlClients.ts";
@@ -73,6 +74,7 @@ export function resolveLinkPullRequestInput(input: {
     readonly webUrl: (number: number) => string | null;
   } | null;
   readonly hasProject: (reference: ResolvedLink) => boolean;
+  readonly translate?: TFunction;
 }): { link: ResolvedLink } | { error: string } | null {
   const parsed =
     parseChangeRequestUrl(input.reference.trim()) !== null
@@ -82,7 +84,12 @@ export function resolveLinkPullRequestInput(input: {
   const url = parseChangeRequestUrl(parsed);
   if (url !== null) {
     if (!input.hasProject({ ...url, url: parsed })) {
-      return { error: `No project in this environment can read ${url.host}/${url.repository}.` };
+      return {
+        error:
+          input.translate?.("pullRequest.linkDialog.noProject", {
+            repository: `${url.host}/${url.repository}`,
+          }) ?? `No project in this environment can read ${url.host}/${url.repository}.`,
+      };
     }
     return {
       link: { host: url.host, repository: url.repository, number: url.number, url: parsed },
@@ -93,13 +100,18 @@ export function resolveLinkPullRequestInput(input: {
   if (input.project === null) {
     return {
       error:
+        input.translate?.("pullRequest.linkDialog.noRepository") ??
         "Paste the full pull request URL; this thread has no repository to resolve the number against.",
     };
   }
   const webUrl = input.project.webUrl(number);
   const webReference = webUrl === null ? null : parseChangeRequestUrl(webUrl);
   if (webUrl === null || webReference === null) {
-    return { error: "Paste a full URL; this project's host has no known pull request URL." };
+    return {
+      error:
+        input.translate?.("pullRequest.linkDialog.unknownHost") ??
+        "Paste a full URL; this project's host has no known pull request URL.",
+    };
   }
   return {
     link: { ...webReference, url: webUrl },

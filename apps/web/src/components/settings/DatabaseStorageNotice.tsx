@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import { useAtomValue } from "@effect/atom-react";
 import { shouldRecommendDatabaseCompaction, type EnvironmentId } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
@@ -17,6 +18,7 @@ export function DatabaseStorageNotice({
   environmentId: EnvironmentId;
   label: string;
 }) {
+  const t = useTranslate();
   const result = useAtomValue(serverEnvironment.databaseStorage({ environmentId, input: {} }));
   const [dismissed, setDismissed] = useLocalStorage(
     `database-storage-notice-dismissed:${environmentId}`,
@@ -27,15 +29,16 @@ export function DatabaseStorageNotice({
   const status = result._tag === "Success" ? result.value : null;
   if (dismissed || status === null || !shouldRecommendDatabaseCompaction(status)) return null;
   return (
-    <SettingsSection id={`storage-database-${environmentId}`} title="Database">
+    <SettingsSection id={`storage-database-${environmentId}`} title={t("storage.database.title")}>
       <SettingsGroup>
         <SettingsRow
-          title={`Reclaim ${(status.reclaimableBytes / 1024 ** 3).toFixed(1)} GiB on ${label}`}
+          title={t("storage.database.reclaim", {
+            size: (status.reclaimableBytes / 1024 ** 3).toFixed(1),
+            environment: label,
+          })}
           description={
             <>
-              Old history is cleaned up automatically, but this database still holds the freed
-              space. Run the command on {label} to return it to disk; it pauses and restarts the
-              background service. Quit the desktop app first if it hosts this environment.
+              {t("storage.database.description", { environment: label })}
               <code className="mt-2 block select-text break-all">{status.compactCommand}</code>
             </>
           }
@@ -46,10 +49,10 @@ export function DatabaseStorageNotice({
                 size="sm"
                 onClick={() => copyToClipboard(status.compactCommand, undefined)}
               >
-                Copy command
+                {t("storage.database.copyCommand")}
               </Button>
               <Button variant="ghost" size="sm" onClick={() => setDismissed(true)}>
-                Dismiss
+                {t("common.dismiss")}
               </Button>
             </div>
           }

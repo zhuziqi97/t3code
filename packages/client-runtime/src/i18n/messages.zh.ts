@@ -14,6 +14,81 @@
 import type { Messages } from "./messages.en.ts";
 
 export const zh: Partial<Messages> = {
+  "pullRequest.linkDialog.noProject": "此环境中没有项目能读取 {{repository}}。",
+  "pullRequest.linkDialog.noRepository":
+    "请粘贴完整的 Pull Request 链接；此会话没有可用于查询该编号的仓库。",
+  "pullRequest.linkDialog.unknownHost":
+    "请粘贴完整链接；无法确定此项目托管平台的 Pull Request 网址。",
+  "general.projectOrder.stableDescription":
+    "项目和置顶会话保持已保存的顺序；其他活跃会话会在发送消息后升至所属项目顶部。",
+  "desktop.tray.open": "打开 T3 Code",
+  "desktop.tray.quit": "完全退出 T3 Code",
+  "desktop.tray.notice.title": "T3 Code 会继续运行",
+  "desktop.tray.notice.message": "关闭窗口后，托管的环境和任务仍会继续运行。",
+  "desktop.tray.notice.taskbar":
+    "可从任务栏或应用启动器重新打开 T3 Code。在应用或托盘菜单中选择“完全退出 T3 Code”，即可停止此桌面应用及其托管的环境。",
+  "desktop.tray.notice.tray":
+    "可通过托盘或菜单栏图标，或再次启动应用来重新打开 T3 Code。在应用或托盘菜单中选择“完全退出 T3 Code”，即可停止此桌面应用及其托管的环境。",
+  "chat.timeline.runEnded": "本轮已结束",
+  "chat.timeline.runFailed": "本轮失败",
+  "chat.timeline.runStopped": "本轮已停止",
+  "chat.timeline.runRolledBack": "本轮已回退",
+  "thread.unreadCompletion": "有未读的轮次结果",
+  "notifications.threadEnded": "本轮已结束",
+  "notifications.threadFailed": "本轮失败",
+  "notifications.approvalNeeded": "需要审批",
+  "notifications.usageLimitReached": "已达用量上限",
+  "notifications.inputNeeded": "需要输入",
+  "notifications.openThread": "打开会话",
+  "workspaceRecovery.title": "工作区不可用",
+  "workspaceRecovery.description":
+    "选择此项目的检出目录，继续当前会话。对话历史会保留；提供方可能会启动新的原生会话。",
+  "workspaceRecovery.checkout": "项目检出目录或工作树",
+  "workspaceRecovery.choose": "选择工作区…",
+  "workspaceRecovery.reconnect": "使用所选工作区",
+  "workspaceRecovery.refresh": "刷新工作区列表",
+  "workspaceRecovery.failed": "无法重新连接此工作区，请重试。",
+  "workspaceRecovery.use": "使用 {{workspace}}",
+  "integrations.search.description": "在地址栏输入网址以外的内容时，使用此搜索引擎。",
+  "integrations.search.reset": "搜索引擎",
+  "integrations.search.customUrl": "自定义搜索网址",
+  "integrations.search.customHint": "用 %s 表示搜索词的位置。",
+  "integrations.search.invalidUrl":
+    "请输入包含 %s 的 http 或 https 网址。在此之前，搜索将使用 DuckDuckGo。",
+  "sourceControl.guide.description":
+    "为 Pull Request 添加“指南”标签页：智能体分步讲解改动，并指出维护者需要作出的判断。",
+  "sourceControl.guide.label": "审阅指南",
+  "sourceControl.guide.modelDescription":
+    "用于阅读 Pull Request 并编写审阅指南的模型。模型需要分多步阅读改动，能力较强的模型会更合适。关闭后使用版本控制文案模型。",
+  "sourceControl.guide.separateModel": "使用独立的审阅指南模型",
+  "sourceControl.guide.instructionsDescription":
+    "设置审阅指南的偏好：先讲什么、重点讲什么、跳过什么。指南的格式和覆盖范围保持不变。",
+  "sourceControl.guide.instructionsReset": "审阅指南指令",
+  "sourceControl.guide.connect": "连接环境后，可为其选择审阅指南模型。",
+  "sourceControl.guide.modelNotSaved": "审阅指南模型未保存",
+  "sourceControl.guide.instructionsMixed": "各目标的指令不同。输入指令以应用到所有选中目标。",
+  "sourceControl.guide.instructionsPlaceholder":
+    "先介绍服务接口，再介绍实现。除非测试文件改变了行为，否则跳过。总结不超过两句话。",
+  "storage.database.title": "数据库",
+  "storage.database.reclaim": "在 {{environment}} 上回收 {{size}} GiB 空间",
+  "storage.database.description":
+    "旧历史记录会自动清理，但释放的空间仍保留在数据库中。在 {{environment}} 上运行此命令可将空间归还磁盘；这会暂停并重启后台服务。如果此环境由桌面应用托管，请先退出桌面应用。",
+  "storage.database.copyCommand": "复制命令",
+  "files.breadcrumbs.label": "文件路径",
+  "pullRequest.linkDialog.description":
+    "通过链接将 Pull Request 关联到此会话，也可以输入此会话所在仓库的 Pull Request 编号。",
+  "pullRequest.linkDialog.placeholder": "Pull Request 链接或 #42",
+  "pullRequest.linkDialog.failed": "无法关联此 Pull Request。",
+  "pullRequest.linkDialog.required": "请粘贴 Pull Request 链接，或输入 123 / #123。",
+  "pullRequest.linkDialog.invalid": "请输入 Pull Request 链接、123 或 #123。",
+  "pullRequest.linkDialog.linking": "正在关联…",
+  "pullRequest.linkDialog.link": "关联",
+  "pullRequest.breakdown.code": "代码",
+  "pullRequest.breakdown.tests": "测试",
+  "pullRequest.breakdown.mocks": "Mock",
+  "pullRequest.breakdown.generated": "生成文件",
+  "pullRequest.breakdown.docs": "文档",
+  "pullRequest.breakdown.total": "总计",
   "settings.search.storage-delete-now.title": "立即删除",
   "settings.search.project-overview.title": "项目概览",
   "settings.search.math-rendering.title": "渲染数学公式",
@@ -31,9 +106,11 @@ export const zh: Partial<Messages> = {
   "settings.search.archive.title": "已归档会话",
   "settings.search.keep-threads-with-pr.title": "保留有 PR 的会话",
   "general.keepPr.description": "有 PR 的会话不会因不活跃而自动完成。PR 合并或关闭后仍会自动完成。",
-  "appearance.math.description": "在消息和 Markdown 预览中渲染 LaTeX 公式，例如 $x^2$ 或 \\[x^2\\]。输入框中仍可编辑 TeX 源码。",
+  "appearance.math.description":
+    "在消息和 Markdown 预览中渲染 LaTeX 公式，例如 $x^2$ 或 \\[x^2\\]。输入框中仍可编辑 TeX 源码。",
   "appearance.math.reset": "数学公式渲染",
-  "general.compactIdle.description": "在长时间空闲的 Claude 会话提示词缓存过期前压缩上下文，降低回来继续使用时的费用。",
+  "general.compactIdle.description":
+    "在长时间空闲的 Claude 会话提示词缓存过期前压缩上下文，降低回来继续使用时的费用。",
   "general.compactIdle.reset": "空闲 Claude 会话压缩",
   "restore.newThreadMode": "新会话模式",
   "restore.newWorktreesRemote": "从远程分支创建新工作树",
@@ -518,8 +595,10 @@ export const zh: Partial<Messages> = {
     "无法将检出目录更新到 Pull Request 的最新提交，因此目录中的代码较旧。未提交的改动或本地提交使它保持在原位置。",
   "pullRequest.flow.checkout.hereDone": "已在当前仓库检出",
   "pullRequest.flow.checkout.done": "已检出",
-  "pullRequest.flow.checkout.hereDescription": "当前仓库已切换到 Pull Request 的分支，并已打开对应会话。",
-  "pullRequest.flow.checkout.worktreeDescription": "Pull Request 已检出到独立工作树，并已打开对应会话。",
+  "pullRequest.flow.checkout.hereDescription":
+    "当前仓库已切换到 Pull Request 的分支，并已打开对应会话。",
+  "pullRequest.flow.checkout.worktreeDescription":
+    "Pull Request 已检出到独立工作树，并已打开对应会话。",
   "pullRequest.flow.checkout.ready": "检出目录已就绪",
   "pullRequest.flow.checkout.pending": "正在检出…",
   "pullRequest.flow.checkout.button": "检出",
@@ -1370,7 +1449,8 @@ export const zh: Partial<Messages> = {
   "general.whitespace.description": "设置差异面板是否默认忽略仅涉及空白字符的修改。",
   "general.whitespace.label": "默认隐藏空白字符变化",
   "general.whitespace.reset": "空白字符差异",
-  "general.diffFiles.description": "打开差异视图或 Pull Request 的“代码”标签页时，文件默认展开还是折叠。",
+  "general.diffFiles.description":
+    "打开差异视图或 Pull Request 的“代码”标签页时，文件默认展开还是折叠。",
   "general.diffFiles.label": "差异文件默认状态",
   "general.diffFiles.reset": "差异文件默认状态",
   "general.diffFiles.expanded": "展开",
