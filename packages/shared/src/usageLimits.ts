@@ -287,7 +287,10 @@ export function collectLimitAccounts(presentations: LimitPresentations): readonl
   return [...accounts.values()];
 }
 
-export function collectLimitNotices(presentations: LimitPresentations): readonly string[] {
+export function collectLimitNotices(
+  presentations: LimitPresentations,
+  translate?: UsageLimitTranslate,
+): readonly string[] {
   const label = (environmentLabel: string, subject: string) =>
     presentations.size > 1 ? `${environmentLabel} · ${subject}` : subject;
   const notices: string[] = [];
@@ -295,7 +298,7 @@ export function collectLimitNotices(presentations: LimitPresentations): readonly
     const environmentLabel = presentation.entry.target.label;
     for (const provider of providersWithLimits(presentation.serverConfig?.providers ?? [])) {
       if (provider.usageLimits?.unavailable?.reason === "unsupported") continue;
-      const notice = provider.usageLimits ? limitsNotice(provider.usageLimits) : null;
+      const notice = provider.usageLimits ? limitsNotice(provider.usageLimits, translate) : null;
       const name = provider.displayName?.trim() || String(provider.driver);
       if (notice) notices.push(`${label(environmentLabel, name)}: ${notice}`);
     }
@@ -303,7 +306,9 @@ export function collectLimitNotices(presentations: LimitPresentations): readonly
       if (source.error) {
         notices.push(`${label(environmentLabel, source.label)}: ${source.error}`);
       } else if (source.accounts.length === 0) {
-        notices.push(`${label(environmentLabel, source.label)}: No accounts reported.`);
+        notices.push(
+          `${label(environmentLabel, source.label)}: ${translate?.("usage.limits.noAccounts", {}) ?? "No accounts reported."}`,
+        );
       }
     }
   }
@@ -518,14 +523,27 @@ function poolWindows(accounts: readonly LimitAccount[], now: number): readonly L
   return pools.sort((left, right) => WINDOW_KIND_ORDER[left.kind] - WINDOW_KIND_ORDER[right.kind]);
 }
 
-export function limitsNotice(limits: ServerProviderUsageLimits): string | null {
+export function limitsNotice(
+  limits: ServerProviderUsageLimits,
+  translate?: UsageLimitTranslate,
+): string | null {
   if (limits.unavailable?.reason === "unsupported") {
-    return limits.unavailable.message ?? "This account has no subscription limits.";
+    return (
+      limits.unavailable.message ??
+      translate?.("usage.limits.noSubscriptionLimits", {}) ??
+      "This account has no subscription limits."
+    );
   }
   if (limits.unavailable?.reason === "probeFailed") {
-    return limits.unavailable.message ?? "Could not read limits.";
+    return (
+      limits.unavailable.message ??
+      translate?.("usage.limits.readFailed", {}) ??
+      "Could not read limits."
+    );
   }
-  return limits.windows.length === 0 ? "No limits reported." : null;
+  return limits.windows.length === 0
+    ? (translate?.("usage.limits.noLimits", {}) ?? "No limits reported.")
+    : null;
 }
 
 export function remainingPercent(window: ServerProviderUsageWindow): number {
@@ -569,22 +587,32 @@ function paceOfShares(usedPercent: number, elapsed: number): LimitPace {
   return "on";
 }
 
-export function formatDuration(ms: number): string {
+type UsageLimitTranslate = (key: string, values: Record<string, string | number>) => string;
+
+export function formatDuration(ms: number, translate?: UsageLimitTranslate): string {
   const remaining = Math.max(0, ms);
   const days = Math.floor(remaining / DAY);
   const hours = Math.floor((remaining % DAY) / HOUR);
   const minutes = Math.floor((remaining % HOUR) / MINUTE);
-  if (days > 0) return `${days}d ${hours}h`;
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  return `${minutes}m`;
+  if (days > 0)
+    return translate?.("usage.limits.daysHours", { days, hours }) ?? `${days}d ${hours}h`;
+  if (hours > 0)
+    return translate?.("usage.limits.hoursMinutes", { hours, minutes }) ?? `${hours}h ${minutes}m`;
+  return translate?.("usage.limits.minutes", { minutes }) ?? `${minutes}m`;
 }
 
-export function formatResetsIn(window: ServerProviderUsageWindow, now: number): string | null {
+export function formatResetsIn(
+  window: ServerProviderUsageWindow,
+  now: number,
+  translate?: UsageLimitTranslate,
+): string | null {
   const resetsAt = resetMillis(window);
   if (resetsAt === null) return null;
-  if (resetsAt <= now) return "resets now";
-  if (resetsAt - now < MINUTE) return "Resets momentarily";
-  return `resets in ${formatDuration(resetsAt - now)}`;
+  if (resetsAt <= now) return translate?.("usage.limits.resetsNow", {}) ?? "resets now";
+  if (resetsAt - now < MINUTE)
+    return translate?.("usage.limits.resetsSoon", {}) ?? "Resets momentarily";
+  const duration = formatDuration(resetsAt - now, translate);
+  return translate?.("usage.limits.resetsIn", { duration }) ?? `resets in ${duration}`;
 }
 
 export const USAGE_LIMITS_COMMAND = {
