@@ -3486,8 +3486,8 @@ export function GeneralSettingsPanel() {
         )}
         <MobileAppSettingsRow />
         <SettingsRow
-          {...searchableSetting("privacy-policy")}
-          description="How this distribution handles your data."
+          {...searchableSetting("privacy-policy", t)}
+          description={t("about.privacy.description")}
           control={
             <Button
               render={
@@ -3496,7 +3496,7 @@ export function GeneralSettingsPanel() {
               size="sm"
               variant="outline"
             >
-              View policy
+              {t("about.privacy.view")}
             </Button>
           }
         />

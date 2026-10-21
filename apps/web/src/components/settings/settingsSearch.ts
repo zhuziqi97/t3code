@@ -860,13 +860,16 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "mobile-app",
     title: "Mobile app",
     to: "/settings/general",
-    searchTerms: ["phone tablet iPhone iPad iOS Android App Store Google Play QR"],
+    searchTerms: [
+      "phone tablet iPhone iPad iOS Android App Store Google Play QR",
+      "移动应用 手机 平板",
+    ],
   },
   {
     id: "privacy-policy",
     title: "Privacy policy",
     to: "/settings/general",
-    searchTerms: ["privacy policy data"],
+    searchTerms: ["privacy policy data", "隐私政策 数据"],
   },
   {
     id: "telemetry-export",

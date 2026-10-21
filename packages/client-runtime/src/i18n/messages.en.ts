@@ -2095,8 +2095,8 @@ export const en = {
   "about.updateInstall.failed": "Install failed.",
   "about.updateCheck.failed": "Update check failed.",
   "about.updateUnsupported": "Automatic updates are not available in this build.",
-  "about.privacy.description":
-    "How we handle your data, including the anonymous usage data T3 Code collects.",
+  "about.mobile.description": "Connect to your server from your phone or tablet.",
+  "about.privacy.description": "How this distribution handles your data.",
   "about.privacy.view": "View policy",
   "about.diagnostics": "Diagnostics",
   "about.diagnostics.description": "Inspect processes, resource use, and logs on this environment.",

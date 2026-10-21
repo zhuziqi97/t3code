@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import { AndroidIcon, AppleIcon } from "../Icons";
 import { Button } from "../ui/button";
 import { Popover, PopoverPopup, PopoverTitle, PopoverTrigger } from "../ui/popover";
@@ -21,10 +22,11 @@ const stores = [
 ];
 
 export function MobileAppSettingsRow() {
+  const t = useTranslate();
   return (
     <SettingsRow
-      {...searchableSetting("mobile-app")}
-      description="Connect to your server from your phone or tablet."
+      {...searchableSetting("mobile-app", t)}
+      description={t("about.mobile.description")}
       control={
         <div className="flex items-center gap-2">
           {stores.map(({ label, store, url, Icon }) => (
