@@ -641,6 +641,9 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.sidebarWorkingShelfEnabled !== DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled
       ? [t("general.working.label")]
       : []),
+    ...(settings.compactIdleThreads !== DEFAULT_UNIFIED_SETTINGS.compactIdleThreads
+      ? [t("settings.search.compact-idle-threads.title")]
+      : []),
     ...(settings.sidebarAutoSettleAfterDays !== DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays
       ? [t("settings.search.auto-settle-inactive-threads.title")]
       : []),
@@ -811,6 +814,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       sidebarProjectGroupingMode: DEFAULT_UNIFIED_SETTINGS.sidebarProjectGroupingMode,
       sidebarProjectSortOrder: DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder,
       sidebarWorkingShelfEnabled: DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled,
+      compactIdleThreads: DEFAULT_UNIFIED_SETTINGS.compactIdleThreads,
       sidebarAutoSettleAfterDays: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays,
       sidebarAutoSettleKeepPullRequests: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleKeepPullRequests,
       sidebarAutoSettleOnMerge: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge,
