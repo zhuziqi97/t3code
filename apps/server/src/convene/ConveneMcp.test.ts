@@ -55,6 +55,7 @@ it.effect(
         contentType: string | undefined;
       }> = [];
       let revision = 1;
+      let rememberedKey = "original-worktree";
       const config = (
         id: string,
         enabled = true,
@@ -75,8 +76,19 @@ it.effect(
       const dependencies = Layer.mergeAll(
         Layer.mock(ConveneWorkspaces.ConveneWorkspaces)({
           threadKey: (_projectId, threadId) =>
-            Effect.succeed(threadId === "a" ? "original-worktree" : "root"),
+            Effect.succeed(threadId === "a" ? rememberedKey : "root"),
           rememberThread: () => Effect.void,
+          list: (projectId) =>
+            Effect.succeed([
+              {
+                projectId,
+                key: projectId === "a" ? "original-worktree" : "root",
+                path: `/work/${projectId}`,
+                available: true,
+                branch: null,
+                displayName: projectId,
+              },
+            ]),
         }),
         NodeHttpServer.layerTest,
         NodeServices.layer,
@@ -181,8 +193,17 @@ it.effect(
           "workspace_unavailable",
         );
         assert.equal((yield* forward(replacement.authorizationHeader)).status, 403);
+        yield* broker.configure([config("a"), config("b")]);
+        rememberedKey = "replacement-worktree";
+        assert.equal((yield* forward(replacement.authorizationHeader)).status, 403);
+        assert.equal(
+          (yield* broker.prepare(a, "stale-workspace").pipe(Effect.flip)).category,
+          "workspace_unavailable",
+        );
+        assert.equal((yield* forward(other.authorizationHeader)).status, 200);
         yield* broker.release(a);
         assert.equal((yield* forward(replacement.authorizationHeader)).status, 401);
+        assert.equal((yield* forward(other.authorizationHeader)).status, 200);
       }).pipe(Effect.provide(ConveneMcp.layer.pipe(Layer.provide(dependencies))));
     }).pipe(Effect.scoped),
 );

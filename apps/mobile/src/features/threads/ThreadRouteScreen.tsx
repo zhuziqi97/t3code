@@ -65,6 +65,7 @@ import {
 } from "../terminal/terminalLaunchContext";
 import { terminalDebugLog } from "../terminal/terminalDebugLog";
 import { ThreadDetailScreen, type ThreadDetailScreenProps } from "./ThreadDetailScreen";
+import { ThreadWorkspaceRecoveryCard } from "./ThreadWorkspaceRecoveryCard";
 import { GitOverviewSheet } from "./git/GitOverviewSheet";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useSelectedThreadGitActions } from "../../state/use-selected-thread-git-actions";
@@ -1002,6 +1003,11 @@ function ThreadRouteContent(
         onReturnToThread={props.onReturnToThread}
       />
 
+      <ThreadWorkspaceRecoveryCard
+        key={String(selectedThread.id)}
+        environmentId={selectedThread.environmentId}
+        threadId={selectedThread.id}
+      />
       {renderThreadRouteBody()}
     </>
   );

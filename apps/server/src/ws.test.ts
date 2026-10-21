@@ -1,3 +1,4 @@
+import * as ThreadWorkspaceRecovery from "./orchestration-v2/ThreadWorkspaceRecovery.ts";
 import * as ConveneConfiguration from "./convene/ConveneConfiguration.ts";
 import * as ConveneConnection from "./convene/ConveneConnection.ts";
 import * as ConveneSettings from "./convene/ConveneSettings.ts";
@@ -452,6 +453,7 @@ it.live.each(["thread", "shell"] as const)(
 const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(ConveneConfiguration.ConveneConfiguration)({}),
   Layer.mock(ConveneConnection.ConveneConnection)({}),
+  Layer.mock(ThreadWorkspaceRecovery.ThreadWorkspaceRecovery)({}),
   Layer.mock(ConveneSettings.ConveneSettings)({}),
   Layer.mock(ServerSecretStore.ServerSecretStore)({}),
   Layer.mock(WorkspacePaths.WorkspacePaths)({}),

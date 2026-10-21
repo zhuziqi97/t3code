@@ -7,6 +7,8 @@ import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
+import * as PubSub from "effect/PubSub";
+import * as Stream from "effect/Stream";
 
 import * as ServerConfig from "../config.ts";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
@@ -45,6 +47,7 @@ export class ConveneWorkspaceError extends Schema.TaggedError<ConveneWorkspaceEr
 export class ConveneWorkspaces extends Context.Service<
   ConveneWorkspaces,
   {
+    readonly changes: Stream.Stream<void>;
     readonly list: (
       projectId: ProjectId,
     ) => Effect.Effect<ReadonlyArray<Workspace>, ConveneWorkspaceError>;
@@ -53,6 +56,11 @@ export class ConveneWorkspaces extends Context.Service<
       key: string,
     ) => Effect.Effect<Workspace | null, ConveneWorkspaceError>;
     readonly rememberThread: (
+      projectId: ProjectId,
+      threadId: string,
+      key: string,
+    ) => Effect.Effect<void, ConveneWorkspaceError>;
+    readonly rebindThread: (
       projectId: ProjectId,
       threadId: string,
       key: string,
@@ -69,6 +77,7 @@ const make = Effect.gen(function* () {
   const projects = yield* ProjectStore.ProjectStoreV2;
   const git = yield* Git.GitVcsDriver;
   const lock = yield* Semaphore.make(1);
+  const changes = yield* PubSub.unbounded<void>();
   const cachePath = path.join(config.stateDir, "convene-workspaces.json");
   const cache = (yield* fs.exists(cachePath))
     ? yield* fs.readFileString(cachePath).pipe(Effect.flatMap(decodeState))
@@ -130,10 +139,25 @@ const make = Effect.gen(function* () {
             });
             if (repository.exitCode === 0) {
               const repositoryRoot = repository.stdout.trim();
+              const rootBranch = yield* git.execute({
+                operation: "convene-workspaces.branch",
+                cwd: root,
+                args: ["symbolic-ref", "--short", "-q", "HEAD"],
+                allowNonZeroExit: true,
+              });
+              set({
+                projectId,
+                key: "root",
+                path: root,
+                displayName: "Project folder",
+                branch: rootBranch.exitCode === 0 ? rootBranch.stdout.trim() : null,
+                available,
+              });
               const relative = path.relative(repositoryRoot, root);
               for (const checkout of yield* git.listWorktreePaths(root)) {
                 const workspacePath = path.join(checkout, relative);
                 if (workspacePath === root) continue;
+                if (!(yield* directoryExists(checkout))) continue;
                 // Git removes a linked checkout's admin directory on removal. A
                 // new checkout at the same path consequently receives a new id.
                 const admin = (yield* command(checkout, [
@@ -170,11 +194,35 @@ const make = Effect.gen(function* () {
       .pipe(Effect.mapError((cause) => new ConveneWorkspaceError({ projectId, cause })));
   });
   return ConveneWorkspaces.of({
+    changes: Stream.fromPubSub(changes),
     list,
     resolve: (projectId, key) =>
       list(projectId).pipe(Effect.map((items) => items.find((item) => item.key === key) ?? null)),
     threadKey: (projectId, threadId) =>
       Effect.sync(() => threadKeys.get(`${projectId}:${threadId}`)?.key ?? null),
+    rebindThread: Effect.fn("ConveneWorkspaces.rebindThread")(function* (projectId, threadId, key) {
+      const target = (yield* list(projectId)).find((workspace) => workspace.key === key);
+      if (!target?.available) return yield* new ConveneWorkspaceError({ projectId });
+      yield* lock
+        .withPermit(
+          Effect.gen(function* () {
+            const id = `${projectId}:${threadId}`;
+            const previous = threadKeys.get(id);
+            if (previous?.key === key) return yield* persist;
+            threadKeys.set(id, { projectId, threadId, key });
+            yield* persist.pipe(
+              Effect.onError(() =>
+                Effect.sync(() => {
+                  if (previous === undefined) threadKeys.delete(id);
+                  else threadKeys.set(id, previous);
+                }),
+              ),
+            );
+            yield* PubSub.publish(changes, undefined);
+          }),
+        )
+        .pipe(Effect.mapError((cause) => new ConveneWorkspaceError({ projectId, cause })));
+    }),
     rememberThread: (projectId, threadId, key) =>
       lock
         .withPermit(

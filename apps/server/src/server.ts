@@ -1,3 +1,4 @@
+import * as ThreadWorkspaceRecovery from "./orchestration-v2/ThreadWorkspaceRecovery.ts";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
 import type { RelayManagedEndpointRuntimeConfig } from "@t3tools/contracts/relay";
 import * as Random from "effect/Random";
@@ -566,7 +567,7 @@ const layerProviderInstallationRefresh = Layer.effectDiscard(
 );
 
 const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
-  ConveneSettings.layer.pipe(
+  Layer.merge(ConveneSettings.layer, ThreadWorkspaceRecovery.layer).pipe(
     Layer.provideMerge(ConveneConnection.layer),
     Layer.provideMerge(ConveneNative.layer),
     Layer.provideMerge(ConveneConfiguration.layer),

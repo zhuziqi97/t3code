@@ -1,4 +1,10 @@
 import {
+  ThreadWorkspaceInput,
+  ThreadWorkspaceState,
+  RecoverThreadWorkspaceInput,
+  ThreadWorkspaceRecoveryError,
+} from "./workspaceRecovery.ts";
+import {
   OrchestrationV2SearchThreadError,
   OrchestrationV2SearchThreadInput,
   OrchestrationV2SearchThreadResult,
@@ -383,6 +389,8 @@ export const WS_METHODS = {
   conveneSubscribeStatus: "convene.subscribeStatus",
   conveneManage: "convene.manage",
   conveneQueryProject: "convene.queryProject",
+  threadWorkspaceInspect: "thread.workspace.inspect",
+  threadWorkspaceRecover: "thread.workspace.recover",
   conveneMutateProject: "convene.mutateProject",
   conveneProjectOptions: "convene.projectOptions",
   // Project registry methods
@@ -1895,6 +1903,16 @@ export class RpcScopeAuthorization extends RpcMiddleware.Service<RpcScopeAuthori
 ) {}
 
 export const WsRpcGroup = RpcGroup.make(
+  Rpc.make(WS_METHODS.threadWorkspaceInspect, {
+    payload: ThreadWorkspaceInput,
+    success: ThreadWorkspaceState,
+    error: Schema.Union([ThreadWorkspaceRecoveryError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make(WS_METHODS.threadWorkspaceRecover, {
+    payload: RecoverThreadWorkspaceInput,
+    success: ThreadWorkspaceState,
+    error: Schema.Union([ThreadWorkspaceRecoveryError, EnvironmentAuthorizationError]),
+  }),
   Rpc.make(WS_METHODS.conveneStatus, {
     payload: Schema.Struct({}),
     success: ConveneStatus,

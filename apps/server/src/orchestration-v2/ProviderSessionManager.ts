@@ -2425,7 +2425,11 @@ export const layerWithOptions = (
             }
             const detachResult = yield* Ref.modify(sessions, (current) => {
               const entry = current.get(key);
-              if (entry === undefined || !entry.attachedThreadIds.has(input.threadId)) {
+              if (
+                entry === undefined ||
+                (!entry.attachedThreadIds.has(input.threadId) &&
+                  !entry.mcpCredentialIdByThread.has(input.threadId))
+              ) {
                 return [
                   Option.none<{
                     readonly entry: LiveSessionEntry;
@@ -2475,8 +2479,9 @@ export const layerWithOptions = (
             // provider process may still be alive (shared multi-thread codex
             // session across a workspace handoff) and holds its MCP client's
             // credential for the thread it will re-attach with.
-            if (input.revokeMcpCredential === true) {
-              yield* clearMcpSession(input.threadId);
+            const retiredCredentialId = currentEntry?.mcpCredentialIdByThread.get(input.threadId);
+            if (input.revokeMcpCredential === true && retiredCredentialId !== undefined) {
+              yield* clearUnusedMcpSession(input.threadId, retiredCredentialId);
             }
             if (Option.isNone(detached)) {
               return;

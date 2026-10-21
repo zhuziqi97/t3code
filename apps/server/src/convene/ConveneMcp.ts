@@ -1,4 +1,4 @@
-import { type ThreadId } from "@t3tools/contracts";
+import { ProjectId, type ThreadId } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
@@ -59,7 +59,13 @@ const make = Effect.gen(function* () {
   let configurations: ReadonlyArray<ConvenePlatform.Configuration> = [];
   const leases = new Map<
     string,
-    { threadId: ThreadId; providerSessionId: string; projectId: string; targetId: string }
+    {
+      threadId: ThreadId;
+      providerSessionId: string;
+      projectId: string;
+      targetId: string;
+      workspaceKey: string;
+    }
   >();
   const credentials = new Map<string, ConvenePlatform.Credential>();
 
@@ -80,14 +86,27 @@ const make = Effect.gen(function* () {
     );
     if (!config || !config.mcp_enabled) return {};
     const workspaceKey = yield* workspaces.threadKey(thread.projectId, threadId);
+    const locations = yield* workspaces
+      .list(thread.projectId)
+      .pipe(
+        Effect.mapError(
+          (cause) => new ConveneMcpError({ category: "workspace_unavailable", cause }),
+        ),
+      );
+    const workspace = locations.find(
+      (location) =>
+        location.available &&
+        (thread.worktreePath === null
+          ? location.key === "root"
+          : location.path === thread.worktreePath),
+    );
+    if (!workspace || (workspaceKey !== null && workspace.key !== workspaceKey))
+      return yield* new ConveneMcpError({ category: "workspace_unavailable" });
     const target = config.targets.find(
       (target) =>
         target.availability === "AVAILABLE" &&
-        (workspaceKey !== null
-          ? target.native_workspace_key === workspaceKey
-          : thread.worktreePath === null
-            ? target.native_workspace_key === "root"
-            : target.path === thread.worktreePath),
+        target.native_workspace_key === workspace.key &&
+        (target.path === null || target.path === workspace.path),
     );
     if (!target) return yield* new ConveneMcpError({ category: "workspace_unavailable" });
     yield* workspaces
@@ -116,6 +135,7 @@ const make = Effect.gen(function* () {
       providerSessionId,
       projectId: config.client_project_id,
       targetId: target.target_id,
+      workspaceKey: workspace.key,
     });
     return { convene: { endpoint, authorizationHeader: `Bearer ${token}` } };
   });
@@ -129,8 +149,16 @@ const make = Effect.gen(function* () {
       : undefined;
     if (!lease) return HttpServerResponse.empty({ status: 401 });
     const config = configurations.find((config) => config.client_project_id === lease.projectId);
+    const threadKey =
+      config === undefined
+        ? null
+        : yield* workspaces.threadKey(
+            ProjectId.make(config.project.native_project_id),
+            lease.threadId,
+          );
     if (
       !config?.mcp_enabled ||
+      threadKey !== lease.workspaceKey ||
       !config.targets.some(
         (target) => target.target_id === lease.targetId && target.availability === "AVAILABLE",
       )

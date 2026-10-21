@@ -7,11 +7,16 @@ import {
   WorktreeMcpHandoffResult,
   WorktreeMcpStatusResult,
   ThreadId,
+  TrimmedNonEmptyString,
+  ThreadWorkspaceState,
+  RecoverThreadWorkspaceInput,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import * as GitWorkflowService from "../../../git/GitWorkflowService.ts";
 import * as ProjectService from "../../../project/ProjectService.ts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
+import * as ThreadWorkspaceRecovery from "../../../orchestration-v2/ThreadWorkspaceRecovery.ts";
+import * as Crypto from "effect/Crypto";
 import { Tool, Toolkit } from "effect/ai";
 
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
@@ -81,8 +86,48 @@ const WorktreeListTool = Tool.make("t3_worktree_list", {
 })
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false);
+const RecoveryOptionsTool = Tool.make("t3_worktree_recovery_options", {
+  description:
+    "List the available project checkout and existing worktrees for a thread whose workspace is unavailable. Omit threadId for this thread. These choices preserve the T3 conversation; native provider identity may change. Do not choose a replacement workspace without the user's direction.",
+  parameters: Schema.Struct({ threadId: Schema.optional(ThreadId) }),
+  success: ThreadWorkspaceState,
+  failure: OrchestratorMcpFailure,
+  failureMode: "return",
+  dependencies: [
+    McpInvocationContext.McpInvocationContext,
+    ThreadManagementService.ThreadManagementService,
+    ThreadWorkspaceRecovery.ThreadWorkspaceRecovery,
+  ],
+})
+  .annotate(Tool.Readonly, true)
+  .annotate(Tool.Destructive, false);
+
+const RecoverWorkspaceTool = Tool.make("t3_worktree_recover", {
+  description:
+    "Reconnect an idle T3 thread to the checkout selected by the user from t3_worktree_recovery_options. Pass worktreePath=null for the project checkout, or the exact listed worktreePath. Retires this thread's old provider/MCP ownership, preserves its history and provider selection, and reports the new workspace identity. Does not activate or transfer platform modules, send a message, or replay any tool operation. clientRequestId makes a retry use the same command receipt.",
+  parameters: Schema.Struct({
+    threadId: ThreadId,
+    worktreePath: RecoverThreadWorkspaceInput.fields.worktreePath,
+    clientRequestId: Schema.optional(TrimmedNonEmptyString),
+  }),
+  success: ThreadWorkspaceState,
+  failure: OrchestratorMcpFailure,
+  failureMode: "return",
+  dependencies: [
+    McpInvocationContext.McpInvocationContext,
+    ThreadManagementService.ThreadManagementService,
+    ThreadWorkspaceRecovery.ThreadWorkspaceRecovery,
+    Crypto.Crypto,
+  ],
+})
+  .annotate(Tool.Readonly, false)
+  .annotate(Tool.Destructive, true)
+  .annotate(Tool.Idempotent, false);
+
 export const WorktreeToolkit = Toolkit.make(
   WorktreeHandoffTool,
   WorktreeStatusTool,
   WorktreeListTool,
+  RecoveryOptionsTool,
+  RecoverWorkspaceTool,
 );

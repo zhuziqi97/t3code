@@ -1,4 +1,6 @@
+import * as ThreadWorkspaceRecovery from "./orchestration-v2/ThreadWorkspaceRecovery.ts";
 import type * as RpcGroup from "effect/rpc/RpcGroup";
+import type * as Rpc from "effect/rpc/Rpc";
 import { OrchestrationDispatchCommandError } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
@@ -544,6 +546,25 @@ const PROVIDER_STATUS_DEBOUNCE_MS = 200;
 
 // Middleware added later wraps middleware added earlier, so instrumentation wraps authorization.
 const ServerWsRpcGroup = WsRpcGroup.middleware(RpcInstrumentation);
+const CoreServerWsRpcGroup = ServerWsRpcGroup.omit(
+  WS_METHODS.threadWorkspaceInspect,
+  WS_METHODS.threadWorkspaceRecover,
+);
+const layerWorkspaceInspectRpc = ServerWsRpcGroup.toLayerHandler(
+  WS_METHODS.threadWorkspaceInspect,
+  Effect.map(
+    ThreadWorkspaceRecovery.ThreadWorkspaceRecovery,
+    (service) => (input) => service.inspect(input),
+  ),
+);
+const layerWorkspaceRecoverRpc = ServerWsRpcGroup.toLayerHandler(
+  WS_METHODS.threadWorkspaceRecover,
+  Effect.map(
+    ThreadWorkspaceRecovery.ThreadWorkspaceRecovery,
+    (service) => (input) => service.recover(input),
+  ),
+);
+
 // Replaying each intervening event costs a shell refetch; past this gap a
 // single O(active-threads) snapshot is cheaper and bounded.
 const SHELL_RESUME_MAX_GAP = 1_000;
@@ -1157,14 +1178,14 @@ export const subscribeOrchestrationV2Shell = Effect.fn("ws.orchestrationV2.subsc
   },
 );
 
-export const layerWsRpc = (
+const makeCoreWsRpcLayer = (
   currentSession: EnvironmentAuth.AuthenticatedSession,
   clientOrigin: OrchestrationClientOrigin,
   clientAnalyticsProps: Readonly<Record<string, unknown>>,
   previewAutomationBroker: PreviewAutomationBroker.PreviewAutomationBroker["Service"],
   serverBrowser: ServerBrowser.ServerBrowser["Service"],
 ) =>
-  ServerWsRpcGroup.toLayer(
+  CoreServerWsRpcGroup.toLayer(
     Effect.gen(function* () {
       const currentSessionId = currentSession.sessionId;
       const conveneSettings = yield* ConveneSettings.ConveneSettings;
@@ -3041,10 +3062,21 @@ export const layerWsRpc = (
               Stream.concat(Stream.make(latest), changes),
             ),
           ),
-      } satisfies RpcGroup.HandlersFrom<RpcGroup.Rpcs<typeof ServerWsRpcGroup>>;
+      } satisfies RpcGroup.HandlersFrom<RpcGroup.Rpcs<typeof CoreServerWsRpcGroup>>;
       return handlers;
     }),
   );
+
+const makeWsRpcLayer = (...args: Parameters<typeof makeCoreWsRpcLayer>) =>
+  Layer.mergeAll(layerWorkspaceInspectRpc, layerWorkspaceRecoverRpc, makeCoreWsRpcLayer(...args));
+
+// Keep RPC schemas from expanding again at each consumer's Layer.provide call.
+type WsRpcTag = RpcGroup.Rpcs<typeof ServerWsRpcGroup>["_tag"];
+type WsRpcHandlers = { [Tag in WsRpcTag]: Rpc.Handler<Tag> }[WsRpcTag];
+export const layerWsRpc: (
+  ...args: Parameters<typeof makeWsRpcLayer>
+) => Layer.Layer<WsRpcHandlers, never, Layer.Services<ReturnType<typeof makeWsRpcLayer>>> =
+  makeWsRpcLayer;
 
 // RpcServer's default sends a socket-level Defect frame instead, and the client
 // ends every pending request on the socket with it.
@@ -3204,6 +3236,7 @@ export const layer: Layer.Layer<
   | HttpRouter.Request<"Requires", EnvironmentAuth.EnvironmentAuth>
   | HttpRouter.Request<"Requires", AnalyticsService.AnalyticsService>
   | HttpRouter.Request<"Requires", ServerRuntimeStartup.ServerRuntimeStartup>
+  | HttpRouter.Request<"Requires", ThreadWorkspaceRecovery.ThreadWorkspaceRecovery>
   | HttpRouter.Request<"Requires", ThreadLaunchService.ThreadLaunchService>
   | HttpRouter.Request<"Requires", ThreadManagementService.ThreadManagementService>
   | HttpRouter.Request<"Requires", FileSystem.FileSystem>

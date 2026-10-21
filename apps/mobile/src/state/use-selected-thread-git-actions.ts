@@ -9,6 +9,7 @@ import {
 } from "@t3tools/client-runtime/state/vcs";
 import {
   AuthOrchestrationOperateScope,
+  CommandId,
   AuthSourceControlWriteScope,
   EnvironmentAuthorizationError,
   type GitRunStackedActionResult,
@@ -21,6 +22,7 @@ import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
 
 import { useBranches } from "../state/queries";
+import { workspaceRecoveryEnvironment } from "./workspaceRecovery";
 import { threadEnvironment } from "../state/threads";
 import { vcsActionManager, vcsEnvironment } from "../state/vcs";
 import { uuidv4 } from "../lib/uuid";
@@ -33,6 +35,9 @@ import { useThreadSelection } from "./use-thread-selection";
 import { useSelectedThreadWorktree } from "./use-selected-thread-worktree";
 
 export function useSelectedThreadGitActions() {
+  const recoverWorkspace = useAtomCommand(workspaceRecoveryEnvironment.recover, {
+    reportFailure: false,
+  });
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
@@ -89,6 +94,16 @@ export function useSelectedThreadGitActions() {
           ),
         );
       }
+      if (nextState.worktreePath !== undefined && nextState.worktreePath !== thread.worktreePath) {
+        return recoverWorkspace({
+          environmentId: thread.environmentId,
+          input: {
+            commandId: CommandId.make(uuidv4()),
+            threadId: thread.id,
+            worktreePath: nextState.worktreePath,
+          },
+        });
+      }
       return updateThreadMetadata({
         environmentId: thread.environmentId,
         input: {
@@ -98,7 +113,7 @@ export function useSelectedThreadGitActions() {
         },
       });
     },
-    [updateThreadMetadata],
+    [updateThreadMetadata, recoverWorkspace],
   );
 
   const refreshSelectedThreadGitStatus = useCallback(
@@ -242,8 +257,8 @@ export function useSelectedThreadGitActions() {
         : AsyncResult.success(undefined);
       branchState.refresh();
       await refreshSelectedThreadGitStatus({ quiet: true, cwd: input.cwd });
-      return AsyncResult.isFailure(updateResult)
-        ? AsyncResult.failure(updateResult.cause)
+      return updateResult._tag === "Failure"
+        ? AsyncResult.failure<void, unknown>(updateResult.cause)
         : AsyncResult.success(undefined);
     },
     [branchState, refreshSelectedThreadGitStatus, updateThreadGitContext],

@@ -3073,6 +3073,11 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
                 client.session.get({ sessionID: sessionId }),
               );
               const nativeSession = unwrapData("session.get", response);
+              // OpenCode keeps the directory on the native session. A client
+              // opened for a different checkout must use the normal history handoff.
+              if (nativeSession.directory !== cwd) {
+                return yield* protocolError("The OpenCode session belongs to another workspace.");
+              }
               const resumedAt = yield* DateTime.now;
               const providerThread = {
                 ...threadInput.providerThread,

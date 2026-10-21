@@ -79,286 +79,287 @@ type ReportWaiter = Deferred.Deferred<void, ConveneIntegrationError>;
 declare const __CONVENE_BUILD_ID__: string | null;
 
 /** One module owns the outward connection; native commands remain in T3 services. */
-const start = (
+const start = Effect.fn("ConveneConnection.start")(function* (
   state: SubscriptionRef.SubscriptionRef<ConnectionState>,
   requests: Queue.Queue<ReportWaiter>,
-) =>
-  Effect.gen(function* () {
-    const platform = yield* ConvenePlatform.ConvenePlatform;
-    const broker = yield* ConveneMcp.ConveneMcp;
-    const projects = yield* ProjectStore.ProjectStoreV2;
-    const events = yield* EventStore.OrchestrationEventStore;
-    const fs = yield* FileSystem.FileSystem;
-    const crypto = yield* Crypto.Crypto;
-    const workspaces = yield* ConveneWorkspaces.ConveneWorkspaces;
-    const configurationCache = yield* ConveneConfiguration.ConveneConfiguration;
-    const connection = yield* platform.readConnection;
-    if (Option.isNone(connection)) {
-      yield* SubscriptionRef.set(state, {
-        phase: "unpaired",
-        baseUrl: null,
-        runnerId: null,
-        error: null,
-      });
-      return yield* Effect.never;
-    }
-    const paired = connection.value;
+) {
+  const platform = yield* ConvenePlatform.ConvenePlatform;
+  const broker = yield* ConveneMcp.ConveneMcp;
+  const projects = yield* ProjectStore.ProjectStoreV2;
+  const events = yield* EventStore.OrchestrationEventStore;
+  const fs = yield* FileSystem.FileSystem;
+  const crypto = yield* Crypto.Crypto;
+  const workspaces = yield* ConveneWorkspaces.ConveneWorkspaces;
+  const configurationCache = yield* ConveneConfiguration.ConveneConfiguration;
+  const connection = yield* platform.readConnection;
+  if (Option.isNone(connection)) {
     yield* SubscriptionRef.set(state, {
-      phase: "connecting",
-      baseUrl: paired.baseUrl,
-      runnerId: paired.runnerId,
+      phase: "unpaired",
+      baseUrl: null,
+      runnerId: null,
       error: null,
     });
-    const url = new URL(`${paired.baseUrl.replace(/\/$/, "")}/api/v1/execution-runners/ws`);
-    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    return yield* Effect.never;
+  }
+  const paired = connection.value;
+  yield* SubscriptionRef.set(state, {
+    phase: "connecting",
+    baseUrl: paired.baseUrl,
+    runnerId: paired.runnerId,
+    error: null,
+  });
+  const url = new URL(`${paired.baseUrl.replace(/\/$/, "")}/api/v1/execution-runners/ws`);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
 
-    const connect = Effect.scoped(
-      Effect.gen(function* () {
-        const webContext = yield* Layer.build(ConveneWeb.layer);
-        const token = yield* platform.accessToken;
-        const socket = yield* Socket.makeWebSocket(url.toString(), {
-          openTimeout: "10 seconds",
-        }).pipe(Effect.provide(NodeSocket.layerWebSocketConstructor));
-        const writer = yield* socket.writer;
-        const { pull } = yield* socket.reader;
-        const send = (message: object) => writer.writeAll([encodeJson(message)]);
-        const sendMessage = Effect.fn("ConveneConnection.sendMessage")(function* (
-          type: string,
-          payload: object,
-          id?: string,
-        ) {
-          yield* send({
-            PROTOCOL_VERSION: 1,
-            TYPE: type,
-            MESSAGE_ID: id ?? (yield* crypto.randomUUIDv4()),
-            OCCURRED_AT: DateTime.formatIso(yield* DateTime.now),
-            RUNNER_ID: paired.runnerId,
-            PAYLOAD: payload,
-          });
+  const connect = Effect.scoped(
+    Effect.gen(function* () {
+      const webContext = yield* Layer.build(ConveneWeb.layer);
+      const token = yield* platform.accessToken;
+      const socket = yield* Socket.makeWebSocket(url.toString(), {
+        openTimeout: "10 seconds",
+      }).pipe(Effect.provide(NodeSocket.layerWebSocketConstructor));
+      const writer = yield* socket.writer;
+      const { pull } = yield* socket.reader;
+      const send = (message: object) => writer.writeAll([encodeJson(message)]);
+      const sendMessage = Effect.fn("ConveneConnection.sendMessage")(function* (
+        type: string,
+        payload: object,
+        id?: string,
+      ) {
+        yield* send({
+          PROTOCOL_VERSION: 1,
+          TYPE: type,
+          MESSAGE_ID: id ?? (yield* crypto.randomUUIDv4()),
+          OCCURRED_AT: DateTime.formatIso(yield* DateTime.now),
+          RUNNER_ID: paired.runnerId,
+          PAYLOAD: payload,
         });
-        const report = (id?: string) =>
+      });
+      const report = Effect.fn("ConveneConnection.report")(function* (id?: string) {
+        const current = yield* projects.list();
+        const projected = yield* Effect.forEach(current, (project) =>
           Effect.gen(function* () {
-            const current = yield* projects.list();
-            const projected = yield* Effect.forEach(current, (project) =>
-              Effect.gen(function* () {
-                const stat = yield* fs.stat(project.workspaceRoot).pipe(Effect.option);
-                const available = Option.isSome(stat) && stat.value.type === "Directory";
-                const fields = {
-                  NATIVE_PROJECT_KIND: "t3_project",
-                  NATIVE_PROJECT_ID: project.projectId,
-                  EXECUTION_HOST_ID: "local",
-                  DISPLAY_NAME: project.title,
-                  AVAILABILITY: available ? "AVAILABLE" : "UNAVAILABLE",
-                  UNAVAILABLE_REASON: available
-                    ? null
-                    : {
-                        CODE: "WORKSPACE_UNAVAILABLE",
-                        MESSAGE: "The project directory is unavailable.",
-                      },
-                  UPDATED_AT: project.updatedAt,
-                };
-                const locations = yield* workspaces.list(project.projectId);
-                return {
-                  project: fields,
-                  targets: locations.map((workspace) => ({
-                    ...fields,
-                    TARGET_ID: `t3:${paired.runnerId}:project:${project.projectId}:${workspace.key}`,
-                    NATIVE_WORKSPACE_KEY: workspace.key,
-                    PATH: workspace.path,
-                    WORKSPACE_DISPLAY_NAME: workspace.displayName,
-                    AVAILABILITY: workspace.available ? "AVAILABLE" : "UNAVAILABLE",
-                    UNAVAILABLE_REASON: workspace.available
-                      ? null
-                      : {
-                          CODE: "WORKSPACE_UNAVAILABLE",
-                          MESSAGE: "This workspace is unavailable.",
-                        },
-                    REPOSITORY: null,
-                    BRANCH: workspace.branch,
-                    AGENT_TYPE: null,
-                  })),
-                };
-              }),
-            );
-            yield* sendMessage(
-              "TARGETS_REPORT",
-              {
-                PROJECTS: projected.map((item) => item.project),
-                TARGETS: projected.flatMap((item) => item.targets),
-              },
-              id,
-            );
-          });
-        yield* send({ TYPE: "AUTHENTICATE", TOKEN: token });
-        yield* sendMessage("HELLO", {
-          CLIENT_TYPE: "t3",
-          CLIENT_VERSION: packageJson.version,
-          RUNNER_BUILD_ID:
-            (typeof __CONVENE_BUILD_ID__ !== "undefined" && __CONVENE_BUILD_ID__) ||
-            `convene-t3-${packageJson.version}`,
-          SUPPORTED_PROTOCOLS: CONVENE_SUPPORTED_PROTOCOLS,
-        });
-        const configurations = new Map<string, ConvenePlatform.Configuration>();
-        const dataChannels = new Map<string, Fiber.Fiber<void, unknown>>();
-        const pendingReports = new Map<string, ReportWaiter>();
-        yield* Effect.addFinalizer(() =>
-          Effect.gen(function* () {
-            for (const waiter of pendingReports.values())
-              yield* Deferred.fail(
-                waiter,
-                new ConveneIntegrationError({ operation: "refresh", code: "DISCONNECTED" }),
-              );
-            yield* broker.configure([]);
+            const stat = yield* fs.stat(project.workspaceRoot).pipe(Effect.option);
+            const available = Option.isSome(stat) && stat.value.type === "Directory";
+            const fields = {
+              NATIVE_PROJECT_KIND: "t3_project",
+              NATIVE_PROJECT_ID: project.projectId,
+              EXECUTION_HOST_ID: "local",
+              DISPLAY_NAME: project.title,
+              AVAILABILITY: available ? "AVAILABLE" : "UNAVAILABLE",
+              UNAVAILABLE_REASON: available
+                ? null
+                : {
+                    CODE: "WORKSPACE_UNAVAILABLE",
+                    MESSAGE: "The project directory is unavailable.",
+                  },
+              UPDATED_AT: project.updatedAt,
+            };
+            const locations = yield* workspaces.list(project.projectId);
+            return {
+              project: fields,
+              targets: locations.map((workspace) => ({
+                ...fields,
+                TARGET_ID: `t3:${paired.runnerId}:project:${project.projectId}:${workspace.key}`,
+                NATIVE_WORKSPACE_KEY: workspace.key,
+                PATH: workspace.path,
+                WORKSPACE_DISPLAY_NAME: workspace.displayName,
+                AVAILABILITY: workspace.available ? "AVAILABLE" : "UNAVAILABLE",
+                UNAVAILABLE_REASON: workspace.available
+                  ? null
+                  : {
+                      CODE: "WORKSPACE_UNAVAILABLE",
+                      MESSAGE: "This workspace is unavailable.",
+                    },
+                REPOSITORY: null,
+                BRANCH: workspace.branch,
+                AGENT_TYPE: null,
+              })),
+            };
           }),
         );
-        const applyConfigurations = (
-          next: ReadonlyArray<ConvenePlatform.Configuration>,
-          replace: boolean,
-        ) =>
-          Effect.gen(function* () {
-            if (replace) configurations.clear();
-            for (const config of next) configurations.set(config.client_project_id, config);
-            yield* broker.configure([...configurations.values()]);
-          });
-        const cacheUpdates = yield* Queue.unbounded<{
-          values: ReadonlyArray<typeof ConveneProjectConfiguration.Type>;
-          replace: boolean;
-          reportId?: string;
-        }>();
-        const persistConfigurations = Stream.fromQueue(cacheUpdates).pipe(
-          Stream.runForEach((update) =>
-            Effect.gen(function* () {
-              yield* configurationCache.record(update.values, update.replace);
-              if (update.reportId !== undefined) {
-                yield* SubscriptionRef.set(state, {
-                  phase: "online",
-                  baseUrl: paired.baseUrl,
-                  runnerId: paired.runnerId,
-                  error: null,
-                });
-                const waiter = pendingReports.get(update.reportId);
-                if (waiter) {
-                  yield* Deferred.succeed(waiter, undefined);
-                  pendingReports.delete(update.reportId);
-                }
-              }
-            }),
-          ),
+        yield* sendMessage(
+          "TARGETS_REPORT",
+          {
+            PROJECTS: projected.map((item) => item.project),
+            TARGETS: projected.flatMap((item) => item.targets),
+          },
+          id,
         );
-        const readControl = Effect.gen(function* () {
-          let ready = false;
-          while (true) {
-            for (const frame of yield* pull) {
-              if (typeof frame !== "string" && !(frame instanceof Uint8Array)) continue;
-              const text = typeof frame === "string" ? frame : new TextDecoder().decode(frame);
-              const raw = yield* decodeMessageType(text);
-              if (raw.TYPE === "OPEN_DATA_CHANNEL" || raw.TYPE === "CANCEL_DATA_CHANNEL") {
-                const control = yield* decodeDataControl(text);
-                if (control.TYPE === "CANCEL_DATA_CHANNEL") {
-                  const fiber = dataChannels.get(control.REQUEST_ID);
-                  if (fiber) yield* Fiber.interrupt(fiber).pipe(Effect.forkScoped);
-                } else {
-                  const fiber = yield* ConveneDataChannel.open(paired.baseUrl, control).pipe(
-                    Effect.provide(webContext),
-                    Effect.scoped,
-                    Effect.tapError((error) =>
-                      Effect.logWarning("Convene native data connection failed", error),
-                    ),
-                    Effect.ensuring(Effect.sync(() => dataChannels.delete(control.REQUEST_ID))),
-                    Effect.forkScoped,
-                  );
-                  dataChannels.set(control.REQUEST_ID, fiber);
-                }
-                continue;
-              }
-              const message = yield* decodeControlMessage(text);
-              if (message.TYPE === "HELLO_REJECT") {
-                yield* Effect.logWarning(
-                  "Convene rejected the integration protocol",
-                  message.PAYLOAD,
-                );
-                return yield* new ConveneIntegrationError({
-                  operation: "connect",
-                  code: "PROTOCOL_REJECTED",
-                });
-              }
-              if (message.TYPE === "HELLO_ACK" && !ready) {
-                const ack = yield* decodeHelloAck(message.PAYLOAD);
-                ready = true;
-                const afterSequence = yield* events.latestApplicationSequence;
-                yield* report();
-                yield* sendMessage("HEARTBEAT", {}).pipe(
-                  Effect.andThen(report()),
-                  Effect.repeat(Schedule.spaced(`${ack.HEARTBEAT_INTERVAL_SECONDS} seconds`)),
-                  Effect.forkScoped,
-                );
-                yield* events.streamApplicationEvents({ afterSequence }).pipe(
-                  Stream.filter(
-                    (event) => "aggregateKind" in event && event.aggregateKind === "project",
-                  ),
-                  Stream.runForEach(() => report()),
-                  Effect.forkScoped,
-                );
-                yield* Stream.fromQueue(requests).pipe(
-                  Stream.runForEach((waiter) =>
-                    Effect.gen(function* () {
-                      const id = yield* crypto.randomUUIDv4();
-                      pendingReports.set(id, waiter);
-                      yield* report(id).pipe(
-                        Effect.catch((cause) =>
-                          Effect.gen(function* () {
-                            yield* Deferred.fail(
-                              waiter,
-                              new ConveneIntegrationError({
-                                operation: "refresh",
-                                code: "REPORT_FAILED",
-                                cause,
-                              }),
-                            );
-                            pendingReports.delete(id);
-                          }),
-                        ),
-                      );
-                    }),
-                  ),
-                  Effect.forkScoped,
-                );
-              } else if (message.TYPE === "TARGETS_REPORT_ACK") {
-                const ack = yield* decodeReportAck(message.PAYLOAD);
-                yield* applyConfigurations(ack.CONFIGURATIONS, true);
-                yield* Queue.offer(cacheUpdates, {
-                  values: ack.CONFIGURATIONS,
-                  replace: true,
-                  reportId: ack.REPORT_ID,
-                });
-              } else if (message.TYPE === "CONFIGURATION_CHANGED") {
-                const changed = yield* decodeConfigurationChanged(message.PAYLOAD);
-                yield* applyConfigurations([changed.CONFIGURATION], false);
-                yield* Queue.offer(cacheUpdates, {
-                  values: [changed.CONFIGURATION],
-                  replace: false,
-                });
+      });
+      yield* send({ TYPE: "AUTHENTICATE", TOKEN: token });
+      yield* sendMessage("HELLO", {
+        CLIENT_TYPE: "t3",
+        CLIENT_VERSION: packageJson.version,
+        RUNNER_BUILD_ID:
+          (typeof __CONVENE_BUILD_ID__ !== "undefined" && __CONVENE_BUILD_ID__) ||
+          `convene-t3-${packageJson.version}`,
+        SUPPORTED_PROTOCOLS: CONVENE_SUPPORTED_PROTOCOLS,
+      });
+      const configurations = new Map<string, ConvenePlatform.Configuration>();
+      const dataChannels = new Map<string, Fiber.Fiber<void, unknown>>();
+      const pendingReports = new Map<string, ReportWaiter>();
+      yield* Effect.addFinalizer(() =>
+        Effect.gen(function* () {
+          for (const waiter of pendingReports.values())
+            yield* Deferred.fail(
+              waiter,
+              new ConveneIntegrationError({ operation: "refresh", code: "DISCONNECTED" }),
+            );
+          yield* broker.configure([]);
+        }),
+      );
+      const applyConfigurations = Effect.fn("ConveneConnection.applyConfigurations")(function* (
+        next: ReadonlyArray<ConvenePlatform.Configuration>,
+        replace: boolean,
+      ) {
+        if (replace) configurations.clear();
+        for (const config of next) configurations.set(config.client_project_id, config);
+        yield* broker.configure([...configurations.values()]);
+      });
+      const cacheUpdates = yield* Queue.unbounded<{
+        values: ReadonlyArray<typeof ConveneProjectConfiguration.Type>;
+        replace: boolean;
+        reportId?: string;
+      }>();
+      const persistConfigurations = Stream.fromQueue(cacheUpdates).pipe(
+        Stream.runForEach((update) =>
+          Effect.gen(function* () {
+            yield* configurationCache.record(update.values, update.replace);
+            if (update.reportId !== undefined) {
+              yield* SubscriptionRef.set(state, {
+                phase: "online",
+                baseUrl: paired.baseUrl,
+                runnerId: paired.runnerId,
+                error: null,
+              });
+              const waiter = pendingReports.get(update.reportId);
+              if (waiter) {
+                yield* Deferred.succeed(waiter, undefined);
+                pendingReports.delete(update.reportId);
               }
             }
+          }),
+        ),
+      );
+      const readControl = Effect.gen(function* () {
+        let ready = false;
+        while (true) {
+          for (const frame of yield* pull) {
+            if (typeof frame !== "string" && !(frame instanceof Uint8Array)) continue;
+            const text = typeof frame === "string" ? frame : new TextDecoder().decode(frame);
+            const raw = yield* decodeMessageType(text);
+            if (raw.TYPE === "OPEN_DATA_CHANNEL" || raw.TYPE === "CANCEL_DATA_CHANNEL") {
+              const control = yield* decodeDataControl(text);
+              if (control.TYPE === "CANCEL_DATA_CHANNEL") {
+                const fiber = dataChannels.get(control.REQUEST_ID);
+                if (fiber) yield* Fiber.interrupt(fiber).pipe(Effect.forkScoped);
+              } else {
+                const fiber = yield* ConveneDataChannel.open(paired.baseUrl, control).pipe(
+                  Effect.provide(webContext),
+                  Effect.scoped,
+                  Effect.tapError((error) =>
+                    Effect.logWarning("Convene native data connection failed", error),
+                  ),
+                  Effect.ensuring(Effect.sync(() => dataChannels.delete(control.REQUEST_ID))),
+                  Effect.forkScoped,
+                );
+                dataChannels.set(control.REQUEST_ID, fiber);
+              }
+              continue;
+            }
+            const message = yield* decodeControlMessage(text);
+            if (message.TYPE === "HELLO_REJECT") {
+              yield* Effect.logWarning(
+                "Convene rejected the integration protocol",
+                message.PAYLOAD,
+              );
+              return yield* new ConveneIntegrationError({
+                operation: "connect",
+                code: "PROTOCOL_REJECTED",
+              });
+            }
+            if (message.TYPE === "HELLO_ACK" && !ready) {
+              const ack = yield* decodeHelloAck(message.PAYLOAD);
+              ready = true;
+              const afterSequence = yield* events.latestApplicationSequence;
+              yield* report();
+              yield* sendMessage("HEARTBEAT", {}).pipe(
+                Effect.andThen(report()),
+                Effect.repeat(Schedule.spaced(`${ack.HEARTBEAT_INTERVAL_SECONDS} seconds`)),
+                Effect.forkScoped,
+              );
+              yield* events.streamApplicationEvents({ afterSequence }).pipe(
+                Stream.filter(
+                  (event) => "aggregateKind" in event && event.aggregateKind === "project",
+                ),
+                Stream.runForEach(() => report()),
+                Effect.forkScoped,
+              );
+              yield* workspaces.changes.pipe(
+                Stream.runForEach(() => report()),
+                Effect.forkScoped,
+              );
+              yield* Stream.fromQueue(requests).pipe(
+                Stream.runForEach((waiter) =>
+                  Effect.gen(function* () {
+                    const id = yield* crypto.randomUUIDv4();
+                    pendingReports.set(id, waiter);
+                    yield* report(id).pipe(
+                      Effect.catch((cause) =>
+                        Effect.gen(function* () {
+                          yield* Deferred.fail(
+                            waiter,
+                            new ConveneIntegrationError({
+                              operation: "refresh",
+                              code: "REPORT_FAILED",
+                              cause,
+                            }),
+                          );
+                          pendingReports.delete(id);
+                        }),
+                      ),
+                    );
+                  }),
+                ),
+                Effect.forkScoped,
+              );
+            } else if (message.TYPE === "TARGETS_REPORT_ACK") {
+              const ack = yield* decodeReportAck(message.PAYLOAD);
+              yield* applyConfigurations(ack.CONFIGURATIONS, true);
+              yield* Queue.offer(cacheUpdates, {
+                values: ack.CONFIGURATIONS,
+                replace: true,
+                reportId: ack.REPORT_ID,
+              });
+            } else if (message.TYPE === "CONFIGURATION_CHANGED") {
+              const changed = yield* decodeConfigurationChanged(message.PAYLOAD);
+              yield* applyConfigurations([changed.CONFIGURATION], false);
+              yield* Queue.offer(cacheUpdates, {
+                values: [changed.CONFIGURATION],
+                replace: false,
+              });
+            }
           }
-        });
-        // Cache writes and cancelled HTTP finalizers must not hold up OPEN_DATA_CHANNEL.
-        // Both workers stay owned by this connection; a cache failure still reconnects it.
-        yield* Effect.raceFirst(readControl, persistConfigurations);
+        }
+      });
+      // Cache writes and cancelled HTTP finalizers must not hold up OPEN_DATA_CHANNEL.
+      // Both workers stay owned by this connection; a cache failure still reconnects it.
+      yield* Effect.raceFirst(readControl, persistConfigurations);
+    }),
+  );
+  return yield* connect.pipe(
+    Effect.tapError(() =>
+      SubscriptionRef.set(state, {
+        phase: "offline",
+        baseUrl: paired.baseUrl,
+        runnerId: paired.runnerId,
+        error: "Connection unavailable. Check the platform and reconnect.",
       }),
-    );
-    return yield* connect.pipe(
-      Effect.tapError(() =>
-        SubscriptionRef.set(state, {
-          phase: "offline",
-          baseUrl: paired.baseUrl,
-          runnerId: paired.runnerId,
-          error: "Connection unavailable. Check the platform and reconnect.",
-        }),
-      ),
-      Effect.retry({ schedule: Schedule.spaced("3 seconds") }),
-    );
-  });
+    ),
+    Effect.retry({ schedule: Schedule.spaced("3 seconds") }),
+  );
+});
 
 export const readConvenePlatformUrls = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
