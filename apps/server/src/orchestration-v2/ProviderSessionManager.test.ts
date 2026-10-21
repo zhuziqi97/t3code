@@ -131,10 +131,11 @@ const layerFlakyReleaseEventSink = (flaky: FlakyReleaseWrites) =>
     }),
   ).pipe(Layer.provide(layerTestEventSink));
 
-// Once armed, holds the next attach write until the writer is interrupted.
+// Once armed, controls the next attach write through its completion or failure.
 const layerPausingAttachEventSink = (pause: {
   readonly armed: Ref.Ref<boolean>;
   readonly paused: Deferred.Deferred<void>;
+  readonly action?: Effect.Effect<void>;
 }) =>
   Layer.effect(
     EventSink.EventSinkV2,
@@ -147,7 +148,7 @@ const layerPausingAttachEventSink = (pause: {
             const attach = input.events.some((event) => event.type === "provider-session.attached");
             if (attach && (yield* Ref.getAndSet(pause.armed, false))) {
               yield* Deferred.succeed(pause.paused, undefined);
-              return yield* Effect.never;
+              yield* pause.action ?? Effect.never;
             }
             return yield* delegate.write(input);
           }),
@@ -5500,40 +5501,46 @@ it.effect.each(["delete-idle", "delete-running", "replace"] as const)(
 
 // Exercise the real broker lease map and forwarding boundary. Only the remote
 // platform and workspace lookup are controlled; session ownership is real.
-const layerLifecycleConvene = ConveneMcp.layer.pipe(
-  Layer.provide(
-    Layer.mergeAll(
-      layerTestStores,
-      Layer.succeed(HttpServer.HttpServer, fakeHttpServer),
-      Layer.mock(ConveneWorkspaces.ConveneWorkspaces)({
-        threadKey: () => Effect.succeed("root"),
-        rememberThread: () => Effect.void,
-      }),
-      Layer.unwrap(
-        PubSub.unbounded<void>().pipe(
-          Effect.map((changes) =>
-            Layer.mock(ConvenePlatform.ConvenePlatform)({
-              changes,
-              credential: (projectId) =>
-                Effect.succeed({
-                  mcp_url: `http://platform.test/${projectId}`,
-                  access_token: `project:${projectId}`,
-                  expires_at: "2099-01-01T00:00:00Z",
-                }),
-            }),
+const makeLifecycleConveneLayer = (
+  rememberThread: ConveneWorkspaces.ConveneWorkspaces["Service"]["rememberThread"] = () =>
+    Effect.void,
+) =>
+  ConveneMcp.layer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        layerTestStores,
+        Layer.succeed(HttpServer.HttpServer, fakeHttpServer),
+        Layer.mock(ConveneWorkspaces.ConveneWorkspaces)({
+          threadKey: () => Effect.succeed("root"),
+          rememberThread,
+        }),
+        Layer.unwrap(
+          PubSub.unbounded<void>().pipe(
+            Effect.map((changes) =>
+              Layer.mock(ConvenePlatform.ConvenePlatform)({
+                changes,
+                credential: (projectId) =>
+                  Effect.succeed({
+                    mcp_url: `http://platform.test/${projectId}`,
+                    access_token: `project:${projectId}`,
+                    expires_at: "2099-01-01T00:00:00Z",
+                  }),
+              }),
+            ),
+          ),
+        ),
+        Layer.succeed(
+          HttpClient.HttpClient,
+          HttpClient.make((request) =>
+            Effect.succeed(HttpClientResponse.fromWeb(request, new Response(request.url))),
           ),
         ),
       ),
-      Layer.succeed(
-        HttpClient.HttpClient,
-        HttpClient.make((request) =>
-          Effect.succeed(HttpClientResponse.fromWeb(request, new Response(request.url))),
-        ),
-      ),
     ),
-  ),
-  Layer.provide(NodeServices.layer),
-);
+    Layer.provide(NodeServices.layer),
+  );
+
+const layerLifecycleConvene = makeLifecycleConveneLayer();
 
 const lifecycleProject = ProjectId.make("lifecycle-project");
 const otherLifecycleProject = ProjectId.make("lifecycle-other-project");
@@ -5899,6 +5906,628 @@ it.effect(
               beforeOpen,
               spawnBeforeOpen: true,
             }),
+          }),
+        ),
+      );
+    }).pipe(Effect.scoped),
+);
+
+it.effect.each([
+  { outcome: "cancel", retire: true },
+  { outcome: "failure", retire: true },
+  { outcome: "cancel", retire: false },
+  { outcome: "failure", retire: false },
+] as const)(
+  "MCP acquisition: preparation $outcome with predecessor retired=$retire",
+  ({ outcome, retire }) =>
+    Effect.gen(function* () {
+      const rememberThread = yield* Ref.make<
+        Effect.Effect<void, ConveneWorkspaces.ConveneWorkspaceError>
+      >(Effect.void);
+      const state = yield* Ref.make(emptyState);
+      const entered = yield* Deferred.make<void>();
+      const finish = yield* Deferred.make<void>();
+      yield* Effect.gen(function* () {
+        const manager = yield* ProviderSessionManager.ProviderSessionManagerV2;
+        const sink = yield* EventSink.EventSinkV2;
+        const ids = yield* IdAllocator.IdAllocatorV2;
+        const configs = yield* McpProviderSessions.McpProviderSessions;
+        const native = yield* McpSessionRegistry.McpSessionRegistry;
+        yield* (yield* ConveneMcp.ConveneMcp).configure(lifecycleConfigurations);
+        const threadId = ThreadId.make(`acquisition-prepare-${outcome}-${retire}`);
+        const siblingId = ThreadId.make(`${threadId}-sibling`);
+        for (const id of [threadId, siblingId])
+          yield* sink.write({
+            events: [
+              yield* makeThreadCreatedEvent({
+                idAllocator: ids,
+                threadId: id,
+                projectId: lifecycleProject,
+                now: yield* DateTime.now,
+              }),
+            ],
+          });
+        const s1 = yield* ids.allocate.providerSession({
+          providerInstanceId: modelSelection.instanceId,
+          threadId,
+        });
+        const s2 = yield* ids.allocate.providerSession({
+          providerInstanceId: modelSelection.instanceId,
+          threadId,
+        });
+        const siblingSession = yield* ids.allocate.providerSession({
+          providerInstanceId: modelSelection.instanceId,
+          threadId: siblingId,
+        });
+        const open = (id: ThreadId, s: ProviderSessionId) =>
+          manager.open({ threadId: id, providerSessionId: s, modelSelection, runtimePolicy });
+        yield* open(threadId, s1);
+        yield* open(siblingId, siblingSession);
+        const original = (yield* configs.read(threadId))!;
+        const sibling = (yield* configs.read(siblingId))!;
+        // rememberThread waits on the same permit as runner workspace listing,
+        // which performs filesystem and Git I/O while holding that permit.
+        yield* Ref.set(
+          rememberThread,
+          Effect.gen(function* () {
+            yield* Deferred.succeed(entered, undefined);
+            if (outcome === "cancel") return yield* Effect.never;
+            yield* Deferred.await(finish);
+            return yield* Effect.fail(
+              new ConveneWorkspaces.ConveneWorkspaceError({ projectId: lifecycleProject }),
+            );
+          }),
+        );
+        const opening = yield* open(threadId, s2).pipe(Effect.forkChild);
+        yield* Deferred.await(entered);
+        if (retire)
+          yield* manager.detach({ providerSessionId: s1, threadId, detail: "Workspace changed." });
+        yield* assertLifecycleCredential(original, true);
+        if (outcome === "cancel") yield* Fiber.interrupt(opening);
+        else yield* Deferred.succeed(finish, undefined);
+        assert.isTrue(Exit.isFailure(yield* Fiber.await(opening)));
+        yield* Ref.set(rememberThread, Effect.void);
+        assert.isFalse(yield* manager.isLive(s2));
+        assert.equal(yield* manager.isLive(s1), !retire);
+        const actual = {
+          outcome,
+          retire,
+          nativeValid:
+            (yield* native.resolve(original.authorizationHeader.replace(/^Bearer\s+/, ""))) !==
+            undefined,
+          brokerStatus: (yield* forwardLifecycleMcp(original)).status,
+          configRetained: (yield* configs.read(threadId)) !== undefined,
+        };
+        yield* assertLifecycleCredential(sibling, true);
+        assert.deepEqual(actual, {
+          outcome,
+          retire,
+          nativeValid: !retire,
+          brokerStatus: retire ? 401 : 200,
+          configRetained: !retire,
+        });
+        yield* manager.close(s1);
+        yield* assertLifecycleCredential(original, false);
+        yield* open(threadId, s2);
+        const recovered = (yield* configs.read(threadId))!;
+        assert.notEqual(recovered.providerSessionId, original.providerSessionId);
+        yield* manager.close(s1);
+        yield* assertLifecycleCredential(recovered, true);
+        yield* assertLifecycleCredential(sibling, true);
+        yield* assertLifecycleCredential(original, false);
+        yield* manager.close(s2);
+        yield* assertLifecycleCredential(recovered, false);
+      }).pipe(
+        Effect.provide(
+          layerTest({
+            state,
+            idleTimeoutMs: 60000,
+            capabilities: ExclusiveCapabilities,
+            conveneMcpLayer: makeLifecycleConveneLayer(() =>
+              Ref.get(rememberThread).pipe(Effect.flatten),
+            ),
+          }),
+        ),
+      );
+    }).pipe(Effect.scoped),
+);
+
+it.effect.each([true, false] as const)(
+  "MCP acquisition: validation interrupted after predecessor retired=%s",
+  (retire) =>
+    Effect.gen(function* () {
+      const rememberThread = yield* Ref.make<
+        Effect.Effect<void, ConveneWorkspaces.ConveneWorkspaceError>
+      >(Effect.void);
+      const state = yield* Ref.make(emptyState),
+        armed = yield* Ref.make(false),
+        paused = yield* Deferred.make<void>();
+      yield* Effect.gen(function* () {
+        const manager = yield* ProviderSessionManager.ProviderSessionManagerV2,
+          sink = yield* EventSink.EventSinkV2,
+          ids = yield* IdAllocator.IdAllocatorV2,
+          configs = yield* McpProviderSessions.McpProviderSessions,
+          native = yield* McpSessionRegistry.McpSessionRegistry;
+        yield* (yield* ConveneMcp.ConveneMcp).configure(lifecycleConfigurations);
+        const t = ThreadId.make(`acquisition-lookup-${retire}`),
+          sibling = ThreadId.make(`${t}-sibling`);
+        for (const id of [t, sibling])
+          yield* sink.write({
+            events: [
+              yield* makeThreadCreatedEvent({
+                idAllocator: ids,
+                threadId: id,
+                projectId: lifecycleProject,
+                now: yield* DateTime.now,
+              }),
+            ],
+          });
+        const allocate = (id: ThreadId) =>
+          ids.allocate.providerSession({
+            providerInstanceId: modelSelection.instanceId,
+            threadId: id,
+          });
+        const old = yield* allocate(t),
+          next = yield* allocate(t),
+          siblingSession = yield* allocate(sibling);
+        const open = (id: ThreadId, s: ProviderSessionId) =>
+          manager.open({ threadId: id, providerSessionId: s, modelSelection, runtimePolicy });
+        yield* open(t, old);
+        yield* open(sibling, siblingSession);
+        const original = (yield* configs.read(t))!,
+          unaffected = (yield* configs.read(sibling))!;
+        yield* Ref.set(armed, true);
+        const pending = yield* open(t, next).pipe(Effect.forkChild);
+        yield* Deferred.await(paused);
+        if (retire) yield* manager.detach({ threadId: t, providerSessionId: old });
+        yield* Fiber.interrupt(pending);
+        const result = yield* Fiber.await(pending);
+        assert.isTrue(Exit.hasInterrupts(result));
+        const actual = {
+          nativeValid:
+            (yield* native.resolve(original.authorizationHeader.replace(/^Bearer\s+/, ""))) !==
+            undefined,
+          brokerStatus: (yield* forwardLifecycleMcp(original)).status,
+          configRetained: (yield* configs.read(t)) !== undefined,
+        };
+        yield* assertLifecycleCredential(unaffected, true);
+        assert.deepEqual(actual, {
+          nativeValid: !retire,
+          brokerStatus: retire ? 401 : 200,
+          configRetained: !retire,
+        });
+        yield* manager.close(old);
+        yield* assertLifecycleCredential(original, false);
+        yield* open(t, next);
+        const recovered = (yield* configs.read(t))!;
+        assert.notEqual(recovered.providerSessionId, original.providerSessionId);
+        yield* manager.close(old);
+        yield* assertLifecycleCredential(recovered, true);
+        yield* assertLifecycleCredential(unaffected, true);
+        yield* assertLifecycleCredential(original, false);
+        yield* manager.close(next);
+        yield* assertLifecycleCredential(recovered, false);
+      }).pipe(
+        Effect.provide(
+          layerTest({
+            state,
+            idleTimeoutMs: 60000,
+            capabilities: ExclusiveCapabilities,
+            pauseResolve: { armed, paused },
+            conveneMcpLayer: makeLifecycleConveneLayer(() =>
+              Ref.get(rememberThread).pipe(Effect.flatten),
+            ),
+          }),
+        ),
+      );
+    }).pipe(Effect.scoped),
+);
+
+it.effect.each([
+  { origin: "other", outcome: "cancel", retireFirst: true },
+  { origin: "other", outcome: "failure", retireFirst: true },
+  { origin: "other", outcome: "cancel", retireFirst: false },
+  { origin: "other", outcome: "failure", retireFirst: false },
+  { origin: "historical", outcome: "cancel", retireFirst: false },
+  { origin: "historical", outcome: "failure", retireFirst: false },
+  { origin: "fresh-transfer", outcome: "cancel", retireFirst: false },
+  { origin: "fresh-transfer", outcome: "failure", retireFirst: false },
+] as const)(
+  "MCP acquisition: attach rollback $origin $outcome retireFirst=$retireFirst",
+  ({ origin, outcome, retireFirst }) =>
+    Effect.gen(function* () {
+      const rememberThread = yield* Ref.make<
+        Effect.Effect<void, ConveneWorkspaces.ConveneWorkspaceError>
+      >(Effect.void);
+      const state = yield* Ref.make(emptyState),
+        armed = yield* Ref.make(false),
+        paused = yield* Deferred.make<void>(),
+        finish = yield* Deferred.make<void>();
+      yield* Effect.gen(function* () {
+        const manager = yield* ProviderSessionManager.ProviderSessionManagerV2,
+          sink = yield* EventSink.EventSinkV2,
+          ids = yield* IdAllocator.IdAllocatorV2,
+          configs = yield* McpProviderSessions.McpProviderSessions,
+          native = yield* McpSessionRegistry.McpSessionRegistry;
+        yield* (yield* ConveneMcp.ConveneMcp).configure(lifecycleConfigurations);
+        const t = ThreadId.make(`acquisition-attach-${origin}-${outcome}-${retireFirst}`),
+          owner = ThreadId.make(`${t}-owner`);
+        for (const id of [t, owner])
+          yield* sink.write({
+            events: [
+              yield* makeThreadCreatedEvent({
+                idAllocator: ids,
+                threadId: id,
+                projectId: lifecycleProject,
+                now: yield* DateTime.now,
+              }),
+            ],
+          });
+        const target = ids.derive.providerSession({
+          providerInstanceId: modelSelection.instanceId,
+        });
+        const source = yield* ids.allocate.providerSession({
+          providerInstanceId: modelSelection.instanceId,
+          threadId: t,
+        });
+        const open = (id: ThreadId, s: ProviderSessionId) =>
+          manager.open({ threadId: id, providerSessionId: s, modelSelection, runtimePolicy });
+        yield* open(owner, target);
+        const ownerConfig = (yield* configs.read(owner))!;
+        if (origin === "other") yield* open(t, source);
+        if (origin === "historical") {
+          yield* open(t, target);
+          yield* manager.detach({ providerSessionId: target, threadId: t });
+        }
+        yield* Ref.set(armed, true);
+        const pending = yield* open(t, target).pipe(Effect.forkChild);
+        yield* Deferred.await(paused);
+        const current = (yield* configs.read(t))!;
+        if (origin === "fresh-transfer") yield* open(t, source);
+        if (origin === "other" && retireFirst) yield* manager.close(source);
+        if (outcome === "cancel") yield* Fiber.interrupt(pending);
+        else yield* Deferred.succeed(finish, undefined);
+        assert.isTrue(Exit.isFailure(yield* Fiber.await(pending)));
+        yield* assertLifecycleCredential(ownerConfig, true);
+        if (origin !== "historical" && !retireFirst) {
+          yield* assertLifecycleCredential(current, true);
+          yield* manager.close(source);
+        }
+        const valid = origin === "historical";
+        const actual = {
+          nativeValid:
+            (yield* native.resolve(current.authorizationHeader.replace(/^Bearer\s+/, ""))) !==
+            undefined,
+          brokerStatus: (yield* forwardLifecycleMcp(current)).status,
+          configRetained: (yield* configs.read(t)) !== undefined,
+        };
+        assert.deepEqual(actual, {
+          nativeValid: valid,
+          brokerStatus: valid ? 200 : 401,
+          configRetained: valid,
+        });
+        yield* open(t, target);
+        const recovered = (yield* configs.read(t))!;
+        if (origin === "historical")
+          assert.equal(recovered.providerSessionId, current.providerSessionId);
+        else assert.notEqual(recovered.providerSessionId, current.providerSessionId);
+        yield* manager.close(source);
+        yield* assertLifecycleCredential(recovered, true);
+        yield* assertLifecycleCredential(ownerConfig, true);
+        yield* assertLifecycleCredential(current, valid);
+        yield* manager.close(target);
+        yield* assertLifecycleCredential(recovered, false);
+      }).pipe(
+        Effect.provide(
+          layerTest({
+            state,
+            idleTimeoutMs: 60000,
+            pauseAttachWrite: {
+              armed,
+              paused,
+              action:
+                outcome === "cancel"
+                  ? Effect.never
+                  : Deferred.await(finish).pipe(
+                      Effect.andThen(Effect.die("controlled attach commit failure")),
+                    ),
+            },
+            conveneMcpLayer: makeLifecycleConveneLayer(() =>
+              Ref.get(rememberThread).pipe(Effect.flatten),
+            ),
+          }),
+        ),
+      );
+    }).pipe(Effect.scoped),
+);
+
+it.effect.each(["removed", "alive", "cancel-after-removed"] as const)(
+  "MCP acquisition: runtime lifetime %s during MCP preparation",
+  (mode) =>
+    Effect.gen(function* () {
+      const rememberThread = yield* Ref.make<
+        Effect.Effect<void, ConveneWorkspaces.ConveneWorkspaceError>
+      >(Effect.void);
+      const state = yield* Ref.make(emptyState),
+        entered = yield* Deferred.make<void>(),
+        finish = yield* Deferred.make<void>();
+      yield* Effect.gen(function* () {
+        const manager = yield* ProviderSessionManager.ProviderSessionManagerV2,
+          sink = yield* EventSink.EventSinkV2,
+          ids = yield* IdAllocator.IdAllocatorV2,
+          configs = yield* McpProviderSessions.McpProviderSessions,
+          native = yield* McpSessionRegistry.McpSessionRegistry;
+        yield* (yield* ConveneMcp.ConveneMcp).configure(lifecycleConfigurations);
+        const t = ThreadId.make(`acquisition-lifetime-${mode}`),
+          owner = ThreadId.make(`${t}-owner`);
+        for (const id of [t, owner])
+          yield* sink.write({
+            events: [
+              yield* makeThreadCreatedEvent({
+                idAllocator: ids,
+                threadId: id,
+                projectId: lifecycleProject,
+                now: yield* DateTime.now,
+              }),
+            ],
+          });
+        const shared = ids.derive.providerSession({
+          providerInstanceId: modelSelection.instanceId,
+        });
+        const open = (id: ThreadId) =>
+          manager.open({ threadId: id, providerSessionId: shared, modelSelection, runtimePolicy });
+        const originalRuntime = yield* open(owner);
+        yield* Ref.set(
+          rememberThread,
+          Deferred.succeed(entered, undefined).pipe(Effect.andThen(Deferred.await(finish))),
+        );
+        const pending = yield* open(t).pipe(Effect.forkChild);
+        yield* Deferred.await(entered);
+        if (mode !== "alive")
+          yield* manager.release({ providerSessionId: shared, reason: "runtime_error" });
+        if (mode === "cancel-after-removed") yield* Fiber.interrupt(pending);
+        else yield* Deferred.succeed(finish, undefined);
+        const result = yield* Fiber.await(pending);
+        yield* Ref.set(rememberThread, Effect.void);
+        const current = yield* configs.read(t);
+        const actual = {
+          openSucceeded: Exit.isSuccess(result),
+          returnedClosedRuntime:
+            mode !== "alive" && Exit.isSuccess(result) && result.value === originalRuntime,
+          nativeValid:
+            current !== undefined &&
+            (yield* native.resolve(current.authorizationHeader.replace(/^Bearer\s+/, ""))) !==
+              undefined,
+          brokerStatus: current?.additionalServers?.convene
+            ? (yield* forwardLifecycleMcp(current)).status
+            : 401,
+        };
+        assert.deepEqual(
+          actual,
+          mode === "alive"
+            ? {
+                openSucceeded: true,
+                returnedClosedRuntime: false,
+                nativeValid: true,
+                brokerStatus: 200,
+              }
+            : {
+                openSucceeded: false,
+                returnedClosedRuntime: false,
+                nativeValid: false,
+                brokerStatus: 401,
+              },
+        );
+        if (mode !== "alive") {
+          yield* open(t);
+          const recovered = (yield* configs.read(t))!;
+          yield* assertLifecycleCredential(recovered, true);
+          assert.equal((yield* Ref.get(state)).openCount, 2);
+          yield* manager.close(shared);
+          yield* assertLifecycleCredential(recovered, false);
+        }
+      }).pipe(
+        Effect.provide(
+          layerTest({
+            state,
+            idleTimeoutMs: 60000,
+            conveneMcpLayer: makeLifecycleConveneLayer(() =>
+              Ref.get(rememberThread).pipe(Effect.flatten),
+            ),
+          }),
+        ),
+      );
+    }).pipe(Effect.scoped),
+);
+
+it.effect.each(["abort-0-first", "abort-1-first", "one-survives"] as const)(
+  "MCP acquisition: last reservation %s",
+  (mode) =>
+    Effect.gen(function* () {
+      const rememberThread = yield* Ref.make<
+        Effect.Effect<void, ConveneWorkspaces.ConveneWorkspaceError>
+      >(Effect.void);
+      const state = yield* Ref.make(emptyState),
+        entered = yield* Queue.unbounded<void>(),
+        finish = yield* Deferred.make<void>();
+      yield* Effect.gen(function* () {
+        const manager = yield* ProviderSessionManager.ProviderSessionManagerV2,
+          sink = yield* EventSink.EventSinkV2,
+          ids = yield* IdAllocator.IdAllocatorV2,
+          configs = yield* McpProviderSessions.McpProviderSessions,
+          native = yield* McpSessionRegistry.McpSessionRegistry;
+        yield* (yield* ConveneMcp.ConveneMcp).configure(lifecycleConfigurations);
+        const t = ThreadId.make(`acquisition-last-${mode}`);
+        yield* sink.write({
+          events: [
+            yield* makeThreadCreatedEvent({
+              idAllocator: ids,
+              threadId: t,
+              projectId: lifecycleProject,
+              now: yield* DateTime.now,
+            }),
+          ],
+        });
+        const allocate = () =>
+          ids.allocate.providerSession({
+            providerInstanceId: modelSelection.instanceId,
+            threadId: t,
+          });
+        const old = yield* allocate(),
+          s0 = yield* allocate(),
+          s1 = yield* allocate();
+        const open = (s: ProviderSessionId) =>
+          manager.open({ threadId: t, providerSessionId: s, modelSelection, runtimePolicy });
+        yield* open(old);
+        const c = (yield* configs.read(t))!;
+        yield* Ref.set(
+          rememberThread,
+          Queue.offer(entered, undefined).pipe(
+            Effect.andThen(Deferred.await(finish)),
+            Effect.asVoid,
+          ),
+        );
+        const p0 = yield* open(s0).pipe(Effect.forkChild);
+        yield* Queue.take(entered);
+        const p1 = yield* open(s1).pipe(Effect.forkChild);
+        yield* Queue.take(entered);
+        yield* manager.close(old);
+        const first = mode === "abort-1-first" ? p1 : p0,
+          second = mode === "abort-1-first" ? p0 : p1;
+        yield* Fiber.interrupt(first);
+        yield* assertLifecycleCredential(c, true);
+        if (mode === "one-survives") yield* Deferred.succeed(finish, undefined);
+        else yield* Fiber.interrupt(second);
+        const result = yield* Fiber.await(second);
+        yield* Ref.set(rememberThread, Effect.void);
+        const expected = mode === "one-survives";
+        assert.equal(Exit.isSuccess(result), expected);
+        const actual = {
+          nativeValid:
+            (yield* native.resolve(c.authorizationHeader.replace(/^Bearer\s+/, ""))) !== undefined,
+          brokerStatus: (yield* forwardLifecycleMcp(c)).status,
+          configRetained: (yield* configs.read(t)) !== undefined,
+        };
+        assert.deepEqual(actual, {
+          nativeValid: expected,
+          brokerStatus: expected ? 200 : 401,
+          configRetained: expected,
+        });
+        if (expected) {
+          yield* manager.close(s1);
+          yield* assertLifecycleCredential(c, false);
+        } else {
+          yield* open(s0);
+          const recovered = (yield* configs.read(t))!;
+          assert.notEqual(recovered.providerSessionId, c.providerSessionId);
+          yield* manager.close(old);
+          yield* assertLifecycleCredential(recovered, true);
+          yield* assertLifecycleCredential(c, false);
+          yield* manager.close(s0);
+          yield* assertLifecycleCredential(recovered, false);
+        }
+      }).pipe(
+        Effect.provide(
+          layerTest({
+            state,
+            idleTimeoutMs: 60000,
+            capabilities: ExclusiveCapabilities,
+            conveneMcpLayer: makeLifecycleConveneLayer(() =>
+              Ref.get(rememberThread).pipe(Effect.flatten),
+            ),
+          }),
+        ),
+      );
+    }).pipe(Effect.scoped),
+);
+
+it.effect.each(["remove", "replace"] as const)(
+  "MCP acquisition: canonical instance %s during preparation",
+  (change) =>
+    Effect.gen(function* () {
+      const rememberThread = yield* Ref.make<
+        Effect.Effect<void, ConveneWorkspaces.ConveneWorkspaceError>
+      >(Effect.void);
+      const state = yield* Ref.make(emptyState),
+        otherState = yield* Ref.make(emptyState),
+        entered = yield* Deferred.make<void>();
+      yield* Effect.gen(function* () {
+        const manager = yield* ProviderSessionManager.ProviderSessionManagerV2,
+          mutator = yield* ProviderInstanceRegistryMutator.ProviderInstanceRegistryMutator,
+          sink = yield* EventSink.EventSinkV2,
+          ids = yield* IdAllocator.IdAllocatorV2,
+          configs = yield* McpProviderSessions.McpProviderSessions,
+          native = yield* McpSessionRegistry.McpSessionRegistry;
+        yield* (yield* ConveneMcp.ConveneMcp).configure(lifecycleConfigurations);
+        const t = ThreadId.make(`acquisition-canonical-${change}`),
+          owner = ThreadId.make(`${t}-owner`),
+          other = ThreadId.make(`${t}-other`);
+        for (const id of [t, owner, other])
+          yield* sink.write({
+            events: [
+              yield* makeThreadCreatedEvent({
+                idAllocator: ids,
+                threadId: id,
+                projectId: lifecycleProject,
+                now: yield* DateTime.now,
+              }),
+            ],
+          });
+        const shared = ids.derive.providerSession({
+            providerInstanceId: modelSelection.instanceId,
+          }),
+          otherSession = ids.derive.providerSession({ providerInstanceId: otherLifecycleInstance });
+        yield* manager.open({
+          threadId: owner,
+          providerSessionId: shared,
+          modelSelection,
+          runtimePolicy,
+        });
+        yield* manager.open({
+          threadId: other,
+          providerSessionId: otherSession,
+          modelSelection: { ...modelSelection, instanceId: otherLifecycleInstance },
+          runtimePolicy,
+        });
+        const unaffected = (yield* configs.read(other))!;
+        yield* Ref.set(
+          rememberThread,
+          Deferred.succeed(entered, undefined).pipe(Effect.andThen(Effect.never)),
+        );
+        const pending = yield* manager
+          .open({ threadId: t, providerSessionId: shared, modelSelection, runtimePolicy })
+          .pipe(Effect.forkChild);
+        yield* Deferred.await(entered);
+        const prepared = (yield* configs.read(t))!;
+        const next = lifecycleConfig(change === "replace" ? 2 : 1);
+        if (change === "remove") delete next[modelSelection.instanceId];
+        yield* mutator.reconcile(next);
+        assert.isTrue(Exit.hasInterrupts(yield* Fiber.await(pending)));
+        yield* Ref.set(rememberThread, Effect.void);
+        assert.isFalse(yield* manager.isLive(shared));
+        assert.isUndefined(yield* configs.read(t));
+        assert.isUndefined(
+          yield* native.resolve(prepared.authorizationHeader.replace(/^Bearer\s+/, "")),
+        );
+        yield* assertLifecycleCredential(unaffected, true);
+        if (change === "replace") {
+          yield* manager.open({
+            threadId: owner,
+            providerSessionId: shared,
+            modelSelection,
+            runtimePolicy,
+          });
+          yield* assertLifecycleCredential((yield* configs.read(owner))!, true);
+        }
+      }).pipe(
+        Effect.provide(
+          layerTest({
+            state,
+            idleTimeoutMs: 60000,
+            conveneMcpLayer: makeLifecycleConveneLayer(() =>
+              Ref.get(rememberThread).pipe(Effect.flatten),
+            ),
+            instanceRegistryLayer: instanceLifecycleRegistry({ state, otherState }),
           }),
         ),
       );
