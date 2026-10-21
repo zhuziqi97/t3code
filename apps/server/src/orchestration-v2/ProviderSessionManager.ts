@@ -2365,11 +2365,11 @@ export const layerWithOptions = (
                     // interrupter, the lock, or later opens.
                     Effect.onError(() =>
                       dropReservation.pipe(
-                        // Clear only a session this open freshly set up: a reused
-                        // one is held by another live provider process and must
-                        // survive this open's failure.
+                        // A reused credential may have lost its predecessor
+                        // while this open held the reservation. After dropping
+                        // it, keep only credentials another owner still holds.
                         Effect.andThen(
-                          prepared.issued && mcpCredentialId !== undefined
+                          mcpCredentialId !== undefined
                             ? clearUnusedMcpSession(input.threadId, mcpCredentialId)
                             : Effect.void,
                         ),

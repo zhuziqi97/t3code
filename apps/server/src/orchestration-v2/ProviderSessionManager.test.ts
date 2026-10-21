@@ -2804,6 +2804,123 @@ it.effect(
     }),
 );
 
+it.effect.each([
+  { outcome: "failure", retirePredecessor: true },
+  { outcome: "cancel", retirePredecessor: true },
+  { outcome: "failure", retirePredecessor: false },
+  { outcome: "cancel", retirePredecessor: false },
+] as const)(
+  "failed reused open ($outcome, retire predecessor: $retirePredecessor) follows credential ownership",
+  ({ outcome, retirePredecessor }) =>
+    Effect.gen(function* () {
+      const state = yield* Ref.make(emptyState);
+      const duringOpen = yield* Ref.make<Effect.Effect<void>>(Effect.void);
+      const entered = yield* Deferred.make<void>();
+      yield* Effect.gen(function* () {
+        const manager = yield* ProviderSessionManager.ProviderSessionManagerV2;
+        const sink = yield* EventSink.EventSinkV2;
+        const ids = yield* IdAllocator.IdAllocatorV2;
+        const configs = yield* McpProviderSessions.McpProviderSessions;
+        yield* (yield* ConveneMcp.ConveneMcp).configure(lifecycleConfigurations);
+        const threadId = ThreadId.make(`thread-reused-open-${outcome}-${retirePredecessor}`);
+        const siblingId = ThreadId.make(`${threadId}-sibling`);
+        const broker = yield* ConveneMcp.ConveneMcp;
+        const native = yield* McpSessionRegistry.McpSessionRegistry;
+        for (const id of [threadId, siblingId]) {
+          yield* sink.write({
+            events: [
+              yield* makeThreadCreatedEvent({
+                idAllocator: ids,
+                threadId: id,
+                now: yield* DateTime.now,
+                projectId: lifecycleProject,
+              }),
+            ],
+          });
+        }
+        const allocateSession = (id: ThreadId) =>
+          ids.allocate.providerSession({
+            providerInstanceId: modelSelection.instanceId,
+            threadId: id,
+          });
+        const predecessor = yield* allocateSession(threadId);
+        const replacement = yield* allocateSession(threadId);
+        const siblingSession = yield* allocateSession(siblingId);
+        const open = (id: ThreadId, providerSessionId: ProviderSessionId) =>
+          manager.open({ threadId: id, providerSessionId, modelSelection, runtimePolicy });
+        yield* open(threadId, predecessor);
+        yield* open(siblingId, siblingSession);
+        const original = (yield* configs.read(threadId))!;
+        const sibling = (yield* configs.read(siblingId))!;
+        yield* Ref.set(
+          duringOpen,
+          Effect.gen(function* () {
+            assert.equal(
+              (yield* configs.read(threadId))?.providerSessionId,
+              original.providerSessionId,
+            );
+            // A workspace continuation can start before the old detach outbox
+            // effect. Its reservation holds the credential until open settles.
+            if (retirePredecessor) {
+              yield* manager
+                .detach({
+                  providerSessionId: predecessor,
+                  threadId,
+                  detail: "Workspace changed.",
+                })
+                .pipe(Effect.orDie);
+            }
+            yield* assertLifecycleCredential(original, true);
+            yield* Deferred.succeed(entered, undefined);
+            return yield* outcome === "failure"
+              ? Effect.die("controlled provider open failure")
+              : Effect.never;
+          }).pipe(
+            Effect.provideService(ConveneMcp.ConveneMcp, broker),
+            Effect.provideService(McpSessionRegistry.McpSessionRegistry, native),
+            Effect.orDie,
+          ),
+        );
+        const opening = yield* open(threadId, replacement).pipe(Effect.forkChild);
+        yield* Deferred.await(entered);
+        if (outcome === "cancel") yield* Fiber.interrupt(opening);
+        const result = yield* Fiber.await(opening);
+        assert.isTrue(Exit.isFailure(result));
+        if (outcome === "cancel") assert.isTrue(Exit.hasInterrupts(result));
+        assert.isFalse(yield* manager.isLive(replacement));
+        assert.equal(yield* manager.isLive(predecessor), !retirePredecessor);
+        yield* assertLifecycleCredential(original, !retirePredecessor);
+        assert.deepEqual(yield* configs.read(threadId), retirePredecessor ? undefined : original);
+        yield* assertLifecycleCredential(sibling, true);
+
+        yield* manager.close(predecessor);
+        yield* assertLifecycleCredential(original, false);
+        const recovery = yield* allocateSession(threadId);
+        yield* open(threadId, recovery);
+        const recovered = (yield* configs.read(threadId))!;
+        assert.notEqual(recovered.providerSessionId, original.providerSessionId);
+        yield* manager.close(replacement);
+        yield* assertLifecycleCredential(recovered, true);
+        yield* assertLifecycleCredential(sibling, true);
+        yield* manager.close(recovery);
+        yield* assertLifecycleCredential(recovered, false);
+        yield* assertLifecycleCredential(sibling, true);
+        yield* manager.close(siblingSession);
+        yield* assertLifecycleCredential(sibling, false);
+      }).pipe(
+        Effect.provide(
+          layerTest({
+            state,
+            capabilities: ExclusiveCapabilities,
+            idleTimeoutMs: 60_000,
+            conveneMcpLayer: layerLifecycleConvene,
+            beforeOpen: () => Ref.getAndSet(duringOpen, Effect.void).pipe(Effect.flatten),
+          }),
+        ),
+      );
+    }).pipe(Effect.scoped),
+);
+
 it.effect("ProviderSessionManagerV2 terminal detach revokes the thread's MCP credential", () =>
   Effect.gen(function* () {
     const state = yield* Ref.make(emptyState);
