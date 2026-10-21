@@ -1066,7 +1066,6 @@ export function firstValidTimestampMs(
   return 0;
 }
 
-export { sortActiveThreadsByOrderKey as sortThreadsForSidebar } from "@t3tools/client-runtime/state/thread-sort";
 export {
   isThreadWorking as isSidebarThreadWorking,
   sortInboxThreadsByReturn,
@@ -1409,21 +1408,6 @@ export function sortLogicalProjectsForSidebar<
     (project) => threadsByProjectKey.get(project.projectKey) ?? [],
     (left, right) =>
       left.title.localeCompare(right.title) || left.projectKey.localeCompare(right.projectKey),
-  );
-}
-
-export function sortSidebarV2ProjectGroups<
-  TProject extends LogicalSidebarProject,
-  TThread extends ScopedSidebarThread & Pick<SidebarThreadSummary, "lineage">,
->(
-  projects: readonly TProject[],
-  threads: readonly TThread[],
-  sortOrder: SidebarProjectSortOrder,
-): TProject[] {
-  return sortLogicalProjectsForSidebar(
-    projects,
-    filterSidebarV2VisibleThreads(threads, null),
-    sortOrder,
   );
 }
 

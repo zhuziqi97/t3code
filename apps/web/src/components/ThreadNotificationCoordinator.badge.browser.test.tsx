@@ -369,7 +369,7 @@ it("badges background failures with in-app notifications enabled", async () => {
   await app.render();
   state.shells.set("one", shell({ latestTurn: { ...thread.latestTurn, state: "error" } }));
   await app.render();
-  expect(TestNotification.sent[0]?.title).toBe("Thread failed");
+  expect(TestNotification.sent[0]?.title).toBe("Turn failed");
   expect(state.badge).toHaveBeenLastCalledWith(1);
   expect(state.toast).not.toHaveBeenCalled();
 });

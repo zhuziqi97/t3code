@@ -6,6 +6,31 @@ import type { SidebarListItem, SidebarSection } from "../Sidebar.logic";
 
 type TreeThread = Pick<EnvironmentThreadShell, "environmentId" | "id" | "projectId">;
 
+/** Ordinary project-tree threads follow user sends; provider and metadata events never rank them. */
+export function sortProjectTreeActiveThreads<
+  T extends Pick<
+    EnvironmentThreadShell,
+    "environmentId" | "id" | "createdAt" | "latestUserMessageAt"
+  >,
+>(threads: readonly T[]): T[] {
+  return threads
+    .map((thread) => ({
+      thread,
+      timestamp: Date.parse(thread.latestUserMessageAt ?? thread.createdAt),
+    }))
+    .sort((left, right) => {
+      const a = Number.isFinite(left.timestamp) ? left.timestamp : Number.NEGATIVE_INFINITY;
+      const b = Number.isFinite(right.timestamp) ? right.timestamp : Number.NEGATIVE_INFINITY;
+      return (
+        (a === b ? 0 : a > b ? -1 : 1) ||
+        scopedThreadKey(scopeThreadRef(left.thread.environmentId, left.thread.id)).localeCompare(
+          scopedThreadKey(scopeThreadRef(right.thread.environmentId, right.thread.id)),
+        )
+      );
+    })
+    .map(({ thread }) => thread);
+}
+
 export function projectExpansionKeys(project: SidebarProjectSnapshot): string[] {
   return [
     project.projectKey,

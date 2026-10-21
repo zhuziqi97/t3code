@@ -65,6 +65,7 @@ import {
 import type { WorkflowOpening } from "@t3tools/client-runtime/state/subagentRuntime";
 import { observeResize } from "~/lib/observeResize";
 import { useStableCallback } from "~/hooks/useStableCallback";
+import { runEndState } from "./runEndState";
 
 const NOOP_USE_ARTIFACT_TEMPLATE = () => {};
 const NOOP_OPEN_ATTACHMENT = (_attachment: ChatFileAttachment) => {};
@@ -452,6 +453,7 @@ interface MessagesTimelineProps {
   ) => boolean;
   isWorking: boolean;
   runlessWorkActive?: boolean;
+  completionHeld?: boolean;
   activeTurnInProgress: boolean;
   activeTurnStartedAt?: string | null;
   worktreeSetup?: WorktreeSetupSnapshot | null;
@@ -558,6 +560,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   onCiteAssistantText,
   isWorking,
   runlessWorkActive = false,
+  completionHeld = false,
   activeTurnInProgress,
   activeTurnStartedAt = null,
   worktreeSetup = null,
@@ -1101,6 +1104,15 @@ const ConversationTimeline = memo(function ConversationTimeline({
   };
   const timelineListFooter = (
     <TimelineListFooter composerInset={anchoredEndSpace ? 0 : contentInsetEndAdjustment}>
+      {!isWorking &&
+      !activeTurnInProgress &&
+      !runlessWorkActive &&
+      !completionHeld &&
+      !isPreparingWorktree &&
+      !isCompacting &&
+      !awaitingUser ? (
+        <LatestRunEndState run={latestRun} timestampFormat={timestampFormat} />
+      ) : null}
       {footer}
     </TimelineListFooter>
   );
@@ -2799,6 +2811,50 @@ function AssistantMetaTimelineRow({
         copyStreaming={row.assistantCopyStreaming}
         alwaysVisible
       />
+    </div>
+  );
+}
+
+function LatestRunEndState({
+  run,
+  timestampFormat,
+}: {
+  run: TimelineLatestRun | null;
+  timestampFormat: TimestampFormat;
+}) {
+  const t = useTranslate();
+  const end = runEndState(run);
+  if (!end) return null;
+  const label =
+    end.kind === "failed"
+      ? t("chat.timeline.runFailed", { defaultValue: "Turn failed" })
+      : end.kind === "stopped"
+        ? t("chat.timeline.runStopped", { defaultValue: "Turn stopped" })
+        : end.kind === "rolledBack"
+          ? t("chat.timeline.runRolledBack", { defaultValue: "Turn rolled back" })
+          : t("chat.timeline.runEnded", { defaultValue: "Turn ended" });
+  return (
+    <div className="messages-timeline-row-frame">
+      <div
+        role="status"
+        data-testid="latest-run-end-state"
+        className={cn(
+          "chat-content-lane flex items-center gap-2 py-2 text-xs text-muted-foreground",
+          end.kind === "failed" && "text-destructive-foreground",
+        )}
+      >
+        <span>{label}</span>
+        {end.completedAt ? (
+          <Tooltip>
+            <TooltipTrigger render={<time dateTime={end.completedAt} className="tabular-nums" />}>
+              {formatDayAwareTimestamp(end.completedAt, timestampFormat, undefined, t)}
+            </TooltipTrigger>
+            <TooltipPopup>
+              {formatChatTimestampTooltip(end.completedAt, timestampFormat, t)}
+            </TooltipPopup>
+          </Tooltip>
+        ) : null}
+      </div>
     </div>
   );
 }

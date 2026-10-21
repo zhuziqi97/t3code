@@ -14,7 +14,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
 export const MessageCopyButton = memo(function MessageCopyButton({
   text,
-  label = "Copy message",
+  label,
   icon = Copy,
   extraFlavors,
   size = "xs",
@@ -30,6 +30,7 @@ export const MessageCopyButton = memo(function MessageCopyButton({
   className?: string;
 }) {
   const t = useTranslate();
+  const copyLabel = label ?? t("chat.copy.message");
   const ref = useRef<HTMLButtonElement>(null);
   const { copyToClipboard, isCopied } = useCopyToClipboard<void>({
     onCopy: () => showAnchoredCopySuccessToast(ref),
@@ -43,7 +44,7 @@ export const MessageCopyButton = memo(function MessageCopyButton({
       <TooltipTrigger
         render={
           <Button
-            aria-label={label}
+            aria-label={copyLabel}
             disabled={isCopied}
             onClick={() => copyToClipboard(text)}
             ref={ref}
@@ -60,7 +61,7 @@ export const MessageCopyButton = memo(function MessageCopyButton({
         />
       </TooltipTrigger>
       <TooltipPopup>
-        <p>{label}</p>
+        <p>{copyLabel}</p>
       </TooltipPopup>
     </Tooltip>
   );
