@@ -2519,7 +2519,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
             {promptLink !== null && (
               <MessageCopyButton
                 text={promptLink}
-                label="Copy prompt link"
+                label={t("chat.copy.promptLink")}
                 icon={LinkIconNode}
                 variant="ghost"
               />

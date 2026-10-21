@@ -4,6 +4,7 @@ import { expect, it } from "vite-plus/test";
 import { page } from "vite-plus/test/browser";
 
 import { act, render as renderUi } from "../../../test/render";
+import { changeLanguage } from "../../i18n";
 import { InlineButton } from "../ui/button";
 import { DraftHeroProjectHeading } from "./DraftHeroProjectHeading";
 import { DraftProjectName } from "./DraftProjectName";
@@ -110,6 +111,42 @@ it("uses the inline heading only when the viewport and chat lane both have room"
     title().getBoundingClientRect().bottom,
   );
   expectAboveComposer();
+});
+
+it("remeasures the heading across language changes and chat lane resizing", async () => {
+  await changeLanguage("en");
+  try {
+    await using fixture = await setup();
+    const { host, render, label, title, expectAboveComposer } = fixture;
+    await page.viewport(1440, 900);
+    await render("obsidian-arr");
+    expect(title().innerText).toBe("What should we build in");
+
+    await act(async () => changeLanguage("zh"));
+    await expect.poll(() => title().innerText).toBe("接下来在");
+    expect(host.querySelector("h1")!.innerText).toContain("中做什么？");
+    expect(label().textContent).toBe("obsidian-arr");
+    expect(label().getBoundingClientRect().top).toBeLessThan(
+      title().getBoundingClientRect().bottom,
+    );
+    expectAboveComposer();
+
+    host.style.width = "350px";
+    await expect.poll(() => title().innerText).toBe("接下来做什么？");
+    expect(label().getBoundingClientRect().top).toBeGreaterThanOrEqual(
+      title().getBoundingClientRect().bottom,
+    );
+    expectAboveComposer();
+
+    await act(async () => changeLanguage("en"));
+    await expect.poll(() => title().innerText).toBe("What should we build?");
+    host.style.width = "700px";
+    await expect.poll(() => title().innerText).toBe("What should we build in");
+    expect(label().textContent).toBe("obsidian-arr");
+    expectAboveComposer();
+  } finally {
+    await changeLanguage("en");
+  }
 });
 
 it.each([390, 1440])(
