@@ -39,7 +39,6 @@ import * as ProjectService from "./ProjectService.ts";
 const projectId = ProjectId.make("agent-session-import-project");
 const providerInstanceId = ProviderInstanceId.make("codex");
 const providerSessionId = "native-codex-thread";
-const threadId = ThreadId.make(`import:${providerInstanceId}:${providerSessionId}`);
 const timestamp = "2026-09-01T10:00:00.000Z";
 const now = DateTime.makeUnsafe(timestamp);
 const stores = Layer.mergeAll(EventStore.layer, ProjectionStore.layer).pipe(
@@ -398,13 +397,39 @@ it.effect(
 
 it.effect.each([
   { outcomeTag: "AlreadyImported" as const, canonicalTitle: "Saved 中文标题" },
+  {
+    outcomeTag: "AlreadyImported" as const,
+    canonicalTitle: "Saved 中文标题",
+    placeholderTitle: "Imported thread",
+  },
+  {
+    outcomeTag: "AlreadyImported" as const,
+    canonicalTitle: undefined,
+    placeholderTitle: "Imported thread",
+  },
+  {
+    outcomeTag: "Importable" as const,
+    canonicalTitle: "Claude 原生标题",
+    placeholderTitle: "Imported thread",
+    provider: "claudeAgent" as const,
+  },
   { outcomeTag: "AlreadyImported" as const, canonicalTitle: undefined },
   { outcomeTag: "Importable" as const, canonicalTitle: "Saved 中文标题" },
   { outcomeTag: "Importable" as const, canonicalTitle: undefined },
-])("repairs existing imports: %j", ({ outcomeTag, canonicalTitle }) => {
+])("repairs existing imports: %j", (testCase) => {
+  const { outcomeTag, canonicalTitle } = testCase;
+  const provider: "codex" | "claudeAgent" =
+    "provider" in testCase && testCase.provider === "claudeAgent" ? "claudeAgent" : "codex";
+  const providerSessionId =
+    provider === "claudeAgent" ? "c6db48d1-56e7-4db2-8132-75ed503fab31" : "native-codex-thread";
+  const threadId = ThreadId.make(`import:${providerInstanceId}:${providerSessionId}`);
+  const placeholderTitle =
+    "placeholderTitle" in testCase
+      ? testCase.placeholderTitle
+      : "# AGENTS.md instructions for /repo";
   const commands: Array<unknown> = [];
   const source = {
-    provider: "codex" as const,
+    provider,
     providerInstanceId,
     providerSessionId,
     filePath: "/tmp/native.jsonl",
@@ -421,7 +446,7 @@ it.effect.each([
           _tag: outcomeTag,
           source,
           thread: {
-            source: "codex",
+            source: provider,
             providerInstanceId,
             providerSessionId,
             title: canonicalTitle ?? "Actual request",
@@ -449,7 +474,7 @@ it.effect.each([
                 id: threadId,
                 projectId,
                 historyOrigin: "v1_import",
-                title: "# AGENTS.md instructions for /repo",
+                title: placeholderTitle,
               },
               messages: [
                 {

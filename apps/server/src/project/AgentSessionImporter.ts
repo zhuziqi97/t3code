@@ -1,5 +1,9 @@
 import * as FileSystem from "effect/FileSystem";
-import { deriveImportedThreadTitle, isLegacyCodexContextTitle } from "./AgentSessionTitle.ts";
+import {
+  deriveImportedThreadTitle,
+  isLegacyCodexContextTitle,
+  isImportedThreadPlaceholderTitle,
+} from "./AgentSessionTitle.ts";
 import {
   DEFAULT_MODEL,
   DEFAULT_MODEL_BY_PROVIDER,
@@ -181,18 +185,18 @@ const make = Effect.gen(function* () {
     source: AgentSessionImportSource,
     title?: string | null,
   ) {
-    if (source.provider !== "codex") return;
     const existing = yield* orchestrator.getThreadRecords(threadId, ["messages"]);
     if (
       existing.thread.historyOrigin !== "v1_import" ||
-      !isLegacyCodexContextTitle(existing.thread.title)
+      !isImportedThreadPlaceholderTitle(existing.thread.title) ||
+      (source.provider !== "codex" && existing.thread.title !== "Imported thread")
     )
       return;
     const replacement =
       title ??
       existing.messages
         .filter((message) => message.role === "user")
-        .map((message) => deriveImportedThreadTitle(message.text, "codex"))
+        .map((message) => deriveImportedThreadTitle(message.text, source.provider))
         .find((value) => value !== null);
     if (!replacement || replacement === "Imported thread" || isLegacyCodexContextTitle(replacement))
       return;
@@ -449,7 +453,6 @@ const make = Effect.gen(function* () {
     // A changing or oversized transcript can be skipped even though its earlier
     // imported messages still contain a usable title. Do not reimport its history.
     for (const source of completedSources) {
-      if (source.provider !== "codex") continue;
       const threadId = ThreadId.make(
         `import:${source.providerInstanceId}:${source.providerSessionId}`,
       );

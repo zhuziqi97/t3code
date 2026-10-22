@@ -1,5 +1,8 @@
 import { EventStoreV2 } from "./EventStore.ts";
-import { isLegacyCodexContextTitle } from "../project/AgentSessionTitle.ts";
+import {
+  isLegacyCodexContextTitle,
+  isImportedThreadPlaceholderTitle,
+} from "../project/AgentSessionTitle.ts";
 import type {
   OrchestrationV2SearchThreadInput,
   OrchestrationV2SearchThreadResult,
@@ -2640,7 +2643,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         thread.deletedAt !== null ||
         thread.historyOrigin !== "v1_import" ||
         thread.projectId !== command.projectId ||
-        !isLegacyCodexContextTitle(thread.title) ||
+        !isImportedThreadPlaceholderTitle(thread.title) ||
         isLegacyCodexContextTitle(command.title) ||
         command.title === "Imported thread" ||
         thread.titleRegeneration != null
@@ -2655,7 +2658,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       if (
         Option.isNone(created) ||
         created.value.event.type !== "thread.created" ||
-        !isLegacyCodexContextTitle(created.value.event.payload.title) ||
+        !isImportedThreadPlaceholderTitle(created.value.event.payload.title) ||
         !String(created.value.event.id).startsWith("agent-session-import:v2:")
       )
         return;

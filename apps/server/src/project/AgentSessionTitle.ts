@@ -79,3 +79,8 @@ export function isLegacyCodexContextTitle(title: string): boolean {
     )
   );
 }
+
+/** Repair only importer placeholders, never an ordinary imported or user-supplied name. */
+export function isImportedThreadPlaceholderTitle(title: string): boolean {
+  return title === "Imported thread" || isLegacyCodexContextTitle(title);
+}

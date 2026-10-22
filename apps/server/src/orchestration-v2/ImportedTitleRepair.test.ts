@@ -94,27 +94,33 @@ function repair(threadId: ThreadId, suffix: string) {
   );
 }
 
-it.effect("repairs an untouched import once without changing its state or activity time", () =>
-  Effect.gen(function* () {
-    const id = yield* seed("import:codex:untouched");
-    const orchestrator = yield* Orchestrator.OrchestratorV2;
-    const before = (yield* orchestrator.getThreadRecords(id, [])).thread;
-    yield* repair(id, "first");
-    const after = (yield* orchestrator.getThreadRecords(id, [])).thread;
-    expect(after).toEqual({ ...before, title: "修复项目标题" });
-    yield* repair(id, "second");
-    expect((yield* orchestrator.getThreadRecords(id, [])).thread).toEqual(after);
-    const store = yield* EventStore.EventStoreV2;
-    const events = yield* store
-      .read({ threadId: id, eventType: "thread.metadata-updated" })
-      .pipe(Stream.runCollect);
-    expect(events).toHaveLength(1);
-  }).pipe(Effect.provide(layer)),
+it.effect.each([oldTitle, "Imported thread"])(
+  "repairs an untouched import once without changing its state or activity time: %s",
+  (title) =>
+    Effect.gen(function* () {
+      const id = yield* seed("import:codex:untouched", { title });
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const before = (yield* orchestrator.getThreadRecords(id, [])).thread;
+      yield* repair(id, "first");
+      const after = (yield* orchestrator.getThreadRecords(id, [])).thread;
+      expect(after).toEqual({ ...before, title: "修复项目标题" });
+      yield* repair(id, "second");
+      expect((yield* orchestrator.getThreadRecords(id, [])).thread).toEqual(after);
+      const store = yield* EventStore.EventStoreV2;
+      const events = yield* store
+        .read({ threadId: id, eventType: "thread.metadata-updated" })
+        .pipe(Stream.runCollect);
+      expect(events).toHaveLength(1);
+    }).pipe(Effect.provide(layer)),
 );
 
-it.effect.each([false, true])("preserves manual renames, including rename back: %s", (renameBack) =>
+it.effect.each(
+  [false, true].flatMap((renameBack) =>
+    [oldTitle, "Imported thread"].map((title) => ({ renameBack, title })),
+  ),
+)("preserves manual renames, including rename back: %j", ({ renameBack, title }) =>
   Effect.gen(function* () {
-    const id = yield* seed("import:codex:renamed");
+    const id = yield* seed("import:codex:renamed", { title });
     const orchestrator = yield* Orchestrator.OrchestratorV2;
     yield* orchestrator.dispatch({
       type: "thread.metadata.update",
@@ -127,11 +133,11 @@ it.effect.each([false, true])("preserves manual renames, including rename back: 
         type: "thread.metadata.update",
         commandId: CommandId.make("rename-back"),
         threadId: id,
-        title: oldTitle,
+        title,
       });
     yield* repair(id, "after-rename");
     expect((yield* orchestrator.getThreadRecords(id, [])).thread.title).toBe(
-      renameBack ? oldTitle : "My name",
+      renameBack ? title : "My name",
     );
   }).pipe(Effect.provide(layer)),
 );
