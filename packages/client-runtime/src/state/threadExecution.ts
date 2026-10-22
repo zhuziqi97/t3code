@@ -15,6 +15,8 @@ import {
   type OrchestrationV2PendingBackgroundTask,
   type OrchestrationV2ProviderGoal,
   type ServerProviderModel,
+  type ServerProvider,
+  type OrchestrationV2ProviderThreadNativeMetadata,
   type OrchestrationV2ExecutionNode,
   type OrchestrationV2ThreadProjection,
   orchestrationV2RunWorkStartedAt,
@@ -24,7 +26,11 @@ import {
   backgroundWorkHoldsCompletion,
   derivePendingBackgroundWork,
 } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
-import { getProviderOptionCurrentLabel, getProviderOptionStatedValue } from "@t3tools/shared/model";
+import {
+  getProviderOptionCurrentLabel,
+  getProviderOptionStatedValue,
+  isReasoningOption,
+} from "@t3tools/shared/model";
 import { formatDuration } from "@t3tools/shared/orchestrationTiming";
 import * as DateTime from "effect/DateTime";
 
@@ -153,6 +159,46 @@ export function deriveReportedModelSelection(
   return providerThread?.nativeMetadata?.modelSelection ?? null;
 }
 
+export function deriveThreadProviderConfiguration(
+  projection: OrchestrationV2ThreadProjection,
+): OrchestrationV2ProviderThreadNativeMetadata | null {
+  return (
+    projection.providerThreads.find(
+      (candidate) =>
+        candidate.id === projection.thread.activeProviderThreadId &&
+        candidate.providerInstanceId === projection.thread.modelSelection.instanceId,
+    )?.nativeMetadata ?? null
+  );
+}
+
+export function applyThreadProviderConfiguration(
+  providers: ReadonlyArray<ServerProvider>,
+  configuration: OrchestrationV2ProviderThreadNativeMetadata | null,
+): ReadonlyArray<ServerProvider> {
+  const selection = configuration?.modelSelection;
+  if (configuration?.optionDescriptors === undefined || !selection) return providers;
+  return providers.map((provider) => {
+    if (provider.instanceId !== selection.instanceId) return provider;
+    const modelId = selection.model ?? provider.models.find((model) => model.isDefault)?.slug;
+    const models = provider.models.map((model) =>
+      model.slug === modelId
+        ? {
+            ...model,
+            capabilities: { optionDescriptors: configuration.optionDescriptors },
+          }
+        : model,
+    );
+    if (modelId && !models.some((model) => model.slug === modelId))
+      models.push({
+        slug: modelId,
+        name: modelId,
+        isCustom: false,
+        capabilities: { optionDescriptors: configuration.optionDescriptors },
+      });
+    return { ...provider, models };
+  });
+}
+
 export const REASONING_EFFORT_OPTION_IDS: ReadonlyArray<string> = [
   "reasoningEffort",
   "effort",
@@ -169,25 +215,22 @@ export function formatModelSelectionEffort(
 ): string | null {
   const caps = models.find((model) => model.slug === selection.model)?.capabilities;
   if (!caps) return null;
-  for (const id of REASONING_EFFORT_OPTION_IDS) {
-    const descriptor = caps.optionDescriptors?.find((candidate) => candidate.id === id);
-    if (descriptor?.type !== "select") continue;
-    const value = getProviderOptionStatedValue(id, selection, reportedSelection);
-    if (value === undefined && id !== "variant") continue;
-    if (typeof value === "boolean") continue;
+  for (const descriptor of caps.optionDescriptors ?? []) {
+    if (!isReasoningOption(descriptor)) continue;
+    const id = descriptor.id;
+    const value =
+      getProviderOptionStatedValue(id, selection, reportedSelection) ??
+      (descriptor.category === "thought_level" ? descriptor.currentValue : undefined);
+    if (value === undefined && id !== "variant" && descriptor.category !== "thought_level")
+      continue;
+    const currentDescriptor =
+      descriptor.type === "boolean"
+        ? { ...descriptor, currentValue: typeof value === "boolean" ? value : undefined }
+        : { ...descriptor, currentValue: typeof value === "string" ? value : undefined };
     // Bypass picker normalization so an obsolete choice cannot become a catalog default.
     const label = t
-      ? getLocalizedProviderOptionCurrentLabel(
-          { ...descriptor, currentValue: value },
-          t,
-          selection,
-          reportedSelection,
-        )
-      : getProviderOptionCurrentLabel(
-          { ...descriptor, currentValue: value },
-          selection,
-          reportedSelection,
-        );
+      ? getLocalizedProviderOptionCurrentLabel(currentDescriptor, t, selection, reportedSelection)
+      : getProviderOptionCurrentLabel(currentDescriptor, selection, reportedSelection);
     if (label) return label;
   }
   return null;

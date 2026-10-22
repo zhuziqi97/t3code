@@ -9,7 +9,6 @@ import * as AcpRegistrySupport from "./AcpRegistrySupport.ts";
 import {
   acpRegistrySnapshotReadiness,
   applyAcpRegistryAvailableCommands,
-  applyAcpRegistryLiveConfiguration,
   buildCheckedAcpRegistrySnapshot,
   checkAcpRegistryProviderReadiness,
   checkAcpRegistryProviderStatus,
@@ -139,64 +138,6 @@ describe("acpRegistrySnapshotReadiness", () => {
     });
     expect(snapshot.auth.status).toBe("unknown");
     expect(snapshot.setup?.canAuthenticate).toBe(true);
-    expect(
-      applyAcpRegistryLiveConfiguration(
-        snapshot,
-        { models: [], currentModelId: null, configOptions: [] },
-        [],
-      ).auth.status,
-    ).toBe("unknown");
-  });
-
-  it("overlays live configuration without dropping probe-owned session capabilities", () => {
-    const provider = buildCheckedAcpRegistrySnapshot({
-      ...identity,
-      settings: decodeSettings({ agentId: "test-agent" }),
-      checkedAt: "2026-08-13T10:00:00.000Z",
-      inspection: {
-        status: "ready",
-        agentId: "test-agent",
-        version: "1.0.0",
-        distribution: "npx",
-      },
-      probe: {
-        probe: {
-          instanceId: identity.instanceId,
-          ready: true,
-          icon: null,
-          authMethods: [],
-          models: [{ id: "probe-model", name: "Probe model", description: null }],
-          currentModelId: "probe-model",
-          configOptions: [],
-          sessionManagement: {
-            canList: true,
-            canLoad: true,
-            canResume: true,
-            canLogout: true,
-            canDelete: true,
-            canConfigureProviders: true,
-          },
-        },
-        slashCommands: [],
-        skills: [],
-      },
-    });
-
-    expect(
-      applyAcpRegistryLiveConfiguration(
-        provider,
-        {
-          models: [{ id: "live-model", name: "Live model", description: null }],
-          currentModelId: "live-model",
-          configOptions: [],
-        },
-        [],
-      ),
-    ).toMatchObject({
-      auth: { status: "unknown", canLogout: true },
-      nativeSessions: { canList: true, canLoad: true, canResume: true },
-      models: [{ slug: "live-model", isDefault: true }],
-    });
   });
 
   it("maps registry inspection status to provider readiness", () => {
@@ -474,4 +415,42 @@ describe("acpRegistrySnapshotReadiness", () => {
       });
     }),
   );
+});
+
+it("uses discovery configuration only as a preview for its current model", () => {
+  const snapshot = buildCheckedAcpRegistrySnapshot({
+    ...identity,
+    settings: decodeSettings({ agentId: "test-agent", customModels: ["custom"] }),
+    checkedAt: "2026-10-23T00:00:00.000Z",
+    inspection: { status: "ready", agentId: "test-agent", version: "1.0.0", distribution: "npx" },
+    probe: {
+      probe: {
+        instanceId: identity.instanceId,
+        ready: true,
+        icon: null,
+        authMethods: [],
+        models: ["graded", "plain"].map((id) => ({ id, name: id, description: null })),
+        currentModelId: "graded",
+        configOptions: [
+          {
+            id: "vendor/depth",
+            label: "Reasoning",
+            category: "thought_level",
+            type: "boolean",
+            currentValue: true,
+          },
+        ],
+        sessionManagement: noSessionManagement,
+      },
+      slashCommands: [],
+      skills: [],
+    },
+  });
+  expect(
+    snapshot.models.map((m) => [m.slug, m.capabilities?.optionDescriptors?.map((d) => d.id)]),
+  ).toEqual([
+    ["graded", ["vendor/depth"]],
+    ["plain", []],
+    ["custom", []],
+  ]);
 });

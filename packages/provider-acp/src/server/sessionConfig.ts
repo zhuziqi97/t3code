@@ -1,7 +1,11 @@
-import type { ProviderOptionChoice, ProviderOptionDescriptor } from "@t3tools/contracts";
+import type {
+  ProviderInstanceId,
+  ProviderOptionChoice,
+  ProviderOptionDescriptor,
+} from "@t3tools/contracts";
 import type * as EffectAcpSchema from "effect-acp/compat";
 
-import type { AcpSessionModeState } from "./runtimeModel.ts";
+import { findModelConfigOption, type AcpSessionModeState } from "./runtimeModel.ts";
 
 export const ACP_SESSION_MODE_OPTION_ID = "_t3/session-mode";
 
@@ -77,6 +81,7 @@ export function acpProviderOptionDescriptors(input: {
     const description = boundedText(option.description, MAX_DESCRIPTION_LENGTH);
     const base = {
       id,
+      ...(option.category ? { category: option.category } : {}),
       label: boundedText(option.name, MAX_TEXT_LENGTH) || id,
       ...(description ? { description } : {}),
     } as const;
@@ -136,6 +141,7 @@ export function acpProviderOptionDescriptors(input: {
     ) {
       descriptors.push({
         id: ACP_SESSION_MODE_OPTION_ID,
+        category: "mode",
         label: "Mode",
         description: "Session mode advertised by the ACP agent.",
         type: "select",
@@ -148,4 +154,28 @@ export function acpProviderOptionDescriptors(input: {
   }
 
   return descriptors.slice(0, MAX_OPTION_DESCRIPTORS);
+}
+
+export function acpSessionConfiguration(input: {
+  readonly instanceId: ProviderInstanceId;
+  readonly configOptions: ReadonlyArray<EffectAcpSchema.SessionConfigOption>;
+  readonly modeState: AcpSessionModeState | undefined;
+  readonly modelState: EffectAcpSchema.SessionModelState | null | undefined;
+}) {
+  const optionDescriptors = acpProviderOptionDescriptors(input);
+  const modelOption = findModelConfigOption(input.configOptions);
+  const model =
+    modelOption?.type === "select" ? modelOption.currentValue : input.modelState?.currentModelId;
+  return {
+    modelSelection: {
+      instanceId: input.instanceId,
+      model: model ? (boundedOpaqueValue(model, MAX_TEXT_LENGTH) ?? null) : null,
+      options: optionDescriptors.flatMap((descriptor) =>
+        descriptor.currentValue === undefined
+          ? []
+          : [{ id: descriptor.id, value: descriptor.currentValue }],
+      ),
+    },
+    optionDescriptors,
+  };
 }

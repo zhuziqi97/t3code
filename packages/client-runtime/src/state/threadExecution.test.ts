@@ -10,6 +10,8 @@ import {
   RunAttemptId,
   RunId,
   ThreadId,
+  type ServerProvider,
+  type ProviderOptionDescriptor,
   type OrchestrationV2ExecutionNode,
   type OrchestrationV2RunStatus,
 } from "@t3tools/contracts";
@@ -23,6 +25,8 @@ import {
   presentPendingBackgroundWork,
   presentProviderGoal,
   deriveReportedModelSelection,
+  applyThreadProviderConfiguration,
+  deriveThreadProviderConfiguration,
   deriveLatestThreadRun,
   deriveProviderSubagentStatus,
   formatModelSelectionEffort,
@@ -506,7 +510,7 @@ describe("formatModelSelectionEffort", () => {
   it("localizes the subagent effort display without changing its selected native value", () => {
     const selected = selection([{ id: "effort", value: "xhigh" }]);
     const t = createI18n().getFixedT("zh");
-    expect(formatModelSelectionEffort(selected, catalog({}), null, t)).toBe("超高");
+    expect(formatModelSelectionEffort(selected, catalog({}), null, t)).toBe("Extra High");
     expect(selected.options).toEqual([{ id: "effort", value: "xhigh" }]);
   });
 
@@ -817,4 +821,96 @@ it("localizes execution summaries without changing goals, task identity or provi
   expect(presentPendingBackgroundWork(tasks, translator.t)?.items[0]?.label).toBe(
     "Review src/math.ts 原文",
   );
+});
+
+describe("session-scoped ACP configuration", () => {
+  const instanceId = ProviderInstanceId.make("local-acp");
+  const provider: ServerProvider = {
+    instanceId,
+    driver: ProviderDriverKind.make("acpRegistry"),
+    enabled: true,
+    installed: true,
+    version: null,
+    status: "ready",
+    auth: { status: "unknown" },
+    checkedAt: "2026-10-23T00:00:00.000Z",
+    slashCommands: [],
+    skills: [],
+    models: ["graded", "plain"].map((slug) => ({
+      slug,
+      name: slug,
+      isCustom: false,
+      capabilities: {
+        optionDescriptors: [
+          { id: "preview", label: "Preview", type: "boolean", currentValue: true },
+        ],
+      },
+    })),
+  };
+  const depth: ProviderOptionDescriptor = {
+    id: "vendor.depth",
+    label: "Reasoning",
+    category: "thought_level",
+    type: "select",
+    currentValue: "high",
+    options: [{ id: "high", label: "High" }],
+  };
+  it("projects each session without mutating public preview or reviving options for a plain model", () => {
+    const a = applyThreadProviderConfiguration([provider], {
+      modelSelection: { instanceId, model: "graded" },
+      optionDescriptors: [depth],
+    });
+    const b = applyThreadProviderConfiguration([provider], {
+      modelSelection: { instanceId, model: "plain" },
+      optionDescriptors: [],
+    });
+    expect(a[0]?.models[0]?.capabilities?.optionDescriptors).toEqual([depth]);
+    expect(b[0]?.models[1]?.capabilities?.optionDescriptors).toEqual([]);
+    expect(provider.models[0]?.capabilities?.optionDescriptors?.[0]?.id).toBe("preview");
+    expect(
+      applyThreadProviderConfiguration([provider], {
+        modelSelection: { instanceId: ProviderInstanceId.make("other"), model: "graded" },
+        optionDescriptors: [],
+      })[0],
+    ).toBe(provider);
+  });
+  it("recognizes arbitrary classified select and boolean IDs without reinterpreting another category", () => {
+    const selection = { instanceId, model: "graded" };
+    const model = {
+      slug: "graded",
+      name: "Graded",
+      isCustom: false,
+      capabilities: { optionDescriptors: [depth] },
+    };
+    expect(formatModelSelectionEffort(selection, [model])).toBe("High");
+    expect(
+      formatModelSelectionEffort(selection, [
+        {
+          ...model,
+          capabilities: {
+            optionDescriptors: [
+              {
+                id: "arbitrary-toggle",
+                category: "thought_level",
+                label: "Thinking",
+                type: "boolean",
+                currentValue: true,
+              },
+            ],
+          },
+        },
+      ]),
+    ).toBe("On");
+    expect(
+      formatModelSelectionEffort(selection, [
+        {
+          ...model,
+          capabilities: { optionDescriptors: [{ ...depth, id: "effort", category: "other" }] },
+        },
+      ]),
+    ).toBeNull();
+  });
+  it("reads configuration only from the active thread with the matching instance", () => {
+    expect(deriveThreadProviderConfiguration(v2Projection)).toBeNull();
+  });
 });

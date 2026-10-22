@@ -7,6 +7,7 @@ import {
   RunAttemptId,
   RunId,
   type ModelSelection,
+  type OrchestrationV2ProviderThreadNativeMetadata,
   ProviderInstanceId,
   ProviderSessionId,
   ThreadId,
@@ -39,10 +40,7 @@ import {
 } from "@t3tools/provider-testing/replayGate";
 import type { ProviderContinuationRequest } from "@t3tools/provider-core/server/ProviderContinuationRequests";
 import * as ServerSettings from "../../serverSettings.ts";
-import type {
-  AcpRegistryAvailableCommands,
-  AcpRegistryLiveConfiguration,
-} from "@t3tools/provider-acp-registry/testing";
+import type { AcpRegistryAvailableCommands } from "@t3tools/provider-acp-registry/testing";
 import * as AcpRegistrySupport from "@t3tools/provider-acp-registry/server/AcpRegistrySupport";
 import * as AcpRegistryRuntimeCoordinator from "@t3tools/provider-acp-registry/server/AcpRegistryRuntimeCoordinator";
 import { ACP_SESSION_MODE_OPTION_ID } from "@t3tools/provider-acp/server/sessionConfig";
@@ -487,6 +485,10 @@ describe("AcpRegistryAdapterV2", () => {
       readonly customModels?: ReadonlyArray<string>;
       readonly storedModel?: string;
       readonly storedModePick?: string;
+      readonly storedOptions?: ModelSelection["options"];
+      readonly sessionId?: string;
+      readonly load?: boolean;
+      readonly keepSessionOpen?: boolean;
       readonly turnModels?: ReadonlyArray<string>;
     }) {
       const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -506,18 +508,20 @@ describe("AcpRegistryAdapterV2", () => {
             outbound("initialize"),
             answer("initialize", {
               protocolVersion: 1,
-              agentCapabilities: { loadSession: false },
+              agentCapabilities: { loadSession: input.load === true },
               authMethods: [{ id: "test", name: "Test" }],
             }),
-            outbound("session/new"),
-            answer("session/new", { sessionId: "agent-session", ...(input.setup as object) }),
+            outbound(input.load ? "session/load" : "session/new"),
+            answer(input.load ? "session/load" : "session/new", {
+              sessionId: input.sessionId ?? "agent-session",
+              ...(input.setup as object),
+            }),
             ...input.pickFrames,
           ] as never,
         },
         ACP_REGISTRY_PROVIDER,
       );
       const instanceId = ProviderInstanceId.make("acp-registry-stored-picks");
-      let published: AcpRegistryLiveConfiguration | undefined;
       const adapter = yield* makeAcpRegistryAdapterV2({
         selfInvocation: yield* resolveSelfInvocation(),
         instanceId,
@@ -543,10 +547,6 @@ describe("AcpRegistryAdapterV2", () => {
             layerInjectedRuntimeCatalog,
             Layer.mock(AcpRegistryRuntimeCoordinator.AcpRegistryRuntimeCoordinator)({
               withForegroundStartup: (_startupKey, effect) => effect,
-              publishLiveConfiguration: (_instanceId, configuration) =>
-                Effect.sync(() => {
-                  published = configuration;
-                }),
             }),
           ),
         ),
@@ -560,27 +560,30 @@ describe("AcpRegistryAdapterV2", () => {
       const stored: ModelSelection = {
         instanceId,
         model: input.storedModel ?? "default",
+        ...(input.storedOptions ? { options: input.storedOptions } : {}),
         ...(input.storedModePick === undefined
           ? {}
           : { options: [{ id: ACP_SESSION_MODE_OPTION_ID, value: input.storedModePick }] }),
       };
-      const configurations: Array<AcpRegistryLiveConfiguration | undefined> = [];
-      yield* Effect.gen(function* () {
+      const configurations: Array<OrchestrationV2ProviderThreadNativeMetadata | null> = [];
+      const runtime = yield* Effect.gen(function* () {
         const runtime = yield* adapter.openSession({
           threadId,
           providerSessionId: ProviderSessionId.make("provider-session-stored-picks"),
+          ...(input.load ? { initialNativeThreadId: input.sessionId ?? "agent-session" } : {}),
           modelSelection: stored,
           runtimePolicy,
         });
-        configurations.push(published);
-        if (input.turnModels === undefined) return;
         const providerThread = yield* runtime.ensureThread({
           threadId,
           modelSelection: stored,
           runtimePolicy,
         });
+        configurations.push(providerThread.nativeMetadata);
+        if (input.turnModels === undefined) return runtime;
         const now = yield* DateTime.now;
         let current = stored;
+        let metadata = providerThread.nativeMetadata;
         for (const [index, model] of input.turnModels.entries()) {
           const target: ModelSelection = { instanceId, model };
           const plan = yield* adapter.planSelectionTransition({
@@ -604,18 +607,21 @@ describe("AcpRegistryAdapterV2", () => {
             Stream.takeUntil((event) => event.type === "turn.terminal"),
             Stream.runForEach((event) =>
               Effect.sync(() => {
+                if (event.type === "provider_thread.updated")
+                  metadata = event.providerThread.nativeMetadata;
                 if (event.type === "turn.terminal") {
                   assert.equal(event.status, "completed", event.failure?.message);
                 }
               }),
             ),
           );
-          configurations.push(published);
+          configurations.push(metadata);
           current = target;
         }
-      }).pipe(Effect.scoped);
+        return runtime;
+      }).pipe(input.keepSessionOpen ? (effect) => effect : Effect.scoped);
       yield* makeAcpReplayCompletenessAssertion(fileSystem, statusPath, transcript);
-      return { configurations };
+      return { configurations, runtime };
     });
 
     it.effect("switches an agent that only advertises modes with session/set_mode", () =>
@@ -758,82 +764,270 @@ describe("AcpRegistryAdapterV2", () => {
             ],
           });
           assert.deepEqual(
-            configurations.map((configuration) => ({
-              models: configuration?.models.map((model) => model.id),
-              current: configuration?.currentModelId,
-            })),
+            configurations.map((configuration) => configuration?.modelSelection?.model),
             [
-              { models: ["hermes", "auto", "default"], current: "default" },
-              { models: ["hermes", "auto", "default"], current: "hermes" },
-              { models: ["hermes", "auto", "default"], current: null },
-              { models: ["hermes", "auto", "default"], current: "auto" },
-              { models: ["hermes", "auto", "default"], current: "default" },
-              { models: ["auto"], current: null },
-              { models: ["auto"], current: null },
-              { models: ["default"], current: null },
-              { models: ["default"], current: null },
-              { models: ["hermes", "auto", "default"], current: "default" },
-              { models: ["hermes", "auto", "default"], current: "hermes" },
+              "default",
+              "hermes",
+              "custom-model",
+              "auto",
+              "default",
+              "hermes",
+              "custom-model",
+              "auto",
+              "custom-model",
+              "default",
+              "hermes",
             ],
           );
         }).pipe(Effect.provide(layerTest), Effect.scoped),
     );
 
-    it.effect("leaves unadvertised model IDs alone in both model selection protocols", () =>
-      Effect.gen(function* () {
-        const { configurations } = yield* openWithStoredPicks({
-          setup: {
-            models: {
-              currentModelId: "hermes",
-              availableModels: ["hermes", "other"].map((modelId) => ({ modelId, name: modelId })),
+    it.effect("rejects an unadvertised model instead of recording the request as applied", () =>
+      openWithStoredPicks({
+        setup: {
+          configOptions: [
+            {
+              id: "model",
+              category: "model",
+              type: "select",
+              name: "Model",
+              currentValue: "other",
+              options: [{ value: "other", name: "Other" }],
+            },
+          ],
+        },
+        storedModel: "removed-model",
+        pickFrames: [],
+      }).pipe(
+        Effect.flip,
+        Effect.tap((error) =>
+          Effect.sync(() => {
+            assert.include(String(error.cause), "removed-model");
+          }),
+        ),
+        Effect.asVoid,
+        Effect.provide(layerTest),
+        Effect.scoped,
+      ),
+    );
+    const depth = (currentValue = "high") => ({
+      id: "vendor/depth",
+      name: "Reasoning",
+      category: "thought_level",
+      type: "select",
+      currentValue,
+      options: ["low", "high"].map((value) => ({ value, name: value })),
+    });
+    const modelConfig = (currentValue: string) => ({
+      id: "choose-model",
+      category: "model",
+      type: "select",
+      name: "Model",
+      currentValue,
+      options: ["plain", "graded", "boolean"].map((value) => ({ value, name: value })),
+    });
+    it.effect(
+      "keeps two sessions on one instance isolated and restores the native current value",
+      () =>
+        Effect.gen(function* () {
+          const a = yield* openWithStoredPicks({
+            setup: { configOptions: [modelConfig("graded"), depth()] },
+            storedModel: "graded",
+            sessionId: "session-A",
+            pickFrames: [],
+          });
+          const b = yield* openWithStoredPicks({
+            setup: {
+              configOptions: [
+                modelConfig("boolean"),
+                {
+                  id: "vendor/depth",
+                  name: "Thinking",
+                  category: "thought_level",
+                  type: "boolean",
+                  currentValue: true,
+                },
+              ],
+            },
+            storedModel: "boolean",
+            sessionId: "session-B",
+            pickFrames: [],
+          });
+          const stillA = yield* a.runtime.ensureThread({
+            threadId: ThreadId.make("thread-A"),
+            modelSelection: {
+              instanceId: ProviderInstanceId.make("acp-registry-stored-picks"),
+              model: "graded",
+            },
+            runtimePolicy: ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
+              runtimeMode: "approval-required",
+              interactionMode: "default",
+              cwd: "/tmp",
+            }),
+          });
+          assert.equal(stillA.nativeMetadata?.optionDescriptors?.[0]?.currentValue, "high");
+          const restored = yield* openWithStoredPicks({
+            setup: { configOptions: [modelConfig("graded"), depth("low")] },
+            storedModel: "graded",
+            sessionId: "session-A",
+            load: true,
+            pickFrames: [],
+          });
+          assert.equal(a.configurations[0]?.modelSelection?.model, "graded");
+          assert.equal(a.configurations[0]?.optionDescriptors?.[0]?.currentValue, "high");
+          assert.equal(b.configurations[0]?.optionDescriptors?.[0]?.currentValue, true);
+          assert.equal(restored.configurations[0]?.optionDescriptors?.[0]?.currentValue, "low");
+          assert.equal(a.configurations[0]?.optionDescriptors?.[0]?.currentValue, "high");
+        }).pipe(Effect.provide(layerTest), Effect.scoped),
+    );
+    it.effect(
+      "replaces options when switching graded, boolean and plain models and ignores another session's late config",
+      () =>
+        Effect.gen(function* () {
+          const boolean = {
+            id: "vendor/depth",
+            name: "Thinking",
+            category: "thought_level",
+            type: "boolean",
+            currentValue: false,
+          };
+          const { configurations } = yield* openWithStoredPicks({
+            setup: { configOptions: [modelConfig("graded"), depth()] },
+            storedModel: "graded",
+            turnModels: ["boolean", "plain", "graded"],
+            pickFrames: [
+              outbound("session/set_config_option", {
+                sessionId: "agent-session",
+                configId: "choose-model",
+                value: "boolean",
+              }),
+              answer("session/set_config_option", {
+                configOptions: [modelConfig("boolean"), boolean],
+              }),
+              ...prompt(),
+              outbound("session/set_config_option", {
+                sessionId: "agent-session",
+                configId: "choose-model",
+                value: "plain",
+              }),
+              answer("session/set_config_option", { configOptions: [modelConfig("plain")] }),
+              ...prompt(),
+              outbound("session/set_config_option", {
+                sessionId: "agent-session",
+                configId: "choose-model",
+                value: "graded",
+              }),
+              answer("session/set_config_option", {
+                configOptions: [modelConfig("graded"), depth("low")],
+              }),
+              ...prompt({
+                type: "emit_inbound",
+                frame: {
+                  kind: "notification",
+                  method: "session/update",
+                  params: {
+                    sessionId: "old-session",
+                    update: {
+                      sessionUpdate: "config_option_update",
+                      configOptions: [modelConfig("boolean"), boolean],
+                    },
+                  },
+                },
+              }),
+            ],
+          });
+          assert.deepEqual(
+            configurations.map((c) =>
+              c?.optionDescriptors?.map((d) => [d.id, d.type, d.currentValue]),
+            ),
+            [
+              [["vendor/depth", "select", "high"]],
+              [["vendor/depth", "boolean", false]],
+              [],
+              [["vendor/depth", "select", "low"]],
+            ],
+          );
+        }).pipe(Effect.provide(layerTest), Effect.scoped),
+    );
+    it.effect("reports an unsupported option and its unavailable actual value", () =>
+      openWithStoredPicks({
+        setup: { configOptions: [modelConfig("plain")] },
+        storedModel: "plain",
+        storedOptions: [{ id: "vendor/depth", value: "high" }],
+        pickFrames: [],
+      }).pipe(
+        Effect.flip,
+        Effect.tap((error) =>
+          Effect.sync(() => {
+            assert.include(String(error.cause), "does not expose");
+            assert.include(String(error.cause), "actual value is unavailable");
+          }),
+        ),
+        Effect.asVoid,
+        Effect.provide(layerTest),
+        Effect.scoped,
+      ),
+    );
+    it.effect("reports a provider refusal with its reason and actual value", () =>
+      openWithStoredPicks({
+        setup: { configOptions: [modelConfig("graded"), depth("low")] },
+        storedModel: "graded",
+        storedOptions: [{ id: "vendor/depth", value: "high" }],
+        pickFrames: [
+          outbound("session/set_config_option", {
+            sessionId: "agent-session",
+            configId: "vendor/depth",
+            value: "high",
+          }),
+          {
+            type: "emit_inbound",
+            frame: {
+              kind: "response",
+              method: "session/set_config_option",
+              error: { code: -32602, message: "High is unavailable for this account" },
             },
           },
-          storedModel: "default",
-          turnModels: [
-            "auto",
-            "removed-model",
-            "other",
-            "default",
-            "auto",
-            "hermes",
-            "removed-model",
-          ],
-          pickFrames: [
-            ...prompt(),
-            ...prompt(),
-            ...setModel("other"),
-            ...prompt(
-              configOptionUpdate([
-                {
-                  ...modelOption("live-model", "other"),
-                  options: [{ value: "other", name: "Other" }],
-                },
-              ]),
-            ),
-            ...prompt(),
-            ...prompt(),
-            ...prompt(
-              configOptionUpdate([
-                {
-                  ...modelOption("replacement-model", "other", true),
-                  options: [
-                    {
-                      group: "models",
-                      name: "Models",
-                      options: [{ value: "other", name: "Other" }],
-                    },
-                  ],
-                },
-              ]),
-            ),
-            ...prompt(),
-          ],
-        });
-        assert.deepEqual(
-          configurations.map((configuration) => configuration?.currentModelId),
-          ["hermes", "hermes", "hermes", "other", "other", "other", "other", "other"],
-        );
-      }).pipe(Effect.provide(layerTest), Effect.scoped),
+        ],
+      }).pipe(
+        Effect.flip,
+        Effect.tap((error) =>
+          Effect.sync(() => {
+            assert.include(String(error.cause), "High is unavailable for this account");
+            assert.include(String(error.cause), "actual value is 'low'");
+          }),
+        ),
+        Effect.asVoid,
+        Effect.provide(layerTest),
+        Effect.scoped,
+      ),
+    );
+    it.effect("rejects a successful response that kept a different actual value", () =>
+      openWithStoredPicks({
+        setup: { configOptions: [modelConfig("graded"), depth("low")] },
+        storedModel: "graded",
+        storedOptions: [{ id: "vendor/depth", value: "high" }],
+        pickFrames: [
+          outbound("session/set_config_option", {
+            sessionId: "agent-session",
+            configId: "vendor/depth",
+            value: "high",
+          }),
+          answer("session/set_config_option", {
+            configOptions: [modelConfig("graded"), depth("low")],
+          }),
+        ],
+      }).pipe(
+        Effect.flip,
+        Effect.tap((error) =>
+          Effect.sync(() => {
+            assert.include(String(error.cause), "did not apply");
+            assert.include(String(error.cause), "actual value is 'low'");
+          }),
+        ),
+        Effect.asVoid,
+        Effect.provide(layerTest),
+        Effect.scoped,
+      ),
     );
     const modelOptions = [
       { id: "fast", name: "Fast", category: "model", type: "boolean", currentValue: false },
@@ -915,19 +1109,27 @@ describe("AcpRegistryAdapterV2", () => {
           ],
           storedModel: model,
         });
-        assert.equal(opened.configurations.at(-1)?.currentModelId, "codex");
+        assert.equal(opened.configurations.at(-1)?.modelSelection?.model, "codex");
       }).pipe(Effect.provide(layerTest), Effect.scoped),
     );
 
-    it.effect("ignores a later-option model without writing configuration", () =>
-      Effect.gen(function* () {
-        const { configurations } = yield* openWithStoredPicks({
-          setup: { configOptions: modelOptions },
-          pickFrames: [],
-          storedModel: "later-model",
-        });
-        assert.equal(configurations[0]?.currentModelId, "gateway");
-      }).pipe(Effect.provide(layerTest), Effect.scoped),
+    it.effect("rejects a later-option model with the actual current model", () =>
+      openWithStoredPicks({
+        setup: { configOptions: modelOptions },
+        pickFrames: [],
+        storedModel: "later-model",
+      }).pipe(
+        Effect.flip,
+        Effect.tap((error) =>
+          Effect.sync(() => {
+            assert.include(String(error.cause), "later-model");
+            assert.include(String(error.cause), 'actual model is "gateway"');
+          }),
+        ),
+        Effect.asVoid,
+        Effect.provide(layerTest),
+        Effect.scoped,
+      ),
     );
   });
 
@@ -1951,7 +2153,6 @@ describe("AcpRegistryAdapterV2", () => {
         readonly instanceId: ProviderInstanceId;
         readonly commands: AcpRegistryAvailableCommands;
       }>();
-      const configurationPublished = yield* Deferred.make<AcpRegistryLiveConfiguration>();
       const adapter = yield* makeAcpRegistryAdapterV2({
         selfInvocation: yield* resolveSelfInvocation(),
         instanceId,
@@ -1987,11 +2188,6 @@ describe("AcpRegistryAdapterV2", () => {
                 }).pipe(Effect.asVoid),
               getAvailableCommands: () => Effect.succeed(Option.none()),
               watchAvailableCommands: () => Effect.never,
-              clearLiveConfiguration: () => Effect.void,
-              publishLiveConfiguration: (_publishedInstanceId, configuration) =>
-                Deferred.succeed(configurationPublished, configuration).pipe(Effect.asVoid),
-              getLiveConfiguration: () => Effect.succeed(Option.none()),
-              watchLiveConfiguration: () => Effect.never,
               requestUrlAuthentication: () => Effect.succeed(false),
               acceptUrlAuthentication: () => Effect.succeed(false),
               getUrlAuthAction: () => Effect.succeed(Option.none()),
@@ -2060,13 +2256,9 @@ describe("AcpRegistryAdapterV2", () => {
           ],
         },
       });
-      const configuration = yield* Deferred.await(configurationPublished);
-      assert.equal(configuration.currentModelId, "default");
-      assert.deepInclude(configuration.models[0], {
-        id: "default",
-        name: "Auto",
-        description: null,
-      });
+      const configuration = providerThread.nativeMetadata;
+      assert.equal(configuration?.modelSelection?.model, "default");
+      assert.isArray(configuration?.optionDescriptors);
     }).pipe(Effect.provide(layerTest), Effect.scoped),
   );
 });

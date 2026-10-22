@@ -15,16 +15,11 @@ import * as Ref from "effect/Ref";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
-import type { AcpRegistryAvailableCommands, AcpRegistryLiveConfiguration } from "./probe.ts";
+import type { AcpRegistryAvailableCommands } from "./probe.ts";
 
 interface AvailableCommandsUpdate {
   readonly instanceId: ProviderInstanceId;
   readonly commands: AcpRegistryAvailableCommands;
-}
-
-interface LiveConfigurationUpdate {
-  readonly instanceId: ProviderInstanceId;
-  readonly configuration: AcpRegistryLiveConfiguration;
 }
 
 interface UrlAuthActionUpdate {
@@ -66,18 +61,6 @@ export class AcpRegistryRuntimeCoordinator extends Context.Service<
       instanceId: ProviderInstanceId,
       onUpdate: (commands: AcpRegistryAvailableCommands) => Effect.Effect<void>,
     ) => Effect.Effect<void>;
-    readonly clearLiveConfiguration: (instanceId: ProviderInstanceId) => Effect.Effect<void>;
-    readonly publishLiveConfiguration: (
-      instanceId: ProviderInstanceId,
-      configuration: AcpRegistryLiveConfiguration,
-    ) => Effect.Effect<void>;
-    readonly getLiveConfiguration: (
-      instanceId: ProviderInstanceId,
-    ) => Effect.Effect<Option.Option<AcpRegistryLiveConfiguration>>;
-    readonly watchLiveConfiguration: (
-      instanceId: ProviderInstanceId,
-      onUpdate: (configuration: AcpRegistryLiveConfiguration) => Effect.Effect<void>,
-    ) => Effect.Effect<void>;
     readonly requestUrlAuthentication: (
       instanceId: ProviderInstanceId,
       action: AcpRegistryUrlAuthAction,
@@ -101,10 +84,6 @@ const make = Effect.gen(function* () {
   const availableCommandsUpdates = yield* PubSub.unbounded<AvailableCommandsUpdate>();
   const availableCommandsByInstance = yield* Ref.make(
     new Map<ProviderInstanceId, AcpRegistryAvailableCommands>(),
-  );
-  const liveConfigurationUpdates = yield* PubSub.unbounded<LiveConfigurationUpdate>();
-  const liveConfigurationByInstance = yield* Ref.make(
-    new Map<ProviderInstanceId, AcpRegistryLiveConfiguration>(),
   );
   const urlAuthActionUpdates = yield* PubSub.unbounded<UrlAuthActionUpdate>();
   const pendingUrlAuthActions = yield* Ref.make(
@@ -206,49 +185,6 @@ const make = Effect.gen(function* () {
         }),
       );
 
-  const clearLiveConfiguration: AcpRegistryRuntimeCoordinator["Service"]["clearLiveConfiguration"] =
-    (instanceId) =>
-      Ref.update(liveConfigurationByInstance, (current) => {
-        const next = new Map(current);
-        next.delete(instanceId);
-        return next;
-      });
-
-  const publishLiveConfiguration: AcpRegistryRuntimeCoordinator["Service"]["publishLiveConfiguration"] =
-    (instanceId, configuration) =>
-      Ref.update(liveConfigurationByInstance, (current) =>
-        new Map(current).set(instanceId, configuration),
-      ).pipe(
-        Effect.andThen(
-          PubSub.publish(liveConfigurationUpdates, {
-            instanceId,
-            configuration,
-          }),
-        ),
-        Effect.asVoid,
-      );
-
-  const getLiveConfiguration: AcpRegistryRuntimeCoordinator["Service"]["getLiveConfiguration"] =
-    Effect.fn("AcpRegistryRuntimeCoordinator.getLiveConfiguration")(function* (instanceId) {
-      return Option.fromNullishOr((yield* Ref.get(liveConfigurationByInstance)).get(instanceId));
-    });
-
-  const watchLiveConfiguration: AcpRegistryRuntimeCoordinator["Service"]["watchLiveConfiguration"] =
-    (instanceId, onUpdate) =>
-      Effect.scoped(
-        Effect.gen(function* () {
-          const subscription = yield* PubSub.subscribe(liveConfigurationUpdates);
-          const current = yield* getLiveConfiguration(instanceId);
-          if (Option.isSome(current)) {
-            yield* onUpdate(current.value);
-          }
-          yield* Stream.fromSubscription(subscription).pipe(
-            Stream.filter((update) => update.instanceId === instanceId),
-            Stream.runForEach((update) => onUpdate(update.configuration)),
-          );
-        }),
-      );
-
   const publishUrlAuthAction = (
     instanceId: ProviderInstanceId,
     action: AcpRegistryUrlAuthAction | null,
@@ -345,10 +281,6 @@ const make = Effect.gen(function* () {
     publishAvailableCommands,
     getAvailableCommands,
     watchAvailableCommands,
-    clearLiveConfiguration,
-    publishLiveConfiguration,
-    getLiveConfiguration,
-    watchLiveConfiguration,
     requestUrlAuthentication,
     acceptUrlAuthentication,
     getUrlAuthAction,

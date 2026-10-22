@@ -16,6 +16,7 @@ export const ProviderOptionChoice = Schema.Struct({
 export type ProviderOptionChoice = typeof ProviderOptionChoice.Type;
 
 const ProviderOptionDescriptorBase = {
+  category: Schema.optional(TrimmedNonEmptyString),
   id: TrimmedNonEmptyString,
   label: TrimmedNonEmptyString,
   description: Schema.optional(TrimmedNonEmptyString),

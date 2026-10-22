@@ -30,6 +30,21 @@ export interface SelectableModelOption {
   aliases?: ReadonlyArray<string> | undefined;
 }
 
+export function isReasoningOption(descriptor: ProviderOptionDescriptor): boolean {
+  return (
+    descriptor.category === "thought_level" ||
+    (descriptor.category === undefined &&
+      [
+        "reasoningEffort",
+        "reasoning_effort",
+        "reasoning",
+        "effort",
+        "variant",
+        "thinking",
+      ].includes(descriptor.id))
+  );
+}
+
 export function createModelCapabilities(input: {
   optionDescriptors: ReadonlyArray<ProviderOptionDescriptor>;
 }): ModelCapabilities {

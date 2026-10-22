@@ -36,7 +36,6 @@ import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import {
   probeAcpRegistryConfiguration,
   normalizeAcpRegistryCommands,
-  normalizeAcpRegistryLiveConfiguration,
   normalizeAcpRegistryWebUrl,
 } from "./probe.ts";
 import * as AcpRegistrySupport from "./AcpRegistrySupport.ts";
@@ -269,11 +268,6 @@ export const makeAcpRegistryAdapterV2 = Effect.fn("makeAcpRegistryAdapterV2")(fu
             runtimeCoordinator.publishAvailableCommands(
               options.instanceId,
               normalizeAcpRegistryCommands(commands),
-            ),
-          onSessionConfigurationUpdate: (configOptions, modeState, modelState) =>
-            runtimeCoordinator.publishLiveConfiguration(
-              options.instanceId,
-              normalizeAcpRegistryLiveConfiguration(configOptions, modeState, modelState),
             ),
           onUrlElicitation: ({ elicitationId, url, message }) => {
             const normalizedUrl = normalizeAcpRegistryWebUrl(url);

@@ -43,6 +43,7 @@ describe("acpProviderOptionDescriptors", () => {
     expect(descriptors).toEqual([
       {
         id: "reasoning_effort",
+        category: "thought_level",
         label: "Reasoning effort",
         type: "select",
         options: [
@@ -139,6 +140,7 @@ describe("acpProviderOptionDescriptors", () => {
     expect(descriptors).toEqual([
       {
         id: ACP_SESSION_MODE_OPTION_ID,
+        category: "mode",
         label: "Mode",
         description: "Session mode advertised by the ACP agent.",
         type: "select",
@@ -260,4 +262,29 @@ describe("acpProviderOptionDescriptors", () => {
 
     expect(descriptors.map((descriptor) => descriptor.id)).toEqual(["mode"]);
   });
+});
+
+it("preserves thought_level for arbitrary ACP IDs and boolean values", () => {
+  expect(
+    acpProviderOptionDescriptors({
+      configOptions: [
+        {
+          id: "vendor/depth",
+          name: "Depth",
+          category: "thought_level",
+          type: "boolean",
+          currentValue: true,
+        },
+      ],
+      modeState: undefined,
+    }),
+  ).toEqual([
+    {
+      id: "vendor/depth",
+      label: "Depth",
+      category: "thought_level",
+      type: "boolean",
+      currentValue: true,
+    },
+  ]);
 });

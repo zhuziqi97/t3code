@@ -72,13 +72,14 @@ import {
   embeddedTerminalIdsFromSessionUpdate,
   extractMcpToolCallIdentity,
   findModelConfigOption,
+  findSessionConfigOption,
   mergeToolCallState,
   parsePermissionRequest,
   parseSessionUpdateEvent,
+  parseSessionModeState,
   toolCallVisibleOutputChanged,
   type AcpPlanUpdate,
   type AcpAgentTerminalState,
-  type AcpSessionModeState,
   type AcpToolCallState,
 } from "./runtimeModel.ts";
 import {
@@ -94,7 +95,11 @@ import {
   resolveEmbeddedTerminalContent,
   type AcpClientTerminals,
 } from "./clientTerminals.ts";
-import { ACP_EMPTY_OPTION_VALUE, ACP_SESSION_MODE_OPTION_ID } from "./sessionConfig.ts";
+import {
+  acpSessionConfiguration,
+  ACP_EMPTY_OPTION_VALUE,
+  ACP_SESSION_MODE_OPTION_ID,
+} from "./sessionConfig.ts";
 import * as AcpSessionRuntime from "./AcpSessionRuntime.ts";
 import {
   t3AcpPromptWithInstructions,
@@ -215,11 +220,12 @@ class AcpModelSelectionError extends Schema.TaggedError<AcpModelSelectionError>(
   "AcpModelSelectionError",
   {
     model: Schema.String,
+    actualModel: Schema.NullOr(Schema.String),
     cause: Schema.Defect(),
   },
 ) {
   override get message(): string {
-    return `The agent did not accept the model "${this.model}". Choose another model for this provider, then retry.`;
+    return `The agent did not accept the model "${this.model}"; actual model is "${this.actualModel ?? "unknown"}". Choose another model for this provider, then retry.`;
   }
 }
 
@@ -235,11 +241,6 @@ export interface AcpAdapterV2Flavor {
   ) => EffectAcpSchema.SessionNotification;
   readonly onAvailableCommandsUpdate?: (
     commands: ReadonlyArray<EffectAcpSchema.AvailableCommand>,
-  ) => Effect.Effect<void>;
-  readonly onSessionConfigurationUpdate?: (
-    configOptions: ReadonlyArray<EffectAcpSchema.SessionConfigOption>,
-    modeState: AcpSessionModeState | undefined,
-    modelState: EffectAcpSchema.SessionModelState | null | undefined,
   ) => Effect.Effect<void>;
   readonly onUrlElicitation?: (input: {
     readonly elicitationId: string;
@@ -1633,6 +1634,18 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
           agentRequests.clear();
           nativeChildren.clear();
           yield* Ref.set(activeSessionSetup, setup);
+          const configuration = acpSessionConfiguration({
+            instanceId: options.instanceId,
+            configOptions: setup.sessionSetupResult.configOptions ?? [],
+            modeState: parseSessionModeState(setup.sessionSetupResult),
+            modelState: setup.sessionSetupResult.models,
+          });
+          yield* Ref.update(nativeMetadataBySessionId, (current) =>
+            new Map(current).set(setup.sessionId, {
+              ...current.get(setup.sessionId),
+              ...configuration,
+            }),
+          );
         });
         const activeSelection = yield* Ref.make<ModelSelection | null>(null);
         const activeInteractionMode = yield* Ref.make<ProviderInteractionMode | null>(null);
@@ -5821,6 +5834,43 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
           }
         });
 
+        const publishSessionConfiguration = Effect.fn("AcpAdapterV2.publishSessionConfiguration")(
+          function* (reportedConfigOptions?: ReadonlyArray<EffectAcpSchema.SessionConfigOption>) {
+            const sessionId = yield* Ref.get(activeSessionId);
+            if (sessionId === null) return;
+            const configOptions = reportedConfigOptions ?? (yield* runtime.getConfigOptions);
+            const modeState = yield* runtime.getModeState;
+            const setup = yield* Ref.get(activeSessionSetup);
+            const configuration = acpSessionConfiguration({
+              instanceId: options.instanceId,
+              configOptions,
+              modeState,
+              modelState: setup?.sessionSetupResult.models,
+            });
+            const known = (yield* Ref.get(providerThreadByNativeSessionId)).get(sessionId);
+            const metadata = {
+              ...known?.nativeMetadata,
+              ...(yield* Ref.get(nativeMetadataBySessionId)).get(sessionId),
+              ...configuration,
+            };
+            yield* Ref.update(nativeMetadataBySessionId, (current) =>
+              new Map(current).set(sessionId, metadata),
+            );
+            const context = yield* Ref.get(activeTurn);
+            if (context?.nativeThreadId === sessionId) context.nativeMetadata = metadata;
+            if (known === undefined) return;
+            const providerThread = {
+              ...known,
+              nativeMetadata: metadata,
+              updatedAt: yield* DateTime.now,
+            };
+            yield* Ref.update(providerThreadByNativeSessionId, (current) =>
+              new Map(current).set(sessionId, providerThread),
+            );
+            yield* emitProviderEvent({ type: "provider_thread.updated", driver, providerThread });
+          },
+        );
+
         const projectAcpRuntimeSessionUpdateEffect =
           /* Provider events include streaming deltas; avoid a span for each update. */
           Effect.fnUntraced(
@@ -5849,13 +5899,14 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                 notification.update.sessionUpdate === "config_option_update" ||
                 notification.update.sessionUpdate === "current_mode_update"
               ) {
-                yield* (
-                  flavor.onSessionConfigurationUpdate?.(
-                    yield* runtime.getConfigOptions,
-                    yield* runtime.getModeState,
-                    (yield* Ref.get(activeSessionSetup))?.sessionSetupResult.models,
-                  ) ?? Effect.void
-                );
+                if (notification.sessionId === (yield* Ref.get(activeSessionId))) {
+                  yield* Ref.set(activeSelection, null);
+                  yield* publishSessionConfiguration(
+                    notification.update.sessionUpdate === "config_option_update"
+                      ? notification.update.configOptions
+                      : undefined,
+                  );
+                }
               }
               yield* handleSessionUpdate(
                 flavor.normalizeSessionUpdate?.(notification) ?? notification,
@@ -6651,214 +6702,277 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
           return activated;
         });
 
-        const configureSession = Effect.fnUntraced(function* (
-          startResult: AcpSessionRuntime.AcpSessionRuntimeStartResult,
-          modelSelection: ModelSelection,
-          runtimePolicy: ProviderAdapter.ProviderAdapterV2RuntimePolicy,
-          resetToDefault = false,
-        ) {
-          yield* Ref.set(activeSelection, null);
-          if (modelSelection.model === null && resetToDefault && flavor.nativeDefaultModel) {
-            const model = yield* flavor.nativeDefaultModel(
-              runtimePolicy.cwd ?? input.runtimePolicy.cwd ?? process.cwd(),
-            );
-            if (!model)
-              return yield* EffectAcpErrors.AcpRequestError.invalidParams(
-                "The agent did not report its native default model.",
+        const configureSession = Effect.fnUntraced(
+          function* (
+            startResult: AcpSessionRuntime.AcpSessionRuntimeStartResult,
+            modelSelection: ModelSelection,
+            runtimePolicy: ProviderAdapter.ProviderAdapterV2RuntimePolicy,
+            resetToDefault = false,
+          ) {
+            yield* Ref.set(activeSelection, null);
+            if (modelSelection.model === null && resetToDefault && flavor.nativeDefaultModel) {
+              const model = yield* flavor.nativeDefaultModel(
+                runtimePolicy.cwd ?? input.runtimePolicy.cwd ?? process.cwd(),
               );
-            modelSelection = { ...modelSelection, model };
-          }
-          const requestedModel = flavor.resolveModelId?.(modelSelection) ?? modelSelection.model;
-          // Invalid params is the agent refusing the value, and the runtime
-          // raises the same code when the session's model option does not offer
-          // it. Other failures, such as sign-in or a lost connection, keep their
-          // own error.
-          const rejectedModel = (error: EffectAcpErrors.AcpError) =>
-            error._tag === "AcpRequestError" && error.code === -32602
-              ? new AcpModelSelectionError({ model: modelSelection.model ?? "", cause: error })
-              : error;
-          let appliedModel: string | undefined;
-          if (
-            flavor.applyModelSelection !== undefined &&
-            (modelSelection.model !== null || resetToDefault)
-          ) {
-            appliedModel = yield* flavor
-              .applyModelSelection({
-                runtime,
-                startResult,
-                modelSelection,
-              })
-              .pipe(Effect.mapError(rejectedModel));
-          } else if (
-            requestedModel != null &&
-            requestedModel.length > 0 &&
-            requestedModel !== "auto" &&
-            requestedModel !== "default"
-          ) {
-            // Stored catalog choices can expire; explicitly configured custom IDs
-            // are validated by the agent instead.
-            const isCustomModel = flavor.customModels?.includes(requestedModel) === true;
-            const modelOption = findModelConfigOption(yield* runtime.getConfigOptions);
-            const modelState = startResult.sessionSetupResult.models;
-            if (modelOption?.type === "select") {
-              if (
-                isCustomModel ||
-                modelOption.options.some((entry) =>
-                  "value" in entry
-                    ? entry.value === requestedModel
-                    : entry.options.some((choice) => choice.value === requestedModel),
-                )
-              ) {
-                yield* runtime
-                  .setConfigOption(modelOption.id, requestedModel)
-                  .pipe(Effect.mapError(rejectedModel));
-                appliedModel = requestedModel;
-              }
-            } else if (
-              modelState != null &&
-              (isCustomModel ||
-                modelState.availableModels.some((model) => model.modelId === requestedModel))
+              if (!model)
+                return yield* EffectAcpErrors.AcpRequestError.invalidParams(
+                  "The agent did not report its native default model.",
+                );
+              modelSelection = { ...modelSelection, model };
+            }
+            const requestedModel = flavor.resolveModelId?.(modelSelection) ?? modelSelection.model;
+            // Invalid params is the agent refusing the value, and the runtime
+            // raises the same code when the session's model option does not offer
+            // it. Other failures, such as sign-in or a lost connection, keep their
+            // own error.
+            const currentModelOption = findModelConfigOption(yield* runtime.getConfigOptions);
+            const actualModel =
+              currentModelOption?.type === "select"
+                ? currentModelOption.currentValue
+                : (startResult.sessionSetupResult.models?.currentModelId ?? null);
+            const rejectedModel = (error: EffectAcpErrors.AcpError) =>
+              error._tag === "AcpRequestError" && error.code === -32602
+                ? new EffectAcpErrors.AcpRequestError({
+                    ...error,
+                    errorMessage: `${error.message}; requested model is '${requestedModel}', actual model is '${actualModel ?? "unknown"}'. Choose another model for this provider, then retry.`,
+                    cause: error,
+                  })
+                : error;
+            let appliedModel: string | undefined;
+            if (
+              flavor.applyModelSelection !== undefined &&
+              (modelSelection.model !== null || resetToDefault)
             ) {
-              if (modelState.currentModelId !== requestedModel) {
-                yield* runtime.setSessionModel(requestedModel).pipe(Effect.mapError(rejectedModel));
+              appliedModel = yield* flavor
+                .applyModelSelection({
+                  runtime,
+                  startResult,
+                  modelSelection,
+                })
+                .pipe(Effect.mapError(rejectedModel));
+            } else if (requestedModel != null && requestedModel.length > 0) {
+              // Stored catalog choices can expire; explicitly configured custom IDs
+              // are validated by the agent instead.
+              const isCustomModel = flavor.customModels?.includes(requestedModel) === true;
+              const modelOption = findModelConfigOption(yield* runtime.getConfigOptions);
+              const modelState = startResult.sessionSetupResult.models;
+              if (modelOption?.type === "select") {
+                if (
+                  requestedModel === modelOption.currentValue ||
+                  isCustomModel ||
+                  modelOption.options.some((entry) =>
+                    "value" in entry
+                      ? entry.value === requestedModel
+                      : entry.options.some((choice) => choice.value === requestedModel),
+                  )
+                ) {
+                  if (modelOption.currentValue !== requestedModel) {
+                    yield* runtime
+                      .setConfigOption(modelOption.id, requestedModel)
+                      .pipe(Effect.mapError(rejectedModel));
+                  }
+                  const reportedModel = findModelConfigOption(yield* runtime.getConfigOptions);
+                  appliedModel =
+                    reportedModel?.type === "select" ? reportedModel.currentValue : requestedModel;
+                  if (appliedModel !== requestedModel) {
+                    return yield* EffectAcpErrors.AcpRequestError.invalidParams(
+                      `The agent did not apply model '${requestedModel}'; actual model is '${appliedModel}'.`,
+                    );
+                  }
+                } else {
+                  return yield* new AcpModelSelectionError({
+                    model: requestedModel,
+                    actualModel,
+                    cause: EffectAcpErrors.AcpRequestError.invalidParams(
+                      "The current session does not offer this model.",
+                    ),
+                  });
+                }
+              } else if (
+                modelState != null &&
+                (isCustomModel ||
+                  modelState.availableModels.some((model) => model.modelId === requestedModel))
+              ) {
+                if (modelState.currentModelId !== requestedModel) {
+                  yield* runtime
+                    .setSessionModel(requestedModel)
+                    .pipe(Effect.mapError(rejectedModel));
+                }
+                appliedModel = requestedModel;
+              } else if (modelState != null) {
+                return yield* new AcpModelSelectionError({
+                  model: requestedModel,
+                  actualModel,
+                  cause: EffectAcpErrors.AcpRequestError.invalidParams(
+                    "The current session does not offer this model.",
+                  ),
+                });
               }
-              appliedModel = requestedModel;
             }
-          }
-          if (appliedModel !== undefined) {
-            const applied = appliedModel;
-            yield* Ref.update(activeSessionSetup, (setup) => {
-              if (setup === null) {
-                return setup;
-              }
-              const models = setup.sessionSetupResult.models;
-              if (models == null || models.currentModelId === applied) {
-                return setup;
-              }
-              return {
-                ...setup,
-                sessionSetupResult: {
-                  ...setup.sessionSetupResult,
-                  models: { ...models, currentModelId: applied },
-                },
-              };
-            });
-          }
-          // Restore the agent's own empty value for choices T3 stores under a
-          // reserved ID (see ACP_EMPTY_OPTION_VALUE).
-          const optionSelections = (modelSelection.options ?? [])
-            .filter((option) => !flavor.modelOptionIds?.includes(option.id))
-            .map((selection) =>
-              selection.value === ACP_EMPTY_OPTION_VALUE ? { ...selection, value: "" } : selection,
-            );
-          const configOptions = yield* runtime.getConfigOptions;
-          const availableConfigIds = new Set(configOptions.map((option) => option.id));
-          const hasNativeConfigWithSyntheticModeId = availableConfigIds.has(
-            ACP_SESSION_MODE_OPTION_ID,
-          );
-          const modeSelection = hasNativeConfigWithSyntheticModeId
-            ? undefined
-            : optionSelections.find((selection) => selection.id === ACP_SESSION_MODE_OPTION_ID);
-          const configSelections = hasNativeConfigWithSyntheticModeId
-            ? optionSelections
-            : optionSelections.filter((selection) => selection.id !== ACP_SESSION_MODE_OPTION_ID);
-          for (const selection of configSelections) {
-            if (!availableConfigIds.has(selection.id)) {
-              return yield* EffectAcpErrors.AcpRequestError.invalidParams(
-                `The agent does not expose configuration option '${selection.id}' for the current model.`,
-              );
-            }
-            yield* runtime.setConfigOption(selection.id, selection.value);
-          }
-          const policyMode = flavor.sessionModeForPolicy?.(runtimePolicy);
-          if (policyMode !== undefined) {
-            yield* runtime.setMode(policyMode);
-          }
-          const modeState = yield* runtime.getModeState;
-          if (
-            modeSelection !== undefined &&
-            typeof modeSelection.value === "string" &&
-            modeState?.availableModes.some((mode) => mode.id === modeSelection.value) === true &&
-            modeState.currentModeId !== modeSelection.value
-          ) {
-            yield* runtime.setMode(modeSelection.value);
-          }
-          const effectiveModeState = yield* runtime.getModeState;
-          const effectiveConfigOptions = yield* runtime.getConfigOptions;
-          const planSensitiveOptions = effectiveConfigOptions.filter(
-            (
-              option,
-            ): option is Extract<
-              EffectAcpSchema.SessionConfigOption,
-              { readonly type: "select" }
-            > =>
-              option.type === "select" &&
-              (option.category === "mode" || option.category === "collaboration_mode"),
-          );
-          if (runtimePolicy.interactionMode === "plan") {
-            if (!nativeBuildConfigurationBySessionId.has(startResult.sessionId)) {
-              nativeBuildConfigurationBySessionId.set(startResult.sessionId, {
-                ...(effectiveModeState === undefined
-                  ? {}
-                  : { modeId: effectiveModeState.currentModeId }),
-                configOptions: planSensitiveOptions.map((option) => ({
-                  id: option.id,
-                  value: option.currentValue,
-                })),
+            if (appliedModel !== undefined) {
+              const applied = appliedModel;
+              yield* Ref.update(activeSessionSetup, (setup) => {
+                if (setup === null) {
+                  return setup;
+                }
+                const models = setup.sessionSetupResult.models;
+                if (models == null || models.currentModelId === applied) {
+                  return setup;
+                }
+                return {
+                  ...setup,
+                  sessionSetupResult: {
+                    ...setup.sessionSetupResult,
+                    models: { ...models, currentModelId: applied },
+                  },
+                };
               });
             }
-            const planMode = effectiveModeState?.availableModes.find(
-              (mode) => mode.id === "plan" || mode.id === "architect",
+            // Restore the agent's own empty value for choices T3 stores under a
+            // reserved ID (see ACP_EMPTY_OPTION_VALUE).
+            const optionSelections = (modelSelection.options ?? [])
+              .filter((option) => !flavor.modelOptionIds?.includes(option.id))
+              .map((selection) =>
+                selection.value === ACP_EMPTY_OPTION_VALUE
+                  ? { ...selection, value: "" }
+                  : selection,
+              );
+            const configOptions = yield* runtime.getConfigOptions;
+            const availableConfigIds = new Set(configOptions.map((option) => option.id));
+            const hasNativeConfigWithSyntheticModeId = availableConfigIds.has(
+              ACP_SESSION_MODE_OPTION_ID,
             );
-            if (planMode !== undefined && effectiveModeState?.currentModeId !== planMode.id) {
-              yield* runtime.setMode(planMode.id);
-            }
-            for (const option of planSensitiveOptions) {
-              const choices = option.options.flatMap((entry) =>
-                "value" in entry ? [entry.value] : entry.options.map((choice) => choice.value),
-              );
-              const requested = choices.find(
-                (choice) => choice === "plan" || choice === "architect",
-              );
-              if (requested !== undefined && option.currentValue !== requested) {
-                yield* runtime.setConfigOption(option.id, requested);
-              }
-            }
-          } else {
-            const nativeBuild = nativeBuildConfigurationBySessionId.get(startResult.sessionId);
-            if (nativeBuild !== undefined) {
-              if (
-                nativeBuild.modeId !== undefined &&
-                effectiveModeState?.currentModeId !== nativeBuild.modeId &&
-                effectiveModeState?.availableModes.some(
-                  (mode) => mode.id === nativeBuild.modeId,
-                ) === true
-              ) {
-                yield* runtime.setMode(nativeBuild.modeId);
-              }
-              for (const saved of nativeBuild.configOptions) {
-                const option = effectiveConfigOptions.find(
-                  (candidate) => candidate.type === "select" && candidate.id === saved.id,
+            const modeSelection = hasNativeConfigWithSyntheticModeId
+              ? undefined
+              : optionSelections.find((selection) => selection.id === ACP_SESSION_MODE_OPTION_ID);
+            const configSelections = hasNativeConfigWithSyntheticModeId
+              ? optionSelections
+              : optionSelections.filter((selection) => selection.id !== ACP_SESSION_MODE_OPTION_ID);
+            for (const selection of configSelections) {
+              if (!availableConfigIds.has(selection.id)) {
+                return yield* EffectAcpErrors.AcpRequestError.invalidParams(
+                  `The agent does not expose configuration option '${selection.id}' for the current model; actual value is unavailable.`,
                 );
-                if (option === undefined || option.type !== "select") continue;
+              }
+              yield* runtime.setConfigOption(selection.id, selection.value).pipe(
+                Effect.catchTags({
+                  AcpRequestError: (cause) =>
+                    Effect.gen(function* () {
+                      const actual = findSessionConfigOption(
+                        yield* runtime.getConfigOptions,
+                        selection.id,
+                      )?.currentValue;
+                      return yield* new EffectAcpErrors.AcpRequestError({
+                        ...cause,
+                        errorMessage: `The agent rejected configuration option '${selection.id}': ${cause.message}; actual value is '${actual ?? "unavailable"}'.`,
+                        cause,
+                      });
+                    }),
+                }),
+              );
+              const actual = findSessionConfigOption(
+                yield* runtime.getConfigOptions,
+                selection.id,
+              )?.currentValue;
+              if (actual !== selection.value) {
+                return yield* EffectAcpErrors.AcpRequestError.invalidParams(
+                  `The agent did not apply configuration option '${selection.id}' value '${selection.value}'; actual value is '${actual ?? "unavailable"}'.`,
+                );
+              }
+            }
+            const policyMode = flavor.sessionModeForPolicy?.(runtimePolicy);
+            if (policyMode !== undefined) {
+              yield* runtime.setMode(policyMode);
+            }
+            const modeState = yield* runtime.getModeState;
+            if (modeSelection !== undefined) {
+              if (
+                typeof modeSelection.value !== "string" ||
+                !modeState?.availableModes.some((mode) => mode.id === modeSelection.value)
+              ) {
+                return yield* EffectAcpErrors.AcpRequestError.invalidParams(
+                  `The agent does not expose session mode '${modeSelection.value}'; actual value is '${modeState?.currentModeId ?? "unavailable"}'.`,
+                );
+              }
+              if (modeState.currentModeId !== modeSelection.value)
+                yield* runtime.setMode(modeSelection.value);
+              const actualMode = (yield* runtime.getModeState)?.currentModeId;
+              if (actualMode !== modeSelection.value)
+                return yield* EffectAcpErrors.AcpRequestError.invalidParams(
+                  `The agent did not apply session mode '${modeSelection.value}'; actual value is '${actualMode ?? "unavailable"}'.`,
+                );
+            }
+            const effectiveModeState = yield* runtime.getModeState;
+            const effectiveConfigOptions = yield* runtime.getConfigOptions;
+            const planSensitiveOptions = effectiveConfigOptions.filter(
+              (
+                option,
+              ): option is Extract<
+                EffectAcpSchema.SessionConfigOption,
+                { readonly type: "select" }
+              > =>
+                option.type === "select" &&
+                (option.category === "mode" || option.category === "collaboration_mode"),
+            );
+            if (runtimePolicy.interactionMode === "plan") {
+              if (!nativeBuildConfigurationBySessionId.has(startResult.sessionId)) {
+                nativeBuildConfigurationBySessionId.set(startResult.sessionId, {
+                  ...(effectiveModeState === undefined
+                    ? {}
+                    : { modeId: effectiveModeState.currentModeId }),
+                  configOptions: planSensitiveOptions.map((option) => ({
+                    id: option.id,
+                    value: option.currentValue,
+                  })),
+                });
+              }
+              const planMode = effectiveModeState?.availableModes.find(
+                (mode) => mode.id === "plan" || mode.id === "architect",
+              );
+              if (planMode !== undefined && effectiveModeState?.currentModeId !== planMode.id) {
+                yield* runtime.setMode(planMode.id);
+              }
+              for (const option of planSensitiveOptions) {
                 const choices = option.options.flatMap((entry) =>
                   "value" in entry ? [entry.value] : entry.options.map((choice) => choice.value),
                 );
-                if (option.currentValue !== saved.value && choices.includes(saved.value)) {
-                  yield* runtime.setConfigOption(option.id, saved.value);
+                const requested = choices.find(
+                  (choice) => choice === "plan" || choice === "architect",
+                );
+                if (requested !== undefined && option.currentValue !== requested) {
+                  yield* runtime.setConfigOption(option.id, requested);
                 }
               }
-              nativeBuildConfigurationBySessionId.delete(startResult.sessionId);
+            } else {
+              const nativeBuild = nativeBuildConfigurationBySessionId.get(startResult.sessionId);
+              if (nativeBuild !== undefined) {
+                if (
+                  nativeBuild.modeId !== undefined &&
+                  effectiveModeState?.currentModeId !== nativeBuild.modeId &&
+                  effectiveModeState?.availableModes.some(
+                    (mode) => mode.id === nativeBuild.modeId,
+                  ) === true
+                ) {
+                  yield* runtime.setMode(nativeBuild.modeId);
+                }
+                for (const saved of nativeBuild.configOptions) {
+                  const option = effectiveConfigOptions.find(
+                    (candidate) => candidate.type === "select" && candidate.id === saved.id,
+                  );
+                  if (option === undefined || option.type !== "select") continue;
+                  const choices = option.options.flatMap((entry) =>
+                    "value" in entry ? [entry.value] : entry.options.map((choice) => choice.value),
+                  );
+                  if (option.currentValue !== saved.value && choices.includes(saved.value)) {
+                    yield* runtime.setConfigOption(option.id, saved.value);
+                  }
+                }
+                nativeBuildConfigurationBySessionId.delete(startResult.sessionId);
+              }
             }
-          }
-          yield* (
-            flavor.onSessionConfigurationUpdate?.(
-              yield* runtime.getConfigOptions,
-              yield* runtime.getModeState,
-              (yield* Ref.get(activeSessionSetup))?.sessionSetupResult.models,
-            ) ?? Effect.void
-          );
-        });
+          },
+          (effect) => effect.pipe(Effect.ensuring(publishSessionConfiguration())),
+        );
 
         yield* configureSession(started, input.modelSelection, input.runtimePolicy);
         yield* Ref.set(activeSelection, input.modelSelection);
@@ -7801,10 +7915,17 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                 ...(itemIdentityVersion === undefined ? {} : { itemIdentityVersion }),
                 now,
               });
+              const configuredThread = {
+                ...providerThread,
+                nativeMetadata: {
+                  ...providerThread.nativeMetadata,
+                  ...(yield* Ref.get(nativeMetadataBySessionId)).get(sessionId),
+                },
+              };
               yield* Ref.update(providerThreadByNativeSessionId, (current) =>
-                new Map(current).set(sessionId, providerThread),
+                new Map(current).set(sessionId, configuredThread),
               );
-              return providerThread;
+              return configuredThread;
             },
             (effect, threadInput) =>
               effect.pipe(
@@ -7859,6 +7980,9 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                   const now = yield* DateTime.now;
                   return {
                     ...threadInput.providerThread,
+                    nativeMetadata:
+                      (yield* Ref.get(nativeMetadataBySessionId)).get(sessionId) ??
+                      threadInput.providerThread.nativeMetadata,
                     providerSessionId: input.providerSessionId,
                     status: "idle" as const,
                     updatedAt: now,
@@ -8316,6 +8440,9 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                   return {
                     providerThread: {
                       ...snapshotInput.providerThread,
+                      nativeMetadata:
+                        (yield* Ref.get(nativeMetadataBySessionId)).get(sessionId) ??
+                        snapshotInput.providerThread.nativeMetadata,
                       providerSessionId: input.providerSessionId,
                       status: "idle" as const,
                       updatedAt: now,
@@ -8412,6 +8539,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                       nativeConversationHeadRef: null,
                       nativeMetadata: {
                         ...rollbackInput.providerThread.nativeMetadata,
+                        ...(yield* Ref.get(nativeMetadataBySessionId)).get(replacement.sessionId),
                         itemIdentityVersion: 2 as const,
                       },
                       status: "idle" as const,
@@ -8494,10 +8622,17 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                     },
                     now,
                   });
+                  const configuredThread = {
+                    ...providerThread,
+                    nativeMetadata: {
+                      ...providerThread.nativeMetadata,
+                      ...(yield* Ref.get(nativeMetadataBySessionId)).get(forked.sessionId),
+                    },
+                  };
                   yield* Ref.update(providerThreadByNativeSessionId, (current) =>
-                    new Map(current).set(forked.sessionId, providerThread),
+                    new Map(current).set(forked.sessionId, configuredThread),
                   );
-                  return providerThread;
+                  return configuredThread;
                 }),
               );
             },

@@ -104,7 +104,7 @@ function modelsFromDiscovery(
             name: "Default",
             isCustom: false,
             isDefault: true,
-            capabilities,
+            capabilities: discovery?.currentModelId == null ? capabilities : EMPTY_CAPABILITIES,
           },
         ]
       : discovered.map((model) => ({
@@ -112,9 +112,9 @@ function modelsFromDiscovery(
           name: model.name,
           isCustom: false,
           ...(model.id === discovery?.currentModelId ? { isDefault: true } : {}),
-          capabilities,
+          capabilities: model.id === discovery?.currentModelId ? capabilities : EMPTY_CAPABILITIES,
         }));
-  return providerModelsFromSettings(builtInModels, customModels, capabilities);
+  return providerModelsFromSettings(builtInModels, customModels, EMPTY_CAPABILITIES);
 }
 
 export function acpRegistrySnapshotReadiness(
@@ -254,19 +254,6 @@ export function applyAcpRegistryAvailableCommands(
     onNone: () => provider,
     onSome: ({ slashCommands, skills }) => ({ ...provider, slashCommands, skills }),
   });
-}
-
-export function applyAcpRegistryLiveConfiguration(
-  provider: ServerProvider,
-  configuration: AcpRegistryLiveConfiguration,
-  customModels: ReadonlyArray<CustomModelSetting>,
-): ServerProvider {
-  const { message: _staleProbeMessage, ...snapshot } = provider;
-  return {
-    ...snapshot,
-    status: provider.enabled ? "ready" : provider.status,
-    models: modelsFromDiscovery(configuration, customModels),
-  };
 }
 
 function applyAcpRegistryUrlAuthAction(
@@ -473,12 +460,7 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
     );
     if (Option.isSome(runtimeCoordinator)) {
       yield* runtimeCoordinator.value.clearAvailableCommands(instanceId);
-      yield* runtimeCoordinator.value.clearLiveConfiguration(instanceId);
-      yield* Effect.addFinalizer(() =>
-        runtimeCoordinator.value
-          .clearAvailableCommands(instanceId)
-          .pipe(Effect.andThen(runtimeCoordinator.value.clearLiveConfiguration(instanceId))),
-      );
+      yield* Effect.addFinalizer(() => runtimeCoordinator.value.clearAvailableCommands(instanceId));
     }
     const crypto = yield* Crypto.Crypto;
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -545,21 +527,13 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
         ? Effect.succeed(provider)
         : Effect.all({
             commands: runtimeCoordinator.value.getAvailableCommands(instanceId),
-            configuration: runtimeCoordinator.value.getLiveConfiguration(instanceId),
             authAction: runtimeCoordinator.value.getUrlAuthAction(instanceId),
           }).pipe(
-            Effect.map(({ commands, configuration, authAction }) => {
-              const withCommands = applyAcpRegistryAvailableCommands(provider, commands);
-              const withConfiguration = Option.match(configuration, {
-                onNone: () => withCommands,
-                onSome: (liveConfiguration) =>
-                  applyAcpRegistryLiveConfiguration(
-                    withCommands,
-                    liveConfiguration,
-                    effectiveConfig.customModels,
-                  ),
-              });
-              return applyAcpRegistryUrlAuthAction(withConfiguration, authAction);
+            Effect.map(({ commands, authAction }) => {
+              return applyAcpRegistryUrlAuthAction(
+                applyAcpRegistryAvailableCommands(provider, commands),
+                authAction,
+              );
             }),
           );
     });
@@ -653,23 +627,6 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
               ),
             ),
         );
-        const publishLiveConfiguration = runtimeCoordinator.value.watchLiveConfiguration(
-          instanceId,
-          (configuration) =>
-            liveSnapshotSemaphore.withPermit(
-              getSnapshot.pipe(
-                Effect.flatMap((current) =>
-                  publishSnapshot(
-                    applyAcpRegistryLiveConfiguration(
-                      current,
-                      configuration,
-                      effectiveConfig.customModels,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        );
         const publishUrlAuthAction = runtimeCoordinator.value.watchUrlAuthAction(
           instanceId,
           (action) =>
@@ -683,13 +640,10 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
               ),
             ),
         );
-        return Effect.all(
-          [publishEnrichment, publishLiveCommands, publishLiveConfiguration, publishUrlAuthAction],
-          {
-            concurrency: "unbounded",
-            discard: true,
-          },
-        );
+        return Effect.all([publishEnrichment, publishLiveCommands, publishUrlAuthAction], {
+          concurrency: "unbounded",
+          discard: true,
+        });
       },
     }).pipe(
       Effect.mapError(
@@ -728,9 +682,7 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
     };
 
     const clearLiveState = Option.isSome(runtimeCoordinator)
-      ? runtimeCoordinator.value
-          .clearLiveConfiguration(instanceId)
-          .pipe(Effect.andThen(runtimeCoordinator.value.clearAvailableCommands(instanceId)))
+      ? runtimeCoordinator.value.clearAvailableCommands(instanceId)
       : Effect.void;
     const controller = yield* AcpRegistryAuth.makeAcpRegistryAuth({
       instanceId,
@@ -883,13 +835,7 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
                 invalidateEnrichmentCache.pipe(
                   Effect.andThen(
                     Option.isSome(runtimeCoordinator)
-                      ? Effect.all(
-                          [
-                            runtimeCoordinator.value.clearAvailableCommands(instanceId),
-                            runtimeCoordinator.value.clearLiveConfiguration(instanceId),
-                          ],
-                          { concurrency: "unbounded", discard: true },
-                        )
+                      ? runtimeCoordinator.value.clearAvailableCommands(instanceId)
                       : Effect.void,
                   ),
                 ),
