@@ -881,7 +881,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   });
 
   it("limits Electron locales and excludes separately packaged resources", () => {
-    assert.deepStrictEqual(DESKTOP_ELECTRON_LANGUAGES, ["en-US"]);
+    assert.deepStrictEqual(DESKTOP_ELECTRON_LANGUAGES, ["en-US", "zh-CN"]);
     for (const resource of [
       ...WSL_RUNTIME_EXTRA_RESOURCES,
       ...LINUX_BROWSER_SECRET_EXTRA_RESOURCES,
