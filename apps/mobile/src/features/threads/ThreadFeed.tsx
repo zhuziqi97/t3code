@@ -1,5 +1,7 @@
 import { runEndState } from "@t3tools/client-runtime/runEndState";
 import { assistantMessageShowsMeta, mobileRunEndFeedback } from "./assistantMessageMeta";
+import { ConveneResourceModal } from "./ConveneResourceModal";
+import { isConveneResourceLink } from "@t3tools/client-runtime/convene-resource-reader";
 import { Button } from "../../components/ui/Button";
 import { useTranslate } from "../../i18n";
 import * as Dialog from "../../components/ui/Dialog";
@@ -1688,6 +1690,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   const deviceType = useDeviceType();
   const duoColumns = useNativeWorkspaceColumnsSupported() && isDuoDevice(deviceType);
   const openPullRequest = useOpenPullRequest();
+  const [conveneResourceUri, setConveneResourceUri] = useState<string | null>(null);
   const navigation = useNavigation();
   const { themeAppearance } = useAppearancePreferences();
   const copyFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1820,6 +1823,10 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     );
   };
   const onMarkdownLinkPress = (href: string, imageEmbed = false) => {
+    if (isConveneResourceLink(href)) {
+      setConveneResourceUri(href);
+      return;
+    }
     const skill = enrichedSkillReference(href, props.skills);
     if (skill) {
       const instructionsPath = enrichedSkillInstructionsPath(skill);
@@ -2544,6 +2551,15 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   return (
     <PresentationSource identifier={fileShareSourceIdentifier} style={{ flex: 1 }}>
       <View className="flex-1" onLayout={handleViewportLayout}>
+        <ConveneResourceModal
+          environmentId={props.environmentId}
+          threadId={props.threadId}
+          uri={conveneResourceUri}
+          textStyle={markdownStyles.assistant.nativeTextStyle}
+          onNavigate={setConveneResourceUri}
+          onClose={() => setConveneResourceUri(null)}
+        />
+
         <View className="flex-1">
           <KeyboardAwareLegendList
             ref={listRef}

@@ -152,6 +152,7 @@ const CHAT_MARKDOWN_SANITIZE_SCHEMA = {
     ...defaultSchema.protocols,
     href: [
       ...(defaultSchema.protocols?.href ?? []),
+      "convene",
       "file",
       "t3-citation",
       "t3-context",

@@ -55,3 +55,17 @@ it("keeps backslashes that CommonMark would read as escapes in prose Windows pat
     String.raw`<code>C:\me\.t3</code> and C:\me\.t3`,
   );
 });
+
+it("preserves canonical Convene issue and comment destinations through the Markdown pipeline", () => {
+  const uri = "convene://issues/zzq/software-factory/t3code/40/comments/5";
+  const processor = unified()
+    .use(remarkParse)
+    .use(CHAT_MARKDOWN_REMARK_PLUGINS)
+    .use(remarkRehype)
+    .use(CHAT_MARKDOWN_REHYPE_PLUGINS);
+  const tree = processor.runSync(processor.parse(`[Comment](${uri})`));
+  expect(tree.children[0]).toMatchObject({
+    tagName: "p",
+    children: [{ tagName: "a", properties: { href: uri } }],
+  });
+});

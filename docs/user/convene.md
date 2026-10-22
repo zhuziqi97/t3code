@@ -22,6 +22,8 @@ Project configuration has separate **Module bindings** and **Convene MCP** tabs.
 
 Cached configuration remains readable while unavailable. Platform writes require a current configuration and a connected environment. There is no automatic offline write replay: reconnect, refresh and explicitly retry. The platform enforces saved MCP access, including permission reductions; configuration changes do not restart active provider processes.
 
+Open an issue or comment's `convene://` link in a conversation to read it inside T3. Return to chat to keep your scroll position and draft. Reading uses that conversation's environment, its paired Convene user and the project's associated modules. It remains available when the agent is stopped or Project MCP is disabled, while access changes take effect immediately. Links you copy retain their canonical `convene://` address; **Open in platform** uses the connected platform. This requires a platform version with client resource reading support; documents, images and prototypes are not included.
+
 To reload MCP after changing its setup, or if a connection still fails after recovery,
 use **Restart agent session** in the web or desktop command palette. Your next message
 reopens the agent with the updated setup and keeps the conversation. Refreshing the

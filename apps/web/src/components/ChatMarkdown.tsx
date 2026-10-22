@@ -1,4 +1,6 @@
 import { useTranslate } from "../i18n";
+import { isConveneResourceLink } from "@t3tools/client-runtime/convene-resource-reader";
+import { useConveneResourceStore } from "./convene/conveneResourceStore";
 import { formatFilePathForClipboard } from "@t3tools/client-runtime/media-actions";
 import { MarkdownFindContext, findRevealRef } from "./chat/markdownFindContext";
 import {
@@ -2583,6 +2585,7 @@ function useChatMarkdownState({
     return buildFileLinkParentSuffixByPath(filePaths);
   })();
   const markdownUrlTransform = (href: string) => {
+    if (isConveneResourceLink(href)) return href;
     if (parseAssistantCitationHref(href)) return href;
     if (parseComposerContextHref(href)) return href;
     if (parseThreadLinkHref(href)) return href;
@@ -2984,6 +2987,7 @@ const CHAT_MARKDOWN_COMPONENTS = {
     );
   },
   a: function MarkdownAnchor({ node, href, children, title: _title, ...props }) {
+    const t = useTranslate();
     const {
       canOperateHost,
       canOperatePreview,
@@ -3006,6 +3010,22 @@ const CHAT_MARKDOWN_COMPONENTS = {
       renderContextReference,
     } = use(ChatMarkdownRendererContext);
     const text = use(ChatMarkdownTextContext);
+    if (href && isConveneResourceLink(href)) {
+      return (
+        <a
+          {...props}
+          href={href}
+          className="text-primary underline underline-offset-2"
+          aria-label={t("convene.resource.open")}
+          onClick={(event) => {
+            event.preventDefault();
+            if (threadRef) useConveneResourceStore.getState().open(threadRef, href);
+          }}
+        >
+          {children}
+        </a>
+      );
+    }
     const citation = href ? parseAssistantCitationHref(href) : null;
     if (citation) return <AssistantCitationChip citation={citation} />;
     const linkedThreadId = href ? parseThreadLinkHref(href) : null;
