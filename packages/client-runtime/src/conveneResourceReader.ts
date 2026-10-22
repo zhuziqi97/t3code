@@ -34,7 +34,11 @@ export function createConveneResourceReader(
   const load = async (uri: string, page = 1) => {
     const request = ++generation;
     const previous = state.uri === uri ? state.result : null;
-    state = { uri, pending: true, result: null };
+    state = {
+      uri,
+      pending: true,
+      result: page > 1 && previous?.status === "ready" ? previous : null,
+    };
     changed(state);
     let result: ConveneResourceReadResult;
     try {

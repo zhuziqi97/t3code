@@ -83,3 +83,24 @@ it("appends comments only for the same canonical resource and reports transport 
   await reader.load("offline");
   expect(state?.result?.status).toBe("unavailable");
 });
+
+it("keeps existing comments mounted during pagination but clears them on permission invalidation", async () => {
+  const pending = Promise.withResolvers<ConveneResourceReadResult>();
+  let state: ConveneResourceReaderState | undefined;
+  const reader = createConveneResourceReader(
+    (uri, page) => (page === 1 ? Promise.resolve(ready(uri)) : pending.promise),
+    (value) => {
+      state = value;
+    },
+  );
+  await reader.load("issue");
+  const nextPage = reader.load("issue", 2);
+  expect(state?.pending).toBe(true);
+  expect(state?.result?.status === "ready" && state.result.comments.map((c) => c.number)).toEqual([
+    1,
+  ]);
+  reader.clear();
+  pending.resolve(ready("issue", 2));
+  await nextPage;
+  expect(state?.result).toBeNull();
+});
