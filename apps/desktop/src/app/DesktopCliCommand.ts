@@ -137,6 +137,22 @@ export const make = Effect.gen(function* () {
     if (windows) return Option.none<string>();
     const first = yield* firstOnPath;
     if (Option.isNone(first) || (yield* isOurLink(first.value))) return Option.none<string>();
+    if (environment.platform === "linux") {
+      // DEB alternatives expose the GUI executable under the same command name.
+      const ownExecutable = path.resolve(
+        environment.resourcesPath,
+        "..",
+        CONVENE_DESKTOP_IDENTITY.executableName,
+      );
+      const isOwnExecutable = yield* Effect.all([
+        fs.realPath(first.value),
+        fs.realPath(ownExecutable),
+      ]).pipe(
+        Effect.map(([firstPath, ownPath]) => firstPath === ownPath),
+        Effect.orElseSucceed(() => false),
+      );
+      if (isOwnExecutable) return Option.none<string>();
+    }
     return first;
   });
 

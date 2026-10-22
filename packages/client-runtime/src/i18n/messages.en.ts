@@ -846,7 +846,7 @@ export const en = {
   "convene.cli.shadowed":
     "Another t3code-convene at {{path}} runs first in a new terminal. Remove it to use this app's.",
   "convene.cli.notOnPath":
-    "Installed at {{path}}, which is not on your PATH yet. Add its folder to your PATH to run `t3code-convene`.",
+    "Installed at {{path}}, but the terminal does not use it first. Put its directory earlier on PATH and reopen the terminal to run `t3code-convene`.",
 
   "pullRequest.flow.annotation.resolve": "Resolve",
   "pullRequest.flow.annotation.unresolve": "Unresolve",

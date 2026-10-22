@@ -815,7 +815,7 @@ export const zh: Partial<Messages> = {
   "convene.cli.shadowed":
     "新终端会优先运行 {{path}} 中的另一个 t3code-convene。移除它后即可使用本应用的命令。",
   "convene.cli.notOnPath":
-    "已安装到 {{path}}，但该路径尚未加入 PATH。请将所在目录加入 PATH 后运行 `t3code-convene`。",
+    "已安装到 {{path}}，但终端尚未优先使用此命令。请将所在目录放到 PATH 前部，重新打开终端后运行 `t3code-convene`。",
 
   "pullRequest.flow.annotation.resolve": "标记为已解决",
   "pullRequest.flow.annotation.unresolve": "重新打开讨论",

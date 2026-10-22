@@ -24,6 +24,7 @@ const environmentFor = (
     baseDir: input.baseDir,
     stateDir: path.join(input.baseDir, "userdata"),
     serverRoot: "/opt/T3 Code/resources/app.asar",
+    resourcesPath: path.join(input.home, "packaged", "resources"),
     appImagePath: Option.none(),
   } as unknown as DesktopEnvironment.DesktopEnvironment["Service"]);
 
@@ -201,6 +202,45 @@ it.layer(NodeServices.layer)("DesktopCliCommand", (it) => {
       });
       expect(installed.shadowedBy).toBeUndefined();
     }).pipe(Effect.scoped),
+  );
+
+  it.effect.each([true, false])(
+    "installs beside its own DEB alternatives entry with user PATH first: %s",
+    (userDirectoryFirst) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const home = yield* fs.makeTempDirectoryScoped();
+        const executable = path.join(home, "packaged", "t3code-convene");
+        const systemBin = path.join(home, "usr", "bin");
+        const alternatives = path.join(home, "etc", "alternatives", "t3code-convene");
+        const systemLink = path.join(systemBin, "t3code-convene");
+        const userBin = path.join(home, ".local", "bin");
+        yield* fs.makeDirectory(path.dirname(executable), { recursive: true });
+        yield* fs.makeDirectory(path.dirname(alternatives), { recursive: true });
+        yield* fs.makeDirectory(systemBin, { recursive: true });
+        yield* fs.writeFileString(executable, `\x7fELF${"\0".repeat(32 * 1024)}`);
+        yield* fs.symlink(executable, alternatives);
+        yield* fs.symlink(alternatives, systemLink);
+        process.env.PATH = userDirectoryFirst ? [userBin, systemBin].join(":") : systemBin;
+
+        const command = yield* commandIn({ home });
+        expect(yield* command.state).toEqual({
+          supported: true,
+          installedPath: null,
+          onPath: false,
+        });
+        expect(yield* command.install).toEqual({
+          supported: true,
+          installedPath: path.join(userBin, "t3code-convene"),
+          onPath: userDirectoryFirst,
+        });
+        expect(yield* fs.realPath(systemLink)).toBe(executable);
+
+        expect((yield* command.uninstall).installedPath).toBeNull();
+        expect(yield* fs.exists(path.join(userBin, "t3code-convene"))).toBe(false);
+        expect(yield* fs.realPath(systemLink)).toBe(executable);
+      }).pipe(Effect.scoped),
   );
 
   it.effect("leaves the Windows PATH alone when it cannot be read", () =>
