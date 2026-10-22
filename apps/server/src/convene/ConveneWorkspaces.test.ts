@@ -159,5 +159,7 @@ it.effect(
       assert.equal(initial[0]?.path, root);
       yield* fs.remove(root, { recursive: true });
       assert.equal((yield* workspaces.resolve(projectId, "root"))?.available, false);
+      yield* fs.makeDirectory(root);
+      assert.equal((yield* workspaces.resolve(projectId, "root"))?.available, true);
     }).pipe(Effect.provide(layer)),
 );

@@ -23,6 +23,7 @@ import * as Path from "effect/Path";
 import * as ServerConfig from "../config.ts";
 import * as Queue from "effect/Queue";
 import * as SubscriptionRef from "effect/SubscriptionRef";
+import * as Semaphore from "effect/Semaphore";
 import * as DesktopTelemetryReceiver from "../resourceTelemetry/DesktopTelemetryReceiver.ts";
 import * as Socket from "effect/socket/Socket";
 
@@ -135,7 +136,7 @@ const start = Effect.fn("ConveneConnection.start")(function* (
           PAYLOAD: payload,
         });
       });
-      const report = Effect.fn("ConveneConnection.report")(function* (id?: string) {
+      const readDirectory = Effect.fn("ConveneConnection.readDirectory")(function* () {
         const current = yield* projects.list();
         const projected = yield* Effect.forEach(current, (project) =>
           Effect.gen(function* () {
@@ -178,13 +179,48 @@ const start = Effect.fn("ConveneConnection.start")(function* (
             };
           }),
         );
-        yield* sendMessage(
-          "TARGETS_REPORT",
-          {
-            PROJECTS: projected.map((item) => item.project),
-            TARGETS: projected.flatMap((item) => item.targets),
-          },
-          id,
+        return {
+          PROJECTS: projected
+            .map((item) => item.project)
+            .sort((a, b) => a.NATIVE_PROJECT_ID.localeCompare(b.NATIVE_PROJECT_ID)),
+          TARGETS: projected
+            .flatMap((item) => item.targets)
+            .sort((a, b) => a.TARGET_ID.localeCompare(b.TARGET_ID)),
+        };
+      });
+      type Directory = Effect.Success<ReturnType<typeof readDirectory>>;
+      const sameProject = (
+        left: Directory["PROJECTS"][number],
+        right: Directory["PROJECTS"][number],
+      ) =>
+        left.NATIVE_PROJECT_ID === right.NATIVE_PROJECT_ID &&
+        left.DISPLAY_NAME === right.DISPLAY_NAME &&
+        left.AVAILABILITY === right.AVAILABILITY;
+      const sameDirectory = (left: Directory, right: Directory) =>
+        left.PROJECTS.length === right.PROJECTS.length &&
+        left.TARGETS.length === right.TARGETS.length &&
+        left.PROJECTS.every((item, index) => sameProject(item, right.PROJECTS[index]!)) &&
+        left.TARGETS.every((item, index) => {
+          const other = right.TARGETS[index]!;
+          return (
+            sameProject(item, other) &&
+            item.TARGET_ID === other.TARGET_ID &&
+            item.NATIVE_WORKSPACE_KEY === other.NATIVE_WORKSPACE_KEY &&
+            item.PATH === other.PATH &&
+            item.WORKSPACE_DISPLAY_NAME === other.WORKSPACE_DISPLAY_NAME &&
+            item.BRANCH === other.BRANCH
+          );
+        });
+      let lastReported: Directory | undefined;
+      const reportLock = yield* Semaphore.make(1);
+      const report = Effect.fn("ConveneConnection.report")(function* (id?: string) {
+        yield* reportLock.withPermit(
+          Effect.gen(function* () {
+            const directory = yield* readDirectory();
+            if (id === undefined && lastReported && sameDirectory(lastReported, directory)) return;
+            yield* sendMessage("TARGETS_REPORT", directory, id);
+            lastReported = directory;
+          }),
         );
       });
       yield* send({ TYPE: "AUTHENTICATE", TOKEN: token });
@@ -285,8 +321,14 @@ const start = Effect.fn("ConveneConnection.start")(function* (
               const afterSequence = yield* events.latestApplicationSequence;
               yield* report();
               yield* sendMessage("HEARTBEAT", {}).pipe(
-                Effect.andThen(report()),
                 Effect.repeat(Schedule.spaced(`${ack.HEARTBEAT_INTERVAL_SECONDS} seconds`)),
+                Effect.forkScoped,
+              );
+              // External Git worktree edits and directory loss/recovery have no
+              // project event. Keep local discovery without uploading an unchanged catalog.
+              yield* report().pipe(
+                Effect.repeat(Schedule.spaced("15 seconds")),
+                Effect.delay("15 seconds"),
                 Effect.forkScoped,
               );
               yield* events.streamApplicationEvents({ afterSequence }).pipe(

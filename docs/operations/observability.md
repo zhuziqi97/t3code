@@ -144,6 +144,11 @@ There are two useful modes:
 
 The local trace file is always on. OTLP export is opt-in.
 
+Web and desktop renderers send spans to the environment only when its OTLP traces export is
+configured. Convene-mounted Web pages do not start this exporter: their legacy traces route
+discards the upload. Server and desktop main-process local trace files remain available in both
+cases; use a direct environment connection for explicit renderer diagnostics.
+
 ### Option 1: Local Traces Only
 
 You do not need any extra env vars. Just run the app normally and inspect `server.trace.ndjson`.

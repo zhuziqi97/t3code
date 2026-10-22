@@ -63,11 +63,37 @@ const make = Effect.gen(function* () {
       threadId: ThreadId;
       providerSessionId: string;
       projectId: string;
+      nativeProjectId: string;
       targetId: string;
       workspaceKey: string;
+      workspacePath: string;
     }
   >();
-  const credentials = new Map<string, ConvenePlatform.Credential>();
+  const credentials = new Map<
+    string,
+    {
+      value: ConvenePlatform.Credential;
+      nativeProjectId: string;
+      target: ConvenePlatform.Configuration["targets"][number];
+    }
+  >();
+  const credentialIdentityIsCurrent = (
+    projectId: string,
+    cached: NonNullable<ReturnType<typeof credentials.get>>,
+  ) => {
+    const config = configurations.find((entry) => entry.client_project_id === projectId);
+    return (
+      config?.mcp_enabled === true &&
+      config.project.native_project_id === cached.nativeProjectId &&
+      config.targets.some(
+        (target) =>
+          target.target_id === cached.target.target_id &&
+          target.native_workspace_key === cached.target.native_workspace_key &&
+          target.path === cached.target.path &&
+          target.availability === "AVAILABLE",
+      )
+    );
+  };
 
   const prepare = Effect.fn("ConveneMcp.prepare")(function* (
     threadId: ThreadId,
@@ -134,8 +160,10 @@ const make = Effect.gen(function* () {
       threadId,
       providerSessionId,
       projectId: config.client_project_id,
+      nativeProjectId: config.project.native_project_id,
       targetId: target.target_id,
       workspaceKey: workspace.key,
+      workspacePath: workspace.path,
     });
     return { convene: { endpoint, authorizationHeader: `Bearer ${token}` } };
   });
@@ -158,19 +186,32 @@ const make = Effect.gen(function* () {
           );
     if (
       !config?.mcp_enabled ||
+      config.project.native_project_id !== lease.nativeProjectId ||
       threadKey !== lease.workspaceKey ||
       !config.targets.some(
-        (target) => target.target_id === lease.targetId && target.availability === "AVAILABLE",
+        (target) =>
+          target.target_id === lease.targetId &&
+          target.native_workspace_key === lease.workspaceKey &&
+          (target.path === null || target.path === lease.workspacePath) &&
+          target.availability === "AVAILABLE",
       )
     )
       return HttpServerResponse.empty({ status: 403 });
     const now = yield* Clock.currentTimeMillis;
-    let credential = credentials.get(lease.projectId);
+    let credential = credentials.get(lease.projectId)?.value;
     if (!credential || Date.parse(credential.expires_at) <= now + 30_000) {
       credential = yield* platform
         .credential(lease.projectId, lease.targetId)
         .pipe(Effect.mapError((cause) => new ConveneMcpError({ category: "credential", cause })));
-      credentials.set(lease.projectId, credential);
+      const cached = {
+        value: credential,
+        nativeProjectId: config.project.native_project_id,
+        target: config.targets.find((target) => target.target_id === lease.targetId)!,
+      };
+      // Configuration may change while a credential request is in flight.
+      if (!credentialIdentityIsCurrent(lease.projectId, cached))
+        return HttpServerResponse.empty({ status: 403 });
+      credentials.set(lease.projectId, cached);
     }
     const forwardedHeaders = Object.fromEntries(
       [
@@ -196,6 +237,9 @@ const make = Effect.gen(function* () {
     const upstream = yield* http
       .execute(outgoing)
       .pipe(Effect.mapError((cause) => new ConveneMcpError({ category: "upstream", cause })));
+    // An invalid JWT is renewed on the next caller's request; never replay a write.
+    if (upstream.status === 401 && credentials.get(lease.projectId)?.value === credential)
+      credentials.delete(lease.projectId);
     return HttpServerResponse.stream(upstream.stream, {
       status: upstream.status,
       headers: Object.fromEntries(
@@ -211,7 +255,8 @@ const make = Effect.gen(function* () {
     configure: (next) =>
       Effect.sync(() => {
         configurations = next;
-        credentials.clear();
+        for (const [projectId, cached] of credentials)
+          if (!credentialIdentityIsCurrent(projectId, cached)) credentials.delete(projectId);
       }),
     release: (threadId, providerSessionId) =>
       Effect.sync(() => {

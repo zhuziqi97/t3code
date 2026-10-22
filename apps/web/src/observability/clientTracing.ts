@@ -7,11 +7,12 @@ import { OtlpExporter, OtlpSerialization, OtlpTracer } from "effect/observabilit
 
 import { settleAsyncResult, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
-import { resolvePrimaryEnvironmentHttpUrl } from "../environments/primary";
+import { resolvePrimaryEnvironmentHttpUrl } from "../environments/primary/target";
 import * as ClientTracer from "./clientTracer";
 import * as PrimaryEnvironmentHttpLayer from "../environments/primary/httpLayer";
 import { isElectron } from "../env";
 import { APP_VERSION } from "~/branding";
+import { webBasePath } from "../webBasePath";
 
 const DEFAULT_EXPORT_INTERVAL_MS = 1_000;
 const CLIENT_TRACING_RESOURCE = {
@@ -38,23 +39,26 @@ let configurationGeneration = 0;
 let pendingConfiguration = Promise.resolve();
 
 export interface ClientTracingConfig {
+  readonly otlpTracesEnabled?: boolean;
   readonly exportIntervalMs?: number;
 }
 
 export function configureClientTracing(config: ClientTracingConfig = {}): Promise<void> {
-  if (config.exportIntervalMs === undefined && activeConfigKey !== null) {
-    return pendingConfiguration;
-  }
   pendingConfiguration = pendingConfiguration.finally(() => applyClientTracingConfig(config));
   return pendingConfiguration;
 }
 
 async function applyClientTracingConfig(config: ClientTracingConfig): Promise<void> {
-  const otlpTracesUrl = resolvePrimaryEnvironmentHttpUrl("/api/observability/v1/traces");
+  // Convene's mounted web route discards these traces, even when the runner
+  // exports its own diagnostics. Only a direct environment has a consumer.
+  const enabled = config.otlpTracesEnabled === true && webBasePath() === "";
+  const otlpTracesUrl = enabled
+    ? resolvePrimaryEnvironmentHttpUrl("/api/observability/v1/traces")
+    : null;
   const exportIntervalMs = Math.max(10, config.exportIntervalMs ?? DEFAULT_EXPORT_INTERVAL_MS);
-  const nextConfigKey = `${otlpTracesUrl}|${exportIntervalMs}`;
+  const nextConfigKey = otlpTracesUrl === null ? null : `${otlpTracesUrl}|${exportIntervalMs}`;
 
-  if (activeConfigKey === nextConfigKey && ClientTracer.hasDelegate()) {
+  if (activeConfigKey === nextConfigKey && (nextConfigKey === null || ClientTracer.hasDelegate())) {
     return;
   }
 
@@ -69,6 +73,7 @@ async function applyClientTracingConfig(config: ClientTracingConfig): Promise<vo
   activeScope = null;
 
   await disposeTracerRuntime(previousRuntime, previousScope);
+  if (otlpTracesUrl === null) return;
 
   const runtime = ManagedRuntime.make(layerDelegateRuntime);
   const scope = runtime.runSync(Scope.make());

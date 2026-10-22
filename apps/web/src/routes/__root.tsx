@@ -502,9 +502,14 @@ function errorReport(error: unknown, pathname: string): string {
 }
 
 function AuthenticatedTracingBootstrap() {
+  const serverConfig = useAtomValue(primaryServerConfigAtom);
+  const otlpTracesEnabled = serverConfig?.observability.otlpTracesEnabled ?? false;
   useEffect(() => {
-    void configureClientTracing();
-  }, []);
+    void configureClientTracing({ otlpTracesEnabled });
+    return () => {
+      void configureClientTracing();
+    };
+  }, [otlpTracesEnabled]);
 
   return null;
 }

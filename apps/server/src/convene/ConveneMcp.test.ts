@@ -6,6 +6,10 @@ import {
   type OrchestrationV2AppThread,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
+import * as Clock from "effect/Clock";
+import * as TestClock from "effect/testing/TestClock";
+import * as Deferred from "effect/Deferred";
+import * as Fiber from "effect/Fiber";
 import * as Effect from "effect/Effect";
 import * as PubSub from "effect/PubSub";
 import * as Layer from "effect/Layer";
@@ -19,7 +23,7 @@ import * as ConveneWorkspaces from "./ConveneWorkspaces.ts";
 import * as ConveneMcp from "./ConveneMcp.ts";
 
 it.effect(
-  "isolates project grants, rotates authorization, and releases only the owning provider lease",
+  "reuses project JWTs across 60 ACKs, renews near expiry, and invalidates only their identity",
   () =>
     Effect.gen(function* () {
       const now = yield* DateTime.now;
@@ -55,6 +59,10 @@ it.effect(
         contentType: string | undefined;
       }> = [];
       let revision = 1;
+      let upstreamStatus = 200;
+      let credentialGate:
+        | { started: Deferred.Deferred<void>; release: Deferred.Deferred<void> }
+        | undefined;
       let rememberedKey = "original-worktree";
       const config = (
         id: string,
@@ -103,12 +111,19 @@ it.effect(
           finishPairing: () => Effect.die("unused"),
           disconnect: Effect.void,
           credential: (projectId, targetId) =>
-            Effect.sync(() => {
+            Effect.gen(function* () {
               grants.push(`${projectId}/${targetId}`);
+              const gate = credentialGate;
+              if (gate) {
+                yield* Deferred.succeed(gate.started, undefined);
+                yield* Deferred.await(gate.release);
+              }
               return {
                 mcp_url: `http://platform.test/${projectId}`,
                 access_token: `project-grant:${projectId}:${revision}`,
-                expires_at: "2099-01-01T00:00:00Z",
+                expires_at: DateTime.formatIso(
+                  DateTime.makeUnsafe((yield* Clock.currentTimeMillis) + 600_000),
+                ),
               };
             }),
         }),
@@ -125,7 +140,10 @@ it.effect(
               });
               return HttpClientResponse.fromWeb(
                 request,
-                new Response("project tools", { headers: { "content-type": "application/json" } }),
+                new Response("project tools", {
+                  status: upstreamStatus,
+                  headers: { "content-type": "application/json" },
+                }),
               );
             }),
           ),
@@ -165,10 +183,42 @@ it.effect(
         assert.equal(forwarded[0]?.method, "tools/call");
         assert.equal(forwarded[0]?.name, "get_platform_guideline");
         assert.equal(forwarded[0]?.contentType, "application/json");
+        for (let index = 0; index < 60; index++) {
+          const aValue = config("a");
+          const targets = [
+            ...aValue.targets,
+            { ...aValue.targets[0]!, target_id: "another-target", native_workspace_key: "other" },
+          ].map((target) => ({
+            ...target,
+            branch: `branch:${index}`,
+            workspace_display_name: `Name ${index}`,
+          }));
+          const values = [
+            {
+              ...aValue,
+              project: { ...aValue.project, display_name: `Project ${index}` },
+              updated_at: `timestamp:${index}`,
+              targets: index % 2 === 0 ? targets : targets.toReversed(),
+            },
+            config("b"),
+          ];
+          yield* broker.configure(index % 2 === 0 ? values : values.toReversed());
+          yield* TestClock.adjust("1 second");
+          assert.equal((yield* forward(replacement.authorizationHeader)).status, 200);
+        }
+        assert.equal(grants.length, 2);
+        yield* TestClock.adjust("509999 millis");
+        yield* forward(replacement.authorizationHeader);
+        assert.equal(grants.length, 2);
+        yield* TestClock.adjust("1 millis");
+        revision = 2;
+        yield* forward(replacement.authorizationHeader);
+        assert.equal(grants.length, 3);
+        assert.equal(forwarded.at(-1)?.auth, "Bearer project-grant:platform:a:2");
         yield* broker.release(a, "provider:old");
         assert.equal((yield* forward(first.authorizationHeader)).status, 401);
         assert.equal((yield* forward(replacement.authorizationHeader)).status, 200);
-        revision = 2;
+        revision = 3;
         yield* broker.configure([config("a"), config("b", false)]);
         assert.equal((yield* forward(replacement.authorizationHeader)).status, 200);
         assert.equal(forwarded.at(-1)?.auth, "Bearer project-grant:platform:a:2");
@@ -177,6 +227,84 @@ it.effect(
         assert.equal((yield* forward(replacement.authorizationHeader)).status, 403);
         const missing = yield* broker.prepare(a, "provider:missing").pipe(Effect.flip);
         assert.equal(missing.category, "workspace_unavailable");
+        yield* broker.configure([config("a"), config("b")]);
+        yield* forward(replacement.authorizationHeader);
+        assert.equal(forwarded.at(-1)?.auth, "Bearer project-grant:platform:a:3");
+        yield* forward(other.authorizationHeader);
+        const beforeIdentityChange = grants.length;
+        const aConfig = config("a");
+        yield* broker.configure([
+          { ...aConfig, project: { native_project_id: "another-native-project" } },
+          config("b"),
+        ]);
+        assert.equal((yield* forward(replacement.authorizationHeader)).status, 403);
+        yield* forward(other.authorizationHeader);
+        assert.equal(grants.length, beforeIdentityChange);
+        yield* broker.configure([config("a"), config("b")]);
+        yield* forward(replacement.authorizationHeader);
+        assert.equal(grants.length, beforeIdentityChange + 1);
+        // Permission decisions remain upstream on every request with the same JWT.
+        upstreamStatus = 403;
+        assert.equal((yield* forward(replacement.authorizationHeader)).status, 403);
+        assert.equal(grants.length, beforeIdentityChange + 1);
+        upstreamStatus = 401;
+        const beforeUnauthorized = forwarded.length;
+        assert.equal((yield* forward(replacement.authorizationHeader)).status, 401);
+        assert.equal(forwarded.length, beforeUnauthorized + 1);
+        upstreamStatus = 200;
+        yield* forward(replacement.authorizationHeader);
+        assert.equal(grants.length, beforeIdentityChange + 2);
+        const beforeDisconnect = grants.length;
+        yield* broker.configure([]);
+        assert.equal((yield* forward(replacement.authorizationHeader)).status, 403);
+        yield* broker.configure([config("a"), config("b")]);
+        yield* forward(replacement.authorizationHeader);
+        yield* forward(other.authorizationHeader);
+        assert.equal(grants.length, beforeDisconnect + 2);
+        for (const invalid of [
+          { ...aConfig, mcp_enabled: false },
+          { ...aConfig, client_project_id: "another-platform-project" },
+          { ...aConfig, targets: [] },
+          {
+            ...aConfig,
+            targets: aConfig.targets.map((target) => ({ ...target, path: "/moved/a" })),
+          },
+          {
+            ...aConfig,
+            targets: aConfig.targets.map((target) => ({
+              ...target,
+              native_workspace_key: "new-key",
+            })),
+          },
+        ]) {
+          const beforeInvalidation = grants.length;
+          yield* broker.configure([invalid, config("b")]);
+          assert.equal((yield* forward(replacement.authorizationHeader)).status, 403);
+          yield* forward(other.authorizationHeader);
+          assert.equal(grants.length, beforeInvalidation);
+          yield* broker.configure([config("a"), config("b")]);
+          yield* forward(replacement.authorizationHeader);
+          assert.equal(grants.length, beforeInvalidation + 1);
+        }
+        yield* broker.configure([]);
+        yield* broker.configure([config("a"), config("b")]);
+        const gate = {
+          started: yield* Deferred.make<void>(),
+          release: yield* Deferred.make<void>(),
+        };
+        credentialGate = gate;
+        const pending = yield* forward(replacement.authorizationHeader).pipe(Effect.forkScoped);
+        yield* Deferred.await(gate.started);
+        yield* broker.configure([config("a", false), config("b")]);
+        credentialGate = undefined;
+        const beforeLateCredential = forwarded.length;
+        yield* Deferred.succeed(gate.release, undefined);
+        assert.equal((yield* Fiber.join(pending)).status, 403);
+        assert.equal(forwarded.length, beforeLateCredential);
+        yield* broker.configure([config("a"), config("b")]);
+        const beforeRenewal = grants.length;
+        yield* forward(replacement.authorizationHeader);
+        assert.equal(grants.length, beforeRenewal + 1);
         const original = config("a");
         yield* broker.configure([
           {
@@ -205,5 +333,5 @@ it.effect(
         assert.equal((yield* forward(replacement.authorizationHeader)).status, 401);
         assert.equal((yield* forward(other.authorizationHeader)).status, 200);
       }).pipe(Effect.provide(ConveneMcp.layer.pipe(Layer.provide(dependencies))));
-    }).pipe(Effect.scoped),
+    }).pipe(Effect.scoped, Effect.provide(TestClock.layer())),
 );
