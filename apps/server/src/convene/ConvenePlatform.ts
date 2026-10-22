@@ -54,6 +54,7 @@ export class ConvenePlatformError extends Schema.TaggedError<ConvenePlatformErro
     operation: Schema.String,
     status: Schema.optional(Schema.Number),
     code: Schema.optional(Schema.String),
+    resourceType: Schema.optional(Schema.String),
     cause: Schema.optional(Schema.Defect()),
   },
 ) {
@@ -124,12 +125,20 @@ const make = Effect.gen(function* () {
       .pipe(Effect.mapError((cause) => new ConvenePlatformError({ operation: path, cause })));
     if (response.status < 200 || response.status >= 300) {
       const error = yield* HttpClientResponse.schemaBodyJson(
-        Schema.Struct({ error: Schema.Struct({ code: Schema.String }) }),
+        Schema.Struct({
+          error: Schema.Struct({ code: Schema.String, detail: Schema.optional(Schema.Unknown) }),
+        }),
       )(response).pipe(Effect.option);
+      const detail = Option.isSome(error)
+        ? Schema.decodeUnknownOption(Schema.Struct({ resource_type: Schema.String }))(
+            error.value.error.detail,
+          )
+        : Option.none();
       return yield* new ConvenePlatformError({
         operation: path,
         status: response.status,
         ...(Option.isSome(error) ? { code: error.value.error.code } : {}),
+        ...(Option.isSome(detail) ? { resourceType: detail.value.resource_type } : {}),
       });
     }
     const result = yield* HttpClientResponse.schemaBodyJson(

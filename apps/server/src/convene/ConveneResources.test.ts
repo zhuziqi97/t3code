@@ -157,13 +157,27 @@ it.effect(
           reply = { status: 403, body: { error: { code: "PERMISSION_DENIED" } } };
           assert.equal((yield* service.read(input)).status, "unauthorized");
           reply = { status: 404, body: { error: { code: "RESOURCE_NOT_FOUND" } } };
+          assert.equal((yield* service.read(input)).status, "unavailable");
+          reply = {
+            status: 404,
+            body: { error: { code: "RESOURCE_NOT_FOUND", detail: { resource_type: "issue" } } },
+          };
           assert.equal((yield* service.read(input)).status, "notFound");
-          // Old platforms have no route and no business RESOURCE_NOT_FOUND receipt.
+          reply = {
+            status: 404,
+            body: {
+              error: { code: "RESOURCE_NOT_FOUND", detail: { resource_type: "issue_comment" } },
+            },
+          };
+          assert.equal((yield* service.read(input)).status, "notFound");
+          reply = { status: 404, body: { error: { code: "MODULE_NOT_FOUND" } } };
+          assert.equal((yield* service.read(input)).status, "notFound");
           reply = { status: 404, body: { detail: "Not Found" } };
           assert.equal((yield* service.read(input)).status, "unavailable");
+          const beforeDisconnect = requests.length;
           paired = false;
           assert.equal((yield* service.read(input)).status, "disconnected");
-          assert.equal(requests.length, 4);
+          assert.equal(requests.length, beforeDisconnect);
         }).pipe(Effect.provide(serviceLayer));
       }),
     ).pipe(Effect.provide(NodeHttpServer.layerTest)),

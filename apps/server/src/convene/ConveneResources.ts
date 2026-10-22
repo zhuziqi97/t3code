@@ -56,7 +56,13 @@ const make = Effect.gen(function* () {
         ConvenePlatformError: (error) => {
           if (error.status === 401 || error.status === 403)
             return Effect.succeed(failure("unauthorized"));
-          if (error.code === "RESOURCE_NOT_FOUND" || error.code === "ISSUE_NOT_FOUND")
+          // Missing API routes share the generic 404 code but have no business resource type.
+          if (
+            error.code === "MODULE_NOT_FOUND" ||
+            error.code === "ISSUE_NOT_FOUND" ||
+            (error.code === "RESOURCE_NOT_FOUND" &&
+              (error.resourceType === "issue" || error.resourceType === "issue_comment"))
+          )
             return Effect.succeed(failure("notFound"));
           if (error.code === "NOT_PAIRED") return Effect.succeed(failure("disconnected"));
           return Effect.succeed(failure("unavailable"));
