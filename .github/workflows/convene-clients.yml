@@ -4,12 +4,6 @@ on:
   push:
     branches: [codex/convene-client-builds]
   workflow_dispatch:
-    inputs:
-      platforms:
-        description: Publication platforms
-        type: choice
-        options: [linux-x64, all]
-        default: linux-x64
 
 permissions:
   contents: read
@@ -40,19 +34,17 @@ jobs:
           git fetch --no-tags --depth=1 origin "$GITHUB_SHA"
           git sparse-checkout set --no-cone '/*' '!/.repos/'
           git checkout --detach FETCH_HEAD
-      - name: Select publication platforms
+      - name: Select all publication platforms
         id: platforms
-        env:
-          PUBLICATION_PLATFORMS: ${{ inputs.platforms || 'all' }}
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import json, os
+          import json
           targets = [
             {"label":"Linux x64","runner":"ubuntu-24.04","platform":"linux","target":"AppImage","arch":"x64","rust_target":"x86_64-unknown-linux-gnu","resource_key":"linux-x64"},
             {"label":"Windows x64","runner":"windows-2025","platform":"win","target":"nsis","arch":"x64","rust_target":"x86_64-pc-windows-msvc","resource_key":"win32-x64"},
             {"label":"macOS arm64","runner":"macos-15","platform":"mac","target":"dmg","arch":"arm64","rust_target":"aarch64-apple-darwin","resource_key":"darwin-arm64"},
           ]
-          print("desktop_matrix=" + json.dumps(targets[:1] if os.environ["PUBLICATION_PLATFORMS"] == "linux-x64" else targets))
+          print("desktop_matrix=" + json.dumps(targets))
           PY
       - name: Setup Vite+
         uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1
@@ -183,15 +175,10 @@ jobs:
       - name: Write publication metadata from this run
         env:
           ACCEPTED_VERSION: ${{ needs.bundle.outputs.version }}
-          PUBLICATION_PLATFORMS: ${{ inputs.platforms || 'all' }}
         run: |
-          platform_args=()
-          if [ "$PUBLICATION_PLATFORMS" != all ]; then
-            platform_args+=(--platform "$PUBLICATION_PLATFORMS")
-          fi
           node scripts/prepare-convene-release.mjs \
             --artifacts accepted-desktop --output convene-clients \
-            --version "$ACCEPTED_VERSION" --commit "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" "${platform_args[@]}"
+            --version "$ACCEPTED_VERSION" --commit "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID"
       - name: Encrypt publication input
         env:
           CONVENE_PACKAGE_TRANSPORT_KEY: ${{ secrets.CONVENE_PACKAGE_TRANSPORT_KEY }}
