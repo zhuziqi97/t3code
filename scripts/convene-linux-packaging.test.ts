@@ -20,7 +20,7 @@ const { LinuxTargetHelper } = builderRequire("app-builder-lib/out/targets/LinuxT
 const FpmTarget = builderRequire("app-builder-lib/out/targets/FpmTarget").default;
 
 it.layer(NodeServices.layer)("Convene Linux packaging", (it) => {
-  it.effect.each(["0.1.1-convene.1", "0.2.0-nightly.20261022.1"])(
+  it.effect.each(["0.1.1-1", "0.2.0-nightly.20261022.1"])(
     "keeps installation targets stable for %s",
     (version) =>
       Effect.gen(function* () {

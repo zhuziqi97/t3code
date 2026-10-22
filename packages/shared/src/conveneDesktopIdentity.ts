@@ -15,6 +15,6 @@ export const CONVENE_UPSTREAM_VERSION = "0.1.1";
 
 /** Default fork release for the checked-out upstream base. Explicit artifact versions override it. */
 export function resolveConveneVersion(upstreamVersion: string): string {
-  if (upstreamVersion.includes("convene.")) return upstreamVersion;
-  return `${upstreamVersion}${upstreamVersion.includes("-") ? "." : "-"}convene.14`;
+  if (upstreamVersion.includes("-")) return upstreamVersion;
+  return `${upstreamVersion}-1`;
 }

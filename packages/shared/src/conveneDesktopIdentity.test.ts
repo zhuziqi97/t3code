@@ -11,6 +11,6 @@ describe("Convene candidate identity", () => {
   );
 
   it("preserves the explicit candidate written by the release flow", () => {
-    expect(resolveConveneVersion("1.2.3-convene.9")).toBe("1.2.3-convene.9");
+    expect(resolveConveneVersion("1.2.3-9")).toBe("1.2.3-9");
   });
 });
