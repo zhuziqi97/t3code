@@ -901,12 +901,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/general",
   },
   {
-    id: "legacy-plan-mode",
+    id: "plan-mode",
     get title() {
-      return i18n.t("settings.search.legacy-plan-mode.title");
+      return i18n.t("settings.search.plan-mode.title");
     },
     to: "/settings/general",
-    searchTerms: ["Plan mode (legacy) 计划模式（旧版）", "build plan composer old"],
+    searchTerms: ["Plan mode 计划模式", "build plan composer /plan /default"],
   },
   {
     id: "legacy-context-window-indicator",

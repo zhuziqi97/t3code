@@ -1311,3 +1311,13 @@ describe("server model preferences", () => {
     });
   });
 });
+
+describe("ClientSettings plan mode", () => {
+  it("enables the capability by default and preserves explicit choices", () => {
+    expect(decodeClientSettings({}).planModeEnabled).toBe(true);
+    for (const enabled of [false, true]) {
+      expect(decodeClientSettings({ planModeEnabled: enabled }).planModeEnabled).toBe(enabled);
+      expect(decodeClientSettingsPatch({ planModeEnabled: enabled }).planModeEnabled).toBe(enabled);
+    }
+  });
+});

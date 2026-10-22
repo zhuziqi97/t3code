@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import { Button } from "../../components/ui/Button";
 import { AuthSettingsWriteScope } from "@t3tools/contracts";
 import { readEnvironmentScope, useEnvironmentsWithScope } from "../../state/session";
@@ -48,7 +49,7 @@ export function SettingsThreadsRouteScreen() {
         >
           <AutoSettleSettingsRows />
           <BetaSettingsSection />
-          <LegacySettingsSection />
+          <PlanModeSettingsSection />
         </ScrollView>
       </SettingsScreen>
     </>
@@ -267,26 +268,24 @@ function BetaSettingsSection() {
   );
 }
 
-function LegacySettingsSection() {
+function PlanModeSettingsSection() {
+  const t = useTranslate();
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
   const preferences = useAtomValue(mobilePreferencesAtom);
   const planModeEnabled =
-    AsyncResult.isSuccess(preferences) && preferences.value.planModeEnabled === true;
+    AsyncResult.isSuccess(preferences) && preferences.value.planModeEnabled !== false;
 
   return (
     <View className="gap-3">
-      <SettingsSection title="Legacy">
+      <SettingsSection title={t("general.plan.title")}>
         <SettingsSwitchRow
           icon="hammer"
-          label="Plan Mode"
+          label={t("general.plan.title")}
           value={planModeEnabled}
           onValueChange={(value) => savePreferences({ planModeEnabled: value })}
         />
       </SettingsSection>
-      <Text className="px-2 text-sm text-foreground-muted">
-        Opt into retired interfaces kept for compatibility. Plan Mode restores the Build/Plan
-        control; otherwise every task runs in Build mode.
-      </Text>
+      <Text className="px-2 text-sm text-foreground-muted">{t("general.plan.description")}</Text>
     </View>
   );
 }

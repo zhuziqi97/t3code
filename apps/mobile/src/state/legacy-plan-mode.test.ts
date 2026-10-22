@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 
 import {
+  resolveLegacyPlanModeEnabled,
   resolvePendingTaskInteractionMode,
   resolveProviderInteractionMode,
 } from "./legacy-plan-mode";
@@ -88,5 +89,14 @@ describe("resolvePendingTaskInteractionMode", () => {
         queuedInteractionMode: "plan",
       }),
     ).toBe("default");
+  });
+});
+
+describe("resolveLegacyPlanModeEnabled", () => {
+  it("defaults on after preferences load, retaining explicit old values", () => {
+    expect(resolveLegacyPlanModeEnabled({ loaded: false, preference: undefined })).toBe(false);
+    expect(resolveLegacyPlanModeEnabled({ loaded: true, preference: undefined })).toBe(true);
+    expect(resolveLegacyPlanModeEnabled({ loaded: true, preference: false })).toBe(false);
+    expect(resolveLegacyPlanModeEnabled({ loaded: true, preference: true })).toBe(true);
   });
 });

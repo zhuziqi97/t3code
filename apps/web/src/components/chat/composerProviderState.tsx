@@ -96,7 +96,18 @@ function resolveComposerOptionSelections(
   selections: ReadonlyArray<ProviderOptionSelection> | undefined;
 } {
   const caps = getProviderModelCapabilities(models, model, provider, planModeEnabled);
-  return { caps, selections: withImplicitFastModeDefault(caps, modelOptions) };
+  const selections = planModeEnabled
+    ? modelOptions
+    : modelOptions?.flatMap((option) => {
+        if (option.id !== "agent" || option.value !== "plan") return [option];
+        const agent = caps.optionDescriptors?.find(
+          (descriptor) => descriptor.id === "agent" && descriptor.type === "select",
+        );
+        return agent?.type === "select" && agent.currentValue
+          ? [{ ...option, value: agent.currentValue }]
+          : [];
+      });
+  return { caps, selections: withImplicitFastModeDefault(caps, selections) };
 }
 
 export function getComposerProviderState(input: ComposerProviderStateInput): ComposerProviderState {

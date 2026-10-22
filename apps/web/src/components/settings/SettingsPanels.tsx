@@ -2074,10 +2074,7 @@ function AutoSettleDaysInput({
   );
 }
 
-const LEGACY_FEATURE_TARGET_IDS: ReadonlySet<string> = new Set([
-  "legacy-plan-mode",
-  "legacy-context-window-indicator",
-]);
+const LEGACY_FEATURE_TARGET_IDS: ReadonlySet<string> = new Set(["legacy-context-window-indicator"]);
 
 function LegacyFeaturesSection() {
   const t = useTranslate();
@@ -2109,19 +2106,6 @@ function LegacyFeaturesSection() {
         </CollapsibleTrigger>
         <CollapsiblePanel>
           <SettingsGroup>
-            <SettingsRow
-              {...searchableSetting("legacy-plan-mode", t)}
-              description={t("legacy.plan.description")}
-              control={
-                <Switch
-                  checked={settings.planModeEnabled}
-                  onCheckedChange={(checked) => {
-                    updateSettings({ planModeEnabled: Boolean(checked) });
-                  }}
-                  aria-label={t("legacy.plan.label")}
-                />
-              }
-            />
             <SettingsRow
               {...searchableSetting("legacy-context-window-indicator", t)}
               description={t("legacy.context.description")}
@@ -2474,6 +2458,19 @@ export function GeneralSettingsPanel() {
       </SettingsSection>
 
       <SettingsSection id="behavior" title={t("section.behavior")}>
+        <SettingsRow
+          {...searchableSetting("plan-mode", t)}
+          description={t("general.plan.description")}
+          control={
+            <Switch
+              checked={settings.planModeEnabled}
+              onCheckedChange={(checked) => {
+                updateSettings({ planModeEnabled: Boolean(checked) });
+              }}
+              aria-label={t("general.plan.title")}
+            />
+          }
+        />
         <NotificationSettings />
         <SettingsRow
           {...searchableSetting("in-app-notifications", t)}
