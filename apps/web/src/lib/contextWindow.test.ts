@@ -49,6 +49,7 @@ describe("V2 context window presentation", () => {
     ]);
     expect(snapshot?.usedTokens).toBe(2_000);
     expect(snapshot?.totalProcessedTokens).toBeNull();
+    expect(snapshot?.compactsAutomatically).toBeNull();
   });
 
   it("keeps unknown usage distinct from a provider-reported zero", () => {
@@ -126,6 +127,7 @@ describe("live provider-turn usage (#8144)", () => {
     expect(snapshot?.maxTokens).toBeNull();
     expect(snapshot?.usedPercentage).toBeNull();
     expect(snapshot?.autoCompactThreshold).toBeNull();
+    expect(snapshot?.compactsAutomatically).toBeNull();
     expect(formatContextWindowCompactionMessage(null, snapshot?.autoCompactThreshold)).toBe(
       "Context compacts automatically when needed.",
     );
