@@ -7475,6 +7475,7 @@ export const en = {
   "chat.traits.choice.normal": "Normal",
   "chat.traits.choice.build": "Build",
   "chat.traits.choice.plan": "Plan",
+  "chat.traits.name.effort": "Effort",
   "chat.traits.name.thinking": "Thinking",
   "chat.traits.name.fastMode": "Fast Mode",
   "chat.traits.name.serviceTier": "Service Tier",

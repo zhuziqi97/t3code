@@ -5,30 +5,73 @@ import {
   getProviderOptionCurrentValue,
 } from "@t3tools/shared/model";
 
-/** Native option labels remain consistent with the provider's own controls. */
+type LocalizableProviderOptionDescriptor = ProviderOptionDescriptor & {
+  readonly category?: string;
+};
+
+const optionNameKeys = new Map([
+  ["Reasoning", "provider.models.reasoning"],
+  ["Reasoning effort", "chat.traits.reasoningEffort"],
+  ["Effort", "chat.traits.name.effort"],
+  ["Thinking", "chat.traits.name.thinking"],
+  ["Fast Mode", "chat.traits.name.fastMode"],
+  ["Fast mode", "provider.models.fastMode"],
+  ["Service Tier", "chat.traits.name.serviceTier"],
+  ["Context Window", "chat.traits.name.contextWindow"],
+  ["Agent", "chat.traits.name.agent"],
+]);
+
+const optionChoiceKeys = new Map([
+  ["Standard", "chat.traits.choice.standard"],
+  ["Fast", "chat.traits.choice.fast"],
+  ["Ultrafast", "chat.traits.choice.ultrafast"],
+  ["Flex", "chat.traits.choice.flex"],
+  ["Normal", "chat.traits.choice.normal"],
+  ["Build", "chat.traits.choice.build"],
+  ["Plan", "chat.traits.choice.plan"],
+  ["On", "common.on"],
+  ["Off", "common.off"],
+]);
+
+function isThoughtLevel(descriptor: LocalizableProviderOptionDescriptor): boolean {
+  if (descriptor.category !== undefined) return descriptor.category === "thought_level";
+  return (
+    ["reasoningEffort", "effort", "thinking"].includes(descriptor.id) ||
+    ["Reasoning", "Reasoning effort", "Effort", "Thinking"].includes(descriptor.label)
+  );
+}
+
 export function formatProviderOptionName(
-  descriptor: ProviderOptionDescriptor,
-  _t: TFunction,
+  descriptor: LocalizableProviderOptionDescriptor,
+  t: TFunction,
 ): string {
-  return descriptor.label;
+  const key = optionNameKeys.get(descriptor.label);
+  return key ? t(key) : descriptor.label;
 }
 
 export function formatProviderOptionChoiceLabel(
-  _descriptor: Extract<ProviderOptionDescriptor, { type: "select" }>,
+  descriptor: Extract<LocalizableProviderOptionDescriptor, { type: "select" }>,
   option: { readonly id: string; readonly label: string },
-  _t: TFunction,
+  t: TFunction,
 ): string {
-  return option.label;
+  // Strength names follow each provider; other known control labels can be translated.
+  if (isThoughtLevel(descriptor)) return option.label;
+  const key = optionChoiceKeys.get(option.label);
+  return key ? t(key) : option.label;
 }
 
 export function getLocalizedProviderOptionCurrentLabel(
-  descriptor: ProviderOptionDescriptor,
+  descriptor: LocalizableProviderOptionDescriptor,
   t: TFunction,
   selection?: ModelSelection | null,
   reportedSelection?: ModelSelection | null,
 ): string | undefined {
   const label = getProviderOptionCurrentLabel(descriptor, selection, reportedSelection);
-  if (descriptor.type === "boolean") return label;
+  if (descriptor.type === "boolean") {
+    if (label === "On") return t("common.on");
+    if (label === "Off") return t("common.off");
+    return label;
+  }
   const currentValue = getProviderOptionCurrentValue(descriptor, selection, reportedSelection);
   const option = descriptor.options.find((option) => option.id === currentValue);
   if (option) return formatProviderOptionChoiceLabel(descriptor, option, t);
