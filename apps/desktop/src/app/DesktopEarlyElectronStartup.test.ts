@@ -5,12 +5,32 @@ import { assert, describe, it } from "@effect/vitest";
 import {
   restoreEarlyLinuxDeviceScaleFactor,
   resolveEarlyLinuxElectronOptions,
+  resolveEarlyLinuxLocale,
   resolveEarlyLinuxPasswordStorePreference,
   resolveLinuxDisableFeaturesSwitch,
 } from "./DesktopEarlyElectronStartup.ts";
 
 describe("DesktopEarlyElectronStartup", () => {
   const joinPath = NodePath.posix.join;
+
+  it.each([
+    {
+      env: { LC_ALL: "en_US.UTF-8", LC_MESSAGES: "zh_CN.UTF-8", LANG: "zh_CN.UTF-8" },
+      expected: "en-US",
+    },
+    { env: { LC_MESSAGES: "zh_CN.UTF-8", LANG: "en_US.UTF-8" }, expected: "zh-CN" },
+    { env: { LANG: "zh_CN.UTF-8" }, expected: "zh-CN" },
+  ])("uses the Linux locale environment precedence ($expected)", ({ env, expected }) => {
+    assert.equal(
+      resolveEarlyLinuxLocale({
+        env,
+        homeDirectory: "/home/user",
+        joinPath,
+        readFileString: () => "{}",
+      }),
+      expected,
+    );
+  });
 
   it("reads the persisted linux password-store preference before Electron is ready", () => {
     const preference = resolveEarlyLinuxPasswordStorePreference({

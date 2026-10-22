@@ -92,9 +92,7 @@ export function resolveEarlyLinuxPasswordStorePreference(
   }
 }
 
-export function resolveEarlyLinuxLocale(
-  input: EarlyDesktopSettingsInput & { readonly systemLocale: string },
-): "zh-CN" | "en-US" {
+export function resolveEarlyLinuxLocale(input: EarlyDesktopSettingsInput): "zh-CN" | "en-US" {
   let preference: LanguagePreference = "system";
   try {
     const settingsPath = input.joinPath(
@@ -107,7 +105,9 @@ export function resolveEarlyLinuxLocale(
   } catch {
     // First launch or unreadable settings use the same system-language fallback as the client.
   }
-  return resolveLanguage(preference, [input.systemLocale]) === "zh" ? "zh-CN" : "en-US";
+  const systemLocale =
+    input.env.LC_ALL?.trim() || input.env.LC_MESSAGES?.trim() || input.env.LANG?.trim() || "en-US";
+  return resolveLanguage(preference, [systemLocale]) === "zh" ? "zh-CN" : "en-US";
 }
 
 const WAYLAND_COLOR_MANAGER_FEATURE = "WaylandWpColorManagerV1";

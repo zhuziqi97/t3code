@@ -71,7 +71,6 @@ export const make = Effect.gen(function* () {
             homeDirectory,
             joinPath: NodePath.posix.join,
             readFileString: (path) => NodeFS.readFileSync(path, "utf8"),
-            systemLocale: Electron.app.getSystemLocale(),
           }),
         );
       }

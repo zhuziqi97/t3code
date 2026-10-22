@@ -16,7 +16,6 @@ const {
   copyFileSyncMock,
   execFileSyncMock,
   readFileSyncMock,
-  getSystemLocaleMock,
 } = vi.hoisted(() => ({
   appendSwitchMock: vi.fn(),
   getSwitchValueMock: vi.fn(),
@@ -28,14 +27,15 @@ const {
   copyFileSyncMock: vi.fn(),
   execFileSyncMock: vi.fn(),
   readFileSyncMock: vi.fn(),
-  getSystemLocaleMock: vi.fn(),
 }));
 
 vi.mock("electron", () => ({
   app: {
     setDesktopName: setDesktopNameMock,
     getVersion: () => "0.0.37",
-    getSystemLocale: getSystemLocaleMock,
+    getSystemLocale: () => {
+      throw new Error("app.getSystemLocale requires Electron ready");
+    },
     isPackaged: true,
     getAppPath: () => "/tmp/.mount_T3/resources/app.asar",
     commandLine: {
@@ -74,7 +74,6 @@ describe("DesktopPreReadyPlatform", () => {
     copyFileSyncMock.mockReset();
     execFileSyncMock.mockReset();
     readFileSyncMock.mockReset().mockReturnValue("{}");
-    getSystemLocaleMock.mockReset().mockReturnValue("en-US");
   });
 
   it.effect.each([
@@ -92,7 +91,9 @@ describe("DesktopPreReadyPlatform", () => {
     "sets native menu locale $expected before startup yields ($settings)",
     ({ settings, systemLocale, expected }) => {
       vi.stubEnv("T3CODE_HOME", "/isolated");
-      getSystemLocaleMock.mockReturnValue(systemLocale);
+      vi.stubEnv("LC_ALL", "");
+      vi.stubEnv("LC_MESSAGES", systemLocale);
+      vi.stubEnv("LANG", "en-US");
       const switches = new Map<string, string>();
       appendSwitchMock.mockImplementation((name: string, value: string) =>
         switches.set(name, value),
