@@ -642,8 +642,8 @@ describe("ClientSettings glass opacity", () => {
 });
 
 describe("ClientSettings appearance contrast", () => {
-  it("defaults to the theme's original contrast", () => {
-    expect(decodeClientSettings({}).appearanceContrast).toBe(100);
+  it("defaults to 200 percent contrast", () => {
+    expect(decodeClientSettings({}).appearanceContrast).toBe(200);
   });
 
   it.each([49, 201, 92.5])("rejects an invalid appearance contrast: %s", (value) => {
