@@ -1,3 +1,4 @@
+import { useTranslate } from "../i18n";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
@@ -31,6 +32,7 @@ function ChatIndexRouteView() {
 }
 
 function IndexDraftLanding() {
+  const t = useTranslate();
   const projects = useProjects();
   const bootstrapped = useAllEnvironmentShellsBootstrapped();
   const handleNewThread = useNewThreadHandler();
@@ -104,16 +106,14 @@ function IndexDraftLanding() {
         {isElectron ? <WorkspacePageHeader electron /> : null}
         <Empty className="flex-1">
           <EmptyHeader>
-            <EmptyTitle>Choose a project to start</EmptyTitle>
-            <EmptyDescription>
-              Select a project in the sidebar or choose where to start a new thread.
-            </EmptyDescription>
+            <EmptyTitle>{t("convene.sidebar.chooseProjectTitle")}</EmptyTitle>
+            <EmptyDescription>{t("convene.sidebar.chooseProjectDescription")}</EmptyDescription>
             <Button onClick={() => openCommandPalette({ open: "new-thread-in" })}>
-              New thread…
+              {t("convene.sidebar.newThread")}
             </Button>
             {scratchTarget !== null && (
               <Button variant="ghost" onClick={() => void startScratchThread(scratchTarget)}>
-                Start without a project
+                {t("project.startWithout")}
               </Button>
             )}
           </EmptyHeader>
@@ -127,19 +127,18 @@ function IndexDraftLanding() {
 }
 
 function DraftStartError({ onRetry }: { readonly onRetry: () => void }) {
+  const t = useTranslate();
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none">
       {isElectron ? <WorkspacePageHeader electron /> : null}
       <Empty className="flex-1">
         <EmptyHeader className="max-w-md">
-          <EmptyTitle>Couldn’t start a new thread</EmptyTitle>
-          <EmptyDescription>
-            The project is still available. Try opening the draft again.
-          </EmptyDescription>
+          <EmptyTitle>{t("convene.sidebar.draftStartFailed")}</EmptyTitle>
+          <EmptyDescription>{t("convene.sidebar.draftStartRetry")}</EmptyDescription>
           <div className="mt-5 flex justify-center">
             <Button size="sm" onClick={onRetry}>
               <RefreshIcon size="md" />
-              Try again
+              {t("common.tryAgain")}
             </Button>
           </div>
         </EmptyHeader>

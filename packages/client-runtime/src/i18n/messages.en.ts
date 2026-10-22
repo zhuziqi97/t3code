@@ -14,6 +14,11 @@
  * rename another product or rewrite a command it tells the user to run.
  */
 export const en = {
+  "convene.sidebar.chooseProjectTitle": "Choose a project to start",
+  "convene.sidebar.chooseProjectDescription":
+    "Select a project in the sidebar or choose where to start a new thread.",
+  "convene.sidebar.draftStartFailed": "Couldn’t start a new thread",
+  "convene.sidebar.draftStartRetry": "The project is still available. Try opening the draft again.",
   "convene.sidebar.moreRemaining": "Show {{count}} more · {{remaining}} remaining",
   "common.optional": "Optional",
   "usage.prices.enterModelId": "Enter a model ID.",

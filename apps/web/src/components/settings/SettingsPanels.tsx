@@ -1192,7 +1192,7 @@ export function AppearanceSettingsPanel() {
 
       <SettingsSection id="appearance-interface" title={t("appearance.interface")}>
         <SettingsRow
-          {...searchableSetting("setting-appearance-contrast")}
+          {...searchableSetting("setting-appearance-contrast", t)}
           description={t("appearance.contrastDescription")}
           resetAction={
             settings.appearanceContrast !== DEFAULT_UNIFIED_SETTINGS.appearanceContrast ? (
@@ -1240,7 +1240,7 @@ export function AppearanceSettingsPanel() {
         />
 
         <SettingsRow
-          {...searchableSetting("setting-glass-opacity")}
+          {...searchableSetting("setting-glass-opacity", t)}
           description={t("appearance.glassDescription")}
           resetAction={
             settings.glassOpacity !== DEFAULT_UNIFIED_SETTINGS.glassOpacity ? (
@@ -1287,7 +1287,7 @@ export function AppearanceSettingsPanel() {
 
         {showEnvironmentIdentification ? (
           <SettingsRow
-            {...searchableSetting("environment-identification")}
+            {...searchableSetting("environment-identification", t)}
             description={t("appearance.environmentDescription")}
             resetAction={
               settings.environmentIdentificationMode !== DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE ? (
@@ -1332,7 +1332,7 @@ export function AppearanceSettingsPanel() {
         ) : null}
 
         <SettingsRow
-          {...searchableSetting("diff-color-scheme")}
+          {...searchableSetting("diff-color-scheme", t)}
           description={t("appearance.diffDescription")}
           resetAction={
             settings.diffColorScheme !== DEFAULT_UNIFIED_SETTINGS.diffColorScheme ? (
@@ -1385,7 +1385,7 @@ export function AppearanceSettingsPanel() {
         />
 
         <SettingsRow
-          {...searchableSetting("composer-context")}
+          {...searchableSetting("composer-context", t)}
           description={t("appearance.composerDescription")}
           resetAction={
             settings.persistComposerContextStrip !==
@@ -1413,7 +1413,7 @@ export function AppearanceSettingsPanel() {
         />
 
         <SettingsRow
-          {...searchableSetting("chat-width")}
+          {...searchableSetting("chat-width", t)}
           description={t("appearance.widthDescription")}
           resetAction={
             settings.chatWidth !== DEFAULT_UNIFIED_SETTINGS.chatWidth ? (
@@ -1449,7 +1449,7 @@ export function AppearanceSettingsPanel() {
           }
         />
         <SettingsRow
-          {...searchableSetting("math-rendering")}
+          {...searchableSetting("math-rendering", t)}
           description={t("appearance.math.description")}
           resetAction={
             settings.mathRenderingEnabled !== DEFAULT_UNIFIED_SETTINGS.mathRenderingEnabled ? (
@@ -1477,7 +1477,7 @@ export function AppearanceSettingsPanel() {
 
       <SettingsSection id="motion" title={t("appearance.motion")}>
         <SettingsRow
-          {...searchableSetting("panel-animations")}
+          {...searchableSetting("panel-animations", t)}
           description={t("appearance.motionDescription")}
           control={
             <div className="grid w-full grid-cols-[5rem_minmax(0,1fr)] items-center gap-3 sm:w-auto sm:grid-cols-[7rem_13rem] sm:gap-4">
@@ -1706,7 +1706,7 @@ function FontSmoothingRow() {
   if (!isMacPlatform(navigator.platform)) return null;
   return (
     <SettingsRow
-      {...searchableSetting("font-smoothing")}
+      {...searchableSetting("font-smoothing", t)}
       description={t("appearance.font.smoothingDescription")}
       resetAction={
         settings.fontSmoothing !== DEFAULT_UNIFIED_SETTINGS.fontSmoothing ? (
@@ -1735,7 +1735,7 @@ function WordWrapRow() {
   const updateSettings = useUpdateScopedSettings();
   return (
     <SettingsRow
-      {...searchableSetting("word-wrap")}
+      {...searchableSetting("word-wrap", t)}
       description={t("appearance.font.wrapDescription")}
       resetAction={
         settings.wordWrap !== DEFAULT_UNIFIED_SETTINGS.wordWrap ? (

@@ -14,6 +14,10 @@
 import type { Messages } from "./messages.en.ts";
 
 export const zh: Partial<Messages> = {
+  "convene.sidebar.chooseProjectTitle": "选择一个项目以开始",
+  "convene.sidebar.chooseProjectDescription": "在侧栏中选择项目，或选择新会话的创建位置。",
+  "convene.sidebar.draftStartFailed": "无法启动新会话",
+  "convene.sidebar.draftStartRetry": "项目仍然可用，请重试打开草稿。",
   "convene.sidebar.moreRemaining": "再显示 {{count}} 条 · 剩余 {{remaining}} 条",
   "common.optional": "可选",
   "usage.prices.enterModelId": "请输入模型 ID。",
