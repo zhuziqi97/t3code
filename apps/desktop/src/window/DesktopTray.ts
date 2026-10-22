@@ -16,6 +16,7 @@ import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as ElectronDialog from "../electron/ElectronDialog.ts";
 import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
+import { LinuxTrayHost } from "./LinuxTrayHost.ts";
 
 class DesktopTraySetupError extends Schema.TaggedError<DesktopTraySetupError>()(
   "DesktopTraySetupError",
@@ -47,9 +48,35 @@ const make = Effect.gen(function* () {
   let tray: Electron.Tray | undefined;
   let openMain: (() => void) | undefined;
   let closing = false;
+  let linuxHost: LinuxTrayHost | undefined;
+  let hiddenWindow: Electron.BrowserWindow | undefined;
+  const restoreTaskbarEntry = () => {
+    const window = hiddenWindow;
+    hiddenWindow = undefined;
+    if (!window) return;
+    return runPromise(
+      Effect.gen(function* () {
+        if (window.isDestroyed() || window.isVisible() || (yield* Ref.get(state.quitting))) return;
+        window.setSkipTaskbar(false);
+        window.showInactive();
+        window.minimize();
+      }).pipe(
+        Effect.catchCause((cause) => logWarning("could not restore the taskbar entry", { cause })),
+      ),
+    );
+  };
   const discardTray = Effect.sync(() => {
+    linuxHost?.close();
+    linuxHost = undefined;
     tray?.destroy();
     tray = undefined;
+    restoreTaskbarEntry();
+  });
+
+  const canUseTray = Effect.fn("desktop.tray.canUseTray")(function* () {
+    if (!tray || tray.isDestroyed()) return false;
+    if (environment.platform !== "linux") return true;
+    return linuxHost ? yield* Effect.promise(() => linuxHost!.isAvailable()) : false;
   });
 
   const translate = Effect.fn("desktop.tray.translate")(function* () {
@@ -124,6 +151,9 @@ const make = Effect.gen(function* () {
           Effect.catch(() => Effect.succeed(Option.none<ClientSettings>())),
         );
         yield* syncLanguage(Option.getOrElse(settings, () => DEFAULT_CLIENT_SETTINGS));
+        if (environment.platform === "linux" && tray && !tray.isDestroyed()) {
+          linuxHost = new LinuxTrayHost(restoreTaskbarEntry);
+        }
       },
       Effect.catchCause((cause) =>
         discardTray.pipe(
@@ -140,7 +170,7 @@ const make = Effect.gen(function* () {
       yield* Effect.gen(function* () {
         if (!(yield* settings.get).trayCloseNoticeShown) {
           const t = yield* translate();
-          const taskbarRecovery = environment.platform === "linux" || !tray || tray.isDestroyed();
+          const taskbarRecovery = !(yield* canUseTray());
           yield* dialog.showMessageBox(
             {
               type: "info",
@@ -167,12 +197,11 @@ const make = Effect.gen(function* () {
           );
         }
         if (window.isDestroyed() || (yield* Ref.get(state.quitting))) return;
-        // Linux can create a Tray even when the shell displays no notification area.
-        // The taskbar remains a recovery path without changing the user's shell.
-        if (environment.platform === "linux" || !tray || tray.isDestroyed()) {
+        if (!(yield* canUseTray())) {
           window.setSkipTaskbar(false);
           window.minimize();
         } else {
+          hiddenWindow = window;
           window.hide();
         }
       }).pipe(

@@ -12,12 +12,23 @@ import { vi } from "vite-plus/test";
 
 const native = vi.hoisted(() => ({
   fail: false,
+  hostAvailable: true,
+  hostLost: undefined as (() => void | Promise<void>) | undefined,
   trays: [] as Array<{
     destroyed: boolean;
     destroy: () => void;
     emit: (event: string) => boolean;
     menu: Electron.MenuItemConstructorOptions[];
   }>,
+}));
+vi.mock("./LinuxTrayHost.ts", () => ({
+  LinuxTrayHost: class {
+    constructor(onUnavailable: () => void | Promise<void>) {
+      native.hostLost = onUnavailable;
+    }
+    isAvailable = async () => native.hostAvailable;
+    close() {}
+  },
 }));
 vi.mock("electron", async () => {
   const { EventEmitter } = await import("node:events");
@@ -68,14 +79,24 @@ function setup(
   quitEffect: Effect.Effect<void> = Effect.void,
 ) {
   native.fail = false;
+  native.hostAvailable = true;
+  native.hostLost = undefined;
   native.trays = [];
   let notices = 0;
+  let detail = "";
+  let visible = true;
   const quit = vi.fn();
   const window = Object.assign(new NodeEvents.EventEmitter(), {
     isDestroyed: () => false,
+    isVisible: () => visible,
     setSkipTaskbar: vi.fn(),
     minimize: vi.fn(),
-    hide: vi.fn(),
+    showInactive: vi.fn(() => {
+      visible = true;
+    }),
+    hide: vi.fn(() => {
+      visible = false;
+    }),
   });
   const layer = DesktopTray.layer.pipe(
     Layer.provideMerge(
@@ -100,9 +121,10 @@ function setup(
           get: Effect.succeedSome({ ...DEFAULT_CLIENT_SETTINGS, languagePreference: "en" }),
         }),
         Layer.mock(ElectronDialog.ElectronDialog)({
-          showMessageBox: () =>
+          showMessageBox: (options) =>
             Effect.sync(() => {
               notices += 1;
+              detail = options.detail ?? "";
             }).pipe(Effect.andThen(notice), Effect.as({ response: 0, checkboxChecked: false })),
         }),
         DesktopAppSettings.layerTest(),
@@ -110,7 +132,7 @@ function setup(
       ),
     ),
   );
-  return { layer, window, quit, notices: () => notices };
+  return { layer, window, quit, notices: () => notices, detail: () => detail };
 }
 
 describe("DesktopTray", () => {
@@ -136,8 +158,9 @@ describe("DesktopTray", () => {
             assert.equal(h.notices(), 1);
             assert.isTrue((yield* settings.get).trayCloseNoticeShown);
             assert.equal(h.quit.mock.calls.length, 0);
-            assert.equal(h.window.minimize.mock.calls.length, platform === "linux" ? 1 : 0);
-            assert.equal(h.window.hide.mock.calls.length, platform === "linux" ? 0 : 1);
+            assert.equal(h.window.minimize.mock.calls.length, 0);
+            assert.equal(h.window.hide.mock.calls.length, 1);
+            assert.include(h.detail(), "tray or menu bar icon");
             yield* service.closeMain(h.window as unknown as Electron.BrowserWindow);
             assert.equal(h.notices(), 1);
             assert.equal(native.trays.length, 1);
@@ -167,6 +190,60 @@ describe("DesktopTray", () => {
         // The service owns and releases the native Tray for the application scope.
         assert.isTrue(native.trays[0]!.destroyed);
       }),
+  );
+
+  it.effect("keeps a Linux taskbar entry when the shell has no registered application icon", () =>
+    Effect.gen(function* () {
+      const h = setup("linux");
+      native.hostAvailable = false;
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const service = yield* DesktopTray.DesktopTray;
+          yield* service.configure(() => {});
+          yield* service.closeMain(h.window as unknown as Electron.BrowserWindow);
+          assert.equal(h.window.hide.mock.calls.length, 0);
+          assert.deepEqual(h.window.setSkipTaskbar.mock.calls, [[false]]);
+          assert.equal(h.window.minimize.mock.calls.length, 1);
+          assert.include(h.detail(), "taskbar or app launcher");
+        }).pipe(Effect.provide(h.layer)),
+      );
+    }),
+  );
+
+  it.effect("restores a taskbar entry if Linux loses its tray while the window is hidden", () =>
+    Effect.gen(function* () {
+      const h = setup("linux");
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const service = yield* DesktopTray.DesktopTray;
+          yield* service.configure(() => {});
+          yield* service.closeMain(h.window as unknown as Electron.BrowserWindow);
+          assert.equal(h.window.hide.mock.calls.length, 1);
+          yield* Effect.promise(async () => native.hostLost!());
+          assert.equal(h.window.showInactive.mock.calls.length, 1);
+          assert.equal(h.window.minimize.mock.calls.length, 1);
+          assert.deepEqual(h.window.setSkipTaskbar.mock.calls, [[false]]);
+        }).pipe(Effect.provide(h.layer)),
+      );
+    }),
+  );
+
+  it.effect("does not reopen a hidden Linux window when the app is quitting", () =>
+    Effect.gen(function* () {
+      const h = setup("linux");
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const service = yield* DesktopTray.DesktopTray;
+          const state = yield* DesktopState.DesktopState;
+          yield* service.configure(() => {});
+          yield* service.closeMain(h.window as unknown as Electron.BrowserWindow);
+          yield* Ref.set(state.quitting, true);
+          yield* Effect.promise(async () => native.hostLost!());
+          assert.equal(h.window.showInactive.mock.calls.length, 0);
+          assert.equal(h.window.minimize.mock.calls.length, 0);
+        }).pipe(Effect.provide(h.layer)),
+      );
+    }),
   );
 
   it.effect("minimizes into the taskbar when a tray cannot be created", () =>
