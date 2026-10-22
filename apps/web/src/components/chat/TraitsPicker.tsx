@@ -8,6 +8,7 @@ import {
 } from "./TraitsPicker.logic";
 import {
   formatProviderOptionName,
+  formatProviderOptionChoiceLabel,
   formatProviderOptionDescription,
   getLocalizedProviderOptionCurrentLabel,
 } from "@t3tools/client-runtime/provider-option-labels";
@@ -22,7 +23,6 @@ import {
   type ServerProviderModel,
 } from "@t3tools/contracts";
 import { buildProviderOptionSelectionsFromDescriptors } from "@t3tools/shared/model";
-import { REASONING_EFFORT_OPTION_IDS } from "@t3tools/client-runtime/state/thread-execution";
 import { memo } from "react";
 import { BrainIcon } from "lucide-react";
 import {
@@ -59,13 +59,6 @@ type TraitsPersistence =
       threadRef?: undefined;
       onModelOptionsChange: (nextOptions: ProviderOptions | undefined) => void;
     };
-
-const ULTRATHINK_PROMPT_PREFIX = "Ultrathink:\n";
-
-const REASONING_SELECT_DESCRIPTOR_IDS: ReadonlySet<string> = new Set([
-  ...REASONING_EFFORT_OPTION_IDS,
-  "thinking",
-]);
 
 function DefaultBadge() {
   const t = useTranslate();
@@ -223,7 +216,9 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
                   >
                     <span className="flex w-full min-w-0 flex-col">
                       <span className="flex min-w-0 items-center gap-1">
-                        <span className="min-w-0 truncate">{option.label}</span>
+                        <span className="min-w-0 truncate">
+                          {formatProviderOptionChoiceLabel(descriptor, option, t)}
+                        </span>
                         {option.isDefault ? <DefaultBadge /> : null}
                       </span>
                       {option.description ? (
@@ -260,7 +255,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
                 {(["on", "off"] as const).map((value) => (
                   <MenuRadioItem key={value} value={value} hideIndicator closeOnClick>
                     <span className="flex w-full min-w-0 items-center justify-between gap-3">
-                      <span>{value === "on" ? "On" : "Off"}</span>
+                      <span>{value === "on" ? t("common.on") : t("common.off")}</span>
                     </span>
                   </MenuRadioItem>
                 ))}

@@ -579,7 +579,7 @@ describe("AcpRegistryAdapterV2", () => {
           modelSelection: stored,
           runtimePolicy,
         });
-        configurations.push(providerThread.nativeMetadata);
+        configurations.push(providerThread.nativeMetadata ?? null);
         if (input.turnModels === undefined) return runtime;
         const now = yield* DateTime.now;
         let current = stored;
@@ -615,7 +615,7 @@ describe("AcpRegistryAdapterV2", () => {
               }),
             ),
           );
-          configurations.push(metadata);
+          configurations.push(metadata ?? null);
           current = target;
         }
         return runtime;

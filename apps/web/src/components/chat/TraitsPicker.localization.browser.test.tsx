@@ -1,5 +1,5 @@
 import "~/index.css";
-import { act, render as renderTestUi, type Screen } from "../../../test/render";
+import { act, render } from "../../../test/render";
 import { useState } from "react";
 
 import { expect, it, vi } from "vite-plus/test";
@@ -22,8 +22,6 @@ vi.mock("../../composerDraftStore", async (original) => ({
 import { changeLanguage } from "../../i18n";
 import { TraitsPicker } from "./TraitsPicker";
 
-let root: Screen;
-let container: HTMLDivElement;
 const reasoning: ProviderOptionDescriptor = {
   id: "reasoningEffort",
   label: "Reasoning",
@@ -82,11 +80,8 @@ function Harness({
     </>
   );
 }
-async function render(props: Parameters<typeof Harness>[0] = {}) {
-  await act(async () => root.rerender(<Harness {...props} />));
-}
 function trigger(label: string) {
-  const button = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+  const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
     (button) => button.getAttribute("aria-label") === label,
   );
   expect(button, `trigger ${label}`).toBeDefined();
@@ -109,13 +104,13 @@ async function language(language: "en" | "zh") {
 }
 
 it("keeps the effort menu open across a language switch and submits the raw choice once", async () => {
-  await using _lifecycle = await setupLifecycle();
+  await setup();
 
-  await render();
+  await using screen = await render(<Harness {...{}} />);
   await click(trigger("Medium"));
   expect(document.querySelector('[role="menu"]')).not.toBeNull();
   await language("zh");
-  expect(document.body.textContent).toContain("Reasoning");
+  expect(document.body.textContent).toContain("思考强度");
   expect(document.body.textContent).toContain("默认");
   expect(document.querySelector('[role="menu"]')).not.toBeNull();
   expect(trigger("Medium")).toBeDefined();
@@ -125,13 +120,13 @@ it("keeps the effort menu open across a language switch and submits the raw choi
   expect(trigger("High")).toBeDefined();
   await language("en");
   expect(trigger("High")).toBeDefined();
-  expect(container.querySelector("textarea")?.value).toBe("请保留 raw prompt content");
+  expect(screen.container.querySelector("textarea")?.value).toBe("请保留 raw prompt content");
   expect(state.prompt).not.toHaveBeenCalled();
   expect(state.persist).not.toHaveBeenCalled();
 });
 
 it("preserves the native Ultrathink prefix and removes it only when the user changes effort", async () => {
-  await using _lifecycle = await setupLifecycle();
+  await setup();
 
   const effort: ProviderOptionDescriptor = {
     ...reasoning,
@@ -140,11 +135,15 @@ it("preserves the native Ultrathink prefix and removes it only when the user cha
     promptInjectedValues: ["ultrathink"],
     options: [...reasoning.options, { id: "ultrathink", label: "Ultrathink" }],
   };
-  await render({ provider: "claudeAgent", models: [model([effort])] });
+  await using screen = await render(
+    <Harness {...{ provider: "claudeAgent", models: [model([effort])] }} />,
+  );
   await language("zh");
   await click(trigger("Medium"));
   await click(radio("Ultrathink"));
-  expect(container.querySelector("textarea")?.value).toBe("Ultrathink:\n请保留 raw prompt content");
+  expect(screen.container.querySelector("textarea")?.value).toBe(
+    "Ultrathink:\n请保留 raw prompt content",
+  );
   expect(trigger("Ultrathink")).toBeDefined();
   await language("en");
   await language("zh");
@@ -152,13 +151,13 @@ it("preserves the native Ultrathink prefix and removes it only when the user cha
   expect(state.save).not.toHaveBeenCalled();
   await click(trigger("Ultrathink"));
   await click(radio("High"));
-  expect(container.querySelector("textarea")?.value).toBe("请保留 raw prompt content");
+  expect(screen.container.querySelector("textarea")?.value).toBe("请保留 raw prompt content");
   expect(state.prompt).toHaveBeenCalledTimes(2);
   expect(state.save).toHaveBeenCalledExactlyOnceWith([{ id: "effort", value: "high" }]);
 });
 
-it("preserves native option labels and custom metadata across interface languages", async () => {
-  await using _lifecycle = await setupLifecycle();
+it("translates known titles while preserving native strength and custom metadata", async () => {
+  await setup();
 
   const context: ProviderOptionDescriptor = {
     id: "contextWindow",
@@ -178,78 +177,121 @@ it("preserves native option labels and custom metadata across interface language
       { id: "medium", label: "My Medium", description: "raw catalog guidance --keep-original" },
     ],
   };
-  await render({
-    models: [
-      model([
-        context,
-        custom,
-        { id: "fastMode", label: "Fast Mode", type: "boolean", currentValue: false },
-      ]),
-    ],
-  });
+  await using _screen = await render(
+    <Harness
+      {...{
+        models: [
+          model([
+            context,
+            custom,
+            { id: "fastMode", label: "Fast Mode", type: "boolean", currentValue: false },
+          ]),
+        ],
+      }}
+    />,
+  );
   await language("zh");
   await click(trigger("1M · My Medium"));
-  expect(document.body.textContent).toContain("Context Window");
+  expect(document.body.textContent).toContain("上下文窗口");
   expect(document.body.textContent).toContain("My Reasoning");
   expect(document.body.textContent).toContain("raw catalog guidance --keep-original");
-  expect(document.body.textContent).toContain("Fast Mode");
-  await click(radio("On"));
+  expect(document.body.textContent).toContain("快速模式");
+  await click(radio("开启"));
   expect(state.save.mock.calls[0]?.[0]).toEqual([
     { id: "contextWindow", value: "1m" },
     { id: "reasoningEffort", value: "medium" },
     { id: "fastMode", value: true },
   ]);
-  expect(trigger("1M · My Medium Fast")).toBeDefined();
+  expect(trigger("1M · My Medium 快速")).toBeDefined();
   await language("en");
   expect(trigger("1M · My Medium Fast")).toBeDefined();
   expect(state.save).toHaveBeenCalledTimes(1);
 });
 
 it("keeps unavailable OpenCode saved values read-only and verbatim", async () => {
-  await using _lifecycle = await setupLifecycle();
+  await setup();
 
-  await render({
-    provider: "opencode",
-    models: [],
-    initialOptions: [
-      { id: "variant", value: "max" },
-      { id: "customTrait", value: "My custom selection" },
-    ],
-  });
+  await using _screen = await render(
+    <Harness
+      {...{
+        provider: "opencode",
+        models: [],
+        initialOptions: [
+          { id: "variant", value: "max" },
+          { id: "customTrait", value: "My custom selection" },
+        ],
+      }}
+    />,
+  );
   await click(trigger("max · My custom selection"));
   await language("zh");
-  expect(document.body.textContent).toContain("Reasoning");
+  expect(document.body.textContent).toContain("思考强度");
   expect(document.body.textContent).toContain("My custom selection");
   expect(document.querySelector('[role="menuitemradio"]')).toBeNull();
   expect(trigger("max · My custom selection")).toBeDefined();
   expect(state.save).not.toHaveBeenCalled();
 });
 
-let renderStack: AsyncDisposableStack;
-async function setupLifecycle() {
-  await using stack = new AsyncDisposableStack();
-  renderStack = stack;
-  stack.defer(async () => {
-    await act(async () => root.unmount());
-    container.remove();
-    vi.unstubAllGlobals();
-  });
-
-  vi.stubGlobal(
-    "ResizeObserver",
-    class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    },
-  );
-  HTMLElement.prototype.getAnimations = () => [];
-  await changeLanguage("en");
+async function setup() {
   for (const mock of [state.save, state.prompt, state.persist]) mock.mockReset();
-  container = document.createElement("div");
-  document.body.append(container);
-  root = renderStack.use(await renderTestUi(null, { container: container, router: false }));
-
-  renderStack = stack.move();
-  return renderStack;
+  await language("en");
 }
+
+it("translates service tier choices and trigger text without changing the request value", async () => {
+  await setup();
+  await using screen = await render(
+    <Harness
+      models={[
+        model([
+          {
+            id: "serviceTier",
+            label: "Service Tier",
+            type: "select",
+            currentValue: "default",
+            options: [
+              { id: "default", label: "Standard" },
+              { id: "priority", label: "Fast" },
+            ],
+          },
+        ]),
+      ]}
+    />,
+  );
+  await language("zh");
+  await click(trigger("标准"));
+  expect(document.body.textContent).toContain("服务等级");
+  await click(radio("快速"));
+  expect(state.save).toHaveBeenCalledExactlyOnceWith([{ id: "serviceTier", value: "priority" }]);
+  expect(trigger("快速")).toBeDefined();
+  await language("en");
+  expect(trigger("Fast")).toBeDefined();
+  expect(screen.container.querySelector("textarea")?.value).toBe("请保留 raw prompt content");
+});
+
+it("toggles a classified boolean under an arbitrary native ID", async () => {
+  await setup();
+  await using screen = await render(
+    <Harness
+      provider="acpRegistry"
+      models={[
+        model([
+          {
+            id: "vendor/depth",
+            category: "thought_level",
+            label: "Thinking",
+            type: "boolean",
+            currentValue: false,
+          },
+        ]),
+      ]}
+    />,
+  );
+  await language("zh");
+  await click(trigger("思考 关闭"));
+  await click(radio("开启"));
+  expect(state.save).toHaveBeenCalledExactlyOnceWith([{ id: "vendor/depth", value: true }]);
+  expect(trigger("思考 开启")).toBeDefined();
+  await language("en");
+  expect(trigger("Thinking On")).toBeDefined();
+  expect(screen.container.querySelector("textarea")?.value).toBe("请保留 raw prompt content");
+});

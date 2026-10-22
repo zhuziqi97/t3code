@@ -7980,9 +7980,10 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                   const now = yield* DateTime.now;
                   return {
                     ...threadInput.providerThread,
-                    nativeMetadata:
-                      (yield* Ref.get(nativeMetadataBySessionId)).get(sessionId) ??
-                      threadInput.providerThread.nativeMetadata,
+                    nativeMetadata: {
+                      ...threadInput.providerThread.nativeMetadata,
+                      ...(yield* Ref.get(nativeMetadataBySessionId)).get(sessionId),
+                    },
                     providerSessionId: input.providerSessionId,
                     status: "idle" as const,
                     updatedAt: now,
@@ -8440,9 +8441,10 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                   return {
                     providerThread: {
                       ...snapshotInput.providerThread,
-                      nativeMetadata:
-                        (yield* Ref.get(nativeMetadataBySessionId)).get(sessionId) ??
-                        snapshotInput.providerThread.nativeMetadata,
+                      nativeMetadata: {
+                        ...snapshotInput.providerThread.nativeMetadata,
+                        ...(yield* Ref.get(nativeMetadataBySessionId)).get(sessionId),
+                      },
                       providerSessionId: input.providerSessionId,
                       status: "idle" as const,
                       updatedAt: now,

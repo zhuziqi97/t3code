@@ -28,7 +28,6 @@ import {
   ThreadId,
   type OrchestrationV2ProviderThread,
   type OrchestrationV2TurnItem,
-  type ProviderOptionDescriptor,
   type ProviderUserInputAnswers,
 } from "@t3tools/contracts";
 import { GrokSettings } from "@t3tools/provider-grok/settings";
@@ -67,7 +66,6 @@ import * as AcpSessionRuntime from "@t3tools/provider-acp/server/AcpSessionRunti
 import {
   ACP_EMPTY_OPTION_VALUE,
   ACP_SESSION_MODE_OPTION_ID,
-  acpProviderOptionDescriptors,
 } from "@t3tools/provider-acp/server/sessionConfig";
 import {
   extractXAiAcpSubagentEndNotice,
@@ -4469,11 +4467,16 @@ describe("AcpAdapterV2", () => {
         },
         status: "idle",
       };
-      yield* runtime.resumeThread({
+      const resumed = yield* runtime.resumeThread({
         providerThread: secondProviderThread,
         modelSelection: alternateSelection,
         runtimePolicy,
       });
+      assert.equal(
+        resumed.nativeMetadata?.itemIdentityVersion,
+        firstProviderThread.nativeMetadata?.itemIdentityVersion,
+      );
+      assert.equal(resumed.nativeMetadata?.modelSelection?.model, "composer-2");
       yield* runtime.startTurn(
         makeTurnInput({
           threadId: secondThreadId,
@@ -4510,7 +4513,6 @@ describe("AcpAdapterV2", () => {
       );
       const protocolEvents = yield* Queue.bounded<EffectAcpProtocol.AcpProtocolLogEvent>(256);
       const instanceId = ProviderInstanceId.make("acp-test");
-      let agentDescriptor: ProviderOptionDescriptor | undefined;
       const adapter = yield* makeAcpAdapterV2({
         instanceId,
         flavor: {
@@ -4522,12 +4524,6 @@ describe("AcpAdapterV2", () => {
             environment: { T3_ACP_EMIT_EMPTY_DEFAULT_AGENT_OPTION: "1" },
             protocolEvents,
           }),
-          onSessionConfigurationUpdate: (configOptions, modeState) =>
-            Effect.sync(() => {
-              agentDescriptor = acpProviderOptionDescriptors({ configOptions, modeState }).find(
-                (descriptor) => descriptor.id === "agent",
-              );
-            }),
         },
         selfInvocation,
       });
@@ -4553,8 +4549,12 @@ describe("AcpAdapterV2", () => {
         modelSelection: customAgentSelection,
         runtimePolicy,
       });
+      let agentDescriptor = providerThread.nativeMetadata?.optionDescriptors?.find(
+        (descriptor) => descriptor.id === "agent",
+      );
       assert.deepEqual(agentDescriptor, {
         id: "agent",
+        category: "_agent",
         label: "Agent",
         type: "select",
         options: [
@@ -4583,6 +4583,14 @@ describe("AcpAdapterV2", () => {
         Stream.runHead,
       );
 
+      const configuredThread = yield* runtime.ensureThread({
+        threadId,
+        modelSelection: customAgentSelection,
+        runtimePolicy,
+      });
+      agentDescriptor = configuredThread.nativeMetadata?.optionDescriptors?.find(
+        (descriptor) => descriptor.id === "agent",
+      );
       assert.equal(
         agentDescriptor?.type === "select" ? agentDescriptor.currentValue : undefined,
         ACP_EMPTY_OPTION_VALUE,

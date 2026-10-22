@@ -8,6 +8,7 @@ import type {
   ServerProviderModel,
 } from "@t3tools/contracts";
 import {
+  isReasoningOption,
   getProviderOptionCurrentLabel,
   applyClaudePromptEffortPrefix,
   buildProviderOptionSelectionsFromDescriptors,
@@ -131,8 +132,7 @@ export function getSelectedTraits(
   const agentDescriptor = selectDescriptors.find((descriptor) => descriptor.id === "agent") ?? null;
   const fastModeDescriptor =
     booleanDescriptors.find((descriptor) => descriptor.id === "fastMode") ?? null;
-  const thinkingDescriptor =
-    booleanDescriptors.find((descriptor) => descriptor.id === "thinking") ?? null;
+  const thinkingDescriptor = booleanDescriptors.find(isReasoningOption) ?? null;
 
   // Prompt-controlled effort (e.g. ultrathink in prompt text)
   const ultrathinkPromptControlled =
@@ -248,8 +248,8 @@ export function buildTraitsTriggerDisplay(
   const labels: Array<string> = [];
   for (const descriptor of input.descriptors) {
     if (descriptor.id === "fastMode" && descriptor.type === "boolean") {
-      speedLabel = descriptor.currentValue === true ? "Fast" : null;
-      fastModeFallbackLabel = speedLabel ?? "Normal";
+      speedLabel = descriptor.currentValue === true ? t("chat.traits.choice.fast") : null;
+      fastModeFallbackLabel = speedLabel ?? t("chat.traits.choice.normal");
       continue;
     }
     if (
@@ -267,14 +267,14 @@ export function buildTraitsTriggerDisplay(
       ) {
         speedLabel =
           ultrafastTier && currentValue === ultrafastTier.id
-            ? "Ultrafast"
+            ? t("chat.traits.choice.ultrafast")
             : fastTier && currentValue === fastTier.id
-              ? "Fast"
+              ? t("chat.traits.choice.fast")
               : null;
         const option = descriptor.options.find(({ id }) => id === currentValue);
         fastModeFallbackLabel = option
           ? formatProviderOptionChoiceLabel(descriptor, option, t)
-          : "Normal";
+          : t("chat.traits.choice.normal");
         continue;
       }
     }
@@ -282,7 +282,7 @@ export function buildTraitsTriggerDisplay(
       input.ultrathinkPromptControlled && descriptor.id === input.primarySelectDescriptorId
         ? "Ultrathink"
         : descriptor.type === "boolean"
-          ? `${formatProviderOptionName(descriptor, t)} ${descriptor.currentValue === true ? "On" : "Off"}`
+          ? `${formatProviderOptionName(descriptor, t)} ${descriptor.currentValue === true ? t("common.on") : t("common.off")}`
           : getLocalizedProviderOptionCurrentLabel(
               descriptor,
               t,
@@ -294,14 +294,7 @@ export function buildTraitsTriggerDisplay(
       if (
         reasoningLabelIndex === -1 &&
         descriptor.type === "select" &&
-        [
-          "reasoningEffort",
-          "reasoning_effort",
-          "reasoning",
-          "effort",
-          "variant",
-          "thinking",
-        ].includes(descriptor.id)
+        isReasoningOption(descriptor)
       ) {
         reasoningLabelIndex = labels.length;
       }
@@ -326,14 +319,6 @@ export function buildTraitsTriggerDisplay(
 }
 
 const ULTRATHINK_PROMPT_PREFIX = "Ultrathink:\n";
-const REASONING_SELECT_DESCRIPTOR_IDS: ReadonlySet<string> = new Set([
-  "reasoningEffort",
-  "reasoning",
-  "effort",
-  "variant",
-  "thinking",
-]);
-
 export function getTraitSelectChange(
   selected: ReturnType<typeof getSelectedTraits>,
   descriptor: Extract<ProviderOptionDescriptor, { type: "select" }>,
@@ -388,10 +373,15 @@ export function getReasoningTraitStep(input: {
     input.planModeEnabled,
   );
   if (selected.modelIsUnavailable || selected.ultrathinkInBodyText) return null;
-  const descriptor = selected.selectDescriptors.find((entry) =>
-    REASONING_SELECT_DESCRIPTOR_IDS.has(entry.id),
-  );
-  if (!descriptor || descriptor.options.length < 2) return null;
+  const descriptor = selected.descriptors.find(isReasoningOption);
+  if (!descriptor) return null;
+  if (descriptor.type === "boolean") {
+    const modelOptions = buildProviderOptionSelectionsFromDescriptors(
+      replaceDescriptorCurrentValue(selected.descriptors, descriptor.id, !descriptor.currentValue),
+    );
+    return modelOptions ? { prompt: input.prompt, modelOptions } : null;
+  }
+  if (descriptor.options.length < 2) return null;
   const isPrimary = descriptor.id === selected.primarySelectDescriptor?.id;
   const current =
     isPrimary && selected.ultrathinkPromptControlled

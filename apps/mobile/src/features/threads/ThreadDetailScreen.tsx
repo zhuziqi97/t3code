@@ -1,3 +1,5 @@
+import { applyThreadProviderConfiguration } from "@t3tools/client-runtime/state/thread-execution";
+import { useThreadProviderConfiguration } from "../../state/entities";
 import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { AsyncResult } from "effect/reactivity";
 import * as Dialog from "../../components/ui/Dialog";
@@ -398,6 +400,14 @@ export const ThreadDetailScreen = function ThreadDetailScreen(props: ThreadDetai
   const navigation = useNavigation();
   const { session: voiceInputSession } = useGlobalVoiceInput();
   const reportedModelSelection = useThreadReportedModelSelection(props.selectedThreadDetailRef);
+  const configuration = useThreadProviderConfiguration(props.selectedThreadDetailRef);
+  const sessionServerConfig =
+    props.serverConfig === null
+      ? null
+      : {
+          ...props.serverConfig,
+          providers: applyThreadProviderConfiguration(props.serverConfig.providers, configuration),
+        };
   const deviceState = useEnvironmentQuery(
     deviceEnvironment.state({ environmentId: props.environmentId, input: {} }),
   );
@@ -872,7 +882,7 @@ export const ThreadDetailScreen = function ThreadDetailScreen(props: ThreadDetai
       : isSplitLayout
         ? CHAT_CONTENT_MAX_WIDTH
         : undefined;
-  const providerSubagentProvider = props.serverConfig?.providers.find(
+  const providerSubagentProvider = sessionServerConfig?.providers.find(
     (provider) => provider.instanceId === props.selectedThread.modelSelection.instanceId,
   );
   const providerSubagentModelSlug = providerSubagentProvider
@@ -1412,7 +1422,7 @@ export const ThreadDetailScreen = function ThreadDetailScreen(props: ThreadDetai
                         hasCompactableConversation={
                           hasCompactableConversation && !props.isCompacting
                         }
-                        serverConfig={props.serverConfig}
+                        serverConfig={sessionServerConfig}
                         queueCount={props.selectedThreadQueueCount}
                         activeThreadBusy={props.activeThreadBusy}
                         canStopThread={props.canStopThread}

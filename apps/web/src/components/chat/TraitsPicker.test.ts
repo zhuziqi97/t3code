@@ -7,6 +7,7 @@ import {
 } from "@t3tools/contracts";
 import {
   buildTraitsTriggerDisplay,
+  getReasoningTraitStep,
   buildUnavailableModelOptionDescriptors,
 } from "./TraitsPicker.logic";
 
@@ -341,4 +342,113 @@ it("shows Unknown until a matching provider report provides Default", () => {
       t,
     ).label,
   ).toBe("Default");
+});
+
+it("cycles an arbitrary thought_level option using its native IDs", () => {
+  const descriptor = {
+    ...selectDescriptor(
+      "vendor/depth",
+      [
+        { id: "low", label: "Low" },
+        { id: "high", label: "High" },
+      ],
+      "low",
+    ),
+    category: "thought_level",
+  };
+  const step = getReasoningTraitStep({
+    provider: ProviderDriverKind.make("acpRegistry"),
+    instanceId: ProviderInstanceId.make("local"),
+    model: "graded",
+    models: [
+      {
+        slug: "graded",
+        name: "Graded",
+        isCustom: false,
+        capabilities: { optionDescriptors: [descriptor] },
+      },
+    ],
+    modelOptions: undefined,
+    reportedModelSelection: null,
+    prompt: "keep prompt",
+    planModeEnabled: true,
+    direction: 1,
+  });
+  expect(step).toEqual({
+    prompt: "keep prompt",
+    modelOptions: [{ id: "vendor/depth", value: "high" }],
+  });
+});
+
+it("localizes service tier and boolean trigger values while preserving classified strength labels and raw selections", () => {
+  const zh = i18n.getFixedT("zh");
+  const descriptor = {
+    ...selectDescriptor("vendor/depth", [{ id: "ultra", label: "Ultra" }], "ultra"),
+    category: "thought_level",
+  };
+  const base = {
+    provider: ProviderDriverKind.make("codex"),
+    primarySelectDescriptorId: descriptor.id,
+    ultrathinkPromptControlled: false,
+  };
+  expect(
+    buildTraitsTriggerDisplay(
+      { ...base, descriptors: [descriptor, serviceTierDescriptor("priority")] },
+      zh,
+    ),
+  ).toEqual({ label: "Ultra 快速" });
+  expect(
+    buildTraitsTriggerDisplay({ ...base, descriptors: [fastModeDescriptor(false)] }, zh),
+  ).toEqual({ label: "普通" });
+  expect(
+    buildTraitsTriggerDisplay(
+      {
+        ...base,
+        descriptors: [
+          {
+            id: "toggle",
+            label: "Thinking",
+            category: "thought_level",
+            type: "boolean",
+            currentValue: true,
+          },
+        ],
+      },
+      zh,
+    ),
+  ).toEqual({ label: "思考 开启" });
+  expect(descriptor.currentValue).toBe("ultra");
+});
+
+it("toggles a classified boolean from the reasoning keybinding with the native value", () => {
+  expect(
+    getReasoningTraitStep({
+      provider: ProviderDriverKind.make("acpRegistry"),
+      instanceId: ProviderInstanceId.make("local"),
+      model: "boolean",
+      models: [
+        {
+          slug: "boolean",
+          name: "Boolean",
+          isCustom: false,
+          capabilities: {
+            optionDescriptors: [
+              {
+                id: "vendor/toggle",
+                category: "thought_level",
+                label: "Thinking",
+                type: "boolean",
+                currentValue: false,
+              },
+            ],
+          },
+        },
+      ],
+      modelOptions: undefined,
+      reportedModelSelection: null,
+      prompt: "keep prompt",
+      planModeEnabled: true,
+      direction: -1,
+    }),
+  ).toEqual({ prompt: "keep prompt", modelOptions: [{ id: "vendor/toggle", value: true }] });
 });

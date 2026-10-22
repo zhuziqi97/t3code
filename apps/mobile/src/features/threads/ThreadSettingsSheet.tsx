@@ -1,3 +1,9 @@
+import {
+  formatProviderOptionName,
+  formatProviderOptionChoiceLabel,
+  getLocalizedProviderOptionCurrentLabel,
+} from "@t3tools/client-runtime/provider-option-labels";
+import { useTranslate } from "../../i18n";
 import { SheetHeader } from "../../components/ui/SheetHeader";
 import { Toolbar } from "../../components/ui/Toolbar";
 import * as Dialog from "../../components/ui/Dialog";
@@ -20,11 +26,7 @@ import type {
 import type { LegendListRenderItemProps } from "@legendapp/list/react-native";
 import { RegistryContext, useAtomValue } from "@effect/atom-react";
 import { AnimatedLegendList } from "@legendapp/list/reanimated";
-import {
-  getProviderOptionCurrentLabel,
-  getProviderOptionCurrentValue,
-  getProviderOptionDescriptors,
-} from "@t3tools/shared/model";
+import { getProviderOptionCurrentValue, getProviderOptionDescriptors } from "@t3tools/shared/model";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import { type NativeStackNavigationProp } from "@react-navigation/native-stack";
 import * as Haptics from "expo-haptics";
@@ -801,6 +803,7 @@ function ThreadSettingsOptionsItem(props: {
 }) {
   const insets = useSafeAreaInsets();
   const session = useThreadSettingsSession();
+  const t = useTranslate();
   const configs = useAtomValue(environmentServerConfigsAtom);
   const selectedProvider = session.environmentId
     ? (configs
@@ -832,9 +835,10 @@ function ThreadSettingsOptionsItem(props: {
                 layout={THREAD_SETTINGS_OPTIONS_LAYOUT_TRANSITION}
               >
                 <DisclosureRow
-                  label={descriptor.label}
-                  value={getProviderOptionCurrentLabel(
+                  label={formatProviderOptionName(descriptor, t)}
+                  value={getLocalizedProviderOptionCurrentLabel(
                     descriptor,
+                    t,
                     session.displayedModelSelection,
                     session.reportedModelSelection,
                   )}
@@ -851,7 +855,7 @@ function ThreadSettingsOptionsItem(props: {
               layout={THREAD_SETTINGS_OPTIONS_LAYOUT_TRANSITION}
             >
               <SwitchRow
-                label={descriptor.label}
+                label={formatProviderOptionName(descriptor, t)}
                 value={descriptor.currentValue ?? false}
                 onValueChange={(value) => session.applyOptionChange(descriptor.id, value)}
               />
@@ -1048,6 +1052,7 @@ function ThreadSettingsChoiceContent(props: {
 }) {
   const insets = useSafeAreaInsets();
   const session = useThreadSettingsSession();
+  const t = useTranslate();
   const descriptorId = props.submenu.kind === "descriptor" ? props.submenu.id : null;
 
   const activeDescriptor =
@@ -1076,7 +1081,7 @@ function ThreadSettingsChoiceContent(props: {
         ? {
             rows: selectableChoices(activeDescriptor).map((choice) => ({
               id: choice.id,
-              label: choice.label,
+              label: formatProviderOptionChoiceLabel(activeDescriptor, choice, t),
               description: undefined,
               selected:
                 choice.id ===
@@ -1154,6 +1159,7 @@ function useThreadSettingsPickerPresentation() {
 }
 
 function ThreadSettingsModelsScreen() {
+  const t = useTranslate();
   const session = useThreadSettingsSession();
   const presentation = useThreadSettingsPickerPresentation();
   const navigation = useNavigation<NativeStackNavigationProp<ThreadSettingsPickerStackParams>>();
@@ -1290,12 +1296,18 @@ function ThreadSettingsModelsScreen() {
       <ScreenContent>
         <ThreadSettingsMainContent
           onOpenSubmenu={(submenu) => {
+            const descriptor =
+              submenu.kind === "descriptor"
+                ? session.displayedDescriptors.find(
+                    (descriptor) => descriptor.type === "select" && descriptor.id === submenu.id,
+                  )
+                : undefined;
             const title =
               submenu.kind === "runtime"
                 ? "Runtime"
-                : (session.displayedDescriptors.find(
-                    (descriptor) => descriptor.type === "select" && descriptor.id === submenu.id,
-                  )?.label ?? "Option");
+                : descriptor
+                  ? formatProviderOptionName(descriptor, t)
+                  : "Option";
             navigation.navigate("ThreadSettingsChoice", { ...submenu, title });
           }}
         />
@@ -1387,6 +1399,8 @@ function ThreadSettingsChoiceScreen() {
 }
 
 function ThreadSettingsPickerNavigator(props: ThreadSettingsPickerPresentation) {
+  const t = useTranslate();
+  const session = useThreadSettingsSession();
   const theme = useUniwindTheme();
   const solidSheetBackground = theme["--color-sheet-solid"];
   const foreground = theme["--color-foreground"];
@@ -1425,7 +1439,16 @@ function ThreadSettingsPickerNavigator(props: ThreadSettingsPickerPresentation) 
         <ThreadSettingsPickerStack.Screen
           name="ThreadSettingsChoice"
           component={ThreadSettingsChoiceScreen}
-          options={({ route }) => ({ title: route.params.title })}
+          options={({ route }) => {
+            const params = route.params;
+            const descriptor =
+              params.kind === "descriptor"
+                ? session.displayedDescriptors.find((descriptor) => descriptor.id === params.id)
+                : undefined;
+            return {
+              title: descriptor ? formatProviderOptionName(descriptor, t) : route.params.title,
+            };
+          }}
         />
       </ThreadSettingsPickerStack.Navigator>
     </ThreadSettingsPickerPresentationContext.Provider>
