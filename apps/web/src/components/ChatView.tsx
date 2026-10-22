@@ -8190,6 +8190,14 @@ export default function ChatView(props: ChatViewProps) {
             }}
             controlsRef={threadFindControlsRef}
             onOpenChange={setIsThreadFindActive}
+            onClickCapture={(event) => {
+              if (
+                event.target instanceof Element &&
+                event.target.closest('a[href^="convene://"]')
+              ) {
+                cancelTimelineLiveFollowForUserNavigationStable();
+              }
+            }}
             detailsCardTopInset={isThreadFindActive ? THREAD_FIND_BAR_RESERVED_HEIGHT : 0}
             composerOverlayElement={isDraftHeroState ? null : composerOverlayElement}
             data-chat-workspace-drop-target="true"
