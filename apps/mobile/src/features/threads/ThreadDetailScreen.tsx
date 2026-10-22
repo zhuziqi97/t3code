@@ -1148,6 +1148,7 @@ export const ThreadDetailScreen = function ThreadDetailScreen(props: ThreadDetai
               agentLabel={agentLabel}
               threadTitle={props.selectedThread.title}
               latestRun={props.activityRun}
+              completionHeld={pendingBackgroundWork?.waiting ?? false}
               activeWorkStartedAt={props.activeWorkStartedAt}
               runlessWorkActive={props.runlessWorkActive ?? false}
               listRef={listRef}

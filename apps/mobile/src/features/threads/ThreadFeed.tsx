@@ -1,4 +1,5 @@
 import { runEndState } from "@t3tools/client-runtime/runEndState";
+import { assistantMessageShowsMeta, mobileRunEndFeedback } from "./assistantMessageMeta";
 import { Button } from "../../components/ui/Button";
 import { useTranslate } from "../../i18n";
 import * as Dialog from "../../components/ui/Dialog";
@@ -305,6 +306,7 @@ export interface ThreadFeedProps {
   readonly agentLabel: string;
   readonly latestRun: ThreadFeedLatestRun | null;
   readonly activeWorkStartedAt: string | null;
+  readonly completionHeld: boolean;
   readonly runlessWorkActive?: boolean;
   readonly listRef: RefObject<LegendListRef | null>;
   readonly freeze: SharedValue<boolean>;
@@ -1159,15 +1161,12 @@ function renderFeedEntry(
     // is clamped, so the paragraphs around the block end up drawn on top of
     // each other. Pinning the width removes that pass.
     const hasWideBlock = hasWideMarkdownBlock(renderedText, WIDE_MARKDOWN_BLOCK_OPTIONS);
-    const assistantTurnStillInProgress =
-      message.role === "assistant" &&
-      props.unsettledTurnId !== null &&
-      message.runId === props.unsettledTurnId;
-    const showAssistantMeta =
-      message.role === "assistant" &&
-      props.terminalAssistantMessageIds.has(message.id) &&
-      !assistantTurnStillInProgress &&
-      !message.streaming;
+    const showAssistantMeta = assistantMessageShowsMeta({
+      message,
+      renderedText,
+      terminal: props.terminalAssistantMessageIds.has(message.id),
+      unsettledTurnId: props.unsettledTurnId,
+    });
 
     if (isUser && props.workflowOpening?.messageId === message.id) {
       return (
@@ -2191,19 +2190,25 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     }
     return new Set(terminalIdsByTurn.values());
   })();
-  const end =
-    !props.runlessWorkActive && props.activeWorkStartedAt === null
-      ? runEndState(props.latestRun)
-      : null;
+  const end = mobileRunEndFeedback({
+    latestRun: props.latestRun,
+    completionHeld: props.completionHeld,
+    runlessWorkActive: props.runlessWorkActive ?? false,
+    activeWorkStartedAt: props.activeWorkStartedAt,
+  });
   const endMessage = end
     ? presentedFeed.findLast(
         (entry) =>
           entry.type === "message" &&
-          entry.message.role === "assistant" &&
           entry.message.runId === props.latestRun?.runId &&
-          terminalAssistantMessageIds.has(entry.message.id) &&
-          !entry.message.streaming &&
-          (entry.message.text.trim().length > 0 || (entry.message.attachments?.length ?? 0) > 0),
+          assistantMessageShowsMeta({
+            message: entry.message,
+            terminal: terminalAssistantMessageIds.has(entry.message.id),
+            unsettledTurnId,
+            renderedText: renderAssistantCitationsAsText(
+              resolveUserMessagePresentation(entry.message).text,
+            ),
+          }),
       )
     : null;
   const endFeedback = end
