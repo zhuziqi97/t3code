@@ -1,3 +1,4 @@
+import { ThreadContextWindowMeter } from "./ThreadContextWindowMeter";
 import { Button } from "../../components/ui/Button";
 import * as Dialog from "../../components/ui/Dialog";
 import type { ComposerTextPaste } from "../../native/T3ComposerEditor.types";
@@ -1185,6 +1186,10 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
             </ComposerDictationToolbar>
           </Animated.View>
         </ComposerSurface>
+        <ThreadContextWindowMeter
+          environmentId={props.environmentId}
+          threadId={props.selectedThread.id}
+        />
 
         {props.connectionState === "connected" && !props.canOperateThread ? (
           <Text className="pt-2 text-xs text-foreground-muted">

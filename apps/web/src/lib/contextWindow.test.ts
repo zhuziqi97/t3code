@@ -14,6 +14,7 @@ import { makeThreadProjectionFixture } from "../test-fixtures";
 import { shouldOfferResumeCompaction } from "../components/chat/ContextWindowMeter.logic";
 import {
   deriveLatestContextWindowSnapshot,
+  deriveThreadContextWindowSnapshot,
   formatContextWindowTokens,
   latestProviderTurnTokenUsage,
 } from "./contextWindow";
@@ -47,7 +48,18 @@ describe("V2 context window presentation", () => {
       },
     ]);
     expect(snapshot?.usedTokens).toBe(2_000);
-    expect(snapshot?.totalProcessedTokens).toBe(10_000);
+    expect(snapshot?.totalProcessedTokens).toBeNull();
+  });
+
+  it("keeps unknown usage distinct from a provider-reported zero", () => {
+    expect(deriveLatestContextWindowSnapshot([])).toBeNull();
+    expect(formatContextWindowTokens(null)).toBe("—");
+    expect(
+      deriveLatestContextWindowSnapshot(
+        [],
+        decodeTokenUsage({ usedTokens: 0, updatedAt: "2026-10-23T00:00:00Z" }),
+      )?.usedTokens,
+    ).toBe(0);
   });
 
   it("prefers current provider usage and preserves ACP cost", () => {
@@ -171,6 +183,15 @@ describe("latestProviderTurnTokenUsage", () => {
       ],
     };
   }
+
+  it("restores reported fork usage and clears it when switching to an unknown thread", () => {
+    expect(
+      deriveThreadContextWindowSnapshot({ ...makeThreadProjectionFixture(), ...forkProjection() })
+        ?.usedTokens,
+    ).toBe(sourceUsage.usedTokens);
+    expect(deriveThreadContextWindowSnapshot(makeThreadProjectionFixture())).toBeNull();
+    expect(deriveThreadContextWindowSnapshot(null)).toBeNull();
+  });
 
   it("keeps fork-point context and its cache expiry before the fork reports usage", () => {
     const usage = latestProviderTurnTokenUsage([], forkProjection());

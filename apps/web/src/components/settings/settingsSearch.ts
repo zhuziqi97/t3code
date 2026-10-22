@@ -909,15 +909,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["Plan mode 计划模式", "build plan composer /plan /default"],
   },
   {
-    id: "legacy-context-window-indicator",
+    id: "context-window-indicator",
     get title() {
-      return i18n.t("settings.search.legacy-context-window-indicator.title");
+      return i18n.t("settings.search.context-window-indicator.title");
     },
     to: "/settings/general",
-    searchTerms: [
-      "Context window indicator (legacy) 上下文窗口指示器（旧版）",
-      "composer meter usage tokens circle old",
-    ],
+    searchTerms: ["Context window usage 上下文窗口用量", "composer meter usage tokens"],
   },
   {
     id: "keybindings",

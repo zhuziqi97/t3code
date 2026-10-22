@@ -50,6 +50,7 @@ export function SettingsThreadsRouteScreen() {
           <AutoSettleSettingsRows />
           <BetaSettingsSection />
           <PlanModeSettingsSection />
+          <ContextWindowSettingsSection />
         </ScrollView>
       </SettingsScreen>
     </>
@@ -286,6 +287,28 @@ function PlanModeSettingsSection() {
         />
       </SettingsSection>
       <Text className="px-2 text-sm text-foreground-muted">{t("general.plan.description")}</Text>
+    </View>
+  );
+}
+
+function ContextWindowSettingsSection() {
+  const t = useTranslate();
+  const savePreferences = useAtomSet(updateMobilePreferencesAtom);
+  const preferences = useAtomValue(mobilePreferencesAtom);
+  return (
+    <View className="gap-3">
+      <SettingsSection title={t("general.context.title")}>
+        <SettingsSwitchRow
+          icon="chart.bar.xaxis"
+          label={t("general.context.title")}
+          value={
+            AsyncResult.isSuccess(preferences) &&
+            preferences.value.contextWindowMeterEnabled !== false
+          }
+          onValueChange={(value) => savePreferences({ contextWindowMeterEnabled: value })}
+        />
+      </SettingsSection>
+      <Text className="px-2 text-sm text-foreground-muted">{t("general.context.description")}</Text>
     </View>
   );
 }

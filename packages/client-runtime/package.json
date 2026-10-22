@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./contextWindow": {
+      "types": "./src/contextWindow.ts",
+      "default": "./src/contextWindow.ts"
+    },
     "./state/workspaceRecovery": {
       "types": "./src/state/workspaceRecovery.ts",
       "default": "./src/state/workspaceRecovery.ts"
