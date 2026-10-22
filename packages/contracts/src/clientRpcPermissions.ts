@@ -15,6 +15,8 @@ import { WS_METHODS } from "./rpc.ts";
 
 /** Incremental client enforcement; the server still authorizes every request. */
 export const CLIENT_GUARDED_RPC_SCOPES = {
+  [WS_METHODS.conveneReadResource]: AuthOrchestrationReadScope,
+  [WS_METHODS.conveneSubscribeResourceChanges]: AuthOrchestrationReadScope,
   [WS_METHODS.threadWorkspaceRecover]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverCancelProviderRefresh]: AuthProvidersManageScope,
   [WS_METHODS.conveneManage]: AuthEnvironmentMaintainScope,

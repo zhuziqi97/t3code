@@ -295,6 +295,37 @@ describe("command permissions", () => {
     ),
   );
 
+  it.effect(
+    "revokes manual resource reads with destination environment access independently of agent operation",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const registry = yield* setup;
+          const read = createCommandPermissions(runtime, WS_METHODS.conveneReadResource);
+          const operate = createCommandPermissions(runtime, WS_METHODS.scheduledTasksRunNow);
+          registry.set(
+            sessions(env),
+            AsyncResult.success({
+              ...grant(false),
+              scopes: [AuthOrchestrationReadScope],
+              permissions: [AuthOrchestrationReadScope],
+            }),
+          );
+          yield* read.authorize(registry, env);
+          expect(registry.get(read.permissionAtom(env))).toBe(true);
+          expect(registry.get(operate.permissionAtom(env))).toBe(false);
+          registry.set(
+            sessions(env),
+            AsyncResult.success({ ...grant(false), scopes: [], permissions: [] }),
+          );
+          expect(registry.get(read.permissionAtom(env))).toBe(false);
+          expect((yield* read.authorize(registry, env).pipe(Effect.flip)).requiredPermission).toBe(
+            AuthOrchestrationReadScope,
+          );
+        }),
+      ),
+  );
+
   it.effect("requires providers management on the destination to cancel discovery", () =>
     Effect.scoped(
       Effect.gen(function* () {

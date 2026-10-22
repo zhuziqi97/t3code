@@ -10,6 +10,14 @@ export function createConveneEnvironmentAtoms<R, E>(
   runtime: Atom.AtomRuntime<EnvironmentRegistry | R, E>,
 ) {
   return {
+    resourceChanges: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
+      label: "environment-data:convene:resource-changes",
+      tag: WS_METHODS.conveneSubscribeResourceChanges,
+    }),
+    readResource: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:convene:read-resource",
+      tag: WS_METHODS.conveneReadResource,
+    }),
     status: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
       label: "environment-data:convene:status",
       tag: WS_METHODS.conveneSubscribeStatus,

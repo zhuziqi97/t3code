@@ -1,3 +1,4 @@
+import * as ConveneResources from "./convene/ConveneResources.ts";
 import * as ThreadWorkspaceRecovery from "./orchestration-v2/ThreadWorkspaceRecovery.ts";
 import * as ConveneConfiguration from "./convene/ConveneConfiguration.ts";
 import * as ConveneConnection from "./convene/ConveneConnection.ts";
@@ -452,6 +453,7 @@ it.live.each(["thread", "shell"] as const)(
 // Build the production RPC layer; unrelated capabilities fail if this test calls them.
 const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(ConveneConfiguration.ConveneConfiguration)({}),
+  Layer.mock(ConveneResources.ConveneResources)({}),
   Layer.mock(ConveneConnection.ConveneConnection)({}),
   Layer.mock(ThreadWorkspaceRecovery.ThreadWorkspaceRecovery)({}),
   Layer.mock(ConveneSettings.ConveneSettings)({}),

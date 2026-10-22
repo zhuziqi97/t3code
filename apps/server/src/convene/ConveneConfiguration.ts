@@ -5,7 +5,7 @@ import {
   type ConveneProjectMutation,
   type ConveneProjectOptionsInput,
   type ConveneProjectView,
-  type ProjectId,
+  ProjectId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -15,6 +15,8 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
+import * as PubSub from "effect/PubSub";
+import * as Stream from "effect/Stream";
 
 import * as ServerConfig from "../config.ts";
 import * as ConvenePlatform from "./ConvenePlatform.ts";
@@ -26,6 +28,7 @@ const isPlatformError = Schema.is(ConvenePlatform.ConvenePlatformError);
 export class ConveneConfiguration extends Context.Service<
   ConveneConfiguration,
   {
+    readonly changes: Stream.Stream<ProjectId>;
     readonly record: (
       values: ReadonlyArray<ConveneProjectConfiguration>,
       replace: boolean,
@@ -33,6 +36,9 @@ export class ConveneConfiguration extends Context.Service<
     readonly query: (
       projectId: ProjectId,
     ) => Effect.Effect<typeof ConveneProjectView.Type, ConveneIntegrationError>;
+    readonly clientProjectId: (
+      projectId: ProjectId,
+    ) => Effect.Effect<string | null, ConveneIntegrationError>;
     readonly mutate: (
       input: ConveneProjectMutation,
     ) => Effect.Effect<ConveneProjectConfiguration, ConveneIntegrationError>;
@@ -44,6 +50,7 @@ export class ConveneConfiguration extends Context.Service<
 
 const make = Effect.gen(function* () {
   const platform = yield* ConvenePlatform.ConvenePlatform;
+  const updates = yield* PubSub.unbounded<ProjectId>();
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const server = yield* ServerConfig.ServerConfig;
@@ -83,19 +90,27 @@ const make = Effect.gen(function* () {
           }
         }),
       )
-      .pipe(failure("cache"));
-  const current = (projectId: ProjectId) =>
-    Effect.gen(function* () {
-      const connection = yield* platform.readConnection;
-      if (Option.isNone(connection)) return null;
-      return (
-        cached.find(
-          (value) =>
-            value.runner_id === connection.value.runnerId &&
-            value.project.native_project_id === projectId,
-        ) ?? null
+      .pipe(
+        Effect.tap(() =>
+          Effect.forEach(
+            values,
+            (value) => PubSub.publish(updates, ProjectId.make(value.project.native_project_id)),
+            { discard: true },
+          ),
+        ),
+        failure("cache"),
       );
-    }).pipe(failure("query"));
+  const current = Effect.fn("ConveneConfiguration.current")(function* (projectId: ProjectId) {
+    const connection = yield* platform.readConnection;
+    if (Option.isNone(connection)) return null;
+    return (
+      cached.find(
+        (value) =>
+          value.runner_id === connection.value.runnerId &&
+          value.project.native_project_id === projectId,
+      ) ?? null
+    );
+  }, failure("query"));
   const query = Effect.fn("ConveneConfiguration.query")(function* (projectId: ProjectId) {
     const saved = yield* current(projectId);
     if (saved === null)
@@ -195,7 +210,16 @@ const make = Effect.gen(function* () {
       .pipe(failure("projects"));
     return { ...result, truncated: false };
   });
-  return ConveneConfiguration.of({ record, query, mutate, options });
+  return ConveneConfiguration.of({
+    record,
+    query,
+    mutate,
+    options,
+    changes: Stream.fromPubSub(updates),
+    clientProjectId: Effect.fn("ConveneConfiguration.clientProjectId")(function* (projectId) {
+      return (yield* current(projectId))?.client_project_id ?? null;
+    }),
+  });
 });
 
 export const layer = Layer.effect(ConveneConfiguration, make);

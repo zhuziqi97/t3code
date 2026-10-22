@@ -72,6 +72,7 @@ import * as ConveneNative from "./convene/ConveneNative.ts";
 import * as ConvenePlatform from "./convene/ConvenePlatform.ts";
 import * as ConveneWorkspaces from "./convene/ConveneWorkspaces.ts";
 import * as ConveneConfiguration from "./convene/ConveneConfiguration.ts";
+import * as ConveneResources from "./convene/ConveneResources.ts";
 import * as ConveneSettings from "./convene/ConveneSettings.ts";
 import * as McpSessionRegistry from "./mcp/McpSessionRegistry.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
@@ -567,7 +568,11 @@ const layerProviderInstallationRefresh = Layer.effectDiscard(
 );
 
 const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
-  Layer.merge(ConveneSettings.layer, ThreadWorkspaceRecovery.layer).pipe(
+  Layer.mergeAll(
+    ConveneSettings.layer,
+    ThreadWorkspaceRecovery.layer,
+    ConveneResources.layer.pipe(Layer.provide(ProjectionStoreV2.layer)),
+  ).pipe(
     Layer.provideMerge(ConveneConnection.layer),
     Layer.provideMerge(ConveneNative.layer),
     Layer.provideMerge(ConveneConfiguration.layer),

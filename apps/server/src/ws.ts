@@ -175,6 +175,7 @@ import * as ServerSettings from "./serverSettings.ts";
 import * as ConveneSettings from "./convene/ConveneSettings.ts";
 import * as ConveneConnection from "./convene/ConveneConnection.ts";
 import * as ConveneConfiguration from "./convene/ConveneConfiguration.ts";
+import * as ConveneResources from "./convene/ConveneResources.ts";
 import * as DatabaseStorage from "./persistence/DatabaseStorage.ts";
 import * as StorageCleanup from "./storageCleanup.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
@@ -1191,6 +1192,7 @@ const makeCoreWsRpcLayer = (
       const conveneSettings = yield* ConveneSettings.ConveneSettings;
       const conveneConnection = yield* ConveneConnection.ConveneConnection;
       const conveneConfiguration = yield* ConveneConfiguration.ConveneConfiguration;
+      const conveneResources = yield* ConveneResources.ConveneResources;
       const sql = yield* SqlClient.SqlClient;
       const threadManagement = yield* ThreadManagementService.ThreadManagementService;
       const intakeContext = yield* Effect.context<
@@ -2320,6 +2322,9 @@ const makeCoreWsRpcLayer = (
         [WS_METHODS.conveneQueryProject]: (input) => conveneSettings.queryProject(input.projectId),
         [WS_METHODS.conveneMutateProject]: (input) => conveneConfiguration.mutate(input),
         [WS_METHODS.conveneProjectOptions]: (input) => conveneConfiguration.options(input),
+        [WS_METHODS.conveneReadResource]: (input) => conveneResources.read(input),
+        [WS_METHODS.conveneSubscribeResourceChanges]: (input) =>
+          conveneResources.changes(input.threadId),
         [WS_METHODS.serverRunStorageCleanup]: () => storageCleanup.runNow,
         [WS_METHODS.serverGetStorageCleanupReport]: () => storageCleanup.reports,
         [WS_METHODS.serverGetDatabaseStorage]: () => databaseStorage.status,
@@ -3278,6 +3283,7 @@ export const layer: Layer.Layer<
   | HttpRouter.Request<"Requires", ConveneConnection.ConveneConnection>
   | HttpRouter.Request<"Requires", ConveneSettings.ConveneSettings>
   | HttpRouter.Request<"Requires", ConveneConfiguration.ConveneConfiguration>
+  | HttpRouter.Request<"Requires", ConveneResources.ConveneResources>
   | HttpRouter.Request<"Requires", StorageCleanup.StorageCleanup>
   | HttpRouter.Request<"Requires", DatabaseStorage.DatabaseStorage>
   | HttpRouter.Request<"Requires", import("effect/process/ChildProcessSpawner").ChildProcessSpawner>

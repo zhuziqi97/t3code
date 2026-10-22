@@ -63,6 +63,8 @@ it.effect(
       }),
       Layer.succeed(ConveneConfiguration.ConveneConfiguration, {
         record: () => Effect.void,
+        clientProjectId: () => Effect.succeed(null),
+        changes: Stream.empty,
         query: () => Effect.succeed({ configuration: null, fresh: true, error: null }),
         mutate: () => Effect.die("not used"),
         options: () => Effect.succeed({ items: [], total: 0, truncated: false }),

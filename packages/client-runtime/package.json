@@ -11,6 +11,10 @@
       "types": "./src/contextWindow.ts",
       "default": "./src/contextWindow.ts"
     },
+    "./convene-resource-reader": {
+      "types": "./src/conveneResourceReader.ts",
+      "default": "./src/conveneResourceReader.ts"
+    },
     "./state/workspaceRecovery": {
       "types": "./src/state/workspaceRecovery.ts",
       "default": "./src/state/workspaceRecovery.ts"

@@ -393,6 +393,8 @@ export const WS_METHODS = {
   threadWorkspaceRecover: "thread.workspace.recover",
   conveneMutateProject: "convene.mutateProject",
   conveneProjectOptions: "convene.projectOptions",
+  conveneReadResource: "convene.readResource",
+  conveneSubscribeResourceChanges: "convene.subscribeResourceChanges",
   // Project registry methods
   projectsList: "projects.list",
   projectsAdd: "projects.add",
@@ -1944,6 +1946,17 @@ export const WsRpcGroup = RpcGroup.make(
     success: ConveneProjectOptions,
     error: Schema.Union([ConveneIntegrationError, EnvironmentAuthorizationError]),
   }),
+  Rpc.make(WS_METHODS.conveneReadResource, {
+    payload: ConveneResourceReadInput,
+    success: ConveneResourceReadResult,
+    error: EnvironmentAuthorizationError,
+  }),
+  Rpc.make(WS_METHODS.conveneSubscribeResourceChanges, {
+    payload: Schema.Struct({ threadId: ConveneResourceReadInput.fields.threadId }),
+    success: Schema.Number,
+    error: EnvironmentAuthorizationError,
+    stream: true,
+  }),
   WsServerProbeRpc,
   WsServerGetConfigRpc,
   WsServerRefreshProvidersRpc,
@@ -2155,3 +2168,4 @@ import {
   ConveneProjectView,
   ConveneIntegrationError,
 } from "./convene.ts";
+import { ConveneResourceReadInput, ConveneResourceReadResult } from "./conveneResource.ts";
