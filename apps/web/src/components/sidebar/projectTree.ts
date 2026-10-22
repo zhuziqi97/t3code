@@ -41,7 +41,7 @@ export function projectExpansionKeys(project: SidebarProjectSnapshot): string[] 
 
 export function buildProjectTreeList(input: {
   groups: readonly SidebarProjectSnapshot[];
-  hiddenSettledByProject?: ReadonlyMap<string, number>;
+  pageControls?: ReadonlySet<string>;
   expandedById: Readonly<Record<string, boolean>>;
   pinned: readonly TreeThread[];
   active: readonly TreeThread[];
@@ -102,6 +102,9 @@ export function buildProjectTreeList(input: {
     items.push({ kind: "marker", marker: "draft-block", projectKey });
     items.push({ kind: "marker", marker: "active-placeholder", projectKey, section: "active" });
     items.push(...(active.get(projectKey) ?? []));
+    if (input.pageControls?.has(`active:${projectKey}`)) {
+      items.push({ kind: "marker", marker: "active-more", projectKey, section: "active" });
+    }
     for (const [section, visible, all] of [
       ["working", working, workingAll],
       ["snoozed", snoozed, snoozedAll],
@@ -111,9 +114,9 @@ export function buildProjectTreeList(input: {
       // Settled remains a destination even when a project has no finished work.
       items.push({ kind: "marker", marker: `${section}-header`, projectKey, section });
       items.push(...(visible.get(projectKey) ?? []));
-    }
-    if ((input.hiddenSettledByProject?.get(projectKey) ?? 0) > 0) {
-      items.push({ kind: "marker", marker: "settled-more", projectKey });
+      if (input.pageControls?.has(`${section}:${projectKey}`)) {
+        items.push({ kind: "marker", marker: `${section}-more`, projectKey, section });
+      }
     }
   }
   return items;

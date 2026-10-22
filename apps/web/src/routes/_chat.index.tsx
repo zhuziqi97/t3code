@@ -5,9 +5,7 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { isElectron } from "../env";
 import { NoProjectsHero } from "../components/NoProjectsHero";
-import { sortScopedProjectsForSidebar } from "../components/Sidebar.logic";
 import { useSidebarNewThread } from "../hooks/useSidebarNewThread";
-import { useLegacySidebarEnabled } from "../hooks/useSettings";
 import { openCommandPalette } from "../commandPaletteBus";
 import { useScratchProject } from "../hooks/useScratchProject";
 import { usePrimaryEnvironmentId } from "../state/environments";
@@ -17,12 +15,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "../components/
 import { SidebarInset } from "../components/ui/sidebar";
 import { WorkspacePageHeader } from "../components/WorkspacePageHeader";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
-import {
-  readProject,
-  useAllEnvironmentShellsBootstrapped,
-  useProjects,
-  useThreadShells,
-} from "../state/entities";
+import { readProject, useAllEnvironmentShellsBootstrapped, useProjects } from "../state/entities";
 import { useEnvironments } from "../state/environments";
 
 function ChatIndexRouteView() {
@@ -39,11 +32,9 @@ function ChatIndexRouteView() {
 
 function IndexDraftLanding() {
   const projects = useProjects();
-  const threads = useThreadShells();
   const bootstrapped = useAllEnvironmentShellsBootstrapped();
   const handleNewThread = useNewThreadHandler();
   const { target } = useSidebarNewThread();
-  const legacy = useLegacySidebarEnabled();
   const { scratchEnvironmentId, startScratchThread } = useScratchProject();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const scratchTarget = scratchEnvironmentId(primaryEnvironmentId);
@@ -59,7 +50,6 @@ function IndexDraftLanding() {
     if (!bootstrapped) return null;
     const explicit = projects.find((project) => project.id === window.__T3_INITIAL_PROJECT_ID__);
     if (explicit) return explicit;
-    if (legacy) return sortScopedProjectsForSidebar(projects, threads, "updated_at")[0] ?? null;
     if (target.kind !== "project") return null;
     return (
       projects.find(

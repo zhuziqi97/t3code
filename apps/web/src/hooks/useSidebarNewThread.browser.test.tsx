@@ -19,7 +19,11 @@ const state = vi.hoisted(() => {
     updatedAt: "2026-10-10",
   }));
   const configs = new Map();
-  const settings = { sidebarProjectGroupingMode: "separate", sidebarProjectGroupingOverrides: {} };
+  const settings = {
+    sidebarProjectGroupingMode: "separate",
+    sidebarProjectGroupingOverrides: {},
+    legacySidebarEnabled: false,
+  };
   const defaultRef = { environmentId: "local", projectId: "a" };
   const thread = { environmentId: "local", projectId: "a" };
   return {
@@ -29,7 +33,6 @@ const state = vi.hoisted(() => {
     settings,
     defaultRef,
     thread,
-    legacy: false,
     create: vi.fn(async () => null),
     palette: vi.fn(),
     toast: vi.fn(),
@@ -63,7 +66,6 @@ vi.mock("./useHandleNewThread", async (original) => ({
 }));
 vi.mock("./useSettings", async (original) => ({
   ...(await original<typeof import("./useSettings")>()),
-  useLegacySidebarEnabled: () => state.legacy,
   useClientSettings: () => state.settings,
 }));
 vi.mock("../commandPaletteBus", async (original) => ({
@@ -141,13 +143,13 @@ describe("ordinary new thread entry", () => {
     expect(state.create).not.toHaveBeenCalled();
     expect(state.palette).toHaveBeenCalledWith({ open: "new-thread-in" });
   });
-  it("keeps legacy new threads in the viewed project despite the hidden saved selection", async () => {
+  it("uses the selected project even when the retired sidebar preference is saved", async () => {
     await using _lifecycle = await setupLifecycle();
 
-    state.legacy = true;
+    state.settings.legacySidebarEnabled = true;
     await mount();
     await click();
-    expect(state.create).toHaveBeenCalledWith({ environmentId: "local", projectId: "a" });
+    expect(state.create).toHaveBeenCalledWith({ environmentId: "local", projectId: "b" });
   });
   it("reports a creation failure without switching projects", async () => {
     await using _lifecycle = await setupLifecycle();
@@ -174,7 +176,7 @@ async function setupLifecycle() {
 
   vi.clearAllMocks();
   state.available = state.projects;
-  state.legacy = false;
+  state.settings.legacySidebarEnabled = false;
   useUiStateStore.setState({ sidebarProjectScopeKey: "local:/work/b" });
 
   renderStack = stack.move();

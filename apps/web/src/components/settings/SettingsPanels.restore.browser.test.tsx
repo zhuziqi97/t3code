@@ -92,7 +92,7 @@ describe("restoring V2 settings", () => {
   });
 
   it.each([false, true])(
-    "only restores a changed legacy project sort preference in legacy mode (%s)",
+    "ignores the retired project sort preference regardless of the old sidebar choice (%s)",
     async (legacySidebarEnabled) => {
       await using lifecycle = await setupLifecycle();
 
@@ -105,17 +105,9 @@ describe("restoring V2 settings", () => {
       await using screen = await renderRestore();
       await act(() => screen.restore.restoreDefaults());
 
-      if (legacySidebarEnabled) {
-        expect(screen.restore.changedSettingLabels).toEqual(["Project order"]);
-        expect(state.confirm).toHaveBeenCalledOnce();
-        expect(state.update.mock.calls[0]?.[0].sidebarProjectSortOrder).toBe(
-          DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder,
-        );
-      } else {
-        expect(screen.restore.changedSettingLabels).toEqual([]);
-        expect(state.confirm).not.toHaveBeenCalled();
-        expect(state.update).not.toHaveBeenCalled();
-      }
+      expect(screen.restore.changedSettingLabels).toEqual([]);
+      expect(state.confirm).not.toHaveBeenCalled();
+      expect(state.update).not.toHaveBeenCalled();
     },
   );
 

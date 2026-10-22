@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useLocation } from "@tanstack/react-router";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { buildSidebarProjectSnapshots } from "../sidebarProjectGrouping";
@@ -6,27 +6,22 @@ import { selectProjectGroupingSettings } from "../logicalProject";
 import { useProjects } from "../state/entities";
 import { usePrimaryEnvironmentId } from "../state/environments";
 import { useUiStateStore } from "../uiStateStore";
-import { useClientSettings, useLegacySidebarEnabled } from "./useSettings";
+import { useClientSettings } from "./useSettings";
 import { useHandleNewThread } from "./useHandleNewThread";
 
 /** Retained by the layout so Settings does not turn a remount into conversation navigation. */
 export function useSidebarProjectNavigation() {
   const { activeThread, activeDraftThread, routeThreadRef, routeDraftId } = useHandleNewThread();
-  const legacy = useLegacySidebarEnabled();
   const pathname = useLocation({ select: (location) => location.pathname });
   const projects = useProjects();
   const settings = useClientSettings(selectProjectGroupingSettings);
   const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const groups = useMemo(
-    () =>
-      buildSidebarProjectSnapshots({
-        projects,
-        settings,
-        primaryEnvironmentId,
-        resolveEnvironmentLabel: () => null,
-      }),
-    [primaryEnvironmentId, projects, settings],
-  );
+  const groups = buildSidebarProjectSnapshots({
+    projects,
+    settings,
+    primaryEnvironmentId,
+    resolveEnvironmentLabel: () => null,
+  });
   const route = routeDraftId
     ? `draft:${routeDraftId}`
     : routeThreadRef
@@ -49,7 +44,7 @@ export function useSidebarProjectNavigation() {
       previous.route !== route ||
       (previous.projectKey !== null && projectKey !== null && previous.projectKey !== projectKey);
     observed.current = { route, projectKey, pending };
-    if (legacy || !pending || !project) return;
+    if (!pending || !project) return;
     const group = groups.find((entry) =>
       entry.memberProjectRefs.some(
         (member) =>
@@ -61,5 +56,5 @@ export function useSidebarProjectNavigation() {
     const store = useUiStateStore.getState();
     store.setSidebarProjectScopeKey(group.projectKey);
     store.setProjectExpanded(group.projectKey, true);
-  }, [groups, pathname, legacy, projectKey, route, project]);
+  }, [groups, pathname, projectKey, route, project]);
 }

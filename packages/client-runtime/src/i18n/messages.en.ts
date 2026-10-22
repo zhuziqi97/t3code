@@ -14,6 +14,7 @@
  * rename another product or rewrite a command it tells the user to run.
  */
 export const en = {
+  "convene.sidebar.moreRemaining": "Show {{count}} more · {{remaining}} remaining",
   "common.optional": "Optional",
   "usage.prices.enterModelId": "Enter a model ID.",
   "usage.prices.mapDifferentModel": "Map to a different model.",

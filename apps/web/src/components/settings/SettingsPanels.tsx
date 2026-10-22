@@ -53,7 +53,6 @@ import {
   type ResponseStreamingMode,
   MIN_TERMINAL_FONT_SIZE,
   type QuitConfirmationMode,
-  SidebarProjectSortOrder,
 } from "@t3tools/contracts/settings";
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
 import { createModelSelection } from "@t3tools/shared/model";
@@ -197,13 +196,6 @@ const RESPONSE_STREAMING_MODE_DESCRIPTIONS: Record<ResponseStreamingMode, string
   turn: "options.streamingDescription.turn",
   paragraph: "options.streamingDescription.paragraph",
 };
-
-const SIDEBAR_PROJECT_SORT_ORDER_LABELS: Record<SidebarProjectSortOrder, string> = {
-  updated_at: "options.projectOrder.updated_at",
-  created_at: "options.projectOrder.created_at",
-  manual: "options.projectOrder.manual",
-};
-const isSidebarProjectSortOrder = Schema.is(SidebarProjectSortOrder);
 
 const TIMESTAMP_FORMAT_LABELS = {
   locale: "options.time.locale",
@@ -623,10 +615,6 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.sidebarProjectGroupingMode !== DEFAULT_UNIFIED_SETTINGS.sidebarProjectGroupingMode
       ? [t("settings.search.project-grouping.title")]
       : []),
-    ...(settings.legacySidebarEnabled &&
-    settings.sidebarProjectSortOrder !== DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder
-      ? [t("settings.search.project-order.title")]
-      : []),
     ...(settings.sidebarWorkingShelfEnabled !== DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled
       ? [t("general.working.label")]
       : []),
@@ -809,7 +797,6 @@ export function useSettingsRestore(onRestored?: () => void) {
       panelAnimationDurationMs: DEFAULT_UNIFIED_SETTINGS.panelAnimationDurationMs,
       sidebarThreadPreviewCount: DEFAULT_UNIFIED_SETTINGS.sidebarThreadPreviewCount,
       sidebarProjectGroupingMode: DEFAULT_UNIFIED_SETTINGS.sidebarProjectGroupingMode,
-      sidebarProjectSortOrder: DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder,
       sidebarWorkingShelfEnabled: DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled,
       compactIdleThreads: DEFAULT_UNIFIED_SETTINGS.compactIdleThreads,
       sidebarAutoSettleAfterDays: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays,
@@ -2090,7 +2077,6 @@ function AutoSettleDaysInput({
 const LEGACY_FEATURE_TARGET_IDS: ReadonlySet<string> = new Set([
   "legacy-plan-mode",
   "legacy-context-window-indicator",
-  "legacy-sidebar",
 ]);
 
 function LegacyFeaturesSection() {
@@ -2146,19 +2132,6 @@ function LegacyFeaturesSection() {
                     updateSettings({ contextWindowMeterEnabled: Boolean(checked) })
                   }
                   aria-label={t("legacy.context.label")}
-                />
-              }
-            />
-            <SettingsRow
-              {...searchableSetting("legacy-sidebar", t)}
-              description={t("legacy.sidebar.description")}
-              control={
-                <Switch
-                  checked={settings.legacySidebarEnabled}
-                  onCheckedChange={(checked) =>
-                    updateSettings({ legacySidebarEnabled: Boolean(checked) })
-                  }
-                  aria-label={t("legacy.sidebar.label")}
                 />
               }
             />
@@ -2308,54 +2281,7 @@ export function GeneralSettingsPanel() {
         />
         <SettingsRow
           {...searchableSetting("project-order", t)}
-          description={t(
-            settings.legacySidebarEnabled
-              ? "general.projectOrder.description"
-              : "general.projectOrder.stableDescription",
-          )}
-          resetAction={
-            settings.legacySidebarEnabled &&
-            settings.sidebarProjectSortOrder !==
-              DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder ? (
-              <SettingResetButton
-                label={t("general.projectOrder.reset")}
-                onClick={() =>
-                  updateSettings({
-                    sidebarProjectSortOrder: DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder,
-                  })
-                }
-              />
-            ) : null
-          }
-          control={
-            settings.legacySidebarEnabled ? (
-              <Select
-                value={settings.sidebarProjectSortOrder}
-                onValueChange={(value) => {
-                  if (isSidebarProjectSortOrder(value)) {
-                    updateSettings({ sidebarProjectSortOrder: value });
-                  }
-                }}
-              >
-                <SelectTrigger
-                  size="sm"
-                  className="w-full sm:w-44"
-                  aria-label={t("general.projectOrder.label")}
-                >
-                  <SelectValue>
-                    {t(SIDEBAR_PROJECT_SORT_ORDER_LABELS[settings.sidebarProjectSortOrder])}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectPopup align="end" alignItemWithTrigger={false}>
-                  {SidebarProjectSortOrder.literals.map((sortOrder) => (
-                    <SelectItem hideIndicator key={sortOrder} value={sortOrder}>
-                      {t(SIDEBAR_PROJECT_SORT_ORDER_LABELS[sortOrder])}
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
-            ) : null
-          }
+          description={t("general.projectOrder.stableDescription")}
         />
 
         <SettingsRow

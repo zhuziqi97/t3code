@@ -14,6 +14,7 @@
 import type { Messages } from "./messages.en.ts";
 
 export const zh: Partial<Messages> = {
+  "convene.sidebar.moreRemaining": "再显示 {{count}} 条 · 剩余 {{remaining}} 条",
   "common.optional": "可选",
   "usage.prices.enterModelId": "请输入模型 ID。",
   "usage.prices.mapDifferentModel": "请映射到其他模型。",

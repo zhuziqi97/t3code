@@ -32,8 +32,8 @@ vi.mock("./useHandleNewThread", async (original) => ({
 }));
 vi.mock("./useSettings", async (original) => ({
   ...(await original<typeof import("./useSettings")>()),
-  useLegacySidebarEnabled: () => state.legacy,
   useClientSettings: () => ({
+    legacySidebarEnabled: state.legacy,
     sidebarProjectGroupingMode: "separate",
     sidebarProjectGroupingOverrides: {},
   }),
@@ -143,14 +143,14 @@ describe("project selection follows navigation, not rerenders", () => {
     await update();
     expect(useUiStateStore.getState().sidebarProjectScopeKey).toBe("local:/work/a");
   });
-  it("leaves the legacy sidebar independent of the hidden project selection", async () => {
+  it("reveals the routed project even when the retired sidebar preference is saved", async () => {
     await using _lifecycle = await setupLifecycle();
 
     state.legacy = true;
     await mount();
     state.route = "next-a";
     await update();
-    expect(useUiStateStore.getState().sidebarProjectScopeKey).toBe("local:/work/b");
+    expect(useUiStateStore.getState().sidebarProjectScopeKey).toBe("local:/work/a");
   });
 });
 

@@ -920,14 +920,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     ],
   },
   {
-    id: "legacy-sidebar",
-    get title() {
-      return i18n.t("settings.search.legacy-sidebar.title");
-    },
-    to: "/settings/general",
-    searchTerms: ["Sidebar (legacy) 侧边栏（旧版）", "project thread tree old flat list"],
-  },
-  {
     id: "keybindings",
     get title() {
       return i18n.t("settings.search.keybindings.title");

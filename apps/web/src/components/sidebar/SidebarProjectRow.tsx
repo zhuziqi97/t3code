@@ -11,6 +11,10 @@ import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { ProjectEnvironmentBadge } from "../ProjectEnvironmentBadge";
 import type { ComponentProps } from "react";
+import type { ProjectDragHandle } from "./ProjectTreeLayout";
+import { useThreadShellsForProjectRefs } from "../../state/entities";
+import { filterSidebarV2VisibleThreads } from "../Sidebar.logic";
+import { ProjectStatusIndicator, useProjectThreadStatus } from "./ProjectStatusIndicator";
 
 export const SidebarProjectRow = memo(function SidebarProjectRow(props: {
   project: SidebarProjectSnapshot;
@@ -22,9 +26,12 @@ export const SidebarProjectRow = memo(function SidebarProjectRow(props: {
   onSelect: () => void;
   onNewThread: () => void;
   onSettings: () => void;
+  dragHandle?: ProjectDragHandle | undefined;
 }) {
   const t = useTranslate();
   const canCreate = useEnvironmentScope(props.project.environmentId, AuthOrchestrationOperateScope);
+  const threads = useThreadShellsForProjectRefs(props.project.memberProjectRefs);
+  const status = useProjectThreadStatus(filterSidebarV2VisibleThreads(threads, null));
   return (
     <div
       className={cn(
@@ -36,18 +43,28 @@ export const SidebarProjectRow = memo(function SidebarProjectRow(props: {
         <TooltipTrigger
           render={
             <button
+              ref={props.dragHandle?.setActivatorNodeRef}
+              {...props.dragHandle?.attributes}
+              {...props.dragHandle?.listeners}
               type="button"
               aria-expanded={props.expanded}
               aria-pressed={props.selected}
               onClick={props.onSelect}
-              className="flex min-h-9 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-sm text-sidebar-foreground outline-hidden focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-11"
+              className={cn(
+                "flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-sm text-sidebar-foreground outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring pointer-coarse:min-h-11",
+                props.dragHandle ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
+              )}
             />
           }
         >
-          <ChevronRightIcon
-            aria-hidden
-            className={cn("size-3 shrink-0 text-icon-muted", props.expanded && "rotate-90")}
-          />
+          {!props.expanded && status ? (
+            <ProjectStatusIndicator status={status} compact />
+          ) : (
+            <ChevronRightIcon
+              aria-hidden
+              className={cn("size-3 shrink-0 text-icon-muted", props.expanded && "rotate-90")}
+            />
+          )}
           {props.isScratch ? (
             <FolderIcon aria-hidden className="size-4 shrink-0" />
           ) : (

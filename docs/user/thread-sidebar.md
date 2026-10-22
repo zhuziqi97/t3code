@@ -15,6 +15,15 @@ Pinned threads appear once above the projects. Search finds threads across proje
 opening a result selects and reveals its project. Threads without a project appear
 under **No project**.
 
+Each project's list reveals more threads a page at a time. Use **Show more** to
+continue, or **Show less** to return to the preview. Working, snoozed, and settled
+lists expand separately. Opening a search result or direct thread link reveals that
+thread without expanding the project's whole history.
+
+A blue status dot marks running work. A green dot marks a successful completion you
+have not read; it clears when you view the thread in a visible, focused window.
+Collapsed projects and **Show more** retain the status of their hidden threads.
+
 A new thread carries your model and mode selections, unless the destination
 project has its own model default.
 Its branch and workspace mode come from your configured defaults. To continue in
@@ -107,7 +116,8 @@ menu because it needs a wake time. Drops onto another project are rejected and
 never change the thread's project. Unpinning by dragging does not ask for confirmation.
 
 Pinned threads can be reordered across projects in the global pinned section.
-In the web and desktop project tree, projects and pinned threads keep their order
+Drag a project heading to reorder projects on this device. In the web and desktop
+project tree, projects and pinned threads keep their order
 when messages arrive. Ordinary active threads rise only inside their own project
 when you send a message. Agent output, tool progress, and renaming do not move them.
 Working, snoozed, and settled sections keep their own order. The drop preview
@@ -123,10 +133,10 @@ On web and desktop, the list also animates section changes made with thread acti
 preference. While dragging, rows follow the insertion gap without replaying a second transition
 after the drop.
 
-New threads appear above the active threads you have arranged. Settling clears a thread's active
-position, so using **Un-settle** returns it to the top. Pinning and snoozing preserve its active
-position until you move it again. Thread activity does not change the order. The settled shelf
-continues to use settlement time.
+On mobile, new threads appear above the active threads you have arranged. Settling clears a
+thread's active position, so using **Un-settle** returns it to the top. Pinning and snoozing preserve
+its active position until you move it again. Thread activity does not change that mobile order.
+The settled shelf continues to use settlement time on all clients.
 
 If dragging is unavailable for one environment, update the T3 Code server running in that
 environment. Pinned and active reordering require server support. Threads from older servers keep
