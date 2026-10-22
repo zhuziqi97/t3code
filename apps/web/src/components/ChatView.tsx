@@ -13,6 +13,7 @@ import {
 import { formatFilePathForClipboard } from "@t3tools/client-runtime/media-actions";
 import { resolvePathLinkTarget } from "@t3tools/shared/fileLinks";
 import { ThreadFind, ThreadFindCanvas, type ThreadFindControls } from "./chat/ThreadFindProvider";
+import { ConveneResourceViewer } from "./convene/ConveneResourceViewer";
 import { THREAD_FIND_BAR_RESERVED_HEIGHT } from "./chat/ThreadFindBar";
 import { usageLimitRecoveryBannerItem } from "./chat/UsageLimitRecoveryBanner";
 import {
@@ -8808,6 +8809,7 @@ export default function ChatView(props: ChatViewProps) {
               onPrepared={handlePreparedPullRequestThreadStable}
             />
           </ThreadFindCanvas>
+          {activeThreadRef ? <ConveneResourceViewer threadRef={activeThreadRef} /> : null}
         </div>
 
         {mountedTerminalThreadRefs.map(({ key: mountedThreadKey, threadRef: mountedThreadRef }) => (
