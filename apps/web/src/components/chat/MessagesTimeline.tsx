@@ -318,7 +318,10 @@ import {
   type ReviewCommentContext,
 } from "../../reviewCommentContext";
 
+type RunEndFeedback = NonNullable<ReturnType<typeof runEndState>>;
+
 interface TimelineRowSharedState {
+  runEndFeedback: { rowId: string; end: RunEndFeedback } | null;
   citationRequest: AssistantCitationTarget | null;
   listRef: React.RefObject<LegendListRef | null>;
   timestampFormat: TimestampFormat;
@@ -1105,16 +1108,35 @@ const ConversationTimeline = memo(function ConversationTimeline({
     size: true,
     shouldRestorePosition: shouldRestoreVisibleContentPosition,
   };
+  const endFeedback =
+    !isWorking &&
+    !activeTurnInProgress &&
+    !runlessWorkActive &&
+    !completionHeld &&
+    !isPreparingWorktree &&
+    !isCompacting &&
+    !awaitingUser
+      ? runEndState(latestRun)
+      : null;
+  const endFeedbackRow =
+    endFeedback && latestRun
+      ? rows.findLast(
+          (row) =>
+            (row.kind === "assistant-meta" || (row.kind === "message" && row.showAssistantMeta)) &&
+            row.message.role === "assistant" &&
+            row.message.runId === latestRun.runId &&
+            !row.message.streaming &&
+            !row.assistantCopyStreaming,
+        )
+      : null;
   const timelineListFooter = (
     <TimelineListFooter composerInset={anchoredEndSpace ? 0 : contentInsetEndAdjustment}>
-      {!isWorking &&
-      !activeTurnInProgress &&
-      !runlessWorkActive &&
-      !completionHeld &&
-      !isPreparingWorktree &&
-      !isCompacting &&
-      !awaitingUser ? (
-        <LatestRunEndState run={latestRun} timestampFormat={timestampFormat} />
+      {endFeedback && !endFeedbackRow ? (
+        <div className="messages-timeline-row-frame">
+          <div className="chat-content-lane py-2">
+            <RunEndStateFeedback end={endFeedback} timestampFormat={timestampFormat} />
+          </div>
+        </div>
       ) : null}
       {footer}
     </TimelineListFooter>
@@ -1303,6 +1325,8 @@ const ConversationTimeline = memo(function ConversationTimeline({
   }, [timelineViewportElement, rows.length, reportContentOverflow, chatWidth]);
 
   const sharedState: TimelineRowSharedState = {
+    runEndFeedback:
+      endFeedback && endFeedbackRow ? { rowId: endFeedbackRow.id, end: endFeedback } : null,
     citationRequest: readyCitationRequest,
     listRef,
     timestampFormat,
@@ -2745,6 +2769,8 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
             message={row.message}
             showCopyButton={row.showAssistantCopyButton}
             copyStreaming={row.assistantCopyStreaming}
+            alwaysVisible={!row.message.streaming && !row.assistantCopyStreaming}
+            end={ctx.runEndFeedback?.rowId === row.id ? ctx.runEndFeedback.end : null}
           />
         ) : null}
       </div>
@@ -2804,6 +2830,7 @@ function AssistantMetaTimelineRow({
 }: {
   row: Extract<TimelineRow, { kind: "assistant-meta" }>;
 }) {
+  const ctx = use(TimelineRowCtx);
   return (
     <div className="px-1">
       <AssistantMessageMeta
@@ -2813,52 +2840,51 @@ function AssistantMetaTimelineRow({
         showCopyButton={row.showAssistantCopyButton}
         copyStreaming={row.assistantCopyStreaming}
         alwaysVisible
+        end={ctx.runEndFeedback?.rowId === row.id ? ctx.runEndFeedback.end : null}
       />
     </div>
   );
 }
 
-function LatestRunEndState({
-  run,
+function RunEndStateFeedback({
+  end,
   timestampFormat,
+  inline = false,
 }: {
-  run: TimelineLatestRun | null;
+  end: RunEndFeedback;
   timestampFormat: TimestampFormat;
+  inline?: boolean;
 }) {
   const t = useTranslate();
-  const end = runEndState(run);
-  if (!end) return null;
   const label =
     end.kind === "failed"
-      ? t("chat.timeline.runFailed", { defaultValue: "Turn failed" })
+      ? t("chat.timeline.runFailed")
       : end.kind === "stopped"
-        ? t("chat.timeline.runStopped", { defaultValue: "Turn stopped" })
+        ? t("chat.timeline.runStopped")
         : end.kind === "rolledBack"
-          ? t("chat.timeline.runRolledBack", { defaultValue: "Turn rolled back" })
-          : t("chat.timeline.runEnded", { defaultValue: "Turn ended" });
+          ? t("chat.timeline.runRolledBack")
+          : t("chat.timeline.runEnded");
   return (
-    <div className="messages-timeline-row-frame">
-      <div
-        role="status"
-        data-testid="latest-run-end-state"
-        className={cn(
-          "chat-content-lane flex items-center gap-2 py-2 text-xs text-muted-foreground",
-          end.kind === "failed" && "text-destructive-foreground",
-        )}
-      >
-        <span>{label}</span>
-        {end.completedAt ? (
-          <Tooltip>
-            <TooltipTrigger render={<time dateTime={end.completedAt} className="tabular-nums" />}>
-              {formatDayAwareTimestamp(end.completedAt, timestampFormat, undefined, t)}
-            </TooltipTrigger>
-            <TooltipPopup>
-              {formatChatTimestampTooltip(end.completedAt, timestampFormat, t)}
-            </TooltipPopup>
-          </Tooltip>
-        ) : null}
-      </div>
-    </div>
+    <span
+      role="status"
+      data-testid={inline ? undefined : "latest-run-end-state"}
+      className={cn(
+        "inline-flex flex-wrap items-center gap-2 text-xs text-muted-foreground",
+        end.kind === "failed" && "text-destructive-foreground",
+      )}
+    >
+      {!inline && end.completedAt ? (
+        <Tooltip>
+          <TooltipTrigger render={<time dateTime={end.completedAt} className="tabular-nums" />}>
+            {formatDayAwareTimestamp(end.completedAt, timestampFormat, undefined, t)}
+          </TooltipTrigger>
+          <TooltipPopup>
+            {formatChatTimestampTooltip(end.completedAt, timestampFormat, t)}
+          </TooltipPopup>
+        </Tooltip>
+      ) : null}
+      <span>{label}</span>
+    </span>
   );
 }
 
@@ -2869,6 +2895,7 @@ function AssistantMessageMeta({
   showCopyButton,
   copyStreaming,
   alwaysVisible = false,
+  end = null,
 }: {
   className?: string;
   projectedItem?: Extract<TimelineRow, { kind: "message" }>["projectedItem"];
@@ -2876,21 +2903,24 @@ function AssistantMessageMeta({
   showCopyButton: boolean;
   copyStreaming: boolean;
   alwaysVisible?: boolean;
+  end?: RunEndFeedback | null;
 }) {
   const t = useTranslate();
   const ctx = use(TimelineRowCtx);
 
+  const timestamp = end?.completedAt ?? message.updatedAt;
   return (
     <div
+      data-testid={end ? "latest-run-end-state" : undefined}
       className={cn(
-        "flex items-center gap-2 text-xs tabular-nums transition-opacity duration-200",
+        "flex flex-wrap items-center gap-x-2 gap-y-1 text-xs tabular-nums transition-opacity duration-200",
         alwaysVisible
           ? "opacity-100"
           : "opacity-0 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/assistant:opacity-100",
         className,
       )}
     >
-      {projectedItem && projectedItem.item.status !== "completed" ? (
+      {!end && projectedItem && projectedItem.item.status !== "completed" ? (
         <span className="rounded-full border border-border/70 px-1.5 py-0.5 font-mono text-3xs text-muted-foreground">
           {projectedItem.item.status}
         </span>
@@ -2905,14 +2935,19 @@ function AssistantMessageMeta({
       ) : null}
       {!message.streaming && (
         <Tooltip>
-          <TooltipTrigger render={<p className="text-muted-foreground text-xs tabular-nums" />}>
-            {formatDayAwareTimestamp(message.updatedAt, ctx.timestampFormat, undefined, t)}
+          <TooltipTrigger
+            render={
+              <time dateTime={timestamp} className="text-muted-foreground text-xs tabular-nums" />
+            }
+          >
+            {formatDayAwareTimestamp(timestamp, ctx.timestampFormat, undefined, t)}
           </TooltipTrigger>
           <TooltipPopup>
-            {formatChatTimestampTooltip(message.updatedAt, ctx.timestampFormat, t)}
+            {formatChatTimestampTooltip(timestamp, ctx.timestampFormat, t)}
           </TooltipPopup>
         </Tooltip>
       )}
+      {end ? <RunEndStateFeedback end={end} timestampFormat={ctx.timestampFormat} inline /> : null}
     </div>
   );
 }

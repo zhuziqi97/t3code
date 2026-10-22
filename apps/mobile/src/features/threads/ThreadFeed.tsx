@@ -1,3 +1,4 @@
+import { runEndState } from "@t3tools/client-runtime/runEndState";
 import { Button } from "../../components/ui/Button";
 import { useTranslate } from "../../i18n";
 import * as Dialog from "../../components/ui/Dialog";
@@ -981,6 +982,11 @@ function renderFeedEntry(
     | "threadId"
     | "workspaceRoot"
   > & {
+    readonly endFeedback: {
+      messageId: string | null;
+      end: NonNullable<ReturnType<typeof runEndState>>;
+      label: string;
+    } | null;
     readonly copyMessageLabel: string;
     readonly copiedRowId: string | null;
     readonly expandedWorkRows: Record<string, boolean>;
@@ -1141,7 +1147,10 @@ function renderFeedEntry(
     const presentation = resolveUserMessagePresentation(message);
     const renderedText = renderAssistantCitationsAsText(presentation.text);
     const styles = isUser ? markdownStyles.user : markdownStyles.assistant;
-    const timestampLabel = formatMessageTime(isUser ? message.createdAt : message.updatedAt);
+    const messageEnd = props.endFeedback?.messageId === message.id ? props.endFeedback : null;
+    const timestampLabel = formatMessageTime(
+      isUser ? message.createdAt : (messageEnd?.end.completedAt ?? message.updatedAt),
+    );
     const attachments = message.attachments ?? [];
     const hasReviewCommentContext = presentation.text.includes("<review_comment");
     // A bubble that sizes itself from its content cannot lay out a block whose
@@ -1417,7 +1426,7 @@ function renderFeedEntry(
           );
         })}
         {showAssistantMeta ? (
-          <View className="mt-1 flex-row items-center gap-1">
+          <View className="mt-1 flex-row flex-wrap items-center gap-1">
             <CopyTextButton
               accessibilityLabel={props.copyMessageLabel}
               text={renderedText}
@@ -1436,6 +1445,9 @@ function renderFeedEntry(
             <Text className="font-t3-medium text-xs tabular-nums text-foreground-secondary">
               {timestampLabel}
             </Text>
+            {messageEnd ? (
+              <Text className="text-xs text-foreground-secondary">{messageEnd.label}</Text>
+            ) : null}
           </View>
         ) : null}
       </Animated.View>
@@ -2170,6 +2182,44 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     props.feed,
     props.queuedMessages,
   );
+  const terminalAssistantMessageIds = (() => {
+    const terminalIdsByTurn = new Map<RunId, string>();
+    for (const entry of props.feed) {
+      if (entry.type === "message" && entry.message.role === "assistant" && entry.message.runId) {
+        terminalIdsByTurn.set(entry.message.runId, entry.message.id);
+      }
+    }
+    return new Set(terminalIdsByTurn.values());
+  })();
+  const end =
+    !props.runlessWorkActive && props.activeWorkStartedAt === null
+      ? runEndState(props.latestRun)
+      : null;
+  const endMessage = end
+    ? presentedFeed.findLast(
+        (entry) =>
+          entry.type === "message" &&
+          entry.message.role === "assistant" &&
+          entry.message.runId === props.latestRun?.runId &&
+          terminalAssistantMessageIds.has(entry.message.id) &&
+          !entry.message.streaming &&
+          (entry.message.text.trim().length > 0 || (entry.message.attachments?.length ?? 0) > 0),
+      )
+    : null;
+  const endFeedback = end
+    ? {
+        messageId: endMessage?.type === "message" ? endMessage.message.id : null,
+        end,
+        label:
+          end.kind === "failed"
+            ? t("chat.timeline.runFailed")
+            : end.kind === "stopped"
+              ? t("chat.timeline.runStopped")
+              : end.kind === "rolledBack"
+                ? t("chat.timeline.runRolledBack")
+                : t("chat.timeline.runEnded"),
+      }
+    : null;
   const setupAnchorIndex = presentedFeed.findIndex(
     (entry) => entry.type === "message" && entry.message.role === "user",
   );
@@ -2192,15 +2242,6 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     { anchorOffset: anchorTopInset + CHAT_LIST_ANCHOR_OFFSET },
   );
   const failedRunIds = failedFeedRunIds(props.feed, props.latestRun);
-  const terminalAssistantMessageIds = (() => {
-    const terminalIdsByTurn = new Map<RunId, string>();
-    for (const entry of props.feed) {
-      if (entry.type === "message" && entry.message.role === "assistant" && entry.message.runId) {
-        terminalIdsByTurn.set(entry.message.runId, entry.message.id);
-      }
-    }
-    return new Set(terminalIdsByTurn.values());
-  })();
   useEffect(() => {
     const previous = previousLatestTurnRef.current;
     previousLatestTurnRef.current = props.latestRun;
@@ -2433,6 +2474,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       >
         <ThreadMediaVisibility>
           {renderFeedEntry(info, {
+            endFeedback,
             copyMessageLabel: t("chat.copy.message"),
             environmentId: props.environmentId,
             dispatchingMessageId: props.dispatchingMessageId,
@@ -2620,15 +2662,27 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
               </>
             }
             ListFooterComponent={
-              props.pendingHandoff ? (
-                <ThreadHandoffDivider
-                  environmentId={props.environmentId}
-                  endpoints={props.pendingHandoff}
-                  iconColor={iconSubtleColor}
-                  surfaceColor={screenColor}
-                  label="Context handoff pending"
-                />
-              ) : null
+              <>
+                {props.pendingHandoff ? (
+                  <ThreadHandoffDivider
+                    environmentId={props.environmentId}
+                    endpoints={props.pendingHandoff}
+                    iconColor={iconSubtleColor}
+                    surfaceColor={screenColor}
+                    label="Context handoff pending"
+                  />
+                ) : null}
+                {endFeedback && endFeedback.messageId === null ? (
+                  <View className="flex-row flex-wrap items-center gap-2 px-1 py-2">
+                    {endFeedback.end.completedAt ? (
+                      <Text className="text-xs tabular-nums text-foreground-secondary">
+                        {formatMessageTime(endFeedback.end.completedAt)}
+                      </Text>
+                    ) : null}
+                    <Text className="text-xs text-foreground-secondary">{endFeedback.label}</Text>
+                  </View>
+                ) : null}
+              </>
             }
             contentContainerStyle={{
               paddingTop: 12,

@@ -847,8 +847,64 @@ describe("MessagesTimeline messages", () => {
           }),
         } as Entry,
       ],
-      { onForkFromRun },
+      {
+        onForkFromRun,
+        latestRun: {
+          runId: RunId.make("run-1"),
+          status: "completed",
+          startedAt: CREATED_AT,
+          completedAt: CREATED_AT,
+        },
+      },
     );
+    using clipboard = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+    await expect.element(screen.getByText("Turn ended", { exact: true })).toBeVisible();
+    const meta = screen.container.querySelector<HTMLElement>(
+      '[data-testid="latest-run-end-state"]',
+    )!;
+    expect(meta.querySelectorAll("time")).toHaveLength(1);
+    expect(meta.querySelectorAll("button")[0]?.getAttribute("aria-label")).toBe("Copy message");
+    expect(meta.querySelectorAll("button")[1]?.getAttribute("aria-label")).toBe(
+      "Fork from this response",
+    );
+    expect(getComputedStyle(meta).opacity).toBe("1");
+    const time = meta.querySelector("time")!.getBoundingClientRect();
+    const status = meta.querySelector('[role="status"]')!.getBoundingClientRect();
+    expect(Math.abs(time.top - status.top)).toBeLessThan(2);
+    screen.container.style.width = "170px";
+    await screen.rerender(
+      <MessagesTimeline
+        {...baseProps()}
+        timelineEntries={[
+          {
+            ...message("Done", { role: "assistant", runId: RunId.make("run-1") }, "assistant-1"),
+            projectedItem: v2Item("assistant_message", {
+              id: "assistant-item-1",
+              messageId: "assistant-1",
+              text: "Done",
+              streaming: false,
+            }),
+          } as Entry,
+        ]}
+        onForkFromRun={onForkFromRun}
+        latestRun={{
+          runId: RunId.make("run-1"),
+          status: "completed",
+          startedAt: CREATED_AT,
+          completedAt: CREATED_AT,
+        }}
+      />,
+    );
+    await expect.element(screen.getByText("Turn ended", { exact: true })).toBeVisible();
+    const narrowMeta = screen.container.querySelector<HTMLElement>(
+      '[data-testid="latest-run-end-state"]',
+    )!;
+    expect(narrowMeta.scrollWidth).toBeLessThanOrEqual(narrowMeta.clientWidth + 1);
+    expect(
+      narrowMeta.querySelector('[role="status"]')!.getBoundingClientRect().top,
+    ).toBeGreaterThanOrEqual(narrowMeta.querySelector("time")!.getBoundingClientRect().top);
+    await click(screen.button("Copy message"));
+    expect(clipboard).toHaveBeenCalledWith("Done");
     await click(screen.button("Fork from this response"));
     expect(onForkFromRun).toHaveBeenCalledWith({ sourceThreadId: "thread-1", runId: "run-1" });
   });
@@ -1819,13 +1875,23 @@ describe("latest run end feedback", () => {
         latestRun={{ ...run, status, completedAt }}
       />,
     );
-    const end = screen.container.querySelector<HTMLElement>(
-      '[data-testid="latest-run-end-state"]',
-    )!;
+    await expect.element(screen.getByText(label, { exact: true })).toBeVisible();
+    const end = screen
+      .getByText(label, { exact: true })
+      .element()
+      .closest<HTMLElement>('[data-testid="latest-run-end-state"]')!;
     expect(end.textContent).toContain(label);
     expect(end.querySelector("time")?.dateTime).toBe(completedAt);
     expect(getComputedStyle(end).opacity).toBe("1");
-    expect(end.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })).toBe(true);
+    await expect
+      .poll(() =>
+        screen
+          .getByText(label, { exact: true })
+          .element()
+          .closest<HTMLElement>('[data-testid="latest-run-end-state"]')!
+          .checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }),
+      )
+      .toBe(true);
     await userEvent.hover(screen.getByText("The final reply"));
     expect(end.textContent).toContain(label);
     await screen.rerender(
@@ -1871,4 +1937,44 @@ describe("latest run end feedback", () => {
       screen.container.querySelector('[data-testid="latest-run-end-state"]')?.textContent,
     ).toContain(label);
   });
+});
+
+it("keeps end feedback with the trailing assistant meta row", async () => {
+  const runId = RunId.make("trailing-meta");
+  await using screen = await renderTimeline(
+    [
+      message("Finished reply", { role: "assistant", runId }),
+      work("tail-tool", {
+        runId,
+        label: "Run checks",
+        tone: "tool",
+        itemType: "command_execution",
+        toolLifecycleStatus: "completed",
+      }),
+    ],
+    { latestRun: { runId, status: "completed", startedAt: CREATED_AT, completedAt: CREATED_AT } },
+  );
+  await expect.element(screen.getByText("Turn ended", { exact: true })).toBeVisible();
+  const meta = screen.container.querySelector<HTMLElement>('[data-testid="latest-run-end-state"]')!;
+  expect(meta.querySelector('[aria-label="Copy message"]')).not.toBeNull();
+  expect(meta.querySelectorAll("time")).toHaveLength(1);
+  expect(screen.container.querySelectorAll('[data-testid="latest-run-end-state"]')).toHaveLength(1);
+});
+
+it("falls back after a run with no assistant reply without attaching to an older response", async () => {
+  await using screen = await renderTimeline(
+    [message("Old reply", { role: "assistant", runId: RunId.make("old-run") })],
+    {
+      latestRun: {
+        runId: RunId.make("failed-before-reply"),
+        status: "failed",
+        startedAt: CREATED_AT,
+        completedAt: CREATED_AT,
+      },
+    },
+  );
+  await expect.element(screen.getByText("Turn failed", { exact: true })).toBeVisible();
+  const end = screen.container.querySelector<HTMLElement>('[data-testid="latest-run-end-state"]')!;
+  expect(end.querySelector("button")).toBeNull();
+  expect(end.querySelectorAll("time")).toHaveLength(1);
 });
