@@ -5,6 +5,9 @@ import { formatContextWindowCompactionMessage } from "../components/chat/Context
 import * as DateTime from "effect/DateTime";
 import {
   ContextTransferId,
+  NodeId,
+  ProviderThreadId,
+  ProviderTurnId,
   ProviderDriverKind,
   ProviderInstanceId,
   RunId,
@@ -82,6 +85,62 @@ describe("V2 context window presentation", () => {
     });
   });
 
+  it.each([0, null])(
+    "does not let a former provider session override current usage %s",
+    (usedTokens) => {
+      const base = makeThreadProjectionFixture();
+      const currentId = ProviderThreadId.make("current-native-session");
+      const projection = {
+        ...base,
+        thread: { ...base.thread, activeProviderThreadId: currentId },
+        providerThreads: [
+          {
+            id: currentId,
+            driver: ProviderDriverKind.make("codex"),
+            providerInstanceId: base.thread.providerInstanceId,
+            providerSessionId: null,
+            appThreadId: base.thread.id,
+            ownerNodeId: null,
+            nativeThreadRef: null,
+            nativeConversationHeadRef: null,
+            status: "idle" as const,
+            firstRunOrdinal: null,
+            lastRunOrdinal: null,
+            handoffIds: [],
+            forkedFrom: null,
+            pendingBackgroundTasks: [],
+            nativeMetadata: null,
+            goal: null,
+            contextUsage: usedTokens === null ? null : { usedTokens, maxTokens: 200_000 },
+            createdAt: base.updatedAt,
+            updatedAt: base.updatedAt,
+          },
+        ],
+        providerTurns: [
+          {
+            id: ProviderTurnId.make("old-native-turn"),
+            providerThreadId: ProviderThreadId.make("former-native-session"),
+            nodeId: NodeId.make("old-node"),
+            runAttemptId: null,
+            nativeTurnRef: null,
+            ordinal: 1,
+            status: "completed" as const,
+            startedAt: base.updatedAt,
+            completedAt: base.updatedAt,
+            tokenUsage: {
+              usedTokens: 80_000,
+              maxTokens: 100_000,
+              updatedAt: "2026-10-23T00:00:00Z",
+            },
+          },
+        ],
+      };
+      const snapshot = deriveThreadContextWindowSnapshot(projection);
+      if (usedTokens === null) expect(snapshot).toBeNull();
+      else expect(snapshot).toMatchObject({ usedTokens: 0, usedPercentage: 0, maxTokens: 200_000 });
+    },
+  );
+
   it("formats compact token values", () => {
     expect(formatContextWindowTokens(1_500)).toBe("1.5k");
   });
@@ -137,11 +196,12 @@ describe("live provider-turn usage (#8144)", () => {
 describe("latestProviderTurnTokenUsage", () => {
   it("picks the newest report, not the last turn in snapshot order", () => {
     const usage = (usedTokens: number, updatedAt: string) => ({
+      providerThreadId: ProviderThreadId.make("provider-thread"),
       tokenUsage: { usedTokens, updatedAt },
     });
     const latest = latestProviderTurnTokenUsage([
       usage(300_000, "2026-06-20T12:00:00.000Z"),
-      {},
+      { providerThreadId: ProviderThreadId.make("provider-thread") },
       usage(90_000, "2026-06-20T09:00:00.000Z"),
     ]);
     expect(latest?.usedTokens).toBe(300_000);
@@ -213,7 +273,14 @@ describe("latestProviderTurnTokenUsage", () => {
 
   it("replaces inherited usage with the fork's own report", () => {
     const tokenUsage = { usedTokens: 42_000, updatedAt: "2026-10-19T12:10:00.000Z" };
-    expect(latestProviderTurnTokenUsage([{ tokenUsage }], forkProjection())).toEqual(tokenUsage);
+    const projection = forkProjection();
+    const providerThreadId = ProviderThreadId.make("target-provider-thread");
+    expect(
+      latestProviderTurnTokenUsage([{ providerThreadId, tokenUsage }], {
+        ...projection,
+        thread: { ...projection.thread, activeProviderThreadId: providerThreadId },
+      }),
+    ).toEqual(tokenUsage);
   });
 
   it.each([0, 42_000])(

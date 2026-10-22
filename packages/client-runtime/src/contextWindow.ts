@@ -33,7 +33,11 @@ export function deriveThreadContextWindowSnapshot(
     (thread) => thread.id === projection.thread.activeProviderThreadId,
   );
   return deriveLatestContextWindowSnapshot(
-    projection.visibleTurnItems,
+    projection.thread.activeProviderThreadId === null
+      ? []
+      : projection.visibleTurnItems.filter(
+          ({ item }) => item.providerThreadId === projection.thread.activeProviderThreadId,
+        ),
     latestProviderTurnTokenUsage(projection.providerTurns, projection, providerThread),
     providerThread,
   );
@@ -44,16 +48,19 @@ export function formatContextWindowPercentage(value: number | null): string | nu
   return value < 10 ? `${value.toFixed(1).replace(/\.0$/, "")}%` : `${Math.round(value)}%`;
 }
 
-/** Newest usage report across a thread's provider turns. Snapshots order turns
-    by provider thread, not time, so pick by timestamp. */
+/** Snapshots retain former provider sessions; only the active session reports current occupancy. */
 export function latestProviderTurnTokenUsage(
-  turns: ReadonlyArray<Pick<OrchestrationV2ProviderTurn, "tokenUsage">>,
+  turns: ReadonlyArray<Pick<OrchestrationV2ProviderTurn, "providerThreadId" | "tokenUsage">>,
   projection?: Pick<OrchestrationV2ThreadProjection, "thread" | "contextTransfers"> | null,
   providerThread?: Pick<OrchestrationV2ProviderThread, "contextUsage"> | null,
 ): OrchestrationV2ProviderTurnTokenUsage | null {
   let latest: OrchestrationV2ProviderTurnTokenUsage | null = null;
-  for (const { tokenUsage } of turns) {
-    if (tokenUsage === undefined) continue;
+  for (const { providerThreadId, tokenUsage } of turns) {
+    if (
+      tokenUsage === undefined ||
+      (projection != null && providerThreadId !== projection.thread.activeProviderThreadId)
+    )
+      continue;
     // Ties go to the later entry, since live upserts append.
     if (latest === null || Date.parse(tokenUsage.updatedAt) >= Date.parse(latest.updatedAt)) {
       latest = tokenUsage;

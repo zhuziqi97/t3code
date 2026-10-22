@@ -487,7 +487,7 @@ import {
   shouldOfferResumeCompaction,
 } from "./chat/ContextWindowMeter.logic";
 import {
-  deriveLatestContextWindowSnapshot,
+  deriveThreadContextWindowSnapshot,
   latestProviderTurnTokenUsage,
 } from "../lib/contextWindow";
 import {
@@ -2662,11 +2662,7 @@ export default function ChatView(props: ChatViewProps) {
     isConnecting ||
     isCompacting ||
     runlessWorkStartedAt !== null;
-  const activeContextWindow = deriveLatestContextWindowSnapshot(
-    serverVisibleTurnItems ?? [],
-    activeThreadLiveTokenUsage,
-    activeProviderThread,
-  );
+  const activeContextWindow = deriveThreadContextWindowSnapshot(serverProjection);
   const pendingBackgroundTasks = (() => {
     if (serverProjection === null || serverProjection === undefined) {
       return [];
