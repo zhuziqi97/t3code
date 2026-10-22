@@ -95,7 +95,7 @@ let renderer: Screen;
 async function mount() {
   await act(async () => {
     container = document.createElement("div");
-    renderer = renderStack.use(await renderTestUi(null, { container: container, router: false }));
+    renderer = renderStack.use(await renderTestUi(null, { container: container }));
     await renderer.rerender(<Probe />);
   });
 }

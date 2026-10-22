@@ -37,7 +37,6 @@ import { resolveThreadCurrentPullRequestLink } from "@t3tools/shared/threadPullR
 import { useAtomValue } from "@effect/atom-react";
 import * as Option from "effect/Option";
 import { Atom } from "effect/reactivity";
-import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
 import * as Schema from "effect/Schema";
 import {
   DndContext,
@@ -195,11 +194,7 @@ import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { cn } from "~/lib/utils";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
-import {
-  buildDraftActionMenuItems,
-  buildThreadActionMenuItems,
-  threadActionRequiresOperate,
-} from "./threadActionMenu.logic";
+import { buildThreadActionMenuItems, threadActionRequiresOperate } from "./threadActionMenu.logic";
 import {
   animateSidebarLayoutChanges,
   applySidebarThreadDrop,
@@ -282,11 +277,8 @@ import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/too
 import { MiddleTruncate } from "./ui/middle-truncate";
 import {
   composerDraftHasUserContent,
-  DraftId,
   useComposerDraftStore,
   useThreadHasUnsentDraft,
-  type ComposerThreadDraftState,
-  type DraftSessionState,
 } from "../composerDraftStore";
 import { useThreadRouteTarget } from "../hooks/useThreadRouteTarget";
 
@@ -1318,189 +1310,6 @@ function SidebarSectionHeader(props: {
     </SortableSidebarMarker>
   );
 }
-
-const SidebarDraftRow = memo(function SidebarDraftRow(props: {
-  draftId: DraftId;
-  composer: ComposerThreadDraftState | null;
-  projectDisplayName: string | null;
-  isActive: boolean;
-  onNavigate: (draftId: DraftId) => void;
-  onDiscard: (draftId: DraftId) => void;
-  onContextMenu: (draftId: DraftId, position: { x: number; y: number }) => void;
-}) {
-  const t = useTranslate();
-  const { composer, draftId, onContextMenu, onDiscard, onNavigate } = props;
-  const promptPreview =
-    replaceComposerContextReferences(composer?.prompt ?? "", (occurrence) => occurrence.label)
-      .trim()
-      .split("\n", 1)[0] ?? "";
-  // images mirrors persistedAttachments once rehydration finishes; before
-  // that only the persisted list is populated, hence max not sum.
-  const attachmentCount =
-    Math.max(composer?.images.length ?? 0, composer?.persistedAttachments.length ?? 0) +
-    (composer?.files.length ?? 0) +
-    (composer?.terminalContexts.length ?? 0) +
-    (composer?.previewAnnotations.length ?? 0) +
-    (composer?.reviewComments.length ?? 0);
-  const preview =
-    promptPreview.length > 0
-      ? promptPreview
-      : attachmentCount > 0
-        ? t("thread.attachments", { count: attachmentCount })
-        : t("thread.new");
-  const accessibility = resolveSidebarRowAccessibility({
-    title: preview,
-    statusLabel: t("thread.draft.unsent"),
-    projectDisplayName: props.projectDisplayName,
-    isActive: props.isActive,
-  });
-  const handleActivate = () => onNavigate(draftId);
-  const handleKeyDown = (event: ReactKeyboardEvent) => {
-    // Keys targeting the nested discard button belong to the button:
-    // preventDefault here would swallow Space's synthesized click and
-    // navigate instead of discarding.
-    if ((event.target as HTMLElement).closest("button")) return;
-    if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
-      event.preventDefault();
-      const rect = event.currentTarget.getBoundingClientRect();
-      onContextMenu(draftId, { x: rect.left, y: rect.bottom });
-    } else if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      onNavigate(draftId);
-    }
-  };
-  const handleContextMenu = (event: ReactMouseEvent) => {
-    event.preventDefault();
-    onContextMenu(draftId, { x: event.clientX, y: event.clientY });
-  };
-  const handleDiscard = (event: ReactMouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-    onDiscard(draftId);
-  };
-  return (
-    <li className="ml-5 list-none">
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <div
-              role="button"
-              tabIndex={0}
-              aria-label={accessibility.label}
-              aria-current={accessibility.current}
-              data-testid="sidebar-draft-row"
-              className={cn(
-                "group/sidebar-row relative flex h-9 w-full cursor-pointer items-center gap-2 overflow-hidden rounded-md px-2.5 text-left text-sidebar-foreground outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring pointer-coarse:h-11",
-                props.isActive ? "bg-sidebar-row-active" : draftSurfaceClassName,
-              )}
-              onClick={handleActivate}
-              onContextMenu={handleContextMenu}
-              onKeyDown={handleKeyDown}
-            />
-          }
-        >
-          <SquarePenIcon aria-hidden className={draftPenClassName} />
-          <span className="min-w-0 flex-1 truncate text-sm text-foreground/90">{preview}</span>
-          <button
-            type="button"
-            aria-label={t("thread.draft.discard")}
-            onClick={handleDiscard}
-            className="pointer-events-none inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md pointer-coarse:h-11 pointer-coarse:w-9 bg-transparent text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/sidebar-row:pointer-events-auto group-hover/sidebar-row:opacity-100 pointer-coarse:pointer-events-auto pointer-coarse:opacity-100"
-          >
-            <XIcon className="size-3.5" />
-          </button>
-        </TooltipTrigger>
-        <TooltipPopup>
-          <div className="max-w-80 break-words">{preview}</div>
-          <div className="text-xs text-muted-foreground">
-            {props.projectDisplayName} · Unsent draft
-          </div>
-        </TooltipPopup>
-      </Tooltip>
-    </li>
-  );
-});
-
-interface SidebarDraftRowData {
-  draftId: DraftId;
-  session: DraftSessionState;
-  composer: ComposerThreadDraftState | null;
-}
-
-const SidebarDraftBlock = memo(function SidebarDraftBlock(props: {
-  projectByKey: ReadonlyMap<string, EnvironmentProject>;
-  projectDisplayNameByKey: ReadonlyMap<string, string>;
-  scopedProjectKeys: ReadonlySet<string> | null;
-  routeDraftId: string | null;
-  onNavigateToDraft: (draftId: DraftId) => void;
-  onDraftContextMenu: (draftId: DraftId, position: { x: number; y: number }) => void;
-}) {
-  const draftThreadsByThreadKey = useComposerDraftStore((store) => store.draftThreadsByThreadKey);
-  const draftsByThreadKey = useComposerDraftStore((store) => store.draftsByThreadKey);
-  const [frozenActive, setFrozenActive] = useState<{
-    routeDraftId: string | null;
-    row: SidebarDraftRowData | null;
-  }>({ routeDraftId: null, row: null });
-  if (frozenActive.routeDraftId !== props.routeDraftId) {
-    let row: SidebarDraftRowData | null = null;
-    if (props.routeDraftId !== null) {
-      const draftId = DraftId.make(props.routeDraftId);
-      const session = draftThreadsByThreadKey[draftId] ?? null;
-      const composer = draftsByThreadKey[draftId] ?? null;
-      row = session && session.promotedTo == null ? { draftId, session, composer } : null;
-    }
-    setFrozenActive({ routeDraftId: props.routeDraftId, row });
-  }
-  const drafts = (() => {
-    const rows: SidebarDraftRowData[] = [];
-    for (const [draftKey, session] of Object.entries(draftThreadsByThreadKey)) {
-      if (session.promotedTo != null) {
-        continue;
-      }
-      if (
-        props.scopedProjectKeys !== null &&
-        !props.scopedProjectKeys.has(`${session.environmentId}:${session.projectId}`)
-      ) {
-        continue;
-      }
-      if (draftKey === props.routeDraftId) {
-        if (frozenActive.routeDraftId === draftKey && frozenActive.row !== null) {
-          rows.push({ ...frozenActive.row, session });
-        }
-        continue;
-      }
-      const composer = draftsByThreadKey[draftKey];
-      if (!composer || !composerDraftHasUserContent(composer)) {
-        continue;
-      }
-      rows.push({ draftId: DraftId.make(draftKey), session, composer });
-    }
-    rows.sort((left, right) => right.session.createdAt.localeCompare(left.session.createdAt));
-    return rows;
-  })();
-  if (drafts.length === 0) {
-    return null;
-  }
-  return (
-    <>
-      {drafts.map(({ composer, draftId, session }) => {
-        const projectKey = `${session.environmentId}:${session.projectId}`;
-        return (
-          <SidebarDraftRow
-            key={draftId}
-            draftId={draftId}
-            composer={composer}
-            projectDisplayName={props.projectDisplayNameByKey.get(projectKey) ?? null}
-            isActive={draftId === props.routeDraftId}
-            onNavigate={props.onNavigateToDraft}
-            onDiscard={discardComposerDraft}
-            onContextMenu={props.onDraftContextMenu}
-          />
-        );
-      })}
-    </>
-  );
-});
 
 // Verb and icon on the lifted row while it hovers over another section. Uses
 // the same icons as the row actions and context menu so the drop reads as the
@@ -3002,15 +2811,6 @@ export default function Sidebar() {
     settings: projectGroupingSettings,
   });
   const showProjectEnvironments = projectGroupsSpanEnvironments(projectGroups);
-  const projectMembersByGroup = new Map(
-    projectGroups.map(
-      (group) =>
-        [
-          group.projectKey,
-          new Set(group.memberProjectRefs.map((ref) => `${ref.environmentId}:${ref.projectId}`)),
-        ] as const,
-    ),
-  );
   const logicalGroupByProjectRef = new Map(
     projectGroups.flatMap((group) =>
       group.memberProjectRefs.map(
@@ -3440,14 +3240,6 @@ export default function Sidebar() {
     } catch {
       clearPendingFileDrop(dropId);
     }
-  };
-
-  const navigateToDraft = (draftId: DraftId) => {
-    clearSelection();
-    if (isMobile) {
-      setOpenMobile(false);
-    }
-    void router.navigate({ to: "/draft/$draftId", params: { draftId } });
   };
 
   const clearThreadSearch = () => {
@@ -4462,61 +4254,6 @@ export default function Sidebar() {
     },
   );
 
-  const handleDraftContextMenu = useStableCallback(
-    (draftId: DraftId, position: { x: number; y: number }) => {
-      void (async () => {
-        const api = readLocalApi();
-        const session = useComposerDraftStore.getState().getDraftSession(draftId);
-        if (!api || !session || session.promotedTo) return;
-        const projectGroup = projectGroupsRef.current.find((group) =>
-          group.memberProjectRefs.some(
-            (ref) =>
-              ref.environmentId === session.environmentId && ref.projectId === session.projectId,
-          ),
-        );
-        const workspacePath =
-          session.worktreePath ??
-          projectByKey.get(`${session.environmentId}:${session.projectId}`)?.workspaceRoot;
-        const clicked = await settlePromise(() =>
-          api.contextMenu.show(
-            buildDraftActionMenuItems(
-              {
-                hasPath: Boolean(workspacePath),
-                hasBranch: Boolean(session.branch),
-                hasProject: projectGroup != null,
-              },
-              t,
-            ),
-            position,
-          ),
-        );
-        if (clicked._tag === "Failure") return;
-        switch (clicked.value) {
-          case "project-settings":
-            if (projectGroup)
-              openProjectSettings(projectGroup, {
-                environmentId: session.environmentId,
-                projectId: session.projectId,
-              });
-            return;
-          case "copy-path":
-            if (workspacePath) copyPathToClipboard(workspacePath, { path: workspacePath });
-            return;
-          case "copy-branch":
-            if (session.branch) copyBranchToClipboard(session.branch, { branch: session.branch });
-            return;
-          case "discard": {
-            // The menu can stay open while the draft sends; discarding a
-            // promoting draft would strand the send.
-            const current = useComposerDraftStore.getState().getDraftSession(draftId);
-            if (current && !current.promotedTo) discardComposerDraft(draftId);
-            return;
-          }
-        }
-      })();
-    },
-  );
-
   const handleThreadContextMenu = useStableCallback(
     (threadRef: ScopedThreadRef, position: { x: number; y: number }) => {
       void (async () => {
@@ -4895,8 +4632,6 @@ export default function Sidebar() {
                   ? `${newThreadTarget.label} · ${projectByKey.get(`${newThreadTarget.projectRef.environmentId}:${newThreadTarget.projectRef.projectId}`)?.workspaceRoot ?? ""}`
                   : null
               }
-              allThreadsSelected={projectScopeKey === null}
-              onAllThreads={() => setProjectScopeKey(null)}
               searchInputRef={threadSearchInputRef}
               searchQuery={threadSearchQuery}
               onSearchQueryChange={(value) => {
@@ -5119,9 +4854,6 @@ export default function Sidebar() {
                         item.projectKey === undefined
                           ? null
                           : (projectGroupByKey.get(item.projectKey) ?? null);
-                      const members = group
-                        ? (projectMembersByGroup.get(group.projectKey) ?? null)
-                        : null;
                       if (item.marker === "pinned-header" || item.marker === "projects-header") {
                         return (
                           <SortableSidebarMarker
@@ -5182,26 +4914,6 @@ export default function Sidebar() {
                               }}
                               onSettings={() => openProjectSettings(group)}
                             />
-                          </SortableSidebarMarker>
-                        );
-                      } else if (item.marker === "draft-block" && group) {
-                        return (
-                          <SortableSidebarMarker
-                            key={id}
-                            marker={item.marker}
-                            projectKey={group.projectKey}
-                            className=""
-                          >
-                            <ul role="presentation">
-                              <SidebarDraftBlock
-                                projectByKey={projectByKey}
-                                projectDisplayNameByKey={projectDisplayNameByKey}
-                                scopedProjectKeys={members}
-                                routeDraftId={routeDraftIdForRows}
-                                onNavigateToDraft={navigateToDraft}
-                                onDraftContextMenu={handleDraftContextMenu}
-                              />
-                            </ul>
                           </SortableSidebarMarker>
                         );
                       } else if (item.marker === "active-placeholder" && group) {

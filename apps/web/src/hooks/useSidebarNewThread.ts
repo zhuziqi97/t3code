@@ -1,10 +1,13 @@
 import { useTranslate } from "../i18n";
 import { useAtomValue } from "@effect/atom-react";
+import { useRouter } from "@tanstack/react-router";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import { openCommandPalette } from "../commandPaletteBus";
 import { buildSidebarProjectSnapshots } from "../sidebarProjectGrouping";
 import { selectProjectGroupingSettings } from "../logicalProject";
-import { readProjects, useProjects } from "../state/entities";
+import { readProjects, readThreadShell, useProjects } from "../state/entities";
+import { composerDraftHasUserContent, useComposerDraftStore } from "../composerDraftStore";
 import { usePrimaryEnvironmentId } from "../state/environments";
 import { environmentServerConfigsAtom } from "../state/server";
 import { useUiStateStore } from "../uiStateStore";
@@ -18,6 +21,7 @@ import { useHandleNewThread } from "./useHandleNewThread";
 
 export function useSidebarNewThread() {
   const t = useTranslate();
+  const router = useRouter();
   const { activeThread, activeDraftThread, defaultProjectRef, handleNewThread } =
     useHandleNewThread();
   const context = {
@@ -60,6 +64,17 @@ export function useSidebarNewThread() {
       return;
     }
     try {
+      const drafts = useComposerDraftStore.getState();
+      const draft = drafts.getDraftSessionByProjectRef(currentTarget.projectRef);
+      // Unsent conversations have no sidebar row; reopening the project must retain their input.
+      if (
+        draft &&
+        composerDraftHasUserContent(drafts.getComposerDraft(draft.draftId)) &&
+        readThreadShell(scopeThreadRef(draft.environmentId, draft.threadId)) === null
+      ) {
+        await router.navigate({ to: "/draft/$draftId", params: { draftId: draft.draftId } });
+        return;
+      }
       await context.handleNewThread(currentTarget.projectRef);
     } catch (error) {
       toastManager.add(

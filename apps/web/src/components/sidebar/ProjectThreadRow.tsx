@@ -58,8 +58,8 @@ export function ProjectThreadRow({
           {status}
           {title}
           {indicators}
-          <span className="relative ml-auto flex min-w-10 shrink-0 items-center justify-end text-xs text-sidebar-muted-foreground">
-            <span className="group-hover/project-thread:opacity-0 group-focus-within/project-thread:opacity-0">
+          <span className="relative ml-auto flex min-w-6 shrink-0 items-center justify-end text-xs text-sidebar-muted-foreground">
+            <span className="group-hover/project-thread:hidden group-focus-within/project-thread:hidden">
               {time}
             </span>
             <span className="pointer-events-none absolute right-0 opacity-0 group-hover/project-thread:pointer-events-auto group-hover/project-thread:opacity-100 group-focus-within/project-thread:pointer-events-auto group-focus-within/project-thread:opacity-100">

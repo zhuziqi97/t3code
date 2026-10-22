@@ -99,7 +99,6 @@ export function buildProjectTreeList(input: {
     const projectKey = group.projectKey;
     items.push({ kind: "marker", marker: "project-header", projectKey });
     if (!resolveProjectExpanded(input.expandedById, projectExpansionKeys(group))) continue;
-    items.push({ kind: "marker", marker: "draft-block", projectKey });
     items.push({ kind: "marker", marker: "active-placeholder", projectKey, section: "active" });
     items.push(...(active.get(projectKey) ?? []));
     if (input.pageControls?.has(`active:${projectKey}`)) {

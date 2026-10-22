@@ -141,7 +141,6 @@ export type SidebarListMarker =
   /** The top boundary is also a landing target when there are no pins. */
   | "projects-header"
   | "project-header"
-  | "draft-block"
   | "settled-more"
   | "active-more"
   | "working-more"

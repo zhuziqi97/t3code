@@ -21,8 +21,6 @@ export interface SidebarThreadHeaderProps {
   newThreadDisabled: boolean;
   newThreadShortcutLabel: string | null | undefined;
   newThreadTargetLabel: string | null;
-  allThreadsSelected: boolean;
-  onAllThreads: () => void;
   searchInputRef: RefObject<HTMLInputElement | null>;
   searchQuery: string;
   onSearchQueryChange: (value: string) => void;
@@ -40,8 +38,6 @@ export function SidebarThreadHeader({
   newThreadDisabled,
   newThreadShortcutLabel,
   newThreadTargetLabel,
-  allThreadsSelected,
-  onAllThreads,
   searchInputRef,
   searchQuery,
   onSearchQueryChange,
@@ -129,9 +125,6 @@ export function SidebarThreadHeader({
           </Button>
         ) : null}
       </div>
-      <SidebarMenuButton type="button" isActive={allThreadsSelected} onClick={onAllThreads}>
-        {t("convene.sidebar.allThreads")}
-      </SidebarMenuButton>
     </div>
   );
 }
