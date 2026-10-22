@@ -16,6 +16,7 @@ const {
   copyFileSyncMock,
   execFileSyncMock,
   readFileSyncMock,
+  getSystemLocaleMock,
 } = vi.hoisted(() => ({
   appendSwitchMock: vi.fn(),
   getSwitchValueMock: vi.fn(),
@@ -27,12 +28,14 @@ const {
   copyFileSyncMock: vi.fn(),
   execFileSyncMock: vi.fn(),
   readFileSyncMock: vi.fn(),
+  getSystemLocaleMock: vi.fn(),
 }));
 
 vi.mock("electron", () => ({
   app: {
     setDesktopName: setDesktopNameMock,
     getVersion: () => "0.0.37",
+    getSystemLocale: getSystemLocaleMock,
     isPackaged: true,
     getAppPath: () => "/tmp/.mount_T3/resources/app.asar",
     commandLine: {
@@ -71,6 +74,58 @@ describe("DesktopPreReadyPlatform", () => {
     copyFileSyncMock.mockReset();
     execFileSyncMock.mockReset();
     readFileSyncMock.mockReset().mockReturnValue("{}");
+    getSystemLocaleMock.mockReset().mockReturnValue("en-US");
+  });
+
+  it.effect.each([
+    { settings: '{"languagePreference":"zh"}', systemLocale: "en-US", expected: "zh-CN" },
+    {
+      settings: '{"settings":{"languagePreference":"zh"}}',
+      systemLocale: "en-US",
+      expected: "zh-CN",
+    },
+    { settings: '{"languagePreference":"en"}', systemLocale: "zh-CN", expected: "en-US" },
+    { settings: '{"languagePreference":"system"}', systemLocale: "zh-TW", expected: "zh-CN" },
+    { settings: undefined, systemLocale: "zh-CN", expected: "zh-CN" },
+    { settings: '{"languagePreference":"system"}', systemLocale: "ja-JP", expected: "en-US" },
+  ])(
+    "sets native menu locale $expected before startup yields ($settings)",
+    ({ settings, systemLocale, expected }) => {
+      vi.stubEnv("T3CODE_HOME", "/isolated");
+      getSystemLocaleMock.mockReturnValue(systemLocale);
+      const switches = new Map<string, string>();
+      appendSwitchMock.mockImplementation((name: string, value: string) =>
+        switches.set(name, value),
+      );
+      readFileSyncMock.mockImplementation((path: string) => {
+        if (path !== "/isolated/userdata/client-settings.json") return "{}";
+        if (settings === undefined) throw new Error("ENOENT");
+        return settings;
+      });
+      return Effect.gen(function* () {
+        const readyLocale = Promise.resolve().then(() => switches.get("lang"));
+        yield* DesktopPreReadyPlatform.make;
+        assert.equal(yield* Effect.promise(() => readyLocale), expected);
+      }).pipe(
+        Effect.provideService(HostProcess.Platform, "linux"),
+        Effect.ensuring(Effect.sync(() => vi.unstubAllEnvs())),
+      );
+    },
+  );
+
+  it.effect("preserves an explicit native locale switch", () => {
+    hasSwitchMock.mockImplementation((name: string) => name === "lang");
+    return DesktopPreReadyPlatform.make.pipe(
+      Effect.provideService(HostProcess.Platform, "linux"),
+      Effect.tap(() =>
+        Effect.sync(() => {
+          assert.isFalse(appendSwitchMock.mock.calls.some(([name]) => name === "lang"));
+          assert.isFalse(
+            readFileSyncMock.mock.calls.some(([path]) => path.endsWith("client-settings.json")),
+          );
+        }),
+      ),
+    );
   });
 
   it.effect("persists Linux scaling synchronously across relaunches and settings rewrites", () => {
@@ -207,7 +262,7 @@ describe("DesktopPreReadyPlatform", () => {
   ])("prepares a $label Linux desktop entry before startup yields", ({ previousEntry }) => {
     vi.stubEnv("VITE_DEV_SERVER_URL", "");
     vi.stubEnv("XDG_DATA_HOME", "/xdg");
-    vi.stubEnv("APPIMAGE", "/Applications/current.AppImage");
+    vi.stubEnv("APPIMAGE", "/Applications/current build.AppImage");
     getSwitchValueMock.mockReturnValue("");
     let desktopName = "t3code.desktop";
     let desktopEntry = previousEntry;
@@ -236,7 +291,10 @@ describe("DesktopPreReadyPlatform", () => {
         );
         const identity = yield* Effect.promise(() => portalIdentity);
         assert.equal(identity.desktopName, "tech.ziqi.t3code-convene.desktop");
-        assert.include(identity.desktopEntry ?? "", 'Exec="/Applications/current.AppImage" %U');
+        assert.include(
+          identity.desktopEntry ?? "",
+          'Exec="/Applications/current build.AppImage" %U',
+        );
         assert.include(identity.desktopEntry ?? "", "Name=T3 Code for Convene (Beta)");
         assert.include(identity.desktopEntry ?? "", "MimeType=x-scheme-handler/t3code-convene;");
         assert.include(

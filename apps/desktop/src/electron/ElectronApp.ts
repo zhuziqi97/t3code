@@ -45,9 +45,8 @@ export class ElectronApp extends Context.Service<
     readonly name: Effect.Effect<string>;
     /**
      * The OS locale, read from the operating system rather than from Chromium's
-     * resolved application locale — the packaged app ships only the `en-US`
-     * locale pak, so `app.getLocale()` and the renderer's `Intl` default are
-     * pinned to `en-US` however the machine is configured.
+     * resolved application locale, which follows the saved interface language
+     * on Linux and can differ from the host's locale.
      */
     readonly systemLocale: Effect.Effect<string>;
     readonly whenReady: Effect.Effect<void, ElectronAppWhenReadyError>;

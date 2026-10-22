@@ -62,6 +62,19 @@ export const make = Effect.gen(function* () {
       platform === "linux" ? resolveEarlyLinuxElectronOptionsFromProcess(homeDirectory) : null;
 
     if (linux !== null) {
+      if (!Electron.app.commandLine.hasSwitch("lang")) {
+        // Chromium's startup locale controls CJK fallback in native menus, independently of labels.
+        Electron.app.commandLine.appendSwitch(
+          "lang",
+          DesktopEarlyElectronStartup.resolveEarlyLinuxLocale({
+            env: process.env,
+            homeDirectory,
+            joinPath: NodePath.posix.join,
+            readFileString: (path) => NodeFS.readFileSync(path, "utf8"),
+            systemLocale: Electron.app.getSystemLocale(),
+          }),
+        );
+      }
       DesktopEarlyElectronStartup.restoreEarlyLinuxDeviceScaleFactor({
         env: process.env,
         homeDirectory,

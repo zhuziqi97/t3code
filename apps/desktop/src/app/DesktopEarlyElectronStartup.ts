@@ -1,4 +1,6 @@
 import { CONVENE_DESKTOP_IDENTITY } from "@t3tools/shared/conveneDesktopIdentity";
+import { LanguagePreference } from "@t3tools/contracts";
+import { resolveLanguage } from "@t3tools/client-runtime/i18n";
 import { fromLenientJson } from "@t3tools/shared/schemaJson";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -46,6 +48,14 @@ const EarlyDesktopSettingsJson = fromLenientJson(
   }),
 );
 const decodeEarlyDesktopSettingsJson = Schema.decodeSync(EarlyDesktopSettingsJson);
+const EarlyClientSettings = Schema.Struct({
+  languagePreference: Schema.optionalKey(LanguagePreference),
+});
+const decodeEarlyClientSettingsJson = Schema.decodeSync(
+  fromLenientJson(
+    Schema.Union([Schema.Struct({ settings: EarlyClientSettings }), EarlyClientSettings]),
+  ),
+);
 
 const isDevelopmentEnvironment = (env: NodeJS.ProcessEnv): boolean =>
   trimNonEmpty(env.VITE_DEV_SERVER_URL) !== null;
@@ -80,6 +90,24 @@ export function resolveEarlyLinuxPasswordStorePreference(
   } catch {
     return DEFAULT_LINUX_PASSWORD_STORE;
   }
+}
+
+export function resolveEarlyLinuxLocale(
+  input: EarlyDesktopSettingsInput & { readonly systemLocale: string },
+): "zh-CN" | "en-US" {
+  let preference: LanguagePreference = "system";
+  try {
+    const settingsPath = input.joinPath(
+      resolveEarlyDesktopSettingsPath(input),
+      "..",
+      "client-settings.json",
+    );
+    const parsed = decodeEarlyClientSettingsJson(input.readFileString(settingsPath));
+    preference = ("settings" in parsed ? parsed.settings : parsed).languagePreference ?? "system";
+  } catch {
+    // First launch or unreadable settings use the same system-language fallback as the client.
+  }
+  return resolveLanguage(preference, [input.systemLocale]) === "zh" ? "zh-CN" : "en-US";
 }
 
 const WAYLAND_COLOR_MANAGER_FEATURE = "WaylandWpColorManagerV1";
