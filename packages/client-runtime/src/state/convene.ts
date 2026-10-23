@@ -1,23 +1,42 @@
-import { WS_METHODS } from "@t3tools/contracts";
+import { WS_METHODS, type ProjectId, type ThreadId } from "@t3tools/contracts";
+import * as Effect from "effect/Effect";
+import { request } from "../rpc/client.ts";
 import { Atom } from "effect/reactivity";
 import type { EnvironmentRegistry } from "../connection/registry.ts";
 import {
   createEnvironmentRpcCommand,
   createEnvironmentRpcSubscriptionAtomFamily,
+  createEnvironmentQueryAtomFamily,
 } from "./runtime.ts";
+
+const readProjectView = Effect.fn("Convene.projectView")((projectId: ProjectId) =>
+  request(WS_METHODS.conveneQueryProject, { projectId }),
+);
 
 export function createConveneEnvironmentAtoms<R, E>(
   runtime: Atom.AtomRuntime<EnvironmentRegistry | R, E>,
 ) {
+  const resourceChanges = createEnvironmentRpcSubscriptionAtomFamily(runtime, {
+    label: "environment-data:convene:resource-changes",
+    tag: WS_METHODS.conveneSubscribeResourceChanges,
+  });
   return {
+    projectView: createEnvironmentQueryAtomFamily(runtime, {
+      label: "environment-data:convene:project-view",
+      execute: (input: { projectId: ProjectId; workspacePath: string; threadId?: ThreadId }) =>
+        readProjectView(input.projectId),
+      staleTimeMs: 0,
+      idleTtlMs: 0,
+      refreshTrigger: ({ environmentId, input }) =>
+        input.threadId
+          ? resourceChanges({ environmentId, input: { threadId: input.threadId } })
+          : undefined,
+    }),
     searchResources: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:convene:search-resources",
       tag: WS_METHODS.conveneSearchResources,
     }),
-    resourceChanges: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
-      label: "environment-data:convene:resource-changes",
-      tag: WS_METHODS.conveneSubscribeResourceChanges,
-    }),
+    resourceChanges,
     readResource: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:convene:read-resource",
       tag: WS_METHODS.conveneReadResource,

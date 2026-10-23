@@ -483,6 +483,10 @@
     "./convene-composer": {
       "types": "./src/conveneComposer.ts",
       "default": "./src/conveneComposer.ts"
+    },
+    "./convene-ide-link": {
+      "types": "./src/conveneIdeLink.ts",
+      "default": "./src/conveneIdeLink.ts"
     }
   },
   "scripts": {

@@ -92,6 +92,7 @@ export type ThreadGitMenuProps = {
   readonly onOpenFilesInspector?: () => void;
   readonly onOpenGitInspector?: () => void;
   readonly onMergeBack?: () => void;
+  readonly webIde?: { readonly title: string; readonly onPress: () => void };
   readonly onPull: () => Promise<void>;
   readonly onRunAction: (input: GitActionRequestInput) => Promise<GitRunStackedActionResult | null>;
 };
@@ -348,6 +349,16 @@ function useThreadGitHeaderActionItems(props: ThreadGitControlsProps): ThreadGit
       label: "Git",
       menu: {
         items: [
+          ...(props.webIde
+            ? [
+                {
+                  type: "action" as const,
+                  label: props.webIde.title,
+                  icon: { name: "terminal", type: "sfSymbol" as const },
+                  onPress: props.webIde.onPress,
+                },
+              ]
+            : []),
           {
             description: compactMenuStatus(props.gitStatus),
             disabled: true,
@@ -533,6 +544,16 @@ function threadGitMenuDefinition(
     icon: "point.topleft.down.curvedto.point.bottomright.up",
     separateBackground: false,
     items: [
+      ...(props.webIde
+        ? [
+            {
+              id: "web-ide",
+              title: props.webIde.title,
+              icon: "terminal" as const,
+              onPress: props.webIde.onPress,
+            },
+          ]
+        : []),
       {
         id: "git-status",
         title: compactMenuBranchLabel(model.currentBranchLabel),

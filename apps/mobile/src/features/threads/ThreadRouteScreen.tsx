@@ -1,4 +1,5 @@
 import * as Dialog from "../../components/ui/Dialog";
+import { useConveneIdeAction } from "./useConveneIdeAction";
 import { useOpenPullRequest } from "../../native/useOpenPullRequest";
 import { makeTurnCommandMetadata } from "../../lib/commandMetadata";
 import { buildProjectThreadStartTurnInput } from "../../lib/projectThreadStartTurn";
@@ -299,6 +300,12 @@ function ThreadRouteContent(
   const selectedThreadDetailState = props.selectedThreadDetailState;
   const selectedThreadDetail = Option.getOrNull(selectedThreadDetailState.data);
   const { selectedThreadCwd } = useSelectedThreadWorktree();
+  const webIde = useConveneIdeAction({
+    environmentId: selectedThread?.environmentId ?? null,
+    projectId: selectedThread?.projectId ?? null,
+    ...(selectedThread ? { threadId: selectedThread.id } : {}),
+    workspacePath: selectedThreadCwd,
+  });
   const composer = useThreadComposerState();
   const gitState = useSelectedThreadGitState();
   const gitActions = useSelectedThreadGitActions();
@@ -707,6 +714,7 @@ function ThreadRouteContent(
     });
   };
   const threadGitControlProps = {
+    webIde,
     environmentId: environmentIdRaw ?? "",
     threadId: threadId ?? "",
     auxiliaryPaneControl:

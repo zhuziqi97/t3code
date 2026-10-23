@@ -3764,6 +3764,11 @@ export const en = {
   "convene.composer.previous": "Previous Convene results",
   "convene.composer.next": "Next Convene results",
   "convene.composer.refresh": "Refresh Convene results",
+  "convene.ide.open": "Open Web IDE",
+  "convene.ide.denied": "Web IDE requires file editing and terminal permission.",
+  "convene.ide.disconnected": "Connect this environment to Convene to open the Web IDE.",
+  "convene.ide.unavailable":
+    "The Web IDE workspace is unavailable. Refresh the Convene project configuration and try again.",
   "convene.resource.title": "Convene resource",
   "convene.resource.back": "Back to chat",
   "convene.resource.close": "Close",

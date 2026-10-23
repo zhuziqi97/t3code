@@ -20,6 +20,7 @@ import ProjectScriptsControl, {
 import { memo, type ComponentProps } from "react";
 import { ThreadDetailsCard } from "./ThreadDetailsCard";
 import { OpenInPicker } from "./OpenInPicker";
+import { ConveneIdeButton } from "../convene/ConveneIdeButton";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
 import { ThreadAutomationsPanel } from "./ThreadAutomationsPanel";
 import { ThreadRelationshipsPanel } from "./ThreadRelationshipsControl";
@@ -143,6 +144,14 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                 />
               ) : null}
 
+              {density !== "essential" ? (
+                <ConveneIdeButton
+                  environmentId={props.environmentId}
+                  projectId={props.projectId}
+                  threadId={props.threadId}
+                  workspacePath={props.gitCwd}
+                />
+              ) : null}
               {props.activeProjectScripts ? (
                 <ProjectScriptsControl
                   environmentId={props.environmentId}

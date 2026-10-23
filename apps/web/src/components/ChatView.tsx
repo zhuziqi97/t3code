@@ -3104,6 +3104,7 @@ export default function ChatView(props: ChatViewProps) {
             : undefined,
       }}
       files={{
+        projectId: activeThread.projectId,
         projectName: activeProject?.title ?? null,
         workspaceRoot: activeWorkspaceRoot,
         availableEditors,

@@ -1,3 +1,4 @@
+import { ConveneIdeButton } from "../convene/ConveneIdeButton";
 import { Spinner } from "~/components/ui/spinner";
 import {
   AuthPreviewOperateScope,
@@ -7,7 +8,7 @@ import {
   type ScopedThreadRef,
 } from "@t3tools/contracts";
 import { filePreviewDelimiter } from "@t3tools/shared/delimitedPreview";
-import { AuthFilesystemWriteScope } from "@t3tools/contracts";
+import { AuthFilesystemWriteScope, type ProjectId } from "@t3tools/contracts";
 import {
   isWorkspaceAudioPreviewPath,
   isWorkspaceImagePreviewPath,
@@ -125,6 +126,7 @@ import {
 
 interface FilePreviewPanelProps {
   environmentId: EnvironmentId;
+  projectId?: ProjectId | null;
   cwd: string;
   projectName: string;
   relativePath: string | null;
@@ -991,6 +993,7 @@ function initialExplorerOpen(): boolean {
 
 export default function FilePreviewPanel({
   environmentId,
+  projectId,
   cwd,
   projectName,
   relativePath: requestedPath,
@@ -1272,6 +1275,17 @@ export default function FilePreviewPanel({
               openInCwdIsFile={file.isFile}
               compact
               revealFileManager={revealsInFileManager}
+            />
+          ) : null}
+          {attachment === undefined && projectId ? (
+            <ConveneIdeButton
+              environmentId={environmentId}
+              projectId={projectId}
+              threadId={threadRef.threadId}
+              workspacePath={cwd}
+              {...(file.isFile && relativePath
+                ? { file: { relativePath, ...(revealLine !== null ? { line: revealLine } : {}) } }
+                : {})}
             />
           ) : null}
           {canToggleRendered && renderedMode ? (
