@@ -163,6 +163,7 @@ const CommandRow = memo(function CommandRow(props: {
   readonly isLast: boolean;
   readonly isSlashSkill: boolean;
 }) {
+  const t = useTranslate();
   const iconName = itemIcon(props.item);
 
   return (
@@ -186,21 +187,51 @@ const CommandRow = memo(function CommandRow(props: {
           type="monochrome"
         />
       ) : null}
-      <Text className="shrink-0 text-base font-t3-medium text-foreground" numberOfLines={1}>
-        {props.isSlashSkill && props.item.type === "skill" ? (
-          <>
-            <Text className="text-foreground-muted">skill:</Text>
-            {props.item.skill.name}
-          </>
-        ) : (
-          props.item.label
-        )}
-      </Text>
-      {props.item.description ? (
-        <Text className="min-w-0 flex-1 text-xs text-foreground-muted" numberOfLines={1}>
-          {props.item.description}
-        </Text>
-      ) : null}
+      {props.item.type === "convene-resource" ? (
+        <View className="min-w-0 flex-1 gap-0.5">
+          <View className="flex-row items-center gap-2">
+            <Text
+              className="min-w-0 flex-1 text-base font-t3-medium text-foreground"
+              numberOfLines={1}
+            >
+              {props.item.label}
+            </Text>
+            {props.item.resource.kind === "issue" ? (
+              <Text className="shrink-0 text-xs text-foreground-muted">
+                {t(
+                  props.item.resource.state === "OPEN"
+                    ? "convene.resource.issueStateOpen"
+                    : "convene.resource.issueStateClosed",
+                )}
+              </Text>
+            ) : null}
+          </View>
+          <Text className="text-xs text-foreground" numberOfLines={1}>
+            {props.item.resource.title}
+          </Text>
+          <Text className="text-xs text-foreground-muted" numberOfLines={1}>
+            {props.item.resource.module_path}
+          </Text>
+        </View>
+      ) : (
+        <>
+          <Text className="shrink-0 text-base font-t3-medium text-foreground" numberOfLines={1}>
+            {props.isSlashSkill && props.item.type === "skill" ? (
+              <>
+                <Text className="text-foreground-muted">skill:</Text>
+                {props.item.skill.name}
+              </>
+            ) : (
+              props.item.label
+            )}
+          </Text>
+          {props.item.description ? (
+            <Text className="min-w-0 flex-1 text-xs text-foreground-muted" numberOfLines={1}>
+              {props.item.description}
+            </Text>
+          ) : null}
+        </>
+      )}
     </Pressable>
   );
 });

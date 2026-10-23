@@ -251,27 +251,48 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
           className={cn("size-4 shrink-0", pullRequestPresentation.toneClassName)}
         />
       ) : null}
-      <span className="flex min-w-0 flex-1 items-center gap-2">
-        <span className="min-w-0 max-w-[45%] shrink-0 truncate font-sans text-xs font-medium">
-          {isSlashSkill ? (
-            <>
-              <span className="text-secondary-label">/skill:</span>
-              {formatProviderSkillDisplayName(isSlashSkill)}
-            </>
-          ) : (
-            props.item.label
-          )}
+      {props.item.type === "convene-resource" ? (
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="min-w-0 flex-1 truncate text-xs font-medium">{props.item.label}</span>
+            {props.item.resource.kind === "issue" ? (
+              <span className="shrink-0 text-xs text-secondary-label">
+                {t(
+                  props.item.resource.state === "OPEN"
+                    ? "convene.resource.issueStateOpen"
+                    : "convene.resource.issueStateClosed",
+                )}
+              </span>
+            ) : null}
+          </span>
+          <span className="truncate text-xs">{props.item.resource.title}</span>
+          <span className="truncate text-xs text-secondary-label">
+            {props.item.resource.module_path}
+          </span>
         </span>
-        <span className="min-w-0 flex-1 truncate text-left text-secondary-label text-xs">
-          {props.item.description}
+      ) : (
+        <span className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="min-w-0 max-w-[45%] shrink-0 truncate font-sans text-xs font-medium">
+            {isSlashSkill ? (
+              <>
+                <span className="text-secondary-label">/skill:</span>
+                {formatProviderSkillDisplayName(isSlashSkill)}
+              </>
+            ) : (
+              props.item.label
+            )}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-left text-secondary-label text-xs">
+            {props.item.description}
+          </span>
+          {skillSourceKind ? (
+            <SkillSourceBadge
+              kind={skillSourceKind}
+              showSkillSuffix={props.triggerKind === "skill"}
+            />
+          ) : null}
         </span>
-        {skillSourceKind ? (
-          <SkillSourceBadge
-            kind={skillSourceKind}
-            showSkillSuffix={props.triggerKind === "skill"}
-          />
-        ) : null}
-      </span>
+      )}
     </CommandItem>
   );
 });

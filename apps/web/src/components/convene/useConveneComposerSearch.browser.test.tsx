@@ -132,9 +132,9 @@ it("paginates the authorized scope and distinguishes a denied refresh", async ()
   await setup();
   await using screen = await render(<Harness />);
   await expect.element(screen.getByText("Convene #47", { exact: true })).toBeVisible();
-  await expect
-    .element(screen.getByText("owner/project/module · Reference title · Open"))
-    .toBeVisible();
+  await expect.element(screen.getByText("Reference title", { exact: true })).toBeVisible();
+  await expect.element(screen.getByText("Open", { exact: true })).toBeVisible();
+  await expect.element(screen.getByText("owner/project/module", { exact: true })).toBeVisible();
   model.search.mockResolvedValueOnce(
     AsyncResult.success({ ...ready(2), items: [{ ...reference, number: 48 }] }),
   );
