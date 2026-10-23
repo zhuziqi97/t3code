@@ -5,7 +5,7 @@
 Agent 生命周期实施计划：[convene-agent-lifecycle-plan.md](../plan/convene-agent-lifecycle-plan.md)。
 用户明确要求本地 fork 保存计划与合并决定；这些文档随 Convene 分支提交，不提交上游。
 
-2026-10-19 后续稳定发行固定上游 `v0.1.0`，不将最新 main 当作正式发行基线。
+当前稳定发行固定上游 `v0.1.2`，不将上游最新 main 当作正式发行基线。
 具体冲突裁决及各适配的上游状态见 [V2 稳定版合入核查](convene-v010-upstream-review.md)；
 实施由 [T3Code Issue #8](convene://issues/zzq/software-factory/t3code/8) 追踪。
 
@@ -13,7 +13,7 @@ Agent 生命周期实施计划：[convene-agent-lifecycle-plan.md](../plan/conve
 
 - 近期基于 T3 发布 Runner，不等待 Happier；手机、远程主机、自动化为第二期。
 - 产品名称 T3 Code for Convene；保持独立应用标识、CLI、协议、profile 和 `~/.convene-code`。不得覆盖上游 T3 用户数据或使用上游更新包。
-- main 只跟踪上游，定制在 `codex/convene-integration`。共享分支使用 merge，不反复 rebase。发布、推送、部署独立记录。
+- fork 的 main 承接已验收的 Convene 发行与正式记录；upstream 只用于读取原作者源码。共享分支使用 merge，不反复 rebase。发布、推送、部署独立记录。
 - 2026-10-16 用户确认：本次替换平台现有 Dextra，发布目录／存储源改为 `t3code`，旧 Dextra 发行及专有支持不保留；复用现有下载服务与共享 Runner owner，不并列维护两个客户端。替换实现与隔离验收已完成，生产替换于 2026-10-18 完成，见文末发行记录；不将原生历史伪装迁入 T3。
 - 中文已纳入首版：早期“只提交上游，等合并”的决定已被用户后续要求替代。
 
@@ -31,7 +31,7 @@ Agent 生命周期实施计划：[convene-agent-lifecycle-plan.md](../plan/conve
 
 - 首次引导顶部始终提供以当前语言自称（English／中文）显示的手动选择入口，不显示额外语言标签或“系统默认”选项，复用现有客户端语言偏好并立即生效；自动识别不能替代手动入口。
 
-- 用户 2026-10-19 确认技术术语保留英文：Pull Request/Pull Requests/PR 不译为“拉取请求”；Thinking、Effort 及强度选项使用 Provider/上游原英文名称。中文句子仍翻译，不改协议值或语言识别；[Issue #6](convene://issues/zzq/software-factory/t3code/6) 负责后续界面修订。
+- 用户确认 Pull Request/Pull Requests/PR 保留英文。Reasoning、Thinking、Effort 等标题翻译；仅具体思考强度 Low/Medium/High/Extra High/Max/Ultra 保留原文。Service Tier/Standard/Fast 使用“服务等级/标准/快速”，原始 ID 和参数值不变；[Issue #6](convene://issues/zzq/software-factory/t3code/6) 记录界面修订。
 
 - 连接放在初始设置／独立 Convene 设置入口，引导可连接，不放高级设置。项目设置不嵌入连接信息或配对表单；加载中不推断为未连接，确认未配对或离线后仅提供带当前环境的连接设置入口，跳转时关闭项目弹窗。
 - 主页使用与设置、分支、用量同排的连接图标，悬停显示状态，点击进入对应环境设置；不独占一行说明。
@@ -79,7 +79,7 @@ Agent 生命周期实施计划：[convene-agent-lifecycle-plan.md](../plan/conve
 3. 模块重构后将中文接到新 owner，提供 host 名等插值，不能为保留翻译恢复旧 GitHub 专用流程。
 4. 自动合并的共同修改也可能语义冲突。优先检查 MCP、权限、项目执行目录、模型 null／报告、发行身份。
 5. 按受影响范围执行必要测试、类型与构建；原生 UI／实际请求／发行包各自记录证据，不把单元测试当实机推理。
-6. 验证后快进 main 至此次固定上游，并合入集成分支；新包重新冻结，不继承旧包已验收声明。
+6. 验证后冻结集成候选；发布后 main 接纳实际发行源码与记录，正式 tag 指向打包提交。新包不继承旧包已验收声明。
 
 ## 本次同步：64972461c → 72fbad7b1
 
@@ -250,15 +250,15 @@ Antigravity 需修正初始化与摘要的关系；Grok、Pi 已有的发现降�
 - **上游合并时取舍**：保留真实发行边界，采用等价上游包管理和生命周期机制；删除
   重复流程，不把预览标签或当前版本验收结论扩展为所有未来版本默认承诺。
 
-## 平台与客户端主线归属（6.3.0 发布准备）
+## 平台与客户端主线归属
 
-- **用户需求**：允许将平台集成成果合回 Convene main；T3 main 用于追踪上游，我们自己的集成分支作为主线。
-- **当前决策**：Convene 的 `main` 是平台交付主线；T3 保留 `main` 跟踪 pingdotgg/t3code，Convene 客户端交付主线继续为 `codex/convene-integration`。本轮不改分支名称。
-- **理由**：明确两个仓库的不同归属，避免把品牌、平台适配和本地决策记录合入仅跟踪上游的分支；改名没有本轮产品收益。
+- **用户需求**：已发布源码、版本记录和正式 tag/main 按真实发行身份收尾。
+- **当前决策**：Convene 的 `main` 是平台交付主线；T3 fork 的 `main` 接纳已验收发行及后续记录。正式 annotated tag 固定实际打包源码，记录提交可以是其后继，不能改写包的 source/build 身份。
+- **理由**：源码、正式标签与已分发安装包可准确对应，文档收尾不要求重新构建或替换已验收包。
 - **职责归属**：平台迁移、部署和联合恢复由 Convene 发布规程负责；客户端与同构建 Web 由 T3 发行 owner 负责。
-- **来源分支／提交**：用户 2026-10-18 发布准备决定；平台 `codex/t3-630-production-preparation` 从 `b06daf752` 开始，方案首提交 `1fb4a5f06`。
-- **验证边界**：客户端仍为已验收的 Actions `.25`，本次仅补分支决策记录，不扩大原生验收范围。平台 6.3.0 准备不等于已获生产停机或正式发布授权。
-- **上游合并时取舍**：从 T3 main 向 Convene 客户端主线吸收上游，按本文件的行为决策处理冲突；不要反向把本地集成台账当作上游交付。
+- **来源**：用户 2026-10-23 联合发行收尾决定，替代 6.3.0 准备时 main 只追踪上游的分支约定。
+- **远端**：T3 当前唯一配置的发行目标为 GitHub fork `origin`（`zhuziqi97/t3code`）。Convene 的双远端规则不自动套用到 T3，不新建私有仓库，不向原作者 `upstream` 推送。
+- **上游合并时取舍**：从固定上游 tag 向隔离集成分支吸收变更，按本文件处理冲突；验证后将已发行源码接纳到 fork main，不向原作者提交本地集成台账。
 
 ## 2026-10-18 `.25` 正式发行与平台替换完成
 
@@ -288,3 +288,13 @@ Antigravity 需修正初始化与摘要的关系；Grok、Pi 已有的发现降�
 - **来源分支／提交：**`codex/bundled-platform-presets`；客户端候选 `55ec38a29cc5a93269f2720b03edadb6538d2fcd`，Actions `39145762766`，构建 `convene-39145762766-1`。之后仅补充独立脚本的 lint 说明注释，不扩大候选验收声明。
 - **验证边界：**相关 115 项测试通过，变更后的优先级用例及各平台加密归档验证通过；四个实际安装包均读出两项正确配置，公开 Web 未含私有地址，下载 HEAD／Range 和新旧 Web 入口通过。2026-10-19 已从平台重新下载 DEB，在 Arch 按既有方式重打原生安装包并更新启动；实际下拉框的两项正式地址均可选择，9 条项目记录、87 个会话、4,588 条消息、4,763 条轮次项及 19 个续接绑定与更新前逐项一致，保留一致备份。未重新执行完整功能门禁；Windows／macOS 继续按预览包提供。
 - **上游合并取舍：**可采用上游同等配置机制，但必须保留正式包的预置地址、遗留验收配置不遮蔽正式配置，以及本地／WSL 一致性；不向上游提交实际地址或本地集成台账。
+
+## 2026-10-23 `0.1.2-1` 联合正式发行
+
+- **发行身份**：上游基线 `v0.1.2`；实际源码 `e29643e7830670d2ae8ac5a5efb553dcd255c0d5`，Actions `39904373650` attempt 1，构建 `convene-39904373650-1`。正式 annotated tag `v0.1.2-1` 指向该源码；后续记录不改四个原始 CI 安装包和同次 Web。
+- **联合结果**：与 Convene 6.5.3 应用 `45787b88cd24ec403a7da9006c5c8bd4c6c62901` 联合发布。主责确认 publisher、独立 verify、四包真实下载路径的 HTTP 200/大小和新旧 Web 资源通过；Web current 为 `convene-39904373650-1`，rollback 为上一版 `convene-39766059113-1`，保留五个已登记构建。联合维护结束公告于北京时间 16:10:38 发布。
+- **产品决定**：等待工具审批时发送新内容采用上游行为；D 原生预测本次排除，等待接口稳定。中文标题与服务等级翻译、会话配置隔离、资源内部查看、计划模式默认开启、上下文与常显结束行及源头减负已交付。
+- **已知限制**：当前 Viewer 仅支持当前 T3 项目已关联模块；用户全部可读模块开放与未关联资源撤权通知由 [Convene #204](convene://issues/zzq/software-factory/convene/204) 承接下一发行版。人工阅读不依赖 MCP 开关、Scope 或 Agent 状态。
+- **验收边界**：固定 Linux CI AppImage 原程序及匹配 Web 完成新平台真实权限变化、Redis、控制 WS 和同页清正文/恢复，旧 6.5.2 平台缺路由显示不可用。独立旧/新包内 server 完成停止态数据升级读取、升级前完整备份恢复；实际迁移版本均为 67，不将此写成 schema 降级或真实用户数据演练。Windows/macOS GUI、原生移动、Cursor/Muse/Antigravity 的既有认证与设备边界不扩为已验；Windows/macOS 继续为预览，macOS 未签名/未公证。
+- **恢复边界**：下载与 Web 使用本轮现场快照及上一版不可变包恢复，保留已打开页面所需构建。客户端回退须完全退出并恢复该用户升级前完整一致备份，不让旧包直接打开升级后的状态，也不承诺保留升级后新增工作。
+- **正式记录**：[T3 #47](convene://issues/zzq/software-factory/t3code/47)、[Convene #186](convene://issues/zzq/software-factory/convene/186) 与 [#187](convene://issues/zzq/software-factory/convene/187)。T3 只向已配置的 origin 推送 main 和正式标签；生产切换和公告由平台主责统一执行。
