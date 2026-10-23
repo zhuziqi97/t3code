@@ -146,7 +146,8 @@ describe("concurrent thread action Undo", () => {
   ] as const)(
     "%s retains one undo for concurrent successful requests",
     async (handler, action, inverse, notice) => {
-      const actions = useThreadActions();
+      await using _lifecycle = await setupLifecycle();
+      const actions = await renderActions();
       const run = () =>
         handler === "snoozeThread"
           ? actions.snoozeThread(target, "2099-01-01T09:00:00.000Z")
@@ -291,11 +292,13 @@ describe("settle and snooze Undo", () => {
   });
 
   it("stops settle restoration if restoring the pin fails", async () => {
+    await using _lifecycle = await setupLifecycle();
     threadShell.pinnedAt = "2026-01-01T00:00:00.000Z";
     threadShell.snoozedUntil = "2030-01-01T09:00:00.000Z";
     commands.pin.mockResolvedValue({ _tag: "Failure", cause: Cause.fail(new Error("Pin failed")) });
     vi.spyOn(toastManager, "add").mockReturnValue("toast");
-    await useThreadActions().settleThread(target);
+    const actions = await renderActions();
+    await actions.settleThread(target);
     await currentUndo()();
     expect(commands.unsettle).toHaveBeenCalledOnce();
     expect(commands.pin).toHaveBeenCalledOnce();
@@ -338,8 +341,6 @@ async function setupLifecycle() {
     await act(() => hookRenderers.splice(0).forEach((renderer) => renderer.unmount()));
     vi.unstubAllGlobals();
 
-    vi.runAllTimers();
-    vi.useRealTimers();
     vi.restoreAllMocks();
     await changeLanguage("en");
   });
