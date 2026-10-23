@@ -23,7 +23,7 @@ export function ComposerServerUpdateIcon({
 }
 
 /** One text line, clipped at the end so the error detail never squeezes its title. */
-export function ComposerServerUpdateStatus({
+function ComposerServerUpdateStatus({
   state,
   serverLabel,
 }: {

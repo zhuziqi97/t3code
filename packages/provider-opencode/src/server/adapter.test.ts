@@ -471,6 +471,16 @@ describe("OpenCodeAdapterV2", () => {
           );
           yield* Effect.promise(() => nativeEvents.push(step("old", "old-assistant")));
         }
+        if (ending === "unresolved")
+          yield* Effect.promise(() => nativeEvents.push(step("unknown", "unknown-assistant")));
+        if (ending === "reconnect") {
+          yield* Effect.promise(() =>
+            nativeEvents.push({ type: "server.connected", properties: {} }),
+          );
+          yield* Effect.promise(() =>
+            nativeEvents.push({ type: "server.connected", properties: {} }),
+          );
+        }
         if (ending === "failed") {
           yield* Effect.promise(() =>
             nativeEvents.push({

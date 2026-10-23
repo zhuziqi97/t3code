@@ -1175,7 +1175,7 @@ const makeFeedUpdates = Effect.gen(function* () {
 
 /** Production releases always use the paired Convene platform. The existing
  * mock-feed mode remains available for the upstream installer test harness. */
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const config = yield* DesktopConfig.DesktopConfig;
   return config.mockUpdates
     ? yield* makeFeedUpdates

@@ -66,7 +66,7 @@ export function useDiscoveredPortsState(
   };
 }
 
-export function useThreadDiscoveredPorts(input: {
+function useThreadDiscoveredPorts(input: {
   readonly environmentId: EnvironmentId | null;
   readonly threadId: ThreadId | null;
 }): ReadonlyArray<DiscoveredLocalServer> {

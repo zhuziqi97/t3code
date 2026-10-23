@@ -153,10 +153,10 @@ describe("scheduled task model defaults", () => {
       ),
     ).toEqual(projectSelection);
   });
-  it("uses the advertised default instead of catalog order when no default is configured", () => {
+  it("keeps the native default when no default is configured", () => {
     expect(
       resolve({ ...config, settings: { ...config.settings, defaultModelSelection: null } }, null),
-    ).toEqual({ instanceId, model: "catalog-default" });
+    ).toEqual({ instanceId, model: null });
   });
   it("falls back to the environment default when the project provider is unavailable", () => {
     expect(

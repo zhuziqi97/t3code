@@ -119,7 +119,6 @@ it.effect(
       }).pipe(Effect.provide(Layer.fresh(ConveneWorkspaces.layer)));
       assert.deepEqual(saved, [replacement.key, linked.key]);
     }).pipe(Effect.provide(layer)),
-  { timeout: 20_000 },
 );
 
 it.effect(

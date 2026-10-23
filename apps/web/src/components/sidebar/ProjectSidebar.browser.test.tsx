@@ -116,7 +116,7 @@ async function setup() {
   });
   return stack;
 }
-function Fixture(props: { threads: EnvironmentThreadShell[]; route?: string }) {
+function Fixture(props: { threads: EnvironmentThreadShell[]; route?: string; draft?: boolean }) {
   const preferences = useUiStateStore((state) => state.projectOrder);
   const groups = orderItemsByPreferredIds({
     items: originalGroups,
@@ -219,7 +219,9 @@ function Fixture(props: { threads: EnvironmentThreadShell[]; route?: string }) {
           dragDisabled={false}
           listRef={() => {}}
           renderItem={renderItem}
-        />
+        >
+          {props.draft ? <input aria-label="Draft message" defaultValue="Keep this draft" /> : null}
+        </ProjectTreeLayout>
       </DndContext>
     </>
   );
@@ -281,4 +283,21 @@ it("drags the whole project block, saves its order, and restores that order afte
       node.getAttribute("data-project-block"),
     ),
   ).toEqual(originalGroups.toReversed().map((group) => group.projectKey));
+});
+
+it("keeps an editable draft mounted before the project groups while reordering", async () => {
+  await using _setup = await setup();
+  await using screen = await render(<Fixture threads={threads()} draft />);
+  const draft = screen.getByRole("textbox", { name: "Draft message" });
+  await expect.element(draft).toBeVisible();
+  await userEvent.fill(draft, "Keep edited draft");
+  await userEvent.dragAndDrop(
+    screen.getByRole("button", { name: "Project A" }),
+    screen.getByRole("button", { name: "Project B" }),
+  );
+  await expect.element(screen.getByTestId("order")).toHaveTextContent("B,A");
+  await expect.element(draft).toHaveValue("Keep edited draft");
+  expect(screen.container.querySelector('ul[role="presentation"]')?.firstElementChild).toBe(
+    screen.container.querySelector('[aria-label="Draft message"]'),
+  );
 });

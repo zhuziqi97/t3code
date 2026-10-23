@@ -570,7 +570,7 @@ export async function archiveSelectedThreadEntries<
   return { archivedThreadKeys, mutationFailure: null, followupFailures };
 }
 
-export function buildMultiSelectThreadContextMenuItems(
+function buildMultiSelectThreadContextMenuItems(
   input: {
     count: number;
     hasRunningThread: boolean;
@@ -627,7 +627,7 @@ export function filterSidebarV2VisibleThreads<
   );
 }
 
-export function getSidebarForkParentThreadId(
+function getSidebarForkParentThreadId(
   thread: Pick<SidebarThreadSummary, "forkedFrom" | "lineage">,
 ) {
   if (thread.lineage.relationshipToParent !== "fork") {
@@ -831,7 +831,7 @@ function hasUnseenFailure(thread: ThreadStatusInput): boolean {
   return completedAt > lastVisitedAt;
 }
 
-export function shouldClearThreadSelectionOnMouseDown(target: HTMLElement | null): boolean {
+function shouldClearThreadSelectionOnMouseDown(target: HTMLElement | null): boolean {
   if (target === null) return true;
   return !target.closest(THREAD_SELECTION_SAFE_SELECTOR);
 }
@@ -862,7 +862,7 @@ export function isSidebarNestedLinkClick(target: EventTarget | null): boolean {
   return nodeClosest(parent, "a[href]") !== null;
 }
 
-export function shouldCreateNewThreadInCurrentProject(
+function shouldCreateNewThreadInCurrentProject(
   shiftKey: boolean,
   projectGroupCount: number,
 ): boolean {
@@ -908,7 +908,7 @@ export function orderItemsByPreferredIds<TItem, TId>(input: {
   return [...ordered, ...remaining];
 }
 
-export function getSidebarThreadIdsToPrewarm<TThreadId>(
+function getSidebarThreadIdsToPrewarm<TThreadId>(
   visibleThreadIds: readonly TThreadId[],
   limit = SIDEBAR_THREAD_PREWARM_LIMIT,
 ): TThreadId[] {
@@ -942,7 +942,7 @@ export function resolveAdjacentThreadId<T>(input: {
   return currentIndex < threadIds.length - 1 ? (threadIds[currentIndex + 1] ?? null) : null;
 }
 
-export function isContextMenuPointerDown(input: {
+function isContextMenuPointerDown(input: {
   button: number;
   ctrlKey: boolean;
   isMac: boolean;
@@ -1110,7 +1110,7 @@ export function pullRequestMatchesSearchQuery(
   return normalizedQuery.split(" ").every((token) => haystack.includes(token));
 }
 
-export function filterSidebarProjectScopeItems<TItem extends { readonly value: string }>(input: {
+function filterSidebarProjectScopeItems<TItem extends { readonly value: string }>(input: {
   items: readonly TItem[];
   query: string;
   matches: (item: TItem, query: string) => boolean;
@@ -1130,7 +1130,7 @@ export type SidebarProjectScopeMenuAction =
   | { readonly type: "open-changed"; readonly open: boolean }
   | { readonly type: "project-settings-opened" };
 
-export function reduceSidebarProjectScopeMenuState(
+function reduceSidebarProjectScopeMenuState(
   state: SidebarProjectScopeMenuState,
   action: SidebarProjectScopeMenuAction,
 ): SidebarProjectScopeMenuState {
@@ -1150,7 +1150,7 @@ export function resolveWorkingStartedAt(
   return resolveThreadWorkingStartedAt(thread);
 }
 
-export function formatWorkingDurationLabel(elapsedMs: number, t: TFunction = i18n.t): string {
+function formatWorkingDurationLabel(elapsedMs: number, t: TFunction = i18n.t): string {
   const seconds = Number.isFinite(elapsedMs) ? Math.max(0, Math.floor(elapsedMs / 1000)) : 0;
   if (seconds < 60) return t("time.compact.seconds", { count: seconds });
   const minutes = Math.floor(seconds / 60);

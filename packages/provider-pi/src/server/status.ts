@@ -98,7 +98,7 @@ function piModelsFromSettings(
   );
 }
 
-function parseDiscoveredModels(
+export function parseDiscoveredModels(
   data: unknown,
   state: unknown,
 ): Result.Result<ReadonlyArray<ServerProviderModel>, PiRpcError> {

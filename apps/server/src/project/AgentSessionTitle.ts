@@ -50,6 +50,15 @@ function skipLeadingCodexContext(text: string): number {
       }
       continue;
     }
+    const requestHeading = "## My request for Codex:";
+    if (text.startsWith(requestHeading, offset)) {
+      const headingEnd = offset + requestHeading.length;
+      if (headingEnd === text.length || text[headingEnd] === "\n" || text[headingEnd] === "\r") {
+        offset = headingEnd;
+        skipWhitespace();
+        continue;
+      }
+    }
     break;
   }
   return offset;

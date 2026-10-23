@@ -71,6 +71,7 @@ function normalizedModel(id: string, candidate: AcpRegistryProbeModel): AcpRegis
 
 function normalizeModels(
   candidates: ReadonlyArray<AcpRegistryProbeModel>,
+  currentModelId: string | null,
 ): ReadonlyArray<AcpRegistryProbeModel> {
   const seen = new Set<string>();
   const models: Array<AcpRegistryProbeModel> = [];
@@ -80,7 +81,11 @@ function normalizeModels(
     seen.add(id);
     models.push(normalizedModel(id, candidate));
   }
-  return models;
+  const bounded = models.slice(0, 256);
+  const current = models.find((model) => model.id === currentModelId);
+  if (current !== undefined && !bounded.some((model) => model.id === currentModelId))
+    bounded[255] = current;
+  return bounded;
 }
 
 export interface AcpRegistryAuthSpawnContext {
@@ -160,7 +165,7 @@ export interface AcpRegistryLiveConfiguration {
   readonly configOptions: AcpRegistryProbeResult["configOptions"];
 }
 
-export function normalizeAcpRegistryLiveConfiguration(
+function normalizeAcpRegistryLiveConfiguration(
   configOptions: ReadonlyArray<EffectAcpSchema.SessionConfigOption>,
   modeState?: Parameters<typeof acpProviderOptionDescriptors>[0]["modeState"],
   modelState?: EffectAcpSchema.SessionModelState | null,
@@ -184,7 +189,7 @@ export function normalizeAcpRegistryLiveConfiguration(
     currentModelId === undefined
       ? null
       : (boundedOpaqueValue(currentModelId, MAX_ID_LENGTH) ?? null);
-  const models = normalizeModels(candidates);
+  const models = normalizeModels(candidates, boundedCurrentModelId);
   return {
     models,
     currentModelId: boundedCurrentModelId,

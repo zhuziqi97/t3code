@@ -23,7 +23,7 @@ export function formatProviderDriverKindLabel(provider: ProviderDriverKind): str
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-export function getProviderModels(
+function getProviderModels(
   providers: ReadonlyArray<ServerProvider>,
   provider: ProviderDriverKind,
 ): ReadonlyArray<ServerProviderModel> {
@@ -38,7 +38,7 @@ function getProviderSnapshot(
   return providers.find((candidate) => candidate.instanceId === defaultInstanceId);
 }
 
-export function resolveSelectableProvider(
+function resolveSelectableProvider(
   providers: ReadonlyArray<ServerProvider>,
   provider: ProviderDriverKind | ProviderInstanceId | null | undefined,
 ): ProviderDriverKind {
@@ -84,7 +84,7 @@ function withoutPlanAgentOption(caps: ModelCapabilities): ModelCapabilities {
   };
 }
 
-export function getDefaultServerModel(
+function getDefaultServerModel(
   providers: ReadonlyArray<ServerProvider>,
   provider: ProviderDriverKind,
 ): string {

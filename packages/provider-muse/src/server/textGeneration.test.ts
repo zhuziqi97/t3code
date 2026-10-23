@@ -142,14 +142,14 @@ it.layer(NodeServices.layer)("Muse text generation", (it) => {
     }),
   );
 
-  it.effect("uses low effort by default and normalizes stale efforts against the model", () =>
+  it.effect("uses low effort by default and preserves explicit native efforts", () =>
     Effect.gen(function* () {
       for (const { saved, variants, expected } of [
         { saved: undefined, variants: undefined, expected: "low" },
-        { saved: undefined, variants: ["medium", "xhigh"], expected: "medium" },
+        { saved: undefined, variants: ["medium", "xhigh"], expected: "low" },
         { saved: "max", variants: ["minimal", "max"], expected: "max" },
-        { saved: "ultra", variants: ["medium", "xhigh"], expected: "medium" },
-        { saved: "high", variants: [], expected: undefined },
+        { saved: "ultra", variants: ["medium", "xhigh"], expected: "ultra" },
+        { saved: "high", variants: [], expected: "high" },
       ]) {
         const test = fixture(
           finish('{"title":"Fix login form"}'),

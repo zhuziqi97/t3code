@@ -28,7 +28,7 @@ const options: ReadonlyArray<{ value: GitHubRoutingPermission; label: string }> 
  * Closed-header summary: the machines that share, grouped by permission.
  * Null when nothing is shared.
  */
-export function summarizeGitHubRouting(
+function summarizeGitHubRouting(
   entries: ReadonlyArray<{ readonly label: string; readonly permission: GitHubRoutingPermission }>,
   t: TFunction = i18n.t,
 ): string | null {

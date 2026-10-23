@@ -454,15 +454,24 @@ export function summarizeT3ToolCalls(
         label = phrase(
           "Started writing",
           "start writing",
-          `review guides${selected.length === 1 ? "" : ` ${times}`}`,
+          t
+            ? t("chat.tools.reviewGuides", { times: selected.length === 1 ? "" : ` ${times}` })
+            : `review guides${selected.length === 1 ? "" : ` ${times}`}`,
         );
       } else if (started === 0) {
-        label = `Could not start ${quantity(failed, "review guide")}`;
+        label = t
+          ? t("chat.tools.guidesFailed", { guides: quantity(failed, "review guide") })
+          : `Could not start ${quantity(failed, "review guide")}`;
       } else {
         label = phrase(
           "Started",
           "start",
-          `${quantity(started, "review guide")}${failed > 0 ? `, ${failed} failed` : ""}`,
+          failed > 0 && t
+            ? t("chat.tools.guidesPartiallyFailed", {
+                guides: quantity(started, "review guide"),
+                count: failed,
+              })
+            : `${quantity(started, "review guide")}${failed > 0 ? `, ${failed} failed` : ""}`,
         );
       }
       break;

@@ -39,7 +39,7 @@ export function SortableSidebarMarker(props: {
   );
 }
 
-export function SidebarSectionPlaceholder(props: {
+function SidebarSectionPlaceholder(props: {
   marker: "active-placeholder" | "settled-placeholder";
   label: string;
   showHint: boolean;
@@ -65,7 +65,7 @@ export function SidebarSectionPlaceholder(props: {
   );
 }
 
-export function SidebarDragBoundary(props: {
+function SidebarDragBoundary(props: {
   marker: "pinned-header" | "pinned-divider";
   label: string;
   visible: boolean;
@@ -100,7 +100,7 @@ export function SidebarDragBoundary(props: {
   );
 }
 
-export function SidebarSectionHeader(props: {
+function SidebarSectionHeader(props: {
   marker: "working-header" | "snoozed-header" | "settled-header";
   label: string;
   className?: string;

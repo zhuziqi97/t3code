@@ -45,6 +45,11 @@ type SessionSetupResult = Pick<
   "configOptions" | "models"
 >;
 
+function knownAntigravityVersion(version: string | undefined) {
+  const value = version?.trim();
+  return value && value !== "unknown" ? value : undefined;
+}
+
 export function buildAntigravityModelsFromSession(
   setup: SessionSetupResult,
 ): ReadonlyArray<ServerProviderModel> {
@@ -199,7 +204,8 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
               draft: {
                 ...state.draft,
                 installed: true,
-                version: initialized.agentInfo?.version || state.draft.version,
+                version:
+                  knownAntigravityVersion(initialized.agentInfo?.version) ?? state.draft.version,
                 status:
                   state.draft.auth.status === "authenticated"
                     ? ("ready" as const)
@@ -235,7 +241,7 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
           installed: !missingInstallation,
           // Custom launchers have no static version; their lightweight probe
           // must not erase the version learned from a real ACP handshake.
-          version: initialized?.agentInfo?.version || draft.version,
+          version: knownAntigravityVersion(initialized?.agentInfo?.version) ?? draft.version,
           status: errorMessage ? "error" : authenticated ? "ready" : "warning",
           checkedAt: updatedAt,
           usageLimits: missingInstallation
@@ -315,7 +321,8 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
           ...draft,
           installed: true,
           status: "ready",
-          version: started.initializeResult.agentInfo?.version || draft.version,
+          version:
+            knownAntigravityVersion(started.initializeResult.agentInfo?.version) ?? draft.version,
           auth: {
             status: "authenticated",
             type: options.auth?.type ?? "oauth-personal",

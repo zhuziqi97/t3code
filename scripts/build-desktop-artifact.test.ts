@@ -1,4 +1,28 @@
+import { BRAND_ASSET_PATHS } from "./lib/brand-assets.ts";
+import {
+  createStageWorkspaceConfig,
+  DESKTOP_ELECTRON_LANGUAGES,
+  DESKTOP_EXTRA_RESOURCES,
+  LINUX_CAPTURE_EXTRA_RESOURCES,
+  LINUX_BROWSER_SECRET_EXTRA_RESOURCES,
+  LINUX_FILE_EXCLUSIONS,
+  MAC_FILE_EXCLUSIONS,
+  resolveDesktopBuildIconAssets,
+  resolveDesktopProductName,
+  resolveDesktopUpdateChannel,
+  resolveDesktopWebAssetBrand,
+  resolveGitHubPublishConfig,
+  stageLinuxCaptureHelper,
+  WINDOWS_NATIVE_ASAR_UNPACK_GLOB,
+  WINDOWS_SERVER_EXTRA_RESOURCES,
+  WINDOWS_SERVER_RESOURCE_SOURCE_DIR,
+  WSL_RUNTIME_EXTRA_RESOURCES,
+} from "./build-desktop-artifact.ts";
 import { previewBrowserRelease } from "@t3tools/shared/previewBrowserArchive";
+const stagePackageExtensions = {
+  "electron-webauthn": { peerDependenciesMeta: { typescript: { optional: true } } },
+  "@electron-webauthn/macos": { peerDependenciesMeta: { typescript: { optional: true } } },
+};
 // @effect-diagnostics nodeBuiltinImport:off - Tests use Node's glob matcher to verify electron-builder exclusions.
 import * as NodeCrypto from "node:crypto";
 import * as NodePath from "node:path";

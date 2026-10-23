@@ -285,7 +285,12 @@ export function resolveClaudeCatalogEffort(
   model: string | null | undefined,
   raw: string | null | undefined,
 ): string | undefined {
-  if (!resolveClaudeCatalogModel(catalog, model)) {
+  const selected = resolveClaudeCatalogModel(catalog, model);
+  if (
+    !selected ||
+    (selected.model.isCustom &&
+      !selected.model.capabilities?.optionDescriptors?.some((option) => option.id === "effort"))
+  ) {
     const effort = raw?.trim();
     return effort && ["low", "medium", "high", "xhigh", "max"].includes(effort)
       ? effort

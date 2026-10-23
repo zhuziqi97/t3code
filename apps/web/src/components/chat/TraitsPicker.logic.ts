@@ -22,7 +22,7 @@ const SAVED_OPTION_LABELS: Readonly<Record<string, string>> = {
   variant: "Reasoning",
 };
 
-export function savedOptionLabel(id: string): string {
+function savedOptionLabel(id: string): string {
   return (
     SAVED_OPTION_LABELS[id] ??
     id.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/^./, (character) => character.toUpperCase())
@@ -187,9 +187,4 @@ export function shouldRenderTraitsControls(input: {
   return getTraitsSectionVisibility(input).hasAnyControls;
 }
 
-export {
-  buildTraitsTriggerDisplay,
-  getDescriptorStringValue,
-  getTraitSelectChange,
-  replaceDescriptorCurrentValue,
-} from "@t3tools/client-runtime/model-traits";
+export { buildTraitsTriggerDisplay } from "@t3tools/client-runtime/model-traits";

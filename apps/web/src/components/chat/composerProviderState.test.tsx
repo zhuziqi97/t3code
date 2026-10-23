@@ -99,7 +99,7 @@ describe("getComposerProviderState", () => {
     );
   });
 
-  it("drops selections for descriptors the model does not declare", () => {
+  it("preserves explicit selections absent from the current catalog", () => {
     const state = getComposerProviderState({
       provider: PROVIDER,
       model: MODEL,
@@ -111,7 +111,7 @@ describe("getComposerProviderState", () => {
     expect(state).toEqual({
       provider: PROVIDER,
       promptEffort: null,
-      modelOptionsForDispatch: selections(["thinking", false]),
+      modelOptionsForDispatch: selections(["effort", "max"], ["thinking", false]),
     });
   });
 
@@ -200,7 +200,9 @@ describe("getComposerProviderState", () => {
       planModeEnabled: false,
     });
 
-    expect(state.modelOptionsForDispatch).toEqual(selections(["effort", "low"]));
+    expect(state.modelOptionsForDispatch).toEqual(
+      selections(["effort", "low"], ["unknown", "value"]),
+    );
   });
 
   it("defaults fastMode to false when the provider reports true but the user has not selected it", () => {

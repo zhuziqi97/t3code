@@ -880,7 +880,7 @@ function installerLatestVersionKey(capabilities: ProviderMaintenanceCapabilities
     : null;
 }
 
-export function latestProviderVersionCacheKeys(
+function latestProviderVersionCacheKeys(
   capabilities: ProviderMaintenanceCapabilities,
 ): ReadonlyArray<string> {
   return [capabilities.packageName, installerLatestVersionKey(capabilities)].filter(

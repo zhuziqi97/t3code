@@ -1,3 +1,4 @@
+import { buildInitialCursorProviderSnapshot } from "./status.ts";
 import type { SDKModel } from "@cursor/sdk";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";

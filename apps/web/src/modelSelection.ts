@@ -165,7 +165,7 @@ export function getAppModelOptionsForInstance(
   );
 }
 
-export function resolveAppModelSelection(
+function resolveAppModelSelection(
   provider: ProviderDriverKind,
   settings: UnifiedSettings,
   providers: ReadonlyArray<ServerProvider>,

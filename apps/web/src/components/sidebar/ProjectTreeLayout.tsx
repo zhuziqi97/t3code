@@ -98,6 +98,7 @@ export function ProjectTreeLayout({
   listRef,
   className,
   renderItem,
+  children,
 }: {
   items: readonly SidebarListItem[];
   projectKeys: readonly string[];
@@ -105,6 +106,7 @@ export function ProjectTreeLayout({
   listRef: Ref<HTMLUListElement>;
   className?: string;
   renderItem: (item: SidebarListItem, handle?: ProjectDragHandle) => ReactNode;
+  children?: ReactNode;
 }) {
   const top: SidebarListItem[] = [];
   const groups = new Map<string, SidebarListItem[]>();
@@ -119,6 +121,7 @@ export function ProjectTreeLayout({
   }
   return (
     <ul ref={listRef} role="presentation" className={cn("relative space-y-1", className)}>
+      {children}
       {top.map((item) => renderItem(item))}
       {projectKeys.map((key) => {
         const items = groups.get(key);

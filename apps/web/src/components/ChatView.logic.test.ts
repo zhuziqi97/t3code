@@ -713,7 +713,7 @@ describe("resolveComposerProviderSelection", () => {
     expect(getAntigravitySendBlockReason(provider, "")).toBeNull();
   });
 
-  it("blocks a saved model that a ready catalog no longer lists", () => {
+  it("lets the provider validate a saved model absent from a ready catalog", () => {
     const provider = entry("antigravity", "google_work", {
       status: "ready",
       models: catalogModels,

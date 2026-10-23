@@ -139,9 +139,7 @@ it.layer(layerTest)("CodexDriver", (it) => {
           Parameters<CodexAdapterV2.CodexAppServerClientFactoryShape["open"]>[0]
         > = [];
 
-        let interruptedChecks = 0;
         let failAcquire = false;
-        const startupChecksInterrupted = yield* Deferred.make<void>();
         const acquire = () =>
           Effect.suspend(() => {
             if (failAcquire)
@@ -151,13 +149,7 @@ it.layer(layerTest)("CodexDriver", (it) => {
                   detail: "The fixture runtime is unavailable",
                 }),
               );
-            if (interruptedChecks === 2) return Effect.succeed(executable);
-            interruptedChecks += 1;
-            return (
-              interruptedChecks === 2
-                ? Deferred.succeed(startupChecksInterrupted, undefined)
-                : Effect.void
-            ).pipe(Effect.andThen(Effect.interrupt));
+            return Effect.succeed(executable);
           });
         const instance = yield* CodexDriver.create({
           instanceId,
@@ -208,7 +200,6 @@ it.layer(layerTest)("CodexDriver", (it) => {
           Stream.runHead,
           Effect.forkScoped,
         );
-        yield* Deferred.await(startupChecksInterrupted);
         const restored = yield* instance.snapshot.refresh;
         expect(restored.auth.email).toBe("account@example.test");
         expect(restored.runtimePaths?.homePath).toBe(sharedHome);

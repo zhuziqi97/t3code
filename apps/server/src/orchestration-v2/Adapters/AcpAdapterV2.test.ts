@@ -2146,7 +2146,7 @@ describe("AcpAdapterV2", () => {
         });
 
         assert.equal(providerThread.nativeThreadRef?.nativeId, "persisted-session");
-        assert.isNull(providerThread.nativeMetadata);
+        assert.equal(providerThread.nativeMetadata?.modelSelection?.model, modelSelection.model);
         const startupMethods = yield* pollProtocolMethods(protocolEvents);
         assert.include(startupMethods, "session/resume");
         assert.notInclude(startupMethods, "session/new");
@@ -3323,6 +3323,7 @@ describe("AcpAdapterV2", () => {
       );
       assert.deepEqual(agentDescriptor, {
         id: "agent",
+        category: "_agent",
         label: "Agent",
         type: "select",
         options: [
@@ -3346,10 +3347,17 @@ describe("AcpAdapterV2", () => {
           now: yield* DateTime.now,
         }),
       );
-      yield* runtime.events.pipe(
-        Stream.filter((event) => event.type === "turn.terminal"),
-        Stream.runHead,
+      const events = yield* runtime.events.pipe(
+        Stream.takeUntil((event) => event.type === "turn.terminal"),
+        Stream.runCollect,
       );
+      const configuredThread = events.findLast((event) => event.type === "provider_thread.updated");
+      agentDescriptor =
+        configuredThread?.type === "provider_thread.updated"
+          ? configuredThread.providerThread.nativeMetadata?.optionDescriptors?.find(
+              (descriptor) => descriptor.id === "agent",
+            )
+          : undefined;
 
       assert.equal(
         agentDescriptor?.type === "select" ? agentDescriptor.currentValue : undefined,

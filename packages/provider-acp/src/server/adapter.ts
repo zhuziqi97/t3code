@@ -222,10 +222,20 @@ class AcpModelSelectionError extends Schema.TaggedError<AcpModelSelectionError>(
     model: Schema.String,
     actualModel: Schema.NullOr(Schema.String),
     cause: Schema.Defect(),
+    reason: Schema.optional(Schema.String),
   },
 ) {
   override get message(): string {
-    return `The agent did not accept the model "${this.model}"; actual model is "${this.actualModel ?? "unknown"}". Choose another model for this provider, then retry.`;
+    return `${this.reason ? `${this.reason}; ` : ""}The agent did not accept the model "${this.model}"; actual model is "${this.actualModel ?? "unknown"}". Choose another model for this provider, then retry.`;
+  }
+}
+
+class AcpConfigurationError extends Schema.TaggedError<AcpConfigurationError>()(
+  "AcpConfigurationError",
+  { detail: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {
+  override get message(): string {
+    return this.detail;
   }
 }
 
@@ -6741,9 +6751,10 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                 : (startResult.sessionSetupResult.models?.currentModelId ?? null);
             const rejectedModel = (error: EffectAcpErrors.AcpError) =>
               error._tag === "AcpRequestError" && error.code === -32602
-                ? new EffectAcpErrors.AcpRequestError({
-                    ...error,
-                    errorMessage: `${error.message}; requested model is '${requestedModel}', actual model is '${actualModel ?? "unknown"}'. Choose another model for this provider, then retry.`,
+                ? new AcpModelSelectionError({
+                    model: requestedModel ?? "default",
+                    actualModel,
+                    reason: error.errorMessage,
                     cause: error,
                   })
                 : error;
@@ -6784,9 +6795,13 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                   appliedModel =
                     reportedModel?.type === "select" ? reportedModel.currentValue : requestedModel;
                   if (appliedModel !== requestedModel) {
-                    return yield* EffectAcpErrors.AcpRequestError.invalidParams(
-                      `The agent did not apply model '${requestedModel}'; actual model is '${appliedModel}'.`,
-                    );
+                    return yield* new AcpModelSelectionError({
+                      model: requestedModel,
+                      actualModel: appliedModel,
+                      cause: EffectAcpErrors.AcpRequestError.invalidParams(
+                        "The agent did not apply the requested model.",
+                      ),
+                    });
                   }
                 } else {
                   return yield* new AcpModelSelectionError({
@@ -6859,9 +6874,9 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
               : optionSelections.filter((selection) => selection.id !== ACP_SESSION_MODE_OPTION_ID);
             for (const selection of configSelections) {
               if (!availableConfigIds.has(selection.id)) {
-                return yield* EffectAcpErrors.AcpRequestError.invalidParams(
-                  `The agent does not expose configuration option '${selection.id}' for the current model; actual value is unavailable.`,
-                );
+                return yield* new AcpConfigurationError({
+                  detail: `The agent does not expose configuration option '${selection.id}' for the current model; actual value is unavailable.`,
+                });
               }
               yield* runtime.setConfigOption(selection.id, selection.value).pipe(
                 Effect.catchTags({
@@ -6871,11 +6886,12 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                         yield* runtime.getConfigOptions,
                         selection.id,
                       )?.currentValue;
-                      return yield* new EffectAcpErrors.AcpRequestError({
-                        ...cause,
-                        errorMessage: `The agent rejected configuration option '${selection.id}': ${cause.message}; actual value is '${actual ?? "unavailable"}'.`,
-                        cause,
-                      });
+                      return yield* cause.code === -32602
+                        ? new AcpConfigurationError({
+                            detail: `${cause.errorMessage}; The agent rejected configuration option '${selection.id}' value '${selection.value}'; actual value is '${actual ?? "unavailable"}'.`,
+                            cause,
+                          })
+                        : cause;
                     }),
                 }),
               );
@@ -6884,9 +6900,9 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                 selection.id,
               )?.currentValue;
               if (actual !== selection.value) {
-                return yield* EffectAcpErrors.AcpRequestError.invalidParams(
-                  `The agent did not apply configuration option '${selection.id}' value '${selection.value}'; actual value is '${actual ?? "unavailable"}'.`,
-                );
+                return yield* new AcpConfigurationError({
+                  detail: `The agent did not apply configuration option '${selection.id}' value '${selection.value}'; actual value is '${actual ?? "unavailable"}'.`,
+                });
               }
             }
             const policyMode = flavor.sessionModeForPolicy?.(runtimePolicy);
@@ -6899,17 +6915,30 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                 typeof modeSelection.value !== "string" ||
                 !modeState?.availableModes.some((mode) => mode.id === modeSelection.value)
               ) {
-                return yield* EffectAcpErrors.AcpRequestError.invalidParams(
-                  `The agent does not expose session mode '${modeSelection.value}'; actual value is '${modeState?.currentModeId ?? "unavailable"}'.`,
-                );
+                return yield* new AcpConfigurationError({
+                  detail: `The agent does not expose session mode '${modeSelection.value}'; actual value is '${modeState?.currentModeId ?? "unavailable"}'.`,
+                });
               }
               if (modeState.currentModeId !== modeSelection.value)
-                yield* runtime.setMode(modeSelection.value);
+                yield* runtime.setMode(modeSelection.value).pipe(
+                  Effect.catchTags({
+                    AcpRequestError: (cause) =>
+                      Effect.gen(function* () {
+                        const actualMode = (yield* runtime.getModeState)?.currentModeId;
+                        return yield* cause.code === -32602
+                          ? new AcpConfigurationError({
+                              detail: `${cause.errorMessage}; The agent rejected session mode '${modeSelection.value}'; actual value is '${actualMode ?? "unavailable"}'.`,
+                              cause,
+                            })
+                          : cause;
+                      }),
+                  }),
+                );
               const actualMode = (yield* runtime.getModeState)?.currentModeId;
               if (actualMode !== modeSelection.value)
-                return yield* EffectAcpErrors.AcpRequestError.invalidParams(
-                  `The agent did not apply session mode '${modeSelection.value}'; actual value is '${actualMode ?? "unavailable"}'.`,
-                );
+                return yield* new AcpConfigurationError({
+                  detail: `The agent did not apply session mode '${modeSelection.value}'; actual value is '${actualMode ?? "unavailable"}'.`,
+                });
             }
             const effectiveModeState = yield* runtime.getModeState;
             const effectiveConfigOptions = yield* runtime.getConfigOptions;

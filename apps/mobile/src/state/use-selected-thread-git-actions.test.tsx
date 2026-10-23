@@ -29,6 +29,9 @@ vi.mock("./vcs", () => ({
   vcsEnvironment: { refreshStatus: "refreshStatus" },
   vcsActionManager: { runStackedAction: () => "runStackedAction", track: vi.fn() },
 }));
+vi.mock("./workspaceRecovery", () => ({
+  workspaceRecoveryEnvironment: { recover: "recoverWorkspace" },
+}));
 vi.mock("./threads", () => ({ threadEnvironment: { updateMetadata: "updateMetadata" } }));
 vi.mock("./queries", () => ({ useBranches: () => ({ data: null, refresh: () => {} }) }));
 vi.mock("../lib/uuid", () => ({ uuidv4: () => "uuid" }));

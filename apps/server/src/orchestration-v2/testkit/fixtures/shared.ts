@@ -355,6 +355,7 @@ export const CURSOR_MODEL_SELECTION = {
 export const MUSE_MODEL_SELECTION = {
   instanceId: ProviderInstanceId.make("muse"),
   model: "muse-spark-1.3-contributor",
+  options: [{ id: "reasoningEffort", value: "high" }],
 } satisfies ModelSelection;
 
 export const GROK_MODEL_SELECTION = {
@@ -381,7 +382,7 @@ export const PI_MODEL_SELECTION = {
 
 export const ACP_REGISTRY_MODEL_SELECTION = {
   instanceId: ProviderInstanceId.make("acpRegistry"),
-  model: "default",
+  model: null,
 } satisfies ModelSelection;
 
 export const READ_ONLY_ON_REQUEST_POLICY = {

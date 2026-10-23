@@ -1,3 +1,8 @@
+import { materializePiT3McpExtension } from "./mcpInjection.ts";
+import { PI_T3_MCP_EXTENSION_FILENAME } from "./mcpExtensionSource.ts";
+import * as FileSystem from "effect/FileSystem";
+import * as Effect from "effect/Effect";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 

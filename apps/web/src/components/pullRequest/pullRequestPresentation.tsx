@@ -128,7 +128,7 @@ export interface PullRequestConflictPresentation {
   readonly Icon: PullRequestGlyphIcon;
 }
 
-export function resolvePullRequestConflict(
+function resolvePullRequestConflict(
   input: {
     readonly state: PullRequestState;
     readonly isDraft: boolean;

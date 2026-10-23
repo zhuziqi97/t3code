@@ -489,7 +489,7 @@ const PROVIDER_UPDATE_MESSAGE_KEYS = {
   "Provider updated.": "providerUpdate.message.updated",
 } as const;
 
-export function formatProviderUpdateMessage(message: string, t: TFunction): string {
+function formatProviderUpdateMessage(message: string, t: TFunction): string {
   const key = PROVIDER_UPDATE_MESSAGE_KEYS[message as keyof typeof PROVIDER_UPDATE_MESSAGE_KEYS];
   if (key) return t(key);
   const exit = /^Update command exited with code (-?\d+)\.$/.exec(message);

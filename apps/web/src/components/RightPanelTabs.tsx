@@ -227,7 +227,7 @@ function previewTabIdOf(
  * resolve while the preview manager's createTab is still in flight, and muting
  * then fails with a PreviewTabNotFoundError nothing surfaces to the user.
  */
-export function tabMuteMenuItem(
+function tabMuteMenuItem(
   input: {
     overlay: DesktopPreviewOverlay | null;
     canResolveRuntimeTabId: boolean;

@@ -355,6 +355,7 @@ describe("root reopen shortcut", () => {
 
   it("uses the completion language when restoring navigation fails and keeps the diagnostic", async () => {
     await using _lifecycle = await setupLifecycle();
+    setup();
 
     useClosedViewStore.getState().remember({
       kind: "panel-tab",
@@ -368,7 +369,6 @@ describe("root reopen shortcut", () => {
           rejectNavigation = reject;
         }),
     );
-    setup();
     await using _view = await renderShortcut();
     await act(async () => {
       press();

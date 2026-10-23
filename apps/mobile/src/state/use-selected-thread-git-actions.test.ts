@@ -57,6 +57,23 @@ vi.mock("./use-vcs-action-state", () => ({
     state.results.push(result),
 }));
 vi.mock("../lib/uuid", () => ({ uuidv4: () => "action" }));
+vi.mock("./workspaceRecovery", () => ({
+  workspaceRecoveryEnvironment: {
+    recover: async ({
+      environmentId,
+      input,
+    }: {
+      environmentId: string;
+      input: { worktreePath: string | null };
+    }) => {
+      state.metadataRequests.push({ environmentId, branch: state.branch });
+      if (!state.scopes.has(AuthOrchestrationOperateScope))
+        return AsyncResult.failure(Cause.fail(new Error("Task operation denied")));
+      Object.assign(state.thread, input, { branch: state.branch });
+      return AsyncResult.success(undefined);
+    },
+  },
+}));
 vi.mock("./threads", () => ({
   threadEnvironment: {
     updateMetadata: async ({
@@ -93,6 +110,7 @@ vi.mock("./vcs", () => ({
     },
     createWorktree: async ({ input }: { input: { newRefName: string } }) => {
       state.worktrees.push("/repo-worktree");
+      state.branch = input.newRefName;
       state.afterGitAction?.();
       return AsyncResult.success({
         worktree: { path: "/repo-worktree", refName: input.newRefName },

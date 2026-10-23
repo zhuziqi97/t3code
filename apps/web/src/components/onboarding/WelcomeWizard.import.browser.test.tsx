@@ -224,7 +224,8 @@ async function mountImport(remote = false) {
   );
   await click("Continue");
   await click("Continue");
-  expect(pageText()).toContain("Import your projects");
+  await click("Continue to projects");
+  expect(pageText()).toContain("Choose your projects");
   stack.move();
   return screen;
 }

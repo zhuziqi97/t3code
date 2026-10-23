@@ -1,3 +1,4 @@
+import * as Result from "effect/Result";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
@@ -175,12 +176,16 @@ describe("Pi native default", () => {
       ],
     };
     for (const provider of ["first", "second"]) {
-      const parsed = parseDiscoveredModels(models, { model: { provider, id: "model" } });
+      const parsed = Result.getOrThrow(
+        parseDiscoveredModels(models, { model: { provider, id: "model" } }),
+      );
       assert.deepEqual(
         parsed.filter((model) => model.isDefault).map((model) => model.slug),
         [`${provider}/model`],
       );
     }
-    assert.isFalse(parseDiscoveredModels(models, undefined).some((model) => model.isDefault));
+    assert.isFalse(
+      Result.getOrThrow(parseDiscoveredModels(models, undefined)).some((model) => model.isDefault),
+    );
   });
 });

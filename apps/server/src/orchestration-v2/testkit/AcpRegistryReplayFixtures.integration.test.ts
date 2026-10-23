@@ -1,3 +1,4 @@
+import { ACP_SESSION_MODE_OPTION_ID } from "@t3tools/provider-acp/server/sessionConfig";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import {
@@ -32,14 +33,20 @@ describe("ACP registry replay fixtures", () => {
     { name: "open", firstTurn: false, code: -32602 },
     { name: "switch", firstTurn: true, code: -32602 },
     { name: "authentication", firstTurn: false, code: -32000 },
+    { name: "option", firstTurn: false, code: -32602 },
+    { name: "mode", firstTurn: false, code: -32602 },
   ])("preserves the ACP model-write $name failure through orchestration", (testCase) =>
     Effect.gen(function* () {
       const name = `acp_model_write_${testCase.name}`;
       const sessionId = "grok-replay-session-1";
       const rejectedModel = "replay-model-b";
+      const optionWrite = testCase.name === "option";
+      const modeWrite = testCase.name === "mode";
       const modelSelection = {
         instanceId: ProviderInstanceId.make("acpRegistry"),
-        model: rejectedModel,
+        model: optionWrite || modeWrite ? "replay-model-a" : rejectedModel,
+        ...(optionWrite ? { options: [{ id: "reasoning", value: "high" }] } : {}),
+        ...(modeWrite ? { options: [{ id: ACP_SESSION_MODE_OPTION_ID, value: "plan" }] } : {}),
       };
       const recorded = yield* readReplayFixtureTranscript(
         new URL("./fixtures/simple/registry_transcript.ndjson", import.meta.url),
@@ -61,7 +68,33 @@ describe("ACP registry replay fixtures", () => {
               method: "session/new",
               result: {
                 sessionId,
+                ...(modeWrite
+                  ? {
+                      modes: {
+                        currentModeId: "build",
+                        availableModes: [
+                          { id: "build", name: "Build" },
+                          { id: "plan", name: "Plan" },
+                        ],
+                      },
+                    }
+                  : {}),
                 configOptions: [
+                  ...(optionWrite
+                    ? [
+                        {
+                          id: "reasoning",
+                          name: "Reasoning",
+                          category: "thought_level",
+                          type: "select" as const,
+                          currentValue: "low",
+                          options: [
+                            { value: "low", name: "Low" },
+                            { value: "high", name: "High" },
+                          ],
+                        },
+                      ]
+                    : []),
                   {
                     id: "model",
                     name: "Model",
@@ -87,8 +120,14 @@ describe("ACP registry replay fixtures", () => {
             label: "session.set_model",
             frame: {
               kind: "request",
-              method: "session/set_config_option",
-              params: { sessionId, configId: "model", value: rejectedModel },
+              method: modeWrite ? "session/set_mode" : "session/set_config_option",
+              params: modeWrite
+                ? { sessionId, modeId: "plan" }
+                : {
+                    sessionId,
+                    configId: optionWrite ? "reasoning" : "model",
+                    value: optionWrite ? "high" : rejectedModel,
+                  },
             },
           },
           {
@@ -96,7 +135,7 @@ describe("ACP registry replay fixtures", () => {
             label: "session.set_model.rejected",
             frame: {
               kind: "response",
-              method: "session/set_config_option",
+              method: modeWrite ? "session/set_mode" : "session/set_config_option",
               error: {
                 code: testCase.code,
                 message: testCase.code === -32602 ? "Invalid provider" : "Authentication required",
@@ -116,7 +155,7 @@ describe("ACP registry replay fixtures", () => {
         driver: ProviderDriverKind.make("acpRegistry"),
         modelSelection: {
           ...modelSelection,
-          model: testCase.firstTurn ? "replay-model-a" : rejectedModel,
+          model: optionWrite || modeWrite || testCase.firstTurn ? "replay-model-a" : rejectedModel,
         },
       });
       const scenario = {
@@ -182,10 +221,20 @@ describe("ACP registry replay fixtures", () => {
         const errors = projection.turnItems.filter((item) => item.type === "error");
         assert.lengthOf(errors, 1);
         assert.equal(errors[0]?.failure.class, "provider_error");
-        if (testCase.code === -32602) {
+        if (modeWrite) {
           assert.equal(
             errors[0]?.failure.message,
-            'The agent did not accept the model "replay-model-b". Choose another model for this provider, then retry.',
+            "Invalid provider; The agent rejected session mode 'plan'; actual value is 'build'.",
+          );
+        } else if (optionWrite) {
+          assert.equal(
+            errors[0]?.failure.message,
+            "Invalid provider; The agent rejected configuration option 'reasoning' value 'high'; actual value is 'low'.",
+          );
+        } else if (testCase.code === -32602) {
+          assert.equal(
+            errors[0]?.failure.message,
+            'Invalid provider; The agent did not accept the model "replay-model-b"; actual model is "replay-model-a". Choose another model for this provider, then retry.',
           );
         } else {
           assert.match(

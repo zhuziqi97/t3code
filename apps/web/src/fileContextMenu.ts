@@ -63,7 +63,7 @@ export interface FileContextMenuCapabilities {
  * advertises: default-app open, reveal (with server-provided wording), and an
  * "Open with" submenu of detected editors. Empty when nothing can act.
  */
-export function buildFileContextMenuItems(
+function buildFileContextMenuItems(
   input: {
     readonly hasAbsolutePath: boolean;
     readonly capabilities: FileContextMenuCapabilities;

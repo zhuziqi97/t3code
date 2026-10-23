@@ -2,7 +2,7 @@ import { ScheduledTaskId } from "@t3tools/contracts";
 import { userEvent } from "vite-plus/test/browser";
 import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 
-import { EnvironmentId, MessageId, RunId, ThreadId } from "@t3tools/contracts";
+import { CheckpointRef, EnvironmentId, MessageId, RunId, ThreadId } from "@t3tools/contracts";
 
 import type { LegendListRef } from "@legendapp/list/react";
 import { createRef, Profiler, type ComponentProps, type ReactElement } from "react";
@@ -294,15 +294,24 @@ describe("MessagesTimeline automation prompts", () => {
         message("Done", { role: "assistant", runId }, "assistant-1"),
       ],
       {
-        latestRun: { runId, status: "running", startedAt: CREATED_AT, completedAt: null },
+        supportsConversationRollback: true,
+        threadStartCheckpointReady: true,
+        turnDiffSummaries: [
+          {
+            runId,
+            checkpointTurnCount: 1,
+            checkpointRef: "checkpoint-1" as never,
+            status: "ready",
+            files: [],
+            assistantMessageId: MessageId.make("assistant-1"),
+            completedAt: CREATED_AT,
+          },
+        ],
       },
     );
-    expect(screen.text()).toContain("Current response remains visible");
-    expect(screen.text()).not.toContain("Partial response from the old attempt");
-    const disclosure = screen.button(/Superseded attempt/);
-    expect(disclosure.textContent).toContain("Cut off by a steer");
-    await click(disclosure);
-    expect(screen.text()).toContain("Partial response from the old attempt");
+    expect(screen.buttons("Edit from here")).toHaveLength(0);
+    await click(screen.button(/^Automation/));
+    expect(screen.buttons("Edit from here")).toHaveLength(1);
   });
 
   it("forks from a completed assistant response", async () => {
@@ -394,18 +403,18 @@ describe("MessagesTimeline automation prompts", () => {
           {
             runId,
             checkpointTurnCount: 1,
-            checkpointRef: "checkpoint-1" as never,
+            checkpointRef: CheckpointRef.make("checkpoint-with-files"),
             status: "ready",
-            files: [],
-            assistantMessageId: MessageId.make("assistant-1"),
+            files: [{ path: "README.md", kind: "modified", additions: 2, deletions: 1 }],
+            assistantMessageId,
             completedAt: CREATED_AT,
           },
         ],
       },
     );
-    expect(screen.buttons("Edit from here")).toHaveLength(0);
-    await click(screen.button(/^Automation/));
-    expect(screen.buttons("Edit from here")).toHaveLength(1);
+    expect(screen.text()).toContain("1 changed file");
+    await click(screen.button("Open diff"));
+    expect(onOpenTurnDiff).toHaveBeenCalledWith(runId, "README.md");
   });
 });
 

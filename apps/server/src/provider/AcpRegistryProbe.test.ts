@@ -222,6 +222,7 @@ describe("ACP Registry probe", () => {
     expect(result.configOptions).toEqual([
       {
         id: "reasoning",
+        category: "thought_level",
         label: "Reasoning",
         type: "select",
         currentValue: "high",

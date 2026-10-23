@@ -310,10 +310,7 @@ export function formatRelativeTimeLabel(
     : relative.value;
 }
 
-export function getRelativeTimeState(
-  isoDate: string | null,
-  t: TFunction = i18n.t,
-): RelativeTimeState {
+function getRelativeTimeState(isoDate: string | null, t: TFunction = i18n.t): RelativeTimeState {
   if (!isoDate) return { status: "missing" };
   const relative = formatRelativeTime(isoDate, t);
   if (!relative) return { status: "invalid" };

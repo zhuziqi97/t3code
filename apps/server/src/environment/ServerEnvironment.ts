@@ -195,12 +195,11 @@ export const make = Effect.gen(function* () {
   const launcher = yield* resolveServiceLauncherMode();
   // Convene desktop releases are installed by the user; do not advertise the
   // upstream remote quit-and-install capability to Web or other machines.
-  const manualDesktopRelease =
-    serverConfig.mode === "desktop" && packageJson.version.includes("convene.");
+  const manualDesktopRelease = serverConfig.mode === "desktop";
   const serverSelfUpdate = manualDesktopRelease
     ? null
     : resolveServerSelfUpdateCapability({
-        desktopManaged: serverConfig.mode === "desktop",
+        desktopManaged: false,
         launcherManaged: launcher.managed,
       });
   const serverInstallation =
