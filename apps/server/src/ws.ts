@@ -96,6 +96,8 @@ import {
   type PullRequestRef,
   WS_METHODS,
   WsRpcGroup,
+  WsCoreRpcGroup,
+  WsOrchestrationRpcGroup,
 } from "@t3tools/contracts";
 import {
   HttpRouter,
@@ -548,10 +550,11 @@ const PROVIDER_STATUS_DEBOUNCE_MS = 200;
 
 // Middleware added later wraps middleware added earlier, so instrumentation wraps authorization.
 const ServerWsRpcGroup = WsRpcGroup.middleware(RpcInstrumentation);
-const CoreServerWsRpcGroup = ServerWsRpcGroup.omit(
+const CoreServerWsRpcGroup = WsCoreRpcGroup.middleware(RpcInstrumentation).omit(
   WS_METHODS.threadWorkspaceInspect,
   WS_METHODS.threadWorkspaceRecover,
 );
+const OrchestrationServerWsRpcGroup = WsOrchestrationRpcGroup.middleware(RpcInstrumentation);
 const layerWorkspaceInspectRpc = ServerWsRpcGroup.toLayerHandler(
   WS_METHODS.threadWorkspaceInspect,
   Effect.map(
@@ -1180,14 +1183,14 @@ export const subscribeOrchestrationV2Shell = Effect.fn("ws.orchestrationV2.subsc
   },
 );
 
-const makeCoreWsRpcLayer = (
+const makeWsRpcLayer = (
   currentSession: EnvironmentAuth.AuthenticatedSession,
   clientOrigin: OrchestrationClientOrigin,
   clientAnalyticsProps: Readonly<Record<string, unknown>>,
   previewAutomationBroker: PreviewAutomationBroker.PreviewAutomationBroker["Service"],
   serverBrowser: ServerBrowser.ServerBrowser["Service"],
 ) =>
-  CoreServerWsRpcGroup.toLayer(
+  Layer.unwrap(
     Effect.gen(function* () {
       const currentSessionId = currentSession.sessionId;
       const conveneSettings = yield* ConveneSettings.ConveneSettings;
@@ -2324,6 +2327,7 @@ const makeCoreWsRpcLayer = (
         [WS_METHODS.conveneMutateProject]: (input) => conveneConfiguration.mutate(input),
         [WS_METHODS.conveneProjectOptions]: (input) => conveneConfiguration.options(input),
         [WS_METHODS.conveneReadResource]: (input) => conveneResources.read(input),
+        [WS_METHODS.conveneSearchResources]: (input) => conveneResources.search(input),
         [WS_METHODS.conveneSubscribeResourceChanges]: (input) =>
           conveneResources.changes(input.threadId),
         [WS_METHODS.serverRunStorageCleanup]: () => storageCleanup.runNow,
@@ -3071,13 +3075,56 @@ const makeCoreWsRpcLayer = (
               Stream.concat(Stream.make(latest), changes),
             ),
           ),
-      } satisfies RpcGroup.HandlersFrom<RpcGroup.Rpcs<typeof CoreServerWsRpcGroup>>;
-      return handlers;
+      } satisfies RpcGroup.HandlersFrom<
+        RpcGroup.Rpcs<typeof CoreServerWsRpcGroup | typeof OrchestrationServerWsRpcGroup>
+      >;
+      const {
+        [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: dispatchCommand,
+        [ORCHESTRATION_V2_WS_METHODS.getWorkflowScript]: getWorkflowScript,
+        [ORCHESTRATION_V2_WS_METHODS.stopWorkflow]: stopWorkflow,
+        [ORCHESTRATION_V2_WS_METHODS.getTurnItem]: getTurnItem,
+        [ORCHESTRATION_V2_WS_METHODS.getTurnDiff]: getTurnDiff,
+        [ORCHESTRATION_V2_WS_METHODS.getFullThreadDiff]: getFullThreadDiff,
+        [ORCHESTRATION_V2_WS_METHODS.searchThreads]: searchThreads,
+        [ORCHESTRATION_V2_WS_METHODS.searchThread]: searchThread,
+        [ORCHESTRATION_V2_WS_METHODS.searchThreadStream]: searchThreadStream,
+        [ORCHESTRATION_V2_WS_METHODS.getArchivedShellSnapshot]: getArchivedShellSnapshot,
+        [ORCHESTRATION_V2_WS_METHODS.getThreadProjection]: getThreadProjection,
+        [ORCHESTRATION_V2_WS_METHODS.launchThread]: launchThread,
+        [ORCHESTRATION_V2_WS_METHODS.subscribeArchivedShell]: subscribeArchivedShell,
+        [ORCHESTRATION_V2_WS_METHODS.subscribeShell]: subscribeShell,
+        [ORCHESTRATION_V2_WS_METHODS.subscribeThread]: subscribeThread,
+        [ORCHESTRATION_V2_WS_METHODS.subscribeCommandOutput]: subscribeCommandOutput,
+        ...core
+      } = handlers;
+      const orchestration = {
+        [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: dispatchCommand,
+        [ORCHESTRATION_V2_WS_METHODS.getWorkflowScript]: getWorkflowScript,
+        [ORCHESTRATION_V2_WS_METHODS.stopWorkflow]: stopWorkflow,
+        [ORCHESTRATION_V2_WS_METHODS.getTurnItem]: getTurnItem,
+        [ORCHESTRATION_V2_WS_METHODS.getTurnDiff]: getTurnDiff,
+        [ORCHESTRATION_V2_WS_METHODS.getFullThreadDiff]: getFullThreadDiff,
+        [ORCHESTRATION_V2_WS_METHODS.searchThreads]: searchThreads,
+        [ORCHESTRATION_V2_WS_METHODS.searchThread]: searchThread,
+        [ORCHESTRATION_V2_WS_METHODS.searchThreadStream]: searchThreadStream,
+        [ORCHESTRATION_V2_WS_METHODS.getArchivedShellSnapshot]: getArchivedShellSnapshot,
+        [ORCHESTRATION_V2_WS_METHODS.getThreadProjection]: getThreadProjection,
+        [ORCHESTRATION_V2_WS_METHODS.launchThread]: launchThread,
+        [ORCHESTRATION_V2_WS_METHODS.subscribeArchivedShell]: subscribeArchivedShell,
+        [ORCHESTRATION_V2_WS_METHODS.subscribeShell]: subscribeShell,
+        [ORCHESTRATION_V2_WS_METHODS.subscribeThread]: subscribeThread,
+        [ORCHESTRATION_V2_WS_METHODS.subscribeCommandOutput]: subscribeCommandOutput,
+      };
+      const coreLayer = CoreServerWsRpcGroup.toLayer(core);
+      const orchestrationLayer = OrchestrationServerWsRpcGroup.toLayer(orchestration);
+      return Layer.mergeAll(
+        layerWorkspaceInspectRpc,
+        layerWorkspaceRecoverRpc,
+        coreLayer,
+        orchestrationLayer,
+      );
     }),
   );
-
-const makeWsRpcLayer = (...args: Parameters<typeof makeCoreWsRpcLayer>) =>
-  Layer.mergeAll(layerWorkspaceInspectRpc, layerWorkspaceRecoverRpc, makeCoreWsRpcLayer(...args));
 
 // Keep RPC schemas from expanding again at each consumer's Layer.provide call.
 type WsRpcTag = RpcGroup.Rpcs<typeof ServerWsRpcGroup>["_tag"];

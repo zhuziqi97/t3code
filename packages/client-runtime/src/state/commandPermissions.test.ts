@@ -268,6 +268,7 @@ describe("command permissions", () => {
         Effect.gen(function* () {
           const registry = yield* setup;
           const read = createCommandPermissions(runtime, WS_METHODS.conveneReadResource);
+          const search = createCommandPermissions(runtime, WS_METHODS.conveneSearchResources);
           const operate = createCommandPermissions(runtime, WS_METHODS.scheduledTasksRunNow);
           registry.set(
             sessions(env),
@@ -278,6 +279,7 @@ describe("command permissions", () => {
             }),
           );
           yield* read.authorize(registry, env);
+          yield* search.authorize(registry, env);
           expect(registry.get(read.permissionAtom(env))).toBe(true);
           expect(registry.get(operate.permissionAtom(env))).toBe(false);
           registry.set(
@@ -285,6 +287,10 @@ describe("command permissions", () => {
             AsyncResult.success({ ...grant(false), scopes: [], permissions: [] }),
           );
           expect(registry.get(read.permissionAtom(env))).toBe(false);
+          expect(registry.get(search.permissionAtom(env))).toBe(false);
+          expect(
+            (yield* search.authorize(registry, env).pipe(Effect.flip)).requiredPermission,
+          ).toBe(AuthOrchestrationReadScope);
           expect((yield* read.authorize(registry, env).pipe(Effect.flip)).requiredPermission).toBe(
             AuthOrchestrationReadScope,
           );

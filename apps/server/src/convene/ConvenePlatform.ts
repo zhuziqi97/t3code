@@ -17,6 +17,12 @@ export const Connection = Schema.Struct({
 export type Connection = typeof Connection.Type;
 const decodeConnection = Schema.decodeUnknownEffect(Schema.fromJsonString(Connection));
 const encodeConnection = Schema.encodeEffect(Schema.fromJsonString(Connection));
+const decodeErrorDetail = Schema.decodeUnknownOption(
+  Schema.Struct({
+    resource_type: Schema.optional(Schema.String),
+    reason: Schema.optional(Schema.String),
+  }),
+);
 
 export const Pairing = Schema.Struct({
   device_code: Schema.String,
@@ -55,6 +61,7 @@ export class ConvenePlatformError extends Schema.TaggedError<ConvenePlatformErro
     status: Schema.optional(Schema.Number),
     code: Schema.optional(Schema.String),
     resourceType: Schema.optional(Schema.String),
+    reason: Schema.optional(Schema.String),
     cause: Schema.optional(Schema.Defect()),
   },
 ) {
@@ -130,15 +137,18 @@ const make = Effect.gen(function* () {
         }),
       )(response).pipe(Effect.option);
       const detail = Option.isSome(error)
-        ? Schema.decodeUnknownOption(Schema.Struct({ resource_type: Schema.String }))(
-            error.value.error.detail,
-          )
+        ? decodeErrorDetail(error.value.error.detail)
         : Option.none();
       return yield* new ConvenePlatformError({
         operation: path,
         status: response.status,
         ...(Option.isSome(error) ? { code: error.value.error.code } : {}),
-        ...(Option.isSome(detail) ? { resourceType: detail.value.resource_type } : {}),
+        ...(Option.isSome(detail) && detail.value.resource_type !== undefined
+          ? { resourceType: detail.value.resource_type }
+          : {}),
+        ...(Option.isSome(detail) && detail.value.reason !== undefined
+          ? { reason: detail.value.reason }
+          : {}),
       });
     }
     const result = yield* HttpClientResponse.schemaBodyJson(

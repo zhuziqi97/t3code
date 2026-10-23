@@ -394,6 +394,7 @@ export const WS_METHODS = {
   conveneMutateProject: "convene.mutateProject",
   conveneProjectOptions: "convene.projectOptions",
   conveneReadResource: "convene.readResource",
+  conveneSearchResources: "convene.searchResources",
   conveneSubscribeResourceChanges: "convene.subscribeResourceChanges",
   // Project registry methods
   projectsList: "projects.list",
@@ -1904,7 +1905,7 @@ export class RpcScopeAuthorization extends RpcMiddleware.Service<RpcScopeAuthori
   { error: EnvironmentAuthorizationError },
 ) {}
 
-export const WsRpcGroup = RpcGroup.make(
+export const WsCoreRpcGroup = RpcGroup.make(
   Rpc.make(WS_METHODS.threadWorkspaceInspect, {
     payload: ThreadWorkspaceInput,
     success: ThreadWorkspaceState,
@@ -1949,6 +1950,11 @@ export const WsRpcGroup = RpcGroup.make(
   Rpc.make(WS_METHODS.conveneReadResource, {
     payload: ConveneResourceReadInput,
     success: ConveneResourceReadResult,
+    error: EnvironmentAuthorizationError,
+  }),
+  Rpc.make(WS_METHODS.conveneSearchResources, {
+    payload: ConveneResourceSearchInput,
+    success: ConveneResourceSearchResult,
     error: EnvironmentAuthorizationError,
   }),
   Rpc.make(WS_METHODS.conveneSubscribeResourceChanges, {
@@ -2140,6 +2146,10 @@ export const WsRpcGroup = RpcGroup.make(
   WsSubscribeAuthAccessRpc,
   WsSubscribeBackgroundPolicyRpc,
   WsSubscribeResourceTelemetryRpc,
+).middleware(RpcScopeAuthorization);
+
+// Separate handler groups keep server layer inference below the compiler limit.
+export const WsOrchestrationRpcGroup = RpcGroup.make(
   WsOrchestrationV2DispatchCommandRpc,
   WsOrchestrationV2GetWorkflowScriptRpc,
   WsOrchestrationV2StopWorkflowRpc,
@@ -2157,6 +2167,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationV2SubscribeThreadRpc,
   WsOrchestrationV2SubscribeCommandOutputRpc,
 ).middleware(RpcScopeAuthorization);
+
+export const WsRpcGroup = WsCoreRpcGroup.merge(WsOrchestrationRpcGroup);
 import {
   ConveneStatus,
   ConveneManageInput,
@@ -2168,4 +2180,9 @@ import {
   ConveneProjectView,
   ConveneIntegrationError,
 } from "./convene.ts";
-import { ConveneResourceReadInput, ConveneResourceReadResult } from "./conveneResource.ts";
+import {
+  ConveneResourceReadInput,
+  ConveneResourceReadResult,
+  ConveneResourceSearchInput,
+  ConveneResourceSearchResult,
+} from "./conveneResource.ts";

@@ -16,6 +16,172 @@ import * as ConvenePlatform from "./ConvenePlatform.ts";
 import * as ConveneConfiguration from "./ConveneConfiguration.ts";
 import * as ConveneResources from "./ConveneResources.ts";
 
+it.effect(
+  "searches draft projects over runner HTTP and distinguishes empty pages from denied access",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const server = yield* HttpServer.HttpServer;
+        const requests: Array<{ url: string; body: unknown; protocol: string | undefined }> = [];
+        const issuePage = {
+          items: [
+            {
+              kind: "issue",
+              module_id: "module-a",
+              module_path: "team/project/a",
+              title: "Issue seven",
+              resource_uri: "convene://issues/team/project/a/7",
+              number: 7,
+              state: "OPEN",
+            },
+            {
+              kind: "issue",
+              module_id: "module-b",
+              module_path: "team/project/b",
+              title: "Another seven",
+              resource_uri: "convene://issues/team/project/b/7",
+              number: 7,
+              state: "CLOSED",
+            },
+          ],
+          total: 22,
+          page: 2,
+          page_size: 20,
+        } as const;
+        let reply: { status: number; body: object } = {
+          status: 200,
+          body: { success: true, data: issuePage },
+        };
+        yield* server.serve(
+          Effect.gen(function* () {
+            const request = yield* HttpServerRequest.HttpServerRequest;
+            if (request.url.endsWith("/refresh"))
+              return HttpServerResponse.jsonUnsafe({
+                success: true,
+                data: { access_token: "runner-search-access", expires_in: 600 },
+              });
+            assert.equal(request.headers.authorization, "Bearer runner-search-access");
+            requests.push({
+              url: request.url,
+              body: yield* request.json,
+              protocol: request.headers["client-protocol"],
+            });
+            return HttpServerResponse.jsonUnsafe(reply.body, { status: reply.status });
+          }),
+        );
+        assert(NetAddress.isInetAddress(server.address));
+        const baseUrl = `http://127.0.0.1:${server.address.port}`;
+        let paired = true;
+        let clientProjectId: string | null = "draft-client-project";
+        const layer = ConveneResources.layer.pipe(
+          Layer.provideMerge(ConvenePlatform.layer),
+          Layer.provide(
+            Layer.mock(ServerSecretStore.ServerSecretStore)({
+              get: () =>
+                Effect.sync(() =>
+                  paired
+                    ? Option.some(
+                        new TextEncoder().encode(
+                          JSON.stringify({
+                            baseUrl,
+                            runnerId: "runner",
+                            refreshCredential: "fixture",
+                          }),
+                        ),
+                      )
+                    : Option.none(),
+                ),
+            }),
+          ),
+          Layer.provide(FetchHttpClient.layer),
+          Layer.provide(Layer.mock(ProjectionStore.ProjectionStoreV2)({})),
+          Layer.provide(
+            Layer.mock(ConveneConfiguration.ConveneConfiguration)({
+              clientProjectId: (projectId) => {
+                assert.equal(projectId, ProjectId.make("draft-project"));
+                return Effect.sync(() => clientProjectId);
+              },
+            }),
+          ),
+        );
+        yield* Effect.gen(function* () {
+          const service = yield* ConveneResources.ConveneResources;
+          const input = {
+            projectId: ProjectId.make("draft-project"),
+            kind: "issue" as const,
+            query: "7",
+            page: 2,
+            pageSize: 20,
+          };
+          assert.deepEqual(yield* service.search(input), { status: "ready", ...issuePage });
+          assert.deepEqual(requests[0], {
+            url: "/api/v1/execution-runner-resources/search",
+            body: {
+              client_project_id: "draft-client-project",
+              kind: "issue",
+              query: "7",
+              page: 2,
+              page_size: 20,
+            },
+            protocol: "1.0",
+          });
+          const documentPage = {
+            items: [
+              {
+                kind: "document",
+                module_id: "module-a",
+                module_path: "team/project/a",
+                title: "Notes",
+                resource_uri: "convene://docs/team/project/a/folder/notes.md",
+                relative_path: "folder/notes.md",
+              },
+            ],
+            total: 1,
+            page: 1,
+            page_size: 20,
+          } as const;
+          reply = { status: 200, body: { success: true, data: documentPage } };
+          assert.deepEqual(
+            yield* service.search({ ...input, kind: "document", query: "", page: 1 }),
+            { status: "ready", ...documentPage },
+          );
+          const emptyPage = { items: [], total: 0, page: 1, page_size: 20 };
+          reply = { status: 200, body: { success: true, data: emptyPage } };
+          assert.deepEqual(yield* service.search(input), { status: "ready", ...emptyPage });
+          for (const [status, error, expected] of [
+            [403, { code: "PERMISSION_DENIED", detail: { reason: "MCP_DISABLED" } }, "mcpDisabled"],
+            [
+              403,
+              { code: "PERMISSION_DENIED", detail: { reason: "CAPABILITY_DISABLED" } },
+              "capabilityDisabled",
+            ],
+            [403, { code: "MCP_SCOPE_INSUFFICIENT" }, "scopeInsufficient"],
+            [403, { code: "PERMISSION_DENIED" }, "unauthorized"],
+            [401, { code: "RUNNER_CREDENTIAL_INVALID" }, "unauthorized"],
+            [401, { code: "RUNNER_REVOKED" }, "unauthorized"],
+            [
+              404,
+              { code: "RESOURCE_NOT_FOUND", detail: { resource_type: "client_project" } },
+              "projectUnavailable",
+            ],
+            [404, { code: "RESOURCE_NOT_FOUND" }, "unavailable"],
+            [404, { detail: "Not Found" }, "unavailable"],
+            [503, { code: "UNAVAILABLE" }, "unavailable"],
+          ] as const) {
+            reply = { status, body: { success: false, error } };
+            assert.equal((yield* service.search(input)).status, expected);
+          }
+          const sent = requests.length;
+          clientProjectId = null;
+          assert.equal((yield* service.search(input)).status, "projectUnavailable");
+          paired = false;
+          assert.equal((yield* service.search(input)).status, "disconnected");
+          assert.equal(requests.length, sent);
+        }).pipe(Effect.provide(layer));
+      }),
+    ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+);
+
 const thread = Schema.decodeUnknownSync(OrchestrationV2AppThreadJson)({
   id: "stopped-thread",
   projectId: "message-project",

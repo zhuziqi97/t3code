@@ -39,6 +39,9 @@ describe("RPC authorization scopes", () => {
     expect(requiredScopeForRpcMethod(WS_METHODS.conveneReadResource)).toBe(
       AuthOrchestrationReadScope,
     );
+    expect(requiredScopeForRpcMethod(WS_METHODS.conveneSearchResources)).toBe(
+      AuthOrchestrationReadScope,
+    );
     expect(requiredScopeForRpcMethod(ORCHESTRATION_V2_WS_METHODS.dispatchCommand)).toBe(
       AuthOrchestrationOperateScope,
     );

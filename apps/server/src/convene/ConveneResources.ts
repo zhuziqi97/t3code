@@ -1,6 +1,9 @@
 import {
   ConveneIssueResource,
   ConveneResourceFailure,
+  ConveneResourceSearchPage,
+  type ConveneResourceSearchInput,
+  type ConveneResourceSearchResult,
   type ThreadId,
   type ConveneResourceReadInput,
   type ConveneResourceReadResult,
@@ -18,6 +21,9 @@ import * as ConveneConfiguration from "./ConveneConfiguration.ts";
 export class ConveneResources extends Context.Service<
   ConveneResources,
   {
+    readonly search: (
+      input: typeof ConveneResourceSearchInput.Type,
+    ) => Effect.Effect<ConveneResourceSearchResult>;
     readonly read: (
       input: typeof ConveneResourceReadInput.Type,
     ) => Effect.Effect<ConveneResourceReadResult>;
@@ -29,6 +35,46 @@ const make = Effect.gen(function* () {
   const platform = yield* ConvenePlatform.ConvenePlatform;
   const configuration = yield* ConveneConfiguration.ConveneConfiguration;
   const projections = yield* ProjectionStore.ProjectionStoreV2;
+  const search = Effect.fn("ConveneResources.search")(function* (
+    input: typeof ConveneResourceSearchInput.Type,
+  ): Effect.fn.Return<ConveneResourceSearchResult> {
+    return yield* Effect.gen(function* () {
+      if (Option.isNone(yield* platform.readConnection)) return { status: "disconnected" as const };
+      const clientProjectId = yield* configuration.clientProjectId(input.projectId);
+      if (clientProjectId === null) return { status: "projectUnavailable" as const };
+      const page = yield* platform.request(
+        "execution-runner-resources/search",
+        {
+          client_project_id: clientProjectId,
+          kind: input.kind,
+          query: input.query,
+          page: input.page,
+          page_size: input.pageSize,
+        },
+        ConveneResourceSearchPage,
+      );
+      return { status: "ready" as const, ...page };
+    }).pipe(
+      Effect.catchTags({
+        ConvenePlatformError: (error) => {
+          if (error.code === "NOT_PAIRED")
+            return Effect.succeed({ status: "disconnected" as const });
+          if (error.status === 403 && error.reason === "MCP_DISABLED")
+            return Effect.succeed({ status: "mcpDisabled" as const });
+          if (error.status === 403 && error.reason === "CAPABILITY_DISABLED")
+            return Effect.succeed({ status: "capabilityDisabled" as const });
+          if (error.status === 403 && error.code === "MCP_SCOPE_INSUFFICIENT")
+            return Effect.succeed({ status: "scopeInsufficient" as const });
+          if (error.status === 401 || error.status === 403)
+            return Effect.succeed({ status: "unauthorized" as const });
+          if (error.status === 404 && error.resourceType === "client_project")
+            return Effect.succeed({ status: "projectUnavailable" as const });
+          return Effect.succeed({ status: "unavailable" as const });
+        },
+      }),
+      Effect.catch(() => Effect.succeed({ status: "unavailable" as const })),
+    );
+  });
   const read = Effect.fn("ConveneResources.read")(function* (
     input: typeof ConveneResourceReadInput.Type,
   ) {
@@ -85,7 +131,7 @@ const make = Effect.gen(function* () {
       ),
       Stream.catch(() => Stream.empty),
     );
-  return ConveneResources.of({ read, changes });
+  return ConveneResources.of({ read, changes, search });
 });
 
 export const layer = Layer.effect(ConveneResources, make);
