@@ -1,6 +1,7 @@
 import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { ProjectId } from "@t3tools/contracts";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -107,6 +108,28 @@ const awaitPhase = (ide: ConveneIde.ConveneIde["Service"], phase: "ready" | "fai
     Stream.runHead,
     Effect.map(Option.getOrThrow),
   );
+
+it.effect("does not let inherited PORT override the managed loopback binding", () =>
+  Effect.gen(function* () {
+    const fixture = yield* setup;
+    const environment = { PORT: "8272", PATH: "/managed/bin", HOME: "/managed/home" };
+    yield* Effect.gen(function* () {
+      const ide = yield* ConveneIde.ConveneIde;
+      yield* ide.handle(OPEN);
+      yield* Deferred.succeed(fixture.install, "/managed/bin/code-server");
+      yield* awaitPhase(ide, "ready");
+      const command = fixture.commands[0]!;
+      assert.deepEqual(command.args.slice(0, 2), ["--bind-addr", "127.0.0.1:0"]);
+      assert.equal(command.options.env?.PORT, undefined);
+      assert.equal(command.options.env?.PATH, environment.PATH);
+      assert.equal(command.options.env?.HOME, environment.HOME);
+      assert.equal(environment.PORT, "8272");
+    }).pipe(
+      Effect.provide(fixture.layer),
+      Effect.provideService(HostProcess.Environment, environment),
+    );
+  }),
+);
 
 it.effect("gets or starts one shared runtime and resolves each workspace independently", () =>
   Effect.gen(function* () {

@@ -110,7 +110,8 @@ const make = Effect.gen(function* () {
         ],
         {
           cwd: config.cwd,
-          env: { ...environment, CS_DISABLE_PROXY: "true" },
+          // code-server lets PORT override --bind-addr, including our ephemeral loopback port.
+          env: { ...environment, PORT: undefined, CS_DISABLE_PROXY: "true" },
           stdin: "ignore",
           stdout: "pipe",
           stderr: "pipe",
