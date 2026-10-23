@@ -90,6 +90,34 @@ describe("environmentBootstrap", () => {
     );
   });
 
+  it.each(["http://192.168.1.126:5000", "http://frps.ziqi.ac.cn:11004"])(
+    "keeps mounted requests on their own session and entry at %s",
+    (origin) => {
+      vi.stubGlobal("window", {
+        location: { origin, href: `${origin}/deploy/clients/runner/env/thread` },
+        __T3_BASE_PATH__: "/deploy/clients/runner/",
+        __T3_REQUEST_BASE_PATH__: "/deploy/clients/runner/_sessions/first/",
+        __T3_ASSET_BASE_PATH__: "/deploy/t3-web/build-one",
+      });
+      expect(readPrimaryEnvironmentTarget()?.target).toEqual({
+        httpBaseUrl: `${origin}/deploy/clients/runner/_sessions/first/`,
+        wsBaseUrl: `${origin.replace("http:", "ws:")}/deploy/clients/runner/_sessions/first/ws`,
+      });
+      expect(resolvePrimaryEnvironmentHttpUrl("/.well-known/t3/environment")).toBe(
+        `${origin}/deploy/clients/runner/_sessions/first/.well-known/t3/environment`,
+      );
+      expect(resolvePrimaryEnvironmentHttpUrl("/api/auth/session")).toBe(
+        `${origin}/deploy/clients/runner/_sessions/first/api/auth/session`,
+      );
+      window.__T3_REQUEST_BASE_PATH__ = "/deploy/clients/runner/_sessions/second";
+      expect(resolvePrimaryEnvironmentHttpUrl("/api/browser/stream")).toBe(
+        `${origin}/deploy/clients/runner/_sessions/second/api/browser/stream`,
+      );
+      expect(window.__T3_BASE_PATH__).toBe("/deploy/clients/runner/");
+      expect(window.__T3_ASSET_BASE_PATH__).toBe("/deploy/t3-web/build-one");
+    },
+  );
+
   it("uses https descriptor urls when the primary environment uses wss", async () => {
     vi.stubEnv("VITE_HTTP_URL", "https://remote.example.com");
     vi.stubEnv("VITE_WS_URL", "wss://remote.example.com");
