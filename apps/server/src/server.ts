@@ -73,6 +73,9 @@ import * as ConvenePlatform from "./convene/ConvenePlatform.ts";
 import * as ConveneWorkspaces from "./convene/ConveneWorkspaces.ts";
 import * as ConveneConfiguration from "./convene/ConveneConfiguration.ts";
 import * as ConveneResources from "./convene/ConveneResources.ts";
+import * as CodeServerInstallation from "./convene/CodeServerInstallation.ts";
+import * as ConveneIde from "./convene/ConveneIde.ts";
+import * as ConveneIdeHttp from "./convene/ConveneIdeHttp.ts";
 import * as ConveneSettings from "./convene/ConveneSettings.ts";
 import * as McpSessionRegistry from "./mcp/McpSessionRegistry.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
@@ -572,6 +575,7 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
     ConveneSettings.layer,
     ThreadWorkspaceRecovery.layer,
     ConveneResources.layer.pipe(Layer.provide(ProjectionStoreV2.layer)),
+    ConveneIde.layer.pipe(Layer.provide(CodeServerInstallation.layer)),
   ).pipe(
     Layer.provideMerge(ConveneConnection.layer),
     Layer.provideMerge(ConveneNative.layer),
@@ -742,6 +746,7 @@ const layerMakeRoutes = Layer.mergeAll(
     Layer.provide(McpOAuth.layerMcpClientAuthenticator),
   ),
   ConveneMcp.route,
+  ConveneIdeHttp.layer,
 ).pipe(
   Layer.provide(
     PullRequestReviewGuideService.layer.pipe(Layer.provide(PullRequestReviewGuides.layer)),
