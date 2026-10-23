@@ -354,7 +354,7 @@ function mcpUrlFromBase(httpBaseUrl: string): string | null {
   } catch {
     return null;
   }
-  url.pathname = "/mcp";
+  url.pathname = url.pathname.replace(/\/+$/, "") + "/mcp";
   url.search = "";
   url.hash = "";
   return url.toString();

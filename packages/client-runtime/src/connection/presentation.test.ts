@@ -107,6 +107,22 @@ describe("connection presentation", () => {
     expect(environmentMcpUrl({ entry })).toBe("http://192.168.4.53:3773/mcp");
   });
 
+  it("keeps a mounted environment's request prefix in its MCP address", () => {
+    const profile = new BearerConnectionProfile({
+      connectionId: TARGET.connectionId,
+      environmentId: TARGET.environmentId,
+      label: TARGET.label,
+      httpBaseUrl: "http://frps.ziqi.ac.cn:11004/clients/runner/_session/current/",
+      wsBaseUrl: "ws://frps.ziqi.ac.cn:11004/clients/runner/_session/current/ws",
+    });
+    expect(
+      environmentMcpUrl({
+        entry: { ...ENTRY, profile: Option.some(profile) },
+        connectedTarget: TARGET,
+      }),
+    ).toBe("http://frps.ziqi.ac.cn:11004/clients/runner/_session/current/mcp");
+  });
+
   // regression: #16909 Copy MCP URL falls back to an alternate route when the relay route has no address
   it("passes over routes without an address of their own", () => {
     const relay = new RelayConnectionTarget({
