@@ -17,6 +17,8 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 type LocalizedPillView = ProviderUpdateSidebarPillView & {
   readonly resolveText: (t: TFunction) => ProviderUpdateSidebarPillView | null;
 };
+// Matches the pill's `duration-180` class.
+const PROVIDER_UPDATE_PILL_EXIT_MS = 180;
 
 const PROVIDER_UPDATE_PILL_STYLES = {
   loading:
@@ -104,6 +106,23 @@ export function SidebarProviderUpdatePill() {
 
   const exitAfterVisible = useEffectEvent((key: string) => startExit(key, null, key));
 
+  const finishExit = useEffectEvent(() => {
+    if (dismissAfterExitKey !== null) {
+      setDismissedKeys((previous) => new Set(previous).add(dismissAfterExitKey));
+    }
+    setRenderedView(pendingView);
+    setPendingView(null);
+    setExitingKey(null);
+    setDismissAfterExitKey(null);
+  });
+
+  useEffect(() => {
+    if (exitingKey === null) return;
+    // A cancelled or skipped CSS transition must not keep a hidden spinner mounted.
+    const timeoutId = window.setTimeout(finishExit, PROVIDER_UPDATE_PILL_EXIT_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [exitingKey]);
+
   useEffect(() => {
     if (!dismissAfterVisibleMs || !viewKey) {
       return;
@@ -133,21 +152,6 @@ export function SidebarProviderUpdatePill() {
           ? "pointer-events-none translate-y-1.5 opacity-0"
           : "translate-y-0 opacity-100"
       }`}
-      onTransitionEnd={(event) => {
-        if (event.target !== event.currentTarget) {
-          return;
-        }
-        if (!displayedView || exitingKey !== displayedView.key) {
-          return;
-        }
-        if (dismissAfterExitKey === displayedView.key) {
-          setDismissedKeys((previous) => new Set(previous).add(displayedView.key));
-        }
-        setRenderedView(pendingView);
-        setPendingView(null);
-        setExitingKey(null);
-        setDismissAfterExitKey(null);
-      }}
     >
       {showDismissProgress ? (
         <div

@@ -1,3 +1,4 @@
+import { EnvironmentAuthorizationError } from "@t3tools/contracts";
 import "~/index.css";
 import { act, render as renderTestUi, type Screen } from "../../test/render";
 import { createElement, useLayoutEffect } from "react";
@@ -5,7 +6,6 @@ import { createElement, useLayoutEffect } from "react";
 import {
   AuthOrchestrationOperateScope,
   AuthSourceControlWriteScope,
-  EnvironmentAuthorizationError,
   EnvironmentId,
   ProjectId,
   ThreadId,

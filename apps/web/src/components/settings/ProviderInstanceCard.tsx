@@ -1,5 +1,3 @@
-"use client";
-
 import { ProviderOperationActions } from "../ProviderOperationActions";
 import { Trans } from "react-i18next";
 import { useTranslate } from "../../i18n";
@@ -186,14 +184,14 @@ function ProviderAuthEmail(props: { readonly email: string | undefined }) {
   );
 }
 
-export function readProviderEnvironmentVariable(
+function readProviderEnvironmentVariable(
   environment: ReadonlyArray<ProviderInstanceEnvironmentVariable> | undefined,
   name: string,
 ): ProviderInstanceEnvironmentVariable | undefined {
   return environment?.find((variable) => variable.name === name);
 }
 
-export function providerEnvironmentWithoutNames(
+function providerEnvironmentWithoutNames(
   environment: ReadonlyArray<ProviderInstanceEnvironmentVariable> | undefined,
   names: ReadonlySet<string>,
 ): ReadonlyArray<ProviderInstanceEnvironmentVariable> {
@@ -488,6 +486,7 @@ function ProjectOverrideInheritance({
   readonly projectEnabled: boolean;
   readonly deviceEnabled: boolean;
 }) {
+  const t = useTranslate();
   const layers = [
     { key: "project", label: "Project", enabled: projectEnabled, effective: true },
     { key: "device", label: "Device", enabled: deviceEnabled, effective: false },
@@ -510,7 +509,7 @@ function ProjectOverrideInheritance({
         >
           <LayersIcon className="size-3 text-primary" />
         </TooltipTrigger>
-        <TooltipPopup side="top">Overridden for this project</TooltipPopup>
+        <TooltipPopup side="top">{t("inheritance.overridden")}</TooltipPopup>
       </Tooltip>
       <PopoverPopup align="end" width="md" padding="none">
         <ol role="list" className="px-3 py-2.5 text-sm">
@@ -536,7 +535,7 @@ function ProjectOverrideInheritance({
                   layer.effective ? "text-foreground" : "text-muted-foreground",
                 )}
               >
-                {layer.enabled ? "On" : "Off"}
+                {layer.enabled ? t("common.on") : t("common.off")}
                 {layer.effective ? (
                   <CheckIcon aria-hidden className="size-3.5 shrink-0 text-primary" />
                 ) : (
@@ -599,7 +598,6 @@ interface ProviderInstanceCardProps {
 }
 
 const EMPTY_ACP_PROJECTS: NonNullable<ProviderInstanceCardProps["acpProjects"]> = [];
-const NO_CUSTOM_MODELS: ReadonlyArray<CustomModelDefinition> = [];
 
 /**
  * Unknown drivers (`driverOption === undefined`) get a read-only

@@ -61,7 +61,7 @@ describe("theme saves after changing language", () => {
   it.each([{ created: true }, { created: false, mergedAppearance: "dark" as const }])(
     "reports activation failure in the completion language (%j)",
     async (context) => {
-      await using lifecycle = await setupLifecycle();
+      await using _lifecycle = await setupLifecycle();
 
       state.saved = parseThemeFile({
         version: THEME_FILE_VERSION,
@@ -87,7 +87,7 @@ describe("theme saves after changing language", () => {
     },
   );
   it("refreshes an edited active half without changing the mix and reports the save in the current language", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     state.saved = installCustomTheme(
       parseThemeFile({

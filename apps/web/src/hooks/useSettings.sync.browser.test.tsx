@@ -119,7 +119,7 @@ function setup() {
 
 describe("shared settings writes", () => {
   it("waits for the remaining target before reporting a partial save", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     setup();
     let finishRemote = () => {};
@@ -142,7 +142,7 @@ describe("shared settings writes", () => {
   });
 
   it("keeps a single-target failure specific to that environment", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     setup();
     appAtomRegistry.set(state.sessions.get(remoteId)!, AsyncResult.success(session([])));
@@ -159,7 +159,7 @@ describe("shared settings writes", () => {
   });
 
   it("names the failed environment when a server rejects a save after the grant check", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     setup();
     state.persist.mockResolvedValueOnce(AsyncResult.success(DEFAULT_SERVER_SETTINGS));
@@ -176,7 +176,7 @@ describe("shared settings writes", () => {
   });
 
   it("dispatches to the primary and connected remote before the remote grant finishes loading", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     setup();
     await using editor = await mountEditor();
@@ -197,7 +197,7 @@ describe("shared settings writes", () => {
       () => AsyncResult.failure<AuthSessionState, Error>(Cause.fail(new Error("session rejected"))),
     ],
   ] as const)("skips a remote whose grant is %s", async (_label, result) => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     setup();
     appAtomRegistry.set(state.sessions.get(remoteId)!, result());
@@ -213,7 +213,7 @@ describe("shared settings writes", () => {
   it.each(["disconnected", "unsupported"] as const)(
     "skips a %s remote even with a cold grant",
     async (condition) => {
-      await using lifecycle = await setupLifecycle();
+      await using _lifecycle = await setupLifecycle();
 
       setup();
       const remote = state.environments[1]!;
@@ -232,7 +232,7 @@ describe("shared settings writes", () => {
   it.each(["primary", "hosted"] as const)(
     "rechecks a cold remote grant that resolves to denied after the %s handler renders",
     async (mode) => {
-      await using lifecycle = await setupLifecycle();
+      await using _lifecycle = await setupLifecycle();
 
       setup();
       if (mode === "hosted") {
@@ -265,7 +265,7 @@ describe("shared settings writes", () => {
   );
 
   it("uses the language at completion and preserves failed and saved environment names", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     setup();
     let finishPrimary = () => {};
@@ -295,7 +295,7 @@ describe("shared settings writes", () => {
   });
 
   it("translates a local setting failure at completion without resending the write", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     setup();
     const localPatch = { worktreesDirectory: "/tmp/qa 原文" } satisfies ServerSettingsPatch;
@@ -322,7 +322,7 @@ describe("shared settings writes", () => {
   });
 
   it("names a denied environment in Chinese and does not dispatch", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     setup();
     state.environments[0]!.label = "开发电脑 原文";
@@ -339,7 +339,7 @@ describe("shared settings writes", () => {
   });
 
   it("explains an unanchored hosted local setting in Chinese", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     setup();
     state.environments = state.environments.filter(
@@ -363,7 +363,7 @@ describe("shared settings writes", () => {
   ])(
     "explains an unsupported shared setting in %s without writing it",
     async (language, title, description) => {
-      await using lifecycle = await setupLifecycle();
+      await using _lifecycle = await setupLifecycle();
 
       setup();
       await i18n.changeLanguage(language);
@@ -375,7 +375,7 @@ describe("shared settings writes", () => {
   );
 
   it("translates a hosted permission rejection when a pending grant resolves before execution", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     setup();
     state.environments = state.environments.filter(

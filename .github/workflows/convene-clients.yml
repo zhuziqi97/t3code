@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  APP_VERSION: 0.1.1-1
+  APP_VERSION: 0.1.2-1
 
 jobs:
   bundle:
@@ -41,7 +41,7 @@ jobs:
           import json
           targets = [
             {"label":"Linux x64","runner":"ubuntu-24.04","platform":"linux","target":"AppImage","arch":"x64","rust_target":"x86_64-unknown-linux-gnu","resource_key":"linux-x64"},
-            {"label":"Windows x64","runner":"windows-2025","platform":"win","target":"nsis","arch":"x64","rust_target":"x86_64-pc-windows-msvc","resource_key":"win32-x64"},
+            {"label":"Windows x64","runner":"ubuntu-24.04","verify_runner":"windows-2025","platform":"win","target":"nsis","arch":"x64","rust_target":"x86_64-pc-windows-msvc","resource_key":"win32-x64"},
             {"label":"macOS arm64","runner":"macos-15","platform":"mac","target":"dmg","arch":"arm64","rust_target":"aarch64-apple-darwin","resource_key":"darwin-arm64"},
           ]
           print("desktop_matrix=" + json.dumps(targets))
@@ -92,7 +92,7 @@ jobs:
           targets: x86_64-unknown-linux-gnu
       - name: Build Linux CLI for the Windows WSL backend
         env:
-          VP_NODE_VERSION: "26.8.2"
+          VP_NODE_VERSION: "26.12.1"
         run: |
           set -euo pipefail
           cargo build --manifest-path native/resource-monitor/Cargo.toml --locked --release --target x86_64-unknown-linux-gnu
@@ -124,6 +124,7 @@ jobs:
       convene_private_distribution: true
       label: ${{ matrix.label }}
       runner: ${{ matrix.runner }}
+      verify_runner: ${{ matrix.verify_runner || '' }}
       platform: ${{ matrix.platform }}
       target: ${{ matrix.target }}
       arch: ${{ matrix.arch }}

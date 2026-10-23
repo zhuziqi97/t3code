@@ -20,7 +20,7 @@ vi.mock("../../composerDraftStore", async (original) => ({
 }));
 
 import { changeLanguage } from "../../i18n";
-import { TraitsPicker } from "./TraitsPicker";
+import { TraitsPicker, readPromptUltrathink } from "./TraitsPicker";
 
 const reasoning: ProviderOptionDescriptor = {
   id: "reasoningEffort",
@@ -65,15 +65,16 @@ function Harness({
         instanceId={ProviderInstanceId.make("raw-personal")}
         models={models}
         model="raw-model"
-        prompt={prompt}
+        promptUltrathink={readPromptUltrathink(prompt)}
         modelOptions={options}
         planModeEnabled
         onModelOptionsChange={(next) => {
           state.save(next);
           setOptions(next);
         }}
-        onPromptChange={(next) => {
-          state.prompt(next);
+        onPromptEdit={(edit) => {
+          const next = edit(prompt);
+          if (next !== prompt) state.prompt(next);
           setPrompt(next);
         }}
       />

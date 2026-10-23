@@ -76,7 +76,7 @@ describe("restoring V2 settings", () => {
     ["autoResumeLimitedThreads", "Auto-resume limited threads"],
     ["snoozeLimitedThreads", "Snooze limited threads"],
   ] as const)("restores %s when it is the only changed setting", async (key, label) => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     setup();
     state.settings = { ...DEFAULT_UNIFIED_SETTINGS, [key]: true };
@@ -94,7 +94,7 @@ describe("restoring V2 settings", () => {
   it.each([false, true])(
     "ignores the retired project sort preference regardless of the old sidebar choice (%s)",
     async (legacySidebarEnabled) => {
-      await using lifecycle = await setupLifecycle();
+      await using _lifecycle = await setupLifecycle();
 
       setup();
       state.settings = {
@@ -112,7 +112,7 @@ describe("restoring V2 settings", () => {
   );
 
   it("does not reset settings after cancellation", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     setup();
     state.settings = { ...DEFAULT_UNIFIED_SETTINGS, autoResumeLimitedThreads: true };
@@ -127,7 +127,7 @@ describe("restoring V2 settings", () => {
   });
 
   it("includes language in the confirmation and restores the system preference", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     setup();
     state.settings = { ...DEFAULT_UNIFIED_SETTINGS, languagePreference: "zh" };
@@ -144,7 +144,7 @@ describe("restoring V2 settings", () => {
 });
 
 it("translates dirty theme and browser defaults in the confirmation and preserves them when cancelled", async () => {
-  await using lifecycle = await setupLifecycle();
+  await using _lifecycle = await setupLifecycle();
 
   setup();
   state.theme = "raw-custom-theme";

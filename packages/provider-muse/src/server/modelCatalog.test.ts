@@ -1,40 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
-import { MuseSettings } from "../settings.ts";
-import * as Effect from "effect/Effect";
-import * as Schema from "effect/Schema";
 
-import type { MuseSdkHost } from "./sdk.ts";
-import {
-  discoverMuseModels,
-  museModelCapabilities,
-  resolveMuseReasoningEffort,
-} from "./modelCatalog.ts";
-
-const settings = Schema.decodeSync(MuseSettings)({});
-const host = (catalog: Record<string, unknown>): MuseSdkHost => ({
-  connection: {
-    request: async () => catalog,
-    command: async () => ({}),
-    mintCommandId: () => "test",
-    onNotification: () => {},
-    onServerRequest: () => {},
-    onProtocolError: () => {},
-    closed: new Promise<void>(() => {}),
-  },
-  initializeResult: { grantedCapabilities: [] },
-  exited: new Promise(() => {}),
-  close: async () => {},
-});
-
-const row = (modelId: string, extra: Record<string, unknown> = {}) => ({
-  modelId,
-  displayLabel: modelId,
-  providerId: "meta",
-  profileId: "tbh",
-  isDefault: false,
-  contextLimit: 1_000_000,
-  ...extra,
-});
+import { museModelCapabilities, resolveMuseReasoningEffort } from "./modelCatalog.ts";
 
 describe("Muse model catalog", () => {
   it.effect("formats Muse model IDs as names without changing their selection slugs", () =>

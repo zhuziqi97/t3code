@@ -1,27 +1,12 @@
 {
   "name": "@t3tools/client-runtime",
+  "version": "0.1.2-1",
   "private": true,
   "type": "module",
   "exports": {
-    "./runEndState": {
-      "types": "./src/runEndState.ts",
-      "default": "./src/runEndState.ts"
-    },
-    "./contextWindow": {
-      "types": "./src/contextWindow.ts",
-      "default": "./src/contextWindow.ts"
-    },
-    "./convene-resource-reader": {
-      "types": "./src/conveneResourceReader.ts",
-      "default": "./src/conveneResourceReader.ts"
-    },
-    "./state/workspaceRecovery": {
-      "types": "./src/state/workspaceRecovery.ts",
-      "default": "./src/state/workspaceRecovery.ts"
-    },
-    "./state/convene": {
-      "types": "./src/state/convene.ts",
-      "default": "./src/state/convene.ts"
+    "./workspace-basename-lookup": {
+      "types": "./src/workspaceBasenameLookup.ts",
+      "default": "./src/workspaceBasenameLookup.ts"
     },
     "./composerThreadItems": {
       "types": "./src/composerThreadItems.ts",
@@ -126,10 +111,6 @@
     "./providerSkills": {
       "types": "./src/providerSkills.ts",
       "default": "./src/providerSkills.ts"
-    },
-    "./provider-option-labels": {
-      "types": "./src/providerOptionLabels.ts",
-      "default": "./src/providerOptionLabels.ts"
     },
     "./providerUpdateRequiredModels": {
       "types": "./src/providerUpdateRequiredModels.ts",
@@ -339,6 +320,10 @@
       "types": "./src/state/threadSubagents.ts",
       "default": "./src/state/threadSubagents.ts"
     },
+    "./state/thread-undo": {
+      "types": "./src/state/threadUndo.ts",
+      "default": "./src/state/threadUndo.ts"
+    },
     "./state/thread-settled": {
       "types": "./src/state/threadSettled.ts",
       "default": "./src/state/threadSettled.ts"
@@ -435,14 +420,6 @@
       "types": "./src/state/mcpApps.ts",
       "default": "./src/state/mcpApps.ts"
     },
-    "./i18n/languages": {
-      "types": "./src/i18n/languages.ts",
-      "default": "./src/i18n/languages.ts"
-    },
-    "./i18n": {
-      "types": "./src/i18n/index.ts",
-      "default": "./src/i18n/index.ts"
-    },
     "./source-control-clients": {
       "types": "./src/sourceControlClients.ts",
       "default": "./src/sourceControlClients.ts"
@@ -463,13 +440,49 @@
       "types": "./src/pullRequestQuery.ts",
       "default": "./src/pullRequestQuery.ts"
     },
+    "./model-traits": {
+      "types": "./src/modelTraits.ts",
+      "default": "./src/modelTraits.ts"
+    },
+    "./runEndState": {
+      "types": "./src/runEndState.ts",
+      "default": "./src/runEndState.ts"
+    },
+    "./contextWindow": {
+      "types": "./src/contextWindow.ts",
+      "default": "./src/contextWindow.ts"
+    },
+    "./convene-resource-reader": {
+      "types": "./src/conveneResourceReader.ts",
+      "default": "./src/conveneResourceReader.ts"
+    },
+    "./state/workspaceRecovery": {
+      "types": "./src/state/workspaceRecovery.ts",
+      "default": "./src/state/workspaceRecovery.ts"
+    },
+    "./state/convene": {
+      "types": "./src/state/convene.ts",
+      "default": "./src/state/convene.ts"
+    },
+    "./provider-option-labels": {
+      "types": "./src/providerOptionLabels.ts",
+      "default": "./src/providerOptionLabels.ts"
+    },
+    "./i18n/languages": {
+      "types": "./src/i18n/languages.ts",
+      "default": "./src/i18n/languages.ts"
+    },
+    "./i18n": {
+      "types": "./src/i18n/index.ts",
+      "default": "./src/i18n/index.ts"
+    },
     "./operations/threadTitle": {
       "types": "./src/operations/threadTitle.ts",
       "import": "./src/operations/threadTitle.ts"
     }
   },
   "scripts": {
-    "typecheck": "tsc-rs --noEmit",
+    "typecheck": "tsc --noEmit",
     "test": "vp test run"
   },
   "dependencies": {
@@ -490,6 +503,7 @@
   "devDependencies": {
     "@effect/vitest": "catalog:",
     "@types/three": "0.180.0",
+    "typescript": "catalog:",
     "vite-plus": "catalog:"
   }
 }

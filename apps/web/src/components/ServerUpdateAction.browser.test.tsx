@@ -1,9 +1,16 @@
+import { type ServerInstallation } from "@t3tools/contracts";
+import {
+  readConfirmDialogState,
+  registerConfirmDialogHost,
+  respondToConfirmDialog,
+} from "~/confirmDialog";
+import { ServerUpdateProgress } from "./ServerUpdateAction";
 import "~/index.css";
 import { act, render, type Screen } from "../../test/render";
 
 import { changeLanguage } from "../i18n";
 import { RegistryContext } from "@effect/atom-react";
-import { AuthSessionState, type EnvironmentId, type ServerInstallation } from "@t3tools/contracts";
+import { AuthSessionState, type EnvironmentId } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Schema from "effect/Schema";
 import { AsyncResult, Atom } from "effect/reactivity";
@@ -58,16 +65,10 @@ vi.mock(import("./ui/toast"), async (original) => {
   return { ...actual, toastManager: { ...actual.toastManager, add: testState.toast } };
 });
 
-import {
-  readConfirmDialogState,
-  registerConfirmDialogHost,
-  resetConfirmDialogForTests,
-  respondToConfirmDialog,
-} from "~/confirmDialog";
+import { resetConfirmDialogForTests } from "~/confirmDialog";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import {
   ServerUpdateAction,
-  ServerUpdateProgress,
   ServerUpdatesAction,
   type ServerUpdateTarget,
 } from "./ServerUpdateAction";
@@ -156,7 +157,7 @@ describe("ServerUpdateAction", () => {
   ] as const)(
     "uses the advertised update scope $serverUpdateScope with grant $scopes",
     async ({ serverUpdateScope, scopes, allowed }) => {
-      await using lifecycle = await setupLifecycle();
+      await using _lifecycle = await setupLifecycle();
 
       using _state = setup();
       setSession(
@@ -182,7 +183,7 @@ describe("ServerUpdateAction", () => {
   );
 
   it("keeps a known grant usable while the session refreshes", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     using _state = setup();
     setSession(AsyncResult.waiting(AsyncResult.success(currentSession)));
@@ -195,7 +196,7 @@ describe("ServerUpdateAction", () => {
   });
 
   it("disables the action once maintenance access is removed", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     using _state = setup();
     await using screen = await renderAction();
@@ -232,7 +233,7 @@ describe("ServerUpdateAction", () => {
   >)(
     "copies an honest manual command for %j without invoking remote update",
     async (installation, label, command, title, guidance) => {
-      await using lifecycle = await setupLifecycle();
+      await using _lifecycle = await setupLifecycle();
 
       using _state = setup();
       await using screen = await renderAction({
@@ -253,7 +254,7 @@ describe("ServerUpdateAction", () => {
   );
 
   it("reports success only after the shared update flow reconnects", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     using _state = setup();
     testState.updateServer.mockResolvedValue(success());
@@ -273,7 +274,7 @@ describe("ServerUpdateAction", () => {
   });
 
   it("reports one result when the update action is double-clicked", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     using _state = setup();
     let finishUpdate: (() => void) | undefined;
@@ -296,7 +297,7 @@ describe("ServerUpdateAction", () => {
   });
 
   it("quietly releases the action when the operation is interrupted", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     using _state = setup();
     testState.updateServer.mockResolvedValue(AsyncResult.failure(Cause.interrupt()));
@@ -308,7 +309,7 @@ describe("ServerUpdateAction", () => {
   });
 
   it("keeps the manual instruction for desktop servers without remote update support", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     using _state = setup();
     await using screen = await renderAction({ selfUpdate: "desktop-managed" });
@@ -320,7 +321,7 @@ describe("ServerUpdateAction", () => {
   });
 
   it("updates remote desktop apps through the shared update flow after confirmation", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     using _state = setup();
     registerConfirmDialogHost();
@@ -351,7 +352,7 @@ describe("ServerUpdateAction", () => {
   });
 
   it("leaves thread continuation off by default", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     using _state = setup();
     testState.updateServer.mockResolvedValue(success());
@@ -366,7 +367,7 @@ describe("ServerUpdateAction", () => {
   });
 
   it("applies the saved thread continuation preference automatically", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     using _state = setup();
     testState.updateServer.mockResolvedValue(success());
@@ -384,7 +385,7 @@ describe("ServerUpdateAction", () => {
   it.each(["success", "failure"] as const)(
     "uses the completion language for a delayed %s and keeps raw result details",
     async (outcome) => {
-      await using lifecycle = await setupLifecycle();
+      await using _lifecycle = await setupLifecycle();
 
       using _state = setup();
       let finishUpdate: (() => void) | undefined;
@@ -449,7 +450,7 @@ describe("ServerUpdatesAction", () => {
   const mount = (batch = targets) => renderUpdate(<ServerUpdatesAction targets={batch} />);
 
   it("updates both supported machines with their own continuation preference and skips the manual machine", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     using _state = setup();
     testState.updateServer.mockResolvedValue(success());
@@ -470,7 +471,7 @@ describe("ServerUpdatesAction", () => {
   });
 
   it("names a failed machine while letting the other machine complete", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     using _state = setup();
     testState.updateServer
@@ -492,7 +493,7 @@ describe("ServerUpdatesAction", () => {
   });
 
   it("starts each machine once when double-clicked and disables the action until both finish", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     using _state = setup();
     const completions: Array<() => void> = [];
@@ -517,7 +518,7 @@ describe("ServerUpdatesAction", () => {
   });
 
   it("asks once for desktop machines and cancels the entire batch", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     using _state = setup();
     registerConfirmDialogHost();
@@ -542,7 +543,7 @@ describe("ServerUpdatesAction", () => {
 
 describe("ServerUpdateProgress", () => {
   it("shows one calm status for the restart wait", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     using _state = setup();
     await using screen = await renderUpdate(
@@ -559,7 +560,7 @@ describe("ServerUpdateProgress", () => {
   });
 
   it("folds the sub-second installing handoff into the download phase", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     using _state = setup();
     await using screen = await renderUpdate(
@@ -576,7 +577,7 @@ describe("ServerUpdateProgress", () => {
   });
 
   it("keeps the failure visible as an alert with its error", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     using _state = setup();
     await using screen = await renderUpdate(

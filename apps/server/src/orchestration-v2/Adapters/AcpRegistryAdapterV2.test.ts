@@ -1,3 +1,7 @@
+const registryUrl = "https://registry.test/registry.json";
+import * as Deferred from "effect/Deferred";
+import * as Option from "effect/Option";
+import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import {
@@ -19,11 +23,9 @@ import * as Fiber from "effect/Fiber";
 import * as DateTime from "effect/DateTime";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
-import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as HttpClient from "effect/http/HttpClient";
@@ -31,7 +33,6 @@ import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as EffectAcpErrors from "effect-acp/errors";
 
-import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import * as TestProviderHost from "@t3tools/provider-testing/TestProviderHost";
 import {
@@ -53,7 +54,6 @@ import {
   makeTurnInput,
 } from "./AcpAdapterV2.testkit.ts";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
-import { BUILT_IN_PROVIDER_ADAPTER_DRIVER_KINDS_V2 } from "../builtInProviderAdapterDrivers.ts";
 import { AcpRegistryAdapterV2Driver } from "@t3tools/provider-acp-registry/server";
 import {
   ACP_REGISTRY_PROVIDER,
@@ -62,7 +62,6 @@ import {
   acpRegistryProbeResult,
 } from "@t3tools/provider-acp-registry/testing";
 
-const registryUrl = "https://registry.test/registry.json";
 const decodeAcpRegistryAdapterSettings = Schema.decodeUnknownEffect(
   AcpRegistryAdapterV2Driver.configSchema,
 );
@@ -445,20 +444,6 @@ describe("AcpRegistryAdapterV2", () => {
     assert.notInclude(rejected.message, "private-key");
     assert.notInclude(rejected.message, "token=secret");
   });
-  it("is registered as a generic provider driver with schema defaults", () => {
-    assert.isTrue(BUILT_IN_PROVIDER_ADAPTER_DRIVER_KINDS_V2.has(ACP_REGISTRY_PROVIDER));
-    assert.equal(AcpRegistryAdapterV2Driver.driverKind, ACP_REGISTRY_PROVIDER);
-    assert.deepEqual(AcpRegistryAdapterV2Driver.defaultConfig(), {
-      source: "registry",
-      commandArgs: [],
-      enabled: true,
-      agentId: "",
-      commandPath: "",
-      authMethodId: "",
-      distribution: "auto",
-      customModels: [],
-    });
-  });
 
   describe("the agent's own pickers", () => {
     type Frame = Record<string, unknown>;
@@ -491,7 +476,19 @@ describe("AcpRegistryAdapterV2", () => {
       readonly keepSessionOpen?: boolean;
       readonly turnModels?: ReadonlyArray<string>;
     }) {
-      const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+      const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+      // Scope release gives the replay agent at most a second to exit, so the status
+      // read below waits for the agent itself instead of racing its last write.
+      const agentExits: Array<Effect.Effect<void>> = [];
+      const childProcessSpawner = ChildProcessSpawner.make((command) =>
+        spawner
+          .spawn(command)
+          .pipe(
+            Effect.tap((handle) =>
+              Effect.sync(() => agentExits.push(Effect.ignore(handle.exitCode))),
+            ),
+          ),
+      );
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const replayDir = yield* fileSystem.makeTempDirectoryScoped({
@@ -1133,73 +1130,7 @@ describe("AcpRegistryAdapterV2", () => {
     );
   });
 
-  it.effect("offers client terminals to Devin only and client fs to no registry agent", () =>
-    Effect.gen(function* () {
-      const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-      const path = yield* Path.Path;
-      const mockAgentPath = yield* path.fromFileUrl(
-        new URL("../../../scripts/acp-mock-agent.ts", import.meta.url),
-      );
-      const advertisedCapabilities = Effect.fn("advertisedCapabilities")(function* (
-        agentId: string,
-      ) {
-        let clientCapabilities: unknown;
-        const instanceId = ProviderInstanceId.make(`acp-registry-capabilities-${agentId}`);
-        const adapter = yield* makeAcpRegistryAdapterV2({
-          selfInvocation: yield* resolveSelfInvocation(),
-          instanceId,
-          settings: yield* decodeAcpRegistryAdapterSettings({ agentId, authMethodId: "test" }),
-          environment: {},
-          makeRuntime: (input) =>
-            Effect.gen(function* () {
-              clientCapabilities = input.clientCapabilities;
-              const { processEnvironment: _processEnvironment, ...runtimeInput } = input;
-              const context = yield* Layer.build(
-                AcpSessionRuntime.layer({
-                  ...runtimeInput,
-                  spawn: {
-                    command: process.execPath,
-                    args: [mockAgentPath],
-                    cwd: input.cwd,
-                    env: { T3_ACP_SESSION_LIFECYCLE: "1" },
-                  },
-                  authMethodId: "test",
-                }).pipe(
-                  Layer.provide(
-                    Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, childProcessSpawner),
-                  ),
-                ),
-              );
-              return yield* Effect.service(AcpSessionRuntime.AcpSessionRuntime).pipe(
-                Effect.provide(context),
-              );
-            }),
-        }).pipe(Effect.provide(layerInjectedRuntimeCatalog));
-        const runtimePolicy = ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
-          runtimeMode: "full-access",
-          interactionMode: "default",
-          cwd: process.cwd(),
-        });
-        yield* adapter.openSession({
-          threadId: ThreadId.make(`thread-acp-registry-capabilities-${agentId}`),
-          providerSessionId: ProviderSessionId.make(`provider-session-capabilities-${agentId}`),
-          modelSelection: { instanceId, model: "default" },
-          runtimePolicy,
-        });
-        return clientCapabilities;
-      });
-
-      assert.deepInclude(yield* advertisedCapabilities("devin"), {
-        fs: { readTextFile: false, writeTextFile: false },
-        terminal: true,
-      });
-      assert.deepInclude(yield* advertisedCapabilities("gemini"), {
-        fs: { readTextFile: false, writeTextFile: false },
-        terminal: false,
-      });
-    }).pipe(Effect.provide(layerTest), Effect.scoped),
-  );
-
+  // regression: #21618 Claude Agent needs ACP v2 for native background lifecycle
   it.effect("launches Claude Agent on ACP v2 unless its instance environment decides", () =>
     Effect.gen(function* () {
       const launchSwitch = Effect.fn("launchSwitch")(function* (

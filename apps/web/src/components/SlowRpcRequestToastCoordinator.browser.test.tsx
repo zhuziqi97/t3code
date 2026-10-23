@@ -1,3 +1,4 @@
+import { fakeTimers } from "../../test/render";
 import "~/index.css";
 import { act, render as renderTestUi } from "../../test/render";
 
@@ -10,12 +11,7 @@ vi.mock("@tanstack/react-router", async (importOriginal) => ({
 
 import { i18n } from "../i18n";
 import { AppAtomRegistryProvider } from "../rpc/atomRegistry";
-import {
-  acknowledgeRpcRequest,
-  resetRequestLatencyStateForTests,
-  SLOW_RPC_ACK_THRESHOLD_MS,
-  trackRpcRequestSent,
-} from "../rpc/requestLatencyState";
+import { acknowledgeRpcRequest, trackRpcRequestSent } from "../rpc/requestLatencyState";
 import { SlowRpcRequestToastCoordinator } from "./SlowRpcRequestToastCoordinator";
 import { ToastProvider, toastManager } from "./ui/toast";
 
@@ -23,8 +19,9 @@ describe("slow-request notifications", () => {
   it("retranslates one expanded notification, keeps raw request labels and closes after acknowledgement", async () => {
     await using _lifecycle = await setupLifecycle();
 
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
-    resetRequestLatencyStateForTests();
+    using _timers = fakeTimers();
+    acknowledgeRpcRequest("first");
+    acknowledgeRpcRequest("second");
     const add = vi.spyOn(toastManager, "add");
     const close = vi.spyOn(toastManager, "close");
     const container = document.createElement("div");
@@ -44,7 +41,7 @@ describe("slow-request notifications", () => {
       await act(async () => {
         trackRpcRequestSent("first", "git.status", "git.status · 原始环境");
         trackRpcRequestSent("second", "server.getConfig", "server.getConfig · Raw host 原文");
-        await vi.advanceTimersByTimeAsync(SLOW_RPC_ACK_THRESHOLD_MS);
+        await vi.advanceTimersByTimeAsync(15_000);
       });
       expect(document.body.textContent).toContain("2 requests waiting longer than 15s.");
       const disclosure = document.querySelector<HTMLElement>(
@@ -79,7 +76,8 @@ describe("slow-request notifications", () => {
     } finally {
       await act(async () => {
         await root.unmount();
-        resetRequestLatencyStateForTests();
+        acknowledgeRpcRequest("first");
+        acknowledgeRpcRequest("second");
         await i18n.changeLanguage("en");
       });
       container.remove();

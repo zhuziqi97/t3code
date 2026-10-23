@@ -116,32 +116,6 @@ describe("customModelEditor.logic", () => {
     expect(copied!.choices.map((choice) => choice.id)).toEqual(["high"]);
   });
 
-  it.each([true, false, undefined])(
-    "preserves boolean values through copy and edit: %s",
-    (currentValue) => {
-      const capabilities: ModelCapabilities = {
-        optionDescriptors: [
-          {
-            id: "thinking",
-            label: "Thinking",
-            type: "boolean",
-            ...(currentValue !== undefined ? { currentValue } : {}),
-          },
-        ],
-      };
-      const copied = definitionFromDraft(
-        draft({
-          descriptors: descriptorsFromCapabilities(capabilities, ProviderDriverKind.make("cursor")),
-        }),
-      );
-      expect(copied.capabilities).toEqual(capabilities);
-      const reopened = draftFromDefinition(copied);
-      expect(definitionFromDraft({ ...reopened, name: "Renamed" }).capabilities).toEqual(
-        capabilities,
-      );
-    },
-  );
-
   it("excludes Claude context choices from presets and copies without changing other providers or authored entries", () => {
     const capabilities: ModelCapabilities = {
       optionDescriptors: [

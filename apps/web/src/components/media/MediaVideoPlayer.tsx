@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import { settlePromise } from "@t3tools/client-runtime/state/runtime";
 import { AsyncResult } from "effect/reactivity";
 import { PlayIcon, RotateCwIcon, TriangleAlertIcon } from "lucide-react";
@@ -44,6 +45,7 @@ export function MediaVideoPlayer({
   onRetry,
   actionsSource,
 }: MediaVideoPlayerProps) {
+  const t = useTranslate();
   // State, not a ref: the element remounts on retry and failure, and effects must rebind to it.
   const [video, setVideo] = useState<HTMLVideoElement | null>(null);
   const [playbackSource, setPlaybackSource] = useState<{
@@ -60,13 +62,16 @@ export function MediaVideoPlayer({
   const failed = src !== null ? failedSrc === src : sourceFailed;
   const preloaded = preloadedSrc === src || typeof IntersectionObserver === "undefined";
 
-  // Re-signing must not reset the playhead. Changed files refresh once playback pauses.
+  // Re-signing must not reload a loaded source. Changed files load once playback pauses.
   if (
     playbackSource !== null &&
     playbackSource.revision !== revision &&
+    (latestSrc !== null || sourceFailed) &&
     (video === null || playingVideo !== video)
   ) {
-    setPlaybackSource(null);
+    setPlaybackSource(
+      revision !== null && latestSrc !== null ? { src: latestSrc, revision } : null,
+    );
   }
 
   useEffect(() => {
@@ -150,7 +155,7 @@ export function MediaVideoPlayer({
                 onClick={() => void retry()}
               >
                 <RotateCwIcon />
-                {retrying ? "Retrying…" : "Retry video"}
+                {retrying ? t("connections.retrying") : "Retry video"}
               </Button>
             ) : null}
             <OpenMediaLink originalUrl={originalUrl} src={latestSrc ?? src} fileName={label} />
@@ -174,7 +179,10 @@ export function MediaVideoPlayer({
             videoClassName,
           )}
           style={style}
-          onLoadedMetadata={(event) => prepareVideoFirstFrame(event.currentTarget)}
+          onLoadedMetadata={(event) => {
+            prepareVideoFirstFrame(event.currentTarget);
+            if (sourceRevision !== null) setPlaybackSource({ src, revision: sourceRevision });
+          }}
           onPlay={(event) => {
             setPlayingVideo(event.currentTarget);
             setPlaybackSource({ src, revision: sourceRevision });
@@ -183,8 +191,8 @@ export function MediaVideoPlayer({
           onEnded={() => setPlayingVideo(null)}
           onError={() => {
             setPlayingVideo(null);
-            if (latestSrc !== null && src !== latestSrc) setPlaybackSource(null);
-            else setFailedSrc(src);
+            setPlaybackSource(null);
+            if (latestSrc === null || src === latestSrc) setFailedSrc(src);
           }}
         />
       ) : (

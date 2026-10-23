@@ -1,3 +1,4 @@
+import { fakeTimers } from "../../test/render";
 import "~/index.css";
 import { act, render as renderTestUi, type Screen } from "../../test/render";
 import { useSyncExternalStore, type ComponentPropsWithoutRef, type ReactNode } from "react";
@@ -12,7 +13,6 @@ import {
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
 import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
-import type { LocalEnvironmentUpdateGroup } from "./ProviderUpdateLaunchNotification.logic";
 
 type ToastOptions = {
   title: ReactNode;
@@ -22,7 +22,6 @@ type ToastOptions = {
 };
 const state = vi.hoisted(() => ({
   providers: [] as ServerProvider[],
-  groups: [] as LocalEnvironmentUpdateGroup[],
   environments: [] as {
     environmentId: EnvironmentId;
     label: string;
@@ -73,17 +72,7 @@ vi.mock("../state/use-atom-command", async (original) => ({
   ...(await original<typeof import("../state/use-atom-command")>()),
   useAtomCommand: () => state.updateProvider,
 }));
-vi.mock("../providerUpdateDismissal", async (original) => ({
-  ...(await original<typeof import("../providerUpdateDismissal")>()),
-  useDismissedProviderUpdateNotificationKeys: () => ({
-    dismissedNotificationKeys: state.dismissed,
-    dismissNotificationKey: state.dismiss,
-  }),
-}));
-vi.mock("./ProviderUpdateLaunchNotification.environments", async (original) => ({
-  ...(await original<typeof import("./ProviderUpdateLaunchNotification.environments")>()),
-  useLocalEnvironmentUpdateGroups: () => ({ groups: state.groups, isAnySettling: false }),
-}));
+
 vi.mock("./chat/ProviderInstanceIcon", async (original) => ({
   ...(await original<typeof import("./chat/ProviderInstanceIcon")>()),
   ProviderInstanceIcon: () => null,
@@ -98,10 +87,6 @@ vi.mock("./ui/toast", async (original) => ({
 }));
 
 import { changeLanguage } from "../i18n";
-import { buildLocalEnvironmentUpdateGroups } from "./ProviderUpdateLaunchNotification.logic";
-import { ProviderUpdatePrimaryNotification } from "./ProviderUpdatePrimaryNotification";
-import { ProviderUpdateLaunchNotification } from "./ProviderUpdateLaunchNotification";
-import { ProviderUpdateEnvironmentRows } from "./ProviderUpdateEnvironmentRows";
 import { ProviderUpdatesAction } from "./ProviderUpdatesAction";
 import { SidebarProviderUpdatePill } from "./sidebar/SidebarProviderUpdatePill";
 
@@ -232,163 +217,12 @@ function configureEnvironments(providers: ServerProvider[], secondary: ServerPro
       serverConfig: { providers: secondary },
     },
   ];
-  state.groups = buildLocalEnvironmentUpdateGroups(
-    state.environments.map((environment) => ({
-      environmentId: environment.environmentId,
-      label: environment.label,
-      isPrimary: environment.environmentId === primaryId,
-      connectionState: "ready",
-      providers: environment.serverConfig.providers,
-    })),
-  ).groups;
 }
-
-it("retranslates a retained primary prompt without recreating it or starting an update", async () => {
-  await using _lifecycle = await setupLifecycle();
-
-  const codex = provider("codex");
-  state.providers = [codex];
-  await render(<ProviderUpdatePrimaryNotification />);
-  expect(container.textContent).toContain(
-    `Update Available: Codex v${codex.versionAdvisory?.latestVersion}`,
-  );
-  await language("zh");
-  expect(container.textContent).toContain(`可更新：Codex v${codex.versionAdvisory?.latestVersion}`);
-  expect(container.textContent).toContain("立即更新，或前往提供方设置查看详情。");
-  expect(state.add).toHaveBeenCalledTimes(1);
-  expect(state.update).not.toHaveBeenCalled();
-  expect(state.updateProvider).not.toHaveBeenCalled();
-  await click(button("设置"));
-  expect(state.navigate).toHaveBeenCalledWith({ to: "/settings/providers" });
-  expect(container.querySelector("section")).toBeNull();
-});
-
-it("keeps sequential targets and raw CLI errors while the language changes during an update", async () => {
-  await using _lifecycle = await setupLifecycle();
-
-  const codex = provider("codex");
-  const claude = provider("claudeAgent");
-  state.providers = [codex, claude];
-  const first = deferred<UpdateResult>();
-  const second = deferred<UpdateResult>();
-  state.updateProvider.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
-  await render(<ProviderUpdatePrimaryNotification />);
-  await click(button("Update"));
-  await language("zh");
-  expect(state.updateProvider).toHaveBeenCalledTimes(1);
-  await act(async () =>
-    first.resolve(AsyncResult.success({ providers: [terminal(codex, "succeeded")] })),
-  );
-  expect(state.updateProvider).toHaveBeenNthCalledWith(2, {
-    environmentId: primaryId,
-    input: { provider: claude.driver, instanceId: claude.instanceId },
-  });
-  const raw = "raw npm EACCES: /raw/provider path";
-  await act(async () => second.resolve(AsyncResult.failure(Cause.fail(new Error(raw)))));
-  expect(container.textContent).toContain("提供方更新失败");
-  expect(container.textContent).toContain(raw);
-  await language("en");
-  expect(container.textContent).toContain("Provider updates failed");
-  expect(container.textContent).toContain(raw);
-  expect(state.updateProvider).toHaveBeenCalledTimes(2);
-  expect(state.add).toHaveBeenCalledTimes(2);
-});
-
-it("stops the next primary update after permission is revoked and retranslates the stored failure", async () => {
-  await using _lifecycle = await setupLifecycle();
-
-  const codex = provider("codex");
-  state.providers = [codex, provider("claudeAgent")];
-  const first = deferred<UpdateResult>();
-  state.updateProvider.mockReturnValueOnce(first.promise);
-  await render(<ProviderUpdatePrimaryNotification />);
-  await click(button("Update"));
-  state.permitted.delete(primaryId);
-  await render(<ProviderUpdatePrimaryNotification />);
-  await language("zh");
-  await act(async () =>
-    first.resolve(AsyncResult.success({ providers: [terminal(codex, "succeeded")] })),
-  );
-  expect(container.textContent).toContain("此连接无权管理提供方账户。");
-  await language("en");
-  expect(container.textContent).toContain("This connection cannot manage provider accounts.");
-  expect(state.updateProvider).toHaveBeenCalledTimes(1);
-});
-
-it("preserves an environment row's pending request, retry and native target across language changes", async () => {
-  await using _lifecycle = await setupLifecycle();
-
-  const codex = provider("codex");
-  configureEnvironments([], [codex]);
-  const update = deferred<UpdateResult>();
-  state.updateProvider.mockReturnValueOnce(update.promise);
-  await render(<ProviderUpdateEnvironmentRows />);
-  await click(button("Update"));
-  await language("zh");
-  expect(container.textContent).toContain("WSL (Ubuntu raw)");
-  expect(container.textContent).toContain("正在更新…");
-  expect(state.updateProvider).toHaveBeenCalledTimes(1);
-  await act(async () =>
-    update.resolve(
-      AsyncResult.success({
-        providers: [terminal(codex, "failed", "Update command exited with code 17.")],
-      }),
-    ),
-  );
-  expect(container.textContent).toContain("更新命令已退出，退出码为 17。");
-  await language("en");
-  expect(container.textContent).toContain("Update command exited with code 17.");
-  state.permitted.delete(secondaryId);
-  await render(<ProviderUpdateEnvironmentRows />);
-  expect(button("Retry").disabled).toBe(true);
-  await click(button("Retry"));
-  expect(state.updateProvider).toHaveBeenCalledTimes(1);
-  state.permitted.add(secondaryId);
-  state.updateProvider.mockResolvedValueOnce(
-    AsyncResult.success({ providers: [terminal(codex, "succeeded")] }),
-  );
-  await render(<ProviderUpdateEnvironmentRows />);
-  await click(button("Retry"));
-  await language("zh");
-  expect(container.textContent).toContain("已更新");
-  expect(state.updateProvider).toHaveBeenLastCalledWith({
-    environmentId: secondaryId,
-    input: { provider: codex.driver, instanceId: codex.instanceId },
-  });
-  expect(state.updateProvider).toHaveBeenCalledTimes(2);
-});
-
-it("retranslates the multi-environment launch toast and keeps the in-flight row mounted", async () => {
-  await using _lifecycle = await setupLifecycle();
-
-  const codex = provider("codex");
-  configureEnvironments([provider("claudeAgent")], [codex]);
-  const update = deferred<UpdateResult>();
-  state.updateProvider.mockReturnValueOnce(update.promise);
-  await render(<ProviderUpdateLaunchNotification />);
-  expect(container.textContent).toContain("Updates Available: 2 providers");
-  const secondaryRow = [...container.querySelectorAll<HTMLDivElement>("div")].find(
-    (element) =>
-      element.querySelector("button") && element.textContent?.startsWith("WSL (Ubuntu raw)"),
-  )!;
-  await click(button("Update", secondaryRow));
-  await language("zh");
-  expect(container.textContent).toContain("2 个提供方可更新");
-  expect(container.textContent).toContain("正在更新…");
-  expect(state.add).toHaveBeenCalledTimes(1);
-  expect(state.updateProvider).toHaveBeenCalledTimes(1);
-  await act(async () =>
-    update.resolve(AsyncResult.success({ providers: [terminal(codex, "succeeded")] })),
-  );
-  expect(container.textContent).toContain("已更新");
-  await click(button("设置"));
-  expect(state.navigate).toHaveBeenCalledWith({ to: "/settings/providers" });
-});
 
 it("retranslates sidebar success without restarting its dismissal timer or reviving a dismissed result", async () => {
   await using _lifecycle = await setupLifecycle();
 
-  vi.useFakeTimers();
+  using _timers = fakeTimers();
   const codex = terminal(provider("codex"), "succeeded");
   state.providers = [codex];
   await render(<SidebarProviderUpdatePill />);
@@ -404,7 +238,7 @@ it("retranslates sidebar success without restarting its dismissal timer or reviv
   // Text can still change during the outgoing transition without replacing its key.
   await language("en");
   expect(main.textContent).toContain(`Codex updated: v${codex.version}`);
-  await act(async () => pill.dispatchEvent(new Event("transitionend", { bubbles: true })));
+  await act(async () => vi.advanceTimersByTimeAsync(180));
   expect(container.querySelector("[data-provider-update-main]")).toBeNull();
   await language("zh");
   expect(container.querySelector("[data-provider-update-main]")).toBeNull();
@@ -467,7 +301,6 @@ async function setupLifecycle() {
   HTMLElement.prototype.getAnimations = () => [];
   await changeLanguage("en");
   state.providers = [];
-  state.groups = [];
   state.environments = [];
   state.permitted = new Set([primaryId, secondaryId]);
   state.toasts.clear();

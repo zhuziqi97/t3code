@@ -1,3 +1,4 @@
+import { fakeTimers } from "../../../test/render";
 import "~/index.css";
 import { act, render as renderTestUi, type Screen } from "../../../test/render";
 import { DEFAULT_UNIFIED_SETTINGS, type UnifiedSettings } from "@t3tools/contracts";
@@ -72,7 +73,7 @@ vi.mock("../SidebarStageBackdrop", async (original) => ({
   useEnvironmentStageLabel: () => "Dev",
 }));
 
-import { AppearanceSettingsPanel } from "./SettingsPanels";
+import { AppearanceSettingsPanel } from "./AppearanceSettingsPanel";
 import { changeLanguage } from "../../i18n";
 let root: Screen;
 let container: HTMLDivElement;
@@ -93,7 +94,7 @@ it("preserves an unsettled font draft across language changes and submits the or
   await using _lifecycle = await setupLifecycle();
 
   await render();
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  using _timers = fakeTimers();
   const input = container.querySelector<HTMLInputElement>(
     'input[aria-label="Interface font family"]',
   )!;

@@ -186,6 +186,7 @@ function FileViewedToggle({
   readonly path: string;
   readonly stat: ReactNode;
 }) {
+  const t = useTranslate();
   const viewedFiles = use(FileViewedToggleContext);
   if (viewedFiles === null || !viewedFiles.enabled) return stat;
   const viewed = viewedFiles.isViewed(path);
@@ -199,21 +200,21 @@ function FileViewedToggle({
         onClick={(event) => event.stopPropagation()}
       >
         <Checkbox
-          aria-label={stale ? "Changed" : "Viewed"}
+          aria-label={
+            stale ? t("pullRequest.flow.diff.changed") : t("pullRequest.flow.diff.viewed")
+          }
           checked={viewed}
           onCheckedChange={(next) => viewedFiles.setFileViewed(fileKey, path, next === true)}
         />
         {stale ? (
           <Tooltip>
             <TooltipTrigger render={<span className="text-warning-foreground" />}>
-              Changed
+              {t("pullRequest.flow.diff.changed")}
             </TooltipTrigger>
-            <TooltipPopup side="bottom">
-              This file has been pushed to since you marked it viewed.
-            </TooltipPopup>
+            <TooltipPopup side="bottom">{t("pullRequest.flow.diff.changedHint")}</TooltipPopup>
           </Tooltip>
         ) : (
-          <span className="@max-xs:hidden">Viewed</span>
+          <span className="@max-xs:hidden">{t("pullRequest.flow.diff.viewed")}</span>
         )}
       </label>
     </span>
@@ -434,6 +435,9 @@ function PullRequestCodeTab({
     if (appliedRefreshToken.current === refreshToken) return;
     appliedRefreshToken.current = refreshToken;
     setSliceState({ key: scopeKey, cursor: null, slices: NO_SLICES });
+    // An equal refetch keeps the answer's identity, so the emptied slices refill only if the
+    // applied page is forgotten too.
+    setAppliedPage(null);
     refreshFirstDiffPage();
     refreshFilesViewed();
   }, [refreshToken, scopeKey, refreshFirstDiffPage, refreshFilesViewed]);

@@ -100,13 +100,19 @@ async function expectDismissedInPlace(change: () => Promise<void> | void) {
     return [rect.left, rect.top];
   };
   const before = place(positioner()!);
-  await change();
-  const seen: number[][] = [];
-  for (let frame = 0; frame < 60 && positioner(); frame += 1) {
-    seen.push(place(positioner()!));
-    await new Promise(requestAnimationFrame);
+  const seen: number[][] = [before];
+  const observer = new MutationObserver(() => {
+    const node = positioner();
+    if (node) seen.push(place(node));
+  });
+  observer.observe(positioner()!, { attributes: true, attributeFilter: ["style", "class"] });
+  try {
+    await change();
+    await vi.waitFor(() => expect(positioner()).toBeNull());
+  } finally {
+    observer.disconnect();
   }
-  expect(positioner()).toBeNull();
+
   expect(seen).toEqual(seen.map(() => before));
 }
 

@@ -1,4 +1,3 @@
-"use client";
 import { useTranslate } from "../../i18n";
 
 import { PlusIcon, XIcon } from "lucide-react";

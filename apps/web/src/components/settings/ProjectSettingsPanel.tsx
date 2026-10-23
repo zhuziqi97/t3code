@@ -11,6 +11,7 @@ import {
   type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { planProjectRemoval } from "@t3tools/client-runtime/state/projects";
 import { AsyncResult } from "effect/reactivity";
 import { type EnvironmentId, type ProjectIconOverride } from "@t3tools/contracts";
 import { useLocation, useNavigate } from "@tanstack/react-router";
@@ -56,10 +57,6 @@ const ProjectIconPickerDialog = lazy(() =>
     default: module.ProjectIconPickerDialog,
   })),
 );
-
-function memberKey(member: { environmentId: string; id: string }): string {
-  return `${member.environmentId}:${member.id}`;
-}
 
 export type ProjectSettingsCategory = "general" | "source-control" | "project";
 
@@ -328,13 +325,15 @@ function ProjectDetail({
     const api = readLocalApi();
     if (!api) return;
 
-    const memberKeys = new Set(members.map(memberKey));
-    const projectThreads = threads.filter((thread) =>
-      memberKeys.has(`${thread.environmentId}:${thread.projectId}`),
-    );
-    const isWholeGroup = members.length === group.memberProjects.length;
-    const targetKind = hasOtherMembers || !isWholeGroup ? "checkout" : "project";
-    const singleMember = members.length === 1 ? members[0]! : null;
+    const { projectThreads, isWholeGroup } = planProjectRemoval({
+      members,
+      groupMemberCount: group.memberProjects.length,
+      hasOtherMembers,
+      displayName: group.displayName,
+      threads,
+    });
+    const singleMember = members.length === 1 ? members[0] : null;
+    const targetKind = singleMember ? "entry" : "group";
     const targetLabel = singleMember?.title ?? group.displayName;
     const confirmed = await settlePromise(() =>
       api.dialogs.confirm(
@@ -435,7 +434,7 @@ function ProjectDetail({
     </Button>
   );
   const checkoutChoices = (
-    <SettingsSection title="Checkouts">
+    <SettingsSection title={t("project.settings.checkouts")}>
       {Array.from(checkoutsByEnvironment, ([environmentId, members]) => {
         if (checkoutsByEnvironment.size === 1) {
           return members.map((member) => (
@@ -517,7 +516,7 @@ function ProjectDetail({
               <div className="flex flex-wrap gap-2">
                 {group.memberProjects.map((member) => (
                   <Button
-                    key={memberKey(member)}
+                    key={member.physicalProjectKey}
                     variant="outline"
                     size="sm"
                     onClick={() =>

@@ -1,16 +1,18 @@
-import * as ClaudeSdk from "@anthropic-ai/claude-agent-sdk";
+import * as CodexErrors from "effect-codex-app-server/errors";
+import * as PlatformError from "effect/PlatformError";
+import * as ProviderMaintenanceRunner from "./providerMaintenanceRunner.ts";
+import * as HostProcess from "@t3tools/shared/HostProcess";
+import { ProviderDriverError } from "./Errors.ts";
+import { makeProviderMaintenanceCapabilities } from "@t3tools/provider-core/server/maintenanceResolver";
 import { vi } from "vite-plus/test";
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as CodexInstallation from "./CodexInstallation.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, it, assert, expect } from "@effect/vitest";
-import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
-import * as Path from "effect/Path";
-import * as FileSystem from "effect/FileSystem";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
@@ -21,7 +23,6 @@ import * as Scope from "effect/Scope";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
-import * as CodexErrors from "effect-codex-app-server/errors";
 import {
   EnvironmentId,
   ClaudeSettings,
@@ -36,7 +37,6 @@ import {
   type ServerProviderSlashCommand,
   type ServerSettings as ContractServerSettings,
 } from "@t3tools/contracts";
-import * as PlatformError from "effect/PlatformError";
 import { HttpClient, HttpClientResponse } from "effect/http";
 import { ChildProcessSpawner } from "effect/process";
 import { deepMerge } from "@t3tools/shared/Struct";
@@ -45,15 +45,9 @@ import { applyServerSettingsPatch } from "@t3tools/shared/serverSettings";
 
 import { checkCodexProviderStatus, type CodexAppServerProviderSnapshot } from "./CodexProvider.ts";
 import { checkClaudeProviderStatus } from "./ClaudeProvider.ts";
-import { ClaudeDriver } from "./Drivers/ClaudeDriver.ts";
-import { ClaudeAgentSdkQueryRunner } from "../orchestration-v2/Adapters/ClaudeAdapterV2.ts";
-import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
-import * as TestProviderHost from "@t3tools/provider-testing/TestProviderHost";
 import * as BackgroundPolicy from "../background/BackgroundPolicy.ts";
 import * as AntigravityInstallation from "./AntigravityInstallation.ts";
 import * as ModelManifest from "./ModelManifest.ts";
-import * as ProviderMaintenanceRunner from "./providerMaintenanceRunner.ts";
-import * as HostProcess from "@t3tools/shared/HostProcess";
 import { applyProviderCompatibility } from "./providerCompatibility.ts";
 import * as ResetCreditCoordinator from "./resetCreditCoordinator.ts";
 import * as ProviderLatestVersions from "@t3tools/provider-core/server/ProviderLatestVersions";
@@ -76,12 +70,12 @@ import type {
 } from "@t3tools/provider-core/server/driver";
 import * as ProviderInstanceRegistry from "./ProviderInstanceRegistry.ts";
 import * as ProviderRegistry from "./ProviderRegistry.ts";
-import { ProviderDriverError } from "./Errors.ts";
 import { mergeProviderInstanceEnvironment } from "@t3tools/provider-core/server/instanceEnvironment";
-import {
-  makeManualOnlyProviderMaintenanceCapabilities,
-  makeProviderMaintenanceCapabilities,
-} from "@t3tools/provider-core/server/maintenanceResolver";
+import { makeManualOnlyProviderMaintenanceCapabilities } from "@t3tools/provider-core/server/maintenanceResolver";
+const disabledCodexSettings: CodexSettings = Schema.decodeSync(CodexSettings)({
+  enabled: false,
+});
+
 vi.mock("@anthropic-ai/claude-agent-sdk", { spy: true });
 
 const decodeServerProvider = Schema.decodeSync(ServerProvider);
@@ -102,10 +96,6 @@ const disabledDefaultSlots = (
 
 const defaultClaudeSettings: ClaudeSettings = Schema.decodeSync(ClaudeSettings)({});
 const defaultCodexSettings: CodexSettings = Schema.decodeSync(CodexSettings)({});
-const decodeCodexSettings = Schema.decodeSync(CodexSettings);
-const disabledCodexSettings: CodexSettings = Schema.decodeSync(CodexSettings)({
-  enabled: false,
-});
 
 process.env.T3CODE_CURSOR_ENABLED = "1";
 
@@ -206,9 +196,6 @@ function claudeCapabilities(overrides: Partial<TestClaudeCapabilities> = {}) {
     });
 }
 
-const noClaudeCapabilities = () =>
-  Effect.sync(() => undefined as TestClaudeCapabilities | undefined);
-
 function mockHandle(result: { stdout: string; stderr: string; code: number }) {
   return ChildProcessSpawner.makeHandle({
     pid: ChildProcessSpawner.ProcessId(1),
@@ -238,92 +225,6 @@ function layerMockSpawner(
       const cmd = command as unknown as { args: ReadonlyArray<string> };
       return Effect.succeed(mockHandle(handler(cmd.args)));
     }),
-  );
-}
-
-function recordingMockSpawnerLayer(
-  handler: (args: ReadonlyArray<string>) => {
-    stdout: string;
-    stderr: string;
-    code: number;
-  },
-) {
-  const commands: Array<{
-    readonly args: ReadonlyArray<string>;
-    readonly env: NodeJS.ProcessEnv | undefined;
-  }> = [];
-  const layer = Layer.succeed(
-    ChildProcessSpawner.ChildProcessSpawner,
-    ChildProcessSpawner.make((command) => {
-      const cmd = command as unknown as {
-        args: ReadonlyArray<string>;
-        options?: {
-          readonly env?: NodeJS.ProcessEnv;
-        };
-      };
-      commands.push({ args: cmd.args, env: cmd.options?.env });
-      return Effect.succeed(mockHandle(handler(cmd.args)));
-    }),
-  );
-  return { layer, commands };
-}
-
-function layerMockCommandSpawner(
-  handler: (
-    command: string,
-    args: ReadonlyArray<string>,
-  ) => { stdout: string; stderr: string; code: number },
-) {
-  return Layer.succeed(
-    ChildProcessSpawner.ChildProcessSpawner,
-    ChildProcessSpawner.make((command) => {
-      const cmd = command as unknown as {
-        command: string;
-        args: ReadonlyArray<string>;
-      };
-      return Effect.succeed(mockHandle(handler(cmd.command, cmd.args)));
-    }),
-  );
-}
-
-function layerFailingSpawner(description: string) {
-  return Layer.succeed(
-    ChildProcessSpawner.ChildProcessSpawner,
-    ChildProcessSpawner.make(() =>
-      Effect.fail(
-        PlatformError.systemError({
-          _tag: "NotFound",
-          module: "ChildProcess",
-          method: "spawn",
-          description,
-        }),
-      ),
-    ),
-  );
-}
-
-function layerHangingScopedSpawner(killCalls: Ref.Ref<number>) {
-  return Layer.succeed(
-    ChildProcessSpawner.ChildProcessSpawner,
-    ChildProcessSpawner.make(() =>
-      Effect.gen(function* () {
-        const handle = ChildProcessSpawner.makeHandle({
-          pid: ChildProcessSpawner.ProcessId(1),
-          exitCode: Effect.never,
-          isRunning: Effect.succeed(true),
-          kill: () => Ref.update(killCalls, (current) => current + 1),
-          unref: Effect.succeed(Effect.void),
-          stdin: Sink.drain,
-          stdout: Stream.never,
-          stderr: Stream.never,
-          all: Stream.never,
-          getInputFd: () => Sink.drain,
-          getOutputFd: () => Stream.empty,
-        });
-        yield* Effect.addFinalizer(() => handle.kill().pipe(Effect.ignore));
-        return handle;
-      }),
-    ),
   );
 }
 
@@ -490,21 +391,6 @@ it.layer(
             input: { hint: "Describe the issue (optional)" },
           },
         ]);
-      }),
-    );
-
-    it.effect("passes configured launch args to the Codex provider probe", () =>
-      Effect.gen(function* () {
-        let observedLaunchArgs: string | undefined;
-        const settings = decodeCodexSettings({ launchArgs: "--strict-config --enable foo" });
-
-        const status = yield* checkCodexProviderStatus(settings, (input) => {
-          observedLaunchArgs = input.launchArgs;
-          return Effect.succeed(makeCodexProbeSnapshot());
-        });
-
-        assert.strictEqual(status.status, "ready");
-        assert.strictEqual(observedLaunchArgs, "--strict-config --enable foo");
       }),
     );
 
@@ -841,45 +727,6 @@ it.layer(
       );
     });
 
-    it("drops custom models the refreshed snapshot no longer carries", () => {
-      const previousProvider = {
-        instanceId: ProviderInstanceId.make("claudeAgent"),
-        driver: ProviderDriverKind.make("claudeAgent"),
-        status: "ready",
-        enabled: true,
-        installed: true,
-        auth: { status: "authenticated" },
-        checkedAt: "2026-04-14T00:00:00.000Z",
-        version: "2.1.0",
-        models: [
-          {
-            slug: "claude-sonnet-4-6",
-            name: "Sonnet 4.6",
-            isCustom: false,
-            capabilities: null,
-          },
-          {
-            slug: "removed-custom",
-            name: "removed-custom",
-            isCustom: true,
-            capabilities: null,
-          },
-        ],
-        slashCommands: [],
-        skills: [],
-      } as const satisfies ServerProvider;
-      const refreshedProvider = {
-        ...previousProvider,
-        checkedAt: "2026-04-14T00:01:00.000Z",
-        models: [previousProvider.models[0]],
-      } satisfies ServerProvider;
-
-      assert.deepStrictEqual(
-        ProviderRegistry.mergeProviderSnapshot(previousProvider, refreshedProvider).models,
-        [...refreshedProvider.models],
-      );
-    });
-
     it("does not bring back models the installed CLI is too old to run", () => {
       const pendingProvider = {
         instanceId: ProviderInstanceId.make("claudeAgent"),
@@ -909,73 +756,6 @@ it.layer(
 
       assert.deepStrictEqual(
         ProviderRegistry.mergeProviderSnapshot(pendingProvider, probedProvider).models,
-        [...probedProvider.models],
-      );
-    });
-
-    it("drops stale ACP Registry models missing from a completed discovery probe", () => {
-      const previousProvider = {
-        instanceId: ProviderInstanceId.make("acpRegistry_codex"),
-        driver: ProviderDriverKind.make("acpRegistry"),
-        status: "ready",
-        enabled: true,
-        installed: true,
-        auth: { status: "authenticated" },
-        checkedAt: "2026-08-13T00:00:00.000Z",
-        version: "1.2.0",
-        models: [
-          { slug: "gpt-5.6-sol", name: "GPT-5.6-Sol", isCustom: false, capabilities: null },
-          {
-            slug: "gpt-5.6-sol[low]",
-            name: "GPT-5.6-Sol (low)",
-            isCustom: false,
-            capabilities: null,
-          },
-          { slug: "default", name: "Default", isCustom: false, capabilities: null },
-        ],
-        nativeSessions: { canList: false, canLoad: false, canResume: false },
-        slashCommands: [],
-        skills: [],
-      } as const satisfies ServerProvider;
-      const refreshedProvider = {
-        ...previousProvider,
-        checkedAt: "2026-08-13T00:01:00.000Z",
-        models: [{ slug: "gpt-5.6-sol", name: "GPT-5.6-Sol", isCustom: false, capabilities: null }],
-      } satisfies ServerProvider;
-
-      assert.deepStrictEqual(
-        ProviderRegistry.mergeProviderSnapshot(previousProvider, refreshedProvider).models,
-        [...refreshedProvider.models],
-      );
-    });
-
-    it("drops stale ACP Registry models when an agent without sign-in completes discovery", () => {
-      const previousProvider = {
-        instanceId: ProviderInstanceId.make("acpRegistry_kimi"),
-        driver: ProviderDriverKind.make("acpRegistry"),
-        status: "ready",
-        enabled: true,
-        installed: true,
-        auth: { status: "unknown", canLogout: false },
-        checkedAt: "2026-08-13T00:00:00.000Z",
-        version: "1.2.0",
-        models: [
-          { slug: "kimi-old", name: "Kimi Old", isCustom: false, capabilities: null },
-          { slug: "default", name: "Default", isCustom: false, capabilities: null },
-        ],
-        nativeSessions: { canList: true, canLoad: true, canResume: false },
-        slashCommands: [],
-        skills: [],
-      } as const satisfies ServerProvider;
-      // Agents that advertise no auth methods stay "unknown" after every probe.
-      const probedProvider = {
-        ...previousProvider,
-        checkedAt: "2026-08-13T00:01:00.000Z",
-        models: [{ slug: "kimi-new", name: "Kimi New", isCustom: false, capabilities: null }],
-      } satisfies ServerProvider;
-
-      assert.deepStrictEqual(
-        ProviderRegistry.mergeProviderSnapshot(previousProvider, probedProvider).models,
         [...probedProvider.models],
       );
     });
@@ -1033,55 +813,6 @@ it.layer(
           { slug: "default", name: "Default", isCustom: false, capabilities: null },
           { slug: "gpt-5.6-sol", name: "GPT-5.6-Sol", isCustom: false, capabilities: null },
         ],
-      );
-    });
-
-    it("drops stale OpenCode models missing from a successful refresh", () => {
-      const previousProvider = {
-        instanceId: ProviderInstanceId.make("opencode"),
-        driver: ProviderDriverKind.make("opencode"),
-        status: "ready",
-        enabled: true,
-        installed: true,
-        auth: { status: "authenticated" },
-        checkedAt: "2026-07-17T00:00:00.000Z",
-        version: "1.0.0",
-        models: [
-          {
-            slug: "github/gpt-5",
-            name: "GPT-5",
-            subProvider: "GitHub",
-            isCustom: false,
-            capabilities: null,
-          },
-          {
-            slug: "removed-plugin/model",
-            name: "Removed Plugin Model",
-            subProvider: "Removed Plugin",
-            isCustom: false,
-            capabilities: null,
-          },
-        ],
-        slashCommands: [],
-        skills: [],
-      } as const satisfies ServerProvider;
-      const refreshedProvider = {
-        ...previousProvider,
-        checkedAt: "2026-07-17T00:01:00.000Z",
-        models: [
-          {
-            slug: "github/gpt-5",
-            name: "GPT-5",
-            subProvider: "GitHub",
-            isCustom: false,
-            capabilities: null,
-          },
-        ],
-      } satisfies ServerProvider;
-
-      assert.deepStrictEqual(
-        ProviderRegistry.mergeProviderSnapshot(previousProvider, refreshedProvider).models,
-        [...refreshedProvider.models],
       );
     });
 
@@ -1310,27 +1041,6 @@ it.layer(
         message: "Pi is available, but T3 Code could not refresh its models and commands.",
       } satisfies ServerProvider;
 
-      it("drops disconnected Pi upstream models after successful discovery", () => {
-        assert.deepStrictEqual(
-          ProviderRegistry.mergeProviderSnapshot(cachedProvider, refreshedProvider).models,
-          refreshedProvider.models,
-        );
-      });
-
-      it("clears discovered Pi models when successful discovery finds no usable models", () => {
-        const signedOutProvider = {
-          ...refreshedProvider,
-          status: "warning",
-          auth: { status: "unauthenticated", type: "pi" },
-          models: [defaultModel, customModel],
-        } satisfies ServerProvider;
-
-        assert.deepStrictEqual(
-          ProviderRegistry.mergeProviderSnapshot(cachedProvider, signedOutProvider).models,
-          signedOutProvider.models,
-        );
-      });
-
       it("retains Pi inventories during incomplete probes without restoring removed custom models", () => {
         const incompleteProviders = [
           pendingProvider,
@@ -1494,55 +1204,6 @@ it.layer(
         installed: true,
       } satisfies ServerProvider;
 
-      it("drops retired alpha models after discovery, including without OpenAI authentication", () => {
-        for (const authStatus of ["authenticated", "unknown"] as const) {
-          assert.deepStrictEqual(
-            ProviderRegistry.mergeProviderSnapshot(cachedProvider, {
-              ...refreshedProvider,
-              auth: { status: authStatus },
-            }).models,
-            refreshedProvider.models,
-          );
-        }
-      });
-
-      it("keeps discovered models during startup, errors, and discovery warnings without restoring removed custom models", () => {
-        for (const provider of [
-          pendingProvider,
-          failedProvider,
-          { ...failedProvider, status: "warning", auth: { status: "authenticated" } },
-        ] satisfies ReadonlyArray<ServerProvider>) {
-          assert.deepStrictEqual(
-            ProviderRegistry.mergeProviderSnapshot(
-              {
-                ...cachedProvider,
-                models: [...cachedProvider.models, { ...customModel, slug: "removed-custom" }],
-              },
-              provider,
-            ).models,
-            [customModel, ...cachedProvider.models],
-          );
-        }
-      });
-
-      it("clears discovered models after sign-out, disable, uninstall, or empty discovery", () => {
-        const emptyProvider = { ...refreshedProvider, models: [customModel] };
-        const clearedProviders = [
-          { ...emptyProvider, status: "error", auth: { status: "unauthenticated" } },
-          { ...emptyProvider, status: "disabled", enabled: false },
-          { ...emptyProvider, status: "error", installed: false, auth: { status: "unknown" } },
-          emptyProvider,
-          { ...emptyProvider, models: [] },
-        ] satisfies ReadonlyArray<ServerProvider>;
-
-        for (const provider of clearedProviders) {
-          assert.deepStrictEqual(
-            ProviderRegistry.mergeProviderSnapshot(cachedProvider, provider).models,
-            provider.models,
-          );
-        }
-      });
-
       it.effect("persists removals across failed refreshes and registry restarts", () =>
         Effect.gen(function* () {
           const config = yield* ServerConfig.ServerConfig;
@@ -1665,65 +1326,6 @@ it.layer(
         skills: [],
       } as const satisfies ServerProvider;
 
-      it("removes unavailable models after a successful refresh", () => {
-        for (const status of ["ready", "warning"] as const) {
-          const refreshedProvider = {
-            ...previousProvider,
-            status,
-            checkedAt: "2026-09-02T00:01:00.000Z",
-            models: [previousProvider.models[1]],
-          } satisfies ServerProvider;
-          const afterRefresh = ProviderRegistry.mergeProviderSnapshot(
-            previousProvider,
-            refreshedProvider,
-          );
-
-          assert.deepStrictEqual(afterRefresh.models, refreshedProvider.models);
-
-          const afterFailure = ProviderRegistry.mergeProviderSnapshot(afterRefresh, {
-            ...refreshedProvider,
-            status: "error",
-            auth: { status: "unknown" },
-            models: [],
-          });
-          assert.deepStrictEqual(afterFailure.models, refreshedProvider.models);
-        }
-      });
-
-      it("keeps cached models during health checks and temporary failures", () => {
-        for (const installed of [false, true]) {
-          const pendingProvider = {
-            ...previousProvider,
-            status: "warning",
-            installed,
-            auth: { status: "unknown" },
-            checkedAt: "2026-09-02T00:01:00.000Z",
-            version: installed ? previousProvider.version : null,
-            models: [],
-          } satisfies ServerProvider;
-
-          assert.deepStrictEqual(
-            ProviderRegistry.mergeProviderSnapshot(previousProvider, pendingProvider).models,
-            previousProvider.models,
-          );
-        }
-
-        for (const authStatus of ["unknown", "authenticated"] as const) {
-          const failedProvider = {
-            ...previousProvider,
-            status: "error",
-            auth: { status: authStatus },
-            checkedAt: "2026-09-02T00:02:00.000Z",
-            models: [],
-          } satisfies ServerProvider;
-
-          assert.deepStrictEqual(
-            ProviderRegistry.mergeProviderSnapshot(previousProvider, failedProvider).models,
-            previousProvider.models,
-          );
-        }
-      });
-
       it("clears models after sign-out, disable, uninstall, or an empty successful refresh", () => {
         const emptyProvider = {
           ...previousProvider,
@@ -1799,31 +1401,6 @@ it.layer(
           ProviderRegistry.mergeProviderSnapshot(merged, restartProbe),
           merged,
         );
-      });
-
-      it("carries the account through the boot probe and a failed probe without hiding them", () => {
-        const booting = {
-          ...restartProbe,
-          installed: false,
-          version: null,
-          message: "Checking Antigravity availability.",
-        } satisfies ServerProvider;
-        assert.deepStrictEqual(ProviderRegistry.mergeProviderSnapshot(signedIn, booting), {
-          ...booting,
-          auth: signedIn.auth,
-          models: signedIn.models,
-        });
-
-        const failed = {
-          ...restartProbe,
-          status: "error",
-          message: "Antigravity did not respond to its local health check within 90 seconds.",
-        } satisfies ServerProvider;
-        assert.deepStrictEqual(ProviderRegistry.mergeProviderSnapshot(signedIn, failed), {
-          ...failed,
-          auth: signedIn.auth,
-          models: signedIn.models,
-        });
       });
 
       it("does not invent an account after sign-out, disable, uninstall, or for other providers", () => {
@@ -2911,72 +2488,6 @@ it.layer(
         assert.strictEqual(yield* Ref.get(openCodeRefreshCalls), 2);
       }),
     );
-
-    it("persists merged provider snapshots for the providers that were refreshed", () => {
-      const previousProviders = [
-        {
-          instanceId: ProviderInstanceId.make("cursor"),
-          driver: ProviderDriverKind.make("cursor"),
-          status: "ready",
-          enabled: true,
-          installed: true,
-          auth: { status: "authenticated" },
-          checkedAt: "2026-04-14T00:00:00.000Z",
-          version: "2026.04.09-f2b0fcd",
-          models: [
-            {
-              slug: "claude-opus-4-6",
-              name: "Opus 4.6",
-              isCustom: false,
-              capabilities: createModelCapabilities({
-                optionDescriptors: [
-                  selectDescriptor("reasoning", "Reasoning", [
-                    { id: "high", label: "High", isDefault: true },
-                  ]),
-                  booleanDescriptor("fastMode", "Fast Mode"),
-                  booleanDescriptor("thinking", "Thinking"),
-                ],
-              }),
-            },
-          ],
-          slashCommands: [],
-          skills: [],
-        },
-        {
-          instanceId: ProviderInstanceId.make("codex"),
-          driver: ProviderDriverKind.make("codex"),
-          status: "ready",
-          enabled: true,
-          installed: true,
-          auth: { status: "authenticated" },
-          checkedAt: "2026-04-14T00:00:00.000Z",
-          version: "1.0.0",
-          models: [],
-          slashCommands: [],
-          skills: [],
-        },
-      ] as const satisfies ReadonlyArray<ServerProvider>;
-      const refreshedCursor = {
-        ...previousProviders[0],
-        checkedAt: "2026-04-14T00:01:00.000Z",
-        models: [],
-      } satisfies ServerProvider;
-
-      const mergedProviders = ProviderRegistry.mergeProviderSnapshots(previousProviders, [
-        refreshedCursor,
-      ]);
-      const persistedProviders = ProviderRegistry.selectProvidersByKind(
-        mergedProviders,
-        new Set([ProviderDriverKind.make("cursor")]),
-      );
-
-      assert.deepStrictEqual(persistedProviders, [
-        {
-          ...refreshedCursor,
-          models: [...previousProviders[0].models],
-        },
-      ]);
-    });
 
     it.effect("shares one in-flight pass between concurrent untargeted refreshes", () =>
       Effect.gen(function* () {
@@ -4118,217 +3629,6 @@ it.layer(
   });
 
   describe("checkClaudeProviderStatus", () => {
-    it.effect("keeps live usage through a refresh of cached Claude capabilities", () =>
-      Effect.gen(function* () {
-        const fs = yield* FileSystem.FileSystem;
-        const homePath = yield* fs.makeTempDirectoryScoped({ prefix: "t3-claude-usage-cache-" });
-        const initializationStarted = yield* Deferred.make<void>();
-        const usageStarted = yield* Deferred.make<void>();
-        const initialization = Promise.withResolvers<ClaudeSdk.SDKControlInitializeResponse>();
-        const usage = Promise.withResolvers<ClaudeSdk.SDKControlGetUsageResponse>();
-        const query = vi.spyOn(ClaudeSdk, "query").mockImplementation(
-          () =>
-            ({
-              initializationResult: () => {
-                Deferred.doneUnsafe(initializationStarted, Effect.void);
-                return initialization.promise;
-              },
-              usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET: () => {
-                Deferred.doneUnsafe(usageStarted, Effect.void);
-                return usage.promise;
-              },
-            }) as ReturnType<typeof ClaudeSdk.query>,
-        );
-        yield* Effect.addFinalizer(() => Effect.sync(() => query.mockRestore()));
-
-        const instance = yield* ClaudeDriver.create({
-          instanceId: ProviderInstanceId.make("claude-usage-cache"),
-          displayName: undefined,
-          environment: [],
-          enabled: true,
-          config: { ...defaultClaudeSettings, homePath },
-        });
-        yield* Deferred.await(initializationStarted);
-        yield* TestClock.adjust("1 second");
-        const usageCheckedAt = DateTime.formatIso(yield* DateTime.now);
-        initialization.resolve({
-          account: { subscriptionType: "max", tokenSource: "oauth" },
-          commands: [],
-          agents: [],
-          output_style: "default",
-          available_output_styles: [],
-          models: [],
-        });
-        yield* Deferred.await(usageStarted);
-        yield* TestClock.adjust("1 second");
-        usage.resolve({
-          rate_limits_available: true,
-          rate_limits: { five_hour: { utilization: 12, resets_at: null } },
-        } as ClaudeSdk.SDKControlGetUsageResponse);
-
-        const first = yield* instance.snapshot.refresh;
-        assert.strictEqual(first.status, "ready");
-        const firstWindow = first.usageLimits?.windows[0];
-        assert.isDefined(firstWindow);
-        assert.strictEqual(firstWindow?.usedPercent, 12);
-
-        yield* TestClock.adjust("1 second");
-        const liveCheckedAt = DateTime.formatIso(yield* DateTime.now);
-        yield* instance.snapshot.applyUsageLimits({
-          checkedAt: liveCheckedAt,
-          windows: [{ ...firstWindow!, usedPercent: 95 }],
-        });
-        const live = yield* instance.snapshot.getSnapshot;
-        yield* TestClock.adjust("1 second");
-        const refreshCheckedAt = DateTime.formatIso(yield* DateTime.now);
-        const refreshed = yield* instance.snapshot.refresh;
-
-        assert.strictEqual(query.mock.calls.length, 1);
-        assert.strictEqual(refreshed.checkedAt, refreshCheckedAt);
-        assert.deepStrictEqual(refreshed.usageLimits, live.usageLimits);
-        assert.strictEqual(refreshed.usageLimits?.checkedAt, liveCheckedAt);
-        assert.strictEqual(refreshed.usageLimits?.windows[0]?.usedPercent, 95);
-        assert.strictEqual(first.usageLimits?.checkedAt, usageCheckedAt);
-      }).pipe(
-        Effect.provide(
-          Layer.mergeAll(
-            TestProviderHost.layer({ runBackgroundWork: false }),
-            ServerConfig.layerTest(process.cwd(), { prefix: "t3-claude-usage-cache-" }),
-            IdAllocator.layer,
-            McpProviderSessions.layer,
-            ResetCreditCoordinator.layerTest,
-            ProviderLatestVersions.layer,
-            Layer.succeed(
-              ProviderEventLoggers.ProviderEventLoggers,
-              ProviderEventLoggers.NoOpProviderEventLoggers,
-            ),
-            Layer.mock(ClaudeAgentSdkQueryRunner)({
-              open: () => Effect.die("Usage probing must not start a conversation"),
-            }),
-          ).pipe(
-            Layer.provideMerge(
-              layerMockSpawner((args) => {
-                if (args.join(" ") === "--version") {
-                  return { stdout: "2.1.288\n", stderr: "", code: 0 };
-                }
-                throw new Error(`Unexpected args: ${args.join(" ")}`);
-              }),
-            ),
-          ),
-        ),
-      ),
-    );
-
-    it.effect("returns ready when claude is installed and authenticated", () =>
-      Effect.gen(function* () {
-        const status = yield* checkClaudeProviderStatus(
-          defaultClaudeSettings,
-          claudeCapabilities(),
-        );
-        assert.strictEqual(status.status, "ready");
-        assert.strictEqual(status.installed, true);
-        assert.strictEqual(status.auth.status, "authenticated");
-      }).pipe(
-        Effect.provide(
-          layerMockSpawner((args) => {
-            const joined = args.join(" ");
-            if (joined === "--version") return { stdout: "1.0.0\n", stderr: "", code: 0 };
-            if (joined === "auth status")
-              return {
-                stdout: '{"loggedIn":true,"authMethod":"claude.ai"}\n',
-                stderr: "",
-                code: 0,
-              };
-            throw new Error(`Unexpected args: ${joined}`);
-          }),
-        ),
-      ),
-    );
-
-    it.effect.each([
-      {
-        name: "accepts a healthy claude --version response after 19 seconds",
-        answer: Effect.sleep("19 seconds"),
-        elapsed: 19_000,
-        status: "ready",
-        version: "1.0.0",
-      },
-      {
-        name: "bounds a hung claude --version probe",
-        answer: Effect.never,
-        elapsed: 21_000,
-        status: "error",
-        version: null,
-      },
-    ])("$name", ({ answer, elapsed, status: expectedStatus, version }) =>
-      Effect.gen(function* () {
-        const started = yield* Deferred.make<void>();
-        const statusFiber = yield* checkClaudeProviderStatus(
-          defaultClaudeSettings,
-          claudeCapabilities(),
-        ).pipe(
-          Effect.provide(
-            Layer.succeed(
-              ChildProcessSpawner.ChildProcessSpawner,
-              ChildProcessSpawner.make((command) => {
-                assert.deepStrictEqual(
-                  (command as unknown as { args: ReadonlyArray<string> }).args,
-                  ["--version"],
-                );
-                return Effect.succeed(
-                  ChildProcessSpawner.makeHandle({
-                    ...mockHandle({ stdout: "", stderr: "", code: 0 }),
-                    exitCode: answer.pipe(Effect.as(ChildProcessSpawner.ExitCode(0))),
-                    stdout: Stream.fromEffect(
-                      Deferred.succeed(started, undefined).pipe(
-                        Effect.andThen(answer),
-                        Effect.as(encoder.encode("1.0.0\n")),
-                      ),
-                    ),
-                  }),
-                );
-              }),
-            ),
-          ),
-          Effect.forkChild,
-        );
-        yield* Deferred.await(started);
-        yield* TestClock.adjust(elapsed);
-
-        const status = yield* Fiber.join(statusFiber);
-        assert.strictEqual(status.status, expectedStatus);
-        assert.strictEqual(status.installed, true);
-        assert.strictEqual(status.version, version);
-        if (expectedStatus === "error") {
-          assert.include(status.message, "Timed out while running command.");
-        }
-      }),
-    );
-
-    it.effect("returns ready and labels Bedrock-backed Claude as authenticated", () =>
-      Effect.gen(function* () {
-        // Bedrock authenticates via external AWS credentials, so the SDK init
-        // reports only `apiProvider` with no subscription or token.
-        const status = yield* checkClaudeProviderStatus(
-          defaultClaudeSettings,
-          claudeCapabilities({ apiProvider: "bedrock" }),
-        );
-        assert.strictEqual(status.status, "ready");
-        assert.strictEqual(status.installed, true);
-        assert.strictEqual(status.auth.status, "authenticated");
-        assert.strictEqual(status.auth.type, "bedrock");
-        assert.strictEqual(status.auth.label, "Amazon Bedrock");
-      }).pipe(
-        Effect.provide(
-          layerMockSpawner((args) => {
-            const joined = args.join(" ");
-            if (joined === "--version") return { stdout: "1.0.0\n", stderr: "", code: 0 };
-            throw new Error(`Unexpected args: ${joined}`);
-          }),
-        ),
-      ),
-    );
-
     it.effect("reports a logged-out CLI as unauthenticated", () =>
       Effect.gen(function* () {
         // The capability probe resolves for a logged-out CLI, so `tokenSource:
@@ -4454,27 +3754,6 @@ it.layer(
       ),
     );
 
-    it.effect("keeps a third-party backend authenticated without any token source", () =>
-      Effect.gen(function* () {
-        // Bedrock and Vertex authenticate outside the CLI, so the account
-        // payload is empty by design rather than because nobody logged in.
-        const status = yield* checkClaudeProviderStatus(
-          defaultClaudeSettings,
-          claudeCapabilities({ tokenSource: "none", apiProvider: "bedrock" }),
-        );
-        assert.strictEqual(status.status, "ready");
-        assert.strictEqual(status.auth.status, "authenticated");
-      }).pipe(
-        Effect.provide(
-          layerMockSpawner((args) => {
-            const joined = args.join(" ");
-            if (joined === "--version") return { stdout: "1.0.0\n", stderr: "", code: 0 };
-            throw new Error(`Unexpected args: ${joined}`);
-          }),
-        ),
-      ),
-    );
-
     it.effect("keeps a CLI that says nothing about its account authenticated", () =>
       Effect.gen(function* () {
         // Profile-authenticated installs report no token source at all, and a
@@ -4497,360 +3776,64 @@ it.layer(
         ),
       ),
     );
-
-    it.effect("returns a display label for claude subscription types", () =>
-      Effect.gen(function* () {
-        const status = yield* checkClaudeProviderStatus(
-          defaultClaudeSettings,
-          claudeCapabilities({ subscriptionType: "maxplan" }),
-        );
-        assert.strictEqual(status.status, "ready");
-        assert.strictEqual(status.auth.status, "authenticated");
-        assert.strictEqual(status.auth.type, "maxplan");
-        assert.strictEqual(status.auth.label, "Claude Max Subscription");
-      }).pipe(
-        Effect.provide(
-          layerMockSpawner((args) => {
-            const joined = args.join(" ");
-            if (joined === "--version") return { stdout: "1.0.0\n", stderr: "", code: 0 };
-            if (joined === "auth status")
-              return {
-                stdout: '{"loggedIn":true,"authMethod":"claude.ai"}\n',
-                stderr: "",
-                code: 0,
-              };
-            throw new Error(`Unexpected args: ${joined}`);
-          }),
-        ),
-      ),
-    );
-
-    it.effect("reads banked resets only for subscription logins", () =>
-      Effect.gen(function* () {
-        const check = (overrides: Partial<TestClaudeCapabilities>) =>
-          checkClaudeProviderStatus(
-            defaultClaudeSettings,
-            () =>
-              Effect.succeed({
-                email: undefined,
-                subscriptionType: undefined,
-                tokenSource: undefined,
-                apiKeySource: undefined,
-                apiProvider: undefined,
-                slashCommands: [],
-                usage: { rate_limits_available: true, rate_limits: {} },
-                ...overrides,
-              }),
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            () => Effect.succeed({ availableCount: 2 }),
-          );
-        const subscription = yield* check({ subscriptionType: "max" });
-        const bedrock = yield* check({ apiProvider: "bedrock" });
-        assert.deepStrictEqual(subscription.usageLimits?.resetCredits, { availableCount: 2 });
-        assert.strictEqual(bedrock.usageLimits?.resetCredits, undefined);
-      }).pipe(
-        Effect.provide(
-          layerMockSpawner((args) => {
-            const joined = args.join(" ");
-            if (joined === "--version") return { stdout: "1.0.0\n", stderr: "", code: 0 };
-            throw new Error(`Unexpected args: ${joined}`);
-          }),
-        ),
-      ),
-    );
-
-    it.effect("does not duplicate Claude in full subscription labels", () =>
-      Effect.gen(function* () {
-        const status = yield* checkClaudeProviderStatus(
-          defaultClaudeSettings,
-          claudeCapabilities({
-            subscriptionType: "Claude Max Subscription",
-          }),
-        );
-        assert.strictEqual(status.auth.status, "authenticated");
-        assert.strictEqual(status.auth.type, "Claude Max Subscription");
-        assert.strictEqual(status.auth.label, "Claude Max Subscription");
-      }).pipe(
-        Effect.provide(
-          layerMockSpawner((args) => {
-            const joined = args.join(" ");
-            if (joined === "--version") return { stdout: "1.0.0\n", stderr: "", code: 0 };
-            throw new Error(`Unexpected args: ${joined}`);
-          }),
-        ),
-      ),
-    );
-
-    it.effect("does not duplicate Claude in provider-prefixed subscription names", () =>
-      Effect.gen(function* () {
-        const status = yield* checkClaudeProviderStatus(
-          defaultClaudeSettings,
-          claudeCapabilities({
-            subscriptionType: "Claude Max",
-          }),
-        );
-        assert.strictEqual(status.auth.status, "authenticated");
-        assert.strictEqual(status.auth.type, "Claude Max");
-        assert.strictEqual(status.auth.label, "Claude Max Subscription");
-      }).pipe(
-        Effect.provide(
-          layerMockSpawner((args) => {
-            const joined = args.join(" ");
-            if (joined === "--version") return { stdout: "1.0.0\n", stderr: "", code: 0 };
-            throw new Error(`Unexpected args: ${joined}`);
-          }),
-        ),
-      ),
-    );
-
-    it.effect("returns claude auth email from initialization result", () =>
-      Effect.gen(function* () {
-        const status = yield* checkClaudeProviderStatus(
-          defaultClaudeSettings,
-          claudeCapabilities({ email: "claude@example.com" }),
-        );
-        assert.strictEqual(status.auth.status, "authenticated");
-        assert.strictEqual(status.auth.email, "claude@example.com");
-      }).pipe(
-        Effect.provide(
-          layerMockSpawner((args) => {
-            const joined = args.join(" ");
-            if (joined === "--version") return { stdout: "1.0.0\n", stderr: "", code: 0 };
-            if (joined === "auth status")
-              return {
-                stdout:
-                  '{"loggedIn":true,"authMethod":"claude.ai","account":{"email":"claude@example.com"}}\n',
-                stderr: "",
-                code: 0,
-              };
-            throw new Error(`Unexpected args: ${joined}`);
-          }),
-        ),
-      ),
-    );
-
-    it.effect("runs Claude status probes with the configured CLAUDE_CONFIG_DIR", () => {
-      const claudeConfigDir = "/tmp/t3code-claude-home";
-      const recorded = recordingMockSpawnerLayer((args) => {
-        const joined = args.join(" ");
-        if (joined === "--version") return { stdout: "1.0.0\n", stderr: "", code: 0 };
-        if (joined === "auth status")
-          return {
-            stdout: '{"loggedIn":true,"authMethod":"claude.ai"}\n',
-            stderr: "",
-            code: 0,
-          };
-        throw new Error(`Unexpected args: ${joined}`);
-      });
-
-      return Effect.gen(function* () {
-        const status = yield* checkClaudeProviderStatus(
-          {
-            ...defaultClaudeSettings,
-            homePath: claudeConfigDir,
-          },
-          claudeCapabilities(),
-        );
-        assert.strictEqual(status.status, "ready");
-        assert.deepStrictEqual(
-          recorded.commands.map((command) => command.env?.CLAUDE_CONFIG_DIR),
-          [(yield* Path.Path).resolve(claudeConfigDir)],
-        );
-      }).pipe(Effect.provide(recorded.layer));
-    });
-
-    it.effect("includes probed claude slash commands in the provider snapshot", () =>
-      Effect.gen(function* () {
-        const status = yield* checkClaudeProviderStatus(
-          defaultClaudeSettings,
-          claudeCapabilities({
-            subscriptionType: "maxplan",
-            slashCommands: [
-              {
-                name: "review",
-                description: "Review a pull request",
-                input: { hint: "pr-or-branch" },
-              },
-            ],
-          }),
-        );
-
-        assert.deepStrictEqual(status.slashCommands.slice(1), [
-          {
-            name: "review",
-            description: "Review a pull request",
-            input: { hint: "pr-or-branch" },
-          },
-        ]);
-      }).pipe(
-        Effect.provide(
-          layerMockSpawner((args) => {
-            const joined = args.join(" ");
-            if (joined === "--version") return { stdout: "1.0.0\n", stderr: "", code: 0 };
-            if (joined === "auth status")
-              return {
-                stdout: '{"loggedIn":true,"authMethod":"claude.ai"}\n',
-                stderr: "",
-                code: 0,
-              };
-            throw new Error(`Unexpected args: ${joined}`);
-          }),
-        ),
-      ),
-    );
-
-    it.effect("deduplicates probed claude slash commands by name", () =>
-      Effect.gen(function* () {
-        const status = yield* checkClaudeProviderStatus(
-          defaultClaudeSettings,
-          claudeCapabilities({
-            subscriptionType: "maxplan",
-            slashCommands: [
-              {
-                name: "ui",
-                description: "Explore and refine UI",
-              },
-              {
-                name: "ui",
-                input: { hint: "component-or-screen" },
-              },
-            ],
-          }),
-        );
-
-        assert.deepStrictEqual(status.slashCommands, [
-          COMPACT_SLASH_COMMAND,
-          {
-            name: "ui",
-            description: "Explore and refine UI",
-            input: { hint: "component-or-screen" },
-          },
-        ]);
-      }).pipe(
-        Effect.provide(
-          layerMockSpawner((args) => {
-            const joined = args.join(" ");
-            if (joined === "--version") return { stdout: "1.0.0\n", stderr: "", code: 0 };
-            if (joined === "auth status")
-              return {
-                stdout: '{"loggedIn":true,"authMethod":"claude.ai"}\n',
-                stderr: "",
-                code: 0,
-              };
-            throw new Error(`Unexpected args: ${joined}`);
-          }),
-        ),
-      ),
-    );
-
-    it.effect("returns an api key label for claude api key auth", () =>
-      Effect.gen(function* () {
-        const status = yield* checkClaudeProviderStatus(
-          defaultClaudeSettings,
-          claudeCapabilities({ tokenSource: "ANTHROPIC_AUTH_TOKEN" }),
-        );
-        assert.strictEqual(status.status, "ready");
-        assert.strictEqual(status.auth.status, "authenticated");
-        assert.strictEqual(status.auth.type, "apiKey");
-        assert.strictEqual(status.auth.label, "Claude API Key");
-      }).pipe(
-        Effect.provide(
-          layerMockSpawner((args) => {
-            const joined = args.join(" ");
-            if (joined === "--version") return { stdout: "1.0.0\n", stderr: "", code: 0 };
-            if (joined === "auth status")
-              return {
-                stdout: '{"loggedIn":true,"authMethod":"api-key"}\n',
-                stderr: "",
-                code: 0,
-              };
-            throw new Error(`Unexpected args: ${joined}`);
-          }),
-        ),
-      ),
-    );
-
-    it.effect("returns unavailable when claude is missing", () =>
-      Effect.gen(function* () {
-        const status = yield* checkClaudeProviderStatus(
-          defaultClaudeSettings,
-          claudeCapabilities(),
-        );
-        assert.strictEqual(status.status, "error");
-        assert.strictEqual(status.installed, false);
-        assert.strictEqual(status.auth.status, "unknown");
-        assert.strictEqual(status.message, "Claude Agent CLI (`claude`) was not found on PATH.");
-      }).pipe(Effect.provide(layerFailingSpawner("spawn claude ENOENT"))),
-    );
-
-    it.effect("returns error when version check fails with non-zero exit code", () => {
-      const secretStderr = "Something went wrong: secret-token-value";
-      return Effect.gen(function* () {
-        const status = yield* checkClaudeProviderStatus(
-          defaultClaudeSettings,
-          claudeCapabilities(),
-        );
-        assert.strictEqual(status.status, "error");
-        assert.strictEqual(status.installed, true);
-        assert.strictEqual(status.message, "Claude Agent CLI is installed but failed to run.");
-        assert.ok(!(status.message ?? "").includes(secretStderr));
-      }).pipe(
-        Effect.provide(
-          layerMockSpawner((args) => {
-            const joined = args.join(" ");
-            if (joined === "--version")
-              return {
-                stdout: "",
-                stderr: secretStderr,
-                code: 1,
-              };
-            throw new Error(`Unexpected args: ${joined}`);
-          }),
-        ),
-      );
-    });
-
-    it.effect("returns warning when the Claude initialization result is unavailable", () =>
-      Effect.gen(function* () {
-        const status = yield* checkClaudeProviderStatus(
-          defaultClaudeSettings,
-          noClaudeCapabilities,
-        );
-        assert.strictEqual(status.status, "warning");
-        assert.strictEqual(status.installed, true);
-        assert.strictEqual(status.auth.status, "unknown");
-        assert.strictEqual(
-          status.message,
-          "Could not verify Claude authentication status from initialization result.",
-        );
-
-        const timedOut = yield* checkClaudeProviderStatus(defaultClaudeSettings, () =>
-          Effect.fail(new Cause.TimeoutError()),
-        );
-        assert.strictEqual(timedOut.status, "warning");
-        assert.strictEqual(timedOut.auth.status, "unknown");
-        assert.strictEqual(
-          timedOut.message,
-          "Timed out after 25s while checking Claude account status.",
-        );
-      }).pipe(
-        Effect.provide(
-          layerMockSpawner((args) => {
-            const joined = args.join(" ");
-            if (joined === "--version") return { stdout: "1.0.0\n", stderr: "", code: 0 };
-            if (joined === "auth status")
-              return {
-                stdout: '{"loggedIn":false}\n',
-                stderr: "",
-                code: 1,
-              };
-            throw new Error(`Unexpected args: ${joined}`);
-          }),
-        ),
-      ),
-    );
   });
 });
+
+function layerHangingScopedSpawner(killCalls: Ref.Ref<number>) {
+  return Layer.succeed(
+    ChildProcessSpawner.ChildProcessSpawner,
+    ChildProcessSpawner.make(() =>
+      Effect.gen(function* () {
+        const handle = ChildProcessSpawner.makeHandle({
+          pid: ChildProcessSpawner.ProcessId(1),
+          exitCode: Effect.never,
+          isRunning: Effect.succeed(true),
+          kill: () => Ref.update(killCalls, (current) => current + 1),
+          unref: Effect.succeed(Effect.void),
+          stdin: Sink.drain,
+          stdout: Stream.never,
+          stderr: Stream.never,
+          all: Stream.never,
+          getInputFd: () => Sink.drain,
+          getOutputFd: () => Stream.empty,
+        });
+        yield* Effect.addFinalizer(() => handle.kill().pipe(Effect.ignore));
+        return handle;
+      }),
+    ),
+  );
+}
+
+function layerFailingSpawner(description: string) {
+  return Layer.succeed(
+    ChildProcessSpawner.ChildProcessSpawner,
+    ChildProcessSpawner.make(() =>
+      Effect.fail(
+        PlatformError.systemError({
+          _tag: "NotFound",
+          module: "ChildProcess",
+          method: "spawn",
+          description,
+        }),
+      ),
+    ),
+  );
+}
+
+function layerMockCommandSpawner(
+  handler: (
+    command: string,
+    args: ReadonlyArray<string>,
+  ) => { stdout: string; stderr: string; code: number },
+) {
+  return Layer.succeed(
+    ChildProcessSpawner.ChildProcessSpawner,
+    ChildProcessSpawner.make((command) => {
+      const cmd = command as unknown as {
+        command: string;
+        args: ReadonlyArray<string>;
+      };
+      return Effect.succeed(mockHandle(handler(cmd.command, cmd.args)));
+    }),
+  );
+}

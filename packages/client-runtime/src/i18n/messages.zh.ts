@@ -14,6 +14,21 @@
 import type { Messages } from "./messages.en.ts";
 
 export const zh: Partial<Messages> = {
+  "chat.approval.redirectPlaceholder": "发送消息以拒绝待审批项并调整智能体方向",
+  "chat.approval.draftChangedAfterDecline": "已拒绝审批；消息内容发生了变化，因此未发送。",
+  "chat.approval.draftChanged": "消息内容发生了变化，因此未发送。",
+  "chat.approval.responding": "正在处理审批，因此未发送消息。",
+  "chat.approval.arrived": "收到新的待审批项，因此未发送消息。",
+  "general.compactIdle.onReturn": "返回会话时",
+  "general.compactIdle.beforeCacheExpires": "缓存过期前（测试版）",
+  "general.compactIdle.off": "从不",
+  "provider.fields.claudeAgent.idleCompaction.label": "压缩闲置会话",
+  "provider.fields.claudeAgent.idleCompaction.description":
+    "此实例何时压缩长时间闲置的会话。“使用默认设置”遵循全局设置。",
+  "provider.fields.claudeAgent.idleCompaction.options.default": "使用默认设置",
+  "provider.fields.claudeAgent.idleCompaction.options.onReturn": "返回会话时",
+  "provider.fields.claudeAgent.idleCompaction.options.beforeCacheExpires": "缓存过期前（测试版）",
+  "provider.fields.claudeAgent.idleCompaction.options.off": "从不",
   "convene.sidebar.chooseProjectTitle": "选择一个项目以开始",
   "convene.sidebar.chooseProjectDescription": "在侧栏中选择项目，或选择新会话的创建位置。",
   "convene.sidebar.draftStartFailed": "无法启动新会话",
@@ -546,7 +561,7 @@ export const zh: Partial<Messages> = {
     "在消息和 Markdown 预览中渲染 LaTeX 公式，例如 $x^2$ 或 \\[x^2\\]。输入框中仍可编辑 TeX 源码。",
   "appearance.math.reset": "数学公式渲染",
   "general.compactIdle.description":
-    "在长时间空闲的 Claude 会话提示词缓存过期前压缩上下文，降低回来继续使用时的费用。",
+    "当闲置的 Claude 会话超过 200,000 Token 时，可在返回会话时、缓存过期前压缩，或从不压缩。各 Claude 实例可单独覆盖此设置。",
   "general.compactIdle.reset": "空闲 Claude 会话压缩",
   "restore.newThreadMode": "新会话模式",
   "restore.newWorktreesRemote": "从远程分支创建新工作树",
@@ -7711,4 +7726,13 @@ export const zh: Partial<Messages> = {
   "provider.auth.xaiApiKey": "xAI API 密钥",
   "provider.auth.cursorApiKey": "Cursor API 密钥",
   "provider.auth.cursorNamedApiKey": "Cursor API 密钥（{{name}}）",
+  "chat.subagent.runsOnOwn": "独立运行",
+  "chat.queue.sendNow": "立即发送",
+  "chat.queue.startTurn": "用这条消息开始新一轮",
+  "chat.queue.sendSteer": "改为即时指令发送",
+  "chat.error.chatgptWorkspaceHint":
+    "已达到工作区在其他应用中使用 ChatGPT 套餐的用量上限。请复制申请，向工作区管理员申请提高额度。",
+  "storage.database.reclaimTitle": "回收数据库空闲空间",
+  "storage.database.allDescription":
+    "旧历史会自动清理，但这些数据库仍占用已释放的空间。请在各台机器运行对应命令回收磁盘空间；期间后台服务将暂停并重启。如果环境由桌面应用托管，请先退出桌面应用。",
 };

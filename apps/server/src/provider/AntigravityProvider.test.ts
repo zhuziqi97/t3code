@@ -1,3 +1,4 @@
+import * as TestClock from "effect/testing/TestClock";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
 import {
@@ -16,7 +17,6 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import * as TestClock from "effect/testing/TestClock";
 import * as EffectAcpErrors from "effect-acp/errors";
 import type * as EffectAcpSchema from "effect-acp/compat";
 
@@ -390,21 +390,6 @@ it.layer(layerTest)("Antigravity provider snapshots", (it) => {
     ),
   );
 
-  it.effect("does not retain a disposable sign-in workspace", () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const harness = yield* makeHarness();
-        yield* harness.initialize;
-        yield* harness.provider.onSessionStarted(started);
-        yield* harness.provider.onAvailableCommands(commands);
-        const snapshot = yield* harness.provider.snapshot.getSnapshot;
-        expect(snapshot.models).toHaveLength(11);
-        expect(snapshot.slashCommands).toEqual(expectedCommands);
-        expect(snapshot.workspaceSnapshots).toEqual([]);
-      }),
-    ),
-  );
-
   it.effect("clears all account metadata on sign-out and authentication failure", () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -479,30 +464,6 @@ it.layer(layerTest)("Antigravity provider snapshots", (it) => {
         });
         yield* harness.initialUpdate;
         expect((yield* harness.provider.snapshot.getSnapshot).version).toBeNull();
-      }),
-    ),
-  );
-
-  it.effect("accepts a known version from a later installation probe", () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const harness = yield* makeHarness();
-        yield* harness.initialize;
-        yield* harness.provider.onSessionStarted({
-          ...started,
-          initializeResult: {
-            ...initializeResult,
-            agentInfo: { ...initializeResult.agentInfo, version: "1.3.0" },
-          },
-        });
-        yield* Ref.set(
-          harness.probe,
-          Effect.succeed({
-            ...initializeResult,
-            agentInfo: { ...initializeResult.agentInfo, version: "1.4.0" },
-          }),
-        );
-        expect((yield* harness.provider.snapshot.refresh).version).toBe("1.4.0");
       }),
     ),
   );

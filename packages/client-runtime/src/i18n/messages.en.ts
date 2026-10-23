@@ -14,6 +14,23 @@
  * rename another product or rewrite a command it tells the user to run.
  */
 export const en = {
+  "chat.approval.redirectPlaceholder": "Send a message to decline and redirect the agent",
+  "chat.approval.draftChangedAfterDecline":
+    "Approval declined. Your message changed, so it wasn't sent.",
+  "chat.approval.draftChanged": "Your message changed, so it wasn't sent.",
+  "chat.approval.responding": "An approval is already being answered, so your message wasn't sent.",
+  "chat.approval.arrived": "Another approval arrived, so your message wasn't sent.",
+  "general.compactIdle.onReturn": "When you return",
+  "general.compactIdle.beforeCacheExpires": "Before the cache expires (beta)",
+  "general.compactIdle.off": "Never",
+  "provider.fields.claudeAgent.idleCompaction.label": "Compact idle threads",
+  "provider.fields.claudeAgent.idleCompaction.description":
+    "When this instance compacts long idle threads. Use default follows the global setting.",
+  "provider.fields.claudeAgent.idleCompaction.options.default": "Use default",
+  "provider.fields.claudeAgent.idleCompaction.options.onReturn": "When you return",
+  "provider.fields.claudeAgent.idleCompaction.options.beforeCacheExpires":
+    "Before the cache expires (beta)",
+  "provider.fields.claudeAgent.idleCompaction.options.off": "Never",
   "convene.sidebar.chooseProjectTitle": "Choose a project to start",
   "convene.sidebar.chooseProjectDescription":
     "Select a project in the sidebar or choose where to start a new thread.",
@@ -560,7 +577,7 @@ export const en = {
     "Typeset LaTeX math, such as $x^2$ or \\[x^2\\], in messages and Markdown previews. The composer keeps TeX source editable.",
   "appearance.math.reset": "math rendering",
   "general.compactIdle.description":
-    "Compact long idle Claude threads just before their prompt cache expires, so coming back costs less.",
+    "When to compact an idle Claude thread over 200,000 tokens: after you return, just before its prompt cache expires, or never. Each Claude provider can override this.",
   "general.compactIdle.reset": "compact idle Claude threads",
   "restore.newThreadMode": "New thread mode",
   "restore.newWorktreesRemote": "New worktrees start from remote",
@@ -8231,6 +8248,15 @@ export const en = {
   "provider.auth.xaiApiKey": "xAI API key",
   "provider.auth.cursorApiKey": "Cursor API key",
   "provider.auth.cursorNamedApiKey": "Cursor API key ({{name}})",
+  "chat.subagent.runsOnOwn": "Runs on its own",
+  "chat.queue.sendNow": "Send now",
+  "chat.queue.startTurn": "Start a turn with this message",
+  "chat.queue.sendSteer": "Send as a steer instead",
+  "chat.error.chatgptWorkspaceHint":
+    "You've reached your workspace's limit for using your ChatGPT plan in other apps. Copy a request to ask your workspace admin for increased usage limits.",
+  "storage.database.reclaimTitle": "Reclaim freed database space",
+  "storage.database.allDescription":
+    "Old history is cleaned up automatically, but these databases still hold the freed space. Run the command on each machine to return it to disk; it pauses and restarts the background service. Quit the desktop app first if it hosts the environment.",
 } as const;
 
 export type MessageKey = keyof typeof en;

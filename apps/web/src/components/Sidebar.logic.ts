@@ -27,7 +27,6 @@ import {
 import type { SidebarThreadSummary, Thread } from "../types";
 import { normalizeSearchText } from "../lib/utils";
 import { isLatestRunSettled } from "../session-logic";
-import { resolveServerBackedAppStageLabel } from "../branding.logic";
 
 export function shouldNavigateAfterThreadPark(input: {
   readonly threadKey: string;
@@ -46,7 +45,7 @@ export function shouldNavigateAfterThreadPark(input: {
 }
 
 const THREAD_SELECTION_SAFE_SELECTOR = "[data-thread-item], [data-thread-selection-safe]";
-export const THREAD_JUMP_HINT_SHOW_DELAY_MS = 200;
+const THREAD_JUMP_HINT_SHOW_DELAY_MS = 200;
 
 export function resolveSidebarRowAccessibility(input: {
   readonly title: string;
@@ -589,7 +588,7 @@ export function buildMultiSelectThreadContextMenuItems(
   ];
 }
 
-export function isSidebarSubagentThread(thread: Pick<SidebarThreadSummary, "lineage">): boolean {
+function isSidebarSubagentThread(thread: Pick<SidebarThreadSummary, "lineage">): boolean {
   return thread.lineage.relationshipToParent === "subagent";
 }
 
@@ -716,14 +715,7 @@ export interface ThreadJumpHintVisibilityController {
   dispose: () => void;
 }
 
-export function resolveSidebarStageBadgeLabel(input: {
-  primaryServerVersion: string | null | undefined;
-  fallbackStageLabel: string;
-}): string {
-  return resolveServerBackedAppStageLabel(input);
-}
-
-export function createThreadJumpHintVisibilityController(input: {
+function createThreadJumpHintVisibilityController(input: {
   delayMs: number;
   onVisibilityChange: (visible: boolean) => void;
   setTimeoutFn?: typeof globalThis.setTimeout;
@@ -1053,10 +1045,6 @@ export function resolveSidebarV2TopStatus(input: {
   return input.isUnread ? "done" : null;
 }
 
-export function shouldShowSidebarV2Duration(status: SidebarThreadStatus): boolean {
-  return status === "working";
-}
-
 export function firstValidTimestampMs(
   ...candidates: ReadonlyArray<string | null | undefined>
 ): number {
@@ -1309,7 +1297,7 @@ export function getFallbackThreadIdAfterDelete<
     )[0]?.id ?? null
   );
 }
-export function getProjectSortTimestamp(
+function getProjectSortTimestamp(
   project: SidebarProject,
   projectThreads: readonly ThreadSortInput[],
   sortOrder: Exclude<SidebarProjectSortOrder, "manual">,

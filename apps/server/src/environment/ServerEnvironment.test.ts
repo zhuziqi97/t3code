@@ -1,3 +1,4 @@
+import * as PlatformError from "effect/PlatformError";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { ORCHESTRATION_PROTOCOL_VERSION } from "@t3tools/contracts";
 import { expect, it } from "@effect/vitest";
@@ -6,8 +7,6 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
-import * as PlatformError from "effect/PlatformError";
-import * as Schema from "effect/Schema";
 
 import { DEFAULT_SIGNAL_EXPORT } from "@t3tools/shared/observability";
 import * as HostProcess from "@t3tools/shared/HostProcess";
@@ -21,10 +20,6 @@ import {
 } from "../cloud/config.ts";
 import * as ServerConfig from "../config.ts";
 import * as ServerEnvironment from "./ServerEnvironment.ts";
-
-const isServerEnvironmentIdPersistenceError = Schema.is(
-  ServerEnvironment.ServerEnvironmentIdPersistenceError,
-);
 
 const layerServerEnvironment = (baseDir: string) =>
   ServerEnvironment.layer.pipe(
@@ -362,8 +357,8 @@ it.layer(NodeServices.layer)("ServerEnvironmentLive", (it) => {
           Effect.flip,
         );
 
-        expect(isServerEnvironmentIdPersistenceError(error)).toBe(true);
-        if (!isServerEnvironmentIdPersistenceError(error)) {
+        expect(error._tag === "ServerEnvironmentIdPersistenceError").toBe(true);
+        if (!(error._tag === "ServerEnvironmentIdPersistenceError")) {
           throw error;
         }
         expect(error.operation).toBe(operation);

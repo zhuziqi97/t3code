@@ -203,7 +203,7 @@ import { reportProviderProgress } from "@t3tools/provider-core/server/managedPro
 const CAPABILITIES_PROBE_TIMEOUT_MS = 25_000;
 const CLAUDE_VERSION_CHECK_TIMEOUT_MS = 20_000;
 
-export const CLAUDE_CAPABILITIES_PROBE_SETTING_SOURCES = [
+const CLAUDE_CAPABILITIES_PROBE_SETTING_SOURCES = [
   "user",
   "project",
   "local",

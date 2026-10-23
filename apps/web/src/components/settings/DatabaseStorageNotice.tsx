@@ -1,63 +1,74 @@
 import { useTranslate } from "../../i18n";
 import { useAtomValue } from "@effect/atom-react";
-import { shouldRecommendDatabaseCompaction, type EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { serverEnvironment } from "../../state/server";
 import { Button } from "../ui/button";
-import { SettingsGroup } from "./SettingsGroup";
 import { SettingsRow, SettingsSection } from "./settingsLayout";
 
-/** Suggests `t3 doctor` for a database that still holds at least 1 GiB of freed pages. */
+const DismissedEnvironmentIds = Schema.Array(Schema.String);
+
+/** Suggests `t3 doctor` on every machine whose database still holds at least 1 GiB of freed pages. */
 export function DatabaseStorageNotice({
-  environmentId,
-  label,
+  environments,
 }: {
-  environmentId: EnvironmentId;
-  label: string;
+  environments: ReadonlyArray<{ readonly environmentId: EnvironmentId; readonly label: string }>;
 }) {
   const t = useTranslate();
-  const result = useAtomValue(serverEnvironment.databaseStorage({ environmentId, input: {} }));
+  const recommendations = useAtomValue(
+    serverEnvironment.databaseCompactionRecommendations(
+      JSON.stringify(environments.map((environment) => environment.environmentId)),
+    ),
+  );
   const [dismissed, setDismissed] = useLocalStorage(
-    `database-storage-notice-dismissed:${environmentId}`,
-    false,
-    Schema.Boolean,
+    "database-storage-notice-dismissed",
+    [],
+    DismissedEnvironmentIds,
   );
   const { copyToClipboard } = useCopyToClipboard({ target: "command" });
-  const status = result._tag === "Success" ? result.value : null;
-  if (dismissed || status === null || !shouldRecommendDatabaseCompaction(status)) return null;
+  const visible = recommendations.filter(
+    (recommendation) => !dismissed.includes(recommendation.environmentId),
+  );
+  if (visible.length === 0) return null;
   return (
-    <SettingsSection id={`storage-database-${environmentId}`} title={t("storage.database.title")}>
-      <SettingsGroup>
+    <SettingsSection id="storage-database" title={t("storage.database.title")}>
+      <SettingsRow
+        title={t("storage.database.reclaimTitle")}
+        description={t("storage.database.allDescription")}
+      />
+      {visible.map(({ environmentId, status }) => (
         <SettingsRow
+          key={environmentId}
           title={t("storage.database.reclaim", {
             size: (status.reclaimableBytes / 1024 ** 3).toFixed(1),
-            environment: label,
+            environment:
+              environments.find((environment) => environment.environmentId === environmentId)
+                ?.label ?? environmentId,
           })}
-          description={
-            <>
-              {t("storage.database.description", { environment: label })}
-              <code className="mt-2 block select-text break-all">{status.compactCommand}</code>
-            </>
-          }
+          description={<code className="select-text break-all">{status.compactCommand}</code>}
           control={
             <div className="flex flex-wrap items-center gap-1.5">
               <Button
                 variant="outline"
-                size="sm"
+                size="xs"
                 onClick={() => copyToClipboard(status.compactCommand, undefined)}
               >
                 {t("storage.database.copyCommand")}
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => setDismissed(true)}>
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => setDismissed((current) => [...current, environmentId])}
+              >
                 {t("common.dismiss")}
               </Button>
             </div>
           }
         />
-      </SettingsGroup>
+      ))}
     </SettingsSection>
   );
 }

@@ -13,7 +13,7 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
-import * as Cause from "effect/Cause";
+
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -22,7 +22,6 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
-import * as HostProcess from "@t3tools/shared/HostProcess";
 
 import * as ServerConfig from "../config.ts";
 import * as ConveneWorkspaces from "../convene/ConveneWorkspaces.ts";
@@ -127,8 +126,6 @@ export const layer: Layer.Layer<
     const idAllocator = yield* IdAllocator.IdAllocatorV2;
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const serverConfig = yield* ServerConfig.ServerConfig;
-    const serverSettings = yield* ServerSettings.ServerSettingsService;
     const gitWorkflow = yield* GitWorkflowService.GitWorkflowService;
     const projects = yield* ProjectService.ProjectService;
     const providerAuth = yield* ProviderAuthService.ProviderAuthService;
@@ -663,6 +660,71 @@ export const layer: Layer.Layer<
       const existingSessionProjection = projection.providerSessions.find(
         (candidate) => candidate.id === providerSessionId,
       );
+      const failedRuns = new Map(
+        projection.runs
+          .filter(
+            (previous) =>
+              previous.ordinal < run.ordinal &&
+              previous.providerThreadId === providerThread.id &&
+              previous.status === "failed",
+          )
+          .map((previous) => [previous.activeAttemptId, previous] as const),
+      );
+      const abandonedTurns = projection.providerTurns.flatMap((turn) => {
+        const previous = failedRuns.get(turn.runAttemptId);
+        return turn.providerThreadId === providerThread.id &&
+          turn.status === "running" &&
+          previous !== undefined &&
+          turn.nodeId === previous.rootNodeId
+          ? [{ turn, run: previous }]
+          : [];
+      });
+      const abandonedTurn = abandonedTurns.at(-1)?.turn;
+      if (abandonedTurn !== undefined) {
+        const liveSession = yield* providerSessions.get(providerSessionId);
+        if (Option.isSome(liveSession)) {
+          // Older versions could fail the run without stopping its provider.
+          // Recover that exact turn before reusing its native conversation.
+          const recovered = yield* Effect.result(
+            liveSession.value.interruptTurn({
+              providerThread,
+              providerTurnId: abandonedTurn.id,
+              requestRuntimeRestart: true,
+            }),
+          );
+          if (recovered._tag === "Failure") {
+            if (input.willRetry === true) return yield* recovered.failure;
+            yield* settleStartFailure({
+              signal: "provider-turn-recovery-failure",
+              title: "Provider turn recovery failed",
+              error: recovered.failure,
+            });
+            return;
+          }
+        }
+        const completedAt = yield* DateTime.now;
+        const repaired = yield* eventSink.writeIfRunCurrent({
+          threadId: projection.thread.id,
+          runId: run.id,
+          activeAttemptId: attempt.id,
+          expectedStatus: "starting",
+          events: yield* Effect.forEach(abandonedTurns, ({ turn, run: failedRun }) =>
+            Effect.gen(function* () {
+              return {
+                id: yield* idAllocator.allocate.event({ threadId: projection.thread.id }),
+                type: "provider-turn.updated" as const,
+                threadId: projection.thread.id,
+                runId: failedRun.id,
+                nodeId: turn.nodeId,
+                providerInstanceId: failedRun.providerInstanceId,
+                occurredAt: completedAt,
+                payload: { ...turn, status: "interrupted" as const, completedAt },
+              };
+            }),
+          ),
+        });
+        if (!repaired.committed) return;
+      }
       const sessionResult = yield* Effect.result(
         providerSessions.open({
           threadId: projection.thread.id,

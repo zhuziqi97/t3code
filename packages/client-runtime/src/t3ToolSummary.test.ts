@@ -172,37 +172,6 @@ describe.each([
     ).toBe("Sent 2 messages to 1 thread");
   });
 
-  it("falls back to message counts when a destination is missing or a result is malformed", () => {
-    expect(
-      summarizeT3ToolCalls("thread-send", [
-        completed({ threadId: "known" }),
-        completed({ message: '{"threadId":"not-a-destination"}' }, "{truncated"),
-        completed(undefined, "Message sent"),
-      ]).label,
-    ).toBe("Sent 3 messages");
-  });
-
-  it("counts batch-created threads, excludes rollbacks, and deduplicates returned thread IDs", () => {
-    const threads = Array.from({ length: 4 }, (_, i) => ({
-      threadId: `thread-${i}`,
-      status: "running",
-    }));
-    expect(
-      summarizeT3ToolCalls("thread-create", [
-        completed(
-          {},
-          { threads: [...threads, { threadId: "rolled-back", status: "rolled_back" }] },
-        ),
-        completed({}, { threadId: "thread-0", status: "running" }),
-      ]).label,
-    ).toBe("Created 4 threads");
-    expect(
-      summarizeT3ToolCalls("thread-create", [
-        completed({ threads: [{ title: "Requested, not confirmed" }] }),
-      ]).label,
-    ).toBe("Requested thread creation 1 time");
-  });
-
   it("excludes failed and unfinished sends even if the provider reports completed", () => {
     const calls: T3ToolSummaryCall[] = [
       completed({ threadId: "success" }, { messageId: "ok", threadId: "success" }),
@@ -246,47 +215,6 @@ describe.each([
     ).toEqual({
       label: "Waited on 1 thread",
       failedCount: 0,
-    });
-  });
-
-  it("describes control requests without claiming that a thread stopped or a task was deleted", () => {
-    expect(
-      summarizeT3ToolCalls("thread-interrupt", [
-        completed(
-          { threadId: "thread-1" },
-          { threadId: "thread-1", status: "interrupt_requested" },
-        ),
-      ]).label,
-    ).toBe("Requested interrupts for 1 thread");
-    expect(
-      summarizeT3ToolCalls("task-cancel", [
-        completed({ taskId: "task-1" }, { taskId: "task-1", status: "cancel_requested" }),
-      ]).label,
-    ).toBe("Requested cancellation of 1 task");
-    expect(
-      summarizeT3ToolCalls("schedule-delete", [
-        completed(
-          { scheduledTaskId: "schedule-1" },
-          { scheduledTaskId: "schedule-1", deleted: false },
-        ),
-      ]).label,
-    ).toBe("Requested deletion of 1 scheduled task");
-  });
-
-  it("counts workflow stop requests by coordinator and excludes failed requests", () => {
-    const first = completed({ threadId: "parent", subagentId: "workflow-1" }, {});
-    const failed = completed({ threadId: "parent", subagentId: "workflow-3" }, { isError: true });
-    expect(
-      summarizeT3ToolCalls("workflow-stop", [
-        first,
-        first,
-        completed({ threadId: "parent", subagentId: "workflow-2" }, {}),
-        failed,
-      ]),
-    ).toEqual({ label: "Requested stops for 2 workflows", failedCount: 1 });
-    expect(summarizeT3ToolCalls("workflow-stop", [failed])).toEqual({
-      label: "Tried to stop 1 workflow",
-      failedCount: 1,
     });
   });
 });

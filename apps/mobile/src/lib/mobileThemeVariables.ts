@@ -1,4 +1,4 @@
-import defaultThemeVariables from "../../generated-uniwind-default-theme-variables.json";
+import defaultThemeVariables from "../../generated-uniwind-default-theme-variables.json" with { type: "json" };
 import {
   DEFAULT_MOBILE_THEME_ID,
   getMobileThemeVariables,

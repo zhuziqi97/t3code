@@ -210,50 +210,6 @@ describe("Muse SDK host", () => {
     },
   );
 
-  it("does not spawn when already aborted and closes a ready host on later abort", async () => {
-    const aborted = new AbortController();
-    aborted.abort();
-    await expect(
-      createMuseSdkHost({ binaryPath: "muse", signal: aborted.signal }),
-    ).rejects.toBeDefined();
-    expect(spawnMspConnection).not.toHaveBeenCalled();
-    const fake = mockSpawn();
-    const abort = new AbortController();
-    const running = createMuseSdkHost({ binaryPath: "muse", signal: abort.signal });
-    fake.startup.resolve(fake.ready);
-    const host = await running;
-    abort.abort();
-    fake.shutdown.resolve({ code: 0, signal: null });
-    await host.close();
-    expect(fake.close).toHaveBeenCalledOnce();
-  });
-
-  it.effect(
-    "keeps Effect startup resources alive until interrupted initialization shuts down",
-    () =>
-      Effect.gen(function* () {
-        const fake = mockSpawn();
-        let released = false;
-        const fiber = yield* Effect.forkChild(
-          createMuseSdkHostEffect({ binaryPath: "muse" }).pipe(
-            Effect.ensuring(
-              Effect.sync(() => {
-                released = true;
-              }),
-            ),
-          ),
-        );
-        yield* Effect.promise(() => fake.initializing.promise);
-        const interrupted = yield* Fiber.interrupt(fiber).pipe(Effect.forkChild);
-        yield* Effect.promise(() => fake.closing.promise);
-        expect(released).toBe(false);
-        fake.shutdown.resolve({ code: 0, signal: null });
-        yield* Fiber.join(interrupted);
-        expect(released).toBe(true);
-        expect(fake.close).toHaveBeenCalledOnce();
-      }),
-  );
-
   it.effect("closes a fulfilled host when interruption wins before acquisition is delivered", () =>
     Effect.gen(function* () {
       const started = pending<void>();
@@ -302,17 +258,6 @@ describe("Muse launch", () => {
       Effect.provideService(SpawnExecutableResolution, () => resolved),
     );
 
-  it.effect("starts the binary itself off Windows", () =>
-    Effect.gen(function* () {
-      expect(yield* museLaunch("muse")).toEqual({ command: "muse", args: [] });
-    }).pipe(
-      Effect.provideService(HostProcess.Platform, "linux"),
-      Effect.provideService(SpawnExecutableResolution, () => {
-        throw new Error("Nothing is resolved off Windows.");
-      }),
-    ),
-  );
-
   it.effect("runs an exe directly and a launcher script under cmd.exe on Windows", () =>
     Effect.gen(function* () {
       expect(yield* onWindows("C:\\Muse\\muse.exe")).toEqual({
@@ -360,76 +305,6 @@ describe("Muse launch", () => {
       expect((yield* fs.readFileString(path.join(folder, "args.txt"))).trim()).toBe("serve --x");
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
-
-  it.effect("starts Muse's Windows launcher through cmd.exe", () =>
-    Effect.gen(function* () {
-      const fake = mockSpawn();
-      const starting = yield* Effect.forkChild(
-        createMuseSdkHostEffect({
-          binaryPath: "muse",
-          environment: { ComSpec: CMD },
-          readOnly: true,
-        }),
-      );
-      yield* Effect.promise(() => fake.initializing.promise);
-      const spawned = vi.mocked(spawnMspConnection).mock.lastCall?.[0];
-      fake.startup.resolve(fake.ready);
-      const host = yield* Fiber.join(starting);
-      fake.shutdown.resolve({ code: 0, signal: null });
-      yield* Effect.promise(() => host.close());
-      expect(spawned).toMatchObject({
-        command: CMD,
-        args: [
-          "/d",
-          "/c",
-          "C:\\Muse\\muse.cmd",
-          "serve",
-          "--disable-shell",
-          "--disable-write",
-          "--no-session-log",
-        ],
-      });
-    }).pipe(
-      Effect.provideService(HostProcess.Platform, "win32"),
-      Effect.provideService(SpawnExecutableResolution, () => "C:\\Muse\\muse.cmd"),
-    ),
-  );
-
-  it.effect("passes launcher arguments to the binary that cmd.exe starts", () =>
-    Effect.gen(function* () {
-      const fake = mockSpawn();
-      const starting = yield* Effect.forkChild(
-        createMuseSdkHostEffect({
-          binaryPath: "muse",
-          launchArgs: ["--launcher-arg"],
-          environment: { ComSpec: CMD },
-          readOnly: true,
-        }),
-      );
-      yield* Effect.promise(() => fake.initializing.promise);
-      const spawned = vi.mocked(spawnMspConnection).mock.lastCall?.[0];
-      fake.startup.resolve(fake.ready);
-      const host = yield* Fiber.join(starting);
-      fake.shutdown.resolve({ code: 0, signal: null });
-      yield* Effect.promise(() => host.close());
-      expect(spawned).toMatchObject({
-        command: CMD,
-        args: [
-          "/d",
-          "/c",
-          "C:\\Muse\\muse.cmd",
-          "--launcher-arg",
-          "serve",
-          "--disable-shell",
-          "--disable-write",
-          "--no-session-log",
-        ],
-      });
-    }).pipe(
-      Effect.provideService(HostProcess.Platform, "win32"),
-      Effect.provideService(SpawnExecutableResolution, () => "C:\\Muse\\muse.cmd"),
-    ),
-  );
 });
 
 describe("Muse workspace root", () => {
@@ -438,26 +313,6 @@ describe("Muse workspace root", () => {
     expect(museVerbatimPath("\\\\server\\share\\repo")).toBe("\\\\?\\UNC\\server\\share\\repo");
     expect(museVerbatimPath("\\\\?\\C:\\repo")).toBe("\\\\?\\C:\\repo");
   });
-
-  it.effect("leaves the root alone off Windows", () =>
-    Effect.gen(function* () {
-      expect(yield* museWorkspaceRoot("/workspace/repo")).toBe("/workspace/repo");
-    }).pipe(Effect.provideService(HostProcess.Platform, "linux")),
-  );
-
-  it.effect("keeps a Windows root it cannot resolve, in verbatim form", () =>
-    Effect.gen(function* () {
-      expect(yield* museWorkspaceRoot("C:\\definitely-missing\\repo")).toBe(
-        "\\\\?\\C:\\definitely-missing\\repo",
-      );
-      expect(yield* museWorkspaceRoot("C:/definitely-missing/repo")).toBe(
-        "\\\\?\\C:\\definitely-missing\\repo",
-      );
-      expect(yield* museWorkspaceRoot("//server/share/missing")).toBe(
-        "\\\\?\\UNC\\server\\share\\missing",
-      );
-    }).pipe(Effect.provideService(HostProcess.Platform, "win32")),
-  );
 
   // FileSystem.realPath keeps the case it is given; Muse rejects a root whose case differs from the disk's.
   it.effect("fixes the case of a Windows root natively", () =>

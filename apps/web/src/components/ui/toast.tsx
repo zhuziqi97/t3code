@@ -1,4 +1,3 @@
-"use client";
 import { useTranslate } from "../../i18n";
 
 import { Spinner } from "~/components/ui/spinner";
@@ -308,7 +307,7 @@ function deriveToastBodyDescriptor(toast: {
     hasVisibleToastAction(toast.actionProps) ||
     hasAdditionalActions ||
     hasSecondaryAction;
-  const inlineContentEndPad = hasTrailingControls ? "pr-6" : "pr-10";
+  const inlineContentEndPad = hasTrailingControls ? "pr-6" : "pr-3.5";
   return {
     Icon,
     stackedActionLayout,
@@ -353,7 +352,12 @@ function ToastBodyContent({
           stackedActionLayout ? "pr-5" : "flex-1",
         )}
       >
-        <div className="flex min-w-0 gap-2">
+        <div
+          className={cn(
+            "flex min-w-0 gap-2",
+            !stackedActionLayout && !hasTrailingControls && "pr-6",
+          )}
+        >
           {leadingIcon ? (
             <div
               className="flex h-lh w-4 shrink-0 items-center justify-center"
@@ -785,7 +789,7 @@ function AnchoredToasts() {
   );
 }
 
-export { hiddenToastActionProps, stackedThreadToast } from "./toastHelpers";
+export { stackedThreadToast } from "./toastHelpers";
 export type { StackedThreadToastOptions } from "./toastHelpers";
 
 export {

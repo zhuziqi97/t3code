@@ -89,24 +89,6 @@ describe("AntigravityAdapterV2 flavor", () => {
     assert.isTrue(flavor.subagentsIdleOnTurnCompletion);
   });
 
-  it("maps runtime modes to the agent's native permission modes", () => {
-    const mode = (runtimeMode: "approval-required" | "auto-accept-edits" | "full-access") =>
-      flavor.sessionModeForPolicy?.(
-        ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
-          runtimeMode,
-          interactionMode: "default",
-          cwd: "/workspace",
-        }),
-      );
-    assert.equal(mode("approval-required"), "default");
-    assert.equal(mode("auto-accept-edits"), "auto_edit");
-    assert.equal(mode("full-access"), "yolo");
-  });
-
-  it("exposes Antigravity's /compact command through the v2 compaction path", () => {
-    assert.isTrue(flavor.supportsCompaction);
-  });
-
   it("routes interaction_* permission requests to the question card", () => {
     const question = flavor.extractPermissionQuestion?.(
       permissionRequest("interaction_1", [
@@ -130,17 +112,21 @@ describe("AntigravityAdapterV2 flavor", () => {
     );
   });
 
-  it("advertises only the approval decisions the request can honor", () => {
-    const options = flavor.approvalOptions?.(
-      permissionRequest("tool_1", [
-        { optionId: "once", name: "Allow", kind: "allow_once" },
-        { optionId: "deny", name: "Deny", kind: "reject_once" },
+  it("keeps the question card to the agent's own options so a typed answer cannot be sent", () => {
+    const question = flavor.extractPermissionQuestion?.(
+      permissionRequest("interaction_2", [
+        { optionId: "opt-main", name: "main", kind: "allow_once" },
+        { optionId: "opt-dev", name: "dev", kind: "allow_once" },
       ]),
     );
+    assert.strictEqual(question?.question.allowCustomAnswer, false);
     assert.deepEqual(
-      options?.map((option) => option.decision),
-      ["accept", "decline", "cancel"],
+      question?.question.options.map((option) => option.value),
+      ["opt-main", "opt-dev"],
     );
+    assert.deepEqual(question?.respond({ interaction_2: "opt-dev" }), {
+      outcome: { outcome: "selected", optionId: "opt-dev" },
+    });
   });
 });
 

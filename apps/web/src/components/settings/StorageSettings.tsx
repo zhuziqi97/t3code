@@ -195,6 +195,7 @@ function CleanupResults({
   report: StorageCleanupReport;
   environmentLabel: string;
 }) {
+  const t = useTranslate();
   return (
     <>
       {report.entries.map((entry, index) => {
@@ -220,7 +221,7 @@ function CleanupResults({
                   <span className="text-foreground/80">{environmentLabel}</span>
                   {entry.projectPath && (
                     <>
-                      <span>Project</span>
+                      <span>{t("pullRequest.list.project")}</span>
                       <code className="text-foreground/80">{entry.projectPath}</code>
                     </>
                   )}
@@ -281,6 +282,7 @@ const storageCleanupPermissionsAtom = environmentAtomList(
 );
 
 function CleanupSection() {
+  const t = useTranslate();
   useRelativeTimeTick(60_000);
   const { connectedEnvironments } = useSettingsScope();
   const [pending, setPending] = useState(false);
@@ -392,7 +394,7 @@ function CleanupSection() {
               disabled={pending || !hasRules || !state.some((entry) => entry.allowed)}
               onClick={() => void deleteNow()}
             >
-              {pending ? "Deleting…" : "Delete now"}
+              {pending ? "Deleting…" : t("settings.search.storage-delete-now.title")}
             </Button>
           }
         />
@@ -488,19 +490,14 @@ export function StorageSettingsPanel() {
 
   return (
     <SettingsPageContainer>
-      {!isProjectScope &&
-        connectedEnvironments
-          .filter(
+      {!isProjectScope && (
+        <DatabaseStorageNotice
+          environments={connectedEnvironments.filter(
             (environment) =>
               environment.serverConfig?.environment.capabilities.databaseStorage === true,
-          )
-          .map((environment) => (
-            <DatabaseStorageNotice
-              key={environment.environmentId}
-              environmentId={environment.environmentId}
-              label={environment.label}
-            />
-          ))}
+          )}
+        />
+      )}
       <SettingsSection id="storage-worktrees" title={t("storage.worktrees")}>
         {!isProjectScope && <WorktreesDirectoryRow />}
         {isProjectScope && (
@@ -660,7 +657,7 @@ export function StorageSettingsPanel() {
                     <SelectTrigger size="sm" aria-label="Keep worktrees with local changes">
                       <SelectValue>
                         {ruleStatus("worktreeKeepWhen")
-                          ? "Mixed"
+                          ? t("usage.prices.placeholder.Mixed")
                           : KEEP_WHEN_LABELS[settings.worktreeKeepWhen]}
                       </SelectValue>
                     </SelectTrigger>

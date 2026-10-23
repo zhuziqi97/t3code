@@ -1,5 +1,3 @@
-"use client";
-
 import type { TFunction } from "i18next";
 import { useTranslate } from "../../i18n";
 import { useEffect, useRef, useState, type ReactNode } from "react";

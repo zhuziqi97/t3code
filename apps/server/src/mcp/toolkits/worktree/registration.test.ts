@@ -87,7 +87,10 @@ const decodeToolsListPayload = Schema.decodeUnknownEffect(ToolsListPayload);
 it.effect("production mcp layer lists worktree tools over http", () =>
   Effect.scoped(
     Effect.gen(function* () {
-      const layerRoutes = McpHttpServer.layer.pipe(Layer.provide(McpSessionRegistry.layer));
+      const registryService = yield* McpSessionRegistry.McpSessionRegistry;
+      const layerRoutes = McpHttpServer.layer.pipe(
+        Layer.provide(Layer.succeed(McpSessionRegistry.McpSessionRegistry, registryService)),
+      );
       yield* HttpRouter.serve(layerRoutes, {
         disableListenLog: true,
         disableLogger: true,
@@ -103,7 +106,7 @@ it.effect("production mcp layer lists worktree tools over http", () =>
         Layer.build,
       );
 
-      const registry = McpSessionRegistry.issueActiveMcpCredential({
+      const registry = registryService.issue({
         threadId: ThreadId.make("thread-scratch"),
         providerInstanceId: ProviderInstanceId.make("claudeAgent"),
       });
@@ -162,7 +165,17 @@ it.effect("production mcp layer lists worktree tools over http", () =>
       for (const tool of tools) {
         expect(tool.inputSchema.type, `inputSchema.type of ${tool.name}`).toBe("object");
       }
-    }),
+    }).pipe(
+      Effect.provide(
+        McpSessionRegistry.layer.pipe(
+          Layer.provide(
+            Layer.mock(ServerEnvironment.ServerEnvironment)({
+              getEnvironmentId: Effect.succeed("environment-scratch" as never),
+            }),
+          ),
+        ),
+      ),
+    ),
   ).pipe(
     Effect.provide(
       Layer.mergeAll(

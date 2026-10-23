@@ -74,9 +74,6 @@ export interface PreviewBrowserOptions {
   /** How long a caller waits on an install in progress. Provider tool calls time out near 60s. */
   readonly wait?: Duration.Input;
 }
-
-// Longer than any install can run: the download times out at 15 minutes.
-const DOWNLOAD_TIMEOUT = "15 minutes";
 const STAGING_STALE_AFTER_MS = 60 * 60_000;
 
 type InstallState =

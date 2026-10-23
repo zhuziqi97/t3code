@@ -10,7 +10,6 @@ import {
   buildCursorCapabilitiesFromSdkModel,
   buildCursorDiscoveredModelsFromSdk,
   buildCursorProviderSnapshot,
-  buildInitialCursorProviderSnapshot,
   checkCursorProviderStatus,
 } from "./status.ts";
 import * as CursorSdkCatalog from "./CursorSdkCatalog.ts";

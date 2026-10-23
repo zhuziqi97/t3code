@@ -1,4 +1,3 @@
-import { formatRelativeTimeLabel } from "~/timestampFormat";
 import type { MessageKey } from "@t3tools/client-runtime/i18n";
 import { useTranslate } from "~/i18n";
 import type { ProjectId, ScopedThreadRef, ThreadPullRequestLink } from "@t3tools/contracts";
@@ -57,7 +56,7 @@ import {
 } from "./pullRequestPresentation";
 import { PullRequestGlyph } from "./pullRequestIcons";
 import { pullRequestQuickActions } from "./pullRequestList.logic";
-import { PullRequestSpeedActions } from "./PullRequestSpeedActions";
+import { PullRequestSpeedActions, PullRequestSpeedModeContext } from "./PullRequestSpeedActions";
 
 const SOURCE_LABEL_KEYS: Record<ThreadPullRequestLink["source"], MessageKey> = {
   manual: "pullRequest.linked.source.manual",
@@ -287,11 +286,7 @@ function LinkRowImpl({
         />
       </a>
       {actionEntry !== null ? (
-        <PullRequestSpeedActions
-          entry={actionEntry}
-          hostActions={linkHostActions}
-          visible={speedMode}
-        />
+        <PullRequestSpeedActions entry={actionEntry} hostActions={linkHostActions} />
       ) : null}
       <span
         className={cn(
@@ -460,45 +455,50 @@ function EnabledThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThread
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      {/* Threads that run a stack or a sweep link hundreds of pull requests; only the rows in
+    <PullRequestSpeedModeContext value={speedMode}>
+      <div className="flex h-full min-h-0 flex-col">
+        {/* Threads that run a stack or a sweep link hundreds of pull requests; only the rows in
           view are mounted. */}
-      <LegendList<PullRequestListLine>
-        data={lines}
-        keyExtractor={lineKey}
-        extraData={rowInputs}
-        renderItem={({ item: line }) => (
-          <LinkRow
-            line={line}
-            threadRef={threadRef}
-            projectId={
-              capabilities?.pullRequests === true
-                ? (findProjectForChangeRequest(environmentProjects, line.link)?.id ??
-                  thread?.projectId ??
-                  null)
-                : null
-            }
-            speedMode={speedMode}
-            onUnlink={handleUnlink}
-            onSetWatching={supportsWatch ? handleSetWatching : null}
-          />
-        )}
-        estimatedItemSize={44}
-        drawDistance={440}
-        className="min-h-0 flex-1 overscroll-contain p-1.5"
-      />
-      <footer className="flex items-center justify-between border-t border-border/60 px-2 py-1.5 text-2xs text-muted-foreground">
-        <span>
-          {t("pullRequest.linked.counts", { open: openCount, linked: linkCount })}
-          {lastSynced
-            ? ` · ${t("pullRequest.linked.synced", { time: formatRelativeTimeLabel(lastSynced, t) })}`
-            : ""}
-        </span>
-        <Button size="xs" variant="ghost" onClick={openLinkDialog}>
-          <PlusIcon className="size-3.5" />
-          {t("pullRequest.linked.link")}
-        </Button>
-      </footer>
-    </div>
+        <LegendList<PullRequestListLine>
+          data={lines}
+          keyExtractor={lineKey}
+          extraData={rowInputs}
+          renderItem={({ item: line }) => (
+            <LinkRow
+              line={line}
+              threadRef={threadRef}
+              projectId={
+                capabilities?.pullRequests === true
+                  ? (findProjectForChangeRequest(environmentProjects, line.link)?.id ??
+                    thread?.projectId ??
+                    null)
+                  : null
+              }
+              speedMode={speedMode}
+              onUnlink={handleUnlink}
+              onSetWatching={supportsWatch ? handleSetWatching : null}
+            />
+          )}
+          estimatedItemSize={44}
+          drawDistance={440}
+          className="min-h-0 flex-1 overscroll-contain p-1.5"
+        />
+        <footer className="flex items-center justify-between border-t border-border/60 px-2 py-1.5 text-2xs text-muted-foreground">
+          <span>
+            {t("pullRequest.linked.counts", { open: openCount, linked: linkCount })}
+            {lastSynced ? (
+              <>
+                {` · ${t("pullRequest.linked.synced", { time: "" })}`}
+                <RelativeTime timestamp={lastSynced} />
+              </>
+            ) : null}
+          </span>
+          <Button size="xs" variant="ghost" onClick={openLinkDialog}>
+            <PlusIcon className="size-3.5" />
+            {t("pullRequest.linked.link")}
+          </Button>
+        </footer>
+      </div>
+    </PullRequestSpeedModeContext>
   );
 }

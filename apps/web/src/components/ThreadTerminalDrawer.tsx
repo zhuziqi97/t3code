@@ -353,10 +353,10 @@ export function terminalThemeFromApp(mountElement?: HTMLElement | null): Ghostty
   };
 }
 
-export function terminalSelectionLineRange(position: {
-  start: { y: number };
-  end: { y: number };
-}): { lineStart: number; lineEnd: number } {
+function terminalSelectionLineRange(position: { start: { y: number }; end: { y: number } }): {
+  lineStart: number;
+  lineEnd: number;
+} {
   const lineStart = position.start.y + 1;
   return {
     lineStart,

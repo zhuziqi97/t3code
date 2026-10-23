@@ -1,3 +1,4 @@
+import { useTranslate } from "../i18n";
 import { useParams } from "@tanstack/react-router";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import {
@@ -11,6 +12,11 @@ import {
   type ScopedProjectRef,
   resolveEnvironmentMachineKind,
 } from "@t3tools/contracts";
+import {
+  type CloneProtocol,
+  cloneUrlForProtocol,
+  cloneUrlProtocol,
+} from "@t3tools/shared/cloneUrl";
 import { ArrowRightIcon } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import { create } from "zustand";
@@ -21,10 +27,7 @@ import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useLogicalProjectEnvironments } from "../hooks/useLogicalProjectEnvironments";
 import {
   COPYABLE_FILE_MAX_BYTES,
-  type CloneProtocol,
   addProjectToMachine,
-  cloneUrlForProtocol,
-  cloneUrlProtocol,
   isDefaultCopiedFile,
 } from "../lib/addProjectToMachine";
 import { formatBytes } from "../lib/formatBytes";
@@ -73,6 +76,7 @@ export function AddProjectToMachineDialogHost() {
 }
 
 function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRequest }) {
+  const t = useTranslate();
   const id = useId();
   const project = useProject(request.projectRef);
   const handleNewThread = useNewThreadHandler();
@@ -82,7 +86,10 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
   const [targetId, setTargetId] = useState(request.targetEnvironmentId);
   const target = targets.find((t) => t.environmentId === targetId) ?? targets[0] ?? null;
   const source = environments.find((env) => env.environmentId === request.projectRef.environmentId);
-  const sourceUrl = project?.repositoryIdentity?.locator.remoteUrl ?? "";
+  const sourceUrl =
+    project?.repositoryIdentity?.origin?.remoteUrl ??
+    project?.repositoryIdentity?.locator.remoteUrl ??
+    "";
   const [protocol, setProtocol] = useState<CloneProtocol | null>(() => cloneUrlProtocol(sourceUrl));
   const sshUrl = cloneUrlForProtocol(sourceUrl, "ssh");
   const httpsUrl = cloneUrlForProtocol(sourceUrl, "https");
@@ -207,8 +214,9 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
           <DialogHeader>
             <DialogTitle>Add to another machine</DialogTitle>
             <DialogDescription>
-              Clone {project?.repositoryIdentity?.displayName ?? project?.title} and bring the local
-              files git does not track.
+              {t("project.clone")}
+              {project?.repositoryIdentity?.displayName ?? project?.title} and bring the local files
+              git does not track.
             </DialogDescription>
           </DialogHeader>
           <DialogPanel>
@@ -328,7 +336,9 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                           )
                         }
                       >
-                        {selectedFiles.size === copyable.length ? "None" : "All"}
+                        {selectedFiles.size === copyable.length
+                          ? t("usage.prices.placeholder.None")
+                          : t("pullRequest.list.all")}
                       </Button>
                     </>
                   ) : null}
@@ -369,10 +379,10 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
           </DialogPanel>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={close}>
-              Cancel
+              {t("convene.scope.cancel")}
             </Button>
             <Button type="submit" disabled={unavailable || submitting}>
-              {submitting ? "Starting…" : `Clone to ${target?.label ?? "machine"}`}
+              {submitting ? t("device.starting") : `Clone to ${target?.label ?? "machine"}`}
             </Button>
           </DialogFooter>
         </form>

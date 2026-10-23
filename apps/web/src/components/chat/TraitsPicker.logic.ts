@@ -1,7 +1,4 @@
-import type { TFunction } from "i18next";
 import type {
-  ModelSelection,
-  ProviderInstanceId,
   ProviderDriverKind,
   ProviderOptionDescriptor,
   ProviderOptionSelection,
@@ -10,18 +7,11 @@ import type {
 import {
   isReasoningOption,
   getProviderOptionCurrentLabel,
-  applyClaudePromptEffortPrefix,
-  buildProviderOptionSelectionsFromDescriptors,
-  getProviderOptionCurrentValue,
   getProviderOptionDescriptors,
-  isClaudeUltrathinkPrompt,
   normalizeModelSlug,
 } from "@t3tools/shared/model";
-import {
-  formatProviderOptionName,
-  formatProviderOptionChoiceLabel,
-  getLocalizedProviderOptionCurrentLabel,
-} from "@t3tools/client-runtime/provider-option-labels";
+
+import { getDescriptorStringValue } from "@t3tools/client-runtime/model-traits";
 import { getProviderModelCapabilities } from "../../providerModels";
 type ProviderOptions = ReadonlyArray<ProviderOptionSelection>;
 
@@ -61,43 +51,11 @@ export function buildUnavailableModelOptionDescriptors(
   );
 }
 
-export function replaceDescriptorCurrentValue(
-  descriptors: ReadonlyArray<ProviderOptionDescriptor>,
-  descriptorId: string,
-  currentValue: string | boolean | undefined,
-): ReadonlyArray<ProviderOptionDescriptor> {
-  return descriptors.map((descriptor) =>
-    descriptor.id !== descriptorId
-      ? descriptor
-      : descriptor.type === "boolean"
-        ? {
-            ...descriptor,
-            ...(typeof currentValue === "boolean" ? { currentValue } : {}),
-          }
-        : {
-            ...descriptor,
-            ...(typeof currentValue === "string" ? { currentValue } : {}),
-          },
-  );
-}
-
-export function getDescriptorStringValue(
-  descriptor: Extract<ProviderOptionDescriptor, { type: "select" }> | null,
-  selection?: ModelSelection | null,
-  reportedSelection?: ModelSelection | null,
-): string | null {
-  if (!descriptor) {
-    return null;
-  }
-  const value = getProviderOptionCurrentValue(descriptor, selection, reportedSelection);
-  return typeof value === "string" ? value : null;
-}
-
 export function getSelectedTraits(
   provider: ProviderDriverKind,
   models: ReadonlyArray<ServerProviderModel>,
   model: string | null | undefined,
-  prompt: string,
+  promptUltrathink: "none" | "prefix" | "body",
   modelOptions: ProviderOptions | null | undefined,
   allowPromptInjectedEffort: boolean,
   planModeEnabled: boolean,
@@ -138,11 +96,10 @@ export function getSelectedTraits(
   const ultrathinkPromptControlled =
     allowPromptInjectedEffort &&
     (primarySelectDescriptor?.promptInjectedValues?.length ?? 0) > 0 &&
-    isClaudeUltrathinkPrompt(prompt);
+    promptUltrathink !== "none";
 
   // Check if "ultrathink" appears in the body text (not just our prefix)
-  const ultrathinkInBodyText =
-    ultrathinkPromptControlled && isClaudeUltrathinkPrompt(prompt.replace(/^Ultrathink:\s*/i, ""));
+  const ultrathinkInBodyText = ultrathinkPromptControlled && promptUltrathink === "body";
   const effort =
     (ultrathinkPromptControlled
       ? "ultrathink"
@@ -180,7 +137,7 @@ export function getTraitsSectionVisibility(input: {
   provider: ProviderDriverKind;
   models: ReadonlyArray<ServerProviderModel>;
   model: string | null | undefined;
-  prompt: string;
+  promptUltrathink?: "none" | "prefix" | "body" | undefined;
   modelOptions: ProviderOptions | null | undefined;
   allowPromptInjectedEffort?: boolean;
   planModeEnabled: boolean;
@@ -189,7 +146,7 @@ export function getTraitsSectionVisibility(input: {
     input.provider,
     input.models,
     input.model,
-    input.prompt,
+    input.promptUltrathink ?? "none",
     input.modelOptions,
     input.allowPromptInjectedEffort ?? true,
     input.planModeEnabled,
@@ -222,7 +179,7 @@ export function shouldRenderTraitsControls(input: {
   provider: ProviderDriverKind;
   models: ReadonlyArray<ServerProviderModel>;
   model: string | null | undefined;
-  prompt: string;
+  promptUltrathink?: "none" | "prefix" | "body" | undefined;
   modelOptions: ProviderOptions | null | undefined;
   allowPromptInjectedEffort?: boolean;
   planModeEnabled: boolean;
@@ -230,187 +187,9 @@ export function shouldRenderTraitsControls(input: {
   return getTraitsSectionVisibility(input).hasAnyControls;
 }
 
-/** Pair speed with reasoning while keeping other traits separated. */
-export function buildTraitsTriggerDisplay(
-  input: {
-    provider: ProviderDriverKind;
-    descriptors: ReadonlyArray<ProviderOptionDescriptor>;
-    primarySelectDescriptorId: string | null;
-    ultrathinkPromptControlled: boolean;
-    modelSelection?: ModelSelection | null;
-    reportedModelSelection?: ModelSelection | null | undefined;
-  },
-  t: TFunction,
-): { label: string } {
-  let fastModeFallbackLabel: string | null = null;
-  let speedLabel: string | null = null;
-  let reasoningLabelIndex = -1;
-  const labels: Array<string> = [];
-  for (const descriptor of input.descriptors) {
-    if (descriptor.id === "fastMode" && descriptor.type === "boolean") {
-      speedLabel = descriptor.currentValue === true ? t("chat.traits.choice.fast") : null;
-      fastModeFallbackLabel = speedLabel ?? t("chat.traits.choice.normal");
-      continue;
-    }
-    if (
-      input.provider === "codex" &&
-      descriptor.id === "serviceTier" &&
-      descriptor.type === "select"
-    ) {
-      const currentValue = getProviderOptionCurrentValue(descriptor);
-      const fastTier = descriptor.options.find(({ label }) => label === "Fast");
-      const ultrafastTier = descriptor.options.find(({ label }) => label === "Ultrafast");
-      if (
-        ((fastTier || ultrafastTier) && currentValue === "default") ||
-        (fastTier && currentValue === fastTier.id) ||
-        (ultrafastTier && currentValue === ultrafastTier.id)
-      ) {
-        speedLabel =
-          ultrafastTier && currentValue === ultrafastTier.id
-            ? t("chat.traits.choice.ultrafast")
-            : fastTier && currentValue === fastTier.id
-              ? t("chat.traits.choice.fast")
-              : null;
-        const option = descriptor.options.find(({ id }) => id === currentValue);
-        fastModeFallbackLabel = option
-          ? formatProviderOptionChoiceLabel(descriptor, option, t)
-          : t("chat.traits.choice.normal");
-        continue;
-      }
-    }
-    const label =
-      input.ultrathinkPromptControlled && descriptor.id === input.primarySelectDescriptorId
-        ? "Ultrathink"
-        : descriptor.type === "boolean"
-          ? `${formatProviderOptionName(descriptor, t)} ${descriptor.currentValue === true ? t("common.on") : t("common.off")}`
-          : getLocalizedProviderOptionCurrentLabel(
-              descriptor,
-              t,
-              input.modelSelection,
-              input.reportedModelSelection,
-            );
-    if (typeof label === "string" && label.length > 0) {
-      // Custom models retain descriptor order, so the primary select can be context.
-      if (
-        reasoningLabelIndex === -1 &&
-        descriptor.type === "select" &&
-        isReasoningOption(descriptor)
-      ) {
-        reasoningLabelIndex = labels.length;
-      }
-      labels.push(label);
-    }
-  }
-
-  // Only fall back to text when fast mode is genuinely the sole trait. Keying
-  // off an empty label list alone would also catch descriptors that resolved to
-  // no label at all, printing a bogus "Normal" for a model without fast mode.
-  if (labels.length === 0 && fastModeFallbackLabel !== null) {
-    return { label: fastModeFallbackLabel };
-  }
-  if (speedLabel) {
-    if (reasoningLabelIndex >= 0) {
-      labels[reasoningLabelIndex] = `${labels[reasoningLabelIndex]} ${speedLabel}`;
-    } else {
-      labels.push(speedLabel);
-    }
-  }
-  return { label: labels.join(" · ") };
-}
-
-const ULTRATHINK_PROMPT_PREFIX = "Ultrathink:\n";
-export function getTraitSelectChange(
-  selected: ReturnType<typeof getSelectedTraits>,
-  descriptor: Extract<ProviderOptionDescriptor, { type: "select" }>,
-  prompt: string,
-  value: string,
-) {
-  if (!value) return null;
-  if (descriptor.promptInjectedValues?.includes(value)) {
-    return {
-      prompt:
-        prompt.trim().length === 0
-          ? ULTRATHINK_PROMPT_PREFIX
-          : applyClaudePromptEffortPrefix(prompt, "ultrathink"),
-    };
-  }
-  const isPrimary = descriptor.id === selected.primarySelectDescriptor?.id;
-  if (isPrimary && selected.ultrathinkInBodyText) return null;
-  return {
-    prompt:
-      isPrimary && selected.ultrathinkPromptControlled
-        ? prompt.replace(/^Ultrathink:\s*/i, "")
-        : prompt,
-    modelOptions: buildProviderOptionSelectionsFromDescriptors(
-      replaceDescriptorCurrentValue(selected.descriptors, descriptor.id, value),
-    ),
-  };
-}
-
-/**
- * `modelOptions` must already carry the composer's implicit defaults (see
- * `withImplicitFastModeDefault`) so the persisted selection matches what the
- * picker would write.
- */
-export function getReasoningTraitStep(input: {
-  provider: ProviderDriverKind;
-  instanceId: ProviderInstanceId;
-  model: string;
-  models: ReadonlyArray<ServerProviderModel>;
-  modelOptions: ProviderOptions | undefined;
-  reportedModelSelection: ModelSelection | null | undefined;
-  prompt: string;
-  planModeEnabled: boolean;
-  direction: 1 | -1;
-}) {
-  const selected = getSelectedTraits(
-    input.provider,
-    input.models,
-    input.model,
-    input.prompt,
-    input.modelOptions,
-    true,
-    input.planModeEnabled,
-  );
-  if (selected.modelIsUnavailable || selected.ultrathinkInBodyText) return null;
-  const descriptor = selected.descriptors.find(isReasoningOption);
-  if (!descriptor) return null;
-  if (descriptor.type === "boolean") {
-    const modelOptions = buildProviderOptionSelectionsFromDescriptors(
-      replaceDescriptorCurrentValue(selected.descriptors, descriptor.id, !descriptor.currentValue),
-    );
-    return modelOptions ? { prompt: input.prompt, modelOptions } : null;
-  }
-  if (descriptor.options.length < 2) return null;
-  const isPrimary = descriptor.id === selected.primarySelectDescriptor?.id;
-  const current =
-    isPrimary && selected.ultrathinkPromptControlled
-      ? "ultrathink"
-      : getDescriptorStringValue(
-          descriptor,
-          { instanceId: input.instanceId, model: input.model, options: input.modelOptions ?? [] },
-          input.reportedModelSelection,
-        );
-  const ordered = input.direction > 0 ? descriptor.options : descriptor.options.toReversed();
-  // A reported value outside the catalog, such as OpenCode's "default", steps
-  // from the catalog default, or from the end when there is none.
-  const position =
-    [current, getDescriptorStringValue(descriptor)]
-      .map((value) => ordered.findIndex((option) => option.id === value))
-      .find((index) => index >= 0) ?? -1;
-  for (const option of [
-    ...ordered.slice(position + 1),
-    ...ordered.slice(0, Math.max(position, 0)),
-  ]) {
-    const change = getTraitSelectChange(selected, descriptor, input.prompt, option.id);
-    if (!change) return null;
-    if ("modelOptions" in change) {
-      return change.modelOptions
-        ? { prompt: change.prompt, modelOptions: change.modelOptions }
-        : null;
-    }
-    // A slash command refuses the Ultrathink prefix, so skip that level.
-    if (change.prompt.startsWith(ULTRATHINK_PROMPT_PREFIX)) return change;
-  }
-  return null;
-}
+export {
+  buildTraitsTriggerDisplay,
+  getDescriptorStringValue,
+  getTraitSelectChange,
+  replaceDescriptorCurrentValue,
+} from "@t3tools/client-runtime/model-traits";

@@ -147,15 +147,9 @@ function press(target: Element = document.body) {
   return event;
 }
 
-function commandPalette() {
-  const palette = document.createElement("div");
-  palette.dataset.commandPalette = "";
-  return palette;
-}
-
 describe("root reopen shortcut", () => {
   it("restores a tab from settings to its owning remote thread", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     setup();
     useClosedViewStore
@@ -173,7 +167,7 @@ describe("root reopen shortcut", () => {
   });
 
   it("leaves native shortcuts alone without history or while the palette is open", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     setup();
     await using view = await renderShortcut();
@@ -190,7 +184,7 @@ describe("root reopen shortcut", () => {
   });
 
   it("lets the keybinding recorder capture the chord", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     setup();
     useClosedViewStore
@@ -205,7 +199,7 @@ describe("root reopen shortcut", () => {
   });
 
   it("serializes deliberate presses while a browser restore waits for RPC", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     setup();
     useClosedViewStore
@@ -233,7 +227,7 @@ describe("root reopen shortcut", () => {
   });
 
   it("does not create a second browser when navigation fails after restoring it", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     setup();
     const store = useClosedViewStore.getState();
@@ -269,7 +263,7 @@ describe("root reopen shortcut", () => {
   it.each(["files", "file", "browser"] as const)(
     "keeps a failed %s restore retryable without blocking older history",
     async (kind) => {
-      await using lifecycle = await setupLifecycle();
+      await using _lifecycle = await setupLifecycle();
 
       setup();
       const store = useClosedViewStore.getState();
@@ -329,7 +323,7 @@ describe("root reopen shortcut", () => {
   );
 
   it("forwards the chord to a focused desktop browser only while history exists", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     setup();
     const forwardedCommands = () =>
@@ -349,7 +343,7 @@ describe("root reopen shortcut", () => {
   });
 
   it("always forwards the layout toggles out of a focused desktop browser", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     setup();
     await using _view = await renderShortcut();
@@ -360,7 +354,7 @@ describe("root reopen shortcut", () => {
   });
 
   it("uses the completion language when restoring navigation fails and keeps the diagnostic", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     useClosedViewStore.getState().remember({
       kind: "panel-tab",
@@ -401,4 +395,10 @@ async function setupLifecycle() {
   });
 
   return stack.move();
+}
+
+function commandPalette() {
+  const palette = document.createElement("div");
+  palette.dataset.commandPalette = "";
+  return palette;
 }

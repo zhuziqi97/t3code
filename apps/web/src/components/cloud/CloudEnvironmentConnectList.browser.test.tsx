@@ -3,7 +3,7 @@ import { act, render } from "../../../test/render";
 import { changeLanguage } from "../../i18n";
 import { toastManager } from "../ui/toast";
 
-import { RELAY_TUNNEL_RELEASED_MESSAGE, type Discovery } from "@t3tools/client-runtime/relay";
+import { type Discovery } from "@t3tools/client-runtime/relay";
 import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
 import { EnvironmentId, ORCHESTRATION_PROTOCOL_VERSION } from "@t3tools/contracts";
 import * as Option from "effect/Option";
@@ -145,7 +145,7 @@ function setup() {
 
 describe("cloud environment offline reasons", () => {
   it("tells the user to update a computer whose idle tunnel was removed", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     using _environment = setup();
     const base = linkedMachines.get(newMachineId)!;
@@ -174,13 +174,13 @@ describe("cloud environment offline reasons", () => {
         error: Option.none(),
       });
     });
-    expect(text()).toContain(RELAY_TUNNEL_RELEASED_MESSAGE);
+    expect(text()).toContain("T3 Connect tunnel was removed");
   });
 });
 
 describe("cloud onboarding discovery", () => {
   it("signals that the section can expand after initial discovery settles", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     using _environment = setup();
     let finishDiscovery!: (environments: DiscoveredEnvironments) => void;
@@ -206,7 +206,7 @@ describe("cloud onboarding discovery", () => {
   });
 
   it("keeps incompatible discoveries unselected until the user enables a compatible server", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     using _environment = setup();
     const base = linkedMachines.get(newMachineId)!;
@@ -280,7 +280,7 @@ describe("cloud onboarding discovery", () => {
   });
 
   it("connects and selects discovered computers by default without overwriting deselection", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     using _environment = setup();
     discovery.listEnvironments.mockResolvedValue(linkedMachines);
@@ -319,7 +319,7 @@ describe("cloud onboarding discovery", () => {
   });
 
   it("shows a newly linked computer without remounting and stops polling once found", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     using _environment = setup();
     discovery.listEnvironments
@@ -337,7 +337,7 @@ describe("cloud onboarding discovery", () => {
   });
 
   it("keeps a discovered computer visible when it is added to the browser", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     using _environment = setup();
     discovery.listEnvironments.mockResolvedValue(linkedMachines);
@@ -362,7 +362,7 @@ describe("cloud onboarding discovery", () => {
   });
 
   it("waits while hidden and refreshes immediately when visible again", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     using _environment = setup();
     visibility = "hidden";
@@ -380,7 +380,7 @@ describe("cloud onboarding discovery", () => {
   });
 
   it("does not overlap a slow refresh or restart polling after unmount", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     using _environment = setup();
     let resolveRefresh!: (environments: DiscoveredEnvironments) => void;
@@ -404,7 +404,7 @@ describe("cloud onboarding discovery", () => {
   });
 
   it("pauses while offline and resumes when discovery is online", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     using _environment = setup();
     await using _screen = await mount();
@@ -418,7 +418,7 @@ describe("cloud onboarding discovery", () => {
   });
 
   it("does not add polling to other cloud lists", async () => {
-    await using lifecycle = await setupLifecycle();
+    await using _lifecycle = await setupLifecycle();
 
     using _environment = setup();
     await using _screen = await mount(false);
@@ -428,7 +428,7 @@ describe("cloud onboarding discovery", () => {
 });
 
 it("updates discovery and offline guidance when language changes without adding a computer", async () => {
-  await using lifecycle = await setupLifecycle();
+  await using _lifecycle = await setupLifecycle();
 
   using _environment = setup();
   discovery.listEnvironments.mockResolvedValue(linkedMachines);
@@ -446,7 +446,7 @@ it("updates discovery and offline guidance when language changes without adding 
 });
 
 it("uses the completion language for an add started before switching languages", async () => {
-  await using lifecycle = await setupLifecycle();
+  await using _lifecycle = await setupLifecycle();
 
   using _environment = setup();
   discovery.listEnvironments.mockResolvedValue(linkedMachines);

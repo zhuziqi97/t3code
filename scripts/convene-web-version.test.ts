@@ -8,7 +8,6 @@ const fixture = vi.hoisted(() => ({
   metadata: undefined as { build_id: string; source_commit: string } | undefined,
 }));
 
-vi.mock("../apps/web/package.json", () => ({ default: { version: "0.2.3-convene.99" } }));
 vi.mock("./lib/public-config", () => ({ loadRepoEnv: () => ({}) }));
 vi.mock("node:fs", async (importOriginal) => {
   const fs = await importOriginal<typeof import("node:fs")>();
@@ -26,6 +25,14 @@ vi.mock("node:fs", async (importOriginal) => {
 it.each([true, false])(
   "injects distinct upstream, product and existing build identities (metadata=%s)",
   async (packaged) => {
+    const previousAppVersion = process.env.APP_VERSION;
+    process.env.APP_VERSION = "0.2.3-convene.99";
+    using _releaseVersion = {
+      [Symbol.dispose]() {
+        if (previousAppVersion === undefined) delete process.env.APP_VERSION;
+        else process.env.APP_VERSION = previousAppVersion;
+      },
+    };
     fixture.metadata = packaged
       ? {
           build_id: "convene-fixture-42-2",
@@ -54,7 +61,7 @@ it.each([true, false])(
     const module = { exports: {} as Record<string, string> };
     new Function("module", result.outputFiles[0]!.text)(module);
     expect(module.exports.APP_VERSION).toBe("0.2.3-convene.99");
-    expect(module.exports.UPSTREAM_VERSION).toBe("0.1.1");
+    expect(module.exports.UPSTREAM_VERSION).toBe("0.1.2");
     expect(module.exports.CONVENE_BUILD_ID).toBe(fixture.metadata?.build_id ?? "");
     expect(module.exports.CONVENE_SOURCE_COMMIT).toBe(fixture.metadata?.source_commit ?? "");
     expect(module.exports.APP_DISPLAY_NAME).toBe("T3 Code for Convene (Beta)");

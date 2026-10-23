@@ -45,7 +45,7 @@ export function deviceHubReadiness(state: DeviceServiceState) {
 }
 
 /** A ready host keeps its devices usable but may still carry a discovery warning. */
-export function deviceHostDiagnostics(
+function deviceHostDiagnostics(
   hosts: ReadonlyArray<Pick<DeviceServiceState["hosts"][number], "id" | "label">>,
   hostStatuses: DeviceServiceState["hostStatuses"],
 ) {
@@ -256,7 +256,7 @@ export function DeviceSetup(props: {
         )}
         {step < 2 ? (
           <Button disabled={!ready || pending !== null} onClick={() => setStep(step + 1)}>
-            Continue
+            {t("wizard.continue")}
           </Button>
         ) : (
           <Button

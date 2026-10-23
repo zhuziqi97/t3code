@@ -1,3 +1,4 @@
+import { fakeTimers } from "../../test/render";
 import "~/index.css";
 import { act, render as renderTestUi, type Screen } from "../../test/render";
 import { createElement, useLayoutEffect } from "react";
@@ -136,6 +137,29 @@ async function renderActions() {
   return result;
 }
 
+describe("concurrent thread action Undo", () => {
+  it.each([
+    ["settleThread", "settle", "unsettle", "Settled"],
+    ["snoozeThread", "snooze", "unsnooze", "Snoozed"],
+    ["unpinThread", "unpin", "pin", "Unpinned"],
+    ["archiveThread", "archive", "unarchive", "Archived"],
+  ] as const)(
+    "%s retains one undo for concurrent successful requests",
+    async (handler, action, inverse, notice) => {
+      const actions = useThreadActions();
+      const run = () =>
+        handler === "snoozeThread"
+          ? actions.snoozeThread(target, "2099-01-01T09:00:00.000Z")
+          : actions[handler](target);
+      await Promise.all([run(), run()]);
+      expect(commands[action]).toHaveBeenCalledTimes(2);
+      expect(useThreadUndoNotice.getState().notice).toMatchObject({ action: notice, count: 1 });
+      await currentUndo()();
+      expect(commands[inverse]).toHaveBeenCalledOnce();
+    },
+  );
+});
+
 describe("unpin Undo", () => {
   it("keeps an existing hook action and reports a pending restore in the new language", async () => {
     await using _lifecycle = await setupLifecycle();
@@ -266,6 +290,18 @@ describe("settle and snooze Undo", () => {
     });
   });
 
+  it("stops settle restoration if restoring the pin fails", async () => {
+    threadShell.pinnedAt = "2026-01-01T00:00:00.000Z";
+    threadShell.snoozedUntil = "2030-01-01T09:00:00.000Z";
+    commands.pin.mockResolvedValue({ _tag: "Failure", cause: Cause.fail(new Error("Pin failed")) });
+    vi.spyOn(toastManager, "add").mockReturnValue("toast");
+    await useThreadActions().settleThread(target);
+    await currentUndo()();
+    expect(commands.unsettle).toHaveBeenCalledOnce();
+    expect(commands.pin).toHaveBeenCalledOnce();
+    expect(commands.snooze).not.toHaveBeenCalled();
+  });
+
   it("expires an older unpin Undo when the thread is settled", async () => {
     await using _lifecycle = await setupLifecycle();
 
@@ -277,12 +313,13 @@ describe("settle and snooze Undo", () => {
     expect(commands.pin).not.toHaveBeenCalled();
   });
 
+  // regression: #12972 the sidebar undo notice must reverse a snooze
   it("wakes the thread from the snooze notice", async () => {
     await using _lifecycle = await setupLifecycle();
 
     const add = vi.spyOn(toastManager, "add").mockReturnValue("toast");
     const actions = await renderActions();
-    await actions.snoozeThread(target, new Date(Date.now() + 60_000).toISOString());
+    await actions.snoozeThread(target, "2026-10-23T00:01:00.000Z");
     expect(useThreadUndoNotice.getState().notice).toMatchObject({ action: "Snoozed", count: 1 });
     expect(add).not.toHaveBeenCalled();
     await currentUndo()();
@@ -309,7 +346,8 @@ async function setupLifecycle() {
 
   await changeLanguage("en");
 
-  vi.useFakeTimers();
+  stack.use(fakeTimers());
+  vi.setSystemTime(new Date("2026-10-23T00:00:00.000Z"));
   for (const command of Object.values(commands)) {
     command.mockReset().mockResolvedValue({ _tag: "Success", value: undefined });
   }

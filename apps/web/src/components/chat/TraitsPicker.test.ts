@@ -1,3 +1,4 @@
+import { getReasoningTraitStep } from "./TraitsPicker";
 import { i18n } from "../../i18n";
 import { describe, expect, it } from "vite-plus/test";
 import {
@@ -7,7 +8,6 @@ import {
 } from "@t3tools/contracts";
 import {
   buildTraitsTriggerDisplay,
-  getReasoningTraitStep,
   buildUnavailableModelOptionDescriptors,
 } from "./TraitsPicker.logic";
 

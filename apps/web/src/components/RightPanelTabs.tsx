@@ -95,7 +95,7 @@ import { resolvePullRequestState } from "./pullRequest/pullRequestPresentation";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 import { observeResize } from "~/lib/observeResize";
 
-interface RightPanelTabsProps {
+export interface RightPanelTabsProps {
   mode: PreviewPanelMode;
   maximized?: boolean;
   open?: boolean;
@@ -160,9 +160,7 @@ export interface PullRequestTabStatus {
 
 export type PullRequestTabStatusSeed = Pick<PullRequestTabStatus, "state" | "isDraft">;
 
-export function shouldOpenDefaultBrowserProfileFromMenuClick(
-  pointerType: string | undefined,
-): boolean {
+function shouldOpenDefaultBrowserProfileFromMenuClick(pointerType: string | undefined): boolean {
   return pointerType !== "touch";
 }
 
@@ -843,6 +841,7 @@ function RightPanelTab(
     ownsDesktopTitleBar: boolean;
   },
 ) {
+  const t = useTranslate();
   const {
     surface,
     title,
@@ -896,12 +895,12 @@ function RightPanelTab(
               </button>
             }
           />
-          <TooltipPopup>{audio === "muted" ? "Unmute tab" : "Mute tab"}</TooltipPopup>
+          <TooltipPopup>{audio === "muted" ? t("panels.unmute") : t("panels.mute")}</TooltipPopup>
         </Tooltip>
       )}
       {props.renaming ? (
         <input
-          aria-label="Device tab name"
+          aria-label={t("panels.deviceTabName")}
           className="w-24 min-w-0 rounded-sm bg-background px-1 outline-none ring-1 ring-inset ring-ring"
           defaultValue={title}
           ref={(element) => {

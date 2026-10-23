@@ -1,3 +1,4 @@
+import { useTranslate } from "../i18n";
 import { useAuth } from "@clerk/react";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { Link } from "@tanstack/react-router";
@@ -63,7 +64,8 @@ export function HostedEmptyState() {
   );
 }
 
-export function T3ConnectSteps() {
+function T3ConnectSteps() {
+  const t = useTranslate();
   const { isLoaded, isSignedIn } = useAuth({ treatPendingAsSignedOut: false });
   const { openAuthPrompt } = useT3ConnectAuthPrompt();
   // Adding the first computer unmounts this screen. Wait for all health checks
@@ -79,11 +81,11 @@ export function T3ConnectSteps() {
         {isSignedIn ? (
           <p className="flex items-center gap-1.5 text-muted-foreground">
             <CheckIcon className="size-4" />
-            Signed in
+            {t("usage.limits.signedIn")}
           </p>
         ) : (
           <Button size="sm" disabled={!isLoaded} onClick={openAuthPrompt}>
-            Sign in
+            {t("wizard.signIn")}
           </Button>
         )}
       </SetupStep>

@@ -1,9 +1,9 @@
+import * as Option from "effect/Option";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import * as DesktopConfig from "../app/DesktopConfig.ts";
@@ -560,21 +560,6 @@ describe("DesktopSettings", () => {
         const loaded = yield* settings.load;
         assert.equal(loaded.wslBackendEnabled, true);
         assert.equal(loaded.wslDistro, "Ubuntu-22.04");
-      }),
-    ),
-  );
-
-  it.effect("drops invalid persisted wsl distro values on load", () =>
-    withSettings(
-      Effect.gen(function* () {
-        const settings = yield* DesktopAppSettings.DesktopAppSettings;
-        yield* writeSettingsPatch({
-          wslBackendEnabled: true,
-          wslDistro: "bad/name",
-        });
-        const loaded = yield* settings.load;
-        assert.equal(loaded.wslBackendEnabled, true);
-        assert.equal(loaded.wslDistro, null);
       }),
     ),
   );

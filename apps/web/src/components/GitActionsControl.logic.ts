@@ -122,54 +122,6 @@ export function formatGitActionElapsed(startedAtMs: number | null, nowMs: number
   return `${minutes}m ${seconds}s`;
 }
 
-export function buildGitActionProgressStages(
-  input: {
-    action: GitStackedAction;
-    hasCustomCommitMessage: boolean;
-    hasWorkingTreeChanges: boolean;
-    pushTarget?: string;
-    featureBranch?: boolean;
-    shouldPushBeforePr?: boolean;
-    terminology?: ChangeRequestTerminology;
-  },
-  t: TFunction = i18n.t,
-): string[] {
-  const terminology = input.terminology ?? {
-    ...sourceControlClients.get(undefined).changeRequest,
-    singular: t("git.pullRequest"),
-  };
-  const branchStages = input.featureBranch ? [t("git.progress.preparingRef")] : [];
-  const pushStage = input.pushTarget
-    ? t("git.progress.pushTarget", { target: input.pushTarget })
-    : t("git.progress.pushing");
-  const prStages = [
-    t("git.progress.prepareRequest", { request: terminology.shortLabel }),
-    t("git.progress.requestContent", { request: terminology.shortLabel }),
-    t("git.progress.createRequest", { request: terminology.singular }),
-  ];
-
-  if (input.action === "push") {
-    return [pushStage];
-  }
-  if (input.action === "create_pr") {
-    return input.shouldPushBeforePr ? [pushStage, ...prStages] : prStages;
-  }
-
-  const shouldIncludeCommitStages = input.action === "commit" || input.hasWorkingTreeChanges;
-  const commitStages = !shouldIncludeCommitStages
-    ? []
-    : input.hasCustomCommitMessage
-      ? [t("git.progress.committing")]
-      : [t("git.progress.commitMessage"), t("git.progress.committing")];
-  if (input.action === "commit") {
-    return [...branchStages, ...commitStages];
-  }
-  if (input.action === "commit_push") {
-    return [...branchStages, ...commitStages, pushStage];
-  }
-  return [...branchStages, ...commitStages, pushStage, ...prStages];
-}
-
 export function buildMenuItems(
   gitStatus: VcsStatusResult | null,
   isBusy: boolean,

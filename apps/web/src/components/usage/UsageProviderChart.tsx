@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import type { UsageProviderKind } from "@t3tools/contracts";
 import { useLayoutEffect, useRef, useState } from "react";
@@ -155,7 +156,7 @@ function areaPath(line: string) {
   return line === "" ? "" : `${line} L${VIEW_WIDTH},${VIEW_HEIGHT} L0,${VIEW_HEIGHT} Z`;
 }
 
-export function niceScale(peak: number, count: number): { max: number; ticks: readonly number[] } {
+function niceScale(peak: number, count: number): { max: number; ticks: readonly number[] } {
   if (peak <= 0) return { max: 0, ticks: [0] };
 
   const rawStep = peak / count;
@@ -171,7 +172,7 @@ export function niceScale(peak: number, count: number): { max: number; ticks: re
 
 const PLACEHOLDER_TICKS = Array.from({ length: TICK_COUNT + 1 }, (_, index) => index);
 
-export function chartScale(
+function chartScale(
   columns: readonly DayColumn[],
   loadingProviders: ReadonlySet<UsageProviderKind>,
 ) {
@@ -239,6 +240,7 @@ function UsageChartTooltip({
   readonly loadingProviders: ReadonlySet<UsageProviderKind>;
   readonly format: (value: number) => string;
 }) {
+  const t = useTranslate();
   const partial = providers.some((provider) => loadingProviders.has(provider));
   return (
     <div
@@ -274,7 +276,7 @@ function UsageChartTooltip({
         );
       })}
       <div className="mt-1 flex items-center justify-between gap-3 border-t border-border pt-1">
-        <span className="text-muted-foreground">Total</span>
+        <span className="text-muted-foreground">{t("pullRequest.breakdown.total")}</span>
         <span className={cn("tabular-nums", partial ? "text-muted-foreground" : "text-foreground")}>
           {format(column?.total ?? 0)}
         </span>

@@ -1,5 +1,3 @@
-"use client";
-
 import { useTranslate } from "~/i18n";
 import type { DesktopPreviewColorScheme } from "@t3tools/contracts";
 import { Minus, MoreVertical, Plus as PlusIcon, RotateCcw } from "lucide-react";

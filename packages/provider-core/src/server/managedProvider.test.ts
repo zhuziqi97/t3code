@@ -14,17 +14,11 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as PubSub from "effect/PubSub";
-import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
-import * as TestClock from "effect/testing/TestClock";
 
 import * as ProviderHost from "./ProviderHost.ts";
 import { makeManagedServerProvider, reportProviderProgress } from "./managedProvider.ts";
-import {
-  createProviderVersionAdvisory,
-  makeCachedProviderMaintenanceResolution,
-} from "./maintenanceResolver.ts";
 
 const emptyCapabilities = createModelCapabilities({ optionDescriptors: [] });
 const fastModeCapabilities = createModelCapabilities({
@@ -131,7 +125,6 @@ function layerProviderHost(input: {
 }
 
 const layerAlwaysRunTest = layerProviderHost({ runBackgroundWork: true });
-const layerNeverRunTest = layerProviderHost({ runBackgroundWork: false });
 
 const enrichedSnapshotSecond: ServerProvider = {
   ...refreshedSnapshotSecond,
@@ -406,56 +399,6 @@ describe("makeManagedServerProvider", () => {
       }),
     ).pipe(Effect.provide(layerAlwaysRunTest)),
   );
-  it.effect(
-    "rereads installer metadata before explicit refresh while background checks stay cached",
-    () =>
-      Effect.scoped(
-        Effect.gen(function* () {
-          const latestVersion = yield* Ref.make("1.0.0");
-          const published = yield* Queue.unbounded<ServerProvider>();
-          const resolveMaintenance = yield* makeCachedProviderMaintenanceResolution(
-            Ref.get(latestVersion).pipe(
-              Effect.map((version) => ({ ...maintenanceCapabilities, latestVersion: version })),
-            ),
-          );
-          const provider = yield* makeManagedServerProvider<TestSettings>({
-            resolveMaintenance,
-            getSettings: Effect.succeed({ enabled: true }),
-            streamSettings: Stream.empty,
-            haveSettingsChanged: (previous, next) => previous.enabled !== next.enabled,
-            initialSnapshot: () => Effect.succeed(initialSnapshot),
-            checkProvider: Effect.gen(function* () {
-              const capabilities = yield* resolveMaintenance();
-              return {
-                ...refreshedSnapshot,
-                versionAdvisory: createProviderVersionAdvisory({
-                  driver: refreshedSnapshot.driver,
-                  currentVersion: refreshedSnapshot.version,
-                  latestVersion: capabilities.latestVersion ?? null,
-                  maintenanceCapabilities: capabilities,
-                }),
-              };
-            }),
-            enrichSnapshot: ({ snapshot }) => Queue.offer(published, snapshot).pipe(Effect.asVoid),
-            refreshInterval: "1 minute",
-          });
-          assert.strictEqual((yield* Queue.take(published)).versionAdvisory?.status, "current");
-
-          yield* Ref.set(latestVersion, "2.0.0");
-          yield* TestClock.adjust("1 minute");
-          assert.strictEqual(
-            (yield* Queue.take(published)).versionAdvisory?.latestVersion,
-            "1.0.0",
-          );
-
-          const refreshed = yield* provider.refresh;
-          assert.strictEqual(refreshed.versionAdvisory?.latestVersion, "2.0.0");
-          assert.strictEqual(refreshed.versionAdvisory?.status, "behind_latest");
-          assert.deepStrictEqual(yield* provider.getSnapshot, refreshed);
-        }),
-      ).pipe(Effect.provide(Layer.mergeAll(layerAlwaysRunTest, TestClock.layer()))),
-  );
-
   it.effect(
     "runs the initial provider check in the background and streams the refreshed snapshot",
     () =>

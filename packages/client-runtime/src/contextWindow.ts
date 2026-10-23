@@ -1,9 +1,8 @@
+import type { ThreadStructure, ThreadStructureTurnItem } from "./state/shell.ts";
 import type {
   OrchestrationV2ProviderTurn,
   OrchestrationV2ProviderTurnTokenUsage,
   OrchestrationV2ProviderThread,
-  OrchestrationV2ThreadProjection,
-  OrchestrationV2TurnItem,
   ThreadTokenUsageSnapshot,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
@@ -26,7 +25,7 @@ export type ContextWindowSnapshot = NullableContextWindowUsage & {
 };
 
 export function deriveThreadContextWindowSnapshot(
-  projection: OrchestrationV2ThreadProjection | null | undefined,
+  projection: ThreadStructure | null | undefined,
 ): ContextWindowSnapshot | null {
   if (!projection) return null;
   const providerThread = projection.providerThreads.find(
@@ -51,7 +50,7 @@ export function formatContextWindowPercentage(value: number | null): string | nu
 /** Snapshots retain former provider sessions; only the active session reports current occupancy. */
 export function latestProviderTurnTokenUsage(
   turns: ReadonlyArray<Pick<OrchestrationV2ProviderTurn, "providerThreadId" | "tokenUsage">>,
-  projection?: Pick<OrchestrationV2ThreadProjection, "thread" | "contextTransfers"> | null,
+  projection?: Pick<ThreadStructure, "thread" | "contextTransfers"> | null,
   providerThread?: Pick<OrchestrationV2ProviderThread, "contextUsage"> | null,
 ): OrchestrationV2ProviderTurnTokenUsage | null {
   let latest: OrchestrationV2ProviderTurnTokenUsage | null = null;
@@ -84,7 +83,7 @@ export function latestProviderTurnTokenUsage(
 
 export function deriveLatestContextWindowSnapshot(
   entries: ReadonlyArray<{
-    readonly item: OrchestrationV2TurnItem;
+    readonly item: ThreadStructureTurnItem;
   }>,
   liveUsage?: OrchestrationV2ProviderTurnTokenUsage | null,
   providerThread?: Pick<OrchestrationV2ProviderThread, "contextUsage" | "updatedAt"> | null,
