@@ -63,6 +63,7 @@ import {
   type ThreadListV2Status,
 } from "./threadListV2";
 import { QueuedMessageIcon } from "./queued-message-icon";
+import { useTranslate } from "../../i18n";
 import { shouldRecedeThreadRow } from "./thread-row-emphasis";
 import { ThreadSearchMatchExcerpt } from "./thread-search-match";
 import { PullRequestGlyph } from "../pull-requests/pullRequestGlyphs";
@@ -579,6 +580,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   readonly simultaneousSwipeGesture?: ComponentProps<typeof ThreadSwipeable>["simultaneousWith"];
 }) {
   const { width: windowWidth } = useWindowDimensions();
+  const t = useTranslate();
   const {
     thread,
     variant,
@@ -600,6 +602,8 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   } = props;
   const snoozedRow = props.snoozed === true;
   const pinnedRow = props.pinned === true;
+  const isPinned = thread.pinnedAt != null;
+  const canOperateThread = useEnvironmentScope(thread.environmentId, AuthOrchestrationOperateScope);
   const dormant = useSwipeRowDormant(props.activationKey);
 
   const { providerDrivers, providerIconUrl } = useMemo(() => {
@@ -650,13 +654,15 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     () => [
       ...(prBadgeLabel ? [{ name: "openPullRequests", label: prBadgeLabel }] : []),
       ...(showsWoke ? [{ name: "dismissWoke", label: "Dismiss Woke notification" }] : []),
+      ...(props.pinningSupported && canOperateThread
+        ? [{ name: "togglePin", label: t(isPinned ? "thread.unpin" : "thread.pin") }]
+        : []),
     ],
-    [prBadgeLabel, showsWoke],
+    [prBadgeLabel, showsWoke, props.pinningSupported, canOperateThread, isPinned, t],
   );
 
   const handleDelete = useCallback(() => onDeleteThread(thread), [onDeleteThread, thread]);
   const handleRename = useCallback(() => onRenameThread(thread), [onRenameThread, thread]);
-  const canOperateThread = useEnvironmentScope(thread.environmentId, AuthOrchestrationOperateScope);
   const handleRegenerateTitle = useCallback(
     () => onRegenerateThreadTitle(thread),
     [onRegenerateThreadTitle, thread],
@@ -979,6 +985,39 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       ? `Opens the thread. Swipe left to ${primaryAction.label.toLowerCase()}.`
       : `Opens the thread. Swipe left for ${primaryAction.label.toLowerCase()} and snooze actions.`;
 
+  const pinControl =
+    props.pinningSupported && canOperateThread ? (
+      <Pressable
+        className="-my-2 p-2"
+        accessibilityRole="button"
+        accessibilityLabel={t(isPinned ? "thread.unpin" : "thread.pin")}
+        accessibilityState={{ selected: isPinned }}
+        hitSlop={8}
+        onPress={(event) => {
+          event.stopPropagation();
+          if (isPinned) handleUnpin();
+          else handlePin();
+        }}
+        onLongPress={() => undefined}
+        style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+      >
+        <SymbolView
+          name="pin"
+          size={13}
+          tintColorClassName={rowAppearance.mutedIconTintClassName}
+          type="monochrome"
+          weight={isPinned ? "bold" : "regular"}
+        />
+      </Pressable>
+    ) : pinnedRow ? (
+      <SymbolView
+        name="pin"
+        size={11}
+        tintColorClassName={rowAppearance.mutedIconTintClassName}
+        type="monochrome"
+      />
+    ) : null;
+
   const cardContent = (
     <>
       <View className="flex-row items-center gap-1.5">
@@ -1004,14 +1043,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
           {props.projectTitle ?? props.project?.title ?? ""}
         </Text>
         {props.hasQueuedMessages ? <QueuedMessageIcon selected={selected} /> : null}
-        {pinnedRow ? (
-          <SymbolView
-            name="pin"
-            size={11}
-            tintColorClassName={rowAppearance.mutedIconTintClassName}
-            type="monochrome"
-          />
-        ) : null}
+        {pinControl}
         {showsWoke ? (
           <Pressable
             className="-m-2.5 flex-row items-center gap-1 p-2.5"
@@ -1254,6 +1286,10 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         onAccessibilityAction={(event) => {
           if (event.nativeEvent.actionName === "openPullRequests") handleOpenPullRequests();
           if (event.nativeEvent.actionName === "dismissWoke") handleAcknowledgeWoke();
+          if (event.nativeEvent.actionName === "togglePin") {
+            if (isPinned) handleUnpin();
+            else handlePin();
+          }
         }}
         onPress={() => {
           close();
@@ -1283,6 +1319,15 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         }
         accessibilityRole="button"
         accessibilityState={{ selected }}
+        accessibilityActions={rowAccessibilityActions}
+        onAccessibilityAction={(event) => {
+          if (event.nativeEvent.actionName === "openPullRequests") handleOpenPullRequests();
+          if (event.nativeEvent.actionName === "dismissWoke") handleAcknowledgeWoke();
+          if (event.nativeEvent.actionName === "togglePin") {
+            if (isPinned) handleUnpin();
+            else handlePin();
+          }
+        }}
         className={rowAppearance.className}
         onPress={() => {
           close();
@@ -1330,6 +1375,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
             ) : null}
           </View>
           {props.hasQueuedMessages ? <QueuedMessageIcon selected={selected} /> : null}
+          {pinControl}
           <Text
             className={cn(
               "text-sm tabular-nums",

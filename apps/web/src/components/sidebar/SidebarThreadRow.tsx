@@ -536,6 +536,7 @@ type SidebarThreadRowProps = {
   onUnsettle: (threadRef: ScopedThreadRef) => void;
   onSnooze: (threadRef: ScopedThreadRef, preset: Pick<SnoozePreset, "snoozedUntil">) => void;
   onUnsnooze: (threadRef: ScopedThreadRef) => void;
+  onPin: (threadRef: ScopedThreadRef) => void;
   onUnpin: (threadRef: ScopedThreadRef) => void;
   onAcknowledgeWoke: (threadRef: ScopedThreadRef, visitedAt: string) => void;
   onFileDropThreads?: ((threadRef: ScopedThreadRef, files: File[]) => void) | undefined;
@@ -559,6 +560,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     onThreadClick,
     onUnsettle,
     onUnsnooze,
+    onPin,
     onUnpin,
     openPullRequestsInRightPanel,
     renamingTitle,
@@ -833,10 +835,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     event.stopPropagation();
     onUnsnooze(threadRef);
   };
-  const handleUnpinClick = (event: ReactMouseEvent) => {
+  const handlePinClick = (event: ReactMouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    onUnpin(threadRef);
+    if (props.isPinned) onUnpin(threadRef);
+    else onPin(threadRef);
   };
   const handleSnoozePreset = (preset: Pick<SnoozePreset, "snoozedUntil">) => {
     onSnooze(threadRef, preset);
@@ -1046,38 +1049,48 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   ) : null;
   const showPin =
     props.isPinned && (!sortable?.isDragging || (props.dragOverPinned && props.dropVerb === null));
-  const pinIndicator = showPin ? (
+  const pinIndicator =
     props.pinningSupported && canOperateThread && !sortable?.isDragging ? (
       <Tooltip>
         <TooltipTrigger
           render={
             <button
               type="button"
-              aria-label={t("thread.unpin")}
-              onClick={handleUnpinClick}
-              className="group/unpin inline-flex cursor-pointer items-center rounded-sm text-muted-foreground/65 outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              aria-label={t(props.isPinned ? "thread.unpin" : "thread.pin")}
+              aria-pressed={props.isPinned}
+              onClick={handlePinClick}
+              onPointerDown={(event) => event.stopPropagation()}
+              className={cn(
+                "group/pin inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring pointer-coarse:size-8",
+                props.isPinned ? "text-foreground" : "text-muted-foreground",
+              )}
             />
           }
         >
           <PinIcon
             aria-hidden
-            className="size-3 shrink-0 group-hover/unpin:hidden group-focus-visible/unpin:hidden"
+            className={cn(
+              "size-3 shrink-0",
+              props.isPinned &&
+                "fill-current group-hover/pin:hidden group-focus-visible/pin:hidden",
+            )}
           />
-          <PinOffIcon
-            aria-hidden
-            className="hidden size-3 shrink-0 group-hover/unpin:block group-focus-visible/unpin:block"
-          />
+          {props.isPinned && (
+            <PinOffIcon
+              aria-hidden
+              className="hidden size-3 shrink-0 group-hover/pin:block group-focus-visible/pin:block"
+            />
+          )}
         </TooltipTrigger>
-        <TooltipPopup>{t("thread.unpin")}</TooltipPopup>
+        <TooltipPopup>{t(props.isPinned ? "thread.unpin" : "thread.pin")}</TooltipPopup>
       </Tooltip>
-    ) : (
+    ) : showPin ? (
       <PinIcon
         aria-label={t("thread.pinned")}
         role="img"
         className="size-3 shrink-0 text-muted-foreground/65"
       />
-    )
-  ) : null;
+    ) : null;
 
   if (variant === "project") {
     const actionSupported =
