@@ -3273,6 +3273,8 @@ export const zh: Partial<Messages> = {
   "chat.timeline.workingFor": "已运行",
   "chat.timeline.workedFor": "工作耗时 {{duration}}",
   "chat.timeline.worked": "已完成工作",
+  "chat.timeline.continuedFor": "继续工作耗时 {{duration}}",
+  "chat.timeline.continued": "已继续工作",
   "chat.timeline.stoppedAfter": "你在 {{duration}} 后停止了回复",
   "chat.timeline.stoppedResponse": "你停止了这条回复",
   "chat.timeline.supersededAttempt": "已被替代的尝试",

@@ -3477,6 +3477,8 @@ export const en = {
   "chat.timeline.workingFor": "Working for",
   "chat.timeline.workedFor": "Worked for {{duration}}",
   "chat.timeline.worked": "Worked",
+  "chat.timeline.continuedFor": "Continued for {{duration}}",
+  "chat.timeline.continued": "Continued",
   "chat.timeline.stoppedAfter": "You stopped after {{duration}}",
   "chat.timeline.stoppedResponse": "You stopped this response",
   "chat.timeline.supersededAttempt": "Superseded attempt",

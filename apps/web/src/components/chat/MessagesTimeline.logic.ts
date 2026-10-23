@@ -629,6 +629,7 @@ type MessagesTimelineRowContent =
       kind: "turn-fold";
       duration: string | null;
       interrupted: boolean;
+      continued: boolean;
       id: string;
       createdAt: string;
       runId: RunId;
@@ -801,6 +802,7 @@ interface TurnFold {
   label: string;
   duration: string | null;
   interrupted: boolean;
+  continued: boolean;
 }
 
 interface SupersededAttemptFold {
@@ -1270,6 +1272,7 @@ function deriveTurnFolds(input: {
       label,
       duration,
       interrupted: isLatestInterruptedTurn,
+      continued: false,
     });
     for (const [index, { startIndex, steer }] of group.steerSegments.entries()) {
       const entries = group.entries.slice(startIndex, group.steerSegments[index + 1]?.startIndex);
@@ -1289,6 +1292,7 @@ function deriveTurnFolds(input: {
         label: segmentMs !== null ? `Continued for ${formatDuration(segmentMs)}` : "Continued",
         duration: segmentMs !== null ? formatDuration(segmentMs) : null,
         interrupted: false,
+        continued: true,
       });
     }
   }
@@ -1696,6 +1700,7 @@ export function deriveMessagesTimelineRows(input: {
         label: turnFold.label,
         duration: turnFold.duration,
         interrupted: turnFold.interrupted,
+        continued: turnFold.continued,
         expanded: input.expandedRunIds?.has(turnFold.runId) ?? false,
       });
     }
