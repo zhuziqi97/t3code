@@ -30,9 +30,15 @@ import { Badge } from "../ui/badge";
 import { Command, CommandGroup, CommandItem, CommandList } from "../ui/command";
 import { PierreEntryIcon } from "./PierreEntryIcon";
 import { ComposerBanner } from "./ComposerBanner";
+import type {
+  ConveneComposerCommandItem,
+  ConveneComposerFooter,
+} from "@t3tools/client-runtime/convene-composer";
+import { Button } from "../ui/button";
 import { resolvePullRequestState } from "../pullRequest/pullRequestPresentation";
 
 export type ComposerCommandItem =
+  | ConveneComposerCommandItem
   | {
       id: string;
       type: "path";
@@ -90,6 +96,7 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
   activeItemId: string | null;
   onHighlightedItemChange: (itemId: string | null) => void;
   onSelect: (item: ComposerCommandItem) => void;
+  conveneSearch?: ConveneComposerFooter;
 }) {
   const t = useTranslate();
   const listRef = useRef<HTMLDivElement>(null);
@@ -158,6 +165,36 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
             </p>
           </div>
         )}
+        {props.conveneSearch?.message ? (
+          <div
+            className="flex flex-wrap items-center gap-2 border-t px-4 py-2 text-xs text-secondary-label"
+            onMouseDown={(event) => event.preventDefault()}
+          >
+            <span role="status" className="min-w-0 flex-1">
+              {props.conveneSearch.message}
+            </span>
+            {props.conveneSearch.previousPage ? (
+              <Button size="xs" variant="ghost" onClick={props.conveneSearch.previousPage}>
+                {t("convene.composer.previous")}
+              </Button>
+            ) : null}
+            {props.conveneSearch.nextPage ? (
+              <Button size="xs" variant="ghost" onClick={props.conveneSearch.nextPage}>
+                {t("convene.composer.next")}
+              </Button>
+            ) : null}
+            {props.conveneSearch.refresh ? (
+              <Button
+                size="xs"
+                variant="ghost"
+                disabled={props.conveneSearch.pending}
+                onClick={props.conveneSearch.refresh}
+              >
+                {t("convene.composer.refresh")}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
       </ComposerBanner.Surface>
     </Command>
   );

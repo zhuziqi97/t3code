@@ -479,6 +479,10 @@
     "./operations/threadTitle": {
       "types": "./src/operations/threadTitle.ts",
       "import": "./src/operations/threadTitle.ts"
+    },
+    "./convene-composer": {
+      "types": "./src/conveneComposer.ts",
+      "default": "./src/conveneComposer.ts"
     }
   },
   "scripts": {

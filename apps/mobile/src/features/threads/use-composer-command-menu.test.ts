@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import { ProviderDriverKind } from "@t3tools/contracts";
+import { EnvironmentId, ProjectId, ProviderDriverKind } from "@t3tools/contracts";
+
+vi.mock("./useConveneComposerSearch", () => ({
+  useConveneComposerSearch: () => ({ items: [], message: null, pending: false, target: null }),
+}));
 
 const refreshProviders = vi.hoisted(() => vi.fn());
 vi.mock("react-native", () => ({ Alert: { alert: vi.fn() } }));
@@ -90,4 +94,38 @@ describe("mobile slash commands", () => {
       }),
     ).toEqual({ text: "/plan ", cursor: 6, interactionMode: null });
   });
+});
+
+it("inserts a canonical document reference without replacing the rest of a mobile draft", () => {
+  const resource = {
+    kind: "document" as const,
+    module_id: "module",
+    module_path: "owner/project/module",
+    relative_path: "docs/guide.md",
+    title: "Guide",
+    resource_uri: "convene://docs/owner/project/module/docs/guide.md",
+  };
+  const result = resolveComposerCommandSelection({
+    draftMessage: "Before @guide after",
+    trigger: { rangeStart: 7, rangeEnd: 13 },
+    allowInteractionMode: true,
+    item: {
+      type: "convene-resource",
+      id: "convene:doc",
+      label: "guide.md",
+      description: "Guide",
+      resource,
+      target: {
+        environmentId: EnvironmentId.make("env"),
+        projectId: ProjectId.make("project"),
+        kind: "document",
+        query: "guide",
+      },
+    },
+  });
+  expect(result.text).toBe(
+    "Before [Convene docs/guide.md · Guide](<convene://docs/owner/project/module/docs/guide.md>)  after",
+  );
+  expect(result.interactionMode).toBeNull();
+  expect(result.text).not.toContain("$Convene");
 });

@@ -53,6 +53,11 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { useComposerPathSearch, useComposerPullRequestSearch } from "../../state/queries";
 import type { ComposerCommandItem } from "./ComposerCommandPopover";
 import { matchesSlashSkillQuery } from "./composerSlashSkillSearch";
+import { useConveneComposerSearch } from "./useConveneComposerSearch";
+import {
+  sameConveneComposerTarget,
+  serializeConveneComposerItem,
+} from "@t3tools/client-runtime/convene-composer";
 
 const WORKSPACE_SNAPSHOT_RETRY_COOLDOWN_MS = 10_000;
 
@@ -152,7 +157,9 @@ export function resolveComposerCommandSelection(input: {
   }
 
   let replacement = "";
-  if (item.type === "path") {
+  if (item.type === "convene-resource" || item.type === "convene-guideline") {
+    replacement = serializeConveneComposerItem(item);
+  } else if (item.type === "path") {
     replacement = `${serializeComposerFileLink(item.path)} `;
   } else if (item.type === "skill") {
     replacement = `$${item.skill.name} `;
@@ -174,6 +181,7 @@ export function useComposerCommandMenu({
   threadShells = EMPTY_THREAD_SHELLS,
   currentThreadId = null,
   projectCwd,
+  projectId = null,
   pullRequestProjectId = null,
   pullRequestRepository = null,
   threadPullRequests,
@@ -192,6 +200,7 @@ export function useComposerCommandMenu({
   readonly threadShells?: ReadonlyArray<EnvironmentThreadShell>;
   readonly currentThreadId?: ThreadId | null;
   readonly projectCwd: string | null;
+  readonly projectId?: ProjectId | null;
   readonly pullRequestProjectId?: ProjectId | null;
   readonly pullRequestRepository?: string | null;
   readonly threadPullRequests?: ReadonlyArray<ThreadPullRequestLink>;
@@ -351,7 +360,13 @@ export function useComposerCommandMenu({
     query: trigger?.kind === "pull-request" ? trigger.query : null,
   });
 
-  const items = ((): ComposerCommandItem[] => {
+  const conveneSearch = useConveneComposerSearch({
+    environmentId,
+    projectId,
+    threadId: currentThreadId,
+    trigger,
+  });
+  const baseItems = ((): ComposerCommandItem[] => {
     if (!trigger) return [];
 
     if (trigger.kind === "pull-request") {
@@ -520,9 +535,16 @@ export function useComposerCommandMenu({
 
     return [];
   })();
+  const items: ComposerCommandItem[] = [...conveneSearch.items, ...baseItems];
 
   const onSelect = (item: ComposerCommandItem) => {
     if (!trigger) return;
+    if (
+      (item.type === "convene-resource" || item.type === "convene-guideline") &&
+      (!sameConveneComposerTarget(item.target, conveneSearch.target) ||
+        !items.some((candidate) => candidate.id === item.id))
+    )
+      return;
     if (item.type === "thread") {
       if (!ownerKey || trigger.kind !== "path") return;
       const shell = threadShells.find(
@@ -618,9 +640,11 @@ export function useComposerCommandMenu({
     onSelectionChange,
     trigger,
     items,
+    conveneSearch,
     skills,
     isLoading:
-      trigger?.kind === "pull-request" ? pullRequestSearch.isPending : pathSearch.isPending,
+      conveneSearch.pending ||
+      (trigger?.kind === "pull-request" ? pullRequestSearch.isPending : pathSearch.isPending),
     error:
       trigger?.kind === "pull-request"
         ? pullRequestProjectId === null || pullRequestRepository === null

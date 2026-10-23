@@ -563,6 +563,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     threadShells: useThreadShells(),
     currentThreadId: props.selectedThread.id,
     projectCwd: props.projectCwd,
+    projectId: project?.id ?? null,
     pullRequestProjectId: props.serverConfig?.environment.capabilities.pullRequests
       ? (project?.id ?? null)
       : null,
@@ -897,7 +898,9 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
       >
         {!isSubmissionLocked &&
         composerMenu.trigger &&
-        (composerMenu.items.length > 0 || composerMenu.trigger.kind === "pull-request") ? (
+        (composerMenu.items.length > 0 ||
+          composerMenu.trigger.kind === "pull-request" ||
+          composerMenu.conveneSearch.message) ? (
           <ComposerPopoverAnchor>
             <ComposerCommandPopover
               items={composerMenu.items}
@@ -905,6 +908,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
               isLoading={composerMenu.isLoading}
               error={composerMenu.error}
               onSelect={composerMenu.onSelect}
+              conveneSearch={composerMenu.conveneSearch}
             />
           </ComposerPopoverAnchor>
         ) : null}

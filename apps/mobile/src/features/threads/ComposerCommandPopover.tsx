@@ -17,7 +17,13 @@ import { AppText as Text } from "../../components/ui/AppText";
 import { GlassSurface } from "../../components/ui/GlassSurface";
 import { PierreEntryIcon } from "../../components/PierreEntryIcon";
 import { pullRequestStatus } from "../pull-requests/pullRequestStatus";
+import { useTranslate } from "../../i18n";
+import type {
+  ConveneComposerCommandItem,
+  ConveneComposerFooter,
+} from "@t3tools/client-runtime/convene-composer";
 export type ComposerCommandItem =
+  | ConveneComposerCommandItem
   | {
       readonly id: string;
       readonly type: "pull-request";
@@ -68,6 +74,7 @@ interface ComposerCommandPopoverProps {
   readonly isLoading: boolean;
   readonly error?: string | null;
   readonly onSelect: (item: ComposerCommandItem) => void;
+  readonly conveneSearch?: ConveneComposerFooter;
 }
 
 function PopoverSurface(props: { readonly children: React.ReactNode; readonly style?: ViewStyle }) {
@@ -99,6 +106,10 @@ const SKILL_SOURCE_SYMBOL_BY_KIND: Record<ProviderSkillSourceKind, AppSymbolName
 
 function itemIcon(item: ComposerCommandItem): AppSymbolName | null {
   switch (item.type) {
+    case "convene-resource":
+      return item.resource.kind === "issue" ? "text.bubble" : "doc.text";
+    case "convene-guideline":
+      return "doc.text";
     case "pull-request":
       return pullRequestStatus(item.pullRequest).icon;
     case "slash-command":
@@ -197,6 +208,7 @@ const CommandRow = memo(function CommandRow(props: {
 export const ComposerCommandPopover = memo(function ComposerCommandPopover(
   props: ComposerCommandPopoverProps,
 ) {
+  const t = useTranslate();
   const label = groupLabel(props.triggerKind);
 
   return (
@@ -231,6 +243,32 @@ export const ComposerCommandPopover = memo(function ComposerCommandPopover(
           </Text>
         </View>
       )}
+      {props.conveneSearch?.message ? (
+        <View className="gap-2 border-t border-border px-3.5 py-2.5">
+          <Text className="text-xs text-foreground-muted">{props.conveneSearch.message}</Text>
+          <View className="flex-row flex-wrap gap-3">
+            {props.conveneSearch.previousPage ? (
+              <Pressable accessibilityRole="button" onPress={props.conveneSearch.previousPage}>
+                <Text className="text-xs text-foreground">{t("convene.composer.previous")}</Text>
+              </Pressable>
+            ) : null}
+            {props.conveneSearch.nextPage ? (
+              <Pressable accessibilityRole="button" onPress={props.conveneSearch.nextPage}>
+                <Text className="text-xs text-foreground">{t("convene.composer.next")}</Text>
+              </Pressable>
+            ) : null}
+            {props.conveneSearch.refresh ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={props.conveneSearch.pending}
+                onPress={props.conveneSearch.refresh}
+              >
+                <Text className="text-xs text-foreground">{t("convene.composer.refresh")}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
     </PopoverSurface>
   );
 });

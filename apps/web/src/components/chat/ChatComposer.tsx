@@ -104,6 +104,11 @@ import { ComposerStashBadge } from "./ComposerStashBadge";
 import { ComposerStashMenu } from "./ComposerStashMenu";
 import { useComposerTriggerState } from "./useComposerTriggerState";
 import { useComposerMenuItems } from "./useComposerMenuItems";
+import {
+  conveneComposerTarget,
+  sameConveneComposerTarget,
+  serializeConveneComposerItem,
+} from "@t3tools/client-runtime/convene-composer";
 import { useComposerFocusState } from "./useComposerFocusState";
 import { useComposerMultilinePrompt } from "./useComposerMultilinePrompt";
 import {
@@ -1189,11 +1194,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     items: composerMenuItems,
     isLoading: isComposerMenuLoading,
     emptyState: composerMenuEmptyState,
+    conveneSearch,
   } = useComposerMenuItems({
     composerTrigger,
     environmentId,
     gitCwd,
     activeThreadId,
+    projectId: activeProjectId,
     pullRequestProjectId,
     pullRequestRepository,
     threadPullRequests,
@@ -1920,6 +1927,29 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     });
     const { snapshot, trigger } = resolveActiveComposerTrigger();
     if (!trigger) return;
+    if (item.type === "convene-resource" || item.type === "convene-guideline") {
+      if (
+        !sameConveneComposerTarget(
+          item.target,
+          conveneComposerTarget(environmentId, activeProjectId, trigger),
+        ) ||
+        !composerMenuItemsRef.current.some((candidate) => candidate.id === item.id)
+      )
+        return;
+      const replacement = serializeConveneComposerItem(item);
+      const replacementRangeEnd = extendReplacementRangeForTrailingSpace(
+        snapshot.value,
+        trigger.rangeEnd,
+        replacement,
+      );
+      if (
+        applyPromptReplacement(trigger.rangeStart, replacementRangeEnd, replacement, {
+          expectedText: snapshot.value.slice(trigger.rangeStart, replacementRangeEnd),
+        })
+      )
+        setComposerHighlightedItemId(null);
+      return;
+    }
     if (item.type === "path") {
       if (!isPathSuggestionCurrent(item.searchTarget, trigger, environmentId, gitCwd)) return;
       const replacement = `${serializeComposerFileLink(item.path)} `;
@@ -3718,6 +3748,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     activeItemId={activeComposerMenuItem?.id ?? null}
                     onHighlightedItemChange={onComposerMenuItemHighlightedStable}
                     onSelect={onSelectComposerItemStable}
+                    conveneSearch={conveneSearch}
                   />
                 </ComposerCommandMenuLayer>
               )}

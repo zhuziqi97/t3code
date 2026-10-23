@@ -34,6 +34,7 @@ import {
   rankPullRequestMatches,
 } from "../pullRequest/pullRequestList.logic";
 import type { ComposerCommandItem } from "./ComposerCommandMenu";
+import { useConveneComposerSearch } from "../convene/useConveneComposerSearch";
 import {
   searchSlashCommandItems,
   slashCommandItemsForPromptPosition,
@@ -50,6 +51,7 @@ export function useComposerMenuItems({
   environmentId,
   gitCwd,
   activeThreadId,
+  projectId,
   pullRequestProjectId,
   pullRequestRepository,
   threadPullRequests,
@@ -64,6 +66,7 @@ export function useComposerMenuItems({
   readonly environmentId: EnvironmentId;
   readonly gitCwd: string | null;
   readonly activeThreadId: ThreadId | null;
+  readonly projectId: ProjectId | null;
   readonly pullRequestProjectId: ProjectId | null;
   readonly pullRequestRepository: string | null;
   readonly threadPullRequests: ReadonlyArray<ThreadPullRequestLink> | undefined;
@@ -74,6 +77,12 @@ export function useComposerMenuItems({
   readonly selectedProviderSlashCommands: ServerProvider["slashCommands"];
   readonly showSkillsInSlashMenu: boolean;
 }) {
+  const conveneSearch = useConveneComposerSearch({
+    environmentId,
+    projectId,
+    threadId: activeThreadId,
+    trigger: composerTrigger,
+  });
   const composerTriggerKind = composerTrigger?.kind ?? null;
   const pathTriggerQuery = composerTrigger?.kind === "path" ? composerTrigger.query : "";
   const pullRequestTriggerQuery =
@@ -340,5 +349,10 @@ export function useComposerMenuItems({
       : "No matching command.";
   })();
 
-  return { items, isLoading, emptyState };
+  return {
+    items: [...conveneSearch.items, ...items],
+    isLoading: isLoading || conveneSearch.pending,
+    emptyState,
+    conveneSearch,
+  };
 }
