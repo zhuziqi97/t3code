@@ -1206,6 +1206,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     threadPullRequests,
     planModeUiEnabled,
     compactSlashCommandAvailable,
+    selectedProviderStatus,
     selectedProvider,
     selectedProviderSkills,
     selectedProviderSlashCommands,

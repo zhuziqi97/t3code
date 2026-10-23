@@ -70,8 +70,19 @@ import type {
 } from "@t3tools/provider-core/server/driver";
 import * as ProviderInstanceRegistry from "./ProviderInstanceRegistry.ts";
 import * as ProviderRegistry from "./ProviderRegistry.ts";
+import { CodexProviderCapabilitiesV2 } from "../orchestration-v2/Adapters/CodexAdapterV2.ts";
+
 import { mergeProviderInstanceEnvironment } from "@t3tools/provider-core/server/instanceEnvironment";
 import { makeManualOnlyProviderMaintenanceCapabilities } from "@t3tools/provider-core/server/maintenanceResolver";
+const capabilitiesAdapter = (supportsMcpTools = true) =>
+  ({
+    getCapabilities: () =>
+      Effect.succeed({
+        ...CodexProviderCapabilitiesV2,
+        tools: { ...CodexProviderCapabilitiesV2.tools, supportsMcpTools },
+      }),
+  }) as unknown as ProviderInstance["orchestrationAdapter"];
+
 const disabledCodexSettings: CodexSettings = Schema.decodeSync(CodexSettings)({
   enabled: false,
 });
@@ -103,7 +114,7 @@ const encoder = new TextEncoder();
 const TEST_EPOCH = DateTime.makeUnsafe("1970-01-01T00:00:00.000Z");
 const withBundledCompatibility = (snapshot: ServerProvider) =>
   applyProviderCompatibility(
-    snapshot,
+    { ...snapshot, supportsMcpTools: true },
     undefined,
     ModelManifest.BUNDLED_MODEL_MANIFEST.compatibility,
   );
@@ -1103,7 +1114,7 @@ it.layer(
                 streamChanges: Stream.empty,
                 applyUsageLimits: () => Effect.void,
               },
-              orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
+              orchestrationAdapter: capabilitiesAdapter(),
               textGeneration: {} as ProviderInstance["textGeneration"],
             } satisfies ProviderInstance;
             const layerInstanceRegistry = Layer.succeed(
@@ -1238,7 +1249,7 @@ it.layer(
               streamChanges: Stream.empty,
               applyUsageLimits: () => Effect.void,
             },
-            orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
+            orchestrationAdapter: capabilitiesAdapter(),
             textGeneration: {} as ProviderInstance["textGeneration"],
           } satisfies ProviderInstance;
           const layerInstanceRegistry = Layer.succeed(
@@ -1538,7 +1549,7 @@ it.layer(
             streamChanges: Stream.empty,
             applyUsageLimits: () => Effect.void,
           },
-          orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
+          orchestrationAdapter: capabilitiesAdapter(),
           textGeneration: {} as ProviderInstance["textGeneration"],
         } satisfies ProviderInstance;
         const layerInstanceRegistry = Layer.succeed(
@@ -1570,7 +1581,9 @@ it.layer(
         ).pipe(Scope.provide(scope));
         yield* Effect.gen(function* () {
           const registry = yield* ProviderRegistry.ProviderRegistry;
-          assert.deepStrictEqual(yield* registry.getProviders, [initialProvider]);
+          assert.deepStrictEqual(yield* registry.getProviders, [
+            { ...initialProvider, supportsMcpTools: true },
+          ]);
           assert.strictEqual(yield* Ref.get(refreshCalls), 0);
         }).pipe(Effect.provide(runtimeServices));
       }),
@@ -1699,7 +1712,7 @@ it.layer(
               cached = false;
               events.push(`invalidate:${id}`);
             }),
-            orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
+            orchestrationAdapter: capabilitiesAdapter(),
             textGeneration: {} as ProviderInstance["textGeneration"],
           };
         };
@@ -1936,7 +1949,7 @@ it.layer(
           },
           snapshotForCwd,
           invalidateCaches: Ref.update(cacheInvalidations, (count) => count + 1),
-          orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
+          orchestrationAdapter: capabilitiesAdapter(),
           textGeneration: {} as ProviderInstance["textGeneration"],
         });
         const firstInstance = makeInstance(machineProvider, () =>
@@ -1967,9 +1980,12 @@ it.layer(
           installed: false,
           auth: { status: "unknown" },
         } satisfies ServerProvider;
-        const rebuiltInstance = makeInstance(rebuiltProvider, () =>
-          Ref.update(snapshotCalls, (count) => count + 1).pipe(Effect.as(scopedProvider)),
-        );
+        const rebuiltInstance = {
+          ...makeInstance(rebuiltProvider, () =>
+            Ref.update(snapshotCalls, (count) => count + 1).pipe(Effect.as(scopedProvider)),
+          ),
+          orchestrationAdapter: capabilitiesAdapter(false),
+        };
         const registryChanges = yield* PubSub.unbounded<void>();
         const instancesRef = yield* Ref.make<ReadonlyArray<ProviderInstance>>([firstInstance]);
         const layerInstanceRegistry = Layer.succeed(
@@ -2029,6 +2045,7 @@ it.layer(
           const published = yield* Fiber.join(workspaceUpdate);
           assert.strictEqual(published._tag, "Some");
           const providers = yield* registry.getProviders;
+          assert.strictEqual(providers[0]?.supportsMcpTools, true);
           assert.deepStrictEqual(providers[0]?.skills, machineProvider.skills);
           assert.deepStrictEqual(
             providers[0]?.workspaceSnapshots?.[0]?.skills,
@@ -2153,6 +2170,7 @@ it.layer(
             rebuilt = yield* registry.getProviders;
           }
           assert.strictEqual(rebuilt[0]?.checkedAt, rebuiltProvider.checkedAt);
+          assert.strictEqual(rebuilt[0]?.supportsMcpTools, false);
           assert.strictEqual(rebuilt[0]?.workspaceSnapshots, undefined);
         }).pipe(Effect.provide(runtimeServices));
       }),
@@ -2211,7 +2229,7 @@ it.layer(
             applyUsageLimits: () => Effect.void,
           },
           snapshotForCwd: () => Ref.get(scanResult),
-          orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
+          orchestrationAdapter: capabilitiesAdapter(),
           textGeneration: {} as ProviderInstance["textGeneration"],
         };
         const layerInstanceRegistry = Layer.succeed(
@@ -2388,7 +2406,7 @@ it.layer(
               streamChanges: Stream.empty,
               applyUsageLimits: () => Effect.void,
             },
-            orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
+            orchestrationAdapter: capabilitiesAdapter(),
             textGeneration: {} as ProviderInstance["textGeneration"],
           },
           {
@@ -2421,7 +2439,7 @@ it.layer(
               streamChanges: Stream.empty,
               applyUsageLimits: () => Effect.void,
             },
-            orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
+            orchestrationAdapter: capabilitiesAdapter(),
             textGeneration: {} as ProviderInstance["textGeneration"],
           },
         ] satisfies ReadonlyArray<ProviderInstance>;
@@ -2543,7 +2561,7 @@ it.layer(
               streamChanges: Stream.empty,
               applyUsageLimits: () => Effect.void,
             },
-            orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
+            orchestrationAdapter: capabilitiesAdapter(),
             textGeneration: {} as ProviderInstance["textGeneration"],
           },
         ] satisfies ReadonlyArray<ProviderInstance>;
@@ -2654,7 +2672,7 @@ it.layer(
             streamChanges: Stream.fromPubSub(changes),
             applyUsageLimits: () => Effect.void,
           },
-          orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
+          orchestrationAdapter: capabilitiesAdapter(),
           textGeneration: {} as ProviderInstance["textGeneration"],
         } satisfies ProviderInstance;
         const layerInstanceRegistry = Layer.succeed(
@@ -2788,7 +2806,7 @@ it.layer(
               streamChanges: Stream.fromPubSub(changes),
               applyUsageLimits: () => Effect.void,
             },
-            orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
+            orchestrationAdapter: capabilitiesAdapter(),
             textGeneration: {} as ProviderInstance["textGeneration"],
           } satisfies ProviderInstance;
           const layerInstanceRegistry = Layer.succeed(
@@ -2897,7 +2915,7 @@ it.layer(
             streamChanges: Stream.empty,
             applyUsageLimits: () => Effect.void,
           },
-          orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
+          orchestrationAdapter: capabilitiesAdapter(),
           textGeneration: {} as ProviderInstance["textGeneration"],
         } satisfies ProviderInstance;
         const layerInstanceRegistry = Layer.succeed(
@@ -3004,7 +3022,7 @@ it.layer(
             streamChanges: Stream.empty,
             applyUsageLimits: () => Effect.void,
           },
-          orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
+          orchestrationAdapter: capabilitiesAdapter(),
           textGeneration: {} as ProviderInstance["textGeneration"],
         });
         const codexInstance = makeInstance(codexProvider);

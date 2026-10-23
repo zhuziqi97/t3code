@@ -2,6 +2,7 @@ import { expect, it } from "vite-plus/test";
 import { EnvironmentId, ProjectId, type ConveneResourceSearchResult } from "@t3tools/contracts";
 import {
   conveneComposerTarget,
+  conveneGuidelineProviderStatus,
   createConveneComposerSearch,
   sameConveneComposerTarget,
   serializeConveneComposerItem,
@@ -129,4 +130,30 @@ it("preserves denial, normal empty results, and transport failure as different s
   expect(state?.result?.status).toBe("scopeInsufficient");
   await search.load(target, 3);
   expect(state?.result?.status).toBe("unavailable");
+});
+
+it("reports adapter MCP support separately from installation and authentication", () => {
+  const provider = {
+    enabled: true,
+    installed: true,
+    auth: { status: "authenticated" as const },
+    supportsMcpTools: true,
+  };
+  expect(conveneGuidelineProviderStatus(provider)).toBeNull();
+  expect(conveneGuidelineProviderStatus({ ...provider, supportsMcpTools: false })).toBe(
+    "providerUnsupported",
+  );
+  expect(conveneGuidelineProviderStatus({ ...provider, supportsMcpTools: undefined })).toBe(
+    "providerUnknown",
+  );
+  expect(conveneGuidelineProviderStatus(null)).toBe("providerUnknown");
+  expect(conveneGuidelineProviderStatus({ ...provider, enabled: false })).toBe(
+    "providerUnavailable",
+  );
+  expect(conveneGuidelineProviderStatus({ ...provider, installed: false })).toBe(
+    "providerUnavailable",
+  );
+  expect(conveneGuidelineProviderStatus({ ...provider, auth: { status: "unauthenticated" } })).toBe(
+    "providerUnavailable",
+  );
 });

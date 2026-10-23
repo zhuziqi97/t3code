@@ -1,10 +1,11 @@
 import { useAtomValue } from "@effect/atom-react";
-import type { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
+import type { EnvironmentId, ProjectId, ThreadId, ServerProvider } from "@t3tools/contracts";
 import { Atom, AsyncResult } from "effect/reactivity";
 import { useEffect, useMemo, useState } from "react";
 import {
   conveneComposerTarget,
   conveneGuidelineStatus,
+  conveneGuidelineProviderStatus,
   createConveneComposerSearch,
   matchesConveneGuideline,
   sameConveneComposerTarget,
@@ -26,6 +27,7 @@ export function useConveneComposerSearch(input: {
   environmentId: EnvironmentId | null;
   projectId: ProjectId | null;
   threadId?: ThreadId | null;
+  provider: ServerProvider | null;
   trigger: { kind: string; query: string } | null;
 }) {
   const t = useTranslate();
@@ -103,7 +105,12 @@ export function useConveneComposerSearch(input: {
     sameConveneComposerTarget(target, state.target);
   const pending = target !== null && permitted && phase === "online" && (!current || state.pending);
   const result = current && !state.pending ? state.result : null;
-  const ready = permitted && phase === "online" && result?.status === "ready" ? result : null;
+  const providerStatus =
+    target?.kind === "guideline" ? conveneGuidelineProviderStatus(input.provider) : null;
+  const ready =
+    permitted && phase === "online" && !providerStatus && result?.status === "ready"
+      ? result
+      : null;
   const items: ConveneComposerCommandItem[] =
     !target || !ready
       ? []
@@ -124,15 +131,17 @@ export function useConveneComposerSearch(input: {
             resource,
             id: `convene:${resource.resource_uri}`,
             label:
-              resource.kind === "issue" ? `Convene #${resource.number}` : resource.relative_path,
-            description: `${resource.module_path} · ${resource.title}`,
+              resource.kind === "issue"
+                ? `Convene #${resource.number}`
+                : `Convene · ${resource.relative_path}`,
+            description: `${resource.module_path} · ${resource.title}${resource.kind === "issue" ? ` · ${t(resource.state === "OPEN" ? "convene.resource.issueStateOpen" : "convene.resource.issueStateClosed")}` : ""}`,
             target,
           }));
   const status = !permitted
     ? "unauthorized"
     : phase !== "online"
       ? "disconnected"
-      : (result?.status ?? null);
+      : (providerStatus ?? result?.status ?? null);
   return {
     target,
     items,
@@ -140,7 +149,7 @@ export function useConveneComposerSearch(input: {
     message:
       target === null
         ? null
-        : pending
+        : pending && !providerStatus
           ? t("convene.composer.loading")
           : status === "ready"
             ? t("convene.composer.scope")

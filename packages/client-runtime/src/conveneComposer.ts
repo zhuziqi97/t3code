@@ -3,6 +3,7 @@ import type {
   ConveneResourceSearchResult,
   EnvironmentId,
   ProjectId,
+  ServerProvider,
 } from "@t3tools/contracts";
 
 export type ConveneComposerTarget = {
@@ -74,6 +75,21 @@ export function conveneGuidelineStatus(
   if (!configuration) return "projectUnavailable";
   if (!configuration.mcp_enabled) return "mcpDisabled";
   return configuration.mcp_scope_modules.length > 0 ? "ready" : "scopeInsufficient";
+}
+
+export function conveneGuidelineProviderStatus(
+  provider: Pick<ServerProvider, "enabled" | "installed" | "auth" | "supportsMcpTools"> | null,
+) {
+  if (provider?.supportsMcpTools === false) return "providerUnsupported";
+  if (!provider || provider.supportsMcpTools === undefined) return "providerUnknown";
+  if (
+    !provider.enabled ||
+    provider.installed === false ||
+    provider.auth.status === "unauthenticated"
+  ) {
+    return "providerUnavailable";
+  }
+  return null;
 }
 
 export function matchesConveneGuideline(query: string): boolean {

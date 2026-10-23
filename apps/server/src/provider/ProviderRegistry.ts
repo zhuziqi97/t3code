@@ -334,7 +334,9 @@ const correlateSnapshotWithSource = (
       ),
     );
   }
-  return Effect.succeed(snapshot);
+  return source.supportsMcpTools.pipe(
+    Effect.map((supportsMcpTools) => ({ ...snapshot, supportsMcpTools })),
+  );
 };
 
 const snapshotInstanceKey = (provider: ServerProvider): ProviderInstanceId => {
@@ -347,6 +349,15 @@ const snapshotInstanceKey = (provider: ServerProvider): ProviderInstanceId => {
 const buildSnapshotSource = (instance: ProviderInstance): ProviderSnapshotSource => ({
   instanceId: instance.instanceId,
   driverKind: instance.driverKind,
+  supportsMcpTools: instance.orchestrationAdapter.getCapabilities().pipe(
+    Effect.map((capabilities) => capabilities.tools.supportsMcpTools),
+    Effect.catch((error) =>
+      Effect.logWarning("provider MCP capabilities unavailable", {
+        instanceId: instance.instanceId,
+        error,
+      }).pipe(Effect.as(undefined)),
+    ),
+  ),
   getSnapshot: instance.snapshot.getSnapshot,
   refresh: instance.snapshot.refresh,
   startRefresh: instance.snapshot.startRefresh,

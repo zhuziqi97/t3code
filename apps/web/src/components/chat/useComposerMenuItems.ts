@@ -59,6 +59,7 @@ export function useComposerMenuItems({
   compactSlashCommandAvailable,
   selectedProvider,
   selectedProviderSkills,
+  selectedProviderStatus,
   selectedProviderSlashCommands,
   showSkillsInSlashMenu,
 }: {
@@ -73,6 +74,7 @@ export function useComposerMenuItems({
   readonly planModeUiEnabled: boolean;
   readonly compactSlashCommandAvailable: boolean;
   readonly selectedProvider: ProviderDriverKind;
+  readonly selectedProviderStatus: ServerProvider | null;
   readonly selectedProviderSkills: ServerProvider["skills"];
   readonly selectedProviderSlashCommands: ServerProvider["slashCommands"];
   readonly showSkillsInSlashMenu: boolean;
@@ -81,6 +83,7 @@ export function useComposerMenuItems({
     environmentId,
     projectId,
     threadId: activeThreadId,
+    provider: selectedProviderStatus,
     trigger: composerTrigger,
   });
   const composerTriggerKind = composerTrigger?.kind ?? null;

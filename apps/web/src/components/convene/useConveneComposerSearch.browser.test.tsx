@@ -1,6 +1,6 @@
 import "~/index.css";
 import { act, render } from "../../../test/render";
-import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ProjectId, ThreadId, type ServerProvider } from "@t3tools/contracts";
 import { expect, it, vi } from "vite-plus/test";
 import { AsyncResult } from "effect/reactivity";
 
@@ -55,9 +55,20 @@ const reference = {
 const ready = (page = 1) =>
   ({ status: "ready", items: [reference], total: 21, page, page_size: 20 }) as const;
 
-function Harness(props: { projectId?: ProjectId; query?: string; kind?: string }) {
+function Harness(props: {
+  projectId?: ProjectId;
+  query?: string;
+  kind?: string;
+  mcp?: boolean | null;
+}) {
   const search = useConveneComposerSearch({
     environmentId,
+    provider: {
+      enabled: true,
+      installed: true,
+      auth: { status: "authenticated" },
+      supportsMcpTools: props.mcp === null ? undefined : (props.mcp ?? true),
+    } as ServerProvider,
     threadId: ThreadId.make("thread"),
     projectId: props.projectId ?? projectId,
     trigger: { kind: props.kind ?? "pull-request", query: props.query ?? "47" },
@@ -121,6 +132,9 @@ it("paginates the authorized scope and distinguishes a denied refresh", async ()
   await setup();
   await using screen = await render(<Harness />);
   await expect.element(screen.getByText("Convene #47", { exact: true })).toBeVisible();
+  await expect
+    .element(screen.getByText("owner/project/module · Reference title · Open"))
+    .toBeVisible();
   model.search.mockResolvedValueOnce(
     AsyncResult.success({ ...ready(2), items: [{ ...reference, number: 48 }] }),
   );
@@ -155,4 +169,40 @@ it("offers a real MCP guideline reference and removes it when access is disabled
     .element(screen.getByText("Convene · Enable MCP for this project to search resources."))
     .toBeVisible();
   expect(model.search).not.toHaveBeenCalled();
+});
+
+it("removes the guideline immediately when the selected adapter lacks MCP support", async () => {
+  await setup();
+  await using screen = await render(<Harness kind="skill" query="convene" />);
+  await expect.element(screen.getByText("Convene", { exact: true })).toBeVisible();
+  await screen.rerender(<Harness kind="skill" query="convene" mcp={false} />);
+  await expect.element(screen.getByText("Convene", { exact: true })).not.toBeInTheDocument();
+  await expect
+    .element(screen.getByText("Convene · This provider does not support MCP tools."))
+    .toBeVisible();
+  await screen.rerender(<Harness kind="skill" query="convene" mcp={null} />);
+  await expect
+    .element(screen.getByText("Convene · MCP support is unknown for this provider."))
+    .toBeVisible();
+});
+
+it("identifies a Markdown candidate as a Convene resource", async () => {
+  await setup();
+  model.search.mockResolvedValue(
+    AsyncResult.success({
+      ...ready(),
+      items: [
+        {
+          kind: "document",
+          module_id: "module",
+          module_path: "owner/project/module",
+          title: "Guide",
+          relative_path: "docs/guide.md",
+          resource_uri: "convene://docs/owner/project/module/docs/guide.md",
+        },
+      ],
+    }),
+  );
+  await using screen = await render(<Harness kind="path" query="guide" />);
+  await expect.element(screen.getByText("Convene · docs/guide.md", { exact: true })).toBeVisible();
 });

@@ -364,6 +364,7 @@ export function useComposerCommandMenu({
     environmentId,
     projectId,
     threadId: currentThreadId,
+    provider: selectedProviderStatus,
     trigger,
   });
   const baseItems = ((): ComposerCommandItem[] => {
