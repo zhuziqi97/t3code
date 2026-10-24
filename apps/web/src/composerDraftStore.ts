@@ -156,6 +156,7 @@ export type PersistedComposerImageAttachment = typeof PersistedComposerImageAtta
 export interface ComposerImageAttachment extends Omit<ChatImageAttachment, "previewUrl"> {
   previewUrl: string;
   file: File;
+  requiresUploadRetry?: true;
 }
 
 export interface ComposerFileAttachment extends Omit<ChatFileAttachment, "previewUrl"> {
@@ -2276,6 +2277,8 @@ export function hydrateImagesFromPersisted(
         sizeBytes: attachment.sizeBytes,
         previewUrl: attachment.dataUrl,
         file,
+        // Restoring local bytes must not replay an upload rejected by the previous Web session.
+        requiresUploadRetry: true,
         ...(attachment.source ? { source: attachment.source } : {}),
       } satisfies ComposerImageAttachment,
     ];

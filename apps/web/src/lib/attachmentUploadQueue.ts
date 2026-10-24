@@ -437,6 +437,15 @@ export function startAttachmentUpload(input: {
     cancelAttachmentUpload(input.image.id);
   }
   const previous = existing?.status === "ready" ? existing : existing?.previous;
+  if (input.image.type === "image" && input.image.requiresUploadRetry) {
+    setUploadState(input.image.id, {
+      status: "failed",
+      environmentId: input.environmentId,
+      reason: "Restored attachment. Retry to upload.",
+      ...(previous ? { previous } : {}),
+    });
+    return;
+  }
   let resolveSettled: () => void = () => {};
   const settled = new Promise<void>((resolve) => {
     resolveSettled = resolve;
@@ -569,7 +578,9 @@ export function retryAttachmentUpload(input: {
   } else {
     clearUploadState(input.image.id);
   }
-  startAttachmentUpload(input);
+  const image = { ...input.image };
+  if (image.type === "image") delete image.requiresUploadRetry;
+  startAttachmentUpload({ ...input, image });
 }
 
 /**

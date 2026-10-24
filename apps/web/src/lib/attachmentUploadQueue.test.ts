@@ -6,6 +6,7 @@ import { appAtomRegistry } from "../rpc/atomRegistry";
 import {
   composerFileNeedsReattach,
   DraftId,
+  hydrateImagesFromPersisted,
   useComposerDraftStore,
   type ComposerFileAttachment,
   type ComposerImageAttachment,
@@ -208,6 +209,30 @@ describe("attachmentUploadQueue", () => {
       releaseAttachmentUpload(imageId);
     }
     vi.unstubAllGlobals();
+  });
+
+  it("keeps restored image bytes local until the user explicitly retries", async () => {
+    const [image] = hydrateImagesFromPersisted([
+      {
+        id: "expired-session-image",
+        name: "restored.png",
+        mimeType: "image/png",
+        sizeBytes: 3,
+        dataUrl: "data:image/png;base64,AQID",
+      },
+    ]);
+    startAttachmentUpload({ environmentId: firstEnvironment, image: image! });
+    expect(mocks.runAtomCommand).not.toHaveBeenCalled();
+    expect(TestXmlHttpRequest.requests).toHaveLength(0);
+    expect(readAttachmentUpload(image!.id)?.status).toBe("failed");
+
+    retryAttachmentUpload({ environmentId: firstEnvironment, image: image! });
+    await Promise.resolve();
+    const settled = awaitAttachmentUploads([image!.id]);
+    expect(TestXmlHttpRequest.requests).toHaveLength(1);
+    TestXmlHttpRequest.requests[0]!.complete();
+    await settled;
+    expect(readAttachmentUpload(image!.id)?.status).toBe("ready");
   });
 
   it("keeps an attachment local until its own environment grants write access", async () => {
