@@ -15,6 +15,7 @@ export async function prepareBuild(root = process.cwd()) {
       ? `convene-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`
       : `convene-local-${NodeCrypto.randomUUID()}`,
     version,
+    web_mount_contract: 1,
     source_commit: NodeChildProcess.execFileSync("git", ["rev-parse", "HEAD"], {
       cwd: root,
       encoding: "utf8",

@@ -9,6 +9,7 @@ import {
   type ThirdPartyLicenseEntry,
   type ThirdPartyLicenseManifest,
 } from "@t3tools/shared/thirdPartyLicenses";
+import { webAssetBasePath } from "../../webBasePath";
 
 import { Button } from "../ui/button";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
@@ -26,10 +27,7 @@ let licenseManifestPromise: Promise<ThirdPartyLicenseManifest> | undefined;
 async function fetchLicenseManifest(): Promise<ThirdPartyLicenseManifest> {
   const signal = AbortSignal.timeout(30_000);
   try {
-    const response = await fetch(
-      `${import.meta.env.BASE_URL.replace(/\/$/, "")}/third-party-licenses.json`,
-      { signal },
-    );
+    const response = await fetch(`${webAssetBasePath()}/third-party-licenses.json`, { signal });
     if (!response.ok) {
       throw new Error(
         `The license manifest request failed with status ${String(response.status)}.`,

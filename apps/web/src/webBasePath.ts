@@ -15,3 +15,7 @@ export function webBasePath(): string {
 export function webRequestBasePath(): string {
   return window.__T3_REQUEST_BASE_PATH__?.replace(/\/+$/, "") ?? webBasePath();
 }
+
+export function webAssetBasePath(): string {
+  return window.__T3_ASSET_BASE_PATH__?.replace(/\/+$/, "") ?? webBasePath();
+}

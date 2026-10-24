@@ -18,6 +18,7 @@ NodeTest.test(
     );
     const first = await prepareBuild(root);
     const second = await prepareBuild(root);
+    NodeAssert.equal(first.web_mount_contract, 1);
     NodeAssert.equal(first.version, second.version);
     NodeAssert.notEqual(first.build_id, second.build_id);
     const client = NodePath.join(root, "apps/server/dist/client");
