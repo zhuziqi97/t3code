@@ -73,7 +73,11 @@ const make = Effect.gen(function* () {
           cause,
         }),
     );
-  const record = (values: ReadonlyArray<ConveneProjectConfiguration>, replace: boolean) =>
+  const record = (
+    values: ReadonlyArray<ConveneProjectConfiguration>,
+    replace: boolean,
+    notifyChanges = true,
+  ) =>
     lock
       .withPermit(
         Effect.gen(function* () {
@@ -92,11 +96,13 @@ const make = Effect.gen(function* () {
       )
       .pipe(
         Effect.tap(() =>
-          Effect.forEach(
-            values,
-            (value) => PubSub.publish(updates, ProjectId.make(value.project.native_project_id)),
-            { discard: true },
-          ),
+          notifyChanges
+            ? Effect.forEach(
+                values,
+                (value) => PubSub.publish(updates, ProjectId.make(value.project.native_project_id)),
+                { discard: true },
+              )
+            : Effect.void,
         ),
         failure("cache"),
       );
@@ -127,7 +133,8 @@ const make = Effect.gen(function* () {
         ConveneProjectConfiguration,
       )
       .pipe(
-        Effect.tap((value) => record([value], false)),
+        // Queries consume these notifications; echoing their result invalidates the same query.
+        Effect.tap((value) => record([value], false, false)),
         Effect.map((configuration) => ({ configuration, fresh: true, error: null })),
         Effect.catchTags({
           ConvenePlatformError: (error) =>

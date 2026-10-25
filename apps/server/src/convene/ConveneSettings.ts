@@ -78,11 +78,13 @@ const make = Effect.gen(function* () {
               }),
         ),
       ),
-    queryProject: (projectId) =>
-      Effect.gen(function* () {
-        if ((yield* connection.status).phase === "online") yield* connection.synchronize;
-        return yield* configurations.query(projectId);
-      }),
+    queryProject: Effect.fn("ConveneSettings.queryProject")(function* (projectId: ProjectId) {
+      const view = yield* configurations.query(projectId);
+      if (view.configuration !== null || (yield* connection.status).phase !== "online") return view;
+      // Only an unreported project needs discovery; report ACKs also invalidate project views.
+      yield* connection.synchronize;
+      return yield* configurations.query(projectId);
+    }),
   });
 });
 
