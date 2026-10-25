@@ -71,27 +71,30 @@ async function setup() {
   await changeLanguage("en");
 }
 
-it("opens a fresh IDE entry on the current mounted origin with a native file location, even with MCP off", async () => {
-  await setup();
-  using _pageBase = stubGlobal("__T3_BASE_PATH__", "/clients/runner/workspaces/current");
-  await using screen = await render(
-    <ConveneIdeButton
-      environmentId={environmentId}
-      projectId={projectId}
-      workspacePath="/work/project"
-      file={{ relativePath: "README.md", line: 3, column: 2 }}
-    />,
-  );
-  await screen.getByRole("button", { name: "Open Web IDE" }).click();
-  const url = new URL(model.open.mock.calls[0]?.[0]);
-  expect(url.origin).toBe(window.location.origin);
-  expect(url.pathname).toBe("/clients/runner/ide");
-  expect(url.searchParams.get("workspaceKey")).toBe("native-key");
-  expect(url.searchParams.get("file")).toBe("README.md");
-  expect(url.searchParams.get("line")).toBe("3");
-  expect(url.searchParams.get("column")).toBe("2");
-  expect(url.href).not.toContain("_session");
-});
+it.each(["/clients/runner/workspaces/current", "/client-web/legacy-session"])(
+  "opens a fresh IDE entry from %s on the current origin with a native file location, even with MCP off",
+  async (pageBase) => {
+    await setup();
+    using _pageBase = stubGlobal("__T3_BASE_PATH__", pageBase);
+    await using screen = await render(
+      <ConveneIdeButton
+        environmentId={environmentId}
+        projectId={projectId}
+        workspacePath="/work/project"
+        file={{ relativePath: "README.md", line: 3, column: 2 }}
+      />,
+    );
+    await screen.getByRole("button", { name: "Open Web IDE" }).click();
+    const url = new URL(model.open.mock.calls[0]?.[0]);
+    expect(url.origin).toBe(window.location.origin);
+    expect(url.pathname).toBe("/clients/runner/ide");
+    expect(url.searchParams.get("workspaceKey")).toBe("native-key");
+    expect(url.searchParams.get("file")).toBe("README.md");
+    expect(url.searchParams.get("line")).toBe("3");
+    expect(url.searchParams.get("column")).toBe("2");
+    expect(url.href).not.toContain("_session");
+  },
+);
 
 it("prevents an old project response or a read-only environment session from opening the IDE", async () => {
   await setup();

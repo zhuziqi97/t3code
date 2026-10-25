@@ -49,6 +49,7 @@ export function ConveneIdeButton(props: {
         })
       : null,
   );
+  const pageBase = webBasePath();
   const href =
     project.data?.fresh &&
     project.data.configuration &&
@@ -62,7 +63,7 @@ export function ConveneIdeButton(props: {
           projectId: props.projectId,
           workspacePath: props.workspacePath,
           ...(props.file ? { file: props.file } : {}),
-          ...(webBasePath().startsWith("/clients/")
+          ...(pageBase.startsWith("/clients/") || pageBase.startsWith("/client-web/")
             ? { mountedOrigin: window.location.origin }
             : {}),
         })
