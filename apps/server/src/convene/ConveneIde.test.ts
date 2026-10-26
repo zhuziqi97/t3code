@@ -44,6 +44,7 @@ const setup = Effect.gen(function* () {
   const commands: Array<ChildProcess.StandardCommand> = [];
   const languageCommands: Array<ChildProcess.StandardCommand> = [];
   let languageExit = 0;
+  let preparationFailed = false;
   let installations = 0;
   let stops = 0;
   const spawner = ChildProcessSpawner.make((command) =>
@@ -114,6 +115,12 @@ const setup = Effect.gen(function* () {
   const layer = ConveneIde.layer.pipe(
     Layer.provide(
       Layer.succeed(CodeServerInstallation.CodeServerInstallation, {
+        prepareLanguage: () =>
+          preparationFailed
+            ? Effect.fail(
+                new CodeServerInstallation.CodeServerInstallationError({ code: "install_failed" }),
+              )
+            : Effect.void,
         ensure: (report) =>
           Effect.sync(() => installations++).pipe(
             Effect.andThen(report ? Queue.offer(reports, report) : Effect.void),
@@ -139,6 +146,9 @@ const setup = Effect.gen(function* () {
     layer,
     failLanguage: (code: number) => {
       languageExit = code;
+    },
+    failPreparation: (failed: boolean) => {
+      preparationFailed = failed;
     },
     counts: () => ({ installations, stops }),
   };
@@ -364,12 +374,13 @@ it.effect.each(["existing choice", "applied default"] as const)(
     }),
 );
 
-it.effect.each(["package", "config", "trailing comma"] as const)(
+it.effect.each(["package", "config", "trailing comma", "native initialization"] as const)(
   "continues ready after a language %s failure and retries only after STOP and OPEN",
   (failure) =>
     Effect.gen(function* () {
       const fixture = yield* setup;
       if (failure === "package") fixture.failLanguage(1);
+      if (failure === "native initialization") fixture.failPreparation(true);
       yield* Effect.gen(function* () {
         const ide = yield* ConveneIde.ConveneIde;
         const fs = yield* FileSystem.FileSystem;
@@ -378,7 +389,8 @@ it.effect.each(["package", "config", "trailing comma"] as const)(
         const dataDir = path.join(config.baseDir, "tools", "code-server", "data");
         const argvPath = path.join(dataDir, "User", "argv.json");
         const invalid = failure === "trailing comma" ? '{"locale":"en",}' : "{ invalid JSONC";
-        if (failure !== "package") {
+        const configFailure = failure === "config" || failure === "trailing comma";
+        if (configFailure) {
           yield* fs.makeDirectory(path.dirname(argvPath), { recursive: true });
           yield* fs.writeFileString(argvPath, invalid);
         }
@@ -389,7 +401,7 @@ it.effect.each(["package", "config", "trailing comma"] as const)(
         assert.isUndefined(ready.progress);
         assert.isNull(ready.error);
         assert.ok(!(yield* fs.exists(path.join(dataDir, ".t3-default-language"))));
-        if (failure === "package") assert.ok(!(yield* fs.exists(argvPath)));
+        if (!configFailure) assert.ok(!(yield* fs.exists(argvPath)));
         else assert.equal(yield* fs.readFileString(argvPath), invalid);
         const calls = fixture.languageCommands.length;
         yield* ide.handle(QUERY);
@@ -404,7 +416,8 @@ it.effect.each(["package", "config", "trailing comma"] as const)(
         assert.isUndefined(stopped.progress);
         assert.equal((yield* ide.handle(QUERY)).phase, "stopped");
         fixture.failLanguage(0);
-        if (failure !== "package") yield* fs.writeFileString(argvPath, "{}\n");
+        fixture.failPreparation(false);
+        if (configFailure) yield* fs.writeFileString(argvPath, "{}\n");
         const next = yield* ide.handle(OPEN);
         assert.isUndefined(next.warning);
         assert.isNull(next.error);
@@ -566,108 +579,167 @@ it.effect(
     }),
 );
 
-it.live("prepares isolated language data and stops a real controlled subprocess", () =>
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const config = yield* ServerConfig.ServerConfig;
-    const http = yield* HttpClient.HttpClient;
-    const executable = path.join(config.baseDir, "fixture-code-server.cjs");
-    yield* fs.writeFileString(
-      executable,
-      [
-        "#!/usr/bin/env node",
-        "const fs = require('node:fs');",
-        "const path = require('node:path');",
-        "const args = process.argv.slice(2);",
-        "const data = args[args.indexOf('--user-data-dir') + 1];",
-        "const extensions = args[args.indexOf('--extensions-dir') + 1];",
-        "if (args.includes('--install-extension')) {",
-        "  fs.mkdirSync(extensions, { recursive: true });",
-        "  fs.writeFileSync(path.join(extensions, 'fixture-language.json'), JSON.stringify(args));",
-        "} else {",
-        "  const server = require('node:http').createServer((_req, res) => {",
-        "    res.writeHead(200, { 'content-type': 'application/json' });",
-        "    res.end(fs.readFileSync(path.join(data, 'User', 'argv.json')));",
-        "  });",
-        "  process.on('SIGTERM', () => server.close(() => process.exit(0)));",
-        "  server.listen(0, '127.0.0.1', () => {",
-        "    process.stdout.write('info HTTP server listening on http://127.0.0.1:' + server.address().port + '\\n');",
-        "  });",
-        "}",
-        "",
-      ].join("\n"),
-    );
-    yield* fs.chmod(executable, 0o755);
-    const layer = ConveneIde.layer.pipe(
-      Layer.provide(
-        Layer.succeed(CodeServerInstallation.CodeServerInstallation, {
-          ensure: () => Effect.succeed(executable),
-        }),
-      ),
-      Layer.provide(
-        Layer.mock(ConveneWorkspaces.ConveneWorkspaces, {
-          resolve: () =>
-            Effect.succeed({
-              projectId: PROJECT,
-              key: "root",
-              path: config.baseDir,
-              displayName: "fixture",
-              branch: null,
-              available: true,
-            }),
-        }),
-      ),
-      Layer.provide(WorkspacePaths.layer),
-    );
-    yield* Effect.gen(function* () {
-      const ide = yield* ConveneIde.ConveneIde;
-      const opening = yield* ide.handle(OPEN);
-      assert.deepEqual(opening.progress, { stage: "checking" });
-      const ready = yield* awaitPhase(ide, "ready");
-      assert.isUndefined(ready.warning);
-      const origin = yield* ide.upstream(ready.runtimeId!);
-      const response = yield* http.get(origin);
-      assert.equal(response.status, 200);
-      assert.deepEqual<unknown>(yield* response.json, { locale: "zh-cn" });
-      const cliArgs: unknown = JSON.parse(
-        yield* fs.readFileString(
-          path.join(config.baseDir, "tools", "code-server", "extensions", "fixture-language.json"),
+it.live.each(["fresh", "existing marker"] as const)(
+  "initializes native language packs before the first HTTP bootstrap with %s data",
+  (existing) =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const config = yield* ServerConfig.ServerConfig;
+      const http = yield* HttpClient.HttpClient;
+      const runtime = path.join(
+        config.baseDir,
+        "tools",
+        "code-server",
+        CodeServerInstallation.VERSION + "-linux-x64",
+      );
+      const executable = path.join(runtime, "bin", "code-server");
+      const native = path.join(runtime, "lib", "vscode", "out", "server-main.js");
+      yield* fs.makeDirectory(path.dirname(executable), { recursive: true });
+      yield* fs.makeDirectory(path.dirname(native), { recursive: true });
+      // The pinned runtime constructs NativeLanguagePackService here without updating its cache.
+      yield* fs.writeFileString(
+        native,
+        [
+          "module.exports = async function(available) {",
+          "let language = 'en', updates = 0;",
+          "class pl { async update() { updates++; language = available ? 'zh-cn' : 'en'; } }",
+          "const Uu = 'languagePacks', i = new Map();",
+          "const F = { createInstance: C => new C(), invokeFunction: fn => fn({ get: key => i.get(key) }) };",
+          "i.set(Uu,F.createInstance(pl));",
+          "return { locale: language, updates };",
+          "};",
+        ].join("\n"),
+      );
+      const data = path.join(config.baseDir, "tools", "code-server", "data");
+      const extensions = path.join(config.baseDir, "tools", "code-server", "extensions");
+      if (existing === "existing marker") {
+        yield* fs.makeDirectory(path.join(data, "User"), { recursive: true });
+        yield* fs.makeDirectory(extensions, { recursive: true });
+        yield* fs.writeFileString(path.join(data, "User", "argv.json"), '{"locale":"zh-cn"}');
+        yield* fs.writeFileString(path.join(data, ".t3-default-language"), "");
+        yield* fs.writeFileString(
+          path.join(extensions, "fixture-language.json"),
+          "already installed",
+        );
+      }
+      yield* fs.writeFileString(
+        executable,
+        [
+          "#!/usr/bin/env node",
+          "const fs = require('node:fs');",
+          "const path = require('node:path');",
+          "const args = process.argv.slice(2);",
+          "const data = args[args.indexOf('--user-data-dir') + 1];",
+          "const extensions = args[args.indexOf('--extensions-dir') + 1];",
+          "if (args.includes('--install-extension')) {",
+          "  fs.mkdirSync(extensions, { recursive: true });",
+          "  fs.writeFileSync(path.join(extensions, 'fixture-language.json'), JSON.stringify(args));",
+          "} else { (async () => {",
+          "  const initialize = require(require('node:path').join(__dirname, '..', 'lib', 'vscode', 'out', 'server-main.js'));",
+          "  const nls = await initialize(fs.existsSync(path.join(extensions, 'fixture-language.json')));",
+          "  const server = require('node:http').createServer((_req, res) => {",
+          "    res.writeHead(200, { 'content-type': 'application/json' });",
+          "    res.end(JSON.stringify(nls));",
+          "  });",
+          "  process.on('SIGTERM', () => server.close(() => process.exit(0)));",
+          "  server.listen(0, '127.0.0.1', () => {",
+          "    process.stdout.write('info HTTP server listening on http://127.0.0.1:' + server.address().port + '\\n');",
+          "  });",
+          "})().catch(error => { console.error(error); process.exit(1); }); }",
+          "",
+        ].join("\n"),
+      );
+      yield* fs.chmod(executable, 0o755);
+      const layer = ConveneIde.layer.pipe(
+        Layer.provide(CodeServerInstallation.layer),
+        Layer.provide(
+          Layer.mock(ConveneWorkspaces.ConveneWorkspaces, {
+            resolve: () =>
+              Effect.succeed({
+                projectId: PROJECT,
+                key: "root",
+                path: config.baseDir,
+                displayName: "fixture",
+                branch: null,
+                available: true,
+              }),
+          }),
         ),
+        Layer.provide(WorkspacePaths.layer),
       );
-      assert.deepEqual(cliArgs, [
-        "--user-data-dir",
-        path.join(config.baseDir, "tools", "code-server", "data"),
-        "--extensions-dir",
-        path.join(config.baseDir, "tools", "code-server", "extensions"),
-        "--config",
-        path.join(config.baseDir, "tools", "code-server", "config.yaml"),
-        "--install-extension",
-        "MS-CEINTL.vscode-language-pack-zh-hans@1.131.0",
-      ]);
-      const stopped = yield* ide.handle({
-        service: "code-server",
-        operation: "STOP",
-        runtimeId: ready.runtimeId!,
-      });
-      assert.equal(stopped.phase, "stopped");
-      assert.equal((yield* ide.handle(QUERY)).phase, "stopped");
-      assert.equal(
-        (yield* ide.upstream(ready.runtimeId!).pipe(Effect.flip)).code,
-        "runtime_unavailable",
-      );
-      yield* Effect.logInfo(
-        "Isolated IDE fixture: checking -> ready; HTTP 200 locale=zh-cn; STOP -> stopped",
-      );
-    }).pipe(Effect.provide(layer));
-  }).pipe(
-    Effect.provide(
-      Layer.mergeAll(
-        ServerConfig.layerTest(process.cwd(), { prefix: "t3-managed-ide-runtime-" }).pipe(
-          Layer.provideMerge(NodeServices.layer),
+      yield* Effect.gen(function* () {
+        const ide = yield* ConveneIde.ConveneIde;
+        const opening = yield* ide.handle(OPEN);
+        assert.deepEqual(opening.progress, { stage: "checking" });
+        const ready = yield* awaitPhase(ide, "ready");
+        assert.isUndefined(ready.warning);
+        const origin = yield* ide.upstream(ready.runtimeId!);
+        const response = yield* http.get(origin);
+        assert.equal(response.status, 200);
+        assert.deepEqual<unknown>(yield* response.json, { locale: "zh-cn", updates: 1 });
+        if (existing === "fresh") {
+          const cliArgs: unknown = JSON.parse(
+            yield* fs.readFileString(
+              path.join(
+                config.baseDir,
+                "tools",
+                "code-server",
+                "extensions",
+                "fixture-language.json",
+              ),
+            ),
+          );
+          assert.deepEqual(cliArgs, [
+            "--user-data-dir",
+            path.join(config.baseDir, "tools", "code-server", "data"),
+            "--extensions-dir",
+            path.join(config.baseDir, "tools", "code-server", "extensions"),
+            "--config",
+            path.join(config.baseDir, "tools", "code-server", "config.yaml"),
+            "--install-extension",
+            "MS-CEINTL.vscode-language-pack-zh-hans@1.131.0",
+          ]);
+        } else {
+          assert.equal(
+            yield* fs.readFileString(path.join(extensions, "fixture-language.json")),
+            "already installed",
+          );
+          assert.equal(
+            yield* fs.readFileString(path.join(data, "User", "argv.json")),
+            '{"locale":"zh-cn"}',
+          );
+        }
+        const stopped = yield* ide.handle({
+          service: "code-server",
+          operation: "STOP",
+          runtimeId: ready.runtimeId!,
+        });
+        assert.equal(stopped.phase, "stopped");
+        assert.equal((yield* ide.handle(QUERY)).phase, "stopped");
+        assert.equal(
+          (yield* ide.upstream(ready.runtimeId!).pipe(Effect.flip)).code,
+          "runtime_unavailable",
+        );
+        yield* ide.handle(OPEN);
+        const reopened = yield* awaitPhase(ide, "ready");
+        const reopenedOrigin = yield* ide.upstream(reopened.runtimeId!);
+        const reopenedResponse = yield* http.get(reopenedOrigin);
+        assert.deepEqual<unknown>(yield* reopenedResponse.json, { locale: "zh-cn", updates: 1 });
+        yield* Effect.logInfo(
+          "Isolated IDE fixture: checking -> ready; HTTP 200 locale=zh-cn; STOP -> stopped",
+        );
+      }).pipe(Effect.provide(layer));
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          ServerConfig.layerTest(process.cwd(), { prefix: "t3-managed-ide-runtime-" }).pipe(
+            Layer.provideMerge(NodeServices.layer),
+          ),
+          FetchHttpClient.layer,
         ),
-        FetchHttpClient.layer,
       ),
+      Effect.provideService(HostProcess.Platform, "linux"),
+      Effect.provideService(HostProcess.Architecture, "x64"),
     ),
-  ),
 );

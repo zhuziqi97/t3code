@@ -158,3 +158,41 @@ it.effect("does not download or create a runtime on unsupported Windows hosts", 
     assert.equal(downloads, 0);
   }).pipe(Effect.provide(base), Effect.provideService(HostProcess.Platform, "win32")),
 );
+
+it.effect("leaves an unrecognized native bundle intact when language preparation fails", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const config = yield* ServerConfig.ServerConfig;
+    const bundle = path.join(
+      config.baseDir,
+      "tools",
+      "code-server",
+      CodeServerInstallation.VERSION + "-linux-x64",
+      "lib",
+      "vscode",
+      "out",
+      "server-main.js",
+    );
+    const source = "unexpected native initialization";
+    yield* fs.makeDirectory(path.dirname(bundle), { recursive: true });
+    yield* fs.writeFileString(bundle, source);
+    const services = yield* Layer.build(
+      CodeServerInstallation.layer.pipe(
+        Layer.provide(
+          Layer.succeed(
+            HttpClient.HttpClient,
+            HttpClient.make(() => Effect.die("Unexpected download")),
+          ),
+        ),
+      ),
+    );
+    const installation = Context.get(services, CodeServerInstallation.CodeServerInstallation);
+    assert.equal((yield* installation.prepareLanguage().pipe(Effect.flip)).code, "install_failed");
+    assert.equal(yield* fs.readFileString(bundle), source);
+  }).pipe(
+    Effect.provide(base),
+    Effect.provideService(HostProcess.Platform, "linux"),
+    Effect.provideService(HostProcess.Architecture, "x64"),
+  ),
+);

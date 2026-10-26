@@ -106,6 +106,7 @@ const make = Effect.gen(function* () {
   const configureLanguage = Effect.fn("ConveneIde.configureLanguage")(function* (
     executable: string,
   ) {
+    yield* installation.prepareLanguage();
     const marker = path.join(dataDir, ".t3-default-language");
     if (yield* fs.exists(marker)) return;
     const argvPath = path.join(dataDir, "User", "argv.json");

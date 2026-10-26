@@ -35,6 +35,7 @@ export class CodeServerInstallation extends Context.Service<
     readonly ensure: (
       onProgress?: (progress: NonNullable<ConveneIdeResult["progress"]>) => Effect.Effect<unknown>,
     ) => Effect.Effect<string, CodeServerInstallationError>;
+    readonly prepareLanguage: () => Effect.Effect<void, CodeServerInstallationError>;
   }
 >()("t3/convene/CodeServerInstallation") {}
 
@@ -58,6 +59,27 @@ const make = Effect.gen(function* () {
     `${VERSION}-${platform}-${arch}`,
   );
   const executable = path.join(directory, "bin", "code-server");
+
+  const prepareLanguage = Effect.fn("CodeServerInstallation.prepareLanguage")(
+    function* () {
+      const bundle = path.join(directory, "lib", "vscode", "out", "server-main.js");
+      const source = yield* fs.readFileString(bundle);
+      // 4.141.0's CLI never instantiates the language-pack service, so its install participant
+      // misses CLI installs. Rebuild through the native service before serving the first HTML.
+      const original = "i.set(Uu,F.createInstance(pl));";
+      const updated = original + "await F.invokeFunction(a=>a.get(Uu).update());";
+      if (source.includes(updated)) return;
+      if (!source.includes(original)) {
+        return yield* new CodeServerInstallationError({ code: "install_failed" });
+      }
+      yield* fs.writeFileString(bundle, source.replace(original, updated));
+    },
+    Effect.mapError((cause) =>
+      isCodeServerInstallationError(cause)
+        ? cause
+        : new CodeServerInstallationError({ code: "install_failed", cause }),
+    ),
+  );
 
   const ensure = Effect.fn("CodeServerInstallation.ensure")(
     function* (onProgress?: Parameters<CodeServerInstallation["Service"]["ensure"]>[0]) {
@@ -124,7 +146,7 @@ const make = Effect.gen(function* () {
         : new CodeServerInstallationError({ code: "install_failed", cause }),
     ),
   );
-  return CodeServerInstallation.of({ ensure });
+  return CodeServerInstallation.of({ ensure, prepareLanguage });
 });
 
 export const layer = Layer.effect(CodeServerInstallation, make);
