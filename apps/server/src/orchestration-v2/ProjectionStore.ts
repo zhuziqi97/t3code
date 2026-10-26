@@ -9,6 +9,7 @@ import type {
 } from "@t3tools/contracts";
 import {
   latestRootProviderFailure,
+  latestPresentedRun,
   latestUnheldRun,
   threadErrorSummary,
   usageLimitRunPresentedAsLatest,
@@ -1518,7 +1519,7 @@ export function threadShellFromProjection(
       projection.runs,
       projection.turnItems,
       providerSession?.lastError ?? null,
-    ) ?? latestUnheldRun(projection.runs);
+    ) ?? latestPresentedRun(projection.runs, projection.turnItems);
   const activeRun =
     projection.runs
       .filter(isInterruptibleRunForShell)
@@ -5794,7 +5795,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               ORDER BY r.ordinal DESC, r.run_id DESC
               LIMIT 1
             )
-            -- The newest run not waiting in a held queue, matching latestUnheldRun.
+            -- Match latestPresentedRun: omit held queues and inputs promoted into another run.
             LEFT JOIN orchestration_v2_projection_runs presented ON presented.run_id = (
               SELECT candidate.run_id
               FROM orchestration_v2_projection_runs candidate
@@ -5802,6 +5803,22 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 AND NOT (
                   candidate.status = 'queued'
                   AND json_extract(candidate.payload_json, '$.queueHeld') IS 1
+                )
+                AND NOT (
+                  candidate.status = 'cancelled'
+                  AND json_extract(candidate.payload_json, '$.startedAt') IS NULL
+                  AND EXISTS (
+                    SELECT 1
+                    FROM orchestration_v2_projection_turn_items promoted
+                      INDEXED BY orchestration_v2_projection_turn_items_user_message_idx
+                    WHERE promoted.thread_id = candidate.thread_id
+                      AND promoted.type = 'user_message'
+                      AND json_extract(promoted.payload_json, '$.messageId') =
+                        json_extract(candidate.payload_json, '$.userMessageId')
+                      AND json_extract(promoted.payload_json, '$.inputIntent') = 'promoted_queued_to_steer'
+                      AND promoted.run_id IS NOT NULL
+                      AND promoted.run_id <> candidate.run_id
+                  )
                 )
               ORDER BY candidate.ordinal DESC, candidate.run_id DESC
               LIMIT 1
