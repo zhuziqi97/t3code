@@ -13,6 +13,8 @@ import { serverEnvironment } from "~/state/server";
 import { resolveVersionMismatch } from "~/versionSkew";
 import type { ServerUpdateOutcome, ServerUpdateTarget } from "../ServerUpdateAction";
 import { stackedThreadToast, toastManager } from "../ui/toast";
+import { claimDesktopUpdateNotice, getDesktopUpdateNoticeIdentity } from "../desktopUpdate.logic";
+import { showDesktopUpdateAvailableToast } from "../desktopUpdate.toast";
 import {
   closeFinishedUpdateRun,
   getUpdateEverythingToastView,
@@ -310,9 +312,31 @@ function followHandedOffServers(servers: ReadonlyArray<HandedOffServer>): void {
 }
 
 let notifiedNotAppliedVersion: string | null = null;
+// Preserve discovery across sidebar remounts and Strict Mode effect replay.
+const notifiedClientUpdates = new Set<string>();
+let activeClientUpdateNotice: { identity: string; id: ReturnType<typeof toastManager.add> } | null =
+  null;
 
 export function DesktopUpdateLaunchNotice() {
-  const notAppliedVersion = useDesktopUpdateState()?.notAppliedVersion ?? null;
+  const state = useDesktopUpdateState();
+  const notAppliedVersion = state?.notAppliedVersion ?? null;
+
+  useEffect(() => {
+    const identity = getDesktopUpdateNoticeIdentity(state);
+    if (activeClientUpdateNotice && activeClientUpdateNotice.identity !== identity) {
+      toastManager.close(activeClientUpdateNotice.id);
+      activeClientUpdateNotice = null;
+    }
+    const bridge = window.desktopBridge;
+    if (
+      !bridge ||
+      !state ||
+      identity === null ||
+      !claimDesktopUpdateNotice(state, notifiedClientUpdates)
+    )
+      return;
+    activeClientUpdateNotice = { identity, id: showDesktopUpdateAvailableToast(bridge, state) };
+  }, [state]);
 
   useEffect(() => {
     const saved = takeSavedUpdateEverythingResult();

@@ -594,6 +594,8 @@ export const en = {
   "archive.archivedAt": "Archived",
   "archive.createdAt": " · Created ",
   "update.platform.download": "Go to download",
+  "update.client.available": "T3 {{version}} available",
+  "update.client.revision": "T3 {{version}} · different build",
   "update.platform.downloads": "Platform downloads",
   "update.platform.source": "Convene update source",
   "update.platform.publishedVersion": "Platform version: {{version}}",

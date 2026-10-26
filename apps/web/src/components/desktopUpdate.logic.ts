@@ -84,6 +84,27 @@ export function resolveDesktopUpdateButtonAction(
   return "none";
 }
 
+export function getDesktopUpdateNoticeIdentity(state: DesktopUpdateState | null): string | null {
+  const release = state?.convene;
+  if (
+    !release?.baseUrl ||
+    !state?.availableVersion ||
+    (release.relation !== "newer" && release.relation !== "different-build")
+  )
+    return null;
+  return JSON.stringify([release.baseUrl, state.availableVersion, release.releaseBuildId]);
+}
+
+export function claimDesktopUpdateNotice(
+  state: DesktopUpdateState | null,
+  notified: Set<string>,
+): boolean {
+  const identity = getDesktopUpdateNoticeIdentity(state);
+  if (state?.status !== "available" || identity === null || notified.has(identity)) return false;
+  notified.add(identity);
+  return true;
+}
+
 export function shouldShowArm64IntelBuildWarning(state: DesktopUpdateState | null): boolean {
   return state?.hostArch === "arm64" && state.appArch === "x64";
 }

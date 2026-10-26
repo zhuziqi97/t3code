@@ -1,7 +1,7 @@
 import { i18n } from "~/i18n";
 import type { TFunction } from "i18next";
 import type { ServerUpdateState } from "@t3tools/client-runtime/state/server";
-import type { EnvironmentId, ServerConfig } from "@t3tools/contracts";
+import type { DesktopUpdateState, EnvironmentId, ServerConfig } from "@t3tools/contracts";
 import { cliReleaseChannelOf } from "@t3tools/shared/cliRelease";
 
 import {
@@ -11,6 +11,22 @@ import {
   supportsServerUpdateThreadContinuation,
 } from "~/versionSkew";
 import type { ServerUpdateOutcome, ServerUpdateTarget } from "../ServerUpdateAction";
+import { resolveDesktopUpdateButtonAction } from "../desktopUpdate.logic";
+
+export function resolveSidebarUpdateActions(
+  state: DesktopUpdateState | null,
+  hasEnvironmentUpdates: boolean,
+) {
+  const runsEverything = hasEnvironmentUpdates && state?.status !== "downloading";
+  return {
+    // Convene downloads are manual and remain separate from the environment update run.
+    clientAction:
+      state && (state.convene || !runsEverything)
+        ? resolveDesktopUpdateButtonAction(state)
+        : "none",
+    runsEverything,
+  } as const;
+}
 
 export interface UpdateEverythingMachine {
   readonly environmentId: EnvironmentId;

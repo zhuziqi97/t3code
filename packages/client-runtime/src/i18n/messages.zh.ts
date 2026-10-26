@@ -578,6 +578,8 @@ export const zh: Partial<Messages> = {
   "archive.archivedAt": "归档于",
   "archive.createdAt": " · 创建于 ",
   "update.platform.download": "前往下载",
+  "update.client.available": "T3 新版 {{version}}",
+  "update.client.revision": "T3 {{version}} · 不同构建",
   "update.platform.downloads": "平台下载页",
   "update.platform.source": "Convene 更新来源",
   "update.platform.publishedVersion": "平台提供版本：{{version}}",
