@@ -21,6 +21,7 @@ import {
   type ProviderOptionDescriptor,
   type OrchestrationV2ExecutionNode,
   type OrchestrationV2RunStatus,
+  type OrchestrationV2TurnItem,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import { usageLimitBlockedRun } from "@t3tools/shared/orchestrationV2ThreadError";
@@ -28,6 +29,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { createI18n } from "../i18n/index.ts";
 
 import { v2Projection } from "./orchestrationV2TestFixtures.ts";
+import { runEndState } from "../runEndState.ts";
 import {
   deriveReportedModelSelection,
   applyThreadProviderConfiguration,
@@ -63,6 +65,214 @@ function run(id: string, ordinal: number, status: OrchestrationV2RunStatus) {
 }
 
 describe("thread execution presentation", () => {
+  function promotedQueueProjection() {
+    const completedAt = DateTime.makeUnsafe("2026-10-26T03:05:36.145Z");
+    const promotedAt = DateTime.makeUnsafe("2026-10-26T03:04:44.236Z");
+    const completed = { ...run("response", 1, "completed"), completedAt };
+    const promoted = {
+      ...run("promoted-queue", 2, "cancelled"),
+      startedAt: null,
+      completedAt: promotedAt,
+    };
+    const input: Extract<OrchestrationV2TurnItem, { type: "user_message" }> = {
+      id: TurnItemId.make("promoted-input"),
+      threadId: v2Projection.thread.id,
+      runId: completed.id,
+      nodeId: null,
+      providerThreadId: null,
+      providerTurnId: null,
+      nativeItemRef: null,
+      parentItemId: null,
+      ordinal: 2,
+      type: "user_message",
+      status: "completed",
+      title: null,
+      startedAt: promotedAt,
+      completedAt: promotedAt,
+      updatedAt: promotedAt,
+      createdBy: "user",
+      creationSource: "web",
+      messageId: promoted.userMessageId,
+      inputIntent: "promoted_queued_to_steer",
+      text: "t3code的issue",
+      attachments: [],
+    };
+    const response = {
+      id: MessageId.make("final-response"),
+      threadId: v2Projection.thread.id,
+      runId: completed.id,
+      nodeId: null,
+      role: "assistant" as const,
+      text: "Issue recorded",
+      attachments: [],
+      streaming: false,
+      createdBy: "agent" as const,
+      creationSource: "provider" as const,
+      createdAt: DateTime.makeUnsafe("2026-10-26T03:05:35.947Z"),
+      updatedAt: DateTime.makeUnsafe("2026-10-26T03:05:35.947Z"),
+    };
+    return {
+      ...v2Projection,
+      runs: [completed, promoted],
+      messages: [response],
+      turnItems: [input] as const,
+    };
+  }
+
+  it("presents the completed response after its queued follow-up was promoted to steer", () => {
+    const projection = promotedQueueProjection();
+    const latest = deriveLatestThreadRun(projection);
+
+    expect(latest).toMatchObject({
+      runId: RunId.make("response"),
+      status: "completed",
+      assistantMessageId: MessageId.make("final-response"),
+    });
+    expect(runEndState(latest)).toEqual({
+      kind: "ended",
+      completedAt: "2026-10-26T03:05:36.145Z",
+    });
+    expect(deriveThreadActivityRun(projection)).toEqual(latest);
+    expect(deriveThreadRuntime(projection)).toMatchObject({
+      status: "completed",
+      activeRunId: null,
+    });
+  });
+
+  it("still presents an unstarted queue cancellation when its message was not promoted", () => {
+    const projection = promotedQueueProjection();
+    const queuedInput = {
+      ...projection.turnItems[0],
+      runId: RunId.make("promoted-queue"),
+      inputIntent: "queued_turn" as const,
+    };
+    const latest = deriveLatestThreadRun({ ...projection, turnItems: [queuedInput] });
+
+    expect(latest).toMatchObject({
+      runId: RunId.make("promoted-queue"),
+      status: "cancelled",
+      startedAt: null,
+      assistantMessageId: null,
+    });
+    expect(runEndState(latest)?.kind).toBe("stopped");
+    expect(deriveLatestThreadRun({ ...projection, turnItems: [] })).toEqual(latest);
+  });
+
+  it("does not hide a different cancelled queue because another message was promoted", () => {
+    const projection = promotedQueueProjection();
+    const cancelled = {
+      ...run("cancelled-queue", 3, "cancelled"),
+      startedAt: null,
+      completedAt: now,
+    };
+
+    expect(
+      deriveLatestThreadRun({ ...projection, runs: [...projection.runs, cancelled] }),
+    ).toMatchObject({
+      runId: cancelled.id,
+      status: "cancelled",
+      assistantMessageId: null,
+    });
+  });
+
+  it.each([
+    ["failed", "failed"],
+    ["interrupted", "stopped"],
+    ["cancelled", "stopped"],
+    ["rolled_back", "rolledBack"],
+  ] as const)("preserves the responding run's real %s outcome after promotion", (status, kind) => {
+    const projection = promotedQueueProjection();
+    const latest = deriveLatestThreadRun({
+      ...projection,
+      runs: projection.runs.map((candidate) =>
+        candidate.id === RunId.make("response") ? { ...candidate, status } : candidate,
+      ),
+    });
+
+    expect(latest).toMatchObject({
+      runId: RunId.make("response"),
+      status,
+      assistantMessageId: MessageId.make("final-response"),
+    });
+    expect(runEndState(latest)?.kind).toBe(kind);
+  });
+
+  it.each(["running", "waiting"] as const)(
+    "keeps the promoted input attached to its %s run without end feedback",
+    (status) => {
+      const projection = promotedQueueProjection();
+      const active = {
+        ...projection,
+        runs: projection.runs.map((candidate) =>
+          candidate.id === RunId.make("response")
+            ? { ...candidate, status, completedAt: null }
+            : candidate,
+        ),
+      };
+      const latest = deriveLatestThreadRun(active);
+
+      expect(latest).toMatchObject({ runId: RunId.make("response"), status });
+      expect(deriveThreadActivityRun(active)).toEqual(latest);
+      expect(deriveThreadRuntime(active)?.status).toBe(status);
+      expect(runEndState(latest)).toBeNull();
+    },
+  );
+
+  it("ignores a held queue after promotion and presents it again when resumed", () => {
+    const projection = promotedQueueProjection();
+    const held = { ...run("held", 3, "queued"), queueHeld: true };
+
+    expect(
+      deriveLatestThreadRun({ ...projection, runs: [...projection.runs, held] }),
+    ).toMatchObject({
+      runId: RunId.make("response"),
+      status: "completed",
+    });
+    expect(
+      deriveLatestThreadRun({
+        ...projection,
+        runs: [...projection.runs, { ...held, queueHeld: false }],
+      }),
+    ).toMatchObject({ runId: held.id, status: "queued" });
+  });
+
+  it("still holds completion for background work after a queued input was promoted", () => {
+    const projection = promotedQueueProjection();
+    const background: Extract<OrchestrationV2TurnItem, { type: "dynamic_tool" }> = {
+      id: TurnItemId.make("background-work"),
+      threadId: projection.thread.id,
+      runId: RunId.make("response"),
+      nodeId: null,
+      providerThreadId: null,
+      providerTurnId: null,
+      nativeItemRef: null,
+      parentItemId: null,
+      ordinal: 3,
+      type: "dynamic_tool",
+      status: "running",
+      title: "Watch build",
+      toolName: "watch_build",
+      input: {},
+      startedAt: now,
+      completedAt: null,
+      updatedAt: now,
+    };
+    const pending = { ...projection, turnItems: [...projection.turnItems, background] };
+
+    expect(deriveLatestThreadRun(pending)?.status).toBe("completed");
+    expect(deriveThreadRuntime(pending)).toMatchObject({ status: "idle", activeRunId: null });
+    expect(
+      deriveThreadRuntime({
+        ...pending,
+        runs: pending.runs.map((candidate) =>
+          candidate.id === background.runId
+            ? { ...candidate, status: "failed" as const }
+            : candidate,
+        ),
+      }),
+    ).toMatchObject({ status: "failed", activeRunId: null });
+  });
+
   it("derives the current root failure without inheriting errors from children or previous runs", () => {
     const failed = { ...run("limited", 1, "failed"), rootNodeId: NodeId.make("root") };
     const item = {

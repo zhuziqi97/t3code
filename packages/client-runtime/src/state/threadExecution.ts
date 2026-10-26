@@ -20,6 +20,8 @@ import {
   type OrchestrationV2ExecutionNode,
   type OrchestrationV2ThreadProjection,
   orchestrationV2RunWorkStartedAt,
+  type MessageId,
+  type RunId,
   type ThreadId,
 } from "@t3tools/contracts";
 import {
@@ -96,10 +98,34 @@ function presentedUsageLimitRun(
   );
 }
 
-function presentedLatestRun(
+export function presentedLatestRun(
   projection: ThreadStructure,
 ): OrchestrationV2ThreadProjection["runs"][number] | null {
-  return presentedUsageLimitRun(projection) ?? latestUnheldRun(projection.runs);
+  const latest = presentedUsageLimitRun(projection) ?? latestUnheldRun(projection.runs);
+  if (latest?.status !== "cancelled" || latest.startedAt !== null) return latest;
+
+  const promotedInputs = new Map<MessageId, RunId>();
+  for (const item of projection.turnItems) {
+    if (
+      item.type === "user_message" &&
+      item.inputIntent === "promoted_queued_to_steer" &&
+      item.runId !== null
+    ) {
+      promotedInputs.set(item.messageId, item.runId);
+    }
+  }
+  // Promotion cancels the queue record but moves its input into another run.
+  return latestUnheldRun(
+    projection.runs.filter((run) => {
+      const targetRunId = promotedInputs.get(run.userMessageId);
+      return !(
+        run.status === "cancelled" &&
+        run.startedAt === null &&
+        targetRunId !== undefined &&
+        targetRunId !== run.id
+      );
+    }),
+  );
 }
 
 export function deriveLatestThreadRun(projection: ThreadStructure): ThreadRunSummary | null {

@@ -2,12 +2,9 @@ import { type OrchestrationV2ProviderTurn, type RunAttemptId } from "@t3tools/co
 import {
   deriveLatestThreadRun,
   deriveThreadRuntime,
+  presentedLatestRun,
 } from "@t3tools/client-runtime/state/thread-execution";
 import { derivePendingBackgroundWork } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
-import {
-  latestUnheldRun,
-  usageLimitRunPresentedAsLatest,
-} from "@t3tools/shared/orchestrationV2ThreadError";
 import * as Option from "effect/Option";
 import type { SetStateAction } from "react";
 import { applyClaudePromptEffortPrefix, resolvePromptInjectedEffort } from "@t3tools/shared/model";
@@ -1668,16 +1665,9 @@ export function presentThreadShellFromProjection(
 /** Background work the provider still runs after the latest run ended. */
 export function deriveThreadPendingBackgroundTasks(projection: ThreadStructure | null) {
   if (projection === null) return [];
-  const sessionError =
-    projection.providerSessions.findLast(
-      (session) => session.providerInstanceId === projection.thread.providerInstanceId,
-    )?.lastError ?? null;
-  const latestRun =
-    usageLimitRunPresentedAsLatest(projection.runs, projection.turnItems, sessionError) ??
-    latestUnheldRun(projection.runs);
   return [
     ...derivePendingBackgroundWork({
-      latestRun,
+      latestRun: presentedLatestRun(projection),
       providerThreads: projection.providerThreads,
       turnItems: projection.turnItems,
       activeProviderThreadId: projection.thread.activeProviderThreadId,
