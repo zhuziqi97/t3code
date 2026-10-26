@@ -7,6 +7,7 @@ import {
   AuthFilesystemWriteScope,
   AuthTerminalOperateScope,
   AuthSessionId,
+  ConveneIdeResult,
   type AuthEnvironmentScope,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
@@ -28,6 +29,7 @@ import * as ConveneIde from "./ConveneIde.ts";
 import * as ConveneIdeHttp from "./ConveneIdeHttp.ts";
 
 const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
+const decodeResult = Schema.decodeUnknownEffect(ConveneIdeResult);
 const OPEN = {
   operation: "OPEN",
   service: "code-server",
@@ -84,18 +86,19 @@ const fixture = Effect.gen(function* () {
   assert.ok(address && typeof address !== "string");
   if (!address || typeof address === "string") return yield* Effect.die("Expected TCP fixture");
   let managementCalls = 0;
+  let result: ConveneIdeResult = {
+    service: "code-server",
+    version: "4.141.0",
+    phase: "ready",
+    runtimeId: "runtime",
+    entryPath: "api/convene/ide/code-server/runtime/?folder=workspace",
+    error: null,
+  };
   const ide = ConveneIde.ConveneIde.of({
     handle: () =>
       Effect.sync(() => {
         managementCalls++;
-        return {
-          service: "code-server",
-          version: "4.141.0",
-          phase: "ready",
-          runtimeId: "runtime",
-          entryPath: "api/convene/ide/code-server/runtime/?folder=workspace",
-          error: null,
-        } as const;
+        return result;
       }),
     changes: Stream.never,
     upstream: (id) =>
@@ -141,8 +144,60 @@ const fixture = Effect.gen(function* () {
     received,
     http: Context.get(services, HttpClient.HttpClient),
     calls: () => managementCalls,
+    setResult: (value: ConveneIdeResult) => {
+      result = value;
+    },
   };
 });
+
+it.live("preserves optional preparation facts over HTTP and still decodes old results", () =>
+  Effect.gen(function* () {
+    const test = yield* fixture;
+    const legacy = {
+      service: "code-server",
+      version: "4.141.0",
+      phase: "ready",
+      runtimeId: "runtime",
+      entryPath: "api/convene/ide/code-server/runtime/?folder=workspace",
+      error: null,
+    } as const;
+    const results: ConveneIdeResult[] = [
+      legacy,
+      {
+        ...legacy,
+        phase: "installing",
+        entryPath: null,
+        progress: { stage: "downloading", receivedBytes: 17, totalBytes: 23 },
+      },
+      {
+        ...legacy,
+        phase: "installing",
+        entryPath: null,
+        progress: { stage: "downloading", receivedBytes: 17 },
+      },
+      {
+        ...legacy,
+        phase: "installing",
+        entryPath: null,
+        progress: { stage: "configuring-language" },
+      },
+      { ...legacy, warning: { code: "language_setup_failed" } },
+    ];
+    for (const expected of results) {
+      test.setResult(expected);
+      const response = yield* test.http.post(test.origin + "/api/convene/ide", {
+        headers: { authorization: "Bearer full" },
+        body: HttpBody.text(encodeJson(OPEN), "application/json"),
+      });
+      assert.equal(response.status, 200);
+      const value = yield* response.json;
+      assert.deepEqual<unknown>(value, expected);
+      assert.deepEqual(yield* decodeResult(value), expected);
+    }
+    assert.equal(test.calls(), results.length);
+    assert.deepEqual(test.received, []);
+  }),
+);
 
 it.live(
   "requires both filesystem write and terminal operate before management or native HTML",

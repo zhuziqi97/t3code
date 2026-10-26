@@ -15,6 +15,7 @@ import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import * as ChildProcess from "effect/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
+import { applyEdits, findNodeAtLocation, modify, parseTree, type ParseError } from "jsonc-parser";
 
 import * as ServerConfig from "../config.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
@@ -23,6 +24,11 @@ import * as ConveneWorkspaces from "./ConveneWorkspaces.ts";
 
 export const MANAGEMENT_PATH = "/api/convene/ide";
 export const RUNTIME_PREFIX = `${MANAGEMENT_PATH}/code-server/`;
+
+class LanguageSetupError extends Schema.TaggedError<LanguageSetupError>()(
+  "LanguageSetupError",
+  {},
+) {}
 
 export class ConveneIdeError extends Schema.TaggedError<ConveneIdeError>()("ConveneIdeError", {
   code: Schema.Literals([
@@ -76,9 +82,69 @@ const make = Effect.gen(function* () {
   });
   let attempt: { id: string; scope: Scope.Closeable; origin: string | null } | undefined;
   const dataDir = path.join(config.baseDir, "tools", "code-server", "data");
+  const isolationArgs = [
+    "--user-data-dir",
+    dataDir,
+    "--extensions-dir",
+    path.join(config.baseDir, "tools", "code-server", "extensions"),
+    "--config",
+    path.join(config.baseDir, "tools", "code-server", "config.yaml"),
+  ];
+  // code-server lets PORT override --bind-addr, including our ephemeral loopback port.
+  const processEnv = { ...environment, PORT: undefined, CS_DISABLE_PROXY: "true" };
+
+  // Download chunks already belong to launch's span; keep each report untraced.
+  const reportProgress = Effect.fnUntraced(function* (
+    id: string,
+    progress: NonNullable<ConveneIdeResult["progress"]>,
+  ) {
+    yield* SubscriptionRef.update(state, (current) =>
+      attempt?.id === id && current.runtimeId === id ? { ...current, progress } : current,
+    );
+  });
+
+  const configureLanguage = Effect.fn("ConveneIde.configureLanguage")(function* (
+    executable: string,
+  ) {
+    const marker = path.join(dataDir, ".t3-default-language");
+    if (yield* fs.exists(marker)) return;
+    const argvPath = path.join(dataDir, "User", "argv.json");
+    const content = (yield* fs.exists(argvPath)) ? yield* fs.readFileString(argvPath) : "{}\n";
+    const errors: ParseError[] = [];
+    // code-server strips comments then uses JSON.parse, which rejects trailing commas.
+    const root = parseTree(content, errors);
+    if (!root || root.type !== "object" || errors.length > 0) {
+      return yield* new LanguageSetupError({});
+    }
+    if (!findNodeAtLocation(root, ["locale"])) {
+      const exit = yield* spawner.exitCode(
+        ChildProcess.make(
+          executable,
+          [
+            ...isolationArgs,
+            "--install-extension",
+            "MS-CEINTL.vscode-language-pack-zh-hans@1.131.0",
+          ],
+          { cwd: config.cwd, env: processEnv, stdin: "ignore", stdout: "ignore", stderr: "ignore" },
+        ),
+      );
+      if (exit !== 0) return yield* new LanguageSetupError({});
+      yield* fs.writeFileString(
+        argvPath,
+        applyEdits(
+          content,
+          modify(content, ["locale"], "zh-cn", {
+            formattingOptions: { insertSpaces: true, tabSize: 2 },
+          }),
+        ),
+      );
+    }
+    // Once handled, a user can remove the locale or extension without OPEN undoing it.
+    yield* fs.writeFileString(marker, "");
+  });
 
   const launch = Effect.fn("ConveneIde.launch")(function* (id: string) {
-    const executable = yield* installation.ensure;
+    const executable = yield* installation.ensure((progress) => reportProgress(id, progress));
     yield* fs.makeDirectory(path.join(dataDir, "User"), { recursive: true });
     const settingsPath = path.join(dataDir, "User", "settings.json");
     if (!(yield* fs.exists(settingsPath))) {
@@ -87,7 +153,23 @@ const make = Effect.gen(function* () {
         '{"remote.autoForwardPorts":false,"telemetry.telemetryLevel":"off"}\n',
       );
     }
-    yield* SubscriptionRef.update(state, (current) => ({ ...current, phase: "starting" as const }));
+    yield* reportProgress(id, { stage: "configuring-language" });
+    yield* configureLanguage(executable).pipe(
+      // A language download must not indefinitely block an otherwise usable editor.
+      Effect.timeout("2 minutes"),
+      Effect.catch(() =>
+        SubscriptionRef.update(state, (current) =>
+          attempt?.id === id && current.runtimeId === id
+            ? { ...current, warning: { code: "language_setup_failed" as const } }
+            : current,
+        ),
+      ),
+    );
+    yield* SubscriptionRef.update(state, (current) =>
+      attempt?.id === id && current.runtimeId === id
+        ? { ...current, phase: "starting" as const, progress: { stage: "starting" as const } }
+        : current,
+    );
     const ready = yield* Deferred.make<string>();
     const child = yield* spawner.spawn(
       ChildProcess.make(
@@ -101,17 +183,11 @@ const make = Effect.gen(function* () {
           "--disable-telemetry",
           "--disable-update-check",
           "--ignore-last-opened",
-          "--user-data-dir",
-          dataDir,
-          "--extensions-dir",
-          path.join(config.baseDir, "tools", "code-server", "extensions"),
-          "--config",
-          path.join(config.baseDir, "tools", "code-server", "config.yaml"),
+          ...isolationArgs,
         ],
         {
           cwd: config.cwd,
-          // code-server lets PORT override --bind-addr, including our ephemeral loopback port.
-          env: { ...environment, PORT: undefined, CS_DISABLE_PROXY: "true" },
+          env: processEnv,
           stdin: "ignore",
           stdout: "pipe",
           stderr: "pipe",
@@ -135,7 +211,11 @@ const make = Effect.gen(function* () {
     );
     if (attempt?.id !== id) return;
     attempt.origin = origin;
-    yield* SubscriptionRef.update(state, (current) => ({ ...current, phase: "ready" as const }));
+    yield* SubscriptionRef.update(state, (current) => ({
+      ...current,
+      phase: "ready" as const,
+      progress: undefined,
+    }));
     return yield* exited;
   });
 
@@ -147,7 +227,14 @@ const make = Effect.gen(function* () {
       .pipe(Effect.mapError((cause) => new ConveneIdeError({ code: "internal_error", cause })));
     const scope = yield* Scope.make();
     attempt = { id, scope, origin: null };
-    const next = { ...current, phase: "installing" as const, runtimeId: id };
+    const next = {
+      ...current,
+      phase: "installing" as const,
+      runtimeId: id,
+      progress: { stage: "checking" as const },
+      warning: undefined,
+      error: null,
+    };
     yield* SubscriptionRef.set(state, next);
     yield* launch(id).pipe(
       Effect.scoped,
@@ -161,7 +248,12 @@ const make = Effect.gen(function* () {
               ? "runtime_exited"
               : "start_failed";
           attempt.origin = null;
-          yield* SubscriptionRef.set(state, { ...current, phase: "failed", error: { code } });
+          yield* SubscriptionRef.set(state, {
+            ...current,
+            phase: "failed",
+            progress: undefined,
+            error: { code },
+          });
           yield* Effect.logWarning("Managed code-server stopped", { runtimeId: id, code, cause });
         }),
       ),
@@ -179,6 +271,8 @@ const make = Effect.gen(function* () {
       phase: "stopped" as const,
       runtimeId: null,
       entryPath: null,
+      progress: undefined,
+      warning: undefined,
       error: null,
     }));
   });

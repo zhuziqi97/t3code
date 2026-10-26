@@ -1,3 +1,4 @@
+import type { ConveneIdeResult } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -30,7 +31,11 @@ export class CodeServerInstallationError extends Schema.TaggedError<CodeServerIn
 
 export class CodeServerInstallation extends Context.Service<
   CodeServerInstallation,
-  { readonly ensure: Effect.Effect<string, CodeServerInstallationError> }
+  {
+    readonly ensure: (
+      onProgress?: (progress: NonNullable<ConveneIdeResult["progress"]>) => Effect.Effect<unknown>,
+    ) => Effect.Effect<string, CodeServerInstallationError>;
+  }
 >()("t3/convene/CodeServerInstallation") {}
 
 export const isCodeServerInstallationError = Schema.is(CodeServerInstallationError);
@@ -54,34 +59,63 @@ const make = Effect.gen(function* () {
   );
   const executable = path.join(directory, "bin", "code-server");
 
-  const ensure = Effect.gen(function* () {
-    if (!supported) return yield* new CodeServerInstallationError({ code: "unsupported_platform" });
-    if (yield* fs.exists(executable)) return executable;
-    yield* fs.makeDirectory(path.dirname(directory), { recursive: true });
-    const staging = yield* fs.makeTempDirectoryScoped({
-      directory: path.dirname(directory),
-      prefix: ".install-",
-    });
-    const archive = path.join(staging, "download.tar.gz");
-    const extracted = path.join(staging, "runtime");
-    const response = yield* http
-      .execute(
-        HttpClientRequest.get(
-          `https://github.com/coder/code-server/releases/download/v${VERSION}/${asset}`,
-        ),
-      )
-      .pipe(Effect.flatMap(HttpClientResponse.filterStatusOk));
-    yield* Stream.run(response.stream, fs.sink(archive));
-    yield* fs.makeDirectory(extracted);
-    const exit = yield* spawner.exitCode(
-      ChildProcess.make("tar", ["-xzf", archive, "-C", extracted, "--strip-components=1"]),
-    );
-    if (exit !== 0 || !(yield* fs.exists(path.join(extracted, "bin", "code-server")))) {
-      return yield* new CodeServerInstallationError({ code: "install_failed" });
-    }
-    yield* fs.rename(extracted, directory);
-    return executable;
-  }).pipe(
+  const ensure = Effect.fn("CodeServerInstallation.ensure")(
+    function* (onProgress?: Parameters<CodeServerInstallation["Service"]["ensure"]>[0]) {
+      if (!supported)
+        return yield* new CodeServerInstallationError({ code: "unsupported_platform" });
+      if (yield* fs.exists(executable)) return executable;
+      yield* fs.makeDirectory(path.dirname(directory), { recursive: true });
+      const staging = yield* fs.makeTempDirectoryScoped({
+        directory: path.dirname(directory),
+        prefix: ".install-",
+      });
+      const archive = path.join(staging, "download.tar.gz");
+      const extracted = path.join(staging, "runtime");
+      const response = yield* http
+        .execute(
+          HttpClientRequest.get(
+            `https://github.com/coder/code-server/releases/download/v${VERSION}/${asset}`,
+          ),
+        )
+        .pipe(Effect.flatMap(HttpClientResponse.filterStatusOk));
+      const length = response.headers["content-length"];
+      const encoding = response.headers["content-encoding"];
+      const size = length && /^\d+$/.test(length) ? Number(length) : undefined;
+      // HTTP clients may decompress the stream, so encoded lengths count different bytes.
+      const totalBytes =
+        (!encoding || encoding.toLowerCase() === "identity") &&
+        size !== undefined &&
+        Number.isSafeInteger(size) &&
+        size > 0
+          ? size
+          : undefined;
+      let receivedBytes = 0;
+      // Chunk reports stay inside the installation span rather than creating a span per chunk.
+      const reportDownload = () =>
+        onProgress?.({
+          stage: "downloading",
+          receivedBytes,
+          ...(totalBytes === undefined ? {} : { totalBytes }),
+        }) ?? Effect.void;
+      yield* reportDownload();
+      yield* response.stream.pipe(
+        Stream.tap((bytes) => {
+          receivedBytes += bytes.length;
+          return reportDownload();
+        }),
+        Stream.run(fs.sink(archive)),
+      );
+      yield* fs.makeDirectory(extracted);
+      yield* onProgress?.({ stage: "extracting" }) ?? Effect.void;
+      const exit = yield* spawner.exitCode(
+        ChildProcess.make("tar", ["-xzf", archive, "-C", extracted, "--strip-components=1"]),
+      );
+      if (exit !== 0 || !(yield* fs.exists(path.join(extracted, "bin", "code-server")))) {
+        return yield* new CodeServerInstallationError({ code: "install_failed" });
+      }
+      yield* fs.rename(extracted, directory);
+      return executable;
+    },
     Effect.scoped,
     Effect.timeout("15 minutes"),
     Effect.mapError((cause) =>
@@ -89,7 +123,6 @@ const make = Effect.gen(function* () {
         ? cause
         : new CodeServerInstallationError({ code: "install_failed", cause }),
     ),
-    Effect.withSpan("CodeServerInstallation.ensure"),
   );
   return CodeServerInstallation.of({ ensure });
 });
