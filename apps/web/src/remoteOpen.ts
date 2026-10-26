@@ -6,14 +6,12 @@ import {
   type RemoteOpenTarget,
 } from "@t3tools/contracts";
 import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
 import { Atom } from "effect/reactivity";
 import { useAtomValue } from "@effect/atom-react";
 import { useEffect, useState } from "react";
 
 import { isDesktopLocalConnectionTarget } from "~/connection/desktopLocal";
 import { isLoopbackHostname } from "~/environments/primary/target";
-import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { environmentPresentations } from "~/state/presentation";
 
 export interface RemoteOpenHost {
@@ -203,11 +201,4 @@ export async function openRemoteEditorUrl(url: string): Promise<boolean> {
   }
   window.location.assign(url);
   return true;
-}
-
-const REMOTE_OPEN_HINT_KEY = "t3code:remote-open-hint-seen";
-
-export function useRemoteOpenHint(): readonly [seen: boolean, markSeen: () => void] {
-  const [seen, setSeen] = useLocalStorage(REMOTE_OPEN_HINT_KEY, false, Schema.Boolean);
-  return [seen, () => setSeen(true)] as const;
 }

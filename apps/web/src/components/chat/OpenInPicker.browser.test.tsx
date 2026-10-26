@@ -46,7 +46,7 @@ vi.mock(import("../../editorPreferences"), async (importOriginal) => {
   const actual = await importOriginal();
   return {
     ...actual,
-    usePreferredEditor: (available: readonly EditorId[]) => {
+    usePreferredEditor: (available?: readonly EditorId[]) => {
       const [preferred, setPreferred] = actual.usePreferredEditor(available);
       const recordPreferred: typeof setPreferred = (editor) => {
         state.setPreferred(editor);
@@ -59,6 +59,7 @@ vi.mock(import("../../editorPreferences"), async (importOriginal) => {
 vi.mock(import("../../remoteOpen"), async (importOriginal) => ({
   ...(await importOriginal()),
   useRemoteOpenState: () => state.remote,
+  useRemoteOpenResolution: () => ({ state: state.remote, isResolved: true }),
   useRemoteCapableEditors: () => state.clientEditors,
   useRemoteOpenHint: () => [false, state.markHintSeen] as const,
   openRemoteEditorUrl: state.openUrl,
@@ -81,6 +82,7 @@ async function setup() {
   state.markHintSeen.mockReset();
   state.listeners.clear();
   window.localStorage.clear();
+  window.localStorage.setItem("t3code:last-editor", JSON.stringify("vscode"));
 
   await using stack = new AsyncDisposableStack();
   const _platform = vi.spyOn(navigator, "platform", "get").mockReturnValue("Linux");
@@ -116,7 +118,7 @@ async function setup() {
     return element!;
   }
 
-  const primaryButton = () => byLabel("Open file in preferred editor");
+  const primaryButton = () => byLabel("Open editor");
   const menuItems = () => [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
 
   async function click(element: HTMLElement) {
@@ -173,11 +175,11 @@ describe("host editor access", () => {
     const event = await pressOpenFavorite();
     expect(state.run).not.toHaveBeenCalled();
     expect(state.setPreferred).not.toHaveBeenCalled();
-    expect(event.defaultPrevented).toBe(false);
+    expect(event.defaultPrevented).toBe(true);
 
     await renderPicker();
     expect(primaryButton().disabled).toBe(true);
-    expect(byLabel("Choose editor").disabled).toBe(true);
-    expect((await pressOpenFavorite()).defaultPrevented).toBe(false);
+    expect(byLabel("Choose editor").disabled).toBe(false);
+    expect((await pressOpenFavorite()).defaultPrevented).toBe(true);
   });
 });

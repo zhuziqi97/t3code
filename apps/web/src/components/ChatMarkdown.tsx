@@ -122,10 +122,9 @@ import { stackedThreadToast, toastManager } from "./ui/toast";
 import { recordVisitForThread } from "../browserHistoryStore";
 import {
   PreferredEditorEnvironmentRequiredError,
-  useOpenInPreferredEditor,
+  useEditorAction,
   usePreferredEditor,
 } from "../editorPreferences";
-import { openInEditorMenuLabel } from "../editorLabels";
 import { resolveDiffThemeName } from "../lib/diffRendering";
 import { RenderErrorBoundary } from "./RenderErrorBoundary";
 import { useRenderedAppearance } from "../hooks/useTheme";
@@ -456,6 +455,7 @@ function useChatMarkdownState({
   headingLevelOffset = 0,
   githubMedia = false,
 }: ChatMarkdownProps) {
+  const t = useTranslate();
   const resolvedTheme = useRenderedAppearance();
   const markdownRef = useRef<HTMLElement>(null);
   const mediaRequestId = useRef(0);
@@ -583,9 +583,12 @@ function useChatMarkdownState({
     markdownServerConfigFieldsAtom(environmentId),
   );
   const projects = useProjects();
-  const [preferredEditor] = usePreferredEditor(availableEditors);
-  const preferredEditorMenuLabel = openInEditorMenuLabel(preferredEditor);
-  const openInPreferredEditor = useOpenInPreferredEditor(environmentId, availableEditors);
+  const preferredEditorMenuLabel = t("chat.editor.open");
+  const [preferredEditor] = usePreferredEditor();
+  const editorAction = useEditorAction(environmentId, availableEditors, {
+    ...(threadRef ? { threadId: threadRef.threadId } : {}),
+    workspacePath: cwd ?? null,
+  });
   const openInEditor = useAtomCommand(shellEnvironment.openInEditor, {
     reportFailure: false,
   });
@@ -849,11 +852,9 @@ function useChatMarkdownState({
         theme={resolvedTheme}
         threadRef={threadRef}
         onOpen={
-          canUseShellActions
+          editorAction.unavailableReason(preferredEditor) === null
             ? async () =>
-                openInPreferredEditor(
-                  markdownFileEditorTarget(fileLinkMeta, await resolveHostPath()),
-                )
+                editorAction.open(markdownFileEditorTarget(fileLinkMeta, await resolveHostPath()))
             : undefined
         }
         resolveCopyPaths={async () =>

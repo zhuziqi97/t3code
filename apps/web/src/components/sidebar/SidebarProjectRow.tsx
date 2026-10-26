@@ -7,7 +7,15 @@ import { useEnvironmentScope } from "../../state/session";
 import { cn } from "../../lib/utils";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { Button } from "../ui/button";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+  MenuSub,
+  MenuSubTrigger,
+  MenuSubPopup,
+} from "../ui/menu";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { ProjectEnvironmentBadge } from "../ProjectEnvironmentBadge";
 import type { ComponentProps } from "react";
@@ -15,6 +23,27 @@ import type { ProjectDragHandle } from "./ProjectTreeLayout";
 import { useThreadShellsForProjectRefs } from "../../state/entities";
 import { filterSidebarV2VisibleThreads } from "../Sidebar.logic";
 import { ProjectStatusIndicator, useProjectThreadStatus } from "./ProjectStatusIndicator";
+
+import { useAtomValue } from "@effect/atom-react";
+import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
+import { serverEnvironment } from "../../state/server";
+import { OpenInPicker } from "../chat/OpenInPicker";
+import type { SidebarProjectGroupMember } from "../../sidebarProjectGrouping";
+
+function ProjectEditorMenu({ project }: { project: SidebarProjectGroupMember }) {
+  const config = useAtomValue(serverEnvironment.configValueAtom(project.environmentId));
+  return (
+    <OpenInPicker
+      presentation="menu"
+      environmentId={project.environmentId}
+      keybindings={config?.keybindings ?? DEFAULT_RESOLVED_KEYBINDINGS}
+      availableEditors={config?.availableEditors ?? []}
+      openInCwd={project.workspaceRoot}
+      workspace={{ projectId: project.id, workspacePath: project.workspaceRoot }}
+      enableShortcut={false}
+    />
+  );
+}
 
 export const SidebarProjectRow = memo(function SidebarProjectRow(props: {
   project: SidebarProjectSnapshot;
@@ -110,6 +139,24 @@ export const SidebarProjectRow = memo(function SidebarProjectRow(props: {
             <MoreHorizontalIcon />
           </MenuTrigger>
           <MenuPopup>
+            {!props.isScratch &&
+              props.project.memberProjects.map((member) =>
+                props.project.memberProjects.length === 1 ? (
+                  <ProjectEditorMenu
+                    key={`${member.environmentId}:${member.id}`}
+                    project={member}
+                  />
+                ) : (
+                  <MenuSub key={`${member.environmentId}:${member.id}`}>
+                    <MenuSubTrigger>
+                      {t("chat.editor.open")} · {member.environmentLabel ?? member.environmentId}
+                    </MenuSubTrigger>
+                    <MenuSubPopup>
+                      <ProjectEditorMenu project={member} />
+                    </MenuSubPopup>
+                  </MenuSub>
+                ),
+              )}
             <MenuItem onClick={props.onSettings}>{t("convene.sidebar.projectSettings")}</MenuItem>
           </MenuPopup>
         </Menu>

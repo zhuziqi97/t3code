@@ -229,11 +229,7 @@ import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../termina
 import { useKnownTerminalSessions, useThreadRunningTerminalIds } from "../state/terminalSessions";
 import { useEnvironmentQuery } from "../state/query";
 import { useEnvironmentScope } from "~/state/session";
-import {
-  primaryServerAvailableEditorsAtom,
-  primaryServerKeybindingsAtom,
-  serverEnvironment,
-} from "../state/server";
+import { primaryServerKeybindingsAtom, serverEnvironment } from "../state/server";
 import { threadEnvironment } from "../state/threads";
 import { resolveProviderSkillsForCwd } from "@t3tools/client-runtime/providerSkills";
 import { vcsEnvironment } from "../state/vcs";
@@ -1604,7 +1600,9 @@ export default function ChatView(props: ChatViewProps) {
   const scriptKeybindings =
     useAtomValue(serverEnvironment.configValueAtom(environmentId))?.keybindings ??
     DEFAULT_RESOLVED_KEYBINDINGS;
-  const availableEditors = useAtomValue(primaryServerAvailableEditorsAtom);
+  const availableEditors =
+    useAtomValue(serverEnvironment.configValueAtom(activeThread?.environmentId ?? environmentId))
+      ?.availableEditors ?? [];
   const remoteOpenState = useRemoteOpenState(activeThread?.environmentId ?? environmentId);
   const showOpenInPicker = shouldShowOpenInPicker({
     activeProjectName: activeProject?.title,
@@ -1614,10 +1612,16 @@ export default function ChatView(props: ChatViewProps) {
   });
   useOpenFavoriteEditorShortcut({
     enabled: showOpenInPicker,
+    capture: false,
     environmentId: activeThread?.environmentId ?? environmentId,
     keybindings,
     availableEditors,
     openInCwd: gitCwd,
+    workspace: {
+      projectId: activeThread?.projectId ?? activeProject?.id,
+      ...(activeThread ? { threadId: activeThread.id } : {}),
+      workspacePath: gitCwd,
+    },
   });
   const manualCompactionProviderAvailable = hasAvailableCompactionProvider({
     providers: providerInstanceEntries,

@@ -1,3 +1,4 @@
+import { useEditorAction } from "../editorPreferences";
 import { openConveneProjectConfiguration } from "./convene/ConveneProjectDialog";
 import { useTranslate } from "../i18n";
 import {
@@ -542,7 +543,8 @@ function OpenCommandPaletteDialog(props: {
         ? scopeThreadRef(activeThread.environmentId, activeThread.id)
         : null;
   const openPanelPullRequestUrl = useOpenPanelPullRequestUrl(referenceThreadRef);
-  const activeThreadServerConfig = useServerConfigs().get(
+  const serverConfigs = useServerConfigs();
+  const activeThreadServerConfig = serverConfigs.get(
     activeThread?.environmentId ?? ("" as EnvironmentId),
   );
   const activeThreadReferenceCopyTarget =
@@ -733,6 +735,24 @@ function OpenCommandPaletteDialog(props: {
   const currentProjectCwd = currentProjectId
     ? (projectCwdById.get(currentProjectId) ?? null)
     : null;
+  const editorProject =
+    currentProjectEnvironmentId && currentProjectId
+      ? projectByKey.get(`${currentProjectEnvironmentId}:${currentProjectId}`)
+      : null;
+  const editorWorkspacePath =
+    activeThread?.worktreePath ??
+    activeDraftThread?.worktreePath ??
+    editorProject?.workspaceRoot ??
+    null;
+  const editorAction = useEditorAction(
+    currentProjectEnvironmentId,
+    serverConfigs.get(currentProjectEnvironmentId ?? ("" as EnvironmentId))?.availableEditors ?? [],
+    {
+      projectId: currentProjectId,
+      ...(activeThread ? { threadId: activeThread.id } : {}),
+      workspacePath: editorWorkspacePath,
+    },
+  );
   const currentProjectCwdForBrowse =
     browseEnvironmentId && currentProjectEnvironmentId === browseEnvironmentId
       ? currentProjectCwd
@@ -1188,6 +1208,24 @@ function OpenCommandPaletteDialog(props: {
   };
 
   const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [];
+  if (currentProjectEnvironmentId && editorWorkspacePath)
+    actionItems.push({
+      kind: "action",
+      value: "action:open-editor",
+      title: t("chat.editor.open"),
+      searchTerms: ["editor", "open", "browser", "vscode", "编辑器"],
+      shortcutCommand: "editor.openFavorite",
+      icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        const result = await editorAction.open(editorWorkspacePath, { isFile: false });
+        if (result._tag === "Failure")
+          toastManager.add({
+            type: "error",
+            title: t("chat.editor.open"),
+            description: String(squashAtomCommandFailure(result)),
+          });
+      },
+    });
 
   if (projects.length > 0) {
     const activeProjectTitle =

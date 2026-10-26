@@ -1,23 +1,15 @@
 import { useTranslate } from "../../i18n";
 import { ThreadDetailsControl } from "./ThreadDetailsControl";
+import { EditorId, type EnvironmentId, type ResolvedKeybindingsConfig } from "@t3tools/contracts";
+import { memo, useRef } from "react";
+import { shortcutLabelForCommand } from "../../keybindings";
 import {
-  AuthOrchestrationOperateScope,
-  buildRemoteOpenUrl,
-  EditorId,
-  type EnvironmentId,
-  type ResolvedKeybindingsConfig,
-} from "@t3tools/contracts";
-import { memo, useEffect, useRef } from "react";
-import { isOpenFavoriteEditorShortcut, shortcutLabelForCommand } from "../../keybindings";
-import { usePreferredEditor } from "../../editorPreferences";
+  usePreferredEditor,
+  useEditorAction,
+  type ClientEditorId,
+  type EditorWorkspace,
+} from "../../editorPreferences";
 import { editorLabelForPlatform } from "../../editorLabels";
-import {
-  openRemoteEditorUrl,
-  useRemoteCapableEditors,
-  useRemoteOpenHint,
-  useRemoteOpenState,
-} from "../../remoteOpen";
-import { useEnvironment } from "../../state/environments";
 import { ChevronDownIcon, FolderClosedIcon, SquareArrowOutUpRightIcon } from "lucide-react";
 
 import { Group, GroupSeparator } from "../ui/group";
@@ -60,8 +52,6 @@ import {
   WebStormIcon,
 } from "../JetBrainsIcons";
 import { cn, isMacPlatform, isWindowsPlatform } from "~/lib/utils";
-import { shellEnvironment } from "~/state/shell";
-import { useAtomCommand } from "~/state/use-atom-command";
 import {
   THREAD_DETAILS_PANEL_CHEVRON_CLASS,
   THREAD_DETAILS_PANEL_ICON_CLASS,
@@ -69,18 +59,20 @@ import {
   THREAD_DETAILS_PANEL_SPLIT_GROUP_CLASS,
   THREAD_DETAILS_PANEL_SPLIT_SEPARATOR_CLASS,
 } from "./threadDetailsPanelStyles";
-import { readEnvironmentScope, useEnvironmentScope } from "~/state/session";
+import { useOpenFavoriteEditorShortcut } from "./OpenInPickerShortcut";
+import { toastManager } from "../ui/toast";
+import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { useComposerMenuState } from "./useComposerMenuState";
 
 type OpenInOption = {
   label: string;
   Icon: Icon;
-  value: EditorId;
+  value: ClientEditorId;
   kind: "brand" | "generic";
 };
 
 const resolveOpenInOptions = (platform: string, availableEditors: ReadonlyArray<EditorId>) => {
-  const baseOptions: ReadonlyArray<Omit<OpenInOption, "label">> = [
+  const baseOptions: ReadonlyArray<Omit<OpenInOption, "label" | "value"> & { value: EditorId }> = [
     {
       Icon: CursorIcon,
       value: "cursor",
@@ -212,6 +204,7 @@ export const OpenInPicker = memo(function OpenInPicker({
   enableShortcut = true,
   displayMode = "toolbar",
   revealFileManager = false,
+  workspace,
 }: {
   environmentId: EnvironmentId;
   keybindings: ResolvedKeybindingsConfig;
@@ -223,168 +216,102 @@ export const OpenInPicker = memo(function OpenInPicker({
   enableShortcut?: boolean;
   displayMode?: "toolbar" | "panel";
   revealFileManager?: boolean;
+  workspace?: EditorWorkspace | undefined;
 }) {
   const t = useTranslate();
   const isPanel = displayMode === "panel";
   const ActionGroup = isPanel ? "div" : Group;
   const panelAnchorRef = useRef<HTMLDivElement | null>(null);
-  const openInEditorMutation = useAtomCommand(
-    shellEnvironment.openInEditor,
-    t("chat.editor.openAction"),
-  );
-  const remote = useRemoteOpenState(environmentId);
-  const canOperateHost = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
-  const isHostEditorDenied = remote.mode === "local-exec" && !canOperateHost;
-  const canOpenEditor = remote.mode !== "remote-unavailable" && !isHostEditorDenied;
-  const [menuOpen, setMenuOpen] = useComposerMenuState(isHostEditorDenied);
-  const remoteCapableEditors = useRemoteCapableEditors();
-  const [remoteHintSeen, markRemoteHintSeen] = useRemoteOpenHint();
-  const environmentLabel = useEnvironment(environmentId)?.label ?? t("chat.editor.machine");
-  // Remote mode ignores the server's PATH probe: what matters is what runs on
-  // the viewing machine, which only the desktop app can probe.
-  const effectiveEditors = remote.mode === "local-exec" ? availableEditors : remoteCapableEditors;
-  const [preferredEditor, setPreferredEditor] = usePreferredEditor(effectiveEditors);
-
-  const openInEditor = (editorId: EditorId | null) => {
+  const action = useEditorAction(environmentId, availableEditors, workspace);
+  const [preferredEditor, setPreferredEditor] = usePreferredEditor();
+  const [menuOpen, setMenuOpen] = useComposerMenuState(false);
+  const openInEditor = async (editor: ClientEditorId = preferredEditor) => {
     if (!openInCwd) return;
-    const editor = editorId ?? preferredEditor;
-    if (!editor) return;
-    if (remote.mode === "remote-unavailable") return;
-    if (remote.mode === "remote-links") {
-      const url = buildRemoteOpenUrl({
-        editor,
-        ...remote.host,
-        absolutePath: openInCwd,
-        isFile: openInCwdIsFile,
-      });
-      if (url === undefined) return;
-      // Only record hint-seen/preferred when the shell actually accepted
-      // the URL (an older desktop build can refuse the editor scheme).
-      void openRemoteEditorUrl(url).then((opened) => {
-        if (!opened) return;
-        markRemoteHintSeen();
-        setPreferredEditor(editor);
-      });
-      return;
-    }
-    if (!readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)) return;
-    const result = openInEditorMutation({
-      environmentId,
-      input: {
-        cwd: openInCwd,
-        editor,
-        ...(revealFileManager && editor === "file-manager" ? { reveal: true } : {}),
-      },
+    const result = await action.open(openInCwd, {
+      editor,
+      isFile: openInCwdIsFile,
+      ...(revealFileManager && editor === "file-manager" ? { reveal: true } : {}),
     });
-    setPreferredEditor(editor);
-    return result;
+    if (result._tag === "Failure")
+      toastManager.add({
+        type: "error",
+        title: t("chat.editor.open"),
+        description: String(squashAtomCommandFailure(result)),
+      });
   };
-
+  useOpenFavoriteEditorShortcut({
+    enabled: enableShortcut,
+    environmentId,
+    keybindings,
+    availableEditors,
+    openInCwd,
+    workspace,
+    isFile: openInCwdIsFile,
+  });
   const openFavoriteEditorShortcutLabel = shortcutLabelForCommand(
     keybindings,
     "editor.openFavorite",
   );
-
-  useEffect(() => {
-    if (!enableShortcut || !canOpenEditor) return;
-    const handler = (e: globalThis.KeyboardEvent) => {
-      if (e.defaultPrevented || !isOpenFavoriteEditorShortcut(e, keybindings)) return;
-      if (!openInCwd) return;
-      if (!preferredEditor) return;
-      if (
-        remote.mode === "local-exec" &&
-        !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)
-      )
-        return;
-
-      e.preventDefault();
-      void openInEditor(preferredEditor);
-    };
-    window.addEventListener("keydown", handler, true);
-    return () => window.removeEventListener("keydown", handler, true);
-  }, [
-    canOpenEditor,
-    enableShortcut,
-    environmentId,
-    keybindings,
-    openInCwd,
-    openInEditor,
-    preferredEditor,
-    remote.mode,
-  ]);
-  // Derived after the shortcut effect so the compiler can cache the resolved editor list.
-  const options = resolveOpenInOptions(navigator.platform, effectiveEditors);
+  const options: OpenInOption[] = [
+    {
+      label: t("chat.editor.browser"),
+      Icon: SquareArrowOutUpRightIcon,
+      value: "browser",
+      kind: "generic",
+    },
+    ...resolveOpenInOptions(navigator.platform, action.editorIds),
+  ];
   const primaryOption = options.find(({ value }) => value === preferredEditor) ?? null;
-  const primaryLabel = isPanel
-    ? t("chat.editor.openNamed", { editor: primaryOption?.label ?? t("chat.editor.generic") })
-    : t("pullRequest.state.open");
+  const primaryLabel = t("chat.editor.open");
+  const unavailableReason = action.unavailableReason(preferredEditor);
 
   const editorItems = (
     <>
-      {remote.mode === "remote-unavailable" ? (
-        <MenuItem density={presentation === "menu" ? "touch" : "default"} disabled>
-          {t("chat.open.noSsh", { environment: environmentLabel })}
-        </MenuItem>
-      ) : (
-        <>
-          {options.length === 0 && (
-            <MenuItem density={presentation === "menu" ? "touch" : "default"} disabled>
-              {t("chat.editor.none")}
-            </MenuItem>
-          )}
-          {options.map(({ label, Icon, value, kind }) => (
-            <MenuItem
-              density={presentation === "menu" ? "touch" : "default"}
-              disabled={!openInCwd || !canOpenEditor}
-              key={value}
-              onClick={() => {
-                if (presentation === "menu") {
-                  void openInEditor(value);
-                } else {
-                  setPreferredEditor(value);
-                }
-              }}
-            >
-              <Icon aria-hidden="true" className={getOpenInIconClass(kind)} />
-              <MenuItemLabel>{label}</MenuItemLabel>
-              {value === preferredEditor && openFavoriteEditorShortcutLabel && (
-                <MenuShortcut>{openFavoriteEditorShortcutLabel}</MenuShortcut>
-              )}
-            </MenuItem>
-          ))}
-          {remote.mode === "remote-links" && !remoteHintSeen && (
-            <MenuItem density={presentation === "menu" ? "touch" : "default"} disabled>
-              {t("chat.open.sshHint", { environment: environmentLabel })}
-            </MenuItem>
-          )}
-        </>
-      )}
+      {options.map(({ label, Icon, value, kind }) => {
+        const reason = action.unavailableReason(value);
+        return (
+          <MenuItem
+            density={presentation === "menu" ? "touch" : "default"}
+            disabled={!openInCwd || reason !== null}
+            title={reason ?? undefined}
+            key={value}
+            onClick={() => {
+              setPreferredEditor(value);
+              if (presentation === "menu") void openInEditor(value);
+            }}
+          >
+            <Icon aria-hidden="true" className={getOpenInIconClass(kind)} />
+            <MenuItemLabel>
+              {label}
+              {reason ? ` — ${reason}` : ""}
+            </MenuItemLabel>
+            {value === preferredEditor && openFavoriteEditorShortcutLabel && (
+              <MenuShortcut>{openFavoriteEditorShortcutLabel}</MenuShortcut>
+            )}
+          </MenuItem>
+        );
+      })}
     </>
   );
   if (presentation === "menu") {
     return (
       <>
-        {primaryOption && (
-          <MenuItem
-            density={presentation === "menu" ? "touch" : "default"}
-
-            disabled={!openInCwd || !canOpenEditor}
-            onClick={() => openInEditor(preferredEditor)}
-          >
-            <primaryOption.Icon className={cn("size-4", getOpenInIconClass(primaryOption.kind))} />
-            <MenuItemLabel>
-              {t("chat.editor.openIn")}
-              {primaryOption.label}
-            </MenuItemLabel>
-            {openFavoriteEditorShortcutLabel && (
-              <MenuShortcut>{openFavoriteEditorShortcutLabel}</MenuShortcut>
-            )}
-          </MenuItem>
-        )}
+        <MenuItem
+          density="touch"
+          title={unavailableReason ?? primaryOption?.label}
+          disabled={!openInCwd || unavailableReason !== null}
+          onClick={() => openInEditor(preferredEditor)}
+        >
+          <SquareArrowOutUpRightIcon className="size-4" />
+          <MenuItemLabel>{primaryLabel}</MenuItemLabel>
+          {openFavoriteEditorShortcutLabel && (
+            <MenuShortcut>{openFavoriteEditorShortcutLabel}</MenuShortcut>
+          )}
+        </MenuItem>
         <MenuSub>
-          <MenuSubTrigger density="touch" disabled={isHostEditorDenied}>
+          <MenuSubTrigger density="touch">
             <SquareArrowOutUpRightIcon className="size-4" />
-            <MenuItemLabel>{t("chat.editor.openInMenu")}</MenuItemLabel>
+            <MenuItemLabel>{t("chat.editor.choose")}</MenuItemLabel>
           </MenuSubTrigger>
           <MenuSubPopup>{editorItems}</MenuSubPopup>
         </MenuSub>
@@ -406,7 +333,8 @@ export const OpenInPicker = memo(function OpenInPicker({
         variant={isPanel ? "ghost" : "outline"}
         part="primary"
         panel={isPanel}
-        disabled={!preferredEditor || !openInCwd || !canOpenEditor}
+        disabled={!openInCwd || unavailableReason !== null}
+        title={unavailableReason ?? primaryOption?.label}
         onClick={() => openInEditor(preferredEditor)}
       >
         {primaryOption?.Icon ? (
@@ -441,7 +369,6 @@ export const OpenInPicker = memo(function OpenInPicker({
       )}
       <Menu open={menuOpen} onOpenChange={setMenuOpen}>
         <MenuTrigger
-          disabled={isHostEditorDenied}
           render={
             <ThreadDetailsControl
               aria-label={t("chat.editor.choose")}

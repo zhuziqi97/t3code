@@ -1,9 +1,10 @@
+import { EDITORS, type ContextMenuItem, type EnvironmentId } from "@t3tools/contracts";
 import {
-  EDITORS,
-  type ContextMenuItem,
-  type EditorId,
-  type EnvironmentId,
-} from "@t3tools/contracts";
+  useEditorAction,
+  usePreferredEditor,
+  type ClientEditorId,
+  type EditorWorkspace,
+} from "./editorPreferences";
 import type { TFunction } from "i18next";
 import { i18n, useTranslate } from "./i18n";
 
@@ -16,8 +17,9 @@ import { readLocalApi } from "./localApi";
 import { serverEnvironment } from "./state/server";
 import { shellEnvironment } from "./state/shell";
 import { useAtomCommand } from "./state/use-atom-command";
-import { resolvePathLinkTarget } from "@t3tools/shared/fileLinks";
+import { resolvePathLinkTarget, splitFilePathPosition } from "@t3tools/shared/fileLinks";
 import { toastManager } from "./components/ui/toast";
+import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { useAtomValue } from "@effect/atom-react";
 
 export type FileContextMenuAction =
@@ -25,12 +27,14 @@ export type FileContextMenuAction =
   | "open"
   /** Submenu parent; never the activated id. */
   | "open-with"
-  | `editor:${EditorId}`;
+  | "open-editor"
+  | `editor:${ClientEditorId}`;
 
 export interface FileContextMenuTarget {
   readonly environmentId: EnvironmentId | null;
   /** Repo- or workspace-relative file path, as shown in diffs. */
   readonly filePath: string;
+  readonly isFile?: boolean;
   readonly workspaceRoot: string | undefined;
   readonly repositoryRoot?: string | undefined;
 }
@@ -55,7 +59,9 @@ const EDITOR_LABEL_BY_ID = new Map(EDITORS.map((editor) => [editor.id, editor.la
 export interface FileContextMenuCapabilities {
   readonly revealLabel: string | undefined;
   readonly canOpenDefault: boolean;
-  readonly editorIds: ReadonlyArray<EditorId>;
+  readonly editorIds: ReadonlyArray<ClientEditorId>;
+  readonly canOpenEditor?: boolean;
+  readonly editorUnavailableReason?: (editor: ClientEditorId) => string | null;
 }
 
 /**
@@ -73,6 +79,8 @@ function buildFileContextMenuItems(
   // Without a resolvable absolute path nothing here can act on the file.
   if (!input.hasAbsolutePath) return [];
   const items: ContextMenuItem<FileContextMenuAction>[] = [];
+  if (input.capabilities.canOpenEditor)
+    items.push({ id: "open-editor", label: t("chat.editor.open"), icon: "pencil" });
   if (input.capabilities.canOpenDefault) {
     items.push({ id: "open", label: t("fileMenu.open"), icon: "pencil" });
   }
@@ -88,21 +96,34 @@ function buildFileContextMenuItems(
     items.push({
       id: "open-with",
       label: t("fileMenu.openWith"),
-      children: editorIds.map((editorId) => ({
-        id: `editor:${editorId}` as FileContextMenuAction,
-        label: EDITOR_LABEL_BY_ID.get(editorId) ?? editorId,
-      })),
+      children: editorIds.map((editorId) => {
+        const reason = input.capabilities.editorUnavailableReason?.(editorId);
+        const label =
+          editorId === "browser"
+            ? t("chat.editor.browser")
+            : (EDITOR_LABEL_BY_ID.get(editorId) ?? editorId);
+        return {
+          id: `editor:${editorId}` as FileContextMenuAction,
+          label: reason ? `${label} — ${reason}` : label,
+          ...(reason ? { disabled: true } : {}),
+        };
+      }),
     });
   }
   return items;
 }
 
-export function useFileContextMenu(environmentId: EnvironmentId | null) {
+export function useFileContextMenu(
+  environmentId: EnvironmentId | null,
+  workspace?: EditorWorkspace,
+) {
   const t = useTranslate();
   const openInEditor = useAtomCommand(shellEnvironment.openInEditor, { reportFailure: false });
   const serverConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId));
 
   const availableEditors = serverConfig?.availableEditors ?? [];
+  const editorAction = useEditorAction(environmentId, availableEditors, workspace);
+  const [, setPreferredEditor] = usePreferredEditor();
   const capabilities: FileContextMenuCapabilities = {
     // The reveal wording comes from the server because on WSL the reveal can
     // run through Windows File Explorer even though the host reports Linux.
@@ -115,7 +136,9 @@ export function useFileContextMenu(environmentId: EnvironmentId | null) {
           : revealInFileExplorerLabelForKind(serverConfig.shellRevealInFileManagerKind, t)
         : undefined,
     canOpenDefault: availableEditors.includes("file-manager"),
-    editorIds: availableEditors,
+    editorIds: workspace ? ["browser", ...editorAction.editorIds] : editorAction.editorIds,
+    canOpenEditor: workspace !== undefined,
+    editorUnavailableReason: editorAction.unavailableReason,
   };
 
   const activate = async (
@@ -123,19 +146,39 @@ export function useFileContextMenu(environmentId: EnvironmentId | null) {
     target: FileContextMenuTarget,
   ): Promise<void> => {
     const absolutePath = resolveFileContextMenuAbsolutePath(target);
-    if (absolutePath === null || environmentId === null) return;
+    if (absolutePath === null || environmentId === null || target.environmentId !== environmentId)
+      return;
 
     const reveal = action === "reveal-in-folder";
+    if (action === "open-with") return;
     const editor =
       action === "open" || reveal
         ? ("file-manager" as const)
-        : (action.slice("editor:".length) as EditorId);
-    if (action !== "open" && !reveal && !capabilities.editorIds.includes(editor)) return;
-
-    const result = await openInEditor({
-      environmentId,
-      input: { cwd: absolutePath, editor, ...(reveal ? { reveal: true } : {}) },
-    });
+        : action === "open-editor"
+          ? undefined
+          : (action.slice("editor:".length) as ClientEditorId);
+    if (
+      editor !== undefined &&
+      action !== "open" &&
+      !reveal &&
+      !capabilities.editorIds.includes(editor)
+    )
+      return;
+    if (action.startsWith("editor:") && editor) setPreferredEditor(editor);
+    const result =
+      action === "open" || reveal
+        ? await openInEditor({
+            environmentId,
+            input: {
+              cwd: splitFilePathPosition(absolutePath).path,
+              editor: "file-manager",
+              ...(reveal ? { reveal: true } : {}),
+            },
+          })
+        : await editorAction.open(absolutePath, {
+            ...(editor ? { editor } : {}),
+            isFile: target.isFile ?? true,
+          });
     if (result._tag !== "Failure") return;
     toastManager.add({
       type: "error",
@@ -145,9 +188,15 @@ export function useFileContextMenu(environmentId: EnvironmentId | null) {
           : reveal
             ? i18n.t("fileMenu.revealFailed")
             : i18n.t("fileMenu.editorFailed", {
-                editor: EDITOR_LABEL_BY_ID.get(editor) ?? editor,
+                editor:
+                  editor === "browser"
+                    ? i18n.t("chat.editor.browser")
+                    : editor
+                      ? (EDITOR_LABEL_BY_ID.get(editor) ?? editor)
+                      : i18n.t("chat.editor.generic"),
               }),
-      description: absolutePath,
+      description:
+        action === "open" || reveal ? absolutePath : String(squashAtomCommandFailure(result)),
     });
   };
 
@@ -184,8 +233,11 @@ export function useFileContextMenu(environmentId: EnvironmentId | null) {
   };
 }
 
-export function useFileContextMenuHandler(environmentId: EnvironmentId | null) {
-  const contextMenu = useFileContextMenu(environmentId);
+export function useFileContextMenuHandler(
+  environmentId: EnvironmentId | null,
+  workspace?: EditorWorkspace,
+) {
+  const contextMenu = useFileContextMenu(environmentId, workspace);
   return (target: FileContextMenuTarget, event?: { clientX: number; clientY: number }) => {
     void contextMenu.show(target, event ? { x: event.clientX, y: event.clientY } : undefined);
   };

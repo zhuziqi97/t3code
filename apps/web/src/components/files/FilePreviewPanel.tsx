@@ -1,4 +1,3 @@
-import { ConveneIdeButton } from "../convene/ConveneIdeButton";
 import { Spinner } from "~/components/ui/spinner";
 import {
   AuthPreviewOperateScope,
@@ -52,7 +51,6 @@ import { OpenInPicker } from "~/components/chat/OpenInPicker";
 import { MediaVideoPlayer } from "~/components/media/MediaVideoPlayer";
 import { MediaActions, type MediaActionSource } from "~/components/media/MediaActions";
 import { MorphIcon } from "~/components/MorphIcon";
-import { useRemoteOpenState } from "~/remoteOpen";
 import { useClientSettings, updateClientSettings } from "~/hooks/useSettings";
 import { useTheme } from "~/hooks/useTheme";
 import { getLocalStorageItem, setLocalStorageItem, useLocalStorage } from "~/hooks/useLocalStorage";
@@ -69,7 +67,7 @@ import { type DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { buildFileReviewComment } from "~/reviewCommentContext";
 import { assetEnvironment } from "~/state/assets";
 import { usePreviewAvailable } from "~/browser/previewRuntime";
-import { useEnvironmentHttpBaseUrl, usePrimaryEnvironmentId } from "~/state/environments";
+import { useEnvironmentHttpBaseUrl } from "~/state/environments";
 import { previewEnvironment } from "~/state/preview";
 import { serverEnvironment } from "~/state/server";
 import { useEnvironmentScope } from "~/state/session";
@@ -1019,8 +1017,6 @@ export default function FilePreviewPanel({
   const { resolvedTheme } = useTheme();
   const wordWrap = useClientSettings((settings) => settings.wordWrap);
   const canOperatePreview = useEnvironmentScope(environmentId, AuthPreviewOperateScope);
-  const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const remoteOpenState = useRemoteOpenState(environmentId);
   const serverConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId));
   const environmentHttpBaseUrl = useEnvironmentHttpBaseUrl(environmentId);
   const previewAvailable = usePreviewAvailable(environmentId);
@@ -1264,28 +1260,19 @@ export default function FilePreviewPanel({
               />
             </div>
           </ScrollArea>
-          {absolutePath &&
-          (environmentId === primaryEnvironmentId || remoteOpenState.mode !== "local-exec") ? (
+          {absolutePath ? (
             <OpenInPicker
               environmentId={environmentId}
               keybindings={keybindings}
               availableEditors={availableEditors}
               enableShortcut={openInShortcutEnabled}
-              openInCwd={absolutePath}
+              openInCwd={`${absolutePath}${file.isFile && revealLine !== null ? `:${revealLine}` : ""}`}
+              {...(attachment === undefined
+                ? { workspace: { projectId, threadId: threadRef.threadId, workspacePath: cwd } }
+                : {})}
               openInCwdIsFile={file.isFile}
               compact
               revealFileManager={revealsInFileManager}
-            />
-          ) : null}
-          {attachment === undefined && projectId ? (
-            <ConveneIdeButton
-              environmentId={environmentId}
-              projectId={projectId}
-              threadId={threadRef.threadId}
-              workspacePath={cwd}
-              {...(file.isFile && relativePath
-                ? { file: { relativePath, ...(revealLine !== null ? { line: revealLine } : {}) } }
-                : {})}
             />
           ) : null}
           {canToggleRendered && renderedMode ? (
@@ -1500,6 +1487,7 @@ export default function FilePreviewPanel({
               key={`${environmentId}:${hostFolderPath ?? cwd}`}
               environmentId={environmentId}
               cwd={hostFolderPath ?? cwd}
+              editorWorkspace={{ projectId, threadId: threadRef.threadId, workspacePath: cwd }}
               projectName={hostFolderPath ?? projectName}
               hostFolder={hostFolderPath !== null}
               selectedPath={
