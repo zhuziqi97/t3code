@@ -97,7 +97,11 @@ export function V2LifecycleRow(props: {
           <span aria-hidden="true" className="opacity-50">
             ·
           </span>
-          <span className="font-medium">{item.message}</span>
+          <span className="font-medium">
+            {item.message === "Run interrupted for workspace handoff"
+              ? t("chat.timeline.interruptedForWorkspaceHandoff")
+              : item.message}
+          </span>
           <span className="text-3xs text-muted-foreground">
             {formatShortTimestamp(props.createdAt, props.timestampFormat)}
           </span>
@@ -112,7 +116,9 @@ export function V2LifecycleRow(props: {
         detail={
           item.message === "Run interrupted by user"
             ? t("chat.timeline.interruptedByUser")
-            : item.message
+            : item.message === "Run interrupted for workspace handoff"
+              ? t("chat.timeline.interruptedForWorkspaceHandoff")
+              : item.message
         }
         tone="danger"
         icon={XIcon}

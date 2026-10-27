@@ -464,16 +464,24 @@ const make = Effect.gen(function* () {
       }
     }
   }).pipe(Effect.forkScoped);
+  const synchronize = Effect.fn("ConveneConnection.synchronize")(function* () {
+    if ((yield* SubscriptionRef.get(state)).phase !== "online")
+      return yield* new ConveneIntegrationError({ operation: "refresh", code: "OFFLINE" });
+    const waiter = yield* Deferred.make<void, ConveneIntegrationError>();
+    yield* Queue.offer(requests, waiter);
+    yield* Deferred.await(waiter);
+  });
+  const broker = yield* ConveneMcp.ConveneMcp;
+  yield* broker.setSynchronizer(
+    Effect.gen(function* () {
+      if ((yield* SubscriptionRef.get(state)).phase === "online") yield* synchronize();
+    }),
+  );
+  yield* Effect.addFinalizer(() => broker.setSynchronizer(null));
   return ConveneConnection.of({
     status: SubscriptionRef.get(state).pipe(Effect.map(withPresets)),
     changes: SubscriptionRef.changes(state).pipe(Stream.map(withPresets)),
-    synchronize: Effect.gen(function* () {
-      if ((yield* SubscriptionRef.get(state)).phase !== "online")
-        return yield* new ConveneIntegrationError({ operation: "refresh", code: "OFFLINE" });
-      const waiter = yield* Deferred.make<void, ConveneIntegrationError>();
-      yield* Queue.offer(requests, waiter);
-      return yield* Deferred.await(waiter);
-    }),
+    synchronize: synchronize(),
   });
 });
 

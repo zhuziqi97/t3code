@@ -1,4 +1,4 @@
-import { ProjectId, type ThreadId } from "@t3tools/contracts";
+import { ProjectId, type ConveneIntegrationError, type ThreadId } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
@@ -39,6 +39,13 @@ export class ConveneMcp extends Context.Service<
       threadId: ThreadId,
       providerSessionId: string,
     ) => Effect.Effect<Readonly<Record<string, McpHttpContribution>>, ConveneMcpError>;
+    readonly rebindThread: (
+      threadId: ThreadId,
+      worktreePath: string | null,
+    ) => Effect.Effect<void, ConveneMcpError>;
+    readonly setSynchronizer: (
+      synchronize: Effect.Effect<void, ConveneIntegrationError> | null,
+    ) => Effect.Effect<void>;
     readonly release: (threadId: ThreadId, providerSessionId?: string) => Effect.Effect<void>;
     readonly forward: (
       request: HttpServerRequest.HttpServerRequest,
@@ -57,6 +64,9 @@ const make = Effect.gen(function* () {
     ? `http://${NetAddress.isUnspecified(server.address.address) ? "127.0.0.1" : NetAddress.formatUrlHostString(NetAddress.formatIp(server.address.address))}:${server.address.port}/convene/mcp`
     : "http://127.0.0.1/convene/mcp";
   let configurations: ReadonlyArray<ConvenePlatform.Configuration> = [];
+  // The connection also serves native orchestration calls. Register its report waiter here
+  // so startup can await it without making the orchestration layer depend on that connection.
+  let synchronize: Effect.Effect<void, ConveneIntegrationError> = Effect.void;
   const leases = new Map<
     string,
     {
@@ -94,6 +104,50 @@ const make = Effect.gen(function* () {
       )
     );
   };
+
+  const rebindThread = Effect.fn("ConveneMcp.rebindThread")(function* (
+    threadId: ThreadId,
+    worktreePath: string | null,
+  ) {
+    const thread = yield* projections
+      .getThread(threadId)
+      .pipe(
+        Effect.mapError(
+          (cause) => new ConveneMcpError({ category: "workspace_unavailable", cause }),
+        ),
+      );
+    // A later explicit selection can supersede an older pending metadata effect.
+    if (!thread || thread.worktreePath !== worktreePath) return;
+    const locations = yield* workspaces
+      .list(thread.projectId)
+      .pipe(
+        Effect.mapError(
+          (cause) => new ConveneMcpError({ category: "workspace_unavailable", cause }),
+        ),
+      );
+    const target = locations.find(
+      (location) =>
+        location.available &&
+        (worktreePath === null ? location.key === "root" : location.path === worktreePath),
+    );
+    if (!target) return yield* new ConveneMcpError({ category: "workspace_unavailable" });
+    const previousKey = yield* workspaces.threadKey(thread.projectId, threadId);
+    const previous = locations.find((location) => location.key === previousKey);
+    // Replaying a committed transition must not adopt a replacement checkout at its path.
+    // That identity change still needs the explicit recovery selection.
+    if (previous && previous.path === target.path && previous.key !== target.key)
+      return yield* new ConveneMcpError({ category: "workspace_unavailable" });
+    yield* workspaces
+      .rebindThread(thread.projectId, threadId, target.key)
+      .pipe(
+        Effect.mapError(
+          (cause) => new ConveneMcpError({ category: "workspace_unavailable", cause }),
+        ),
+      );
+    yield* synchronize.pipe(
+      Effect.mapError((cause) => new ConveneMcpError({ category: "workspace_unavailable", cause })),
+    );
+  });
 
   const prepare = Effect.fn("ConveneMcp.prepare")(function* (
     threadId: ThreadId,
@@ -252,6 +306,12 @@ const make = Effect.gen(function* () {
   return ConveneMcp.of({
     prepare,
     forward,
+    rebindThread,
+    setSynchronizer: Effect.fn("ConveneMcp.setSynchronizer")((next) =>
+      Effect.sync(() => {
+        synchronize = next ?? Effect.void;
+      }),
+    ),
     configure: (next) =>
       Effect.sync(() => {
         configurations = next;

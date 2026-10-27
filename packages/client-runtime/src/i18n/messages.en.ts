@@ -795,6 +795,7 @@ export const en = {
   "convene.capability.issues": "Issue tools",
   "convene.project.mcpEnabled": "Convene MCP enabled. Start a new chat to use it.",
   "chat.timeline.sentT3": "Sent by T3 Code",
+  "chat.timeline.interruptedForWorkspaceHandoff": "Run interrupted for workspace handoff",
   "chat.timeline.interruptedByUser": "Run interrupted by user",
   "convene.project.save": "Save settings",
   "convene.project.discard": "Reset changes",

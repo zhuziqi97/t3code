@@ -59,6 +59,7 @@ it.live("keeps heartbeat, changed directories, refresh ACKs, and reconnection in
     const reports = yield* Queue.unbounded<Schema.Json>();
     const control = yield* Queue.unbounded<object | Socket.CloseEvent>();
     const applied = yield* Queue.unbounded<ReadonlyArray<ConvenePlatform.Configuration>>();
+    let mcpSynchronize: Parameters<ConveneMcp.ConveneMcp["Service"]["setSynchronizer"]>[0] = null;
     const wrongAck = yield* Deferred.make<void>();
     const releaseAck = yield* Deferred.make<void>();
     const projectId = ProjectId.make("recovery-report-project");
@@ -187,6 +188,10 @@ it.live("keeps heartbeat, changed directories, refresh ACKs, and reconnection in
       }),
       Layer.mock(ConveneMcp.ConveneMcp)({
         configure: (values) => Queue.offer(applied, values).pipe(Effect.asVoid),
+        setSynchronizer: (next) =>
+          Effect.sync(() => {
+            mcpSynchronize = next;
+          }),
       }),
       Layer.mock(ProjectStore.ProjectStoreV2)({
         list: () =>
@@ -299,7 +304,8 @@ it.live("keeps heartbeat, changed directories, refresh ACKs, and reconnection in
       assert.equal((yield* Queue.take(applied))[0]?.mcp_enabled, false);
       configurations = [];
       holdAck = true;
-      const refresh = yield* connection.synchronize.pipe(Effect.forkScoped);
+      assert.ok(mcpSynchronize);
+      const refresh = yield* mcpSynchronize.pipe(Effect.forkScoped);
       yield* Deferred.await(wrongAck);
       assert.equal(refresh.pollUnsafe(), undefined);
       yield* Deferred.succeed(releaseAck, undefined);

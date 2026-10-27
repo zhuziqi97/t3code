@@ -66,7 +66,7 @@ export function ThreadWorkspaceRecovery({
   return (
     <section
       aria-labelledby={`${id}-title`}
-      className="mx-3 flex flex-col gap-2 rounded-lg border p-3 text-sm"
+      className="mx-3 mb-3 flex min-w-0 flex-col gap-2 rounded-lg border bg-background p-3 text-sm"
     >
       <p id={`${id}-title`} className="font-medium">
         {t("workspaceRecovery.title", { defaultValue: "Workspace unavailable" })}
@@ -86,7 +86,7 @@ export function ThreadWorkspaceRecovery({
         value={selection}
         disabled={busy || !permitted}
         onChange={(event) => setSelection(event.target.value)}
-        className="rounded-md border bg-background p-2"
+        className="min-w-0 rounded-md border bg-background p-2"
       >
         <option value="">
           {t("workspaceRecovery.choose", { defaultValue: "Choose a workspace…" })}
@@ -99,7 +99,7 @@ export function ThreadWorkspaceRecovery({
         ))}
       </select>
       {error || query.error ? <p role="alert">{error ?? query.error}</p> : null}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button
           size="sm"
           disabled={!selected || !permitted || busy}

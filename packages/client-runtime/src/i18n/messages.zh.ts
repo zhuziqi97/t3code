@@ -764,6 +764,7 @@ export const zh: Partial<Messages> = {
   "convene.capability.issues": "议题工具",
   "convene.project.mcpEnabled": "Convene MCP 已启用，请新建会话使用。",
   "chat.timeline.sentT3": "由 T3 Code 发送",
+  "chat.timeline.interruptedForWorkspaceHandoff": "为切换工作区自动中断执行",
   "chat.timeline.interruptedByUser": "用户已停止执行",
   "convene.project.save": "保存设置",
   "convene.project.discard": "还原更改",

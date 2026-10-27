@@ -17,6 +17,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 
 import * as GitWorkflowService from "../git/GitWorkflowService.ts";
+import * as EffectOutbox from "../orchestration-v2/EffectOutbox.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
@@ -57,6 +58,7 @@ const asOperationFailed = (prefix: string) =>
 const make = Effect.gen(function* () {
   const crypto = yield* Crypto.Crypto;
   const threadManagement = yield* ThreadManagementService.ThreadManagementService;
+  const effects = yield* EffectOutbox.EffectOutboxV2;
   const projects = yield* ProjectService.ProjectService;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const gitWorkflow = yield* GitWorkflowService.GitWorkflowService;
@@ -317,10 +319,9 @@ const make = Effect.gen(function* () {
           ),
         );
 
-        // Queue the continuation right after the binding commits: the detach
-        // that the metadata update schedules will terminate the calling
-        // session, and a durably queued message is what guarantees the thread
-        // re-launches inside the worktree.
+        // The effect lane rebinds Convene and awaits the real target ACK before detach.
+        // This block is uninterruptible so retiring the calling session cannot lose the
+        // continuation; a failed transition leaves the bound worktree for explicit recovery.
         const queueContinuation: Effect.Effect<WorktreeMcpContinuationStatus, WorktreeMcpFailure> =
           Effect.suspend(() =>
             input.continuationPrompt === undefined
@@ -346,7 +347,21 @@ const make = Effect.gen(function* () {
                   ),
           );
 
-        const continuation = yield* recheckAndBind.pipe(Effect.andThen(queueContinuation));
+        yield* recheckAndBind;
+        const bindingEffectId = `effect:${ids.commandId}:thread.workspace.rebind`;
+        yield* effects
+          .awaitSettled(bindingEffectId)
+          .pipe(asOperationFailed("Unable to synchronize the workspace binding"));
+        const binding = yield* effects
+          .get(bindingEffectId)
+          .pipe(asOperationFailed("Unable to read the workspace binding result"));
+        if (Option.isNone(binding) || binding.value.status !== "succeeded") {
+          return yield* failure(
+            "operation_failed",
+            "The thread moved to the worktree, but its workspace binding could not be synchronized. Select the workspace again before continuing.",
+          );
+        }
+        const continuation = yield* queueContinuation;
 
         yield* vcsStatusBroadcaster
           .refreshStatus(worktreePath)
@@ -455,6 +470,7 @@ export const layer: Layer.Layer<
   never,
   | Crypto.Crypto
   | ThreadManagementService.ThreadManagementService
+  | EffectOutbox.EffectOutboxV2
   | ProjectService.ProjectService
   | ServerSettings.ServerSettingsService
   | GitWorkflowService.GitWorkflowService
