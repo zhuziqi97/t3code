@@ -89,6 +89,13 @@ function makeSession(frame?: ReturnType<typeof makeFrame>) {
     emit: (name: string) => events.emit(name),
     detach: vi.fn(async () => {}),
     send: vi.fn(async (method: string, input?: unknown): Promise<Record<string, unknown>> => {
+      if (
+        pdfProbeFailure &&
+        method === "Runtime.evaluate" &&
+        (input as { expression?: string }).expression === "navigator.pdfViewerEnabled"
+      ) {
+        throw pdfProbeFailure;
+      }
       if (method === "Page.getNavigationHistory") return { currentIndex: 0, entries: [{}] };
       if (method === "Page.getLayoutMetrics") return { cssVisualViewport: { pageX: 0, pageY: 0 } };
       if (method === "Page.captureScreenshot") {
@@ -225,6 +232,7 @@ let focusedFrame: ReturnType<typeof makeFrame> | null = null;
 let contextFailure: Error | null = null;
 let initialNavigation: (() => Promise<void>) | null = null;
 let desktopRendersNext = false;
+let pdfProbeFailure: Error | null = null;
 const desktopDetaches = new NodeEvents.EventEmitter();
 const desktopTabs = new Set<string>();
 const desktopRenders = (tabId: string) => {
@@ -347,6 +355,7 @@ beforeEach(() => {
   focusedFrame = null;
   desktopTabs.clear();
   desktopRendersNext = false;
+  pdfProbeFailure = null;
   releasedDesktopTabs.length = 0;
   desktopConnections.length = 0;
 });
@@ -1165,6 +1174,29 @@ it.live(
         });
       }),
     ).pipe(Effect.provide(layer)),
+);
+
+it.live("initializes a navigating desktop tab while leaving its native PDF viewer intact", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      desktopRendersNext = true;
+      pdfProbeFailure = new Error(
+        "Protocol error (Runtime.evaluate): Inspected target navigated or closed",
+      );
+      const { broker, tabId } = yield* ready;
+      const status = yield* broker.invoke<PreviewAutomationStatus>({
+        scope,
+        tabId,
+        operation: "status",
+        input: {},
+      });
+      expect(status.available).toBe(true);
+      expect(status.tabId).toBe(tabId);
+      const session = desktopConnections[0]!.context.sessions[0]!;
+      expect(session.send).not.toHaveBeenCalledWith("Fetch.enable", expect.anything());
+      expect(contexts).toHaveLength(0);
+    }),
+  ).pipe(Effect.provide(layer)),
 );
 
 it.live(

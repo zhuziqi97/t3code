@@ -739,7 +739,9 @@ const make = Effect.gen(function* () {
     if (!desktop) await prepareContext(context);
     const page = adopted?.page ?? desktop?.page ?? (await context.newPage());
     const cdp = await context.newCDPSession(page);
-    await installPdfDocumentNavigation(cdp);
+    // Electron has a native PDF viewer; only our headless shell needs interception.
+    // New desktop guests can still be between document execution contexts here.
+    if (!desktop) await installPdfDocumentNavigation(cdp);
     // The desktop's page is already a normal browser. A popup's first request
     // went out before it became a tab; everything after presents as Chrome.
     if (!desktop) await presentAsChrome(cdp, host);

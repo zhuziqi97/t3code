@@ -5,7 +5,7 @@ import { installPdfDocumentNavigation } from "./PdfDocumentNavigation.ts";
 
 const source = "https://environment.test/api/assets/signed-token/files/Study%20guide.PDF";
 
-function fixture(nativePdfViewer = false) {
+function fixture() {
   const completed = Promise.withResolvers<{ method: string; params: Record<string, unknown> }>();
   let paused: (event: {
     requestId: string;
@@ -17,7 +17,6 @@ function fixture(nativePdfViewer = false) {
     throw new Error("Navigation handler was not installed");
   };
   const send = vi.fn(async (method: string, params: Record<string, unknown> = {}) => {
-    if (method === "Runtime.evaluate") return { result: { value: nativePdfViewer } };
     if (method === "Page.getFrameTree") return { frameTree: { frame: { id: "main" } } };
     if (
       method === "Fetch.fulfillRequest" ||
@@ -57,6 +56,26 @@ function fixture(nativePdfViewer = false) {
 }
 
 describe("PDF document navigation", () => {
+  it("installs the shell fallback while the initial document has no execution context", async () => {
+    const test = fixture();
+    const send = test.send.getMockImplementation()!;
+    test.send.mockImplementation((method, params) => {
+      if (method === "Runtime.evaluate") {
+        throw new Error("Inspected target navigated or closed");
+      }
+      return send(method, params);
+    });
+    await installPdfDocumentNavigation(test.cdp);
+    expect((await test.navigate()).method).toBe("Fetch.fulfillRequest");
+  });
+
+  it("still reports a target that actually closed", async () => {
+    const test = fixture();
+    const error = new Error("Target closed");
+    test.send.mockRejectedValueOnce(error);
+    await expect(installPdfDocumentNavigation(test.cdp)).rejects.toBe(error);
+  });
+
   it("escapes filenames in the browser document", async () => {
     const test = fixture();
     await installPdfDocumentNavigation(test.cdp);
