@@ -9,6 +9,7 @@ import {
   EnvironmentId,
   PreviewTabId,
   ProviderInstanceId,
+  PreviewOpenInput,
   ThreadId,
   type PreviewAutomationSnapshot,
   type PreviewAutomationStatus,
@@ -21,6 +22,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as PubSub from "effect/PubSub";
 import * as Queue from "effect/Queue";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import type { BrowserContext, Page } from "playwright-core";
 import { beforeEach, expect, vi } from "vite-plus/test";
@@ -249,6 +251,7 @@ const testThread = {
   providerSessionId: "agent-a",
   providerInstanceId: ProviderInstanceId.make("codex"),
 };
+const decodeOpenInput = Schema.decodeUnknownEffect(PreviewOpenInput);
 const scope = {
   environmentId: EnvironmentId.make("browser-test-environment"),
   thread: testThread,
@@ -1174,6 +1177,88 @@ it.live(
         });
       }),
     ).pipe(Effect.provide(layer)),
+);
+
+it.live("desktop linked tabs inherit their agent opener and keep close protections", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      desktopRendersNext = true;
+      const { browser, broker, tabId } = yield* ready;
+      const manager = yield* Manager.PreviewManager;
+      desktopRendersNext = true;
+      const child = yield* manager.open(
+        yield* decodeOpenInput({
+          threadId: scope.thread.threadId,
+          runtime: "server",
+          url: "https://example.com/editor?file=sample.ts",
+          openerTabId: tabId,
+        }),
+      );
+      const viewer = yield* browser.attachViewer(viewerInput(child.tabId, true));
+      const status = yield* broker.invoke<PreviewAutomationStatus>({
+        scope,
+        tabId: child.tabId,
+        operation: "status",
+        input: {},
+      });
+      expect(status.control).toMatchObject({ owner: "agent", ownedByCaller: true });
+      expect(status.tabs).toContainEqual(
+        expect.objectContaining({ tabId: child.tabId, openerTabId: tabId, ownedByCaller: true }),
+      );
+      const foreign = yield* broker
+        .invoke<void>({
+          scope: asSession("agent-b"),
+          tabId: child.tabId,
+          operation: "close",
+          input: {},
+        })
+        .pipe(Effect.flip);
+      expect(foreign).toMatchObject({ reason: "agentMismatch" });
+      yield* viewer.input({ type: "takeControl" });
+      const human = yield* broker
+        .invoke<void>({ scope, tabId: child.tabId, operation: "close", input: {} })
+        .pipe(Effect.flip);
+      expect(human).toMatchObject({ reason: "humanControl" });
+      yield* viewer.input({ type: "releaseControl" });
+      yield* broker.invoke<void>({ scope, tabId: child.tabId, operation: "close", input: {} });
+      expect(
+        (yield* manager.list({ threadId: scope.thread.threadId })).sessions,
+      ).not.toContainEqual(expect.objectContaining({ tabId: child.tabId }));
+    }),
+  ).pipe(Effect.provide(layer)),
+);
+
+it.live("desktop linked tabs from human openers remain unclaimed after agent reuse", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const { browser, broker } = yield* ready;
+      const manager = yield* Manager.PreviewManager;
+      const opener = yield* manager.open({ threadId: scope.thread.threadId, runtime: "server" });
+      desktopRendersNext = true;
+      const child = yield* manager.open(
+        yield* decodeOpenInput({
+          threadId: scope.thread.threadId,
+          runtime: "server",
+          openerTabId: opener.tabId,
+        }),
+      );
+      yield* browser.attachViewer(viewerInput(child.tabId, false));
+      const status = yield* broker.invoke<PreviewAutomationStatus>({
+        scope,
+        tabId: child.tabId,
+        operation: "open",
+        input: { open: false },
+      });
+      expect(status.control).toMatchObject({ owner: "unclaimed", ownedByCaller: false });
+      expect(status.tabs).toContainEqual(
+        expect.objectContaining({ tabId: child.tabId, openerTabId: opener.tabId }),
+      );
+      const close = yield* broker
+        .invoke<void>({ scope, tabId: child.tabId, operation: "close", input: {} })
+        .pipe(Effect.flip);
+      expect(close).toMatchObject({ reason: "agentMismatch" });
+    }),
+  ).pipe(Effect.provide(layer)),
 );
 
 it.live("initializes a navigating desktop tab while leaving its native PDF viewer intact", () =>

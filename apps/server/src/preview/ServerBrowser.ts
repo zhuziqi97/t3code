@@ -770,7 +770,7 @@ const make = Effect.gen(function* () {
       isolatedContext,
       desktop: desktop === null ? null : { close: desktop.close },
       profileId: snapshot.profileId,
-      openerTabId: adopted?.openerTabId,
+      openerTabId: adopted?.openerTabId ?? snapshot.openerTabId,
       downloads: [],
       fileChooser: null,
       dialog: null,

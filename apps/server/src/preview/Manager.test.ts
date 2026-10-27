@@ -94,6 +94,29 @@ it.layer(layer)("PreviewManager", (it) => {
     }),
   );
 
+  it.effect("requires a live server opener in the same thread for linked tabs", () =>
+    Effect.gen(function* () {
+      const threadId = freshThreadId();
+      const manager = yield* PreviewManager.PreviewManager;
+      const opener = yield* manager.open({
+        threadId,
+        runtime: "server",
+        automationOwner: "agent-a",
+      });
+      const child = yield* manager.open({ threadId, runtime: "server", openerTabId: opener.tabId });
+      expect(child).toMatchObject({ automationOwner: "agent-a", openerTabId: opener.tabId });
+      const foreign = yield* manager
+        .open({ threadId: freshThreadId(), runtime: "server", openerTabId: opener.tabId })
+        .pipe(Effect.flip);
+      expect(foreign._tag).toBe("PreviewSessionLookupError");
+      yield* manager.close({ threadId, tabId: opener.tabId });
+      const closed = yield* manager
+        .open({ threadId, runtime: "server", openerTabId: opener.tabId })
+        .pipe(Effect.flip);
+      expect(closed._tag).toBe("PreviewSessionLookupError");
+    }),
+  );
+
   it.effect("reissues presentation requests without replaying them on navigation", () =>
     Effect.gen(function* () {
       const threadId = freshThreadId();
