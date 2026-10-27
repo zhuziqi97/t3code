@@ -27,10 +27,29 @@ import { getThreadSortTimestamp, sortThreads } from "../lib/threadSort";
 import { normalizeSearchText } from "../lib/utils";
 import { formatRelativeTimeLabel } from "../timestampFormat";
 import { type Project, type SidebarThreadSummary, type Thread } from "../types";
+import type { RightPanelSurface } from "../rightPanelStore";
+import { resolvePathLinkTarget } from "@t3tools/shared/fileLinks";
 
 export const RECENT_THREAD_LIMIT = 12;
 export const ITEM_ICON_CLASS = "size-4 text-icon-muted";
 export const ADDON_ICON_CLASS = "size-4";
+
+export function getCommandPaletteEditorTarget(input: {
+  readonly workspacePath: string | null;
+  readonly activeSurface: RightPanelSurface | null;
+  readonly isFile: boolean;
+}): { path: string; isFile: boolean } | null {
+  const { workspacePath, activeSurface, isFile } = input;
+  if (!workspacePath) return null;
+  if (activeSurface?.kind === "file" && activeSurface.attachment === undefined && isFile) {
+    const path = resolvePathLinkTarget(activeSurface.relativePath, workspacePath);
+    return {
+      path: `${path}${activeSurface.revealLine === null ? "" : `:${activeSurface.revealLine}`}`,
+      isFile: true,
+    };
+  }
+  return { path: workspacePath, isFile: false };
+}
 
 export function buildLinkedThreadActionItems(
   input: CommandPaletteLinkedThreads & {

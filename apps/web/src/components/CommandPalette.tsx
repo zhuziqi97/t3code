@@ -46,7 +46,7 @@ import {
   AuthSourceControlWriteScope,
   AuthFilesystemReadScope,
   type DesktopWslState,
-  type EnvironmentId,
+  EnvironmentId,
   type FilesystemBrowseResult,
   SourceControlProviderKind,
   PRIMARY_LOCAL_ENVIRONMENT_ID,
@@ -138,6 +138,7 @@ import { isTerminalFocused } from "../lib/terminalFocus";
 import {
   PULL_REQUESTS_PANEL_REF,
   selectActiveRightPanel,
+  selectActiveRightPanelSurface,
   useRightPanelStore,
 } from "../rightPanelStore";
 import { getLatestThreadForProject, sortThreads } from "../lib/threadSort";
@@ -176,6 +177,7 @@ import {
   filterPinnedBrowseEntries,
   getCommandPaletteInputPlaceholder,
   getCommandPaletteMode,
+  getCommandPaletteEditorTarget,
   ITEM_ICON_CLASS,
   RECENT_THREAD_LIMIT,
   reduceCommandPaletteUiState,
@@ -190,6 +192,8 @@ import {
   reduceCommandPaletteSearchState,
   type SearchOverlayMode,
 } from "./CommandPalette.logic";
+import { resolveFilePreviewPath } from "./files/filePreviewMode";
+import { useProjectFileQuery } from "./files/projectFilesQueryState";
 import { resolveEnvironmentOptionLabel } from "./BranchToolbar.logic";
 import { CommandPaletteContent } from "./CommandPaletteContent";
 import {
@@ -744,6 +748,29 @@ function OpenCommandPaletteDialog(props: {
     activeDraftThread?.worktreePath ??
     editorProject?.workspaceRoot ??
     null;
+  const editorThreadId = activeThread?.id ?? activeDraftThread?.threadId;
+  const editorThreadRef =
+    currentProjectEnvironmentId && editorThreadId
+      ? scopeThreadRef(currentProjectEnvironmentId, editorThreadId)
+      : null;
+  const editorSurface = useRightPanelStore((state) =>
+    selectActiveRightPanelSurface(state.byThreadKey, editorThreadRef),
+  );
+  const editorFilePath =
+    editorSurface?.kind === "file" && editorSurface.attachment === undefined
+      ? resolveFilePreviewPath(editorSurface.relativePath, editorWorkspacePath ?? "")
+      : null;
+  const editorFile = useProjectFileQuery(
+    currentProjectEnvironmentId ?? EnvironmentId.make(PRIMARY_LOCAL_ENVIRONMENT_ID),
+    editorWorkspacePath ?? "",
+    editorFilePath,
+    currentProjectEnvironmentId !== null && editorWorkspacePath !== null && editorFilePath !== null,
+  );
+  const editorTarget = getCommandPaletteEditorTarget({
+    workspacePath: editorWorkspacePath,
+    activeSurface: editorSurface,
+    isFile: editorFile.isFile,
+  });
   const editorAction = useEditorAction(
     currentProjectEnvironmentId,
     serverConfigs.get(currentProjectEnvironmentId ?? ("" as EnvironmentId))?.availableEditors ?? [],
@@ -1208,7 +1235,7 @@ function OpenCommandPaletteDialog(props: {
   };
 
   const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [];
-  if (currentProjectEnvironmentId && editorWorkspacePath)
+  if (currentProjectEnvironmentId && editorTarget)
     actionItems.push({
       kind: "action",
       value: "action:open-editor",
@@ -1217,7 +1244,7 @@ function OpenCommandPaletteDialog(props: {
       shortcutCommand: "editor.openFavorite",
       icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
       run: async () => {
-        const result = await editorAction.open(editorWorkspacePath, { isFile: false });
+        const result = await editorAction.open(editorTarget.path, { isFile: editorTarget.isFile });
         if (result._tag === "Failure")
           toastManager.add({
             type: "error",
