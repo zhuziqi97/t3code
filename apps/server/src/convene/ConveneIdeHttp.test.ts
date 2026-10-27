@@ -38,6 +38,7 @@ const OPEN = {
 };
 const fixture = Effect.gen(function* () {
   const received: Array<{ path: string; cookie?: string; authorization?: string }> = [];
+  let finishStream: (() => void) | undefined;
   const server = NodeHttp.createServer((request, response) => {
     received.push({
       path: request.url!,
@@ -46,7 +47,30 @@ const fixture = Effect.gen(function* () {
         ? {}
         : { authorization: request.headers.authorization }),
     });
-    if (request.url === "/redirect") {
+    if (request.url === "/_static/out/browser/serviceWorker.js" || request.url === "/no-content") {
+      const status =
+        request.url === "/no-content"
+          ? 204
+          : request.headers["if-none-match"] === '"cached-worker"'
+            ? 304
+            : 200;
+      response.writeHead(status, {
+        "content-type": "application/javascript",
+        ...(status !== 204 ? { "content-length": "17" } : {}),
+        etag: '"cached-worker"',
+        "cache-control": "public, max-age=0",
+        "last-modified": "Tue, 27 Oct 2026 00:00:00 GMT",
+        vary: "Accept-Encoding",
+      });
+      response.end(status === 200 ? "// cached worker\n" : undefined);
+    } else if (request.url === "/stream") {
+      response.writeHead(200, { "content-type": "text/plain" });
+      response.write("first");
+      finishStream = () => {
+        finishStream = undefined;
+        response.end("second");
+      };
+    } else if (request.url === "/redirect") {
       response.writeHead(302, { location: "/login", "set-cookie": "native=fake; Path=/" });
       response.end();
     } else if (request.url === "/relative") {
@@ -76,6 +100,7 @@ const fixture = Effect.gen(function* () {
       Effect.promise(
         () =>
           new Promise<void>((resolve) => {
+            finishStream?.();
             for (const client of ws.clients) client.terminate();
             ws.close();
             server.close(() => resolve());
@@ -85,6 +110,36 @@ const fixture = Effect.gen(function* () {
   const address = server.address();
   assert.ok(address && typeof address !== "string");
   if (!address || typeof address === "string") return yield* Effect.die("Expected TCP fixture");
+  const upstreamOrigin = `http://127.0.0.1:${address.port}`;
+  const upstreamStreamReads: Array<{ method: string; status: number }> = [];
+  const httpLayer = Layer.effect(
+    HttpClient.HttpClient,
+    Effect.map(HttpClient.HttpClient, (http) =>
+      HttpClient.transformResponse(
+        http,
+        Effect.map(
+          (response) =>
+            new Proxy(response, {
+              get(target, property, receiver) {
+                if (property === "stream" && target.request.url.startsWith(upstreamOrigin + "/")) {
+                  upstreamStreamReads.push({
+                    method: target.request.method,
+                    status: target.status,
+                  });
+                }
+                return Reflect.get(target, property, receiver);
+              },
+            }),
+        ),
+      ),
+    ),
+  ).pipe(
+    Layer.provide(
+      FetchHttpClient.layer.pipe(
+        Layer.provide(Layer.succeed(FetchHttpClient.RequestInit, { redirect: "manual" })),
+      ),
+    ),
+  );
   let managementCalls = 0;
   let result: ConveneIdeResult = {
     service: "code-server",
@@ -103,7 +158,7 @@ const fixture = Effect.gen(function* () {
     changes: Stream.never,
     upstream: (id) =>
       id === "runtime"
-        ? Effect.succeed(`http://127.0.0.1:${address.port}`)
+        ? Effect.succeed(upstreamOrigin)
         : Effect.fail(new ConveneIde.ConveneIdeError({ code: "runtime_unavailable" })),
   });
   const auth = Layer.mock(EnvironmentAuth.EnvironmentAuth, {
@@ -131,17 +186,18 @@ const fixture = Effect.gen(function* () {
       Layer.provideMerge(
         NodeHttpServer.layer(NodeHttp.createServer, { port: 0, host: "127.0.0.1" }),
       ),
-      Layer.provideMerge(
-        FetchHttpClient.layer.pipe(
-          Layer.provide(Layer.succeed(FetchHttpClient.RequestInit, { redirect: "manual" })),
-        ),
-      ),
+      Layer.provideMerge(httpLayer),
     ),
   );
   const origin = HttpServer.formatAddress(Context.get(services, HttpServer.HttpServer).address);
   return {
     origin,
     received,
+    upstreamStreamReads,
+    finishStream: () => {
+      assert.ok(finishStream);
+      finishStream();
+    },
     http: Context.get(services, HttpClient.HttpClient),
     calls: () => managementCalls,
     setResult: (value: ConveneIdeResult) => {
@@ -149,6 +205,65 @@ const fixture = Effect.gen(function* () {
     },
   };
 });
+
+it.live.each([
+  { method: "HEAD", path: "/_static/out/browser/serviceWorker.js", status: 200 },
+  { method: "GET", path: "/_static/out/browser/serviceWorker.js", status: 304 },
+  { method: "GET", path: "/no-content", status: 204 },
+] as const)(
+  "preserves $method $status headers without reading the upstream body",
+  ({ method, path, status }) =>
+    Effect.gen(function* () {
+      const test = yield* fixture;
+      const response = yield* test.http.execute(
+        HttpClientRequest.make(method)(
+          test.origin + "/api/convene/ide/code-server/runtime" + path,
+          {
+            headers: {
+              authorization: "Bearer full",
+              ...(status === 304 ? { "if-none-match": '"cached-worker"' } : {}),
+            },
+          },
+        ),
+      );
+      assert.equal(response.status, status);
+      assert.equal(response.headers["etag"], '"cached-worker"');
+      assert.equal(response.headers["cache-control"], "public, max-age=0");
+      assert.equal(response.headers["last-modified"], "Tue, 27 Oct 2026 00:00:00 GMT");
+      assert.equal(response.headers["vary"], "Accept-Encoding");
+      assert.equal(response.headers["content-type"], "application/javascript");
+      assert.equal(response.headers["content-length"], status === 204 ? undefined : "17");
+      assert.equal((yield* response.arrayBuffer).byteLength, 0);
+      assert.deepEqual(test.upstreamStreamReads, []);
+    }),
+);
+
+it.live("streams a GET chunk before the upstream response finishes", () =>
+  Effect.gen(function* () {
+    const test = yield* fixture;
+    const response = yield* test.http.get(
+      test.origin + "/api/convene/ide/code-server/runtime/stream",
+      { headers: { authorization: "Bearer full" } },
+    );
+    assert.equal(response.status, 200);
+    assert.equal(response.headers["content-type"], "text/plain");
+    const chunks: string[] = [];
+    yield* response.stream.pipe(
+      Stream.decodeText(),
+      Stream.runForEach((chunk) =>
+        Effect.sync(() => {
+          chunks.push(chunk);
+          if (chunks.length === 1) {
+            assert.equal(chunk, "first");
+            test.finishStream();
+          }
+        }),
+      ),
+    );
+    assert.equal(chunks.join(""), "firstsecond");
+    assert.deepEqual(test.upstreamStreamReads, [{ method: "GET", status: 200 }]);
+  }),
+);
 
 it.live("preserves optional preparation facts over HTTP and still decodes old results", () =>
   Effect.gen(function* () {
