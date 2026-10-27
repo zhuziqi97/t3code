@@ -1,3 +1,4 @@
+import * as NodeVM from "node:vm";
 import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { ProjectId } from "@t3tools/contracts";
@@ -15,7 +16,9 @@ import * as Stream from "effect/Stream";
 import * as ChildProcess from "effect/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import { FetchHttpClient, HttpClient } from "effect/http";
+import { build } from "vite-plus/pack";
 
+import serverViteConfig from "../../vite.config.ts";
 import * as ServerConfig from "../config.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 import * as CodeServerInstallation from "./CodeServerInstallation.ts";
@@ -579,7 +582,7 @@ it.effect(
     }),
 );
 
-it.live.each(["fresh", "existing marker"] as const)(
+it.live.each(["fresh", "existing marker", "bundled fresh"] as const)(
   "initializes native language packs before the first HTTP bootstrap with %s data",
   (existing) =>
     Effect.gen(function* () {
@@ -651,7 +654,31 @@ it.live.each(["fresh", "existing marker"] as const)(
         ].join("\n"),
       );
       yield* fs.chmod(executable, 0o755);
-      const layer = ConveneIde.layer.pipe(
+      let ideModule = ConveneIde;
+      if (existing === "bundled fresh") {
+        const pack = serverViteConfig.pack;
+        assert.ok(pack && !Array.isArray(pack));
+        const outDir = path.join(config.baseDir, "service-bundle");
+        yield* Effect.promise(() =>
+          build({
+            ...pack,
+            config: false,
+            cwd: path.resolve(import.meta.dirname, "../.."),
+            entry: [path.join(import.meta.dirname, "ConveneIde.ts")],
+            outDir,
+            sourcemap: false,
+            logLevel: "silent",
+          }),
+        );
+        const bundleUrl = yield* path.toFileUrl(path.join(outDir, "ConveneIde.mjs"));
+        // Vitest's source transform must not rewrite the emitted server bundle.
+        const loadBundle: (url: string) => Promise<typeof ConveneIde> = NodeVM.runInThisContext(
+          "(url) => import(url)",
+          { importModuleDynamically: NodeVM.constants.USE_MAIN_CONTEXT_DEFAULT_LOADER },
+        );
+        ideModule = yield* Effect.promise(() => loadBundle(bundleUrl.href));
+      }
+      const layer = ideModule.layer.pipe(
         Layer.provide(CodeServerInstallation.layer),
         Layer.provide(
           Layer.mock(ConveneWorkspaces.ConveneWorkspaces, {
@@ -678,7 +705,11 @@ it.live.each(["fresh", "existing marker"] as const)(
         const response = yield* http.get(origin);
         assert.equal(response.status, 200);
         assert.deepEqual<unknown>(yield* response.json, { locale: "zh-cn", updates: 1 });
-        if (existing === "fresh") {
+        if (existing !== "existing marker") {
+          assert.equal(
+            JSON.parse(yield* fs.readFileString(path.join(data, "User", "argv.json"))).locale,
+            "zh-cn",
+          );
           const cliArgs: unknown = JSON.parse(
             yield* fs.readFileString(
               path.join(
