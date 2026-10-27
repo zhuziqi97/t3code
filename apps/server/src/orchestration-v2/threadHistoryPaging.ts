@@ -359,12 +359,10 @@ function isLocalProjectedRow(
 }
 
 /**
- * Keep every small request item from the full projection even when it sits
- * outside the recent visible window, so a later history page that introduces
- * the matching result still has the request available for live attempt/run
- * reducers.
+ * Pending form bodies are control state, independent of the visible history window.
+ * Interrupt requests also support reducers when their results arrive on a later page.
  */
-function retainedInterruptRequestTurnItems(
+function retainedControlTurnItems(
   projection: OrchestrationV2ThreadProjection,
   visible: ReadonlyArray<OrchestrationV2ProjectedTurnItem>,
 ): OrchestrationV2TurnItem[] {
@@ -376,8 +374,19 @@ function retainedInterruptRequestTurnItems(
   }
 
   const retained: OrchestrationV2TurnItem[] = [];
+  const pendingRequestIds = new Set(
+    projection.runtimeRequests
+      .filter((request) => request.status === "pending")
+      .map((request) => request.id),
+  );
   for (const item of projection.turnItems) {
-    if (item.type !== "run_interrupt_request") {
+    if (
+      item.type !== "run_interrupt_request" &&
+      !(
+        (item.type === "user_input_request" || item.type === "approval_request") &&
+        pendingRequestIds.has(item.requestId)
+      )
+    ) {
       continue;
     }
     if (visibleLocalIds.has(String(item.id))) {
@@ -508,15 +517,10 @@ export function buildBoundedThreadProjection(input: {
   };
   const latestLocalTurnOrdinal = computeLatestLocalTurnOrdinal(input.projection.turnItems);
 
-  const dependencyReserve = (() => {
-    let reserve = 0;
-    for (const item of controlProjection.turnItems) {
-      if (item.type === "run_interrupt_request") {
-        reserve += bytesOfJson(item);
-      }
-    }
-    return reserve;
-  })();
+  const dependencyReserve = retainedControlTurnItems(controlProjection, []).reduce(
+    (reserve, item) => reserve + bytesOfJson(item),
+    0,
+  );
   const controlBytes = bytesOfJson({
     ...controlProjection,
     messages: [],
@@ -543,10 +547,7 @@ export function buildBoundedThreadProjection(input: {
   });
   const visibleTurnItems = renumberPositions(window.items);
   const windowTurnItems = localTurnItemsForVisibleWindow(controlProjection, visibleTurnItems);
-  const dependencyTurnItems = retainedInterruptRequestTurnItems(
-    controlProjection,
-    visibleTurnItems,
-  );
+  const dependencyTurnItems = retainedControlTurnItems(controlProjection, visibleTurnItems);
   const turnItemById = new Map<string, OrchestrationV2TurnItem>();
   for (const item of windowTurnItems) {
     turnItemById.set(String(item.id), item);

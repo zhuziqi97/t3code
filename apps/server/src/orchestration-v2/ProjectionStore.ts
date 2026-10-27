@@ -5611,6 +5611,40 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 : {}),
               ...(historyAnchor === undefined ? {} : { historyAnchor }),
             });
+            // Pending forms need their bodies even when subsequent activity has paged them out.
+            const presentRequestIds = new Set(
+              projection.turnItems.flatMap((item) =>
+                item.type === "user_input_request" || item.type === "approval_request"
+                  ? [item.requestId]
+                  : [],
+              ),
+            );
+            const missingRequests = projection.runtimeRequests.filter(
+              (request) =>
+                request.status === "pending" &&
+                request.kind !== "auth_refresh" &&
+                request.kind !== "dynamic_tool_call" &&
+                !presentRequestIds.has(request.id),
+            );
+            const missingRequestIds = new Set(missingRequests.map((request) => request.id));
+            const pendingItems =
+              missingRequests.length === 0
+                ? []
+                : yield* decodeRows(
+                    decodeTurnItemPayload,
+                    threadId,
+                  )(
+                    yield* sql<PayloadRow>`
+              SELECT payload_json FROM orchestration_v2_projection_turn_items
+              WHERE thread_id = ${threadId}
+                AND ${sql.in(
+                  "node_id",
+                  missingRequests.map((request) => request.nodeId),
+                )}
+                AND type IN ('user_input_request', 'approval_request')
+              ORDER BY ordinal ASC, turn_item_id ASC
+            `,
+                  );
             const rows = yield* sql<{ readonly snapshot_sequence: number | null }>`
               SELECT MAX(sequence) AS snapshot_sequence
               FROM orchestration_events
@@ -5621,7 +5655,21 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             return {
               schemaVersion: ORCHESTRATION_V2_PROJECTION_SCHEMA_VERSION,
               snapshotSequence: rows[0]?.snapshot_sequence ?? 0,
-              projection,
+              projection:
+                pendingItems.length === 0
+                  ? projection
+                  : {
+                      ...projection,
+                      turnItems: [
+                        ...projection.turnItems,
+                        ...pendingItems.filter(
+                          (item) =>
+                            (item.type === "user_input_request" ||
+                              item.type === "approval_request") &&
+                            missingRequestIds.has(item.requestId),
+                        ),
+                      ],
+                    },
             };
           }),
         )
