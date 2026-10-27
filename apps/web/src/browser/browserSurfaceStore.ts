@@ -1,3 +1,8 @@
+import {
+  DESKTOP_PREVIEW_ACTIVITY_TRIGGER,
+  type DesktopPreviewActivityHandler,
+} from "@t3tools/contracts";
+import { flushSync } from "react-dom";
 import { create } from "zustand";
 
 export interface BrowserSurfaceRect {
@@ -229,3 +234,21 @@ export function acquireBrowserSurface(
     },
   };
 }
+
+const desktopActivity = new Map<string, () => void>();
+const setDesktopActivity: DesktopPreviewActivityHandler = (tabId, active) => {
+  // Electron awaits this callback before CDP; commit the paintable guest layout now.
+  flushSync(() => {
+    if (active) {
+      if (!desktopActivity.has(tabId))
+        desktopActivity.set(tabId, acquireBrowserSurfaceActivity(tabId));
+    } else {
+      desktopActivity.get(tabId)?.();
+      desktopActivity.delete(tabId);
+    }
+  });
+};
+Object.defineProperty(globalThis, DESKTOP_PREVIEW_ACTIVITY_TRIGGER, {
+  value: setDesktopActivity,
+  configurable: true,
+});

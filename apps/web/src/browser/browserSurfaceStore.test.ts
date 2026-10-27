@@ -1,3 +1,7 @@
+import {
+  DESKTOP_PREVIEW_ACTIVITY_TRIGGER,
+  type DesktopPreviewActivityHandler,
+} from "@t3tools/contracts";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 
 import {
@@ -68,4 +72,21 @@ describe("browserSurfaceStore", () => {
       visible: true,
     });
   });
+});
+
+it("releases only desktop automation activity while local capture still owns the surface", () => {
+  const handler = Reflect.get(
+    globalThis,
+    DESKTOP_PREVIEW_ACTIVITY_TRIGGER,
+  ) as DesktopPreviewActivityHandler;
+  const tabId = "automation-browser";
+  const releaseLocal = acquireBrowserSurfaceActivity(tabId);
+  handler(tabId, true);
+  handler(tabId, true);
+  expect(useBrowserSurfaceStore.getState().activityByTabId[tabId]).toBe(2);
+  handler(tabId, false);
+  handler(tabId, false);
+  expect(useBrowserSurfaceStore.getState().activityByTabId[tabId]).toBe(1);
+  releaseLocal();
+  expect(useBrowserSurfaceStore.getState().activityByTabId[tabId]).toBeUndefined();
 });

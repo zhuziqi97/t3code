@@ -2,6 +2,8 @@
 import { describe, expect, it } from "@effect/vitest";
 import { DesktopBrowserEvent } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Deferred from "effect/Deferred";
+import * as Queue from "effect/Queue";
 import * as Fiber from "effect/Fiber";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -33,11 +35,16 @@ const makeDebuggee = () => {
     getURL: () => "http://localhost/",
     getTitle: () => "Page",
     getUserAgent: () => "Electron",
+    capturePage: () =>
+      new Promise((resolve) => {
+        pending.push(() => resolve({ isEmpty: () => false, toPNG: () => Buffer.from("frame") }));
+      }),
   };
   return {
     tab: {
       webContents: webContents as unknown as Electron.WebContents,
       debugger: debuggee as unknown as Electron.Debugger,
+      setActivity: (_active: boolean) => Effect.void,
     },
     emit: (method: string, params: unknown) => emitter.emit("message", {}, method, params, ""),
     release: () => pending.splice(0).forEach((resolve) => resolve()),
@@ -146,3 +153,51 @@ describe("DesktopBrowserHost", () => {
     }),
   );
 });
+
+it.effect.each(["activity", "release", "detach"])(
+  "waits for rendering activity before native capture and releases on %s while it is still pending",
+  (end) =>
+    Effect.gen(function* () {
+      const host = yield* DesktopBrowserHost.make;
+      const debuggee = makeDebuggee();
+      const activityStarted = yield* Deferred.make<void>();
+      const paintable = yield* Deferred.make<void>();
+      const activityChanges = yield* Queue.unbounded<boolean>();
+      const sent = yield* Queue.unbounded<string>();
+      debuggee.tab.setActivity = (active: boolean) =>
+        Effect.gen(function* () {
+          if (active) {
+            yield* Deferred.succeed(activityStarted, undefined);
+            yield* Deferred.await(paintable);
+          }
+          yield* Queue.offer(activityChanges, active);
+        });
+      const capture = debuggee.tab.webContents.capturePage.bind(debuggee.tab.webContents);
+      debuggee.tab.webContents.capturePage = (...args) => {
+        Queue.offerUnsafe(sent, "capturePage");
+        return capture(...args);
+      };
+      host.attach(key, debuggee.tab);
+      yield* host.handleCommandLine(encodeJson({ type: "activity", ...key, active: true }));
+      yield* Deferred.await(activityStarted);
+      yield* host.handleCommandLine(
+        encodeJson({
+          type: "cdp",
+          ...key,
+          message: encodeJson({
+            id: 1,
+            method: "Page.captureScreenshot",
+            sessionId: "t3-preview-page",
+          }),
+        }),
+      );
+      expect(yield* Queue.size(sent)).toBe(0);
+      yield* Deferred.succeed(paintable, undefined);
+      expect(yield* Queue.take(activityChanges)).toBe(true);
+      expect(yield* Queue.take(sent)).toBe("capturePage");
+      if (end === "detach") host.detach(key);
+      else yield* host.handleCommandLine(encodeJson({ type: end, ...key, active: false }));
+      expect(yield* Queue.take(activityChanges)).toBe(false);
+      debuggee.release();
+    }),
+);

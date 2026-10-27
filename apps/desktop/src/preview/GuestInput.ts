@@ -115,6 +115,60 @@ const evaluate = async (debuggee: Electron.Debugger, expression: string) => {
   return reply.result?.value;
 };
 
+interface ScreenshotClip {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly scale: number;
+}
+
+const captureScreenshot = async (
+  webContents: Electron.WebContents,
+  debuggee: Electron.Debugger,
+  params: Record<string, unknown>,
+) => {
+  const clip = params["clip"] as ScreenshotClip | undefined;
+  const metrics = clip
+    ? ((await debuggee.sendCommand("Page.getLayoutMetrics")) as {
+        readonly cssVisualViewport: {
+          readonly pageX: number;
+          readonly pageY: number;
+          readonly zoom?: number;
+        };
+      })
+    : undefined;
+  // CDP waits forever for a hidden webview's surface. A native capturer marks
+  // only the guest page visible while copying pixels; its window stays hidden.
+  let image = await webContents.capturePage(undefined, { stayHidden: false, stayAwake: true });
+  if (image.isEmpty()) throw new Error("The desktop browser returned an empty screenshot.");
+  if (clip && metrics) {
+    const viewport = metrics.cssVisualViewport;
+    const zoom = viewport.zoom ?? 1;
+    // CDP clips use document DIP; the display ratio includes page zoom. Deriving
+    // it from viewport width would overcount pixels when a scrollbar is present.
+    const pixelsPerDip = ((await evaluate(debuggee, "devicePixelRatio")) as number) / zoom;
+    image = image.crop({
+      x: Math.round((clip.x - viewport.pageX * zoom) * pixelsPerDip),
+      y: Math.round((clip.y - viewport.pageY * zoom) * pixelsPerDip),
+      width: Math.round(clip.width * pixelsPerDip),
+      height: Math.round(clip.height * pixelsPerDip),
+    });
+    if (clip.scale !== 1) {
+      const size = image.getSize();
+      image = image.resize({
+        width: Math.max(1, Math.round(size.width * clip.scale)),
+        height: Math.max(1, Math.round(size.height * clip.scale)),
+      });
+    }
+  }
+  const bytes =
+    params["format"] === "jpeg"
+      ? image.toJPEG(typeof params["quality"] === "number" ? params["quality"] : 80)
+      : image.toPNG();
+  return { data: bytes.toString("base64") };
+};
+
 /** Sends one command to the guest's page, keeping reloads and input inside it. */
 export const sendPageCommand = async (
   webContents: Electron.WebContents,
@@ -122,6 +176,7 @@ export const sendPageCommand = async (
   method: string,
   params: Record<string, unknown>,
 ): Promise<unknown> => {
+  if (method === "Page.captureScreenshot") return captureScreenshot(webContents, debuggee, params);
   // Electron's debugger routes Page.reload on a webview to its embedder window.
   if (method === "Page.reload") {
     if (params["ignoreCache"] === true) webContents.reloadIgnoringCache();

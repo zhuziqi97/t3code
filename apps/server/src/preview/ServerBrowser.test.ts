@@ -49,7 +49,9 @@ vi.mock("./ServerBrowserContexts.ts", () => ({
       return context as unknown as BrowserContext;
     }
     async scratchPage() {
-      return makeContext().page as unknown as Page;
+      const encoder = makeContext();
+      encoders.push(encoder);
+      return encoder.page as unknown as Page;
     }
     async connectDesktopPage(endpoint: string) {
       const context = makeContext();
@@ -213,6 +215,8 @@ function makeContext(onClose?: (context: BrowserContext) => void) {
 }
 
 const contexts: ReturnType<typeof makeContext>[] = [];
+const encoders: ReturnType<typeof makeContext>[] = [];
+const desktopActivity = new Map<string, number>();
 const contextRequests: Array<{ profileId: string; isolated: boolean }> = [];
 let contextGate: PromiseWithResolvers<void> | null = null;
 let pageCopy = "";
@@ -290,6 +294,18 @@ const dependencies = Layer.mergeAll(
       Effect.acquireRelease(Effect.succeed(`ws://desktop/${key.tabId}`), () =>
         Effect.sync(() => releasedDesktopTabs.push(key.tabId)),
       ),
+    acquireActivity: (key: { tabId: string }) =>
+      Effect.sync(() => {
+        desktopActivity.set(key.tabId, (desktopActivity.get(key.tabId) ?? 0) + 1);
+        let released = false;
+        return Effect.sync(() => {
+          if (released) return;
+          released = true;
+          const count = desktopActivity.get(key.tabId)! - 1;
+          if (count === 0) desktopActivity.delete(key.tabId);
+          else desktopActivity.set(key.tabId, count);
+        });
+      }),
     pointer: () => Effect.void,
   }),
 ).pipe(
@@ -320,6 +336,8 @@ const viewerInput = (tabId: string, canOperate: boolean) => ({
 
 beforeEach(() => {
   contexts.length = 0;
+  encoders.length = 0;
+  desktopActivity.clear();
   contextRequests.length = 0;
   contextGate = null;
   contextFailure = null;
@@ -1147,4 +1165,106 @@ it.live(
         });
       }),
     ).pipe(Effect.provide(layer)),
+);
+
+it.live(
+  "holds desktop rendering before snapshot capture and releases it after success or failure",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        desktopRendersNext = true;
+        const { broker, tabId } = yield* ready;
+        const session = desktopConnections[0]!.context.sessions[0]!;
+        const original = session.send.getMockImplementation()!;
+        session.send.mockImplementation(async (method, input) => {
+          if (method === "Page.captureScreenshot") expect(desktopActivity.get(tabId)).toBe(1);
+          return original(method, input);
+        });
+        yield* broker.invoke<void>({ scope, tabId, operation: "snapshot", input: {} });
+        expect(desktopActivity.has(tabId)).toBe(false);
+        session.send.mockImplementation(async (method, input) => {
+          if (method === "Page.captureScreenshot") {
+            expect(desktopActivity.get(tabId)).toBe(1);
+            throw new Error("capture failed");
+          }
+          return original(method, input);
+        });
+        const failure = yield* broker
+          .invoke<void>({ scope, tabId, operation: "snapshot", input: {} })
+          .pipe(Effect.flip);
+        expect(failure._tag).toBe("PreviewAutomationExecutionError");
+        expect(desktopActivity.has(tabId)).toBe(false);
+      }),
+    ).pipe(Effect.provide(layer)),
+);
+
+it.live.each(["stop", "close"])("keeps desktop recording rendering active until %s", (end) =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      desktopRendersNext = true;
+      const { broker, tabId } = yield* ready;
+      yield* broker.invoke<void>({ scope, tabId, operation: "recordingStart", input: {} });
+      expect(desktopActivity.get(tabId)).toBe(1);
+      yield* broker.invoke<void>({ scope, tabId, operation: "snapshot", input: {} });
+      expect(desktopActivity.get(tabId)).toBe(1);
+      encoders[0]!.page.evaluate.mockResolvedValueOnce({
+        mimeType: "video/webm",
+        count: 1,
+        bytes: 1,
+      } as never);
+      encoders[0]!.page.evaluate.mockResolvedValueOnce("eA==" as never);
+      yield* broker.invoke<void>({
+        scope,
+        tabId,
+        operation: end === "stop" ? "recordingStop" : "close",
+        input: {},
+      });
+      expect(desktopActivity.has(tabId)).toBe(false);
+    }),
+  ).pipe(Effect.provide(layer)),
+);
+
+it.live("releases desktop recording activity when its first capture fails", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      desktopRendersNext = true;
+      const { broker, tabId } = yield* ready;
+      const session = desktopConnections[0]!.context.sessions[0]!;
+      const original = session.send.getMockImplementation()!;
+      session.send.mockImplementation(async (method, input) => {
+        if (method === "Page.captureScreenshot") throw new Error("capture failed");
+        return original(method, input);
+      });
+      const failure = yield* broker
+        .invoke<void>({ scope, tabId, operation: "recordingStart", input: {} })
+        .pipe(Effect.flip);
+      expect(failure._tag).toBe("PreviewAutomationExecutionError");
+      expect(desktopActivity.has(tabId)).toBe(false);
+      expect(encoders[0]!.page.close).toHaveBeenCalledOnce();
+    }),
+  ).pipe(Effect.provide(layer)),
+);
+
+it.live("releases desktop recording activity and clears recording state when encoding fails", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      desktopRendersNext = true;
+      const { broker, tabId } = yield* ready;
+      yield* broker.invoke<void>({ scope, tabId, operation: "recordingStart", input: {} });
+      encoders[0]!.page.evaluate.mockRejectedValueOnce(new Error("encoding failed"));
+      const failure = yield* broker
+        .invoke<void>({ scope, tabId, operation: "recordingStop", input: {} })
+        .pipe(Effect.flip);
+      expect(failure._tag).toBe("PreviewAutomationExecutionError");
+      expect(desktopActivity.has(tabId)).toBe(false);
+      expect(encoders[0]!.page.close).toHaveBeenCalledOnce();
+      const repeated = yield* broker
+        .invoke<void>({ scope, tabId, operation: "recordingStop", input: {} })
+        .pipe(Effect.flip);
+      expect(repeated).toMatchObject({
+        _tag: "PreviewAutomationExecutionError",
+        cause: { _tag: "PreviewAutomationRecordingNotActiveError" },
+      });
+    }),
+  ).pipe(Effect.provide(layer)),
 );

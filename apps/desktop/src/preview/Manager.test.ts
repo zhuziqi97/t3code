@@ -2565,3 +2565,57 @@ describe("PreviewManager", () => {
     ),
   );
 });
+
+effectIt.effect(
+  "shares automation frame capture with local recording and restores throttling on release",
+  () =>
+    Effect.gen(function* () {
+      const manager = yield* PreviewManager.PreviewManager;
+      const browserHost = yield* DesktopBrowserHost.DesktopBrowserHost;
+      const changes = yield* Queue.unbounded<boolean>();
+      const layout = yield* Queue.unbounded<string>();
+      const host = makeTestHostWebContents();
+      host.executeJavaScript.mockImplementation(async (expression: string) => {
+        if (expression.includes("__t3DesktopPreviewActivity"))
+          Queue.offerUnsafe(layout, expression);
+        return true;
+      });
+      const guest = makeTestPreviewWebContents(
+        vi.fn(async () => ({
+          toJPEG: () => Buffer.from("frame"),
+          getSize: () => ({ width: 1280, height: 720 }),
+        })),
+        42,
+        host,
+      );
+      guest.setBackgroundThrottling.mockImplementation((enabled) => {
+        Queue.offerUnsafe(changes, enabled);
+      });
+      fromId.mockReturnValue(guest);
+      Object.assign(guest, { isDevToolsOpened: () => false });
+      const windowThrottling = vi.fn();
+      yield* manager.setMainWindow({
+        isDestroyed: () => false,
+        once: vi.fn(),
+        webContents: Object.assign(host, { setBackgroundThrottling: windowThrottling }),
+      } as never);
+      const key = { threadId: "thread-activity", tabId: "tab-activity" };
+      yield* manager.createTab("runtime-activity", { serverTab: key });
+      yield* manager.registerWebview("runtime-activity", 42);
+      yield* browserHost.events.pipe(Stream.take(1), Stream.runDrain);
+      yield* browserHost.handleCommandLine(
+        JSON.stringify({ type: "activity", ...key, active: true }),
+      );
+      expect(yield* Queue.take(changes)).toBe(false);
+      expect(yield* Queue.take(layout)).toContain('"runtime-activity", true');
+      yield* manager.startRecording("runtime-activity");
+      host.displayMediaHandler()?.({ frame: host.mainFrame }, () => {});
+      yield* browserHost.handleCommandLine(
+        JSON.stringify({ type: "activity", ...key, active: false }),
+      );
+      expect(yield* Queue.take(layout)).toContain('"runtime-activity", false');
+      yield* manager.stopRecording("runtime-activity");
+      expect(yield* Queue.take(changes)).toBe(true);
+      expect(windowThrottling.mock.calls).toEqual([[false], [true]]);
+    }).pipe(Effect.provide(managerLayer("linux")), Effect.scoped),
+);

@@ -1174,6 +1174,10 @@ export interface DesktopBridge {
   preview?: DesktopPreviewBridge;
 }
 
+/** Electron awaits this callback before forwarding CDP to an inactive guest. */
+export const DESKTOP_PREVIEW_ACTIVITY_TRIGGER = "__t3DesktopPreviewActivity";
+export type DesktopPreviewActivityHandler = (tabId: string, active: boolean) => void;
+
 /** Renderer callback invoked by Electron with a fresh user gesture before display-media capture. */
 export const DESKTOP_PREVIEW_RECORDING_CAPTURE_TRIGGER = "__t3DesktopPreviewRecordingCapture";
 
