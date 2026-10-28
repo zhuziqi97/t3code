@@ -164,6 +164,63 @@ describe("RPC scope middleware", () => {
   );
 });
 
+it.effect.each([false, true])(
+  "guards explicit Registry preparation with provider management: %s",
+  (canManage) =>
+    Effect.gen(function* () {
+      const tested = [
+        WS_METHODS.serverSearchAcpRegistry,
+        WS_METHODS.serverPrepareAcpRegistryAgent,
+      ] as const;
+      const group = WsRpcGroup.omit(
+        ...[...WsRpcGroup.requests.keys()].filter(
+          (tag): tag is Exclude<keyof typeof RPC_REQUIRED_SCOPES, (typeof tested)[number]> =>
+            !(tested as ReadonlyArray<string>).includes(tag),
+        ),
+      );
+      const prepared: string[] = [];
+      const client = yield* RpcTest.makeClient(group).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            group.toLayerHandler(WS_METHODS.serverSearchAcpRegistry, () =>
+              Effect.succeed({ agents: [] }),
+            ),
+            group.toLayerHandler(WS_METHODS.serverPrepareAcpRegistryAgent, ({ agentId }) =>
+              Effect.sync(() => {
+                prepared.push(agentId);
+                return {
+                  agentId,
+                  version: "2.0.0",
+                  distribution: "binary" as const,
+                  prepared: true as const,
+                };
+              }),
+            ),
+            RpcAuthorization.layer(
+              canManage
+                ? [AuthOrchestrationReadScope, AuthProvidersManageScope]
+                : [AuthOrchestrationReadScope],
+            ),
+          ),
+        ),
+      );
+      expect(yield* client[WS_METHODS.serverSearchAcpRegistry]({ query: "example" })).toEqual({
+        agents: [],
+      });
+      const result = client[WS_METHODS.serverPrepareAcpRegistryAgent]({ agentId: "example" });
+      if (canManage) {
+        expect(yield* result).toMatchObject({ version: "2.0.0", prepared: true });
+        expect(prepared).toEqual(["example"]);
+      } else {
+        expect(yield* result.pipe(Effect.flip)).toMatchObject({
+          _tag: "EnvironmentAuthorizationError",
+          requiredPermission: AuthProvidersManageScope,
+        });
+        expect(prepared).toEqual([]);
+      }
+    }).pipe(Effect.scoped),
+);
+
 describe("settings mutation authorization", () => {
   const group = WsRpcGroup.omit(
     ...[...WsRpcGroup.requests.keys()].filter(

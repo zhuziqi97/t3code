@@ -54,6 +54,7 @@ function catalogWithInspection(
   inspection: AcpRegistrySupport.AcpRegistryInspection,
 ): AcpRegistrySupport.AcpRegistryCatalog["Service"] {
   return {
+    refresh: () => Effect.die("unused refresh"),
     search: () => Effect.die("unused search"),
     prepare: () => Effect.die("unused prepare"),
     inspect: () => Effect.succeed(inspection),
@@ -63,6 +64,65 @@ function catalogWithInspection(
 }
 
 describe("acpRegistrySnapshotReadiness", () => {
+  it("compares the installed version with the directory and retains the last successful check", () => {
+    const snapshot = buildCheckedAcpRegistrySnapshot({
+      ...identity,
+      settings: decodeSettings({ agentId: "test-agent" }),
+      checkedAt: "2026-10-28T11:00:00.000Z",
+      inspection: {
+        status: "ready",
+        agentId: "test-agent",
+        distribution: "binary",
+        version: "1.0.0",
+        latestVersion: "2.0.0",
+        registryCheck: { lastSuccessAt: "2026-10-28T10:00:00.000Z", error: "Registry is offline." },
+      },
+    });
+    expect(snapshot.version).toBe("1.0.0");
+    expect(snapshot.versionAdvisory).toMatchObject({
+      status: "behind_latest",
+      currentVersion: "1.0.0",
+      latestVersion: "2.0.0",
+      checkedAt: "2026-10-28T10:00:00.000Z",
+      canUpdate: false,
+    });
+    expect(snapshot.versionAdvisory?.message).toContain("Registry is offline.");
+  });
+
+  it.each([null, "3.0.0"])("does not advertise an upgrade for installed version %s", (version) => {
+    const snapshot = buildCheckedAcpRegistrySnapshot({
+      ...identity,
+      settings: decodeSettings({ agentId: "test-agent", commandPath: "/custom/agent" }),
+      checkedAt: "2026-10-28T11:00:00.000Z",
+      inspection: {
+        status: "ready",
+        agentId: "test-agent",
+        version,
+        latestVersion: "2.0.0",
+        distribution: "binary",
+      },
+    });
+    expect(snapshot.versionAdvisory?.status).toBe(version === null ? "unknown" : "current");
+    expect(snapshot.versionAdvisory?.canUpdate).toBe(false);
+  });
+
+  it("suppresses update advisories when provider update checks are disabled", () => {
+    const snapshot = buildCheckedAcpRegistrySnapshot({
+      ...identity,
+      settings: decodeSettings({ agentId: "test-agent" }),
+      checkedAt: "2026-10-28T11:00:00.000Z",
+      enableProviderUpdateChecks: false,
+      inspection: {
+        status: "ready",
+        agentId: "test-agent",
+        version: "1.0.0",
+        latestVersion: "2.0.0",
+        distribution: "binary",
+      },
+    });
+    expect(snapshot.versionAdvisory).toMatchObject({ status: "unknown", latestVersion: null });
+  });
+
   it("treats a live empty command advertisement as an authoritative replacement", () => {
     const provider = buildCheckedAcpRegistrySnapshot({
       ...identity,

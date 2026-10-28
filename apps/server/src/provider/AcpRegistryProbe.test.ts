@@ -321,6 +321,7 @@ describe("ACP Registry probe", () => {
 
   it.effect("lists native sessions and logs out through generic ACP lifecycle methods", () => {
     const catalog = AcpRegistrySupport.AcpRegistryCatalog.of({
+      refresh: () => Effect.die("unused refresh"),
       search: () => Effect.die("unused search"),
       prepare: () => Effect.die("unused prepare"),
       inspect: () => Effect.die("unused inspect"),

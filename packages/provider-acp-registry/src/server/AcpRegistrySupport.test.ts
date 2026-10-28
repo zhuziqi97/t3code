@@ -15,6 +15,7 @@ import * as Path from "effect/Path";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import * as TestClock from "effect/testing/TestClock";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as ChildProcess from "effect/process/ChildProcess";
@@ -138,6 +139,213 @@ const makeFakeUvToolchain = Effect.fn("AcpRegistrySupport.test.makeFakeUvToolcha
 });
 
 describe("AcpRegistrySupport", () => {
+  it.effect(
+    "reports package installation facts without treating npm or an executable override as an installed agent",
+    () => {
+      let agent = {
+        ...makeAgent({ npx: { package: "@example/acp@1.2.3" } }),
+        version: "2026.10.28",
+      };
+      return Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const cacheDir = yield* fileSystem.makeTempDirectoryScoped({
+          prefix: "t3-acp-package-update-",
+        });
+        const toolchain = yield* makeFakeNpmToolchain(cacheDir);
+        const options = { cacheDir, toolsDir: `${cacheDir}/tools`, registryUrl };
+        const resolver = yield* AcpRegistrySupport.makeAcpRegistryCatalog(options);
+        yield* resolver.search({ query: agent.id });
+        expect(yield* resolver.inspect(settings(), toolchain.environment)).toMatchObject({
+          status: "unprepared",
+          version: null,
+          latestVersion: "1.2.3",
+        });
+        const override = `${cacheDir}/custom-agent`;
+        yield* fileSystem.writeFileString(override, "controlled override");
+        yield* fileSystem.chmod(override, 0o755);
+        expect(
+          yield* resolver.inspect(settings({ commandPath: override }), toolchain.environment),
+        ).toMatchObject({
+          status: "ready",
+          version: null,
+          latestVersion: "1.2.3",
+        });
+        expect(yield* fileSystem.readFileString(toolchain.logPath)).toBe("");
+        const installed = yield* resolver.resolve(settings(), "/workspace", toolchain.environment);
+        expect(yield* resolver.inspect(settings(), toolchain.environment)).toMatchObject({
+          status: "ready",
+          version: "1.2.3",
+          latestVersion: "1.2.3",
+        });
+        const installLog = yield* fileSystem.readFileString(toolchain.logPath);
+        yield* fileSystem.remove(`${cacheDir}/acp-registry/installed-agents`, { recursive: true });
+        agent = {
+          ...agent,
+          version: "2026.11.1",
+          distribution: { npx: { package: "@example/acp@2.0.0" } },
+        };
+        yield* resolver.search({ query: agent.id });
+        const restarted = yield* AcpRegistrySupport.makeAcpRegistryCatalog(options);
+        expect(
+          (yield* restarted.resolve(settings(), "/workspace", toolchain.environment)).spawn.command,
+        ).toBe(installed.spawn.command);
+        expect(yield* restarted.inspect(settings(), toolchain.environment)).toMatchObject({
+          status: "ready",
+          version: "1.2.3",
+          latestVersion: "2.0.0",
+        });
+        expect(yield* fileSystem.readFileString(toolchain.logPath)).toBe(installLog);
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(
+          layerResolver((request) =>
+            Effect.succeed(HttpClientResponse.fromWeb(request, new Response(makeRegistry(agent)))),
+          ),
+        ),
+      );
+    },
+  );
+
+  it.effect(
+    "expires automatic directory checks, backs off failures, and permits explicit refresh with checks disabled",
+    () => {
+      const agent = makeAgent({ npx: { package: "@example/acp@1.2.3" } });
+      let requests = 0;
+      let unavailable = false;
+      return Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const cacheDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-acp-ttl-" });
+        const resolver = yield* AcpRegistrySupport.makeAcpRegistryCatalog({
+          cacheDir,
+          toolsDir: `${cacheDir}/tools`,
+          registryUrl,
+        });
+        yield* resolver.search({ query: agent.id });
+        const successful = yield* resolver.refresh({ force: false });
+        expect(requests).toBe(1);
+        expect(successful.lastSuccessAt).not.toBeNull();
+        const restarted = yield* AcpRegistrySupport.makeAcpRegistryCatalog({
+          cacheDir,
+          toolsDir: `${cacheDir}/tools`,
+          registryUrl,
+        });
+        expect(yield* restarted.refresh({ force: false })).toEqual(successful);
+        expect(requests).toBe(1);
+        yield* TestClock.adjust("1 hour");
+        unavailable = true;
+        const failed = yield* resolver.refresh({ force: false });
+        expect(requests).toBe(2);
+        expect(failed.lastSuccessAt).toBe(successful.lastSuccessAt);
+        expect(failed.error).toContain("Could not fetch");
+        yield* resolver.refresh({ force: false });
+        expect(requests).toBe(2);
+        expect((yield* resolver.search({ query: agent.id })).agents[0]?.version).toBe("1.2.3");
+        expect(requests).toBe(3);
+        yield* TestClock.adjust("5 minutes");
+        yield* resolver.refresh({ force: false });
+        expect(requests).toBe(4);
+        const hostSettings = yield* TestProviderHost.TestProviderHostSettings;
+        yield* hostSettings.set({ ...DEFAULT_SERVER_SETTINGS, enableProviderUpdateChecks: false });
+        yield* TestClock.adjust("1 hour");
+        yield* resolver.refresh({ force: false });
+        expect(requests).toBe(4);
+        unavailable = false;
+        expect((yield* resolver.refresh()).error).toBeNull();
+        expect(requests).toBe(5);
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(
+          layerResolver((request) => {
+            requests += 1;
+            return Effect.succeed(
+              HttpClientResponse.fromWeb(
+                request,
+                unavailable
+                  ? new Response("offline", { status: 503 })
+                  : new Response(makeRegistry(agent)),
+              ),
+            );
+          }),
+        ),
+      );
+    },
+  );
+
+  it.effect(
+    "keeps the installed binary and its arguments after the directory advertises an update",
+    () => {
+      let agent = makeAgent({
+        binary: { "linux-x86_64": { archive: archiveUrl, cmd: "agent", args: ["old-acp"] } },
+      });
+      const downloads: string[] = [];
+      let failDownload = false;
+      return Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const cacheDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-acp-update-" });
+        const options = { cacheDir, toolsDir: `${cacheDir}/tools`, registryUrl };
+        const resolver = yield* AcpRegistrySupport.makeAcpRegistryCatalog(options);
+        yield* resolver.prepare({ agentId: agent.id });
+        const original = yield* resolver.resolve(settings(), "/workspace");
+        yield* fileSystem.remove(`${cacheDir}/acp-registry/installed-agents`, { recursive: true });
+        agent = {
+          ...agent,
+          version: "2.0.0",
+          distribution: {
+            binary: {
+              "linux-x86_64": { archive: `${archiveUrl}?v=2`, cmd: "new-agent", args: ["new-acp"] },
+            },
+          },
+        };
+        yield* resolver.search({ query: agent.id });
+        const restarted = yield* AcpRegistrySupport.makeAcpRegistryCatalog(options);
+        const resolved = yield* restarted.resolve(settings(), "/workspace");
+        expect(resolved.spawn.command).toBe(original.spawn.command);
+        expect(resolved.spawn.args).toEqual(["old-acp"]);
+        expect(downloads).toEqual([archiveUrl]);
+        expect(yield* restarted.inspect(settings())).toMatchObject({
+          status: "ready",
+          version: "1.2.3",
+          latestVersion: "2.0.0",
+          distribution: "binary",
+        });
+        failDownload = true;
+        expect((yield* restarted.prepare({ agentId: agent.id }).pipe(Effect.flip)).reason).toBe(
+          "download_failed",
+        );
+        expect((yield* restarted.resolve(settings(), "/workspace")).spawn.command).toBe(
+          original.spawn.command,
+        );
+        failDownload = false;
+        yield* restarted.prepare({ agentId: agent.id });
+        expect(yield* restarted.inspect(settings())).toMatchObject({
+          status: "ready",
+          version: "2.0.0",
+          latestVersion: "2.0.0",
+        });
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(
+          layerResolver((request) => {
+            if (request.url === registryUrl) {
+              return Effect.succeed(
+                HttpClientResponse.fromWeb(request, new Response(makeRegistry(agent))),
+              );
+            }
+            downloads.push(request.url);
+            return Effect.succeed(
+              HttpClientResponse.fromWeb(
+                request,
+                failDownload
+                  ? new Response("offline", { status: 503 })
+                  : new Response("controlled binary"),
+              ),
+            );
+          }),
+        ),
+      );
+    },
+  );
+
   it("selects the preferred compatible distribution", () => {
     const agent = makeAgent({
       binary: {
@@ -821,25 +1029,44 @@ describe("AcpRegistrySupport", () => {
     );
   });
 
-  it.effect("refreshes explicit searches and coalesces concurrent refreshes", () => {
+  it.effect("coalesces automatic checks with explicit searches without blocking inspection", () => {
     const agent = makeAgent({ npx: { package: "@example/acp@1.2.3" } });
     let requests = 0;
+    let reply = Effect.void;
     return Effect.gen(function* () {
+      const started = yield* Deferred.make<void>();
+      const release = yield* Deferred.make<void>();
+      reply = Deferred.succeed(started, undefined).pipe(Effect.andThen(Deferred.await(release)));
       const fileSystem = yield* FileSystem.FileSystem;
       const cacheDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-acp-registry-refresh-",
       });
+      yield* fileSystem.makeDirectory(`${cacheDir}/acp-registry`);
+      yield* fileSystem.writeFileString(
+        `${cacheDir}/acp-registry/registry.json`,
+        makeRegistry(agent),
+      );
       const resolver = yield* AcpRegistrySupport.makeAcpRegistryCatalog({
         cacheDir,
         toolsDir: `${cacheDir}/tools`,
         registryUrl,
       });
-      yield* Effect.all(
-        [resolver.search({ query: "example" }), resolver.search({ query: "example" })],
-        { concurrency: "unbounded" },
-      );
+      const automatic = yield* resolver
+        .refresh({ force: false })
+        .pipe(Effect.forkScoped({ startImmediately: true }));
+      yield* Deferred.await(started);
+      const explicit = yield* resolver
+        .search({ query: "example" })
+        .pipe(Effect.forkScoped({ startImmediately: true }));
+      expect(yield* resolver.inspect(settings())).toMatchObject({
+        status: "unprepared",
+        version: null,
+      });
       expect(requests).toBe(1);
-
+      yield* Deferred.succeed(release, undefined);
+      yield* Fiber.join(automatic);
+      yield* Fiber.join(explicit);
+      expect(requests).toBe(1);
       yield* resolver.search({ query: "example" });
       expect(requests).toBe(2);
     }).pipe(
@@ -847,7 +1074,7 @@ describe("AcpRegistrySupport", () => {
       Effect.provide(
         layerResolver((request) => {
           requests += 1;
-          return Effect.yieldNow.pipe(
+          return reply.pipe(
             Effect.as(HttpClientResponse.fromWeb(request, new Response(makeRegistry(agent)))),
           );
         }),
@@ -1147,7 +1374,7 @@ describe("AcpRegistrySupport", () => {
       });
       const inspection = yield* resolver.inspect(settings());
 
-      expect(inspection).toMatchObject({ status: "ready", agentId: agent.id });
+      expect(inspection).toMatchObject({ status: "unprepared", agentId: agent.id, version: null });
       expect(requests).toBe(0);
     }).pipe(
       Effect.scoped,
@@ -1185,7 +1412,11 @@ describe("AcpRegistrySupport", () => {
       const resolved = yield* resolver.resolve(settings(), "/workspace", providerEnvironment);
 
       expect(hostInspection).toMatchObject({ status: "missing_runner", runner: "npm" });
-      expect(instanceInspection).toMatchObject({ status: "ready", distribution: "npx" });
+      expect(instanceInspection).toMatchObject({
+        status: "unprepared",
+        distribution: "npx",
+        version: null,
+      });
       expect(resolved.spawn).toMatchObject({
         command: toolchain.executablePath,
         env: { PATH: expect.stringMatching(new RegExp(`^${toolchain.globalBin}:`, "u")) },
