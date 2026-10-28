@@ -62,6 +62,56 @@ const setup = Effect.gen(function* () {
 });
 
 describe("command permissions", () => {
+  it("requires provider management to prepare a Registry agent on the destination at execution", async () => {
+    const registry = AtomRegistry.make();
+    const unmountTarget = registry.mount(sessions(env));
+    const unmountOther = registry.mount(sessions(other));
+    let installations = 0;
+    const command = createEnvironmentRpcCommand(runtime, {
+      label: "test.registry.prepare",
+      tag: WS_METHODS.serverPrepareAcpRegistryAgent,
+      execute: ({ agentId }) =>
+        Effect.sync(() => {
+          installations += 1;
+          return {
+            agentId,
+            version: "2.0.0",
+            distribution: "binary" as const,
+            prepared: true as const,
+          };
+        }),
+    });
+    const managed = {
+      ...grant(false),
+      scopes: [AuthProvidersManageScope],
+      permissions: [AuthProvidersManageScope],
+    };
+    registry.set(sessions(env), AsyncResult.success(managed));
+    registry.set(sessions(other), AsyncResult.success(grant(true)));
+    try {
+      expect(registry.get(command.permissionAtom(env))).toBe(true);
+      expect(registry.get(command.permissionAtom(other))).toBe(false);
+      expect(
+        (await command.run(registry, { environmentId: other, input: { agentId: "agent" } }))._tag,
+      ).toBe("Failure");
+      expect(installations).toBe(0);
+      registry.set(sessions(env), AsyncResult.success(grant(false)));
+      expect(
+        (await command.run(registry, { environmentId: env, input: { agentId: "agent" } }))._tag,
+      ).toBe("Failure");
+      expect(installations).toBe(0);
+      registry.set(sessions(env), AsyncResult.success(managed));
+      expect(
+        (await command.run(registry, { environmentId: env, input: { agentId: "agent" } }))._tag,
+      ).toBe("Success");
+      expect(installations).toBe(1);
+    } finally {
+      unmountTarget();
+      unmountOther();
+      registry.dispose();
+    }
+  });
+
   it.effect(
     "workspace recovery uses the destination operate grant for availability and execution",
     () =>

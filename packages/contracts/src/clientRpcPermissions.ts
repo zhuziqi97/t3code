@@ -21,6 +21,7 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.conveneSubscribeResourceChanges]: AuthOrchestrationReadScope,
   [WS_METHODS.threadWorkspaceRecover]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverCancelProviderRefresh]: AuthProvidersManageScope,
+  [WS_METHODS.serverPrepareAcpRegistryAgent]: AuthProvidersManageScope,
   [WS_METHODS.conveneManage]: AuthEnvironmentMaintainScope,
   [WS_METHODS.conveneMutateProject]: AuthSettingsWriteScope,
   [WS_METHODS.previewClose]: AuthPreviewOperateScope,

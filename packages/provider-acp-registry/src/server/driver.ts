@@ -36,7 +36,10 @@ import {
   type ProviderInstance,
 } from "@t3tools/provider-core/server/driver";
 import { providerModelsFromSettings } from "@t3tools/provider-core/server/snapshotProbe";
-import { makeManualOnlyProviderMaintenanceCapabilities } from "@t3tools/provider-core/server/maintenanceResolver";
+import {
+  createProviderVersionAdvisory,
+  makeManualOnlyProviderMaintenanceCapabilities,
+} from "@t3tools/provider-core/server/maintenanceResolver";
 import {
   haveProviderSnapshotSettingsChanged,
   makeProviderSnapshotSettingsSource,
@@ -253,6 +256,16 @@ export function applyAcpRegistryAvailableCommands(
   });
 }
 
+function withInstallationFacts(provider: ServerProvider, facts: ServerProvider): ServerProvider {
+  const { versionAdvisory: _previousAdvisory, ...previous } = provider;
+  return {
+    ...previous,
+    installed: facts.installed,
+    version: facts.version,
+    ...(facts.versionAdvisory === undefined ? {} : { versionAdvisory: facts.versionAdvisory }),
+  };
+}
+
 function applyAcpRegistryUrlAuthAction(
   provider: ServerProvider,
   action: Option.Option<NonNullable<ServerProvider["auth"]["action"]>>,
@@ -290,6 +303,7 @@ export function buildCheckedAcpRegistrySnapshot(
       | { readonly status: "failed"; readonly message: string };
     readonly probe?: AcpRegistryConfigurationProbeResult;
     readonly probeError?: AcpRegistryOperationError;
+    readonly enableProviderUpdateChecks?: boolean;
   },
 ): ServerProvider {
   const readiness = acpRegistrySnapshotReadiness(input.inspection);
@@ -308,7 +322,7 @@ export function buildCheckedAcpRegistrySnapshot(
         ? `Set ${advertisedAuthMethod.envVarNames!.join(", ")} under this instance's environment variables in provider settings. T3 Code will detect it on the next provider refresh.`
         : `Sign in in provider settings using "${advertisedAuthMethod.name}".`
     : undefined;
-  return baseSnapshot({
+  const snapshot = baseSnapshot({
     ...input,
     ...(input.inspection.status === "ready" && input.inspection.documentationUrl
       ? { documentationUrl: input.inspection.documentationUrl }
@@ -340,6 +354,36 @@ export function buildCheckedAcpRegistrySnapshot(
         ? { message: readiness.message }
         : {}),
   });
+  if (input.inspection.status === "failed" || input.inspection.latestVersion === undefined)
+    return snapshot;
+  const advisory = createProviderVersionAdvisory({
+    driver: DRIVER_KIND,
+    currentVersion: readiness.installed ? readiness.version : null,
+    latestVersion:
+      input.enableProviderUpdateChecks === false ? null : input.inspection.latestVersion,
+    checkedAt: input.inspection.registryCheck?.lastSuccessAt ?? null,
+    maintenanceCapabilities: MAINTENANCE,
+  });
+  const message =
+    advisory.status === "behind_latest" && !input.settings.commandPath.trim()
+      ? `ACP Registry version ${advisory.latestVersion} is available for this managed installation (installed: ${advisory.currentVersion}).`
+      : advisory.message;
+  return {
+    ...snapshot,
+    versionAdvisory: {
+      ...advisory,
+      message:
+        [
+          message,
+          input.inspection.registryCheck?.error,
+          advisory.status === "behind_latest" && advisory.checkedAt
+            ? `Last successful registry check: ${advisory.checkedAt}.`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" ") || null,
+    },
+  };
 }
 
 export const checkAcpRegistryProviderStatus = Effect.fn("AcpRegistryDriver.checkProviderStatus")(
@@ -348,6 +392,7 @@ export const checkAcpRegistryProviderStatus = Effect.fn("AcpRegistryDriver.check
       readonly settings: AcpRegistrySettings;
       readonly cwd: string;
       readonly environment: NodeJS.ProcessEnv;
+      readonly enableProviderUpdateChecks?: boolean;
     },
     probeConfiguration: AcpRegistryConfigurationProbe<Requirements>,
   ): Effect.fn.Return<ServerProvider, never, AcpRegistrySupport.AcpRegistryCatalog | Requirements> {
@@ -404,6 +449,7 @@ export const checkAcpRegistryProviderReadiness = Effect.fn(
   input: SnapshotIdentity & {
     readonly settings: AcpRegistrySettings;
     readonly environment: NodeJS.ProcessEnv;
+    readonly enableProviderUpdateChecks?: boolean;
   },
 ): Effect.fn.Return<ServerProvider, never, AcpRegistrySupport.AcpRegistryCatalog> {
   const checkedAt = DateTime.formatIso(yield* DateTime.now);
@@ -532,17 +578,27 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
             }),
           );
     });
-    const checkProvider = checkAcpRegistryProviderReadiness(readinessInput).pipe(
+    const updateChecksEnabled = host.settings.get.pipe(
+      Effect.map((settings) => settings.enableProviderUpdateChecks),
+      Effect.orElseSucceed(() => false),
+    );
+    const checkProvider = updateChecksEnabled.pipe(
+      Effect.flatMap((enableProviderUpdateChecks) =>
+        checkAcpRegistryProviderReadiness({
+          ...readinessInput,
+          enableProviderUpdateChecks,
+        }),
+      ),
       Effect.provideService(AcpRegistrySupport.AcpRegistryCatalog, catalog),
       Effect.flatMap(withLiveRuntimeState),
     );
-    const enrichProvider = checkAcpRegistryProviderStatus(
-      {
-        ...readinessInput,
-        cwd: host.paths.cwd,
-      },
-      probeAcpRegistryConfiguration,
-    ).pipe(
+    const enrichProvider = updateChecksEnabled.pipe(
+      Effect.flatMap((enableProviderUpdateChecks) =>
+        checkAcpRegistryProviderStatus(
+          { ...readinessInput, cwd: host.paths.cwd, enableProviderUpdateChecks },
+          probeAcpRegistryConfiguration,
+        ),
+      ),
       Effect.provideService(AcpRegistrySupport.AcpRegistryCatalog, catalog),
       Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
       Effect.provideService(Crypto.Crypto, crypto),
@@ -599,17 +655,35 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
         getSnapshot,
         publishSnapshot,
       }) {
-        if (!snapshot.installed) return Effect.void;
+        const refreshDirectory =
+          effectiveConfig.source === "local" || !effectiveConfig.agentId.trim()
+            ? Effect.void
+            : catalog.refresh({ force: false }).pipe(
+                Effect.andThen(checkProvider),
+                Effect.flatMap((fresh) =>
+                  liveSnapshotSemaphore.withPermit(
+                    getSnapshot.pipe(
+                      Effect.flatMap((current) =>
+                        publishSnapshot(withInstallationFacts(current, fresh)),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+        if (!snapshot.installed) return refreshDirectory;
         // Background updates reuse discovered facts and native runtime events.
         // Opening a disposable ACP session belongs only to explicit discovery.
         const publishEnrichment = Ref.get(enrichmentCache).pipe(
           Effect.flatMap(({ entry }) =>
-            entry
-              ? withLiveRuntimeState(entry.provider).pipe(Effect.flatMap(publishSnapshot))
+            entry && entry.provider.version === snapshot.version
+              ? withLiveRuntimeState(withInstallationFacts(entry.provider, snapshot)).pipe(
+                  Effect.flatMap(publishSnapshot),
+                )
               : Effect.void,
           ),
         );
-        if (Option.isNone(runtimeCoordinator)) return publishEnrichment;
+        if (Option.isNone(runtimeCoordinator))
+          return publishEnrichment.pipe(Effect.andThen(refreshDirectory));
 
         const publishLiveCommands = runtimeCoordinator.value.watchAvailableCommands(
           instanceId,
@@ -639,10 +713,17 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
               ),
             ),
         );
-        return Effect.all([publishEnrichment, publishLiveCommands, publishUrlAuthAction], {
-          concurrency: "unbounded",
-          discard: true,
-        });
+        return Effect.all(
+          [
+            publishEnrichment.pipe(Effect.andThen(refreshDirectory)),
+            publishLiveCommands,
+            publishUrlAuthAction,
+          ],
+          {
+            concurrency: "unbounded",
+            discard: true,
+          },
+        );
       }),
     }).pipe(
       Effect.mapError(
@@ -723,7 +804,18 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
       auth,
       snapshot: {
         ...snapshot,
-        refresh: snapshot.refresh.pipe(Effect.tap(() => controller.refreshMethods ?? Effect.void)),
+        startRefresh: (options) =>
+          snapshot.startRefresh({
+            ...options,
+            work: (check) =>
+              (effectiveConfig.source === "local" ? Effect.void : catalog.refresh()).pipe(
+                Effect.andThen(options?.work ? options.work(check) : check),
+              ),
+          }),
+        refresh: (effectiveConfig.source === "local" ? Effect.void : catalog.refresh()).pipe(
+          Effect.andThen(snapshot.refresh),
+          Effect.tap(() => controller.refreshMethods ?? Effect.void),
+        ),
       },
       invalidateCaches: invalidateEnrichmentCache,
       refreshModels: Effect.fn("driver.refreshModels")(() =>

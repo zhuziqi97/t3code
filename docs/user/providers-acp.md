@@ -51,6 +51,18 @@ version published by the Registry. Their commands are available in a new server 
 sign-in and direct use. Removing an agent's last provider instance removes T3-managed binary files
 but keeps package installs. To use an existing local binary, set **Executable override** explicitly.
 
+## Update an agent
+
+Open the agent in **Settings → Providers** on web or desktop and select **Check and update agent**.
+On mobile, use the provider list in the environment's settings. Updates run on that environment and
+require provider management permission. New sessions use the updated installation; active sessions
+keep their current process. Local commands and **Executable override** are updated with their own installer.
+Updates keep the instance's distribution preference.
+
+Automatic provider update checks refresh the Registry directory without upgrading installed agents.
+You can still check and update manually when those checks are off. If installation succeeds but
+refreshing status fails, retrying status refresh keeps the completed installation.
+
 ## Signing in
 
 Open the agent's account section in **Settings → Providers** on web or desktop. Choose

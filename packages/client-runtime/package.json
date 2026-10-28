@@ -500,6 +500,10 @@
       "types": "./src/state/convene.ts",
       "default": "./src/state/convene.ts"
     },
+    "./acp-registry-update": {
+      "types": "./src/acpRegistryUpdate.ts",
+      "default": "./src/acpRegistryUpdate.ts"
+    },
     "./provider-option-labels": {
       "types": "./src/providerOptionLabels.ts",
       "default": "./src/providerOptionLabels.ts"
