@@ -4,7 +4,8 @@ import type {
   ConveneStatus,
   ProjectId,
 } from "@t3tools/contracts";
-import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
+import { splitFilePathPosition } from "@t3tools/shared/fileLinks";
+import { workspaceRelativeFilePath, normalizeProjectPathForComparison } from "@t3tools/shared/path";
 
 type IdeFile = Extract<ConveneIdeRequest, { workspaceKey: string }>["file"];
 
@@ -46,4 +47,23 @@ export function conveneIdeLink(input: {
     if (input.file.column !== undefined) url.searchParams.set("column", String(input.file.column));
   }
   return url.href;
+}
+
+export function conveneIdeFileTarget(
+  workspacePath: string,
+  targetPath: string,
+  isFile: boolean,
+): { file?: IdeFile } | null {
+  const { path, line, column } = splitFilePathPosition(targetPath);
+  const relativePath = workspaceRelativeFilePath(path, workspacePath);
+  if (relativePath === null) return null;
+  return isFile && relativePath !== "."
+    ? {
+        file: {
+          relativePath,
+          ...(line !== undefined ? { line } : {}),
+          ...(column !== undefined ? { column } : {}),
+        },
+      }
+    : {};
 }

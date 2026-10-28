@@ -63,10 +63,20 @@ export function useConveneIdeAction(input: {
           workspacePath: input.workspacePath,
         })
       : null;
-  return href
+  const unavailableReason =
+    !canWrite || !canOperateTerminal
+      ? t("convene.ide.denied")
+      : status?.phase !== "online"
+        ? t("convene.ide.disconnected")
+        : t("convene.ide.unavailable");
+  return input.projectId && input.workspacePath
     ? {
         title: t("convene.ide.open"),
         onPress: () => {
+          if (!href) {
+            Dialog.alert(t("convene.ide.open"), unavailableReason);
+            return;
+          }
           void Linking.openURL(href).catch(() =>
             Dialog.alert(t("convene.ide.open"), t("convene.ide.unavailable")),
           );

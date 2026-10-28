@@ -183,25 +183,41 @@ export const make = Effect.gen(function* PreviewManagerMake() {
       // Persisted client surfaces must not bind to a different tab after a server restart.
       const tabId = `${newPreviewTabId()}${runtime === "server" ? `_${serverEpoch}` : ""}`;
       const updatedAt = yield* currentIsoTimestamp;
-      const snapshot: PreviewSessionSnapshot = {
-        threadId: input.threadId,
-        tabId,
-        navStatus: input.url
-          ? { _tag: "Loading", url: yield* normalizeUrl(input.url), title: "" }
-          : { _tag: "Idle" },
-        canGoBack: false,
-        canGoForward: false,
-        viewport: input.viewport ?? FILL_PREVIEW_VIEWPORT,
-        ...(input.profileId === undefined ? {} : { profileId: input.profileId }),
-        ...(runtime === undefined ? {} : { runtime }),
-        ...(runtime === "server" && input.automationOwner !== undefined
-          ? { automationOwner: input.automationOwner }
-          : {}),
-        ...(input.reveal === undefined ? {} : { reveal: input.reveal }),
-        updatedAt,
-      };
-      yield* SynchronizedRef.modifyEffect(stateRef, (state) =>
+      return yield* SynchronizedRef.modifyEffect(stateRef, (state) =>
         Effect.gen(function* () {
+          const opener =
+            runtime === "server" && input.openerTabId !== undefined
+              ? state.sessions.get(compositeKey(input.threadId, input.openerTabId))?.snapshot
+              : undefined;
+          if (
+            runtime === "server" &&
+            input.openerTabId !== undefined &&
+            opener?.runtime !== "server"
+          ) {
+            return yield* new PreviewSessionLookupError({
+              threadId: input.threadId,
+              tabId: input.openerTabId,
+            });
+          }
+          // Resolve ownership from the source tab, rather than trusting an owner from the client.
+          const automationOwner =
+            opener === undefined ? input.automationOwner : opener.automationOwner;
+          const snapshot: PreviewSessionSnapshot = {
+            threadId: input.threadId,
+            tabId,
+            navStatus: input.url
+              ? { _tag: "Loading", url: yield* normalizeUrl(input.url), title: "" }
+              : { _tag: "Idle" },
+            canGoBack: false,
+            canGoForward: false,
+            viewport: input.viewport ?? FILL_PREVIEW_VIEWPORT,
+            ...(input.profileId === undefined ? {} : { profileId: input.profileId }),
+            ...(runtime === undefined ? {} : { runtime }),
+            ...(runtime === "server" && automationOwner !== undefined ? { automationOwner } : {}),
+            ...(opener === undefined ? {} : { openerTabId: opener.tabId }),
+            ...(input.reveal === undefined ? {} : { reveal: input.reveal }),
+            updatedAt,
+          };
           const revision = state.revision + 1;
           const sessions = new Map(state.sessions);
           sessions.set(compositeKey(input.threadId, tabId), {
@@ -222,7 +238,6 @@ export const make = Effect.gen(function* PreviewManagerMake() {
           return [snapshot, { sessions, revision }] as const;
         }),
       );
-      return snapshot;
     },
   );
 

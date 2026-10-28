@@ -678,7 +678,24 @@ export const type = async (page: Page, input: PreviewAutomationTypeInput) => {
     return;
   }
   // A shadow host also matches :focus; use its innermost focused descendant.
-  const target = locator ?? page.locator("*:focus").last();
+  let target = locator ?? page.locator("*:focus").last();
+  if (locator === null) {
+    // A focused iframe is document.activeElement but does not match :focus.
+    let frame = page.mainFrame();
+    for (;;) {
+      const active = await frame.evaluateHandle<unknown>(`(() => {
+        let element = document.activeElement;
+        while (element?.shadowRoot?.activeElement) element = element.shadowRoot.activeElement;
+        return element;
+      })()`);
+      const child = await Promise.resolve(active.asElement()?.contentFrame()).finally(() =>
+        active.dispose(),
+      );
+      if (!child) break;
+      frame = child;
+      target = frame.locator("*:focus").last();
+    }
+  }
   const focused =
     (locator !== null || (await target.count()) > 0) &&
     (await target.evaluate(

@@ -1,5 +1,5 @@
 import type { DesktopBridge, DesktopUpdateState } from "@t3tools/contracts";
-import { TriangleAlertIcon } from "lucide-react";
+import { DownloadIcon, TriangleAlertIcon } from "lucide-react";
 import { type ComponentProps, useEffect, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useTranslate } from "../../i18n";
@@ -24,9 +24,11 @@ import {
   shouldToastDesktopUpdateActionResult,
 } from "../desktopUpdate.logic";
 import {
+  openDesktopUpdateDownload,
   showDesktopUpdateDownloadedToast,
   showDesktopUpdateErrorToast,
 } from "../desktopUpdate.toast";
+import { Button } from "../ui/button";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Popover, PopoverCreateHandle, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { SidebarMenuItem } from "../ui/sidebar";
@@ -40,7 +42,11 @@ import {
 import { SidebarUpdateReleaseNotes } from "./SidebarUpdateReleaseNotes";
 import { SidebarUpdateCapsule } from "./SidebarUpdateCapsule";
 import { UpdateEverythingDialog } from "./UpdateEverythingDialog";
-import type { UpdateEverythingRun, UpdateRunLocalState } from "./updateEverything.logic";
+import {
+  resolveSidebarUpdateActions,
+  type UpdateEverythingRun,
+  type UpdateRunLocalState,
+} from "./updateEverything.logic";
 import {
   clearSavedUpdateEverythingResult,
   saveUpdateEverythingResult,
@@ -194,6 +200,47 @@ export function SidebarUpdatePill() {
   return <SidebarUpdateControl />;
 }
 
+export function SidebarClientUpdate() {
+  return isElectron ? <SidebarClientUpdateContent /> : null;
+}
+
+function SidebarClientUpdateContent() {
+  const t = useTranslate();
+  const state = useDesktopUpdateState();
+  const [isPending, setIsPending] = useState(false);
+  const { clientAction } = resolveSidebarUpdateActions(state, false);
+  if (!state?.convene || clientAction !== "open-download") return null;
+
+  const label = t(
+    state.convene.relation === "different-build"
+      ? "update.client.revision"
+      : "update.client.available",
+    { version: state.availableVersion },
+  );
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg bg-warning/12 px-2 py-1.5 text-warning">
+      <DownloadIcon className="size-3.5 shrink-0" />
+      <span className="min-w-0 flex-1 text-2xs font-medium wrap-break-word">{label}</span>
+      <Button
+        size="xs"
+        variant="ghost"
+        disabled={isPending}
+        onClick={() => {
+          const bridge = window.desktopBridge;
+          if (!bridge || isPending) return;
+          setIsPending(true);
+          void openDesktopUpdateDownload(bridge).finally(() => setIsPending(false));
+        }}
+      >
+        {t(state.convene.downloadUrl ? "update.platform.download" : "update.platform.downloads")}
+      </Button>
+      {state.convene.downloadUrl === null ? (
+        <p className="w-full text-2xs">{t("update.platform.noPackage")}</p>
+      ) : null}
+    </div>
+  );
+}
+
 function SidebarUpdateControl() {
   const t = useTranslate();
   const state = useDesktopUpdateState();
@@ -223,12 +270,12 @@ function SidebarUpdateControl() {
     }
   }
 
-  const action = state ? resolveDesktopUpdateButtonAction(state) : "none";
+  const action = state && !state.convene ? resolveDesktopUpdateButtonAction(state) : "none";
   const isDownloading = state?.status === "downloading";
   const localUpdateVersion =
     state && !state.convene && action !== "none" ? getDesktopUpdateDownloadedVersion(state) : null;
   const everything = useUpdateEverything(localUpdateVersion);
-  const runsEverything = everything.hasUpdates && !isDownloading;
+  const { runsEverything } = resolveSidebarUpdateActions(state, everything.hasUpdates);
   const run = useUpdateEverythingRun();
   const isRunningEverything = run !== null;
   const showCheckIcon = shouldShowDesktopUpdateCheckIcon({
@@ -288,28 +335,6 @@ function SidebarUpdateControl() {
 
     if (!bridge || !state) return;
     setIsActionPending(true);
-
-    if (action === "open-download") {
-      void bridge
-        .downloadUpdate()
-        .then((result) => {
-          if (shouldToastDesktopUpdateActionResult(result))
-            showDesktopUpdateErrorToast(
-              "about.updateDownload.error",
-              result.state.message,
-              "update.unexpected",
-            );
-        })
-        .catch((error: unknown) => {
-          showDesktopUpdateErrorToast(
-            "about.updateDownload.error",
-            error instanceof Error ? error.message : null,
-            "update.unexpected",
-          );
-        })
-        .finally(() => setIsActionPending(false));
-      return;
-    }
 
     if (action === "download") {
       void downloadLocalUpdate(bridge, { notifyDownloaded: true }).finally(() =>

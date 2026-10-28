@@ -1,6 +1,12 @@
 import { type CommandPaletteActionItem } from "./CommandPalette.logic";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import {
+  ChatAttachmentId,
+  EnvironmentId,
+  ProjectId,
+  ProviderInstanceId,
+  ThreadId,
+} from "@t3tools/contracts";
 import type { Thread } from "../types";
 import { makeThreadFixture } from "../test-fixtures";
 import {
@@ -8,11 +14,66 @@ import {
   buildLinkedThreadActionItems,
   filterPinnedBrowseEntries,
   filterCommandPaletteGroups,
+  getCommandPaletteEditorTarget,
   reduceCommandPaletteUiState,
   createCommandPaletteSearchState,
   reduceCommandPaletteSearchState,
   type CommandPaletteUiState,
 } from "./CommandPalette.logic";
+
+describe("command palette editor target", () => {
+  it.each([null, 27])("opens the selected file in the current worktree (line %s)", (revealLine) => {
+    expect(
+      getCommandPaletteEditorTarget({
+        workspacePath: "/work/feature-tree",
+        activeSurface: {
+          id: "file:sample.ts",
+          kind: "file",
+          relativePath: "sample.ts",
+          revealLine,
+          revealRequestId: 1,
+        },
+        isFile: true,
+      }),
+    ).toEqual({
+      path: `/work/feature-tree/sample.ts${revealLine === null ? "" : `:${revealLine}`}`,
+      isFile: true,
+    });
+  });
+
+  it("keeps the workspace target when no file surface is active", () => {
+    expect(
+      getCommandPaletteEditorTarget({
+        workspacePath: "/work/feature-tree",
+        activeSurface: null,
+        isFile: false,
+      }),
+    ).toEqual({ path: "/work/feature-tree", isFile: false });
+  });
+
+  it("does not treat an attachment as a file in the project workspace", () => {
+    expect(
+      getCommandPaletteEditorTarget({
+        workspacePath: "/work/feature-tree",
+        activeSurface: {
+          id: "attachment:upload",
+          kind: "file",
+          relativePath: "sample.ts",
+          revealLine: null,
+          revealRequestId: 1,
+          attachment: {
+            type: "file",
+            id: ChatAttachmentId.make("upload"),
+            name: "sample.ts",
+            mimeType: "text/plain",
+            sizeBytes: 1,
+          },
+        },
+        isFile: true,
+      }),
+    ).toEqual({ path: "/work/feature-tree", isFile: false });
+  });
+});
 
 describe("linked pull request thread navigation", () => {
   it("keeps archived relations searchable and routes them through the PR environment", async () => {

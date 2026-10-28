@@ -1,7 +1,9 @@
 import type {
+  MessageId,
   OrchestrationV2ProviderFailure,
   OrchestrationV2Run,
   OrchestrationV2TurnItem,
+  RunId,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 
@@ -10,6 +12,13 @@ type ErrorTurnItem = Extract<OrchestrationV2TurnItem, { type: "error" }>;
 type FailureScanTurnItem =
   | ErrorTurnItem
   | { readonly type: Exclude<OrchestrationV2TurnItem["type"], "error"> };
+
+type PromotionScanTurnItem =
+  | Pick<
+      Extract<OrchestrationV2TurnItem, { type: "user_message" }>,
+      "type" | "messageId" | "runId" | "inputIntent"
+    >
+  | { readonly type: Exclude<OrchestrationV2TurnItem["type"], "user_message"> };
 
 export function latestRootProviderFailure(
   run: OrchestrationV2Run | null,
@@ -115,4 +124,35 @@ export function latestUnheldRun(
     if (latest === null || run.ordinal > latest.ordinal) latest = run;
   }
   return latest;
+}
+
+export function latestPresentedRun(
+  runs: ReadonlyArray<OrchestrationV2Run>,
+  turnItems: ReadonlyArray<PromotionScanTurnItem>,
+): OrchestrationV2Run | null {
+  const latest = latestUnheldRun(runs);
+  if (latest?.status !== "cancelled" || latest.startedAt !== null) return latest;
+
+  const promotedInputs = new Map<MessageId, RunId>();
+  for (const item of turnItems) {
+    if (
+      item.type === "user_message" &&
+      item.inputIntent === "promoted_queued_to_steer" &&
+      item.runId !== null
+    ) {
+      promotedInputs.set(item.messageId, item.runId);
+    }
+  }
+  // Promotion cancels the queue record but moves its input into another run.
+  return latestUnheldRun(
+    runs.filter((run) => {
+      const targetRunId = promotedInputs.get(run.userMessageId);
+      return !(
+        run.status === "cancelled" &&
+        run.startedAt === null &&
+        targetRunId !== undefined &&
+        targetRunId !== run.id
+      );
+    }),
+  );
 }

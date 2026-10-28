@@ -2406,6 +2406,21 @@ it.effect("does not overwrite Stop when ownership changes after the finalization
   }),
 );
 
+it.effect("preserves the workspace handoff reason when the provider turn is interrupted", () =>
+  Effect.gen(function* () {
+    const { written } = yield* captureRootRunTermination({
+      key: "workspace-handoff",
+      shouldFinalizeRun: () => Effect.succeed(true),
+      interruptMessage: () => Effect.succeed("Run interrupted for workspace handoff"),
+    });
+    assert.equal(written[0]?.type, "run_interrupt_result");
+    assert.equal(
+      written[0]?.type === "run_interrupt_result" && written[0].message,
+      "Run interrupted for workspace handoff",
+    );
+  }),
+);
+
 it.effect("emits run_interrupt_result when hard-stop finalizes the active attempt", () =>
   Effect.gen(function* () {
     const { written, observed, committedEffects } = yield* captureRootRunTermination({
@@ -2415,6 +2430,10 @@ it.effect("emits run_interrupt_result when hard-stop finalizes the active attemp
     assert.deepEqual(
       written.map((item) => item.type),
       ["run_interrupt_result"],
+    );
+    assert.equal(
+      written[0]?.type === "run_interrupt_result" && written[0].message,
+      "Run interrupted by user",
     );
     assert.deepEqual(observed, ["run:interrupted", "pull-requests-refreshed"]);
     assert.deepEqual(
@@ -2702,6 +2721,7 @@ function captureRootRunTermination(input: {
   readonly shouldFinalizeRun: () => Effect.Effect<boolean, ProjectionStore.ProjectionStoreV2Error>;
   readonly rejectTerminalWrite?: boolean;
   readonly hasUnpairedRunInterruptRequest?: () => Effect.Effect<boolean, never>;
+  readonly interruptMessage?: () => Effect.Effect<string | undefined>;
   readonly seedOpenSubagent?: boolean;
   readonly events?: (
     ids: BackgroundScenarioIds,
@@ -2889,6 +2909,9 @@ function captureRootRunTermination(input: {
           : {
               hasUnpairedRunInterruptRequest: input.hasUnpairedRunInterruptRequest,
             }),
+        ...(input.interruptMessage === undefined
+          ? {}
+          : { interruptMessage: input.interruptMessage }),
         message: {
           messageId: MessageId.make(`message:${input.key}`),
           text: "interrupt projection",

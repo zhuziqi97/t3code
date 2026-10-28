@@ -657,7 +657,10 @@ export const make = Effect.gen(function* PreviewAutomationBrokerMake() {
             if (input.updateCurrentTab !== false) {
               yield* disconnect(connection.clientId, connection.queue, true);
             }
-            return yield* new PreviewAutomationTimeoutError(requestContext);
+            return yield* new PreviewAutomationTimeoutError({
+              ...requestContext,
+              timeoutMs: responseTimeoutMs,
+            });
           }),
         onSome: (value) => Effect.succeed(value as A),
       });

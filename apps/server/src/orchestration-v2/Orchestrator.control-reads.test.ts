@@ -1,3 +1,25 @@
+import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { HttpClient } from "effect/http";
+import * as Deferred from "effect/Deferred";
+import * as Fiber from "effect/Fiber";
+import * as Option from "effect/Option";
+import * as PubSub from "effect/PubSub";
+import * as Logger from "effect/Logger";
+import * as References from "effect/References";
+import * as ConveneMcp from "../convene/ConveneMcp.ts";
+import * as ConvenePlatform from "../convene/ConvenePlatform.ts";
+import * as ConveneWorkspaces from "../convene/ConveneWorkspaces.ts";
+import * as EffectWorker from "./EffectWorker.ts";
+import * as RunFinalizationService from "./RunFinalizationService.ts";
+import * as CheckpointRollbackService from "./CheckpointRollbackService.ts";
+import * as ProviderSessionManager from "./ProviderSessionManager.ts";
+import * as ProviderTurnControlService from "./ProviderTurnControlService.ts";
+import * as ProviderTurnStartService from "./ProviderTurnStartService.ts";
+import * as RuntimeRequestService from "./RuntimeRequestService.ts";
+import * as ThreadTitleRegenerationService from "./ThreadTitleRegenerationService.ts";
+import * as ThreadManagementService from "./ThreadManagementService.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import { assert, it } from "@effect/vitest";
 import {
   CommandId,
@@ -353,6 +375,13 @@ it.effect(
         threadId,
         worktreePath: "/new-repo",
       });
+      const workspaceEffects = yield* (yield* EffectOutbox.EffectOutboxV2).listByCommandId(
+        CommandId.make("workspace-control"),
+      );
+      assert.deepEqual(
+        workspaceEffects.map((effect) => effect.request.type),
+        ["provider-session.detach", "thread.workspace.rebind"],
+      );
       const thread = yield* projections.getThread(threadId);
       assert.equal(thread.title, "After");
       assert.equal(thread.modelSelection.model, "gpt-6");
@@ -1230,4 +1259,364 @@ it.effect("explicit settle clears snooze atomically and stays idempotent after r
     assert.deepInclude(yield* projections.getThreadShell(threadId), active);
     assert.deepInclude((yield* projections.getThreadProjection(threadId)).thread, active);
   }).pipe(Effect.provide(layerTest)),
+);
+
+it.effect(
+  "rebinds root before the reported target ACK and continuation start, keeping the thread history",
+  () =>
+    Effect.gen(function* () {
+      const projectId = ProjectId.make("project:handoff-root");
+      const threadId = ThreadId.make("thread:handoff-root");
+      const path = "/repo/new-worktree";
+      const projections = yield* ProjectionStore.ProjectionStoreV2;
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const outbox = yield* EffectOutbox.EffectOutboxV2;
+      const reportStarted = yield* Deferred.make<void>();
+      const ack = yield* Deferred.make<void>();
+      const sequence: string[] = [];
+      let savedKey = "root";
+      let available = true;
+      let replacement = false;
+      const config = (includeWorktree: boolean): ConvenePlatform.Configuration => ({
+        client_project_id: "convene:handoff",
+        project: { native_project_id: projectId },
+        mcp_enabled: true,
+        targets: [
+          {
+            target_id: "root",
+            native_workspace_key: "root",
+            path: "/repo",
+            availability: "AVAILABLE",
+          },
+          ...(includeWorktree
+            ? [
+                {
+                  target_id: "worktree",
+                  native_workspace_key: "new-key",
+                  path,
+                  availability: "AVAILABLE" as const,
+                },
+              ]
+            : []),
+        ],
+      });
+      const layerBroker = ConveneMcp.layer.pipe(
+        Layer.provide(
+          Layer.mergeAll(
+            Layer.succeed(ProjectionStore.ProjectionStoreV2, projections),
+            Layer.mock(ConvenePlatform.ConvenePlatform)({
+              changes: yield* PubSub.unbounded<void>(),
+            }),
+            Layer.succeed(
+              HttpClient.HttpClient,
+              HttpClient.make(() => Effect.die("No upstream MCP calls in this fixture")),
+            ),
+            NodeHttpServer.layerTest,
+            NodeServices.layer,
+            Layer.mock(ConveneWorkspaces.ConveneWorkspaces)({
+              threadKey: () => Effect.sync(() => savedKey),
+              list: () =>
+                Effect.sync(() => [
+                  {
+                    projectId,
+                    key: "root",
+                    path: "/repo",
+                    available: true,
+                    branch: "main",
+                    displayName: "Root",
+                  },
+                  {
+                    projectId,
+                    key: replacement ? "replacement-key" : "new-key",
+                    path,
+                    available,
+                    branch: "feature/new",
+                    displayName: "Worktree",
+                  },
+                  ...(replacement
+                    ? [
+                        {
+                          projectId,
+                          key: "new-key",
+                          path,
+                          available: false,
+                          branch: "feature/new",
+                          displayName: "Removed",
+                        },
+                      ]
+                    : []),
+                ]),
+              rememberThread: () => Effect.void,
+              rebindThread: (_projectId, _threadId, key) =>
+                Effect.sync(() => {
+                  savedKey = key;
+                  sequence.push(`bind:${key}`);
+                }),
+            }),
+          ),
+        ),
+      );
+      yield* Effect.gen(function* () {
+        const broker = yield* ConveneMcp.ConveneMcp;
+        yield* broker.configure([config(false)]);
+        yield* broker.setSynchronizer(
+          Effect.gen(function* () {
+            sequence.push("report");
+            yield* Deferred.succeed(reportStarted, undefined);
+            yield* Deferred.await(ack);
+            yield* broker.configure([config(true)]);
+            sequence.push("ack-applied");
+          }),
+        );
+        yield* orchestrator.dispatch({
+          type: "thread.create",
+          commandId: CommandId.make("handoff:create"),
+          threadId,
+          projectId,
+          title: "Keep this conversation",
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: null,
+          createdBy: "user",
+          creationSource: "web",
+        });
+        yield* broker.prepare(threadId, "root-session");
+        const now = yield* DateTime.now;
+        yield* (yield* EventSink.EventSinkV2).write({
+          events: [
+            {
+              id: EventId.make("handoff:history"),
+              type: "message.updated",
+              threadId,
+              occurredAt: now,
+              payload: {
+                id: MessageId.make("handoff:history"),
+                threadId,
+                runId: null,
+                nodeId: null,
+                text: "Keep the original conversation",
+                role: "assistant",
+                attachments: [],
+                streaming: false,
+                createdAt: now,
+                updatedAt: now,
+                createdBy: "agent",
+                creationSource: "server",
+              },
+            },
+          ],
+        });
+        yield* orchestrator.dispatch({
+          type: "thread.metadata.update",
+          commandId: CommandId.make("handoff:metadata"),
+          threadId,
+          branch: "feature/new",
+          worktreePath: path,
+          expectedWorktreePath: null,
+        });
+        sequence.push("metadata");
+        yield* orchestrator.dispatch({
+          type: "message.dispatch",
+          commandId: CommandId.make("handoff:continue"),
+          threadId,
+          messageId: MessageId.make("handoff:continuation"),
+          text: "Continue in the new workspace",
+          attachments: [],
+          dispatchMode: { type: "start_immediately" },
+          createdBy: "agent",
+          creationSource: "mcp",
+        });
+        const layerExecutor = EffectWorker.layerExecutor.pipe(
+          Layer.fresh,
+          Layer.provide(
+            Layer.mergeAll(
+              Layer.succeed(ConveneMcp.ConveneMcp, broker),
+              Layer.mock(ProviderSessionManager.ProviderSessionManagerV2)({}),
+              Layer.mock(RunFinalizationService.RunFinalizationService)({}),
+              Layer.mock(CheckpointRollbackService.CheckpointRollbackServiceV2)({}),
+              Layer.mock(ProviderTurnControlService.ProviderTurnControlServiceV2)({}),
+              Layer.mock(RuntimeRequestService.RuntimeRequestServiceV2)({}),
+              Layer.mock(ThreadTitleRegenerationService.ThreadTitleRegenerationService)({
+                execute: () => Effect.void,
+              }),
+              Layer.mock(ThreadManagementService.ThreadManagementService)({}),
+              ServerSettings.layerTest(),
+              Layer.mock(ProviderTurnStartService.ProviderTurnStartServiceV2)({
+                start: () =>
+                  Effect.gen(function* () {
+                    // This is the real MCP identity check, with no provider process.
+                    yield* broker.prepare(threadId, "continuation-session").pipe(
+                      Effect.mapError(
+                        (cause) =>
+                          new ProviderTurnStartService.ProviderTurnStartError({
+                            runId: RunId.make("continuation"),
+                            cause,
+                          }),
+                      ),
+                    );
+                    sequence.push(`start:${savedKey}`);
+                  }),
+              }),
+            ),
+          ),
+        );
+        yield* Effect.gen(function* () {
+          const effects = yield* outbox.listByCommandId(CommandId.make("handoff:metadata"));
+          // On main there is no rebind effect, so preparation still sees the saved root key.
+          if (effects.length === 0) {
+            yield* broker.prepare(threadId, "continuation-session");
+            assert.fail("A workspace transition must have a binding effect");
+          }
+          const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
+          const working = yield* Effect.forkChild(worker.drain());
+          yield* Effect.raceFirst(
+            Deferred.await(reportStarted),
+            Fiber.join(working).pipe(
+              Effect.andThen((count) =>
+                Effect.die(
+                  new Error(`Worker finished before reporting: ${count}, ${sequence.join(",")}`),
+                ),
+              ),
+            ),
+          );
+          assert.equal(savedKey, "new-key");
+          assert.deepEqual(sequence, ["metadata", "bind:new-key", "report"]);
+          assert.isTrue(
+            Option.isNone(
+              yield* outbox.claimNext({ workerId: "another-worker", leaseDurationMs: 1000 }),
+            ),
+          );
+          yield* Deferred.succeed(ack, undefined);
+          yield* Fiber.join(working);
+          assert.deepEqual(sequence, [
+            "metadata",
+            "bind:new-key",
+            "report",
+            "ack-applied",
+            "start:new-key",
+          ]);
+          const projection = yield* projections.getThreadRecords(threadId, ["messages"]);
+          assert.equal(projection.thread.id, threadId);
+          assert.equal(projection.thread.title, "Keep this conversation");
+          assert.sameMembers(
+            projection.messages.map((message) => message.text),
+            ["Keep the original conversation", "Continue in the new workspace"],
+          );
+          available = false;
+          assert.equal(
+            (yield* broker.prepare(threadId, "missing").pipe(Effect.flip)).category,
+            "workspace_unavailable",
+          );
+          assert.equal(
+            (yield* broker.rebindThread(threadId, path).pipe(Effect.flip)).category,
+            "workspace_unavailable",
+          );
+          available = true;
+          replacement = true;
+          assert.equal(
+            (yield* broker.prepare(threadId, "replaced").pipe(Effect.flip)).category,
+            "workspace_unavailable",
+          );
+          assert.equal(
+            (yield* broker.rebindThread(threadId, path).pipe(Effect.flip)).category,
+            "workspace_unavailable",
+          );
+          assert.deepEqual(sequence, [
+            "metadata",
+            "bind:new-key",
+            "report",
+            "ack-applied",
+            "start:new-key",
+          ]);
+          yield* Effect.logInfo(
+            "Isolated handoff service",
+            sequence.join(" -> "),
+            "history preserved; unavailable and replaced identities rejected",
+          ).pipe(
+            Effect.provide(Logger.layer([Logger.consolePretty()])),
+            Effect.provideService(References.MinimumLogLevel, "Info"),
+          );
+        }).pipe(
+          Effect.provide(
+            EffectWorker.layerWithOptions({ workerId: "handoff-worker" }).pipe(
+              Layer.provide(
+                Layer.merge(layerExecutor, Layer.succeed(EffectOutbox.EffectOutboxV2, outbox)),
+              ),
+            ),
+          ),
+        );
+      }).pipe(Effect.provide(layerBroker));
+    }).pipe(Effect.provide(layerTest)),
+);
+
+it.effect(
+  "persists the workspace handoff interrupt request and leaves a user stop reason intact",
+  () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const projections = yield* ProjectionStore.ProjectionStoreV2;
+      for (const userStopped of ["none", "before", "after"] as const) {
+        const threadId = ThreadId.make(`handoff-reason:${userStopped}`);
+        yield* orchestrator.dispatch({
+          type: "thread.create",
+          commandId: CommandId.make(`${threadId}:create`),
+          threadId,
+          projectId: ProjectId.make("handoff-reason-project"),
+          title: "Handoff reason",
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: null,
+          createdBy: "user",
+          creationSource: "web",
+        });
+        yield* orchestrator.dispatch({
+          type: "message.dispatch",
+          commandId: CommandId.make(`${threadId}:message`),
+          threadId,
+          messageId: MessageId.make(`${threadId}:message`),
+          text: "Work",
+          attachments: [],
+          dispatchMode: { type: "start_immediately" },
+          createdBy: "user",
+          creationSource: "web",
+        });
+        if (userStopped === "before") {
+          const { runs } = yield* projections.getThreadRecords(threadId, ["runs"]);
+          yield* orchestrator.dispatch({
+            type: "run.interrupt",
+            commandId: CommandId.make(`${threadId}:stop`),
+            threadId,
+            runId: runs[0]!.id,
+            reason: "User requested stop",
+          });
+        }
+        yield* orchestrator.dispatch({
+          type: "thread.metadata.update",
+          commandId: CommandId.make(`${threadId}:handoff`),
+          threadId,
+          worktreePath: "/repo/worktree",
+        });
+        if (userStopped === "after") {
+          const { runs } = yield* projections.getThreadRecords(threadId, ["runs"]);
+          yield* orchestrator.dispatch({
+            type: "run.interrupt",
+            commandId: CommandId.make(`${threadId}:stop-after`),
+            threadId,
+            runId: runs[0]!.id,
+            reason: "User requested stop",
+          });
+        }
+        const { turnItems } = yield* projections.getThreadRecords(threadId, ["turnItems"]);
+        const request = turnItems.find((item) => item.type === "run_interrupt_request");
+        assert.ok(request?.type === "run_interrupt_request");
+        assert.equal(
+          request.message,
+          userStopped === "none" ? "Run interrupted for workspace handoff" : "User requested stop",
+        );
+      }
+    }).pipe(Effect.provide(layerTest)),
 );

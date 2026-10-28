@@ -104,6 +104,7 @@ export function ElectronBrowserHost() {
       url,
       openPreview,
       profileId: source.snapshot.profileId,
+      ...(source.snapshot.runtime === "server" ? { openerTabId: source.snapshot.tabId } : {}),
       background,
     });
   });

@@ -9,6 +9,7 @@ import * as NodeZlib from "node:zlib";
 import {
   DesktopPreviewRecordingInputSchema,
   DESKTOP_PREVIEW_RECORDING_CAPTURE_TRIGGER,
+  DESKTOP_PREVIEW_ACTIVITY_TRIGGER,
 } from "@t3tools/contracts";
 import type {
   DesktopPreviewAnnotationTheme,
@@ -391,7 +392,7 @@ interface ManagedListeners {
   readonly webContents: Electron.WebContents;
 }
 
-type FrameCaptureConsumer = "picture-in-picture" | "recording";
+type FrameCaptureConsumer = "picture-in-picture" | "recording" | "automation";
 
 interface FrameCaptureSession {
   readonly recordingInputOptions?: RecordingInputOptions;
@@ -1749,6 +1750,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
         cancelPickElement(tabId),
         closePictureInPicture(tabId),
         stopFrameCapture(tabId, "recording"),
+        stopFrameCapture(tabId, "automation"),
       ],
       {
         concurrency: 3,
@@ -2387,7 +2389,11 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       }
       if (afterAttach.serverTab) {
         yield* listenForAgentPointers;
-        browserHost.attach(afterAttach.serverTab, { webContents: wc, debugger: control.debugger });
+        browserHost.attach(afterAttach.serverTab, {
+          webContents: wc,
+          debugger: control.debugger,
+          setActivity: (active) => setAutomationActivity(tabId, wc, active),
+        });
       }
       if (afterAttach.colorScheme !== "system") {
         yield* attemptPromise({ operation: "applyColorScheme", tabId, webContentsId: wc.id }, () =>
@@ -2769,6 +2775,40 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
         }),
       ),
     );
+  });
+
+  const setAutomationActivity = Effect.fn("PreviewManager.setAutomationActivity")(function* (
+    tabId: string,
+    wc: Electron.WebContents,
+    active: boolean,
+  ) {
+    const host = wc.hostWebContents;
+    const setSurfaceActivity = Effect.gen(function* () {
+      if (!host || host.isDestroyed()) {
+        if (active) return yield* new PreviewMainWindowClosedError({ tabId });
+        return;
+      }
+      const ready = yield* attemptPromise(
+        { operation: "automation.activity", tabId, webContentsId: wc.id },
+        () =>
+          host.executeJavaScript(
+            `(() => { const handler = globalThis[${JSON.stringify(DESKTOP_PREVIEW_ACTIVITY_TRIGGER)}]; if (!handler) return false; handler(${JSON.stringify(tabId)}, ${active}); return true; })()`,
+          ),
+      );
+      if (active && ready !== true)
+        return yield* new PreviewOperationError({
+          operation: "automation.activity",
+          tabId,
+          webContentsId: host.id,
+          cause: new Error("The desktop renderer has not initialized browser surface activity."),
+        });
+    });
+    if (active) {
+      yield* startFrameCapture(tabId, "automation");
+      yield* setSurfaceActivity.pipe(Effect.onError(() => stopFrameCapture(tabId, "automation")));
+    } else {
+      yield* setSurfaceActivity.pipe(Effect.ensuring(stopFrameCapture(tabId, "automation")));
+    }
   });
 
   const releasePictureInPicture = Effect.fn("PreviewManager.releasePictureInPicture")(function* (

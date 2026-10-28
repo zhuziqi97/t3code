@@ -2,7 +2,7 @@ import type { TFunction } from "i18next";
 import { getLocalizedProviderOptionCurrentLabel } from "../providerOptionLabels.ts";
 import {
   latestRootProviderFailure,
-  latestUnheldRun,
+  latestPresentedRun,
   threadErrorSummary,
   usageLimitRunPresentedAsLatest,
 } from "@t3tools/shared/orchestrationV2ThreadError";
@@ -96,10 +96,12 @@ function presentedUsageLimitRun(
   );
 }
 
-function presentedLatestRun(
+export function presentedLatestRun(
   projection: ThreadStructure,
 ): OrchestrationV2ThreadProjection["runs"][number] | null {
-  return presentedUsageLimitRun(projection) ?? latestUnheldRun(projection.runs);
+  return (
+    presentedUsageLimitRun(projection) ?? latestPresentedRun(projection.runs, projection.turnItems)
+  );
 }
 
 export function deriveLatestThreadRun(projection: ThreadStructure): ThreadRunSummary | null {

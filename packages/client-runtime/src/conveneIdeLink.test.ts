@@ -4,7 +4,7 @@ import {
   type ConveneProjectConfiguration,
   type ConveneStatus,
 } from "@t3tools/contracts";
-import { conveneIdeLink } from "./conveneIdeLink.ts";
+import { conveneIdeLink, conveneIdeFileTarget } from "./conveneIdeLink.ts";
 
 const projectId = ProjectId.make("native-project");
 const status: ConveneStatus = {
@@ -88,4 +88,40 @@ it("does not reuse another runner, project or unavailable worktree", () => {
     }),
   ).toBeNull();
   expect(conveneIdeLink({ ...input, workspacePath: "/work/other" })).toBeNull();
+});
+
+it("derives file and position from the executing worktree and rejects outside files", () => {
+  expect(conveneIdeFileTarget("/work/tree", "/work/tree/src/main.ts:18:7", true)).toEqual({
+    file: { relativePath: "src/main.ts", line: 18, column: 7 },
+  });
+  expect(conveneIdeFileTarget("/work/tree", "/work/tree", false)).toEqual({});
+  expect(conveneIdeFileTarget("/work/tree", "/work/tree/subdir", false)).toEqual({});
+  expect(conveneIdeFileTarget("/work/tree", "/work/project/src/main.ts:18", true)).toBeNull();
+  expect(conveneIdeFileTarget("/work/tree", "/work/tree/../attachment.png", true)).toBeNull();
+  expect(conveneIdeFileTarget("/work/tree", "/home/me/.t3/keybindings.json", true)).toBeNull();
+  expect(conveneIdeFileTarget("C:\\Work\\Tree", "c:\\Work\\Tree\\src\\Main.ts:4:2", true)).toEqual({
+    file: { relativePath: "src/Main.ts", line: 4, column: 2 },
+  });
+});
+
+it("selects the actual worktree key instead of a different available project root", () => {
+  const config = {
+    ...configuration,
+    targets: [
+      ...configuration.targets,
+      { ...configuration.targets[0]!, path: "/work/tree", native_workspace_key: "tree-key" },
+    ],
+  };
+  const url = new URL(
+    conveneIdeLink({
+      status,
+      configuration: config,
+      projectId,
+      workspacePath: "/work/tree",
+      file: { relativePath: "main.ts", line: 11, column: 6 },
+    })!,
+  );
+  expect(url.searchParams.get("workspaceKey")).toBe("tree-key");
+  expect(url.searchParams.get("line")).toBe("11");
+  expect(url.searchParams.get("column")).toBe("6");
 });

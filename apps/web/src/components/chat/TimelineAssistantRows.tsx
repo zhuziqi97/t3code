@@ -353,7 +353,11 @@ function AssistantChangedFilesSectionInner({
       ? { environmentId: thread.environmentId, projectId: thread.projectId }
       : null,
   );
-  const onFileContextMenu = useFileContextMenuHandler(ctx.activeThreadEnvironmentId);
+  const onFileContextMenu = useFileContextMenuHandler(ctx.activeThreadEnvironmentId, {
+    projectId: thread?.projectId,
+    ...(ctx.threadRef ? { threadId: ctx.threadRef.threadId } : {}),
+    workspacePath: ctx.workspaceRoot ?? null,
+  });
 
   return (
     <ChangedFilesCard

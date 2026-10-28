@@ -115,6 +115,8 @@ export default mergeConfig(
         neverBundle: (id: string) => isExternalCliDependency(id),
         onlyBundle: false,
       },
+      // Its UMD factory hides relative requires from the bundler; use the shipped ESM graph.
+      alias: { "jsonc-parser": "jsonc-parser/lib/esm/main.js" },
       banner: {
         js: "#!/usr/bin/env node\n",
       },

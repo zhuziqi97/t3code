@@ -6,6 +6,7 @@
  * tab's `webContents.debugger`.
  */
 import * as NodeStream from "@effect/platform-node/NodeStream";
+import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as NodeSocketServer from "@effect/platform-node/NodeSocketServer";
 import {
   DesktopBrowserCommand,
@@ -28,7 +29,6 @@ import * as NodeCrypto from "node:crypto";
 import * as NodeNet from "node:net";
 
 import * as ServerConfig from "../config.ts";
-import { writeAllToFileDescriptor } from "../resourceTelemetry/DesktopTelemetryReceiver.ts";
 
 const decodeEvent = Schema.decodeUnknownEffect(DesktopBrowserEvent);
 const encodeCommand = Schema.encodeEffect(Schema.fromJsonString(DesktopBrowserCommand));
@@ -53,6 +53,7 @@ export class DesktopBrowserChannel extends Context.Service<
     readonly attached: Stream.Stream<DesktopTabKey>;
     readonly isAttached: (key: DesktopTabKey) => Effect.Effect<boolean>;
     readonly endpoint: (key: DesktopTabKey) => Effect.Effect<string, never, Scope.Scope>;
+    readonly acquireActivity: (key: DesktopTabKey) => Effect.Effect<Effect.Effect<void>>;
     readonly pointer: (
       key: DesktopTabKey,
       pointer: { readonly phase: "move" | "click"; readonly x: number; readonly y: number },
@@ -77,19 +78,56 @@ const make = Effect.gen(function* () {
       attached: Stream.empty,
       isAttached: () => Effect.succeed(false),
       endpoint: () => Effect.die("No desktop app is attached to this server."),
+      acquireActivity: () => Effect.succeed(Effect.void),
       pointer: () => Effect.void,
     });
   }
 
+  // Playwright's injected scripts exceed a pipe's buffer. Socket writes wait
+  // for drain rather than dropping a command on a nonblocking fd's EAGAIN.
+  const writable = yield* Effect.acquireRelease(
+    Effect.sync(() => new NodeNet.Socket({ fd: controlFd, readable: false, writable: true })),
+    (stream) => Effect.sync(() => stream.destroy()),
+  );
+  const control = yield* NodeSocket.fromDuplex(Effect.succeed(writable));
+  yield* control.reader;
+  const writer = yield* control.writer;
   const command = (message: DesktopBrowserCommandType) =>
     writeLock.withPermits(1)(
       encodeCommand(message).pipe(
-        Effect.flatMap((line) => writeAllToFileDescriptor(controlFd, Buffer.from(`${line}\n`))),
+        Effect.flatMap((line) =>
+          writable.destroyed || writable.writableEnded ? Effect.void : writer.write(`${line}\n`),
+        ),
         Effect.catchCause((cause) =>
           Effect.logWarning("desktop browser command failed", { cause }),
         ),
       ),
     );
+
+  const activity = new Map<string, { key: DesktopTabKey; count: number }>();
+  yield* Effect.addFinalizer(() =>
+    Effect.forEach(activity.values(), (lease) => command({ type: "release", ...lease.key }), {
+      discard: true,
+    }).pipe(Effect.andThen(Effect.sync(() => activity.clear()))),
+  );
+  const acquireActivity = Effect.fn("DesktopBrowserChannel.acquireActivity")(function* (
+    key: DesktopTabKey,
+  ) {
+    const id = keyOf(key);
+    const lease = activity.get(id) ?? { key, count: 0 };
+    activity.set(id, lease);
+    lease.count += 1;
+    if (lease.count === 1) yield* command({ type: "activity", ...key, active: true });
+    let released = false;
+    return Effect.suspend(() => {
+      if (released || activity.get(id) !== lease) return Effect.void;
+      released = true;
+      lease.count -= 1;
+      if (lease.count > 0) return Effect.void;
+      activity.delete(id);
+      return command({ type: "activity", ...key, active: false });
+    });
+  }, Effect.uninterruptible);
 
   // Socket reads can be cancelled while the desktop keeps its write end open.
   // Filesystem reads on this pipe keep Node alive after scope shutdown.
@@ -149,6 +187,7 @@ const make = Effect.gen(function* () {
       Effect.gen(function* () {
         if (inbound.get(id) === queue) inbound.delete(id);
         yield* Queue.shutdown(queue);
+        activity.delete(id);
         yield* command({ type: "release", ...key });
       }),
     );
@@ -215,6 +254,7 @@ const make = Effect.gen(function* () {
     ),
     isAttached: (key) => Effect.sync(() => attachedTabs.has(keyOf(key))),
     endpoint,
+    acquireActivity,
     pointer: (key, pointer) => command({ type: "pointer", ...key, ...pointer }),
   });
 });

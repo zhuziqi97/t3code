@@ -15,6 +15,8 @@ import {
   getDesktopUpdateReleaseHistoryUrl,
   getDesktopUpdateReleaseUrl,
   resolveDesktopUpdateButtonAction,
+  getDesktopUpdateNoticeIdentity,
+  claimDesktopUpdateNotice,
 } from "./desktopUpdate.logic";
 
 const baseState: DesktopUpdateState = {
@@ -35,6 +37,86 @@ const baseState: DesktopUpdateState = {
   errorContext: null,
   canRetry: false,
 };
+
+describe("Convene client update notices", () => {
+  const available: DesktopUpdateState = {
+    ...baseState,
+    status: "available",
+    availableVersion: "1.1.0",
+    convene: {
+      baseUrl: "https://platform.example/prefix",
+      currentBuildId: "installed",
+      releaseVersion: "1.1.0",
+      releaseBuildId: "build-a",
+      relation: "newer",
+      downloadUrl: "https://platform.example/prefix/downloads/file/versions/build-a/client.deb",
+      downloadsUrl: "https://platform.example/prefix/downloads/latest",
+      helpUrl: "https://platform.example/prefix/help/t3code",
+    },
+  };
+
+  it("does not notify again when the same discovered release is rechecked", () => {
+    const notified = new Set<string>();
+    expect(claimDesktopUpdateNotice(available, notified)).toBe(true);
+    expect(claimDesktopUpdateNotice(available, notified)).toBe(false);
+    const checking = { ...available, status: "checking" as const };
+    expect(getDesktopUpdateNoticeIdentity(checking)).toBe(
+      getDesktopUpdateNoticeIdentity(available),
+    );
+    expect(claimDesktopUpdateNotice(checking, notified)).toBe(false);
+    expect(
+      claimDesktopUpdateNotice({ ...available, checkedAt: "2026-10-26T04:00:00Z" }, notified),
+    ).toBe(false);
+  });
+
+  it("gives the same version on another platform its own notice, without renotifying on return", () => {
+    const notified = new Set<string>();
+    expect(claimDesktopUpdateNotice(available, notified)).toBe(true);
+    const other = {
+      ...available,
+      convene: { ...available.convene!, baseUrl: "https://other.example/prefix" },
+    };
+    expect(claimDesktopUpdateNotice(other, notified)).toBe(true);
+    expect(claimDesktopUpdateNotice(available, notified)).toBe(false);
+  });
+
+  it("notifies for a new build of the same version and keeps the downloads fallback", () => {
+    const notified = new Set<string>();
+    claimDesktopUpdateNotice(available, notified);
+    const revision = {
+      ...available,
+      convene: {
+        ...available.convene!,
+        releaseBuildId: "build-b",
+        relation: "different-build" as const,
+        downloadUrl: null,
+      },
+    };
+    expect(claimDesktopUpdateNotice(revision, notified)).toBe(true);
+    expect(resolveDesktopUpdateButtonAction(revision)).toBe("open-download");
+    expect(claimDesktopUpdateNotice(revision, notified)).toBe(false);
+  });
+
+  it("clears the notice identity after unpairing or a failed check without claiming current", () => {
+    expect(getDesktopUpdateNoticeIdentity(null)).toBeNull();
+    expect(
+      getDesktopUpdateNoticeIdentity({
+        ...available,
+        availableVersion: null,
+        status: "error",
+        errorContext: "check",
+      }),
+    ).toBeNull();
+    expect(
+      getDesktopUpdateNoticeIdentity({
+        ...available,
+        convene: { ...available.convene!, baseUrl: null },
+      }),
+    ).toBeNull();
+    expect(claimDesktopUpdateNotice({ ...available, status: "checking" }, new Set())).toBe(false);
+    expect(claimDesktopUpdateNotice(baseState, new Set())).toBe(false);
+  });
+});
 
 describe("desktop update button state", () => {
   it("opens only the paired platform download and never offers install for Convene", () => {

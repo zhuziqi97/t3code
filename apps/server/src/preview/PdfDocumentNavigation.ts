@@ -10,11 +10,6 @@ export const isPdfAssetUrl = (url: string) => {
 };
 
 export async function installPdfDocumentNavigation(cdp: CDPSession) {
-  const nativeViewer = await cdp.send("Runtime.evaluate", {
-    expression: "navigator.pdfViewerEnabled",
-    returnByValue: true,
-  });
-  if (nativeViewer.result?.value === true) return;
   const { frameTree } = await cdp.send("Page.getFrameTree");
   // The shell cannot open PDFs. Commit a document at the original URL so the
   // client can embed its signed bytes while Back and Forward keep working.

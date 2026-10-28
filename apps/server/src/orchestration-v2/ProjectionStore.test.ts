@@ -9,6 +9,7 @@ import {
   MessageId,
   type ModelSelection,
   type OrchestrationV2ProviderThread,
+  type OrchestrationV2Run,
   type OrchestrationV2TurnItem,
   type OrchestrationV2ThreadShellSnapshot,
   NodeId,
@@ -183,6 +184,135 @@ const addRolledBackRecoveryCandidate = Effect.fn("addRolledBackRecoveryCandidate
 
   return threadId;
 });
+
+it.effect.each([
+  ["memory", ProjectionStore.layerMemory],
+  ["SQL", layerTest],
+] as const)("%s shells ignore cancelled queues promoted into the responding run", ([, layer]) =>
+  Effect.gen(function* () {
+    const store = yield* ProjectionStore.ProjectionStoreV2;
+    const threadId = yield* addRolledBackRecoveryCandidate("promoted-shell");
+    const original = (yield* store.getThreadProjection(threadId)).runs[0]!;
+    const promotedAt = DateTime.makeUnsafe("2026-10-26T03:04:44.236Z");
+    const completedAt = DateTime.makeUnsafe("2026-10-26T03:05:36.145Z");
+    const completed = { ...original, status: "completed" as const, completedAt };
+    const queued = {
+      ...original,
+      id: RunId.make("run:promoted-shell:queued"),
+      userMessageId: MessageId.make("message:promoted-shell:queued"),
+      rootNodeId: NodeId.make("node:promoted-shell:queued"),
+      ordinal: 2,
+      status: "cancelled" as const,
+      requestedAt: DateTime.makeUnsafe("2026-10-26T03:04:40.000Z"),
+      startedAt: null,
+      completedAt: promotedAt,
+    };
+    yield* store.apply({
+      id: EventId.make("event:promoted-shell:completed"),
+      type: "run.updated",
+      threadId,
+      occurredAt: completedAt,
+      payload: completed,
+    });
+    yield* store.apply({
+      id: EventId.make("event:promoted-shell:queued"),
+      type: "run.created",
+      threadId,
+      occurredAt: promotedAt,
+      payload: queued,
+    });
+    const input: Extract<OrchestrationV2TurnItem, { type: "user_message" }> = {
+      id: TurnItemId.make("item:promoted-shell:input"),
+      threadId,
+      runId: queued.id,
+      nodeId: queued.rootNodeId,
+      providerThreadId: null,
+      providerTurnId: null,
+      nativeItemRef: null,
+      parentItemId: null,
+      ordinal: 2,
+      status: "completed",
+      title: null,
+      startedAt: promotedAt,
+      completedAt: promotedAt,
+      updatedAt: promotedAt,
+      type: "user_message",
+      createdBy: "user",
+      creationSource: "web",
+      messageId: queued.userMessageId,
+      inputIntent: "queued_turn",
+      text: "t3code的issue",
+      attachments: [],
+    };
+    yield* store.apply({
+      id: EventId.make("event:promoted-shell:input"),
+      type: "turn-item.updated",
+      threadId,
+      occurredAt: promotedAt,
+      payload: input,
+    });
+    const assertOutcome = Effect.fnUntraced(function* (expected: OrchestrationV2Run) {
+      const projection = yield* store.getThreadProjection(threadId);
+      const listed = (yield* store.getShellSnapshot()).threads.find((row) => row.id === threadId);
+      for (const shell of [
+        yield* store.getThreadShell(threadId),
+        listed,
+        ProjectionStore.threadShellFromProjection(projection),
+      ]) {
+        assert.equal(shell?.latestRunId, expected.id);
+        assert.equal(shell?.status, expected.status);
+        assert.deepEqual(shell?.latestRunRequestedAt, expected.requestedAt);
+        assert.deepEqual(shell?.latestRunStartedAt, expected.startedAt);
+        assert.deepEqual(shell?.latestRunCompletedAt, expected.completedAt);
+      }
+      assert.equal(projection.runs.find((run) => run.id === queued.id)?.status, "cancelled");
+      assert.isNull(projection.runs.find((run) => run.id === queued.id)?.startedAt);
+    });
+    yield* assertOutcome(queued);
+    yield* store.apply({
+      id: EventId.make("event:promoted-shell:promoted"),
+      type: "turn-item.updated",
+      threadId,
+      occurredAt: promotedAt,
+      payload: {
+        ...input,
+        runId: completed.id,
+        nodeId: completed.rootNodeId,
+        inputIntent: "promoted_queued_to_steer",
+      },
+    });
+    yield* assertOutcome(completed);
+    const cancelled = {
+      ...queued,
+      id: RunId.make("run:promoted-shell:cancelled"),
+      userMessageId: MessageId.make("message:promoted-shell:cancelled"),
+      rootNodeId: NodeId.make("node:promoted-shell:cancelled"),
+      ordinal: 3,
+    };
+    yield* store.apply({
+      id: EventId.make("event:promoted-shell:cancelled"),
+      type: "run.created",
+      threadId,
+      occurredAt: completedAt,
+      payload: cancelled,
+    });
+    yield* store.apply({
+      id: EventId.make("event:promoted-shell:cancelled-input"),
+      type: "turn-item.updated",
+      threadId,
+      occurredAt: completedAt,
+      payload: {
+        ...input,
+        id: TurnItemId.make("item:promoted-shell:cancelled-input"),
+        runId: cancelled.id,
+        nodeId: cancelled.rootNodeId,
+        messageId: cancelled.userMessageId,
+        ordinal: 3,
+      },
+    });
+    yield* assertOutcome(cancelled);
+  }).pipe(Effect.provide(layer)),
+);
 
 it.effect.each([
   ["memory", ProjectionStore.layerMemory],

@@ -22,7 +22,6 @@ import {
 } from "lucide-react";
 import {
   AuthPreviewOperateScope,
-  AuthOrchestrationOperateScope,
   AuthTerminalOperateScope,
   type ContextMenuItem,
   type ProviderInstanceId,
@@ -66,7 +65,7 @@ import {
   type GhosttyTerminalSurfaceOptions,
 } from "~/terminal/ghostty/surface";
 import { type GhosttyColor, type GhosttyTheme } from "~/terminal/ghostty/core";
-import { useOpenInPreferredEditor } from "../editorPreferences";
+import { useEditorAction, usePreferredEditor, readPreferredEditor } from "../editorPreferences";
 import { resolvePathLinkTarget } from "@t3tools/shared/fileLinks";
 import { isTerminalUrl } from "../terminal-links";
 import {
@@ -522,17 +521,18 @@ function TerminalSessionViewport({
   const hasTerminalWriteAccess = useEffectEvent(() =>
     readEnvironmentScope(environmentId, AuthTerminalOperateScope),
   );
-  const canOpenHostEditor = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
+  const serverConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId));
+  const editorAction = useEditorAction(environmentId, serverConfig?.availableEditors ?? [], {
+    threadId: threadRef.threadId,
+    workspacePath: cwd,
+  });
+  const [preferredEditor] = usePreferredEditor();
+  const canOpenEditor = editorAction.unavailableReason(preferredEditor) === null;
   const canActivateTerminalLink = useEffectEvent(
     (text: string) =>
-      isTerminalUrl(text) || readEnvironmentScope(environmentId, AuthOrchestrationOperateScope),
+      isTerminalUrl(text) || editorAction.unavailableReason(readPreferredEditor()) === null,
   );
-  const serverConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId));
-  const openInPreferredEditor = useOpenInPreferredEditor(
-    environmentId,
-    serverConfig?.availableEditors ?? [],
-  );
-  const openTerminalPath = useEffectEvent((target: string) => openInPreferredEditor(target));
+  const openTerminalPath = useEffectEvent((target: string) => editorAction.open(target));
   const openPreview = useAtomCommand(previewEnvironment.open, {
     reportFailure: false,
   });
@@ -646,12 +646,12 @@ function TerminalSessionViewport({
   }, [canOperateTerminal]);
 
   // Links re-read the grant on activation; only the hovered link's styling needs a nudge.
-  const linkActivationScopeRef = useRef(canOpenHostEditor);
+  const linkActivationScopeRef = useRef(canOpenEditor);
   useEffect(() => {
-    if (linkActivationScopeRef.current === canOpenHostEditor) return;
-    linkActivationScopeRef.current = canOpenHostEditor;
+    if (linkActivationScopeRef.current === canOpenEditor) return;
+    linkActivationScopeRef.current = canOpenEditor;
     terminalRef.current?.refreshLinkActivation();
-  }, [canOpenHostEditor]);
+  }, [canOpenEditor]);
 
   useEffect(() => {
     if (resizeSessionGeneration === null) return;

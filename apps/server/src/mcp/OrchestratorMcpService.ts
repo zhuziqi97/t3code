@@ -508,34 +508,45 @@ function endsTaskWait(result: OrchestratorMcpDelegateTaskResult): boolean {
 
 const isApprovalRequestKind = Schema.is(ProviderRequestKind);
 
-function pendingTaskApproval(
+function pendingTaskRequests(
   child: Pick<OrchestrationV2ThreadProjection, "runs" | "nodes" | "runtimeRequests">,
   taskId: NodeId,
   originalRun: OrchestrationV2Run | undefined,
 ) {
-  const taskRunIds = new Set(
+  const taskRuns = new Map(
     child.runs
       .filter(
         (run) =>
-          !ThreadManagementService.isTerminalRunStatus(run.status) &&
-          (run.delegatedTaskId === taskId ||
-            // Legacy tasks own only their original run, not later turns in the child thread.
-            (run.delegatedTaskId === undefined && run.id === originalRun?.id)),
+          run.delegatedTaskId === taskId ||
+          // Legacy tasks own only their original run, not later turns in the child thread.
+          (run.delegatedTaskId === undefined && run.id === originalRun?.id),
       )
-      .map((run) => run.id),
+      .map((run) => [run.id, run]),
   );
+  return child.runtimeRequests.filter((request) => {
+    if (request.status !== "pending") return false;
+    const runId = child.nodes.find((node) => node.id === request.nodeId)?.runId;
+    const run = runId === undefined || runId === null ? undefined : taskRuns.get(runId);
+    // Message questions remain answerable after their provider run exits.
+    return (
+      run !== undefined &&
+      (request.responseCapability.type === "message" ||
+        !ThreadManagementService.isTerminalRunStatus(run.status))
+    );
+  });
+}
+
+function pendingTaskApproval(
+  child: Pick<OrchestrationV2ThreadProjection, "nodes">,
+  requests: OrchestrationV2ThreadProjection["runtimeRequests"],
+) {
   let approval: OrchestratorMcpDelegateTaskResult["pendingApproval"] = null;
   let oldestCreatedAt = Infinity;
-  for (const request of child.runtimeRequests) {
-    if (
-      request.status !== "pending" ||
-      request.responseCapability.type !== "live" ||
-      !isApprovalRequestKind(request.kind)
-    ) {
+  for (const request of requests) {
+    if (request.responseCapability.type !== "live" || !isApprovalRequestKind(request.kind))
       continue;
-    }
     const runId = child.nodes.find((node) => node.id === request.nodeId)?.runId;
-    if (runId === undefined || runId === null || !taskRunIds.has(runId)) continue;
+    if (runId === undefined || runId === null) continue;
     const createdAt = DateTime.toEpochMillis(request.createdAt);
     if (createdAt < oldestCreatedAt) {
       oldestCreatedAt = createdAt;
@@ -1616,6 +1627,7 @@ const make = Effect.gen(function* () {
         instanceId: task.providerInstanceId,
         model: task.model,
       };
+    const pendingRequests = pendingTaskRequests(childControls, task.id, childRun);
     const response = {
       taskId: task.id,
       childThreadId: task.childThreadId,
@@ -1639,16 +1651,16 @@ const make = Effect.gen(function* () {
           : latestTerminalResultContextTransferId,
       hasPendingQuestion:
         !isTerminalTaskStatus(status) &&
-        childControls.runtimeRequests.some(
+        pendingRequests.some(
           (request) =>
             request.kind === "user_input" &&
-            request.status === "pending" &&
-            request.responseCapability.type === "live",
+            (request.responseCapability.type === "live" ||
+              request.responseCapability.type === "message"),
         ),
       pendingApproval:
         isTerminalTaskStatus(status) || task.completionDelivery?.state === "disposed"
           ? null
-          : pendingTaskApproval(childControls, task.id, childRun),
+          : pendingTaskApproval(childControls, pendingRequests),
       waitTimedOut,
     } satisfies OrchestratorMcpDelegateTaskResult;
     if (

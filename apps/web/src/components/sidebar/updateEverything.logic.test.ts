@@ -1,12 +1,69 @@
-import { EnvironmentId, type ServerSelfUpdateCapability } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  type DesktopUpdateState,
+  type ServerSelfUpdateCapability,
+} from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
   collectRestartingMachines,
   collectServerUpdateTargets,
   runUpdateEverything,
+  resolveSidebarUpdateActions,
   type UpdateEverythingMachine,
 } from "./updateEverything.logic";
+
+const clientUpdate: DesktopUpdateState = {
+  enabled: true,
+  status: "available",
+  channel: "latest",
+  currentVersion: "0.1.2-2",
+  hostArch: "x64",
+  appArch: "x64",
+  runningUnderArm64Translation: false,
+  availableVersion: "0.1.3-1",
+  downloadedVersion: null,
+  releaseNotes: [],
+  omittedReleaseCount: 0,
+  downloadPercent: null,
+  checkedAt: null,
+  message: null,
+  errorContext: null,
+  canRetry: false,
+  convene: {
+    baseUrl: "https://platform.example/prefix",
+    currentBuildId: "installed",
+    releaseVersion: "0.1.3-1",
+    releaseBuildId: "candidate",
+    relation: "newer",
+    downloadUrl: "https://platform.example/prefix/downloads/file/versions/candidate/client.deb",
+    downloadsUrl: "https://platform.example/prefix/downloads/latest",
+    helpUrl: "https://platform.example/prefix/help/t3code",
+  },
+};
+
+describe("resolveSidebarUpdateActions", () => {
+  it("keeps the T3 download available alongside Provider and environment updates", () => {
+    expect(resolveSidebarUpdateActions(clientUpdate, true)).toEqual({
+      clientAction: "open-download",
+      runsEverything: true,
+    });
+  });
+
+  it("offers the T3 download when only the client has an update", () => {
+    expect(resolveSidebarUpdateActions(clientUpdate, false)).toEqual({
+      clientAction: "open-download",
+      runsEverything: false,
+    });
+  });
+
+  it("offers only environment updates without a client update", () => {
+    expect(resolveSidebarUpdateActions(null, true)).toEqual({
+      clientAction: "none",
+      runsEverything: true,
+    });
+  });
+});
 
 function machine(
   id: string,

@@ -9,6 +9,7 @@ import {
   EnvironmentId,
   PreviewTabId,
   ProviderInstanceId,
+  PreviewOpenInput,
   ThreadId,
   type PreviewAutomationSnapshot,
   type PreviewAutomationStatus,
@@ -21,6 +22,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as PubSub from "effect/PubSub";
 import * as Queue from "effect/Queue";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import type { BrowserContext, Page } from "playwright-core";
 import { beforeEach, expect, vi } from "vite-plus/test";
@@ -49,7 +51,9 @@ vi.mock("./ServerBrowserContexts.ts", () => ({
       return context as unknown as BrowserContext;
     }
     async scratchPage() {
-      return makeContext().page as unknown as Page;
+      const encoder = makeContext();
+      encoders.push(encoder);
+      return encoder.page as unknown as Page;
     }
     async connectDesktopPage(endpoint: string) {
       const context = makeContext();
@@ -87,6 +91,13 @@ function makeSession(frame?: ReturnType<typeof makeFrame>) {
     emit: (name: string) => events.emit(name),
     detach: vi.fn(async () => {}),
     send: vi.fn(async (method: string, input?: unknown): Promise<Record<string, unknown>> => {
+      if (
+        pdfProbeFailure &&
+        method === "Runtime.evaluate" &&
+        (input as { expression?: string }).expression === "navigator.pdfViewerEnabled"
+      ) {
+        throw pdfProbeFailure;
+      }
       if (method === "Page.getNavigationHistory") return { currentIndex: 0, entries: [{}] };
       if (method === "Page.getLayoutMetrics") return { cssVisualViewport: { pageX: 0, pageY: 0 } };
       if (method === "Page.captureScreenshot") {
@@ -213,6 +224,8 @@ function makeContext(onClose?: (context: BrowserContext) => void) {
 }
 
 const contexts: ReturnType<typeof makeContext>[] = [];
+const encoders: ReturnType<typeof makeContext>[] = [];
+const desktopActivity = new Map<string, number>();
 const contextRequests: Array<{ profileId: string; isolated: boolean }> = [];
 let contextGate: PromiseWithResolvers<void> | null = null;
 let pageCopy = "";
@@ -221,6 +234,7 @@ let focusedFrame: ReturnType<typeof makeFrame> | null = null;
 let contextFailure: Error | null = null;
 let initialNavigation: (() => Promise<void>) | null = null;
 let desktopRendersNext = false;
+let pdfProbeFailure: Error | null = null;
 const desktopDetaches = new NodeEvents.EventEmitter();
 const desktopTabs = new Set<string>();
 const desktopRenders = (tabId: string) => {
@@ -237,6 +251,7 @@ const testThread = {
   providerSessionId: "agent-a",
   providerInstanceId: ProviderInstanceId.make("codex"),
 };
+const decodeOpenInput = Schema.decodeUnknownEffect(PreviewOpenInput);
 const scope = {
   environmentId: EnvironmentId.make("browser-test-environment"),
   thread: testThread,
@@ -290,6 +305,18 @@ const dependencies = Layer.mergeAll(
       Effect.acquireRelease(Effect.succeed(`ws://desktop/${key.tabId}`), () =>
         Effect.sync(() => releasedDesktopTabs.push(key.tabId)),
       ),
+    acquireActivity: (key: { tabId: string }) =>
+      Effect.sync(() => {
+        desktopActivity.set(key.tabId, (desktopActivity.get(key.tabId) ?? 0) + 1);
+        let released = false;
+        return Effect.sync(() => {
+          if (released) return;
+          released = true;
+          const count = desktopActivity.get(key.tabId)! - 1;
+          if (count === 0) desktopActivity.delete(key.tabId);
+          else desktopActivity.set(key.tabId, count);
+        });
+      }),
     pointer: () => Effect.void,
   }),
 ).pipe(
@@ -320,6 +347,8 @@ const viewerInput = (tabId: string, canOperate: boolean) => ({
 
 beforeEach(() => {
   contexts.length = 0;
+  encoders.length = 0;
+  desktopActivity.clear();
   contextRequests.length = 0;
   contextGate = null;
   contextFailure = null;
@@ -329,6 +358,7 @@ beforeEach(() => {
   focusedFrame = null;
   desktopTabs.clear();
   desktopRendersNext = false;
+  pdfProbeFailure = null;
   releasedDesktopTabs.length = 0;
   desktopConnections.length = 0;
 });
@@ -1147,4 +1177,211 @@ it.live(
         });
       }),
     ).pipe(Effect.provide(layer)),
+);
+
+it.live("desktop linked tabs inherit their agent opener and keep close protections", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      desktopRendersNext = true;
+      const { browser, broker, tabId } = yield* ready;
+      const manager = yield* Manager.PreviewManager;
+      desktopRendersNext = true;
+      const child = yield* manager.open(
+        yield* decodeOpenInput({
+          threadId: scope.thread.threadId,
+          runtime: "server",
+          url: "https://example.com/editor?file=sample.ts",
+          openerTabId: tabId,
+        }),
+      );
+      const viewer = yield* browser.attachViewer(viewerInput(child.tabId, true));
+      const status = yield* broker.invoke<PreviewAutomationStatus>({
+        scope,
+        tabId: child.tabId,
+        operation: "status",
+        input: {},
+      });
+      expect(status.control).toMatchObject({ owner: "agent", ownedByCaller: true });
+      expect(status.tabs).toContainEqual(
+        expect.objectContaining({ tabId: child.tabId, openerTabId: tabId, ownedByCaller: true }),
+      );
+      const foreign = yield* broker
+        .invoke<void>({
+          scope: asSession("agent-b"),
+          tabId: child.tabId,
+          operation: "close",
+          input: {},
+        })
+        .pipe(Effect.flip);
+      expect(foreign).toMatchObject({ reason: "agentMismatch" });
+      yield* viewer.input({ type: "takeControl" });
+      const human = yield* broker
+        .invoke<void>({ scope, tabId: child.tabId, operation: "close", input: {} })
+        .pipe(Effect.flip);
+      expect(human).toMatchObject({ reason: "humanControl" });
+      yield* viewer.input({ type: "releaseControl" });
+      yield* broker.invoke<void>({ scope, tabId: child.tabId, operation: "close", input: {} });
+      expect(
+        (yield* manager.list({ threadId: scope.thread.threadId })).sessions,
+      ).not.toContainEqual(expect.objectContaining({ tabId: child.tabId }));
+    }),
+  ).pipe(Effect.provide(layer)),
+);
+
+it.live("desktop linked tabs from human openers remain unclaimed after agent reuse", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const { browser, broker } = yield* ready;
+      const manager = yield* Manager.PreviewManager;
+      const opener = yield* manager.open({ threadId: scope.thread.threadId, runtime: "server" });
+      desktopRendersNext = true;
+      const child = yield* manager.open(
+        yield* decodeOpenInput({
+          threadId: scope.thread.threadId,
+          runtime: "server",
+          openerTabId: opener.tabId,
+        }),
+      );
+      yield* browser.attachViewer(viewerInput(child.tabId, false));
+      const status = yield* broker.invoke<PreviewAutomationStatus>({
+        scope,
+        tabId: child.tabId,
+        operation: "open",
+        input: { open: false },
+      });
+      expect(status.control).toMatchObject({ owner: "unclaimed", ownedByCaller: false });
+      expect(status.tabs).toContainEqual(
+        expect.objectContaining({ tabId: child.tabId, openerTabId: opener.tabId }),
+      );
+      const close = yield* broker
+        .invoke<void>({ scope, tabId: child.tabId, operation: "close", input: {} })
+        .pipe(Effect.flip);
+      expect(close).toMatchObject({ reason: "agentMismatch" });
+    }),
+  ).pipe(Effect.provide(layer)),
+);
+
+it.live("initializes a navigating desktop tab while leaving its native PDF viewer intact", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      desktopRendersNext = true;
+      pdfProbeFailure = new Error(
+        "Protocol error (Runtime.evaluate): Inspected target navigated or closed",
+      );
+      const { broker, tabId } = yield* ready;
+      const status = yield* broker.invoke<PreviewAutomationStatus>({
+        scope,
+        tabId,
+        operation: "status",
+        input: {},
+      });
+      expect(status.available).toBe(true);
+      expect(status.tabId).toBe(tabId);
+      const session = desktopConnections[0]!.context.sessions[0]!;
+      expect(session.send).not.toHaveBeenCalledWith("Fetch.enable", expect.anything());
+      expect(contexts).toHaveLength(0);
+    }),
+  ).pipe(Effect.provide(layer)),
+);
+
+it.live(
+  "holds desktop rendering before snapshot capture and releases it after success or failure",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        desktopRendersNext = true;
+        const { broker, tabId } = yield* ready;
+        const session = desktopConnections[0]!.context.sessions[0]!;
+        const original = session.send.getMockImplementation()!;
+        session.send.mockImplementation(async (method, input) => {
+          if (method === "Page.captureScreenshot") expect(desktopActivity.get(tabId)).toBe(1);
+          return original(method, input);
+        });
+        yield* broker.invoke<void>({ scope, tabId, operation: "snapshot", input: {} });
+        expect(desktopActivity.has(tabId)).toBe(false);
+        session.send.mockImplementation(async (method, input) => {
+          if (method === "Page.captureScreenshot") {
+            expect(desktopActivity.get(tabId)).toBe(1);
+            throw new Error("capture failed");
+          }
+          return original(method, input);
+        });
+        const failure = yield* broker
+          .invoke<void>({ scope, tabId, operation: "snapshot", input: {} })
+          .pipe(Effect.flip);
+        expect(failure._tag).toBe("PreviewAutomationExecutionError");
+        expect(desktopActivity.has(tabId)).toBe(false);
+      }),
+    ).pipe(Effect.provide(layer)),
+);
+
+it.live.each(["stop", "close"])("keeps desktop recording rendering active until %s", (end) =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      desktopRendersNext = true;
+      const { broker, tabId } = yield* ready;
+      yield* broker.invoke<void>({ scope, tabId, operation: "recordingStart", input: {} });
+      expect(desktopActivity.get(tabId)).toBe(1);
+      yield* broker.invoke<void>({ scope, tabId, operation: "snapshot", input: {} });
+      expect(desktopActivity.get(tabId)).toBe(1);
+      encoders[0]!.page.evaluate.mockResolvedValueOnce({
+        mimeType: "video/webm",
+        count: 1,
+        bytes: 1,
+      } as never);
+      encoders[0]!.page.evaluate.mockResolvedValueOnce("eA==" as never);
+      yield* broker.invoke<void>({
+        scope,
+        tabId,
+        operation: end === "stop" ? "recordingStop" : "close",
+        input: {},
+      });
+      expect(desktopActivity.has(tabId)).toBe(false);
+    }),
+  ).pipe(Effect.provide(layer)),
+);
+
+it.live("releases desktop recording activity when its first capture fails", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      desktopRendersNext = true;
+      const { broker, tabId } = yield* ready;
+      const session = desktopConnections[0]!.context.sessions[0]!;
+      const original = session.send.getMockImplementation()!;
+      session.send.mockImplementation(async (method, input) => {
+        if (method === "Page.captureScreenshot") throw new Error("capture failed");
+        return original(method, input);
+      });
+      const failure = yield* broker
+        .invoke<void>({ scope, tabId, operation: "recordingStart", input: {} })
+        .pipe(Effect.flip);
+      expect(failure._tag).toBe("PreviewAutomationExecutionError");
+      expect(desktopActivity.has(tabId)).toBe(false);
+      expect(encoders[0]!.page.close).toHaveBeenCalledOnce();
+    }),
+  ).pipe(Effect.provide(layer)),
+);
+
+it.live("releases desktop recording activity and clears recording state when encoding fails", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      desktopRendersNext = true;
+      const { broker, tabId } = yield* ready;
+      yield* broker.invoke<void>({ scope, tabId, operation: "recordingStart", input: {} });
+      encoders[0]!.page.evaluate.mockRejectedValueOnce(new Error("encoding failed"));
+      const failure = yield* broker
+        .invoke<void>({ scope, tabId, operation: "recordingStop", input: {} })
+        .pipe(Effect.flip);
+      expect(failure._tag).toBe("PreviewAutomationExecutionError");
+      expect(desktopActivity.has(tabId)).toBe(false);
+      expect(encoders[0]!.page.close).toHaveBeenCalledOnce();
+      const repeated = yield* broker
+        .invoke<void>({ scope, tabId, operation: "recordingStop", input: {} })
+        .pipe(Effect.flip);
+      expect(repeated).toMatchObject({
+        _tag: "PreviewAutomationExecutionError",
+        cause: { _tag: "PreviewAutomationRecordingNotActiveError" },
+      });
+    }),
+  ).pipe(Effect.provide(layer)),
 );

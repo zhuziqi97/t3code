@@ -3732,6 +3732,43 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     // so for settle this only ever stops an idle session; commands are
     // decided serially against the projection, so a turn start that
     // re-engages the thread cannot race this detach.
+    if (
+      command.type === "thread.metadata.update" &&
+      command.worktreePath !== undefined &&
+      command.worktreePath !== thread.worktreePath
+    ) {
+      // The thread's effect lane gates every later start, including messages already queued
+      // when an MCP handoff commits. Rebind and await the target report before retiring its session.
+      yield* Ref.update(effects, (existing) => [
+        ...existing,
+        {
+          id: `effect:${command.commandId}:thread.workspace.rebind`,
+          commandId: command.commandId,
+          threadId: command.threadId,
+          request: { type: "thread.workspace.rebind", worktreePath: command.worktreePath! },
+        } satisfies PendingOrchestrationEffectV2,
+      ]);
+      const { runs } = yield* projectionStore
+        .getThreadRecords(command.threadId, ["runs"])
+        .pipe(mapDispatchError(command));
+      for (const run of runs) {
+        if (!["starting", "running", "waiting"].includes(run.status)) continue;
+        yield* markStoppedRun({
+          command: {
+            type: "run.interrupt",
+            commandId: command.commandId,
+            threadId: command.threadId,
+            runId: run.id,
+            reason: "Run interrupted for workspace handoff",
+          },
+          events,
+          thread,
+          run,
+          now,
+        });
+      }
+    }
+
     const detachSessionIds = new Set(
       command.type === "thread.archive" || command.type === "thread.settle"
         ? (providerContext?.providerSessions ?? []).map((session) => session.id)

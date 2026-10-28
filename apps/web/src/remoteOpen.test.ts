@@ -187,3 +187,16 @@ describe("buildRemoteOpenUrl", () => {
     }
   });
 });
+
+it("preserves an explicit remote file line and column", () => {
+  expect(
+    buildRemoteOpenUrl({
+      editor: "vscode",
+      host: "sol",
+      absolutePath: "/work/tree/src/main.ts",
+      isFile: true,
+      line: 23,
+      column: 7,
+    }),
+  ).toBe("vscode://vscode-remote/ssh-remote+sol/work/tree/src/main.ts:23:7");
+});

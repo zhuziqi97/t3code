@@ -270,6 +270,7 @@ interface Recording {
   readonly session: CDPSession;
   readonly startedAt: string;
   readonly framesInFlight: Set<Promise<void>>;
+  readonly releaseActivity: () => Promise<void>;
 }
 
 interface ServerTab {
@@ -675,6 +676,7 @@ const make = Effect.gen(function* () {
     else void tab.page.close().catch(constVoid);
     if (tab.isolatedContext) void tab.page.context().close().catch(constVoid);
     void tab.recording?.encoder.close().catch(constVoid);
+    void tab.recording?.releaseActivity().catch(constVoid);
     void NodeFSP.rm(downloadDir(tab), { recursive: true, force: true }).catch(constVoid);
     reportLiveTabs();
     if (closeSession) {
@@ -737,7 +739,9 @@ const make = Effect.gen(function* () {
     if (!desktop) await prepareContext(context);
     const page = adopted?.page ?? desktop?.page ?? (await context.newPage());
     const cdp = await context.newCDPSession(page);
-    await installPdfDocumentNavigation(cdp);
+    // Electron has a native PDF viewer; only our headless shell needs interception.
+    // New desktop guests can still be between document execution contexts here.
+    if (!desktop) await installPdfDocumentNavigation(cdp);
     // The desktop's page is already a normal browser. A popup's first request
     // went out before it became a tab; everything after presents as Chrome.
     if (!desktop) await presentAsChrome(cdp, host);
@@ -766,7 +770,7 @@ const make = Effect.gen(function* () {
       isolatedContext,
       desktop: desktop === null ? null : { close: desktop.close },
       profileId: snapshot.profileId,
-      openerTabId: adopted?.openerTabId,
+      openerTabId: adopted?.openerTabId ?? snapshot.openerTabId,
       downloads: [],
       fileChooser: null,
       dialog: null,
@@ -1457,6 +1461,23 @@ const make = Effect.gen(function* () {
     });
   };
 
+  const acquireActivity = async (tab: ServerTab) => {
+    if (!tab.desktop) return async () => {};
+    const release = await Effect.runPromise(
+      desktopChannel.acquireActivity({ threadId: tab.threadId, tabId: tab.tabId }),
+    );
+    return () => Effect.runPromise(release);
+  };
+
+  const withActivity = async <A>(tab: ServerTab, operation: () => Promise<A>): Promise<A> => {
+    const release = await acquireActivity(tab);
+    try {
+      return await operation();
+    } finally {
+      await release();
+    }
+  };
+
   const withCaptureLock = <A>(tab: ServerTab, operation: () => Promise<A>): Promise<A> => {
     const run = tab.captureLock.then(() => {
       if (tab.closing) throw new Error("The preview tab closed.");
@@ -1469,17 +1490,20 @@ const make = Effect.gen(function* () {
   const startRecording = (tab: ServerTab): Promise<Recording> => {
     const started = withCaptureLock(tab, async () => {
       if (tab.recording) return tab.recording;
-      const encoder = await contexts.scratchPage();
+      const releaseActivity = await acquireActivity(tab);
+      let encoder: Page | null = null;
       let session: CDPSession | null = null;
       try {
-        await encoder.evaluate(ServerBrowserPage.RECORDING_ENCODER_SCRIPT);
+        const recordingEncoder = await contexts.scratchPage();
+        encoder = recordingEncoder;
+        await recordingEncoder.evaluate(ServerBrowserPage.RECORDING_ENCODER_SCRIPT);
         // Seed idle pages before returning so an immediate stop has a frame to encode.
         const firstFrame = await ServerBrowserPage.captureViewport(tab.page, tab.cdp, {
           format: "jpeg",
           quality: RECORDING_SCREENCAST.quality,
           scale: 1,
         });
-        await encoder.evaluate(
+        await recordingEncoder.evaluate(
           ([data, width]) =>
             (globalThis as unknown as EncoderWindow).__t3Recorder.frame(data, width),
           [firstFrame, tab.page.viewportSize()?.width ?? UNATTACHED_FILL_VIEWPORT.width] as const,
@@ -1489,7 +1513,7 @@ const make = Effect.gen(function* () {
         const framesInFlight = new Set<Promise<void>>();
         opened.on("Page.screencastFrame", (frame) => {
           const cssWidth = tab.page.viewportSize()?.width ?? frame.metadata.deviceWidth;
-          const delivered: Promise<void> = encoder
+          const delivered: Promise<void> = recordingEncoder
             .evaluate(
               ([data, width]) =>
                 (globalThis as unknown as EncoderWindow).__t3Recorder.frame(data, width),
@@ -1510,15 +1534,17 @@ const make = Effect.gen(function* () {
         await opened.send("Page.startScreencast", RECORDING_SCREENCAST);
         if (tab.closing) throw new Error("The tab closed while the recording started.");
         const recording: Recording = {
-          encoder,
+          encoder: recordingEncoder,
           session: opened,
           startedAt: new Date().toISOString(),
           framesInFlight,
+          releaseActivity,
         };
         tab.recording = recording;
         return recording;
       } catch (cause) {
-        await encoder.close().catch(constVoid);
+        await encoder?.close().catch(constVoid);
+        await releaseActivity();
         await session?.detach().catch(constVoid);
         throw cause;
       }
@@ -1588,6 +1614,7 @@ const make = Effect.gen(function* () {
       } finally {
         await recording.encoder.close().catch(constVoid);
         tab.recording = null;
+        await recording.releaseActivity();
       }
       const data = Buffer.concat(chunks);
       if (!mimeType || data.byteLength === 0) {
@@ -1804,34 +1831,35 @@ const make = Effect.gen(function* () {
           );
         return tab.control.agent(
           request.agentSessionId,
-          async () => {
-            if (tab.dialog)
-              throw new BrowserControlInterrupted(
-                "A browser dialog is pending. Read preview_status and use preview_dialog first.",
-                "dialogPending",
-              );
-            if (existing) {
-              if (url) await navigate(tab, url, "load", navigationTimeout);
-            } else {
-              await tab.initialNavigation;
-            }
-            const reveal = open.open ?? open.show;
-            if (reveal !== false) {
-              await Effect.runPromise(
-                manager.requestReveal({
-                  threadId: tab.threadId,
-                  tabId: tab.tabId,
-                  force: reveal === true,
-                }),
-              );
-            }
-            if (!existing && url) {
-              await tab.page
-                .waitForLoadState("load", { timeout: navigationTimeout })
-                .catch(constVoid);
-            }
-            return statusWithTitle(tab, request.agentSessionId);
-          },
+          () =>
+            withActivity(tab, async () => {
+              if (tab.dialog)
+                throw new BrowserControlInterrupted(
+                  "A browser dialog is pending. Read preview_status and use preview_dialog first.",
+                  "dialogPending",
+                );
+              if (existing) {
+                if (url) await navigate(tab, url, "load", navigationTimeout);
+              } else {
+                await tab.initialNavigation;
+              }
+              const reveal = open.open ?? open.show;
+              if (reveal !== false) {
+                await Effect.runPromise(
+                  manager.requestReveal({
+                    threadId: tab.threadId,
+                    tabId: tab.tabId,
+                    force: reveal === true,
+                  }),
+                );
+              }
+              if (!existing && url) {
+                await tab.page
+                  .waitForLoadState("load", { timeout: navigationTimeout })
+                  .catch(constVoid);
+              }
+              return statusWithTitle(tab, request.agentSessionId);
+            }),
           deadlineMs,
         );
       }
@@ -1906,7 +1934,7 @@ const make = Effect.gen(function* () {
             "A browser dialog is pending. Read preview_status.",
             "dialogPending",
           );
-        return executeTabOperation(tab, request);
+        return withActivity(tab, () => executeTabOperation(tab, request));
       });
     }
     return tab.control.agent(
@@ -1921,7 +1949,7 @@ const make = Effect.gen(function* () {
         tab.agentOperating = !READ_OPERATIONS.has(request.operation);
         updateFileChooserInterception(tab);
         try {
-          return await executeTabOperation(tab, request);
+          return await withActivity(tab, () => executeTabOperation(tab, request));
         } finally {
           tab.agentOperating = false;
           updateFileChooserInterception(tab);

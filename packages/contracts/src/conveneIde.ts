@@ -34,6 +34,19 @@ export const ConveneIdeResult = Schema.Struct({
   runtimeId: Schema.NullOr(Schema.String),
   /** Relative to the current tab's authenticated request base, never a host or port. */
   entryPath: Schema.NullOr(Schema.String),
+  progress: Schema.optional(
+    Schema.Union([
+      Schema.Struct({
+        stage: Schema.Literals(["checking", "extracting", "configuring-language", "starting"]),
+      }),
+      Schema.Struct({
+        stage: Schema.Literal("downloading"),
+        receivedBytes: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+        totalBytes: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),
+      }),
+    ]),
+  ),
+  warning: Schema.optional(Schema.Struct({ code: Schema.Literal("language_setup_failed") })),
   error: Schema.NullOr(
     Schema.Struct({
       code: Schema.Literals([

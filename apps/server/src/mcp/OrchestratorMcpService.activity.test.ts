@@ -7,6 +7,7 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   RunId,
+  RuntimeRequestId,
   ScheduledTaskId,
   ThreadId,
 } from "@t3tools/contracts";
@@ -27,7 +28,7 @@ import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import type * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as OrchestratorMcpService from "./OrchestratorMcpService.ts";
-import { liveThreadShell } from "./McpToolAccess.testkit.ts";
+import { idleThreadProjection, liveThreadShell } from "./McpToolAccess.testkit.ts";
 
 const layerOrchestratorService = OrchestratorMcpService.layer.pipe(
   Layer.provide(Layer.mock(ThreadLaunchService.ThreadLaunchService)({})),
@@ -297,6 +298,124 @@ it("taskStatus returns task.providerInstanceId rather than the driver kind", asy
     expect(result.childThreadId).toBe(childThreadId);
   }).pipe(Effect.provide(layer), Effect.runPromise);
 });
+
+it.each([
+  ...(
+    [
+      { capability: "message", owner: "current", pending: true, expected: true },
+      { capability: "live", owner: "current", pending: true, expected: true },
+      { capability: "message", owner: "previous", pending: true, expected: false },
+      { capability: "live", owner: "previous", pending: true, expected: false },
+      { capability: "message", owner: "earlier_task_run", pending: true, expected: true },
+      { capability: "live", owner: "earlier_task_run", pending: true, expected: false },
+      { capability: "message", owner: "current", pending: false, expected: false },
+      { capability: "not_resumable", owner: "current", pending: true, expected: false },
+    ] as const
+  ).map((scenario) => ({ ...scenario, kind: "user_input" as const, approval: false })),
+  {
+    capability: "live",
+    owner: "current",
+    pending: true,
+    expected: false,
+    kind: "command",
+    approval: true,
+  },
+  {
+    capability: "message",
+    owner: "current",
+    pending: true,
+    expected: false,
+    kind: "command",
+    approval: false,
+  },
+  {
+    capability: "live",
+    owner: "previous",
+    pending: true,
+    expected: false,
+    kind: "command",
+    approval: false,
+  },
+] as const)(
+  "taskStatus scopes $capability $kind requests to the $owner run (pending=$pending)",
+  async ({ capability, owner, pending, expected, kind, approval }) => {
+    const previousTaskId = NodeId.make("task:failed-before-provider-start");
+    const questionNodeId = NodeId.make("node:delegated-question");
+    const previousRunId = RunId.make("run:previous-child-run");
+    const parent = {
+      ...idleThreadProjection(liveThreadShell(parentThreadId)),
+      subagents: [
+        {
+          id: taskId,
+          threadId: parentThreadId,
+          origin: "app_owned",
+          childThreadId,
+          providerInstanceId: parentInstanceId,
+          model: "gpt-5.4",
+          status: "running",
+          result: null,
+        },
+      ],
+    } as unknown as OrchestrationV2ThreadProjection;
+    const child = {
+      ...idleThreadProjection(liveThreadShell(childThreadId)),
+      runs: [
+        {
+          ...makeRun({ id: previousRunId, ordinal: 1, status: "cancelled" }),
+          status: owner === "earlier_task_run" ? "completed" : "failed",
+          delegatedTaskId: owner === "earlier_task_run" ? taskId : previousTaskId,
+          startedAt: owner === "earlier_task_run" ? now : null,
+        },
+        { ...makeRun({ id: childRunId, ordinal: 2, status: "running" }), delegatedTaskId: taskId },
+      ],
+      nodes: [{ id: questionNodeId, runId: owner === "current" ? childRunId : previousRunId }],
+      runtimeRequests: [
+        {
+          id: RuntimeRequestId.make("request:delegated-question"),
+          nodeId: questionNodeId,
+          kind,
+          status: pending ? "pending" : "resolved",
+          responseCapability: { type: capability },
+          createdAt: now,
+        },
+      ],
+    } as unknown as OrchestrationV2ThreadProjection;
+    const layer = layerOrchestratorService.pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          Layer.mock(ThreadManagementService.ThreadManagementService)({
+            getThreadRecords: (id) => Effect.succeed(id === parentThreadId ? parent : child),
+          }),
+          ServerSettings.layerTest(),
+          Layer.mock(ProviderRegistry.ProviderRegistry)({ getProviders: Effect.succeed([]) }),
+          Layer.mock(ProjectService.ProjectService)({}),
+          Layer.mock(SecretRequests.SecretRequests)({}),
+          Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),
+          Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({
+            list: () => Effect.succeed([]),
+          }),
+          NodeCrypto.layer,
+        ),
+      ),
+    );
+    await Effect.gen(function* () {
+      const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+      const result = yield* service.taskStatus(makeScope(), taskId);
+      expect(result.status).toBe("running");
+      expect(result.childRunId).toBe(owner === "earlier_task_run" ? previousRunId : childRunId);
+      expect(result.hasPendingQuestion).toBe(expected);
+      expect(result.pendingApproval).toEqual(
+        approval
+          ? {
+              requestId: RuntimeRequestId.make("request:delegated-question"),
+              kind: "command",
+              runId: childRunId,
+            }
+          : null,
+      );
+    }).pipe(Effect.provide(layer), Effect.runPromise);
+  },
+);
 
 it("readThread and sendToThread reach threads in other projects", async () => {
   let parentShell: OrchestrationV2ThreadShell | null = null;

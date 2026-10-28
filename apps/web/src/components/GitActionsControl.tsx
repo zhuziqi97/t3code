@@ -993,10 +993,6 @@ export default function GitActionsControl({
   );
   const canOperateThread = useEnvironmentScope(activeEnvironmentId, AuthOrchestrationOperateScope);
   const serverConfig = useAtomValue(serverEnvironment.configValueAtom(activeEnvironmentId));
-  const openInPreferredEditor = useOpenInPreferredEditor(
-    activeEnvironmentId,
-    serverConfig?.availableEditors ?? [],
-  );
   const threadToastData = activeThreadRef ? { threadRef: activeThreadRef } : undefined;
   const activeServerThreadShell = useQuietThreadShell(activeThreadRef);
   const openPrLink = useOpenPrLink(activeThreadRef ?? undefined);
@@ -1012,6 +1008,15 @@ export default function GitActionsControl({
   );
   const activeServerThread =
     activeServerThreadShell ?? activeServerThreadProjection?.projection.thread ?? null;
+  const openInPreferredEditor = useOpenInPreferredEditor(
+    activeEnvironmentId,
+    serverConfig?.availableEditors ?? [],
+    {
+      projectId: activeServerThread?.projectId ?? activeDraftThread?.projectId,
+      ...(activeThreadRef ? { threadId: activeThreadRef.threadId } : {}),
+      workspacePath: gitCwd,
+    },
+  );
   const isLocalDraftThread = activeDraftThread !== null && activeServerThread === null;
   const canChangeThreadBranch = canWriteSourceControl && (isLocalDraftThread || canOperateThread);
   const setDraftThreadContext = useComposerDraftStore((store) => store.setDraftThreadContext);

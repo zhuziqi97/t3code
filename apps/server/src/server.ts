@@ -66,6 +66,7 @@ import * as ProviderInstanceRegistryHydration from "./provider/ProviderInstanceR
 import * as ProjectSettingsOverrideSweep from "./provider/ProjectSettingsOverrideSweep.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
 import * as McpHttpServer from "./mcp/McpHttpServer.ts";
+import * as EffectOutbox from "./orchestration-v2/EffectOutbox.ts";
 import * as ConveneConnection from "./convene/ConveneConnection.ts";
 import * as ConveneMcp from "./convene/ConveneMcp.ts";
 import * as ConveneNative from "./convene/ConveneNative.ts";
@@ -571,6 +572,7 @@ const layerProviderInstallationRefresh = Layer.effectDiscard(
 );
 
 const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
+  EffectOutbox.layer,
   Layer.mergeAll(
     ConveneSettings.layer,
     ThreadWorkspaceRecovery.layer,

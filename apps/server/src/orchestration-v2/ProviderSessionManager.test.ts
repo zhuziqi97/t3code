@@ -638,6 +638,8 @@ it.effect(
       let mcpSessions: McpProviderSessions.McpProviderSessions["Service"];
       const threadId = ThreadId.make("thread-convene-mcp-failure");
       const conveneMcp = ConveneMcp.ConveneMcp.of({
+        rebindThread: () => Effect.void,
+        setSynchronizer: () => Effect.void,
         configure: () => Effect.void,
         forward: () => Effect.die("unused"),
         prepare: (id, credentialId) =>
@@ -3914,6 +3916,8 @@ it.effect.each(["delete-idle", "delete-running", "replace"] as const)(
       const leases = new Set<string>();
       const key = (threadId: ThreadId, credentialId: string) => `${threadId}:${credentialId}`;
       const conveneMcp = ConveneMcp.ConveneMcp.of({
+        rebindThread: () => Effect.void,
+        setSynchronizer: () => Effect.void,
         configure: () => Effect.void,
         forward: () => Effect.die("unused"),
         prepare: (threadId, credentialId) =>

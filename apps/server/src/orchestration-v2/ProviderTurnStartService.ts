@@ -181,6 +181,24 @@ export const layer: Layer.Layer<
               );
             }),
           ),
+        interruptMessage: () =>
+          projectionStore
+            .getTurnItem({
+              threadId: input.threadId,
+              itemId: idAllocator.derive.runSignalTurnItem({
+                runId: input.runId,
+                signal: "interrupt-request",
+              }),
+            })
+            .pipe(
+              Effect.map((item) =>
+                item?.type === "run_interrupt_request" &&
+                item.message === "Run interrupted for workspace handoff"
+                  ? item.message
+                  : undefined,
+              ),
+              Effect.orDie,
+            ),
         hasUnpairedRunInterruptRequest: () =>
           projectionStore
             .hasUnpairedRunInterruptRequest(
@@ -1410,6 +1428,7 @@ export const layer: Layer.Layer<
         shouldStartProviderTurn: runControls.shouldStartProviderTurn,
         shouldFinalizeRun: runControls.shouldFinalizeRun,
         hasUnpairedRunInterruptRequest: runControls.hasUnpairedRunInterruptRequest,
+        interruptMessage: runControls.interruptMessage,
         message: {
           messageId: message.id,
           text: userText,

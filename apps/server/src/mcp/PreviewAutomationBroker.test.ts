@@ -18,6 +18,7 @@ import * as Deferred from "effect/Deferred";
 import * as Fiber from "effect/Fiber";
 import * as Result from "effect/Result";
 import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 
 import * as PreviewAutomationBroker from "./PreviewAutomationBroker.ts";
 
@@ -1029,6 +1030,66 @@ it.effect("keeps each thread's current tab when threads share a provider session
       ]);
       // Each thread's agent owns its own tabs and tab budget.
       expect(routed[0]!.agentSessionId).not.toBe(routed[1]!.agentSessionId);
+    }),
+  ),
+);
+
+it.effect("reports a host timeout separately from the budget for waiting on its response", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const broker = yield* makeBroker;
+      const connected = yield* Deferred.make<void>();
+      const requests = requestsFrom(yield* broker.connect(makeHost()), () => {
+        Deferred.doneUnsafe(connected, Effect.void);
+      });
+      yield* Stream.runForEach(requests, (request) =>
+        broker.respond({
+          clientId: "client-1",
+          connectionId: request.connectionId,
+          requestId: request.requestId,
+          ok: false,
+          error: {
+            _tag: "PreviewAutomationTimeoutError",
+            message: "Screenshot timed out after 10000ms",
+          },
+        }),
+      ).pipe(Effect.forkScoped);
+      yield* Deferred.await(connected);
+      const error = yield* broker
+        .invoke<void>({ scope, operation: "snapshot", input: {}, timeoutMs: 15_000 })
+        .pipe(Effect.flip);
+      expect(error).toMatchObject({
+        _tag: "PreviewAutomationTimeoutError",
+        remoteTag: "PreviewAutomationTimeoutError",
+        timeoutMs: 15_000,
+      });
+      expect(error.message).toBe("Preview automation host timed out while executing snapshot.");
+    }),
+  ),
+);
+
+it.effect("reports the actual budget when no host response arrives", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const broker = yield* makeBroker;
+      const received = yield* Deferred.make<void>();
+      const connected = yield* Deferred.make<void>();
+      const requests = requestsFrom(yield* broker.connect(makeHost()), () => {
+        Deferred.doneUnsafe(connected, Effect.void);
+      });
+      yield* Stream.runForEach(requests, () => Deferred.succeed(received, undefined)).pipe(
+        Effect.forkScoped,
+      );
+      yield* Deferred.await(connected);
+      const result = yield* broker
+        .invoke<void>({ scope, operation: "snapshot", input: {}, timeoutMs: 2_000 })
+        .pipe(Effect.flip, Effect.forkScoped);
+      yield* Deferred.await(received);
+      yield* TestClock.adjust(3_000);
+      const error = yield* Fiber.join(result);
+      expect(error.message).toBe(
+        "Preview automation timed out waiting for the host response to snapshot after 3000ms.",
+      );
     }),
   ),
 );

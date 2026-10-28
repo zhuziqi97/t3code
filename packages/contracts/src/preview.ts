@@ -192,6 +192,7 @@ export const PreviewSessionSnapshot = Schema.Struct({
   profileId: Schema.optional(BrowserProfileId),
   runtime: Schema.optional(PreviewRuntime),
   automationOwner: Schema.optional(Schema.String),
+  openerTabId: Schema.optional(PreviewTabId),
   reveal: Schema.optional(Schema.Boolean),
   revealRequest: Schema.optional(Schema.Struct({ id: Schema.String, force: Schema.Boolean })),
   updatedAt: Schema.String,
@@ -200,6 +201,8 @@ export type PreviewSessionSnapshot = typeof PreviewSessionSnapshot.Type;
 
 export const PreviewOpenInput = Schema.Struct({
   threadId: ThreadId,
+  /** Internal tab relationship; JavaScript window.opener can remain null. */
+  openerTabId: Schema.optional(PreviewTabId),
   url: Schema.optional(Url),
   viewport: Schema.optional(PreviewViewportSetting),
   profileId: Schema.optional(BrowserProfileId),

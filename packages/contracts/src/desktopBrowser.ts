@@ -18,6 +18,7 @@ export type DesktopBrowserEvent = typeof DesktopBrowserEvent.Type;
 export const DesktopBrowserCommand = Schema.Union([
   Schema.Struct({ type: Schema.Literal("cdp"), ...TabKey, message: Schema.String }),
   Schema.Struct({ type: Schema.Literal("release"), ...TabKey }),
+  Schema.Struct({ type: Schema.Literal("activity"), ...TabKey, active: Schema.Boolean }),
   Schema.Struct({
     type: Schema.Literal("pointer"),
     ...TabKey,

@@ -1,3 +1,4 @@
+import * as EffectOutbox from "../../../orchestration-v2/EffectOutbox.ts";
 import * as Orchestrator from "../../../orchestration-v2/Orchestrator.ts";
 import * as ThreadWorkspaceRecovery from "../../../orchestration-v2/ThreadWorkspaceRecovery.ts";
 import * as ProjectionStore from "../../../orchestration-v2/ProjectionStore.ts";
@@ -102,6 +103,7 @@ it.effect("production mcp layer lists worktree tools over http", () =>
         ),
         Layer.provide(PreviewAutomationBroker.layer),
         Layer.provide(PreviewBrowser.layer),
+        Layer.provide(Layer.mock(EffectOutbox.EffectOutboxV2)({})),
         Layer.provide(layerStubServices),
         Layer.build,
       );

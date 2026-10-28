@@ -120,7 +120,83 @@ describe("server browser element refs", () => {
     expect(await page.frameLocator("iframe").getByRole("textbox").inputValue()).toBe(
       "inside iframe",
     );
+    await ServerBrowserPage.type(page, { locator, text: " appended" });
+    expect(await page.frameLocator("iframe").getByRole("textbox").inputValue()).toBe(
+      "inside iframe appended",
+    );
     expect(await page.getByRole("textbox", { name: "parent" }).inputValue()).toBe("");
+  });
+
+  it.each(["parent.test", "child.test"])(
+    "types without a target into the focused iframe at %s",
+    async (frameHost) => {
+      await page.route("**/*", (route) =>
+        route.fulfill({
+          contentType: "text/html",
+          body: route.request().url().endsWith("/frame")
+            ? '<textarea aria-label="child">first</textarea>'
+            : `<input aria-label="parent" value="untouched"><iframe src="https://${frameHost}/frame"></iframe>`,
+        }),
+      );
+      await page.goto("https://parent.test/");
+      const child = page.frameLocator("iframe").getByRole("textbox");
+      await child.click();
+      await page.keyboard.press("End");
+      await ServerBrowserPage.type(page, { text: " appended" });
+      expect(await child.inputValue()).toBe("first appended");
+      await ServerBrowserPage.type(page, { text: "replacement", clear: true });
+      expect(await child.inputValue()).toBe("replacement");
+      expect(await page.getByRole("textbox", { name: "parent" }).inputValue()).toBe("untouched");
+    },
+  );
+
+  it.each([
+    { kind: "input", html: '<input aria-label="field" value="first">' },
+    {
+      kind: "contenteditable",
+      html: '<div role="textbox" aria-label="field" contenteditable>first</div>',
+    },
+  ])("preserves focused main-frame append and clear for $kind", async ({ kind, html }) => {
+    await page.setContent(html);
+    const field = page.getByRole("textbox");
+    const value = () => (kind === "input" ? field.inputValue() : field.textContent());
+    await field.click();
+    await page.keyboard.press("End");
+    await ServerBrowserPage.type(page, { text: " appended" });
+    expect(await value()).toBe("first appended");
+    await ServerBrowserPage.type(page, { text: "replacement", clear: true });
+    expect(await value()).toBe("replacement");
+  });
+
+  it("rejects a focused iframe's noneditable controls and explicit disabled inputs", async () => {
+    await page.setContent(
+      '<input aria-label="parent" value="untouched"><iframe srcdoc="<button>Keep</button><input aria-label=readonly readonly value=protected><input aria-label=disabled disabled value=protected>"></iframe>',
+    );
+    await page.getByRole("textbox", { name: "parent" }).click();
+    await page.keyboard.press("End");
+    const frame = page.frameLocator("iframe");
+    await frame.getByRole("button").click();
+    await expect(ServerBrowserPage.type(page, { text: "lost" })).rejects.toMatchObject({
+      tag: "PreviewAutomationTargetNotEditableError",
+    });
+    await frame.getByRole("textbox", { name: "readonly" }).click();
+    await expect(ServerBrowserPage.type(page, { text: "lost" })).rejects.toMatchObject({
+      tag: "PreviewAutomationTargetNotEditableError",
+    });
+    await expect(
+      ServerBrowserPage.type(page, { locator: 'input[aria-label="parent"]', text: " accepted" }),
+    ).resolves.toBeUndefined();
+    await expect(
+      ServerBrowserPage.type(page, {
+        locator: "iframe >> internal:control=enter-frame >> input[disabled]",
+        text: "lost",
+      }),
+    ).rejects.toMatchObject({ tag: "PreviewAutomationTargetNotEditableError" });
+    expect(await frame.getByRole("textbox", { name: "readonly" }).inputValue()).toBe("protected");
+    expect(await frame.getByRole("textbox", { name: "disabled" }).inputValue()).toBe("protected");
+    expect(await page.getByRole("textbox", { name: "parent" }).inputValue()).toBe(
+      "untouched accepted",
+    );
   });
 
   it("shows dotted fields as dots wherever their value appears, keeping text values and refs", async () => {

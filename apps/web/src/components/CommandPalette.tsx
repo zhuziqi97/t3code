@@ -1,3 +1,4 @@
+import { useEditorAction } from "../editorPreferences";
 import { openConveneProjectConfiguration } from "./convene/ConveneProjectDialog";
 import { useTranslate } from "../i18n";
 import {
@@ -45,7 +46,7 @@ import {
   AuthSourceControlWriteScope,
   AuthFilesystemReadScope,
   type DesktopWslState,
-  type EnvironmentId,
+  EnvironmentId,
   type FilesystemBrowseResult,
   SourceControlProviderKind,
   PRIMARY_LOCAL_ENVIRONMENT_ID,
@@ -137,6 +138,7 @@ import { isTerminalFocused } from "../lib/terminalFocus";
 import {
   PULL_REQUESTS_PANEL_REF,
   selectActiveRightPanel,
+  selectActiveRightPanelSurface,
   useRightPanelStore,
 } from "../rightPanelStore";
 import { getLatestThreadForProject, sortThreads } from "../lib/threadSort";
@@ -175,6 +177,7 @@ import {
   filterPinnedBrowseEntries,
   getCommandPaletteInputPlaceholder,
   getCommandPaletteMode,
+  getCommandPaletteEditorTarget,
   ITEM_ICON_CLASS,
   RECENT_THREAD_LIMIT,
   reduceCommandPaletteUiState,
@@ -189,6 +192,8 @@ import {
   reduceCommandPaletteSearchState,
   type SearchOverlayMode,
 } from "./CommandPalette.logic";
+import { resolveFilePreviewPath } from "./files/filePreviewMode";
+import { useProjectFileQuery } from "./files/projectFilesQueryState";
 import { resolveEnvironmentOptionLabel } from "./BranchToolbar.logic";
 import { CommandPaletteContent } from "./CommandPaletteContent";
 import {
@@ -542,7 +547,8 @@ function OpenCommandPaletteDialog(props: {
         ? scopeThreadRef(activeThread.environmentId, activeThread.id)
         : null;
   const openPanelPullRequestUrl = useOpenPanelPullRequestUrl(referenceThreadRef);
-  const activeThreadServerConfig = useServerConfigs().get(
+  const serverConfigs = useServerConfigs();
+  const activeThreadServerConfig = serverConfigs.get(
     activeThread?.environmentId ?? ("" as EnvironmentId),
   );
   const activeThreadReferenceCopyTarget =
@@ -733,6 +739,47 @@ function OpenCommandPaletteDialog(props: {
   const currentProjectCwd = currentProjectId
     ? (projectCwdById.get(currentProjectId) ?? null)
     : null;
+  const editorProject =
+    currentProjectEnvironmentId && currentProjectId
+      ? projectByKey.get(`${currentProjectEnvironmentId}:${currentProjectId}`)
+      : null;
+  const editorWorkspacePath =
+    activeThread?.worktreePath ??
+    activeDraftThread?.worktreePath ??
+    editorProject?.workspaceRoot ??
+    null;
+  const editorThreadId = activeThread?.id ?? activeDraftThread?.threadId;
+  const editorThreadRef =
+    currentProjectEnvironmentId && editorThreadId
+      ? scopeThreadRef(currentProjectEnvironmentId, editorThreadId)
+      : null;
+  const editorSurface = useRightPanelStore((state) =>
+    selectActiveRightPanelSurface(state.byThreadKey, editorThreadRef),
+  );
+  const editorFilePath =
+    editorSurface?.kind === "file" && editorSurface.attachment === undefined
+      ? resolveFilePreviewPath(editorSurface.relativePath, editorWorkspacePath ?? "")
+      : null;
+  const editorFile = useProjectFileQuery(
+    currentProjectEnvironmentId ?? EnvironmentId.make(PRIMARY_LOCAL_ENVIRONMENT_ID),
+    editorWorkspacePath ?? "",
+    editorFilePath,
+    currentProjectEnvironmentId !== null && editorWorkspacePath !== null && editorFilePath !== null,
+  );
+  const editorTarget = getCommandPaletteEditorTarget({
+    workspacePath: editorWorkspacePath,
+    activeSurface: editorSurface,
+    isFile: editorFile.isFile,
+  });
+  const editorAction = useEditorAction(
+    currentProjectEnvironmentId,
+    serverConfigs.get(currentProjectEnvironmentId ?? ("" as EnvironmentId))?.availableEditors ?? [],
+    {
+      projectId: currentProjectId,
+      ...(activeThread ? { threadId: activeThread.id } : {}),
+      workspacePath: editorWorkspacePath,
+    },
+  );
   const currentProjectCwdForBrowse =
     browseEnvironmentId && currentProjectEnvironmentId === browseEnvironmentId
       ? currentProjectCwd
@@ -1188,6 +1235,24 @@ function OpenCommandPaletteDialog(props: {
   };
 
   const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [];
+  if (currentProjectEnvironmentId && editorTarget)
+    actionItems.push({
+      kind: "action",
+      value: "action:open-editor",
+      title: t("chat.editor.open"),
+      searchTerms: ["editor", "open", "browser", "vscode", "编辑器"],
+      shortcutCommand: "editor.openFavorite",
+      icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        const result = await editorAction.open(editorTarget.path, { isFile: editorTarget.isFile });
+        if (result._tag === "Failure")
+          toastManager.add({
+            type: "error",
+            title: t("chat.editor.open"),
+            description: String(squashAtomCommandFailure(result)),
+          });
+      },
+    });
 
   if (projects.length > 0) {
     const activeProjectTitle =

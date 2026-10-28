@@ -5,11 +5,78 @@ import { ArrowRightIcon } from "lucide-react";
 import {
   getDesktopUpdateDownloadedVersion,
   getDesktopUpdateReleaseUrl,
+  shouldToastDesktopUpdateActionResult,
 } from "./desktopUpdate.logic";
 import { DesktopUpdateText } from "./DesktopUpdateText";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 
 type DesktopUpdateShell = Pick<DesktopBridge, "openExternal">;
+
+export async function openDesktopUpdateDownload(
+  bridge: Pick<DesktopBridge, "downloadUpdate">,
+): Promise<void> {
+  try {
+    const result = await bridge.downloadUpdate();
+    if (shouldToastDesktopUpdateActionResult(result)) {
+      showDesktopUpdateErrorToast("about.updateDownload.error", result.state.message);
+    }
+  } catch (error) {
+    showDesktopUpdateErrorToast(
+      "about.updateDownload.error",
+      error instanceof Error ? error.message : null,
+    );
+  }
+}
+
+export function showDesktopUpdateAvailableToast(
+  bridge: Pick<DesktopBridge, "downloadUpdate">,
+  state: DesktopUpdateState,
+) {
+  const id = toastManager.add(
+    stackedThreadToast({
+      type: "info",
+      title: (
+        <DesktopUpdateText
+          render={(t) =>
+            t(
+              state.convene?.relation === "different-build"
+                ? "update.client.revision"
+                : "update.client.available",
+              { version: state.availableVersion },
+            )
+          }
+        />
+      ),
+      description: (
+        <DesktopUpdateText
+          render={(t) =>
+            state.message
+              ? formatDesktopUpdateMessage(state.message, t)
+              : t("update.platform.manualInstall")
+          }
+        />
+      ),
+      actionProps: {
+        children: (
+          <DesktopUpdateText
+            render={(t) =>
+              t(
+                state.convene?.downloadUrl
+                  ? "update.platform.download"
+                  : "update.platform.downloads",
+              )
+            }
+          />
+        ),
+        onClick: () => {
+          toastManager.close(id);
+          void openDesktopUpdateDownload(bridge);
+        },
+      },
+    }),
+  );
+  return id;
+}
 
 export async function openDesktopUpdateReleaseNotes(
   shell: DesktopUpdateShell | undefined,

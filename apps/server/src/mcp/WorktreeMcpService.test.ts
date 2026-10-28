@@ -27,6 +27,7 @@ import {
   OrchestratorDispatchError,
   OrchestratorProjectionError,
 } from "../orchestration-v2/Orchestrator.ts";
+import * as EffectOutbox from "../orchestration-v2/EffectOutbox.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
@@ -100,6 +101,8 @@ interface HarnessOptions {
   readonly dispatchDies?: boolean;
   readonly dispatchInterrupts?: boolean;
   readonly dispatchGate?: Effect.Effect<void>;
+  readonly bindingFails?: boolean;
+  readonly bindingGate?: Effect.Effect<void>;
   readonly threadAttachedOnRecheck?: boolean;
   readonly threadArchivedOnRecheck?: boolean;
   readonly threadReadFailsOnRecheck?: boolean;
@@ -291,6 +294,16 @@ const makeHarness = (options: HarnessOptions = {}) => {
   const layer = WorktreeMcpService.layer.pipe(
     Layer.provide(
       Layer.mergeAll(
+        Layer.mock(EffectOutbox.EffectOutboxV2)({
+          awaitSettled: () => options.bindingGate ?? Effect.void,
+          get: (id) =>
+            Effect.succeed(
+              Option.some({
+                id,
+                status: options.bindingFails ? "failed" : "succeeded",
+              } as EffectOutbox.OrchestrationEffectV2),
+            ),
+        }),
         Layer.mock(ThreadManagementService.ThreadManagementService)({
           dispatch,
           getThreadRecords,
@@ -375,6 +388,47 @@ const runStatus = (harness: ReturnType<typeof makeHarness>) =>
 const decodeHandoffInput = Schema.decodeUnknownEffect(WorktreeMcpHandoffInput);
 
 describe("t3_worktree_handoff", () => {
+  it.effect("queues continuation only after the workspace binding effect settles", () =>
+    Effect.gen(function* () {
+      const started = yield* Deferred.make<void>();
+      const acknowledged = yield* Deferred.make<void>();
+      const harness = makeHarness({
+        bindingGate: Deferred.succeed(started, undefined).pipe(
+          Effect.andThen(Deferred.await(acknowledged)),
+        ),
+      });
+      const running = yield* Effect.forkChild(
+        runHandoff(harness, {
+          branch: "feature/sync-order",
+          continuationPrompt: "Continue after synchronization.",
+        }),
+      );
+      yield* Deferred.await(started);
+      expect(harness.sendToThread).not.toHaveBeenCalled();
+      yield* Deferred.succeed(acknowledged, undefined);
+      expect((yield* Fiber.join(running)).continuation.status).toBe("scheduled");
+      expect(harness.sendToThread).toHaveBeenCalledTimes(1);
+    }),
+  );
+
+  it.effect(
+    "does not queue continuation or delete the bound worktree when synchronization fails",
+    () => {
+      const harness = makeHarness({ bindingFails: true });
+      return Effect.gen(function* () {
+        const exit = yield* Effect.exit(
+          runHandoff(harness, {
+            branch: "feature/sync-fails",
+            continuationPrompt: "Keep going.",
+          }),
+        );
+        expectTypedFailure(exit, { _tag: "WorktreeMcpFailure", code: "operation_failed" });
+        expect(harness.sendToThread).not.toHaveBeenCalled();
+        expect(harness.removeWorktree).not.toHaveBeenCalled();
+      });
+    },
+  );
+
   it.effect("reports a continuation failure without failing the handoff", () => {
     const harness = makeHarness({ continuation: "fails" });
     return Effect.gen(function* () {

@@ -36,7 +36,10 @@ import { loadFileAncestors } from "./loadFileAncestors";
 import { useDirectoryEntries } from "./useDirectoryEntries";
 import { useProjectPathSearch } from "~/state/queries";
 
+import type { EditorWorkspace } from "~/editorPreferences";
+
 interface FileBrowserPanelProps {
+  editorWorkspace?: EditorWorkspace;
   environmentId: EnvironmentId;
   cwd: string;
   projectName: string;
@@ -145,6 +148,7 @@ function buildTreeEntries(
 
 export default function FileBrowserPanel({
   environmentId,
+  editorWorkspace,
   cwd,
   projectName,
   selectedPath,
@@ -159,7 +163,7 @@ export default function FileBrowserPanel({
     hostFolder ? joinHostPath(cwd, relativePath) : relativePath;
   const { resolvedTheme } = useTheme();
   const composerRef = useComposerHandleContext();
-  const fileContextMenu = useFileContextMenu(environmentId);
+  const fileContextMenu = useFileContextMenu(environmentId, editorWorkspace);
   const {
     entries: directoryEntries,
     load,
@@ -210,7 +214,12 @@ export default function FileBrowserPanel({
       const position = pointerIsFresh
         ? { x: pointer.x, y: pointer.y }
         : { x: anchorRect.left, y: anchorRect.bottom };
-      const fileTarget = { environmentId, filePath: relativePath, workspaceRoot: cwd };
+      const fileTarget = {
+        environmentId,
+        filePath: relativePath,
+        workspaceRoot: cwd,
+        isFile: entryKindsRef.current.get(relativePath) !== "directory",
+      };
       const fileMenuItems = fileContextMenu.buildItems(fileTarget);
       void settlePromise(async () => {
         const clicked = await api.contextMenu.show(

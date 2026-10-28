@@ -145,6 +145,10 @@ const proxyHttp = Effect.fn("ConveneIdeHttp.http")(function* (
       else forwarded[name] = value;
     } else forwarded[name] = value;
   }
+  // Fetch exposes null bodies here, so constructing its stream would fail with EmptyBody.
+  if (request.method === "HEAD" || response.status === 204 || response.status === 304) {
+    return HttpServerResponse.empty({ status: response.status, headers: forwarded });
+  }
   return HttpServerResponse.stream(response.stream, {
     status: response.status,
     headers: forwarded,

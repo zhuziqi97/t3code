@@ -17,6 +17,8 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   RunId,
+  RuntimeRequestId,
+  ProviderSessionId,
   ThreadId,
   TurnItemId,
   type OrchestrationV2DomainEvent,
@@ -59,6 +61,9 @@ const projectId = ProjectId.make("project:compact-transport");
 const PARENT = ThreadId.make("thread:compact-transport:parent");
 const FORK = ThreadId.make("thread:compact-transport:fork");
 const LONG = ThreadId.make("thread:compact-transport:long");
+const CHILD = ThreadId.make(
+  "thread:delegated-task:command%3Amcp%3Aquestion-regression%3Adelegate-task%3Aresumed",
+);
 const parentRun = RunId.make("run:compact-transport:parent");
 const longRun = RunId.make("run:compact-transport:long");
 
@@ -223,6 +228,74 @@ const seed = Effect.gen(function* () {
   for (const event of events) yield* projections.apply(event);
 });
 
+const seedQuestions = Effect.gen(function* () {
+  const projections = yield* ProjectionStore.ProjectionStoreV2;
+  const at = yield* DateTime.now;
+  yield* projections.apply(threadCreated(CHILD, at));
+  const failed = runCreated(CHILD, RunId.make("run:question:failed-start"), at);
+  if (failed.type !== "run.created") throw new Error("Expected run");
+  yield* projections.apply({
+    ...failed,
+    payload: { ...failed.payload, status: "failed", startedAt: null },
+  });
+  const resumed = runCreated(CHILD, RunId.make("run:question:resumed"), at);
+  if (resumed.type !== "run.created") throw new Error("Expected run");
+  yield* projections.apply({
+    ...resumed,
+    payload: { ...resumed.payload, ordinal: 2, status: "running", completedAt: null },
+  });
+  for (const [index, capability] of ["message", "live"].entries()) {
+    const requestId = RuntimeRequestId.make(`request:question:${capability}`);
+    const nodeId = NodeId.make(`node:question:${capability}`);
+    const item = itemUpdated(CHILD, resumed.payload.id, capability, index + 1, at);
+    if (item.type !== "turn-item.updated" || item.payload.type !== "command_execution") {
+      throw new Error("Expected command item");
+    }
+    yield* projections.apply({
+      ...item,
+      payload: {
+        ...item.payload,
+        type: "user_input_request",
+        nodeId,
+        requestId,
+        status: "waiting",
+        completedAt: null,
+        ...(capability === "message" ? { responseMode: "message" } : {}),
+        questions: [
+          { id: "0", header: "Probe", question: `Read the ${capability} question`, options: [] },
+        ],
+      },
+    });
+    yield* projections.apply({
+      id: EventId.make(`event:question:${capability}`),
+      type: "runtime-request.updated",
+      threadId: CHILD,
+      runId: resumed.payload.id,
+      nodeId,
+      occurredAt: at,
+      payload: {
+        id: requestId,
+        nodeId,
+        kind: "user_input",
+        status: "pending",
+        providerTurnId: null,
+        nativeRequestRef: null,
+        responseCapability:
+          capability === "live"
+            ? { type: "live", providerSessionId: ProviderSessionId.make("session:question") }
+            : { type: "message" },
+        createdAt: at,
+        resolvedAt: null,
+      },
+    });
+  }
+  for (let index = 0; index < 90; index += 1) {
+    yield* projections.apply(
+      itemUpdated(CHILD, resumed.payload.id, `tool-${index}`, index + 3, at),
+    );
+  }
+});
+
 const TestLayer = Layer.mergeAll(
   management,
   Layer.succeed(ServerEnvironment.ServerEnvironmentIdentity, {
@@ -279,6 +352,64 @@ function itemIds(projection: OrchestrationV2ThreadProjection): string[] {
 }
 
 it.layer(TestLayer)("compact bounded snapshot transport", (it) => {
+  it.effect("keeps pending question bodies outside a resumed child's history window", () =>
+    Effect.gen(function* () {
+      yield* seedQuestions;
+      const projections = yield* ProjectionStore.ProjectionStoreV2;
+      const window = yield* projections.getThreadSnapshotWindow(CHILD, { rowLimit: 77 });
+      const assertQuestions = (projection: OrchestrationV2ThreadProjection) => {
+        assert.strictEqual(projection.thread.id, CHILD);
+        assert.strictEqual(projection.runs.at(-1)?.id, RunId.make("run:question:resumed"));
+        assert.strictEqual(projection.runs.at(-1)?.status, "running");
+        assert.lengthOf(projection.runtimeRequests, 2);
+        assert.deepStrictEqual(
+          projection.turnItems.flatMap((item) =>
+            item.type === "user_input_request"
+              ? item.questions.map((question) => question.question)
+              : [],
+          ),
+          ["Read the message question", "Read the live question"],
+        );
+        assert.isFalse(
+          projection.visibleTurnItems.some((row) => row.item.type === "user_input_request"),
+        );
+      };
+      assertQuestions(window.projection);
+      yield* withHttp(async (get) => {
+        const response = await get(
+          `/api/orchestration/threads/${encodeURIComponent(CHILD)}/bounded?compactTurnItems=1`,
+        );
+        assert.strictEqual(response.status, 200);
+        assertQuestions(boundedSnapshotProjection(decodeBounded(await response.text())));
+      });
+      const socket = yield* firstSnapshot({
+        threadId: CHILD,
+        acceptBoundedSnapshot: true,
+        acceptCompactTurnItems: true,
+      });
+      assertQuestions(boundedSnapshotProjection(socket.decoded));
+      for (const request of window.projection.runtimeRequests) {
+        yield* projections.apply({
+          id: EventId.make(`event:${request.id}:answered`),
+          type: "runtime-request.updated",
+          threadId: CHILD,
+          nodeId: request.nodeId,
+          occurredAt: request.createdAt,
+          payload: {
+            ...request,
+            status: "resolved",
+            resolvedAt: request.createdAt,
+            answers: { "0": "Done" },
+          },
+        });
+      }
+      const answered = yield* projections.getThreadSnapshotWindow(CHILD, { rowLimit: 77 });
+      assert.isFalse(
+        answered.projection.turnItems.some((item) => item.type === "user_input_request"),
+      );
+    }),
+  );
+
   describe.each([
     ["fork", FORK],
     ["long run with a retained interrupt request", LONG],
