@@ -693,7 +693,12 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
         streamChanges: Stream.fromQueue(providerChanges).pipe(
           Stream.tap(() => Queue.offer(pulled, undefined)),
         ),
-        refreshWorkspaceSnapshot: () => Effect.succeed([provider]),
+        startRefresh: (input) =>
+          Effect.sync(() => {
+            assert.equal(input.instanceId, instanceId);
+            assert.equal(input.cwd, "/b");
+            return [provider];
+          }),
       }),
       Layer.mock(UsageLimitSources.UsageLimitSources)({
         current: Effect.succeed([]),
@@ -796,6 +801,14 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
       refreshed.providers.map((entry) => [entry.workspaceSnapshots, entry.slashCommands]),
       [[[snapshotFor("/b", "2026-10-25T00:00:00.000Z")], []]],
     );
+    yield* server.write(0, {
+      _tag: "Request",
+      id: RpcMessage.RequestId("legacy-refresh"),
+      tag: WS_METHODS.serverRefreshProviders,
+      payload: { instanceId, cwd: "/b" },
+      headers: Headers.empty,
+    });
+    assert.deepEqual(yield* Queue.take(responses), { providers: [provider] });
     yield* server.write(0, { _tag: "Interrupt", requestId: configRequest, interruptors: [] });
   }).pipe(
     Effect.provide(

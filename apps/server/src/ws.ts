@@ -2310,7 +2310,21 @@ const makeWsRpcLayer = (
         [WS_METHODS.serverRefreshProviders]: Effect.fn("ws.serverRefreshProviders")(
           function* (input) {
             if (input.instanceId === undefined) yield* usageLimitSources.requestRefresh;
-            return { providers: yield* providerRegistry.startRefresh(input) };
+            const providers = yield* providerRegistry.startRefresh(input);
+            if (input.workspaceSnapshotsOnDemand !== true) return { providers };
+            return {
+              providers: providers.map(({ workspaceSnapshots, ...provider }) =>
+                provider.instanceId === input.instanceId && input.cwd !== undefined
+                  ? {
+                      ...provider,
+                      slashCommands: [],
+                      skills: [],
+                      workspaceSnapshots:
+                        workspaceSnapshots?.filter((snapshot) => snapshot.cwd === input.cwd) ?? [],
+                    }
+                  : provider,
+              ),
+            };
           },
         ),
         [WS_METHODS.serverCancelProviderRefresh]: (input) =>
