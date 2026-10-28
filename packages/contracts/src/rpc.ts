@@ -1,4 +1,9 @@
 import {
+  ComposerPredictionInput,
+  ComposerPredictionCancelInput,
+  ComposerPredictionResult,
+} from "./composerPrediction.ts";
+import {
   ThreadWorkspaceInput,
   ThreadWorkspaceState,
   RecoverThreadWorkspaceInput,
@@ -389,6 +394,8 @@ import { VcsError } from "./vcs.ts";
 import { Project, ProjectMutation, ProjectMutationError } from "./project.ts";
 
 export const WS_METHODS = {
+  composerRequestPrediction: "composer.requestPrediction",
+  composerCancelPrediction: "composer.cancelPrediction",
   conveneStatus: "convene.status",
   conveneSubscribeStatus: "convene.subscribeStatus",
   conveneManage: "convene.manage",
@@ -664,6 +671,17 @@ const WsServerUpdateProviderRpc = Rpc.make(WS_METHODS.serverUpdateProvider, {
 });
 
 const ProviderSetupRpcError = Schema.Union([ProviderSetupError, EnvironmentAuthorizationError]);
+
+const WsComposerRequestPredictionRpc = Rpc.make(WS_METHODS.composerRequestPrediction, {
+  payload: ComposerPredictionInput,
+  success: ComposerPredictionResult,
+  error: EnvironmentAuthorizationError,
+});
+const WsComposerCancelPredictionRpc = Rpc.make(WS_METHODS.composerCancelPrediction, {
+  payload: ComposerPredictionCancelInput,
+  success: Schema.Void,
+  error: EnvironmentAuthorizationError,
+});
 
 const WsProviderConsumeResetCreditRpc = Rpc.make(WS_METHODS.providerConsumeResetCredit, {
   payload: ProviderConsumeResetCreditInput,
@@ -2004,6 +2022,8 @@ export const WsCoreRpcGroup = RpcGroup.make(
   WsServerRefreshProvidersRpc,
   WsServerCancelProviderRefreshRpc,
   WsServerUpdateProviderRpc,
+  WsComposerRequestPredictionRpc,
+  WsComposerCancelPredictionRpc,
   WsProviderConsumeResetCreditRpc,
   WsProviderAuthStartRpc,
   WsProviderAuthCompleteRpc,

@@ -1537,6 +1537,8 @@ describe("CodexAdapterV2 session initialize", () => {
             runtimePolicy: CODEX_TEST_RUNTIME_POLICY,
           }),
         initializeRequests: () => initializeRequests,
+        nativePrediction: runtime.nativePrediction,
+        runtime,
       };
     });
 
@@ -1621,6 +1623,166 @@ describe("CodexAdapterV2 session initialize", () => {
     ),
   );
 
+  it.effect.each(["result", "turn/started", "thread/closed"] as const)(
+    "uses the resolved native root for sampling and closes on %s",
+    (end) =>
+      Effect.gen(function* () {
+        const nativeThreadId = "prediction-root";
+        const samplePending = yield* Deferred.make<void>();
+        const releaseSample = yield* Deferred.make<void>();
+        const preamble = replayPreamble(nativeThreadId);
+        preamble[1] = {
+          type: "emit_inbound",
+          label: "initialize",
+          frame: {
+            id: 1,
+            result: {
+              userAgent: "T3 Code/0.165.0",
+              codexHome: "/tmp/fixture-codex-home",
+              platformFamily: "unix",
+              platformOs: "linux",
+            },
+          },
+        };
+        const startFrame = (
+          preamble[4] as {
+            readonly frame: { readonly result: { readonly thread: Record<string, unknown> } };
+          }
+        ).frame;
+        const entries: Array<CodexReplay.CodexAppServerReplayEntry> = [
+          ...preamble.slice(0, 5),
+          {
+            type: "expect_outbound",
+            frame: {
+              id: 3,
+              method: "thread/read",
+              params: { threadId: nativeThreadId, includeTurns: false },
+            },
+          },
+          {
+            type: "emit_inbound",
+            frame: {
+              id: 3,
+              result: { thread: { ...startFrame.result.thread, model: "native-resolved-model" } },
+            },
+          },
+          {
+            type: "expect_outbound",
+            frame: {
+              id: 4,
+              method: "getAuthStatus",
+              params: { includeToken: true, refreshToken: false },
+            },
+          },
+          {
+            type: "emit_inbound",
+            frame: {
+              id: 4,
+              result: {
+                authMethod: "chatgpt",
+                authToken: "synthetic-fixture-token",
+                requiresOpenaiAuth: true,
+              },
+            },
+          },
+          {
+            type: "expect_outbound",
+            frame: {
+              id: 5,
+              method: "thread/sample",
+              params: {
+                threadId: nativeThreadId,
+                expectedTurnId: "source-turn",
+                prompt: "external fixture prompt",
+                effort: null,
+              },
+            },
+          },
+        ];
+        if (end === "result") {
+          entries.push({
+            type: "emit_inbound",
+            label: "sample-finish",
+            frame: {
+              id: 5,
+              result: {
+                sourceTurnId: "source-turn",
+                responseId: "fixture-response",
+                text: '{"suggestion":"Editable draft"}',
+                inputTokens: 12,
+                cachedInputTokens: 4,
+                outputTokens: 3,
+              },
+            },
+          });
+        } else {
+          entries.push(
+            {
+              type: "emit_inbound",
+              label: "sample-finish",
+              frame: {
+                method: end,
+                params:
+                  end === "turn/started"
+                    ? {
+                        threadId: nativeThreadId,
+                        turn: makeCodexReplayTurn({ id: "next-turn", status: "inProgress" }),
+                      }
+                    : { threadId: nativeThreadId },
+              },
+            },
+            {
+              type: "expect_outbound",
+              frame: { id: 6, method: "thread/sample/cancel", params: { requestId: 5 } },
+            },
+            { type: "emit_inbound", frame: { id: 6, result: {} } },
+          );
+        }
+        const session = yield* openReplaySession(
+          makeCodexReplayTranscript({
+            scenario: `native-prediction-${end.replace("/", "-")}`,
+            entries,
+          }),
+          (entry) =>
+            entry.label === "sample-finish"
+              ? Deferred.succeed(samplePending, undefined).pipe(
+                  Effect.andThen(Deferred.await(releaseSample)),
+                )
+              : Effect.void,
+        );
+        const providerThread = yield* session.ensureThread("thread-prediction");
+        assert.deepEqual(yield* session.nativePrediction!.context(providerThread), {
+          token: "synthetic-fixture-token",
+          model: "native-resolved-model",
+        });
+        const sampling = yield* session
+          .nativePrediction!.sample({
+            providerThread,
+            sourceTurnId: "source-turn",
+            prompt: "external fixture prompt",
+            effort: null,
+          })
+          .pipe(Effect.forkChild);
+        yield* Deferred.await(samplePending);
+        const retainedSession = yield* session.runtime.hasPendingBackgroundWork!;
+        const retainedThread =
+          yield* session.runtime.hasPendingBackgroundWorkForThread!(providerThread);
+        yield* Deferred.succeed(releaseSample, undefined);
+        const response = yield* Fiber.join(sampling);
+        assert.isTrue(retainedSession);
+        assert.isTrue(retainedThread);
+        assert.isFalse(yield* session.runtime.hasPendingBackgroundWork!);
+        assert.isFalse(yield* session.runtime.hasPendingBackgroundWorkForThread!(providerThread));
+        if (end === "result") assert.equal(response?.text, '{"suggestion":"Editable draft"}');
+        else assert.isNull(response);
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(
+          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),
+        ),
+      ),
+  );
+
   it.effect("completes the handshake after a caller is interrupted mid-initialize", () =>
     Effect.gen(function* () {
       const initializeAwaitingResponse = yield* Deferred.make<void>();
@@ -1659,6 +1821,7 @@ describe("CodexAdapterV2 session initialize", () => {
       const providerThread = yield* session.ensureThread("thread-initialize-interrupted");
       assert.equal(providerThread.nativeThreadRef?.nativeId, "initialize-interrupted");
       assert.equal(session.initializeRequests(), 2);
+      assert.isNull(yield* session.nativePrediction!.context(providerThread));
     }).pipe(
       Effect.scoped,
       Effect.provide(
@@ -7766,5 +7929,17 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         ),
       ),
     );
+  });
+});
+
+describe("CodexAdapterV2 native prediction version", () => {
+  it.each(["", "unrecognized-agent", "t3/0.156.1", "t3/0.164.0-alpha.12"])(
+    "does not promise sampling for %s",
+    (userAgent) => {
+      assert.isFalse(CodexAdapterV2.codexSupportsNativePredictions(userAgent));
+    },
+  );
+  it("accepts the stable native sampling runtime", () => {
+    assert.isTrue(CodexAdapterV2.codexSupportsNativePredictions("t3/0.165.0 (Linux)"));
   });
 });

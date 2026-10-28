@@ -548,6 +548,24 @@ export interface ProviderAdapterV2SessionRuntime {
   readonly providerSessionId: ProviderSessionId;
   readonly providerSession: OrchestrationV2ProviderSession;
   readonly events: Stream.Stream<ProviderAdapterV2Event, ProviderAdapterV2Error>;
+  readonly nativePrediction?: {
+    readonly context: (providerThread: OrchestrationV2ProviderThread) => Effect.Effect<
+      {
+        readonly token: string;
+        readonly model: string;
+      } | null,
+      ProviderAdapterV2Error
+    >;
+    readonly sample: (input: {
+      readonly providerThread: OrchestrationV2ProviderThread;
+      readonly sourceTurnId: string;
+      readonly prompt: string;
+      readonly effort: string | null;
+    }) => Effect.Effect<
+      { readonly sourceTurnId: string; readonly text: string | null } | null,
+      ProviderAdapterV2Error
+    >;
+  };
   /** Manager runtimes broadcast independent subscriptions; adapters may expose only a single-consumer stream. */
   readonly subscribeEvents?: Effect.Effect<ProviderAdapterV2EventSubscription>;
   readonly hasPendingBackgroundWork?: Effect.Effect<boolean>;

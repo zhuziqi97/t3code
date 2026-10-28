@@ -1,3 +1,4 @@
+import * as CodexRpc from "effect-codex-app-server/rpc";
 import * as DocumentText from "../../provider/DocumentText.ts";
 import { revertCodexThread } from "../../provider/CodexThreadRevert.ts";
 import { historyResponseItems } from "@t3tools/provider-core/server/handoffBudget";
@@ -226,6 +227,16 @@ const decodeCodexBackgroundTerminalTerminateResponse = Schema.decodeUnknownEffec
 const decodeCodexBackgroundTerminalsListResponse = Schema.decodeUnknownEffect(
   CodexBackgroundTerminalsListResponse,
 );
+export function codexSupportsNativePredictions(userAgent: string): boolean {
+  const version = /\/(\d+)\.(\d+)\.(\d+)([-\w.]*)/.exec(userAgent);
+  return (
+    version !== null &&
+    !((Number(version[1]) === 0 && Number(version[2]) < 165) || version[4]?.startsWith("-"))
+  );
+}
+
+const decodeThreadSampleParams = Schema.decodeUnknownEffect(CodexRpc.ThreadSampleParams);
+
 const CODEX_CLIENT_CAPABILITIES = {
   experimentalApi: true,
   optOutNotificationMethods: ["turn/diff/updated"],
@@ -1729,6 +1740,8 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           ),
         );
         const initialized = yield* Ref.make(false);
+        let nativeUserAgent = "";
+        const predictionSources = new Map<string, Deferred.Deferred<void>>();
         // Codex rejects a second initialize on the shared app-server.
         const initializePermit = yield* Semaphore.make(1);
         const ensureInitialized = initializePermit.withPermit(
@@ -1744,6 +1757,11 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                 capabilities: CODEX_CLIENT_CAPABILITIES,
               })
               .pipe(
+                Effect.tap((response) =>
+                  Effect.sync(() => {
+                    nativeUserAgent = response.userAgent;
+                  }),
+                ),
                 Effect.catchTags({
                   // Interruption can leave Codex initialized before the local flag is set.
                   CodexAppServerRequestError: (error) =>
@@ -6655,15 +6673,84 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           ),
         };
 
+        yield* client.handleServerNotification("turn/started", (payload) => {
+          const pending = predictionSources.get(payload.threadId);
+          return pending === undefined
+            ? Effect.void
+            : Deferred.succeed(pending, undefined).pipe(Effect.asVoid);
+        });
+        yield* client.handleServerNotification("thread/closed", (payload) => {
+          const pending = predictionSources.get(payload.threadId);
+          return pending === undefined
+            ? Effect.void
+            : Deferred.succeed(pending, undefined).pipe(Effect.asVoid);
+        });
+        const predictionError = (cause: unknown) =>
+          new ProviderAdapter.ProviderAdapterProtocolError({
+            driver: CODEX_PROVIDER,
+            detail: "Native prediction request failed",
+            cause,
+          });
         const runtime: ProviderAdapter.ProviderAdapterV2SessionRuntime = {
           instanceId: adapterOptions.instanceId,
           driver: CODEX_PROVIDER,
           providerSessionId: input.providerSessionId,
           providerSession: session,
+          nativePrediction: {
+            context: Effect.fn("CodexAdapterV2.predictionContext")(function* (providerThread) {
+              yield* ensureInitialized;
+              if (!codexSupportsNativePredictions(nativeUserAgent)) return null;
+              const threadId = providerThread.nativeThreadRef?.nativeId;
+              if (!threadId || providerThread.ownerNodeId !== null) return null;
+              const { thread } = yield* client.request("thread/read", {
+                threadId,
+                includeTurns: false,
+              });
+              if (
+                thread.modelProvider !== "openai" ||
+                thread.ephemeral ||
+                thread.parentThreadId != null ||
+                thread.status.type !== "idle"
+              )
+                return null;
+              const model = thread.model ?? providerThread.nativeMetadata?.modelSelection?.model;
+              if (!model) return null;
+              const auth = yield* client.request("getAuthStatus", {
+                includeToken: true,
+                refreshToken: false,
+              });
+              return auth.authToken &&
+                (auth.authMethod === "chatgpt" || auth.authMethod === "chatgptAuthTokens")
+                ? { token: auth.authToken, model }
+                : null;
+            }, Effect.mapError(predictionError)),
+            sample: Effect.fn("CodexAdapterV2.samplePrediction")(function* (prediction) {
+              const threadId = prediction.providerThread.nativeThreadRef?.nativeId;
+              if (!threadId) return null;
+              const changed = yield* Deferred.make<void>();
+              const params = yield* decodeThreadSampleParams({
+                threadId,
+                expectedTurnId: prediction.sourceTurnId,
+                prompt: prediction.prompt,
+                effort: prediction.effort,
+              });
+              predictionSources.set(threadId, changed);
+              return yield* client.request("thread/sample", params).pipe(
+                Effect.raceFirst(Deferred.await(changed).pipe(Effect.as(null))),
+                Effect.ensuring(
+                  Effect.sync(() => {
+                    if (predictionSources.get(threadId) === changed)
+                      predictionSources.delete(threadId);
+                  }),
+                ),
+              );
+            }, Effect.mapError(predictionError)),
+          },
           events: Stream.fromEffectRepeat(Queue.take(events)),
           canReuseContextUsage: canReuseCodexContextUsage,
           // Idle release can beat delayed subagent resumes: Codex reports them completed between turns with no resume-expected signal.
           hasPendingBackgroundWork: Effect.gen(function* () {
+            if (predictionSources.size > 0) return true;
             for (const items of (yield* Ref.get(runningCommandItemsByTurn)).values()) {
               if (items.size > 0) {
                 return true;
@@ -6687,6 +6774,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           hasPendingBackgroundWorkForThread: Effect.fn(
             "CodexAdapterV2.hasPendingBackgroundWorkForThread",
           )(function* (providerThread) {
+            if (predictionSources.has(providerThread.nativeThreadRef?.nativeId ?? "")) return true;
             const contexts = [
               ...(yield* Ref.get(activeTurns)).values(),
               ...(yield* Ref.get(settledTurns)).values(),

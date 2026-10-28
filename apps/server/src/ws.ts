@@ -1,3 +1,4 @@
+import * as ComposerPredictions from "./provider/ComposerPredictions.ts";
 import * as ProjectSetupScriptRunner from "./project/ProjectSetupScriptRunner.ts";
 import * as ThreadWorkspaceRecovery from "./orchestration-v2/ThreadWorkspaceRecovery.ts";
 import type * as Rpc from "effect/rpc/Rpc";
@@ -1238,6 +1239,7 @@ const makeWsRpcLayer = (
         | ServerConfig.ServerConfig
         | ServerSettings.ServerSettingsService
         | DocumentText.DocumentText
+        | ComposerPredictions.ComposerPredictions
       >();
       const applicationEvents = yield* OrchestrationEventStore.OrchestrationEventStore;
       const projectStore = yield* ProjectStore.ProjectStoreV2;
@@ -1247,6 +1249,7 @@ const makeWsRpcLayer = (
       const threadSearch = yield* ThreadSearch.ThreadSearch;
 
       const providerSessionsV2 = yield* ProviderSessionManager.ProviderSessionManagerV2;
+      const composerPredictions = yield* ComposerPredictions.ComposerPredictions;
       const mcpAppRequests = yield* McpAppRequests.McpAppRequests;
       const analytics = yield* AnalyticsService.AnalyticsService;
       const originProps = clientAnalyticsProps;
@@ -2318,6 +2321,8 @@ const makeWsRpcLayer = (
         [WS_METHODS.mcpAppsToolInfo]: (input) => mcpAppRequests.toolInfo(input),
         [WS_METHODS.mcpAppsUpdateModelContext]: (input) => mcpAppRequests.updateModelContext(input),
         [WS_METHODS.mcpAppsReadResource]: (input) => mcpAppRequests.readResource(input),
+        [WS_METHODS.composerRequestPrediction]: (input) => composerPredictions.request(input),
+        [WS_METHODS.composerCancelPrediction]: (input) => composerPredictions.cancel(input),
         [WS_METHODS.providerUploadFeedback]:
           /* Request instrumentation already owns the span; keep this helper in that context. */
           Effect.fnUntraced(
@@ -3415,6 +3420,7 @@ export const layer: Layer.Layer<
   | PullRequestReviewGuideService.PullRequestReviewGuideService
   | HttpRouter.Request<"Requires", GuestShareService.GuestShareService>
   | HttpRouter.Request<"Requires", DocumentText.DocumentText>
+  | HttpRouter.Request<"Requires", ComposerPredictions.ComposerPredictions>
   | HttpRouter.Request<"Requires", SessionStore.SessionStore>
   | HttpRouter.Request<"Requires", EnvironmentAuth.EnvironmentAuth>
   | HttpRouter.Request<"Requires", AnalyticsService.AnalyticsService>

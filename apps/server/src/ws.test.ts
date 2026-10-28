@@ -48,6 +48,7 @@ import * as CommandOutputHub from "./orchestration-v2/CommandOutputHub.ts";
 import * as CodexInstallation from "./provider/CodexInstallation.ts";
 import * as DeviceService from "./device/DeviceService.ts";
 import * as DocumentText from "./provider/DocumentText.ts";
+import * as ComposerPredictions from "./provider/ComposerPredictions.ts";
 import * as DirectEndpoints from "./environment/DirectEndpoints.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as EnvironmentTheme from "./environmentTheme.ts";
@@ -404,6 +405,7 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(ThreadWorkspaceRecovery.ThreadWorkspaceRecovery)({}),
   Layer.mock(ConveneSettings.ConveneSettings)({}),
   Layer.mock(DocumentText.DocumentText)({}),
+  Layer.mock(ComposerPredictions.ComposerPredictions)({}),
   Layer.mock(ServerSecretStore.ServerSecretStore)({}),
   Layer.mock(WorkspacePaths.WorkspacePaths)({}),
   Layer.mock(TraceDiagnostics.TraceDiagnostics)({}),

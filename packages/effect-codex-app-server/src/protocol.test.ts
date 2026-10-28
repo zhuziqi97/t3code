@@ -690,4 +690,40 @@ it.layer(NodeServices.layer)("effect-codex-app-server protocol", (it) => {
       assert.strictEqual(yield* Deferred.await(termination), exitError);
     }),
   );
+  it.effect("cancels a sample on the wire using its JSON-RPC request id", () =>
+    Effect.gen(function* () {
+      const { stdio, input, output } = yield* makeInMemoryStdio();
+      const cancels: Array<unknown> = [];
+      const transport = yield* CodexProtocol.makeCodexAppServerPatchedProtocol({
+        stdio,
+        logOutgoing: true,
+        logger: (event) => {
+          if (event.stage !== "decoded") return Effect.void;
+          const message = event.payload as { id: number; method: string; params?: unknown };
+          if (message.method !== "thread/sample/cancel") return Effect.void;
+          cancels.push(message.params);
+          return Queue.offer(input, encodeJsonl({ id: message.id, result: {} })).pipe(
+            Effect.asVoid,
+          );
+        },
+      });
+      const pending = yield* transport
+        .request(
+          "thread/sample",
+          { threadId: "native-root" },
+          {
+            cancelMethod: "thread/sample/cancel",
+          },
+        )
+        .pipe(Effect.forkScoped);
+      const sent = yield* decodeJson(yield* Queue.take(output));
+      assert.deepEqual(sent, {
+        id: 1,
+        method: "thread/sample",
+        params: { threadId: "native-root" },
+      });
+      yield* Fiber.interrupt(pending);
+      assert.deepEqual(cancels, [{ requestId: 1 }]);
+    }).pipe(Effect.scoped),
+  );
 });

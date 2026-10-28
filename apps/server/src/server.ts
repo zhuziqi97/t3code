@@ -1,3 +1,4 @@
+import * as ComposerPredictions from "./provider/ComposerPredictions.ts";
 import * as ThreadWorkspaceRecovery from "./orchestration-v2/ThreadWorkspaceRecovery.ts";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
 import type { RelayManagedEndpointRuntimeConfig } from "@t3tools/contracts/relay";
@@ -534,10 +535,10 @@ const layerOrchestrationV2Runtime = RuntimeLayer.layerProduction.pipe(
   ),
 );
 
-const layerOrchestrationApplication = CheckpointDiffQuery.layer.pipe(
-  Layer.provideMerge(layerCheckpointStore),
-  Layer.provideMerge(layerOrchestrationV2Runtime),
-);
+const layerOrchestrationApplication = Layer.merge(
+  CheckpointDiffQuery.layer,
+  ComposerPredictions.layer.pipe(Layer.provide(ProjectionStoreV2.layer)),
+).pipe(Layer.provideMerge(layerCheckpointStore), Layer.provideMerge(layerOrchestrationV2Runtime));
 
 const layerThreadSettlementWorker = Layer.effectDiscard(
   ThreadSettlementService.make.pipe(Effect.flatMap((service) => service.start())),

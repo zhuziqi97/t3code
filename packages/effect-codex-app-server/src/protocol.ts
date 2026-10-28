@@ -60,6 +60,7 @@ export interface CodexAppServerPatchedProtocol {
   readonly request: (
     method: string,
     payload?: unknown,
+    options?: { readonly cancelMethod: string },
   ) => Effect.Effect<unknown, CodexError.CodexAppServerError>;
   readonly notify: (
     method: string,
@@ -468,9 +469,12 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
 
     yield* Stream.fromQueue(outgoing).pipe(Stream.run(options.stdio.stdout()), Effect.forkScoped);
 
-    const request = Effect.fn("CodexAppServerProtocol.request")(function* (
+    const request: CodexAppServerPatchedProtocol["request"] = Effect.fn(
+      "CodexAppServerProtocol.request",
+    )(function* (
       method: string,
       payload?: unknown,
+      requestOptions?: { readonly cancelMethod: string },
     ) {
       const requestId = yield* Ref.modify(
         nextRequestId,
@@ -486,7 +490,15 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
         ...(payload !== undefined ? { params: payload } : {}),
       }).pipe(Effect.tapError(() => removePending(String(requestId))));
       return yield* Deferred.await(deferred).pipe(
-        Effect.onInterrupt(() => removePending(String(requestId))),
+        Effect.onInterrupt(() =>
+          removePending(String(requestId)).pipe(
+            Effect.andThen(
+              requestOptions === undefined
+                ? Effect.void
+                : request(requestOptions.cancelMethod, { requestId }).pipe(Effect.ignore),
+            ),
+          ),
+        ),
       );
     });
 
