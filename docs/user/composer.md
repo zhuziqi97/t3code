@@ -12,6 +12,18 @@ becomes an attachment when inserting it would exceed the message limit. On a
 hardware keyboard, use `Cmd+Shift+V` on Apple devices or `Ctrl+Shift+V` elsewhere
 to keep a large paste editable in the composer instead.
 
+## Codex predictions (experimental)
+
+Enable **Settings → Chat → Codex native predictions** on each client to get
+optional follow-up suggestions after a Codex turn finishes or when returning to
+a completed thread. This is off by default and requires a system Codex CLI with
+native sampling support (stable 0.165 or newer). Predictions may consume your
+subscription allowance or incur charges; enabling them does not guarantee a suggestion.
+
+Accept a suggestion to add an editable draft, then review and send it yourself.
+Suggestions leave existing text and attachments alone. You can cancel a pending
+suggestion or dismiss it without sending anything.
+
 ## Formatting
 
 The composer writes Markdown and shows it styled as you type. Markers such as

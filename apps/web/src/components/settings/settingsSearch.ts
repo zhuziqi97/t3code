@@ -697,6 +697,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     ],
   },
   {
+    id: "codex-native-predictions",
+    get title() {
+      return i18n.t("prediction.setting.label");
+    },
+    to: "/settings/chat",
+    searchTerms: ["codex prediction suggestion native experimental 预测 建议 原生 实验"],
+  },
+  {
     id: "composer-rich-text",
     get title() {
       return i18n.t("settings.search.composer-rich-text.title");

@@ -427,6 +427,7 @@ interface ComposerDraftStoreState {
     Record<ProviderInstanceId, Partial<Record<string, ReadonlyArray<ProviderOptionSelection>>>>
   >;
   stickyActiveProvider: ProviderInstanceId | null;
+  getComposerDraftRevision: (target: ComposerThreadTarget) => number;
   getComposerDraft: (target: ComposerThreadTarget) => ComposerThreadDraftState | null;
   getDraftThreadByLogicalProjectKey: (logicalProjectKey: string) => ProjectDraftSession | null;
   getDraftSessionByLogicalProjectKey: (logicalProjectKey: string) => ProjectDraftSession | null;
@@ -2359,6 +2360,8 @@ function toHydratedDraftThreadState(
   };
 }
 
+const draftRevisions = new Map<string, number>();
+
 const composerDraftStore = create<ComposerDraftStoreState>()(
   persist(
     (setBase, get) => {
@@ -2374,6 +2377,8 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
         stickyModelSelectionByProvider: {},
         stickyOptionsByModelByProvider: {},
         stickyActiveProvider: null,
+        getComposerDraftRevision: (target) =>
+          draftRevisions.get(resolveComposerDraftKey(get(), target) ?? "") ?? 0,
         getComposerDraft: (target) => getComposerDraftState(get(), target),
         getDraftThreadByLogicalProjectKey: (logicalProjectKey) => {
           return get().getDraftSessionByLogicalProjectKey(logicalProjectKey);
@@ -4094,6 +4099,18 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
     },
   ),
 );
+
+composerDraftStore.subscribe((state, previous) => {
+  if (state.draftsByThreadKey === previous.draftsByThreadKey) return;
+  for (const key of new Set([
+    ...Object.keys(state.draftsByThreadKey),
+    ...Object.keys(previous.draftsByThreadKey),
+  ])) {
+    if (state.draftsByThreadKey[key] !== previous.draftsByThreadKey[key]) {
+      draftRevisions.set(key, (draftRevisions.get(key) ?? 0) + 1);
+    }
+  }
+});
 
 export const useComposerDraftStore = composerDraftStore;
 

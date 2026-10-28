@@ -15,6 +15,7 @@ import {
   AuthEnvironmentMaintainScope,
   AuthSourceControlWriteScope,
   ThreadId,
+  RunId,
   EnvironmentId,
   ScheduledTaskId,
   WS_METHODS,
@@ -512,3 +513,71 @@ it.effect("rejects protected unary and streamed RPCs outside a guarded command",
     expect(writes).toBe(0);
   }),
 );
+
+it("rechecks destination operate permission for native prediction request and cancellation", async () => {
+  const registry = AtomRegistry.make();
+  const unmount = registry.mount(sessions(env));
+  const unmountOther = registry.mount(sessions(other));
+  let requests = 0;
+  let cancellations = 0;
+  const request = createEnvironmentRpcCommand(runtime, {
+    label: "test.prediction.request",
+    tag: WS_METHODS.composerRequestPrediction,
+    execute: ({ requestId, sourceRunId }) =>
+      Effect.sync(() => {
+        requests += 1;
+        return { requestId, sourceRunId, status: "empty" as const, text: null };
+      }),
+  });
+  const cancel = createEnvironmentRpcCommand(runtime, {
+    label: "test.prediction.cancel",
+    tag: WS_METHODS.composerCancelPrediction,
+    execute: () =>
+      Effect.sync(() => {
+        cancellations += 1;
+      }),
+  });
+  const input = {
+    threadId: ThreadId.make("prediction"),
+    sourceRunId: RunId.make("source"),
+    requestId: "request",
+    trigger: "live" as const,
+  };
+  try {
+    registry.set(sessions(env), AsyncResult.success(grant(true)));
+    registry.set(sessions(other), AsyncResult.success(grant(false)));
+    expect(registry.get(request.permissionAtom(env))).toBe(true);
+    expect(registry.get(cancel.permissionAtom(env))).toBe(true);
+    expect(registry.get(request.permissionAtom(other))).toBe(false);
+    expect(registry.get(cancel.permissionAtom(other))).toBe(false);
+    registry.set(sessions(env), AsyncResult.success(grant(false)));
+    registry.set(sessions(other), AsyncResult.success(grant(true)));
+    expect((await request.run(registry, { environmentId: env, input }))._tag).toBe("Failure");
+    expect(
+      (
+        await cancel.run(registry, {
+          environmentId: env,
+          input: { threadId: input.threadId, requestId: input.requestId },
+        })
+      )._tag,
+    ).toBe("Failure");
+    expect(requests).toBe(0);
+    expect(cancellations).toBe(0);
+    registry.set(sessions(env), AsyncResult.success(grant(true)));
+    expect((await request.run(registry, { environmentId: env, input }))._tag).toBe("Success");
+    expect(
+      (
+        await cancel.run(registry, {
+          environmentId: env,
+          input: { threadId: input.threadId, requestId: input.requestId },
+        })
+      )._tag,
+    ).toBe("Success");
+    expect(requests).toBe(1);
+    expect(cancellations).toBe(1);
+  } finally {
+    unmount();
+    unmountOther();
+    registry.dispose();
+  }
+});

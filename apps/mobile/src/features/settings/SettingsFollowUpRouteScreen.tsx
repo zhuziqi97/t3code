@@ -1,3 +1,5 @@
+import { useTranslate } from "../../i18n";
+import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { useNavigation } from "@react-navigation/native";
@@ -31,6 +33,7 @@ const FOLLOW_UP_OPTIONS: ReadonlyArray<{
 ];
 
 export function SettingsFollowUpRouteScreen() {
+  const t = useTranslate();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
@@ -55,6 +58,19 @@ export function SettingsFollowUpRouteScreen() {
         contentContainerClassName="gap-3 px-5 pt-4"
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
       >
+        <SettingsSection title={t("prediction.setting.label")}>
+          <SettingsSwitchRow
+            icon="sparkles"
+            label={t("prediction.setting.label")}
+            subtitle={t("prediction.setting.description")}
+            value={
+              AsyncResult.isSuccess(preferencesResult) &&
+              preferencesResult.value.codexNativePredictions === true
+            }
+            disabled={!preferencesReady}
+            onValueChange={(value) => savePreferences({ codexNativePredictions: value })}
+          />
+        </SettingsSection>
         <SettingsSection title="While the agent is running">
           {FOLLOW_UP_OPTIONS.map((option, index) => (
             <SettingsChoiceRow

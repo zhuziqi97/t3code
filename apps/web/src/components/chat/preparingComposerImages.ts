@@ -1,3 +1,4 @@
+import { pendingDraftWork } from "./pendingDraftWork";
 import { create } from "zustand";
 
 export interface PreparingComposerImage {
@@ -38,6 +39,7 @@ export function addPreparingComposerImages(
       [targetKey]: [...(state.byTargetKey[targetKey] ?? NO_PREPARING_IMAGES), ...images],
     },
   }));
+  pendingDraftWork.markEdited(targetKey);
 }
 
 export function isPreparingComposerImage(targetKey: string, imageId: string): boolean {

@@ -1,3 +1,4 @@
+import { ComposerPrediction } from "./ComposerPrediction";
 import { useTranslate } from "../../i18n";
 
 import { useComposerTypingGuard } from "./useComposerTypingGuard";
@@ -3449,6 +3450,30 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       <ComposerBanner.Dock>
         <ComposerBanner.Column>
           <ComposerBannerStack items={shelfItems} />
+          {routeKind === "server" ? (
+            <ComposerPrediction
+              key={composerDraftTargetKey}
+              threadRef={routeThreadRef}
+              draftTarget={composerDraftTarget}
+              selectedInstanceId={selectedInstanceId}
+              codex={selectedProvider === "codex"}
+              blocked={
+                isEditingQueuedMessage ||
+                isSendBusy ||
+                isPreparingWorktree ||
+                isCompacting ||
+                pendingApprovals.length > 0 ||
+                incomingPendingUserInputs.length > 0 ||
+                multipleModelSelections !== null ||
+                preparingComposerImages.length > 0 ||
+                questionAttachmentTarget !== null
+              }
+              focus={() => {
+                if (isComposerCollapsedMobile) expandMobileComposer();
+                else focusComposer();
+              }}
+            />
+          ) : null}
           {showComposerTopDrawer ? (
             <ComposerBanner.Attachment>
               <ComposerBanner.Root

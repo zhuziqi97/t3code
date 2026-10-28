@@ -2478,3 +2478,13 @@ describe("composerDraftStore attachment references", () => {
     );
   });
 });
+
+describe("prediction draft revisions", () => {
+  it("remembers edits after text is deleted back to an empty draft", () => {
+    const ref = scopeThreadRef(TEST_ENVIRONMENT_ID, ThreadId.make("prediction-revision"));
+    const before = useComposerDraftStore.getState().getComposerDraftRevision(ref);
+    useComposerDraftStore.getState().setPrompt(ref, "typed");
+    useComposerDraftStore.getState().setPrompt(ref, "");
+    expect(useComposerDraftStore.getState().getComposerDraftRevision(ref)).toBe(before + 2);
+  });
+});

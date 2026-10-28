@@ -2642,3 +2642,11 @@ describe("mobile composer drafts", () => {
     expect(composerAttachmentCleanupMocks.remove).not.toHaveBeenCalled();
   });
 });
+
+it("preserves prediction revision after text edits return to empty", async () => {
+  const { getComposerDraftRevision, setComposerDraftText } = await import("./use-composer-drafts");
+  const before = getComposerDraftRevision("prediction-revision");
+  setComposerDraftText("prediction-revision", "typed");
+  setComposerDraftText("prediction-revision", "");
+  expect(getComposerDraftRevision("prediction-revision")).toBe(before + 2);
+});

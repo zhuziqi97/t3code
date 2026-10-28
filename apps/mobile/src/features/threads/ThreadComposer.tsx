@@ -1,3 +1,4 @@
+import { ComposerPrediction } from "./ComposerPrediction";
 import { ThreadContextWindowMeter } from "./ThreadContextWindowMeter";
 import { useSidebarWorkspaceTabs } from "../workspace/useSystemWorkspaceTabBar";
 import { Button } from "../../components/ui/Button";
@@ -808,6 +809,24 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
         style={{ maxWidth: props.contentMaxWidth }}
       >
         {props.draftControls}
+        {!props.isDraft ? (
+          <ComposerPrediction
+            key={composerDraftKey}
+            environmentId={props.environmentId}
+            threadId={props.selectedThread.id}
+            draftKey={composerDraftKey}
+            blocked={
+              props.hidden ||
+              isSubmissionLocked ||
+              props.activeThreadBusy ||
+              props.queueCount > 0 ||
+              queuedEdit !== null ||
+              props.threadSyncPhase != null ||
+              pendingPastedTextAttachmentCount > 0
+            }
+            focus={() => inputRef.current?.focus()}
+          />
+        ) : null}
         {!isSubmissionLocked &&
         composerMenu.trigger &&
         (composerMenu.items.length > 0 ||
