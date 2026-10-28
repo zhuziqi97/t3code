@@ -1,5 +1,13 @@
 /** English keys define the catalog and fallback. Interpolation uses {{name}}; plurals use _one and _other. Keep provider names and shell commands untranslated. */
 export const en = {
+  "prediction.setting.label": "Codex native predictions (experimental)",
+  "prediction.setting.description":
+    "Suggest a follow-up after Codex finishes. Requires a system Codex CLI with native sampling support (stable 0.165 or newer). May use subscription allowance or incur charges. Accepting adds an editable draft; it does not send it.",
+  "prediction.pending": "Preparing a suggestion…",
+  "prediction.accept": "Use as draft",
+  "prediction.dismiss": "Dismiss suggestion",
+  "prediction.cancel": "Cancel suggestion",
+  "prediction.suggestion": "Suggested follow-up",
   "filePreview.mermaidSource": "Show Mermaid source",
   "filePreview.mermaidRendered": "Show rendered diagram",
   "chat.approval.redirectPlaceholder": "Send a message to decline and redirect the agent",

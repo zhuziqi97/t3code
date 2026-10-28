@@ -1,4 +1,25 @@
 const operationsByDraftKey = new Map<string, Set<AbortController>>();
+const revisions = new Map<string, number>();
+const listeners = new Set<() => void>();
+
+export function composerDraftOperationRevision(draftKey: string): number {
+  return revisions.get(draftKey) ?? 0;
+}
+
+export function hasComposerDraftOperation(draftKey: string): boolean {
+  return (operationsByDraftKey.get(draftKey)?.size ?? 0) > 0;
+}
+
+export function subscribeComposerDraftOperations(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function notify(): void {
+  for (const listener of listeners) listener();
+}
 
 /**
  * Async work that writes into one draft (a context import, a picker) starts
@@ -13,6 +34,8 @@ export function startComposerDraftOperation(draftKey: string): {
   const operations = operationsByDraftKey.get(draftKey) ?? new Set();
   operations.add(controller);
   operationsByDraftKey.set(draftKey, operations);
+  revisions.set(draftKey, composerDraftOperationRevision(draftKey) + 1);
+  notify();
   return {
     signal: controller.signal,
     finish: () => {
@@ -20,6 +43,7 @@ export function startComposerDraftOperation(draftKey: string): {
       if (operations.size === 0 && operationsByDraftKey.get(draftKey) === operations) {
         operationsByDraftKey.delete(draftKey);
       }
+      notify();
     },
   };
 }
@@ -29,6 +53,7 @@ export function abortComposerDraftOperations(draftKey: string): void {
   if (!operations) return;
   operationsByDraftKey.delete(draftKey);
   for (const controller of operations) controller.abort();
+  notify();
 }
 
 export function abortComposerDraftOperationsWhere(matches: (draftKey: string) => boolean): void {

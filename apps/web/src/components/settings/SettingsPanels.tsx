@@ -1184,6 +1184,17 @@ export function ChatSettingsPanel() {
     <SettingsPageContainer>
       <SettingsSection id="composer" title="Composer">
         <SettingsRow
+          {...searchableSetting("codex-native-predictions")}
+          description={i18n.t("prediction.setting.description")}
+          control={
+            <Switch
+              checked={settings.codexNativePredictions}
+              onCheckedChange={(checked) => updateSettings({ codexNativePredictions: checked })}
+              aria-label={i18n.t("prediction.setting.label")}
+            />
+          }
+        />
+        <SettingsRow
           {...searchableSetting("composer-rich-text")}
           description={i18n.t("general.richText.description")}
           resetAction={

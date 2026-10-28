@@ -1148,6 +1148,16 @@ export function createServerEnvironmentAtoms<R, E>(
   });
 
   return {
+    composer: {
+      requestPrediction: createEnvironmentRpcCommand(runtime, {
+        label: "environment-data:composer:request-prediction",
+        tag: WS_METHODS.composerRequestPrediction,
+      }),
+      cancelPrediction: createEnvironmentRpcCommand(runtime, {
+        label: "environment-data:composer:cancel-prediction",
+        tag: WS_METHODS.composerCancelPrediction,
+      }),
+    },
     configValueAtom,
     runStorageCleanup: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:run-storage-cleanup",

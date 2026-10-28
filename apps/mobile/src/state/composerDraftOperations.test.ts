@@ -40,3 +40,13 @@ describe("composer draft operations", () => {
     expect(after.signal.aborted).toBe(true);
   });
 });
+
+it("keeps an edit revision after an attachment operation finishes or is aborted", async () => {
+  const { composerDraftOperationRevision } = await import("./composerDraftOperations");
+  const key = "prediction-operation";
+  const before = composerDraftOperationRevision(key);
+  startComposerDraftOperation(key).finish();
+  startComposerDraftOperation(key);
+  abortComposerDraftOperations(key);
+  expect(composerDraftOperationRevision(key)).toBe(before + 2);
+});

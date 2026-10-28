@@ -4,6 +4,14 @@
 import type { Messages } from "./messages.en.ts";
 
 export const zh: Partial<Messages> = {
+  "prediction.setting.label": "Codex 原生预测（实验性）",
+  "prediction.setting.description":
+    "在 Codex 完成后建议下一条消息。需要支持原生采样的系统 Codex CLI（稳定版 0.165 或更新版本），可能消耗订阅额度或产生费用。接受后只填入可编辑草稿，不会自动发送。",
+  "prediction.pending": "正在准备建议…",
+  "prediction.accept": "填入草稿",
+  "prediction.dismiss": "关闭建议",
+  "prediction.cancel": "取消建议",
+  "prediction.suggestion": "建议的下一条消息",
   "chat.approval.redirectPlaceholder": "发送消息以拒绝待审批项并调整智能体方向",
   "chat.approval.draftChangedAfterDecline": "已拒绝审批；消息内容发生了变化，因此未发送。",
   "chat.approval.draftChanged": "消息内容发生了变化，因此未发送。",

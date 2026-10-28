@@ -43,3 +43,12 @@ describe("PendingDraftWork", () => {
     expect(pending.has("double-end")).toBe(true);
   });
 });
+
+it("keeps an edit revision after a transfer finishes without draft content", () => {
+  const key = "prediction-transfer";
+  const before = pendingDraftWork.revision(key);
+  pendingDraftWork.begin(key);
+  pendingDraftWork.end(key);
+  expect(pendingDraftWork.has(key)).toBe(false);
+  expect(pendingDraftWork.revision(key)).toBe(before + 1);
+});

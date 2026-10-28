@@ -56,6 +56,7 @@ import { SerializedAsyncQueue } from "../lib/serialized-async-queue";
 import { appAtomRegistry } from "./atom-registry";
 import {
   abortComposerDraftOperations,
+  composerDraftOperationRevision,
   abortComposerDraftOperationsWhere,
 } from "./composerDraftOperations";
 import {
@@ -584,6 +585,20 @@ function normalizeDraft(draft: ComposerDraft | undefined): ComposerDraft {
   };
 }
 
+const draftRevisions = new Map<string, number>();
+
+export function getComposerDraftRevision(draftKey: string): number {
+  return (draftRevisions.get(draftKey) ?? 0) + composerDraftOperationRevision(draftKey);
+}
+
+function setComposerDrafts(next: Record<string, ComposerDraft>): void {
+  const current = appAtomRegistry.get(composerDraftsAtom);
+  for (const key of new Set([...Object.keys(current), ...Object.keys(next)])) {
+    if (current[key] !== next[key]) draftRevisions.set(key, (draftRevisions.get(key) ?? 0) + 1);
+  }
+  appAtomRegistry.set(composerDraftsAtom, next);
+}
+
 export function getComposerDraftSnapshot(draftKey: string): ComposerDraft {
   return normalizeDraft(appAtomRegistry.get(composerDraftsAtom)[draftKey]);
 }
@@ -1016,7 +1031,7 @@ export function ensureComposerDraftsLoaded(): void {
     appAtomRegistry.set(composerCloudDraftsAtom, persisted.cloudDrafts);
     if (Object.keys(persisted.drafts).length > 0) {
       const current = appAtomRegistry.get(composerDraftsAtom);
-      appAtomRegistry.set(composerDraftsAtom, {
+      setComposerDrafts({
         ...persisted.drafts,
         ...current,
       });
@@ -1098,7 +1113,7 @@ export async function archiveCloudComposerDrafts(
   for (const message of queued) {
     if (environmentIds.has(message.environmentId)) savedMessages.set(message.messageId, message);
   }
-  appAtomRegistry.set(composerDraftsAtom, remaining);
+  setComposerDrafts(remaining);
   appAtomRegistry.set(composerCloudDraftsAtom, {
     // Retain the owner through removal so cold-start cleanup can retry before another account activates.
     accountId: owner,
@@ -1260,7 +1275,7 @@ function updateComposerDrafts(
   if (next === current) {
     return;
   }
-  appAtomRegistry.set(composerDraftsAtom, next);
+  setComposerDrafts(next);
   schedulePersistComposerState();
 }
 
@@ -1708,7 +1723,7 @@ export async function mergeComposerDraftContent(
   ).length;
   // Publish content and receipt before awaiting disk; concurrent typing then preserves the receipt in later serialized writes.
   if (next !== current) {
-    appAtomRegistry.set(composerDraftsAtom, next);
+    setComposerDrafts(next);
   }
   await persistenceQueue.run(() =>
     writePersistedComposerState(next, appAtomRegistry.get(stickyComposerModelSelectionAtom)),
@@ -1733,7 +1748,7 @@ export async function restoreComposerDraftSnapshot(
     draftKey,
     snapshot,
   );
-  appAtomRegistry.set(composerDraftsAtom, next);
+  setComposerDrafts(next);
   await persistenceQueue.run(() =>
     writePersistedComposerState(next, appAtomRegistry.get(stickyComposerModelSelectionAtom)),
   );
@@ -1817,7 +1832,7 @@ export async function undoComposerDraftMerge(
     snapshot,
     merged,
   );
-  appAtomRegistry.set(composerDraftsAtom, next);
+  setComposerDrafts(next);
   await persistenceQueue.run(() =>
     writePersistedComposerState(next, appAtomRegistry.get(stickyComposerModelSelectionAtom)),
   );
@@ -1965,7 +1980,7 @@ export async function clearComposerDraftsEnvironment(environmentId: EnvironmentI
     clearTimeout(persistTimer);
     persistTimer = null;
   }
-  appAtomRegistry.set(composerDraftsAtom, next);
+  setComposerDrafts(next);
   await persistenceQueue.run(() =>
     writePersistedComposerState(next, appAtomRegistry.get(stickyComposerModelSelectionAtom)),
   );

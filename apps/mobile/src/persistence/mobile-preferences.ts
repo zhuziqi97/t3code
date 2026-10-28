@@ -103,6 +103,7 @@ export interface Preferences {
   /** Hardware Return behavior is iOS-only. */
   readonly composerEnterBehavior?: ComposerEnterBehavior;
   readonly followUpBehavior?: FollowUpBehavior;
+  readonly codexNativePredictions?: boolean;
   /** Device-local interface language; mirrors the web `languagePreference`. */
   readonly languagePreference?: LanguagePreference;
   /** Microphone kinds and remembered devices, most preferred first. iOS only. */
@@ -183,6 +184,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     dismissedDatabaseStorageNotices?: readonly string[];
     composerEnterBehavior?: ComposerEnterBehavior;
     followUpBehavior?: FollowUpBehavior;
+    codexNativePredictions?: boolean;
     languagePreference?: LanguagePreference;
     microphones?: ReadonlyArray<MicrophoneEntry>;
     projectGroupingEnabled?: boolean;
@@ -281,6 +283,9 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   }
   if (parsed.composerEnterBehavior === "send" || parsed.composerEnterBehavior === "newline") {
     preferences.composerEnterBehavior = parsed.composerEnterBehavior;
+  }
+  if (typeof parsed.codexNativePredictions === "boolean") {
+    preferences.codexNativePredictions = parsed.codexNativePredictions;
   }
   if (parsed.followUpBehavior === "queue" || parsed.followUpBehavior === "steer") {
     preferences.followUpBehavior = parsed.followUpBehavior;
