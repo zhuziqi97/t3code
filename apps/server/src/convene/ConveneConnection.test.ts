@@ -3,13 +3,17 @@ import {
   EventId,
   IsoDateTime,
   ProjectId,
+  ProviderInstanceId,
+  ThreadId,
   type ApplicationStoredEvent,
   type ConveneProjectConfiguration,
+  type OrchestrationV2AppThread,
 } from "@t3tools/contracts";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
@@ -24,6 +28,7 @@ import { FetchHttpClient, HttpRouter, HttpServer, HttpServerRequest } from "effe
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import * as ServerConfig from "../config.ts";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
+import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as EventStore from "../persistence/OrchestrationEventStore.ts";
 import * as ConveneConfiguration from "./ConveneConfiguration.ts";
 import * as ConveneConnection from "./ConveneConnection.ts";
@@ -43,6 +48,264 @@ const decodeReportedTargets = Schema.decodeUnknownEffect(
       Schema.Struct({ NATIVE_WORKSPACE_KEY: Schema.String, AVAILABILITY: Schema.String }),
     ),
   }),
+);
+
+it.live("gates a prepared worktree's first MCP lease on its matching control ACK", () =>
+  Effect.gen(function* () {
+    const projectId = ProjectId.make("first-mcp-project");
+    const threadId = ThreadId.make("first-mcp-thread");
+    const now = yield* DateTime.now;
+    const thread: OrchestrationV2AppThread = {
+      id: threadId,
+      projectId,
+      title: "First MCP",
+      createdBy: "agent",
+      creationSource: "mcp",
+      providerInstanceId: ProviderInstanceId.make("codex"),
+      modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: null },
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      branch: "worktree",
+      worktreePath: `${process.cwd()}/prepared`,
+      activeProviderThreadId: null,
+      lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
+      forkedFrom: null,
+      createdAt: now,
+      updatedAt: now,
+      archivedAt: null,
+      settledOverride: null,
+      settledAt: null,
+      lastVisitedAt: null,
+      deletedAt: null,
+    };
+    const target = {
+      target_id: "first-target",
+      native_workspace_key: "prepared-worktree",
+      path: thread.worktreePath,
+      workspace_display_name: "Prepared worktree",
+      branch: thread.branch,
+      availability: "AVAILABLE" as const,
+    };
+    const configuration: ConveneProjectConfiguration = {
+      runner_id: "runner",
+      runner_name: "Controlled",
+      client_project_id: "platform-project",
+      project: { native_project_id: projectId, display_name: "First MCP" },
+      targets: [],
+      bindings: [],
+      mcp_enabled: true,
+      mcp_scope_modules: [],
+      mcp_capabilities: { code_graph_enabled: true, forge_enabled: true, issue_enabled: true },
+      mcp_scope_details: [],
+      binding_module_details: [],
+    };
+    const reported = { ...configuration, targets: [target] };
+    const reports = yield* Queue.unbounded<{ id: unknown; payload: unknown }>();
+    const stored = yield* Queue.unbounded<ReadonlyArray<ConveneProjectConfiguration>>();
+    const control = yield* Queue.unbounded<object | Socket.CloseEvent>();
+    const platformChanges = yield* PubSub.unbounded<void>();
+    let workspacePrepared = false;
+    let rememberedKey: string | null = null;
+    let rememberCount = 0;
+    let reportCount = 0;
+    const serverContext = yield* Layer.build(
+      HttpRouter.serve(
+        HttpRouter.add(
+          "GET",
+          "/api/v1/execution-runners/ws",
+          Effect.gen(function* () {
+            const socket = yield* (yield* HttpServerRequest.HttpServerRequest).upgrade;
+            const { pull } = yield* socket.reader;
+            const writer = yield* socket.writer;
+            const send = (message: object) => writer.write(JSON.stringify(message));
+            yield* Stream.fromQueue(control).pipe(
+              Stream.runForEach((message) =>
+                message instanceof Socket.CloseEvent ? writer.write(message) : send(message),
+              ),
+              Effect.forkScoped,
+            );
+            while (true)
+              for (const frame of yield* pull) {
+                const message = yield* decode(frame);
+                if (message.TYPE === "HELLO")
+                  yield* send({ TYPE: "HELLO_ACK", PAYLOAD: { HEARTBEAT_INTERVAL_SECONDS: 15 } });
+                if (message.TYPE === "TARGETS_REPORT") {
+                  reportCount++;
+                  yield* Queue.offer(reports, { id: message.MESSAGE_ID, payload: message.PAYLOAD });
+                }
+              }
+          }),
+        ),
+        { disableListenLog: true },
+      ).pipe(Layer.provideMerge(NodeHttpServer.layerTest)),
+    );
+    const server = Context.get(serverContext, HttpServer.HttpServer);
+    const dependencies = Layer.mergeAll(
+      Layer.succeed(HttpServer.HttpServer, server),
+      FetchHttpClient.layer,
+      Layer.mock(EnvironmentAuth.EnvironmentAuth)({ revokeSession: () => Effect.succeed(true) }),
+      Layer.mock(ProjectionStore.ProjectionStoreV2)({ getThread: () => Effect.succeed(thread) }),
+      Layer.mock(ConveneNative.ConveneNative)({}),
+      Layer.mock(ConvenePlatform.ConvenePlatform)({
+        readConnection: Effect.succeedSome({
+          baseUrl: HttpServer.formatAddress(server.address),
+          runnerId: "runner",
+          refreshCredential: "controlled",
+        }),
+        accessToken: Effect.succeed("controlled"),
+        changes: platformChanges,
+      }),
+      Layer.mock(ProjectStore.ProjectStoreV2)({
+        list: () =>
+          Effect.succeed([
+            {
+              projectId,
+              title: "First MCP",
+              workspaceRoot: process.cwd(),
+              defaultModelSelection: null,
+              defaultThreadEnvMode: null,
+              autoPull: false,
+              faviconPath: null,
+              projectIcon: null,
+              scripts: [],
+              createdAt: IsoDateTime.make("2026-10-28T00:00:00.000Z"),
+              updatedAt: IsoDateTime.make("2026-10-28T00:00:00.000Z"),
+              deletedAt: null,
+            },
+          ]),
+      }),
+      Layer.mock(EventStore.OrchestrationEventStore)({
+        latestApplicationSequence: Effect.succeed(0),
+        streamApplicationEvents: () => Stream.never,
+      }),
+      Layer.mock(ConveneWorkspaces.ConveneWorkspaces)({
+        list: () =>
+          Effect.sync(() =>
+            workspacePrepared
+              ? [
+                  {
+                    projectId,
+                    key: target.native_workspace_key,
+                    path: target.path!,
+                    branch: target.branch,
+                    displayName: target.workspace_display_name,
+                    available: true,
+                  },
+                ]
+              : [],
+          ),
+        threadKey: () => Effect.sync(() => rememberedKey),
+        rememberThread: (_projectId, _threadId, key) =>
+          Effect.sync(() => {
+            rememberedKey = key;
+            rememberCount++;
+          }),
+        changes: Stream.never,
+      }),
+      Layer.mock(ConveneConfiguration.ConveneConfiguration)({
+        record: (values) => Queue.offer(stored, values).pipe(Effect.asVoid),
+      }),
+      DesktopTelemetryReceiver.layerTest(),
+    );
+    yield* Effect.gen(function* () {
+      const connection = yield* ConveneConnection.ConveneConnection;
+      const broker = yield* ConveneMcp.ConveneMcp;
+      const ack = (id: unknown, configurations: ReadonlyArray<ConveneProjectConfiguration>) =>
+        Queue.offer(control, {
+          TYPE: "TARGETS_REPORT_ACK",
+          PAYLOAD: { REPORT_ID: id, CONFIGURATIONS: configurations },
+        });
+      const initial = yield* Queue.take(reports);
+      yield* ack(initial.id, [configuration]);
+      yield* connection.changes.pipe(
+        Stream.filter((state) => state.phase === "online"),
+        Stream.take(1),
+        Stream.runDrain,
+      );
+      yield* Queue.take(stored);
+      workspacePrepared = true;
+      const preparing = yield* broker.prepare(threadId, "first-session").pipe(Effect.forkScoped);
+      const first = yield* Queue.take(reports);
+      assert.ok(
+        (yield* decodeReportedTargets(first.payload)).TARGETS.some(
+          (item) => item.NATIVE_WORKSPACE_KEY === target.native_workspace_key,
+        ),
+      );
+      yield* ack("unrelated-report", [reported]);
+      yield* Queue.take(stored);
+      assert.equal(preparing.pollUnsafe(), undefined);
+      assert.equal(rememberCount, 0);
+      yield* ack(first.id, [reported]);
+      const contribution = (yield* Fiber.join(preparing)).convene!;
+      yield* Queue.take(stored);
+      assert.equal(rememberedKey, target.native_workspace_key);
+      assert.equal(rememberCount, 1);
+      assert.deepEqual((yield* broker.prepare(threadId, "first-session")).convene, contribution);
+      assert.equal(reportCount, 2);
+      yield* broker.release(threadId, "first-session");
+      assert.equal(
+        (yield* broker.forward(
+          HttpServerRequest.fromWeb(
+            new Request(contribution.endpoint, {
+              headers: { Authorization: contribution.authorizationHeader },
+            }),
+          ),
+        )).status,
+        401,
+      );
+
+      yield* ack("catalog-without-worktree", [configuration]);
+      yield* Queue.take(stored);
+      const cancelled = yield* broker
+        .prepare(threadId, "cancelled-session")
+        .pipe(Effect.forkScoped);
+      const cancelledReport = yield* Queue.take(reports);
+      yield* Fiber.interrupt(cancelled);
+      yield* ack(cancelledReport.id, [reported]);
+      yield* Queue.take(stored);
+      assert.equal(rememberCount, 2);
+      assert.isDefined((yield* broker.prepare(threadId, "retry-session")).convene);
+      assert.equal(reportCount, 3);
+
+      yield* ack("catalog-before-revocation", [configuration]);
+      yield* Queue.take(stored);
+      const revoked = yield* broker.prepare(threadId, "revoked-session").pipe(Effect.forkScoped);
+      const revokedReport = yield* Queue.take(reports);
+      yield* ack(revokedReport.id, [{ ...reported, mcp_enabled: false }]);
+      assert.equal(
+        (yield* Fiber.join(revoked).pipe(Effect.flip)).category,
+        "workspace_unavailable",
+      );
+      yield* Queue.take(stored);
+      assert.equal(rememberCount, 3);
+
+      yield* ack("catalog-before-disconnect", [configuration]);
+      yield* Queue.take(stored);
+      const disconnected = yield* broker
+        .prepare(threadId, "disconnected-session")
+        .pipe(Effect.forkScoped);
+      yield* Queue.take(reports);
+      yield* Queue.offer(control, new Socket.CloseEvent(1012));
+      const failure = yield* Fiber.join(disconnected).pipe(Effect.flip);
+      assert.equal(failure.category, "workspace_unavailable");
+      assert.equal(rememberCount, 3);
+    }).pipe(
+      Effect.provide(
+        ConveneConnection.layer.pipe(
+          Layer.provideMerge(ConveneMcp.layer),
+          Layer.provide(dependencies),
+        ),
+      ),
+    );
+  }).pipe(
+    Effect.provide(
+      ServerConfig.layerTest(process.cwd(), { prefix: "t3-first-mcp-" }).pipe(
+        Layer.provideMerge(NodeServices.layer),
+      ),
+    ),
+    Effect.scoped,
+    Effect.provide(TestClock.layer()),
+  ),
 );
 
 it.live("keeps heartbeat, changed directories, refresh ACKs, and reconnection independent", () =>

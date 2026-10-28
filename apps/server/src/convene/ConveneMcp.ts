@@ -149,10 +149,7 @@ const make = Effect.gen(function* () {
     );
   });
 
-  const prepare = Effect.fn("ConveneMcp.prepare")(function* (
-    threadId: ThreadId,
-    providerSessionId: string,
-  ) {
+  const readPreparation = Effect.fn("ConveneMcp.readPreparation")(function* (threadId: ThreadId) {
     const thread = yield* projections
       .getThread(threadId)
       .pipe(
@@ -160,11 +157,11 @@ const make = Effect.gen(function* () {
           (cause) => new ConveneMcpError({ category: "workspace_unavailable", cause }),
         ),
       );
-    if (!thread) return {};
+    if (!thread) return;
     const config = configurations.find(
       (config) => config.project.native_project_id === thread.projectId,
     );
-    if (!config || !config.mcp_enabled) return {};
+    if (!config || !config.mcp_enabled) return;
     const workspaceKey = yield* workspaces.threadKey(thread.projectId, threadId);
     const locations = yield* workspaces
       .list(thread.projectId)
@@ -182,13 +179,45 @@ const make = Effect.gen(function* () {
     );
     if (!workspace || (workspaceKey !== null && workspace.key !== workspaceKey))
       return yield* new ConveneMcpError({ category: "workspace_unavailable" });
-    const target = config.targets.find(
-      (target) =>
-        target.availability === "AVAILABLE" &&
-        target.native_workspace_key === workspace.key &&
-        (target.path === null || target.path === workspace.path),
+    return { thread, config, workspace };
+  });
+
+  const prepare = Effect.fn("ConveneMcp.prepare")(function* (
+    threadId: ThreadId,
+    providerSessionId: string,
+  ) {
+    const initial = yield* readPreparation(threadId);
+    if (!initial) return {};
+    let preparation = initial;
+    let target = preparation.config.targets.find(
+      (target) => target.native_workspace_key === preparation.workspace.key,
     );
-    if (!target) return yield* new ConveneMcpError({ category: "workspace_unavailable" });
+    if (!target) {
+      yield* synchronize.pipe(
+        Effect.mapError(
+          (cause) => new ConveneMcpError({ category: "workspace_unavailable", cause }),
+        ),
+      );
+      const current = yield* readPreparation(threadId);
+      if (
+        !current ||
+        current.config.client_project_id !== preparation.config.client_project_id ||
+        current.workspace.key !== preparation.workspace.key ||
+        current.workspace.path !== preparation.workspace.path
+      )
+        return yield* new ConveneMcpError({ category: "workspace_unavailable" });
+      preparation = current;
+      target = current.config.targets.find(
+        (target) => target.native_workspace_key === current.workspace.key,
+      );
+    }
+    const { thread, config, workspace } = preparation;
+    if (
+      !target ||
+      target.availability !== "AVAILABLE" ||
+      (target.path !== null && target.path !== workspace.path)
+    )
+      return yield* new ConveneMcpError({ category: "workspace_unavailable" });
     yield* workspaces
       .rememberThread(thread.projectId, threadId, target.native_workspace_key)
       .pipe(

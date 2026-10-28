@@ -1,5 +1,6 @@
 import { assert, it } from "@effect/vitest";
 import {
+  ConveneIntegrationError,
   ProjectId,
   ProviderInstanceId,
   ThreadId,
@@ -13,14 +14,210 @@ import * as Fiber from "effect/Fiber";
 import * as Effect from "effect/Effect";
 import * as PubSub from "effect/PubSub";
 import * as Layer from "effect/Layer";
+import * as NetAddress from "effect/net/NetAddress";
 
-import { HttpClient, HttpClientResponse, HttpServerRequest } from "effect/http";
+import { HttpClient, HttpClientResponse, HttpServer, HttpServerRequest } from "effect/http";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as ConvenePlatform from "./ConvenePlatform.ts";
 import * as ConveneWorkspaces from "./ConveneWorkspaces.ts";
 import * as ConveneMcp from "./ConveneMcp.ts";
+
+it.effect.each([
+  "available",
+  "missing",
+  "unavailable",
+  "revoked",
+  "project-removed",
+  "workspace-removed",
+  "workspace-replaced",
+  "thread-rebound",
+  "cancelled",
+  "disconnected",
+  "already-reported",
+  "already-unavailable",
+  "wrong-path",
+  "stale-thread-key",
+] as const)("prepares a worktree MCP lease using current report state (%s)", (scenario) =>
+  Effect.gen(function* () {
+    const projectId = ProjectId.make("first-worktree-project");
+    const threadId = ThreadId.make("first-worktree-thread");
+    const now = yield* DateTime.now;
+    const thread: OrchestrationV2AppThread = {
+      id: threadId,
+      projectId,
+      title: "First worktree",
+      createdBy: "agent",
+      creationSource: "mcp",
+      providerInstanceId: ProviderInstanceId.make("codex"),
+      modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: null },
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      branch: "worktree",
+      worktreePath: "/work/first",
+      activeProviderThreadId: null,
+      lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
+      forkedFrom: null,
+      createdAt: now,
+      updatedAt: now,
+      archivedAt: null,
+      settledOverride: null,
+      settledAt: null,
+      lastVisitedAt: null,
+      deletedAt: null,
+    };
+    const workspace = {
+      projectId,
+      key: "first-worktree",
+      path: thread.worktreePath!,
+      available: true,
+      branch: thread.branch,
+      displayName: "First worktree",
+    };
+    const configuration: ConvenePlatform.Configuration = {
+      client_project_id: "platform-project",
+      project: { native_project_id: projectId },
+      mcp_enabled: true,
+      targets: [],
+    };
+    const target = {
+      target_id: "first-target",
+      native_workspace_key: workspace.key,
+      path: workspace.path,
+      availability: "AVAILABLE" as const,
+    };
+    const reported = { ...configuration, targets: [target] };
+    const reportRequested = yield* Deferred.make<void>();
+    const reportApplied = yield* Deferred.make<void>();
+    const remembered: string[] = [];
+    let currentWorkspace = workspace;
+    let threadKey: string | null = scenario === "stale-thread-key" ? "root" : null;
+    let reports = 0;
+    const dependencies = Layer.mergeAll(
+      Layer.mock(ProjectionStore.ProjectionStoreV2)({ getThread: () => Effect.succeed(thread) }),
+      Layer.mock(ConveneWorkspaces.ConveneWorkspaces)({
+        threadKey: () => Effect.sync(() => threadKey),
+        list: () => Effect.sync(() => [currentWorkspace]),
+        rememberThread: (_projectId, _threadId, key) =>
+          Effect.sync(() => {
+            remembered.push(key);
+            threadKey = key;
+          }),
+      }),
+      Layer.mock(ConvenePlatform.ConvenePlatform)({ changes: yield* PubSub.unbounded<void>() }),
+      Layer.succeed(
+        HttpServer.HttpServer,
+        HttpServer.HttpServer.of({
+          address: NetAddress.inetAddressFromIpStringUnsafe("127.0.0.1", 43123),
+          serve: () => Effect.void,
+        }),
+      ),
+      Layer.succeed(
+        HttpClient.HttpClient,
+        HttpClient.make(() => Effect.die("unused")),
+      ),
+      NodeServices.layer,
+    );
+    yield* Effect.gen(function* () {
+      const broker = yield* ConveneMcp.ConveneMcp;
+      yield* broker.configure([
+        scenario === "already-reported"
+          ? reported
+          : scenario === "already-unavailable"
+            ? { ...configuration, targets: [{ ...target, availability: "UNAVAILABLE" }] }
+            : scenario === "wrong-path"
+              ? { ...configuration, targets: [{ ...target, path: "/another/checkout" }] }
+              : configuration,
+      ]);
+      yield* broker.setSynchronizer(
+        Effect.sync(() => reports++).pipe(
+          Effect.andThen(Deferred.succeed(reportRequested, undefined)),
+          Effect.andThen(Deferred.await(reportApplied)),
+          Effect.andThen(
+            scenario === "disconnected"
+              ? Effect.fail(
+                  new ConveneIntegrationError({ operation: "refresh", code: "DISCONNECTED" }),
+                )
+              : Effect.void,
+          ),
+        ),
+      );
+      if (scenario === "already-reported") {
+        const first = (yield* broker.prepare(threadId, "first-provider-session")).convene!;
+        const reused = (yield* broker.prepare(threadId, "first-provider-session")).convene!;
+        assert.deepEqual(reused, first);
+        assert.equal(reports, 0);
+        return;
+      }
+      if (
+        scenario === "already-unavailable" ||
+        scenario === "wrong-path" ||
+        scenario === "stale-thread-key"
+      ) {
+        const failure = yield* broker.prepare(threadId, "first-provider-session").pipe(Effect.flip);
+        assert.equal(failure.category, "workspace_unavailable");
+        assert.equal(reports, 0);
+        assert.deepEqual(remembered, []);
+        return;
+      }
+      const preparing = yield* broker
+        .prepare(threadId, "first-provider-session")
+        .pipe(Effect.forkChild({ startImmediately: true }));
+      assert.equal(preparing.pollUnsafe(), undefined);
+      assert.isTrue(yield* Deferred.isDone(reportRequested));
+      assert.deepEqual(remembered, []);
+      if (scenario === "cancelled") yield* Fiber.interrupt(preparing);
+      yield* broker.configure(
+        scenario === "project-removed"
+          ? []
+          : [
+              scenario === "missing"
+                ? configuration
+                : scenario === "revoked"
+                  ? { ...reported, mcp_enabled: false }
+                  : scenario === "unavailable"
+                    ? { ...reported, targets: [{ ...target, availability: "UNAVAILABLE" }] }
+                    : reported,
+            ],
+      );
+      if (scenario === "workspace-removed") currentWorkspace = { ...workspace, available: false };
+      if (scenario === "workspace-replaced")
+        currentWorkspace = { ...workspace, key: "replacement" };
+      if (scenario === "thread-rebound") threadKey = "root";
+      yield* Deferred.succeed(reportApplied, undefined);
+      assert.equal(reports, 1);
+      if (scenario === "cancelled") {
+        assert.deepEqual(remembered, []);
+        const retried = yield* broker.prepare(threadId, "retried-provider-session");
+        assert.isDefined(retried.convene);
+        assert.deepEqual(remembered, [workspace.key]);
+        assert.equal(reports, 1);
+        return;
+      }
+      if (scenario !== "available") {
+        const failure = yield* Fiber.join(preparing).pipe(Effect.flip);
+        assert.equal(failure.category, "workspace_unavailable");
+        assert.deepEqual(remembered, []);
+        return;
+      }
+      const contribution = (yield* Fiber.join(preparing)).convene;
+      assert.isDefined(contribution);
+      assert.deepEqual(remembered, [workspace.key]);
+      yield* broker.release(threadId, "first-provider-session");
+      assert.equal(
+        (yield* broker.forward(
+          HttpServerRequest.fromWeb(
+            new Request(contribution!.endpoint, {
+              headers: { Authorization: contribution!.authorizationHeader },
+            }),
+          ),
+        )).status,
+        401,
+      );
+    }).pipe(Effect.provide(ConveneMcp.layer.pipe(Layer.provide(dependencies))));
+  }).pipe(Effect.scoped),
+);
 
 it.effect(
   "reuses project JWTs across 60 ACKs, renews near expiry, and invalidates only their identity",
