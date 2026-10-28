@@ -238,7 +238,7 @@ const isEnvironmentRequestInvalidError = Schema.is(EnvironmentRequestInvalidErro
 const COMPOSER_SCROLL_COLLAPSE_THRESHOLD_PX = 24;
 const COMPOSER_SCROLL_GESTURE_RESET_MS = 120;
 import { toastManager } from "../ui/toast";
-import { PlayIcon, ShieldIcon } from "lucide-react";
+import { ShieldIcon } from "lucide-react";
 import { proposedPlanTitle } from "@t3tools/shared/proposedPlanText";
 import { hasProviderSetup } from "./ProviderStatusBanner";
 import { type AppModelOption, getAppModelOptionsForInstance } from "../../modelSelection";
@@ -1282,20 +1282,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     : null;
   const showResumeAction =
     canResume && !composerDraftHasUserContent(composerDraft) && !isEditingQueuedMessage;
-  const collapsedComposerPrimaryActionDisabled =
-    phase === "running" ||
-    isSendBusy ||
-    isSendDisabled ||
-    isConnecting ||
-    noProviderAvailable ||
-    projectSelectionRequired ||
-    environmentUnavailable !== null ||
-    (!composerSendState.hasSendableContent && !showResumeAction);
-  const collapsedComposerPrimaryActionLabel = showResumeAction
-    ? "Resume thread"
-    : props.resumeCompactionTokens !== null && !props.keepFullHistory
-      ? "Open composer to compact and send"
-      : "Send message";
   const showMobilePendingAnswerActions =
     isMobileViewport && !isComposerCollapsedMobile && pendingPrimaryAction !== null;
 
@@ -3334,6 +3320,42 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       focusComposer={focusComposer}
     />
   ) : null;
+  const composerPrimaryActionProps = {
+    canOperateThread,
+    pendingAction: pendingPrimaryAction,
+    isRunning: phase === "running",
+    canInterrupt,
+    followUpBehavior,
+    canSteer: !isCompacting,
+    alternateShortcutLabel: shortcutLabelForCommand(keybindings, "composer.sendAlternate", {
+      context: {
+        composerFocus: true,
+        draftThreadRoute: routeKind === "draft",
+        turnRunning: true,
+        composerRequiresModifier: composerRequiresModifier(settings.sendShortcut, prompt),
+      },
+    }),
+    showPlanFollowUpPrompt: pendingUserInputs.length === 0 && showPlanFollowUpPrompt,
+    promptHasText: prompt.trim().length > 0,
+    isSendBusy,
+    sendDisabledReason,
+    isConnecting,
+    isEnvironmentUnavailable:
+      environmentUnavailable !== null || noProviderAvailable || projectSelectionRequired,
+    isPreparingWorktree,
+    hasSendableContent: composerSendState.hasSendableContent,
+    canResume: showResumeAction,
+    preserveComposerFocusOnPointerDown: isMobileViewport || isComposerResting,
+    isEditingQueuedMessage,
+    onSubmitMessage: handleSubmitMessageStable,
+    onResume,
+    onPreviousPendingQuestion: onPreviousActivePendingUserInputQuestion,
+    onInterrupt: handleInterruptPrimaryActionStable,
+    onImplementPlanInNewThread: handleImplementPlanInNewThreadPrimaryActionStable,
+    compactBeforeSendTokens: props.resumeCompactionTokens,
+    keepFullHistory: props.keepFullHistory,
+    onToggleKeepFullHistory: props.onToggleKeepFullHistory,
+  };
   return (
     <form
       ref={composerFormRef}
@@ -3533,35 +3555,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     (showProviderUnavailable ? "Enable a provider in Settings" : "Ask anything...")}
                 </button>
                 {collapsedComposerImagePreviews}
-                <button
-                  type="button"
+                <div
                   data-chat-composer-transition-actions="true"
-                  className="flex size-8 shrink-0 items-center justify-center rounded-full bg-message-action text-message-action-foreground hover:bg-message-action-hover disabled:opacity-64"
-                  disabled={collapsedComposerPrimaryActionDisabled}
-                  aria-label={collapsedComposerPrimaryActionLabel}
-                  onPointerDown={(event) => event.preventDefault()}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    if (showResumeAction) onResume();
-                    else if (props.resumeCompactionTokens !== null && !props.keepFullHistory)
-                      expandMobileComposer();
-                    else submitComposer();
-                  }}
+                  className="flex shrink-0 items-center justify-end"
                 >
-                  {showResumeAction ? (
-                    <PlayIcon className="size-4 fill-current" aria-hidden="true" />
-                  ) : (
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                      <path
-                        d="M8 3L8 13M8 3L4 7M8 3L12 7"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  )}
-                </button>
+                  <ComposerPrimaryActions
+                    {...composerPrimaryActionProps}
+                    compact
+                    onExpandForCompaction={expandMobileComposerStable}
+                  />
+                </div>
               </div>
             ) : null}
 
@@ -3800,58 +3803,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 >
                   {composerAttachButton}
                   <ComposerFooterPrimaryActions
+                    {...composerPrimaryActionProps}
                     compact={isComposerResting || isComposerPrimaryActionsCompact}
-                    canOperateThread={canOperateThread}
                     activeContextWindow={
                       settings.contextWindowMeterEnabled ? activeContextWindow : null
                     }
                     reserveContextWindowMeter={reserveContextWindowMeter}
                     activeThreadModelDisplayName={activeThreadModelDisplayName}
-                    pendingAction={pendingPrimaryAction}
-                    isRunning={phase === "running"}
-                    canInterrupt={canInterrupt}
-                    followUpBehavior={followUpBehavior}
-                    canSteer={!isCompacting}
-                    alternateShortcutLabel={shortcutLabelForCommand(
-                      keybindings,
-                      "composer.sendAlternate",
-                      {
-                        context: {
-                          composerFocus: true,
-                          draftThreadRoute: routeKind === "draft",
-                          turnRunning: true,
-                          composerRequiresModifier: composerRequiresModifier(
-                            settings.sendShortcut,
-                            prompt,
-                          ),
-                        },
-                      },
-                    )}
-                    showPlanFollowUpPrompt={
-                      pendingUserInputs.length === 0 && showPlanFollowUpPrompt
-                    }
-                    promptHasText={prompt.trim().length > 0}
-                    isSendBusy={isSendBusy}
-                    sendDisabledReason={sendDisabledReason}
-                    isConnecting={isConnecting}
-                    isEnvironmentUnavailable={
-                      environmentUnavailable !== null ||
-                      noProviderAvailable ||
-                      projectSelectionRequired
-                    }
-                    isPreparingWorktree={isPreparingWorktree}
-                    hasSendableContent={composerSendState.hasSendableContent}
-                    canResume={showResumeAction}
-                    preserveComposerFocusOnPointerDown={isMobileViewport || isComposerResting}
-                    isEditingQueuedMessage={isEditingQueuedMessage}
-                    onSubmitMessage={handleSubmitMessageStable}
-                    onResume={onResume}
-                    onPreviousPendingQuestion={onPreviousActivePendingUserInputQuestion}
-                    onInterrupt={handleInterruptPrimaryActionStable}
-                    onImplementPlanInNewThread={handleImplementPlanInNewThreadPrimaryActionStable}
-                    compactBeforeSendTokens={props.resumeCompactionTokens}
-                    keepFullHistory={props.keepFullHistory}
-                    onToggleKeepFullHistory={props.onToggleKeepFullHistory}
                     compactDisabled={
                       compactDisabled || noProviderAvailable || isSendBusy || isConnecting
                     }
