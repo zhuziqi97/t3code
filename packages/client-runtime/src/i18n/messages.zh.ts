@@ -1,15 +1,5 @@
-/**
- * Simplified Chinese catalog.
- *
- * Partial on purpose: a missing key falls back to `en` per key, so an
- * untranslated surface reads as English rather than as a raw key.
- *
- * Chinese has one plural form, so counts only need `_other`; i18next uses it
- * for every count when there is no `_one` form.
- *
- * Product names (Codex, Claude Code, T3 Connect, ChatGPT) and shell commands
- * are not translated. Terms follow the glossary: a *thread* is 会话, not 线程,
- * which would read as an operating-system thread.
+/** Missing keys fall back to English. Chinese counts use `_other`.
+ * Keep product names and commands untranslated; thread means 会话.
  */
 import type { Messages } from "./messages.en.ts";
 
@@ -3642,8 +3632,8 @@ export const zh: Partial<Messages> = {
   "chat.panel.toggleTerminalShortcut": "切换终端抽屉{{shortcut}}",
   "chat.panel.toggleRightShortcut": "切换右侧面板{{shortcut}}",
   "chat.editor.openNamed": "在 {{editor}} 中打开",
-  "chat.model.disabled": "{{provider}} — 已在设置中禁用。",
-  "chat.model.newProvider": "{{provider}} — 新增",
+  "chat.model.disabled": "{{provider}}：已在设置中禁用。",
+  "chat.model.newProvider": "{{provider}}：新增",
   "chat.model.newProviderAria": "{{provider}}，新增",
   "chat.model.switchProviderHint": "此会话无法使用 {{provider}}，请新建会话以切换智能体提供方。",
   "chat.provider.setupName": "配置 {{provider}}",
