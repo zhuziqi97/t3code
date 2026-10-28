@@ -36,6 +36,13 @@ const handleMethod = (message: Record<string, unknown>) => {
 
   switch (method) {
     case "initialize": {
+      const exitCode = process.env.CODEX_APP_SERVER_TEST_EXIT_CODE;
+      if (exitCode !== undefined) {
+        process.stderr.write(process.env.CODEX_APP_SERVER_TEST_STDERR ?? "", () => {
+          process.exit(Number(exitCode));
+        });
+        return;
+      }
       // oxlint-disable-next-line t3code/no-global-process-runtime -- Standalone mock peer process has no Effect runtime.
       const platform = NodeOS.platform();
       const stderrBytes = Number(process.env.CODEX_APP_SERVER_TEST_STDERR_BYTES ?? 0);

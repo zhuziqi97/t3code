@@ -11,6 +11,7 @@ import * as Schema from "effect/Schema";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
+import * as ChildProcess from "effect/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
 import {
@@ -174,6 +175,38 @@ const account = {
   account: { type: "chatgpt", email: "test@example.com", planType: "pro" },
   requiresOpenaiAuth: false,
 } as const;
+
+it.live("retains subprocess diagnostics and exit code in the provider probe failure", () =>
+  Effect.gen(function* () {
+    const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+    const fs = yield* FileSystem.FileSystem;
+    const homePath = yield* fs.makeTempDirectoryScoped();
+    const diagnostic = "Invalid project config: unknown field in config.toml";
+    const substitute = ChildProcessSpawner.make(() =>
+      spawner.spawn(
+        ChildProcess.make(
+          process.execPath,
+          [
+            "-e",
+            `process.stdin.once('data', () => process.stderr.write(${JSON.stringify(`${diagnostic}\nBearer fake-private-value\n`)}, () => process.exit(1)));`,
+          ],
+          { env: {}, extendEnv: false },
+        ),
+      ),
+    );
+    const provider = yield* checkCodexProviderStatus(
+      decodeCodexSettings({ binaryPath: "codex-stderr-test", homePath }),
+    ).pipe(Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, substitute));
+
+    assert.equal(provider.status, "error");
+    assert.equal(provider.auth.status, "unknown");
+    assert.equal(
+      provider.message,
+      `Codex app-server provider probe failed: Codex App Server process exited with code 1\n${diagnostic}\nBearer [REDACTED].`,
+    );
+    assert.notInclude(JSON.stringify(provider), "fake-private-value");
+  }).pipe(Effect.provide(NodeServices.layer)),
+);
 
 const startProbe = Effect.fn("startProbe")(function* (hang: ReadonlyArray<string>) {
   const fs = yield* FileSystem.FileSystem;
