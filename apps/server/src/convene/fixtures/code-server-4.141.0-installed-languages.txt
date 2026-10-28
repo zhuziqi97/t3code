@@ -1,0 +1,5 @@
+/*!--------------------------------------------------------
+ * Copyright (C) Microsoft Corporation. All rights reserved.
+ *--------------------------------------------------------*/
+// Executable server-main.js method excerpts from the same code-server build.
+({createQuickPickItem(e,n,o){let i=n??e,s;if(i!==e&&(s=`(${e})`),e.toLowerCase()===pn.toLowerCase()&&(s??="",s+=d(3669,null)),o?.installCount){s??="";let a=o.installCount,l;a>1e6?l=`${Math.floor(a/1e5)/10}M`:a>1e3?l=`${Math.floor(a/1e3)}K`:l=String(a),s+=` $(cloud-download) ${l}`}return{id:e,label:i,description:s}},async getInstalledLanguages(){let e=await this.cache.getLanguagePacks(),n=Object.keys(e).map(o=>{let i=e[o];return{...this.createQuickPickItem(o,i.label),extensionId:i.extensions[0].extensionIdentifier.id}});return n.push(this.createQuickPickItem("en","English")),n.sort((o,i)=>o.label.localeCompare(i.label)),n}})

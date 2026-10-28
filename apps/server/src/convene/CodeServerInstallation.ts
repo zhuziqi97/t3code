@@ -68,11 +68,35 @@ const make = Effect.gen(function* () {
       // misses CLI installs. Rebuild through the native service before serving the first HTML.
       const original = "i.set(Uu,F.createInstance(pl));";
       const updated = original + "await F.invokeFunction(a=>a.get(Uu).update());";
-      if (source.includes(updated)) return;
-      if (!source.includes(original)) {
+      if (!source.includes(updated) && !source.includes(original)) {
         return yield* new CodeServerInstallationError({ code: "install_failed" });
       }
-      yield* fs.writeFileString(bundle, source.replace(original, updated));
+      const workbench = path.join(
+        directory,
+        "lib",
+        "vscode",
+        "out",
+        "vs",
+        "code",
+        "browser",
+        "workbench",
+        "workbench.js",
+      );
+      const browserSource = yield* fs.readFileString(workbench);
+      // Installed items arrive decorated with the server's English locale; the renderer owns Current.
+      const originalPicker =
+        "getInstalledLanguages(){return this.languagePackService.getInstalledLanguages()}";
+      const updatedPicker =
+        "async getInstalledLanguages(){return(await this.languagePackService.getInstalledLanguages()).map(e=>({...e,...this.createQuickPickItem(e.id,e.label)}))}";
+      if (!browserSource.includes(updatedPicker) && !browserSource.includes(originalPicker)) {
+        return yield* new CodeServerInstallationError({ code: "install_failed" });
+      }
+      if (!source.includes(updated)) {
+        yield* fs.writeFileString(bundle, source.replace(original, updated));
+      }
+      if (!browserSource.includes(updatedPicker)) {
+        yield* fs.writeFileString(workbench, browserSource.replace(originalPicker, updatedPicker));
+      }
     },
     Effect.mapError((cause) =>
       isCodeServerInstallationError(cause)

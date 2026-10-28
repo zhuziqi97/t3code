@@ -598,8 +598,24 @@ it.live.each(["fresh", "existing marker", "bundled fresh"] as const)(
       );
       const executable = path.join(runtime, "bin", "code-server");
       const native = path.join(runtime, "lib", "vscode", "out", "server-main.js");
+      const workbench = path.join(
+        runtime,
+        "lib",
+        "vscode",
+        "out",
+        "vs",
+        "code",
+        "browser",
+        "workbench",
+        "workbench.js",
+      );
       yield* fs.makeDirectory(path.dirname(executable), { recursive: true });
       yield* fs.makeDirectory(path.dirname(native), { recursive: true });
+      yield* fs.makeDirectory(path.dirname(workbench), { recursive: true });
+      yield* fs.copyFile(
+        path.join(import.meta.dirname, "fixtures", "code-server-4.141.0-language-picker.txt"),
+        workbench,
+      );
       // The pinned runtime constructs NativeLanguagePackService here without updating its cache.
       yield* fs.writeFileString(
         native,
@@ -609,7 +625,10 @@ it.live.each(["fresh", "existing marker", "bundled fresh"] as const)(
           "class pl { async update() { updates++; language = available ? 'zh-cn' : 'en'; } }",
           "const Uu = 'languagePacks', i = new Map();",
           "const F = { createInstance: C => new C(), invokeFunction: fn => fn({ get: key => i.get(key) }) };",
-          "i.set(Uu,F.createInstance(pl));",
+          "i.set(Uu,F.createInstance(pl));" +
+            (existing === "existing marker"
+              ? "await F.invokeFunction(a=>a.get(Uu).update());"
+              : ""),
           "return { locale: language, updates };",
           "};",
         ].join("\n"),
