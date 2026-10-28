@@ -1397,7 +1397,8 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.serverPrepareAcpRegistryAgent,
       concurrency: {
         mode: "singleFlight",
-        key: ({ environmentId, input }) => `${environmentId}:${input.agentId}`,
+        key: ({ environmentId, input }) =>
+          `${environmentId}:${input.agentId}:${input.distribution ?? "auto"}`,
       },
     }),
     uninstallAcpRegistryManagedBinary: createEnvironmentRpcCommand(runtime, {

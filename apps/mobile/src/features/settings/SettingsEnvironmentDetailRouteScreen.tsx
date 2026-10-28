@@ -1,3 +1,5 @@
+import { managedAcpRegistryUpdateTarget } from "@t3tools/client-runtime/acp-registry-update";
+import { AcpRegistryUpdateRow } from "./AcpRegistryUpdateRow";
 import * as Dialog from "../../components/ui/Dialog";
 import { useAtomValue } from "@effect/atom-react";
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
@@ -392,12 +394,22 @@ function EnvironmentDetail({ environmentId }: { readonly environmentId: Environm
                             </Text>
                           ) : null}
                           {provider.versionAdvisory?.status === "behind_latest" &&
-                          !provider.versionAdvisory.canUpdate ? (
+                          !provider.versionAdvisory.canUpdate &&
+                          managedAcpRegistryUpdateTarget(
+                            config.settings.providerInstances[provider.instanceId],
+                          ) === null ? (
                             <Text className="text-sm text-foreground-muted">
                               Update this provider on the environment's machine.
                             </Text>
                           ) : null}
                         </View>
+                        <AcpRegistryUpdateRow
+                          environmentId={environmentId}
+                          instanceId={provider.instanceId}
+                          instance={config.settings.providerInstances[provider.instanceId]}
+                          advisory={provider.versionAdvisory}
+                          disabled={busy}
+                        />
                         {canUpdateEnvironmentProvider(provider) ? (
                           <SettingsActionRow
                             icon="arrow.up.circle"

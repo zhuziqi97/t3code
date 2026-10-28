@@ -1820,7 +1820,7 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
     function* (input) {
       const registry = yield* refreshRegistry();
       const agent = yield* findAgent(registry, input.agentId);
-      const distribution = yield* compatibleDistribution(agent, "auto");
+      const distribution = yield* compatibleDistribution(agent, input.distribution ?? "auto");
       if (distribution.kind === "binary") {
         // Only explicit command overrides may use PATH copies with different ACP capabilities.
         yield* installSemaphore.withPermits(1)(

@@ -5609,6 +5609,19 @@ export const en = {
   "provider.registry.searching": "Searching the registry...",
   "provider.registry.noAgents": "No compatible agents found",
   "provider.registry.broaderSearch": "Try a broader search.",
+  "provider.registry.update.lastChecked": "Last successful registry check: {{time}}",
+  "provider.registry.update.title": "Agent updates",
+  "provider.registry.update.description":
+    "Install the latest ACP Registry version on this environment. Active sessions keep their current process.",
+  "provider.registry.update.action": "Check and update agent",
+  "provider.registry.update.refreshing": "Refreshing provider status…",
+  "provider.registry.update.succeeded": "Agent updated. New sessions use the updated installation.",
+  "provider.registry.update.prepareFailed":
+    "The agent update could not be confirmed. You can retry.",
+  "provider.registry.update.refreshFailed":
+    "Agent updated, but provider status could not be refreshed.",
+  "provider.registry.update.retryRefresh": "Retry status refresh",
+  "provider.registry.update.retry": "Retry update",
   "provider.registry.downloading": "Downloading",
   "provider.registry.preparing": "Preparing",
   "provider.registry.add": "Add",

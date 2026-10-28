@@ -140,6 +140,78 @@ const makeFakeUvToolchain = Effect.fn("AcpRegistrySupport.test.makeFakeUvToolcha
 
 describe("AcpRegistrySupport", () => {
   it.effect(
+    "upgrades the explicitly selected package distribution when a binary is also available",
+    () => {
+      let agent = makeAgent({
+        binary: { "linux-x86_64": { archive: archiveUrl, cmd: "agent" } },
+        npx: { package: "@example/acp@1.2.3" },
+      });
+      const downloads: string[] = [];
+      return Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const cacheDir = yield* fileSystem.makeTempDirectoryScoped({
+          prefix: "t3-acp-explicit-update-",
+        });
+        const toolchain = yield* makeFakeNpmToolchain(cacheDir);
+        const resolver = yield* AcpRegistrySupport.makeAcpRegistryCatalog({
+          cacheDir,
+          toolsDir: `${cacheDir}/tools`,
+          registryUrl,
+        }).pipe(Effect.provideService(HostProcess.Environment, toolchain.environment));
+        expect(yield* resolver.prepare({ agentId: agent.id, distribution: "npx" })).toMatchObject({
+          distribution: "npx",
+          version: "1.2.3",
+        });
+        const original = yield* resolver.resolve(
+          settings({ distribution: "npx" }),
+          "/workspace",
+          toolchain.environment,
+        );
+        agent = {
+          ...agent,
+          version: "2.0.0",
+          distribution: { ...agent.distribution, npx: { package: "@example/acp@2.0.0" } },
+        };
+        toolchain.environment.FAKE_NPM_MANIFEST = encodeUnknownJson({
+          name: "@example/acp",
+          version: "2.0.0",
+          bin: { "example-agent": "dist/cli.js" },
+        });
+        expect(yield* resolver.prepare({ agentId: agent.id, distribution: "npx" })).toMatchObject({
+          distribution: "npx",
+          version: "2.0.0",
+        });
+        expect(
+          yield* resolver.inspect(settings({ distribution: "npx" }), toolchain.environment),
+        ).toMatchObject({ status: "ready", version: "2.0.0", latestVersion: "2.0.0" });
+        const updated = yield* resolver.resolve(
+          settings({ distribution: "npx" }),
+          "/workspace",
+          toolchain.environment,
+        );
+        expect(updated.spawn.command).not.toBe(original.spawn.command);
+        expect(yield* fileSystem.exists(original.spawn.command)).toBe(true);
+        expect(downloads).toEqual([]);
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(
+          layerResolver((request) => {
+            if (request.url !== registryUrl) downloads.push(request.url);
+            return Effect.succeed(
+              HttpClientResponse.fromWeb(
+                request,
+                new Response(
+                  request.url === registryUrl ? makeRegistry(agent) : "controlled binary",
+                ),
+              ),
+            );
+          }),
+        ),
+      );
+    },
+  );
+
+  it.effect(
     "reports package installation facts without treating npm or an executable override as an installed agent",
     () => {
       let agent = {

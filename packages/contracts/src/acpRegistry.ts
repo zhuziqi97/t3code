@@ -81,6 +81,7 @@ export type AcpRegistrySearchResult = typeof AcpRegistrySearchResult.Type;
 
 export const AcpRegistryPrepareInput = Schema.Struct({
   agentId: AcpRegistryAgentId,
+  distribution: Schema.optionalKey(AcpRegistryDistribution),
 });
 export type AcpRegistryPrepareInput = typeof AcpRegistryPrepareInput.Type;
 

@@ -1,3 +1,5 @@
+import { managedAcpRegistryUpdateTarget } from "@t3tools/client-runtime/acp-registry-update";
+import { AcpRegistryUpdateSection } from "./AcpRegistryUpdateSection";
 import { formatRelativeTimeLabel } from "~/timestampFormat";
 import { Trans } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -1319,6 +1321,7 @@ function ProviderInstanceRow({
       }
     : undefined;
   const codexSetupMode = driver === "codex" ? readCodexSetupMode(instance.config) : null;
+  const registryUpdateTarget = managedAcpRegistryUpdateTarget(instance);
   const recommendedVersion = liveProvider?.compatibilityAdvisory?.recommendedVersion;
   const canInstallRecommended =
     !readOnly &&
@@ -1354,7 +1357,30 @@ function ProviderInstanceRow({
       }
       canWriteSettings={canWriteSettings}
       setup={
-        mode === "editor" && driver === "antigravity" ? (
+        mode === "editor" && registryUpdateTarget !== null ? (
+          <>
+            <AcpRegistryUpdateSection
+              key={`${environmentId}:${instanceId}:${registryUpdateTarget.agentId}:${registryUpdateTarget.distribution ?? "auto"}`}
+              environmentId={environmentId}
+              instanceId={instanceId}
+              {...registryUpdateTarget}
+              advisory={liveProvider?.versionAdvisory}
+              readOnly={readOnly}
+            />
+            {!readOnly &&
+            liveProvider &&
+            (liveProvider.setup?.canAuthenticate || liveProvider.installed) ? (
+              <ProviderAuthenticationSection
+                key={`${environmentId}:${instanceId}`}
+                environmentId={environmentId}
+                environmentLabel={environmentLabel}
+                instanceId={instanceId}
+                provider={liveProvider}
+                readOnly={readOnly}
+              />
+            ) : null}
+          </>
+        ) : mode === "editor" && driver === "antigravity" ? (
           <ProviderSetupSection
             environmentId={environmentId}
             environmentLabel={environmentLabel}

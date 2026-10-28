@@ -4,14 +4,30 @@ import * as Schema from "effect/Schema";
 import {
   AcpRegistryManagedBinaryUninstallInput,
   AcpRegistryManagedBinaryUninstallResult,
+  AcpRegistryPrepareInput,
   officialAcpRegistryIconUrlForAgentId,
   resolveOfficialAcpRegistryIconUrl,
 } from "./acpRegistry.ts";
 
 const decodeUninstallInput = Schema.decodeUnknownSync(AcpRegistryManagedBinaryUninstallInput);
 const decodeUninstallResult = Schema.decodeUnknownSync(AcpRegistryManagedBinaryUninstallResult);
+const decodePrepareInput = Schema.decodeUnknownSync(AcpRegistryPrepareInput);
+const prepareCodec = Schema.fromJsonString(AcpRegistryPrepareInput);
+const encodePrepare = Schema.encodeSync(prepareCodec);
+const decodePrepare = Schema.decodeSync(prepareCodec);
 
 describe("ACP Registry contracts", () => {
+  it.each([undefined, "binary", "npx", "uvx"])(
+    "round trips preparation distribution %s without changing omitted defaults",
+    (distribution) => {
+      const input = {
+        agentId: "example-agent",
+        ...(distribution === undefined ? {} : { distribution }),
+      };
+      const decoded = decodePrepareInput(input);
+      expect(decodePrepare(encodePrepare(decoded))).toEqual(input);
+    },
+  );
   it("accepts only official Registry icon URLs and safe agent IDs", () => {
     expect(officialAcpRegistryIconUrlForAgentId("antigravity-acp")).toBe(
       "https://cdn.agentclientprotocol.com/registry/v1/latest/antigravity-acp.svg",
