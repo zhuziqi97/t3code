@@ -4,12 +4,14 @@ import {
   type ServerSelfUpdateCapability,
 } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
+import { claimDesktopUpdateNotice } from "../desktopUpdate.logic";
 
 import {
   collectRestartingMachines,
   collectServerUpdateTargets,
   runUpdateEverything,
   resolveSidebarUpdateActions,
+  resolveSidebarUpdatePresentation,
   type UpdateEverythingMachine,
 } from "./updateEverything.logic";
 
@@ -62,6 +64,142 @@ describe("resolveSidebarUpdateActions", () => {
       clientAction: "none",
       runsEverything: true,
     });
+  });
+});
+
+describe("sidebar client update discovery", () => {
+  it("keeps the client download on the update icon after its notice has disappeared", () => {
+    expect(
+      resolveSidebarUpdatePresentation({
+        state: clientUpdate,
+        showsEverything: false,
+        run: null,
+        isDownloading: false,
+        showCheckIcon: false,
+        isActionPending: false,
+        isClientDownloadPending: false,
+      }),
+    ).toMatchObject({
+      action: "open-download",
+      showClientDownload: true,
+      iconStatus: "available",
+      showUpdateDetails: true,
+    });
+  });
+
+  it("keeps both actions discoverable while Provider updates run", () => {
+    expect(
+      resolveSidebarUpdatePresentation({
+        state: clientUpdate,
+        showsEverything: true,
+        run: { localVersion: null, phase: "providers", restartAt: null, machines: [] },
+        isDownloading: false,
+        showCheckIcon: false,
+        isActionPending: true,
+        isClientDownloadPending: false,
+      }),
+    ).toMatchObject({
+      isInteractionDisabled: false,
+      action: "open-download",
+      showClientDownload: true,
+      iconStatus: "everything",
+      showUpdateDetails: true,
+    });
+    expect(
+      resolveSidebarUpdatePresentation({
+        state: clientUpdate,
+        showsEverything: true,
+        run: { localVersion: null, phase: "providers", restartAt: null, machines: [] },
+        isDownloading: false,
+        showCheckIcon: false,
+        isActionPending: true,
+        isClientDownloadPending: true,
+      }).isInteractionDisabled,
+    ).toBe(true);
+  });
+
+  it("restores the download without renotifying after an offline check", () => {
+    const notified = new Set<string>();
+    const original = structuredClone(clientUpdate);
+    expect(claimDesktopUpdateNotice(clientUpdate, notified)).toBe(true);
+    expect(claimDesktopUpdateNotice({ ...clientUpdate, status: "checking" }, notified)).toBe(false);
+    const failed: DesktopUpdateState = {
+      ...clientUpdate,
+      status: "error",
+      availableVersion: null,
+      errorContext: "check",
+      convene: {
+        ...clientUpdate.convene!,
+        releaseVersion: null,
+        releaseBuildId: null,
+        relation: null,
+        downloadUrl: null,
+      },
+    };
+    expect(claimDesktopUpdateNotice(failed, notified)).toBe(false);
+    expect(resolveSidebarUpdateActions(failed, false).clientAction).toBe("none");
+    expect(claimDesktopUpdateNotice(clientUpdate, notified)).toBe(false);
+    expect(resolveSidebarUpdateActions(clientUpdate, true)).toEqual({
+      clientAction: "open-download",
+      runsEverything: true,
+    });
+    expect(
+      resolveSidebarUpdatePresentation({
+        state: clientUpdate,
+        showsEverything: true,
+        run: null,
+        isDownloading: false,
+        showCheckIcon: false,
+        isActionPending: false,
+        isClientDownloadPending: false,
+      }).showClientDownload,
+    ).toBe(true);
+    expect(clientUpdate).toEqual(original);
+  });
+
+  it("uses the existing download fallback for a new build and removes stale source actions", () => {
+    const revision = {
+      ...clientUpdate,
+      convene: {
+        ...clientUpdate.convene!,
+        relation: "different-build" as const,
+        releaseBuildId: "another-build",
+        downloadUrl: null,
+      },
+    };
+    const notified = new Set<string>();
+    expect(claimDesktopUpdateNotice(clientUpdate, notified)).toBe(true);
+    expect(claimDesktopUpdateNotice(revision, notified)).toBe(true);
+    expect(resolveSidebarUpdateActions(revision, true)).toEqual({
+      clientAction: "open-download",
+      runsEverything: true,
+    });
+    const unpaired: DesktopUpdateState = {
+      ...clientUpdate,
+      status: "error" as const,
+      availableVersion: null,
+      convene: {
+        ...clientUpdate.convene!,
+        baseUrl: null,
+        downloadUrl: null,
+        downloadsUrl: null,
+        relation: null,
+        releaseVersion: null,
+        releaseBuildId: null,
+        helpUrl: null,
+      },
+    };
+    expect(
+      resolveSidebarUpdatePresentation({
+        state: unpaired,
+        showsEverything: true,
+        run: null,
+        isDownloading: false,
+        showCheckIcon: false,
+        isActionPending: false,
+        isClientDownloadPending: false,
+      }),
+    ).toMatchObject({ action: "none", showClientDownload: false, iconStatus: "everything" });
   });
 });
 

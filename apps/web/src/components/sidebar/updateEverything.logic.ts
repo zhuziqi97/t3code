@@ -11,7 +11,12 @@ import {
   supportsServerUpdateThreadContinuation,
 } from "~/versionSkew";
 import type { ServerUpdateOutcome, ServerUpdateTarget } from "../ServerUpdateAction";
-import { resolveDesktopUpdateButtonAction } from "../desktopUpdate.logic";
+import {
+  canCheckForUpdate,
+  isDesktopUpdateButtonDisabled,
+  resolveDesktopUpdateButtonAction,
+} from "../desktopUpdate.logic";
+import type { DesktopUpdateStatusIconState } from "./DesktopUpdateStatusIcon";
 
 export function resolveSidebarUpdateActions(
   state: DesktopUpdateState | null,
@@ -25,6 +30,63 @@ export function resolveSidebarUpdateActions(
         ? resolveDesktopUpdateButtonAction(state)
         : "none",
     runsEverything,
+  } as const;
+}
+
+export function resolveSidebarUpdatePresentation({
+  state,
+  showsEverything,
+  run,
+  isDownloading,
+  showCheckIcon,
+  isActionPending,
+  isClientDownloadPending,
+}: {
+  readonly state: DesktopUpdateState | null;
+  readonly showsEverything: boolean;
+  readonly run: UpdateEverythingRun | null;
+  readonly isDownloading: boolean;
+  readonly showCheckIcon: boolean;
+  readonly isActionPending: boolean;
+  readonly isClientDownloadPending: boolean;
+}) {
+  const action = state ? resolveDesktopUpdateButtonAction(state) : "none";
+  const showClientDownload = action === "open-download";
+  const showUpdateDetails = action !== "none" || showsEverything || run !== null || isDownloading;
+  const iconStatus: DesktopUpdateStatusIconState = showCheckIcon
+    ? "checking"
+    : isDownloading
+      ? "downloading"
+      : run !== null
+        ? run.localVersion !== null && action === "install"
+          ? "downloaded"
+          : "everything"
+        : showsEverything
+          ? "everything"
+          : action === "install"
+            ? "downloaded"
+            : action === "download" || action === "open-download"
+              ? "available"
+              : "idle";
+
+  const disabled = showCheckIcon
+    ? true
+    : showsEverything
+      ? false
+      : showUpdateDetails
+        ? isDesktopUpdateButtonDisabled(state)
+        : !canCheckForUpdate(state);
+  const isInteractionDisabled =
+    disabled || (showClientDownload ? isClientDownloadPending : isActionPending || run !== null);
+
+  return {
+    action,
+    showClientDownload,
+    disabled,
+    isInteractionDisabled,
+    iconStatus,
+    showUpdateDetails,
+    showUpdateIconState: showUpdateDetails && !showCheckIcon,
   } as const;
 }
 
