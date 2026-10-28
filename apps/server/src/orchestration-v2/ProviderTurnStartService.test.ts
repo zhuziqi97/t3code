@@ -852,6 +852,50 @@ function makeLocalCommandHarness(input: {
   };
 }
 
+effectIt.effect("does not replace a native thread when its MCP connection is unconfirmed", () =>
+  Effect.gen(function* () {
+    const harness = makeLocalCommandHarness({ text: "Continue" });
+    const projection = harness.projection();
+    const providerThread = {
+      ...projection.providerThreads[0]!,
+      nativeThreadRef: {
+        driver: projection.providerThreads[0]!.driver,
+        nativeId: "retained-native",
+        strength: "strong" as const,
+      },
+    };
+    harness.setProjection({ ...projection, providerThreads: [providerThread] });
+    const failure = new ProviderAdapter.ProviderAdapterResumeThreadError({
+      driver: providerThread.driver,
+      providerSessionId: providerThread.providerSessionId!,
+      providerThreadId: providerThread.id,
+      cause: new Error("mock internal MCP connection diagnostic"),
+      preserveNativeThread: true,
+    });
+    const ensureThread = vi.fn(() => Effect.succeed(providerThread));
+    const resumeThread = vi.fn(() => Effect.fail(failure));
+    harness.open.mockReturnValue(
+      Effect.succeed({
+        driver: providerThread.driver,
+        resumeThread,
+        ensureThread,
+      } as never),
+    );
+    yield* Effect.exit(harness.start);
+    expect(resumeThread).toHaveBeenCalledTimes(1);
+    expect(ensureThread).not.toHaveBeenCalled();
+    expect(harness.startRootRun).not.toHaveBeenCalled();
+    expect(harness.projection().runs.at(-1)?.status).toBe("failed");
+    const settled = harness.events.find(
+      (event) => event.type === "turn-item.updated" && event.payload.type === "error",
+    );
+    expect(settled).toBeDefined();
+    if (settled?.type === "turn-item.updated" && settled.payload.type === "error") {
+      expect(settled.payload.failure?.message).toBe(failure.message);
+    }
+  }),
+);
+
 effectIt.effect("recovers the retained thread branch tip without selecting same-named tags", () =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;

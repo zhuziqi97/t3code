@@ -836,6 +836,10 @@ export const layer: Layer.Layer<
           signal: "provider-thread-load-failure",
           title: "Provider turn failed to start",
           error: loaded.failure,
+          ...(loaded.failure._tag === "ProviderAdapterResumeThreadError" &&
+          loaded.failure.preserveNativeThread === true
+            ? { message: loaded.failure.message }
+            : {}),
         });
         return undefined;
       });
@@ -919,6 +923,12 @@ export const layer: Layer.Layer<
         );
         if (resumed._tag === "Success") {
           return resumed.success;
+        }
+        if (
+          resumed.failure._tag === "ProviderAdapterResumeThreadError" &&
+          resumed.failure.preserveNativeThread === true
+        ) {
+          return yield* loadFromProvider(Effect.fail(resumed.failure));
         }
 
         yield* Effect.logWarning("Provider resume failed; attempting a fresh native session", {

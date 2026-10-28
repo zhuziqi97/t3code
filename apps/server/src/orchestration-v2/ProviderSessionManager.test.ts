@@ -3894,7 +3894,7 @@ function instanceLifecycleRegistry(input: {
   runtimeMethods?: Partial<
     Pick<
       ProviderAdapter.ProviderAdapterV2SessionRuntime,
-      "ensureThread" | "resumeThread" | "forkThread" | "startTurn"
+      "ensureThread" | "resumeThread" | "forkThread" | "startTurn" | "isThreadLoaded"
     >
   >;
 }) {
@@ -4267,6 +4267,98 @@ it.effect("resumes with the registered MCP credential after switching away and b
                   ),
                   Effect.as(input.providerThread),
                 ),
+            },
+          }),
+        }),
+      ),
+    );
+  }),
+);
+
+it.effect("checks native subscription and configuration before reusing a loaded key", () =>
+  Effect.gen(function* () {
+    const state = yield* Ref.make(emptyState);
+    const otherState = yield* Ref.make(emptyState);
+    const current = yield* Ref.make(true);
+    const resumes: Array<
+      Parameters<ProviderAdapter.ProviderAdapterV2SessionRuntime["resumeThread"]>[0]
+    > = [];
+    yield* Effect.gen(function* () {
+      const manager = yield* ProviderSessionManager.ProviderSessionManagerV2;
+      const ids = yield* IdAllocator.IdAllocatorV2;
+      const sink = yield* EventSink.EventSinkV2;
+      const threadId = ThreadId.make("thread-native-load-key");
+      const now = yield* DateTime.now;
+      const providerSessionId = ids.derive.providerSession({
+        providerInstanceId: modelSelection.instanceId,
+      });
+      const providerThread = makeProviderThread({
+        idAllocator: ids,
+        threadId,
+        providerSessionId,
+        now,
+      });
+      yield* sink.write({
+        events: [
+          yield* makeThreadCreatedEvent({ idAllocator: ids, threadId, now }),
+          {
+            id: yield* ids.allocate.event({ threadId }),
+            type: "provider-thread.updated",
+            threadId,
+            driver: CODEX_DRIVER,
+            occurredAt: now,
+            payload: providerThread,
+          },
+        ],
+      });
+      const runtime = yield* manager.open({
+        threadId,
+        providerSessionId,
+        modelSelection,
+        runtimePolicy,
+      });
+      const resume = runtime.resumeThread({
+        threadId,
+        providerThread,
+        modelSelection,
+        runtimePolicy,
+      });
+      yield* resume;
+      yield* resume;
+      assert.lengthOf(resumes, 1, "current subscribed configuration uses the loaded key");
+      yield* Ref.set(current, false);
+      yield* resume;
+      assert.lengthOf(
+        resumes,
+        2,
+        "matching local key cannot hide native detach/configuration drift",
+      );
+      yield* resume;
+      assert.lengthOf(resumes, 2);
+      const changedCwd = { ...runtimePolicy, cwd: "/new-workspace" };
+      yield* runtime.resumeThread({
+        threadId,
+        providerThread,
+        modelSelection,
+        runtimePolicy: changedCwd,
+      });
+      assert.lengthOf(resumes, 3);
+      assert.deepEqual(resumes[2]!.runtimePolicy, changedCwd);
+      yield* manager.close(providerSessionId);
+    }).pipe(
+      Effect.provide(
+        layerTest({
+          state,
+          idleTimeoutMs: 60_000,
+          instanceRegistryLayer: instanceLifecycleRegistry({
+            state,
+            otherState,
+            runtimeMethods: {
+              isThreadLoaded: () => Ref.get(current),
+              resumeThread: (input) =>
+                Effect.sync(() => {
+                  resumes.push(input);
+                }).pipe(Effect.andThen(Ref.set(current, true)), Effect.as(input.providerThread)),
             },
           }),
         }),
@@ -5145,7 +5237,7 @@ it.effect.each(["ensureThread", "resumeThread", "forkThread", "startTurn"] as co
         startTurn: () => record("startTurn"),
       } satisfies Pick<
         ProviderAdapter.ProviderAdapterV2SessionRuntime,
-        "ensureThread" | "resumeThread" | "forkThread" | "startTurn"
+        "ensureThread" | "resumeThread" | "forkThread" | "startTurn" | "isThreadLoaded"
       >;
       const threadId = ThreadId.make(`runtime-recovery-${method}`);
       yield* Effect.gen(function* () {
