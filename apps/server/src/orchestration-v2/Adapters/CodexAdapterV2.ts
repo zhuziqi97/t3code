@@ -765,6 +765,17 @@ export const buildCodexTurnStartParams = Effect.fn("CodexAdapterV2.buildCodexTur
             : yield* decodeTurnReasoningEffort(nativeEffort)
           : undefined
         : yield* decodeTurnReasoningEffort(selectedEffort);
+    const collaborationEffort =
+      effort === undefined && nativeEffort !== undefined
+        ? yield* decodeTurnReasoningEffort(nativeEffort)
+        : effort;
+    const collaborationModel = input.modelSelection.model ?? input.resolvedModel;
+    if (collaborationModel === undefined) {
+      return yield* new ProviderAdapter.ProviderAdapterProtocolError({
+        driver: CODEX_PROVIDER,
+        detail: "Codex did not report its current model for collaboration mode.",
+      });
+    }
     const serviceTier =
       input.omitServiceTier === true
         ? undefined
@@ -781,7 +792,7 @@ export const buildCodexTurnStartParams = Effect.fn("CodexAdapterV2.buildCodexTur
       input.hasT3Mcp === true
         ? buildCodexAdditionalContext(
             {
-              model: input.modelSelection.model ?? input.resolvedModel ?? "",
+              model: collaborationModel,
               reasoningEffort: effort ?? nativeEffort,
             },
             {
@@ -812,8 +823,8 @@ export const buildCodexTurnStartParams = Effect.fn("CodexAdapterV2.buildCodexTur
       collaborationMode: {
         mode: input.runtimePolicy.interactionMode,
         settings: {
-          model: input.modelSelection.model,
-          ...(effort === undefined ? {} : { reasoning_effort: effort }),
+          model: collaborationModel,
+          ...(collaborationEffort === undefined ? {} : { reasoning_effort: collaborationEffort }),
         },
       },
     });
