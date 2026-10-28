@@ -7,29 +7,76 @@ import * as Scope from "effect/Scope";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { assert, it } from "@effect/vitest";
+import { assert, describe, it } from "@effect/vitest";
 
 import * as CodexClient from "./client.ts";
+import * as CodexError from "./errors.ts";
 
 const mockPeerPath = Effect.map(Effect.service(Path.Path), (path) =>
   path.join(import.meta.dirname, "../test/fixtures/codex-app-server-mock-peer.ts"),
 );
 const mockPeerArgs = (path: string) => [path];
 
-it.layer(NodeServices.layer)("effect-codex-app-server client", (it) => {
-  const makeHandle = (env?: Record<string, string>) =>
-    Effect.gen(function* () {
-      const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-      const path = yield* Path.Path;
-      const peerCwd = path.join(import.meta.dirname, "..");
-      const command = ChildProcess.make(process.execPath, mockPeerArgs(yield* mockPeerPath), {
-        cwd: peerCwd,
-        ...(env ? { env: { ...process.env, ...env } } : {}),
-      });
-      return yield* spawner.spawn(command);
+const makeHandle = (env?: Record<string, string>) =>
+  Effect.gen(function* () {
+    const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+    const path = yield* Path.Path;
+    const peerCwd = path.join(import.meta.dirname, "..");
+    const command = ChildProcess.make(process.execPath, mockPeerArgs(yield* mockPeerPath), {
+      cwd: peerCwd,
+      ...(env ? { env: { ...process.env, ...env } } : {}),
     });
+    return yield* spawner.spawn(command);
+  });
 
-  it.effect("initializes, handles typed server requests, and reads account and skills data", () =>
+it.live("reports stderr and exit code when the child exits before initialize", () =>
+  Effect.gen(function* () {
+    const handle = yield* makeHandle({
+      CODEX_APP_SERVER_TEST_EXIT_CODE: "1",
+      CODEX_APP_SERVER_TEST_STDERR: "Invalid project config: unknown field in config.toml\n",
+    });
+    const context = yield* Layer.build(CodexClient.layerChildProcess(handle));
+    const client = yield* Effect.service(CodexClient.CodexAppServerClient).pipe(
+      Effect.provide(context),
+    );
+    const error = yield* client
+      .request("initialize", {
+        clientInfo: { name: "stderr-test", title: null, version: "0.0.0" },
+        capabilities: null,
+      })
+      .pipe(Effect.flip);
+
+    assert.instanceOf(error, CodexError.CodexAppServerProcessExitedError);
+    assert.equal(error.code, 1);
+    assert.equal(
+      error.message,
+      "Codex App Server process exited with code 1\nInvalid project config: unknown field in config.toml",
+    );
+    assert.isFalse(yield* handle.isRunning);
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+describe("effect-codex-app-server client", () => {
+  it.live("releases the child process after a successful request when its scope closes", () =>
+    Effect.gen(function* () {
+      const handle = yield* Effect.gen(function* () {
+        const handle = yield* makeHandle();
+        const context = yield* Layer.build(CodexClient.layerChildProcess(handle));
+        const client = yield* Effect.service(CodexClient.CodexAppServerClient).pipe(
+          Effect.provide(context),
+        );
+        yield* client.request("initialize", {
+          clientInfo: { name: "cleanup-test", title: null, version: "0.0.0" },
+          capabilities: null,
+        });
+        assert.isTrue(yield* handle.isRunning);
+        return handle;
+      }).pipe(Effect.scoped);
+      assert.isFalse(yield* handle.isRunning);
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.live("initializes, handles typed server requests, and reads account and skills data", () =>
     Effect.gen(function* () {
       const userInputRequests = yield* Ref.make<Array<unknown>>([]);
       const messageDeltas = yield* Ref.make<Array<unknown>>([]);
@@ -122,9 +169,9 @@ it.layer(NodeServices.layer)("effect-codex-app-server client", (it) => {
           turnId: "turn-1",
         },
       ]);
-    }),
+    }).pipe(Effect.provide(NodeServices.layer)),
   );
-  it.effect("drains child stderr so large diagnostics cannot block protocol responses", () =>
+  it.live("drains child stderr so large diagnostics cannot block protocol responses", () =>
     Effect.gen(function* () {
       const handle = yield* makeHandle({
         CODEX_APP_SERVER_TEST_STDERR_BYTES: String(512 * 1024),
@@ -146,13 +193,9 @@ it.layer(NodeServices.layer)("effect-codex-app-server client", (it) => {
             optOutNotificationMethods: null,
           },
         });
-      }).pipe(
-        Effect.timeout("5 seconds"),
-        Effect.provide(context),
-        Effect.ensuring(Scope.close(scope, Exit.void)),
-      );
+      }).pipe(Effect.provide(context), Effect.ensuring(Scope.close(scope, Exit.void)));
 
       assert.equal(initialized.userAgent, "mock-codex-app-server");
-    }),
+    }).pipe(Effect.provide(NodeServices.layer)),
   );
 });
