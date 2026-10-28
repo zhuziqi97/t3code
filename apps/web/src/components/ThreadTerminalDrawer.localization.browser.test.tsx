@@ -210,6 +210,7 @@ it.each([
   async (action, available, expected) => {
     await using _lifecycle = await setupLifecycle();
 
+    using _copyFallback = vi.spyOn(document, "execCommand").mockReturnValue(false);
     vi.stubGlobal(
       "navigator",
       available

@@ -253,7 +253,7 @@ it("preserves pending log opening and re-translates a retained own fallback with
   await click("Open logs folder");
   await language("zh");
   expect(button("打开日志文件夹").disabled).toBe(true);
-  expect(state.open).toHaveBeenCalledExactlyOnceWith("/raw/logs/path");
+  expect(state.open).toHaveBeenCalledExactlyOnceWith("/raw/logs/path", { isFile: false });
   await act(async () => open.resolve({ _tag: "Failure" }));
   expect(document.body.textContent).toContain("raw controlled failure: EACCES");
   expect(button("打开日志文件夹").disabled).toBe(false);

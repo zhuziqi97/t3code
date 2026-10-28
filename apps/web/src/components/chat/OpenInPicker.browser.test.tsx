@@ -113,7 +113,7 @@ async function setup() {
   }
 
   function byLabel(label: string) {
-    const element = document.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`);
+    const element = document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
     expect(element, label).not.toBeNull();
     return element!;
   }

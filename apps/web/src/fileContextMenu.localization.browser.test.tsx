@@ -17,11 +17,13 @@ vi.mock("@effect/atom-react", async (original) => ({
 vi.mock("./browserEditorAction", () => ({
   useBrowserEditorAction: () => ({ unavailableReason: "workspace required", open: vi.fn() }),
 }));
-vi.mock("./remoteOpen", () => ({
+vi.mock("./remoteOpen", async (original) => ({
+  ...(await original<typeof import("./remoteOpen")>()),
   useRemoteOpenResolution: () => ({ state: { mode: "local-exec" }, isResolved: true }),
   useRemoteCapableEditors: () => [],
 }));
-vi.mock("./state/session", () => ({
+vi.mock("./state/session", async (original) => ({
+  ...(await original<typeof import("./state/session")>()),
   useEnvironmentScope: () => true,
   readEnvironmentScope: () => true,
 }));
