@@ -6,7 +6,7 @@ import * as Scope from "effect/Scope";
 import * as Stdio from "effect/Stdio";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
-import * as CodexRpc from "./_generated/meta.gen.ts";
+import * as CodexRpc from "./rpc.ts";
 import * as CodexSchema from "./_generated/schema.gen.ts";
 import * as CodexError from "./errors.ts";
 import * as CodexProtocol from "./protocol.ts";
@@ -209,7 +209,13 @@ export const make = Effect.fn("effect-codex-app-server/CodexAppServerClient.make
     payload: CodexRpc.ClientRequestParamsByMethod[M],
   ): Effect.Effect<CodexRpc.ClientRequestResponsesByMethod[M], CodexError.CodexAppServerError> =>
     encodeOptionalPayload(method, getClientRequestParamSchema(method), payload).pipe(
-      Effect.flatMap((encoded) => transport.request(method, encoded)),
+      Effect.flatMap((encoded) =>
+        transport.request(
+          method,
+          encoded,
+          method === "thread/sample" ? { cancelMethod: "thread/sample/cancel" } : undefined,
+        ),
+      ),
       Effect.flatMap(
         (
           raw,

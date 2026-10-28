@@ -9,6 +9,8 @@ import {
   CommandId,
   ProviderInstanceId,
   ThreadId,
+  RunId,
+  clientRpcRequiredScopes,
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   AuthSourceControlWriteScope,
@@ -217,6 +219,75 @@ it.effect.each([false, true])(
           requiredPermission: AuthProvidersManageScope,
         });
         expect(prepared).toEqual([]);
+      }
+    }).pipe(Effect.scoped),
+);
+
+it.effect.each([false, true])(
+  "guards native prediction generation and cancellation with operate permission: %s",
+  (canOperate) =>
+    Effect.gen(function* () {
+      const tested = [
+        WS_METHODS.composerRequestPrediction,
+        WS_METHODS.composerCancelPrediction,
+      ] as const;
+      const group = WsRpcGroup.omit(
+        ...[...WsRpcGroup.requests.keys()].filter(
+          (tag): tag is Exclude<keyof typeof RPC_REQUIRED_SCOPES, (typeof tested)[number]> =>
+            !(tested as ReadonlyArray<string>).includes(tag),
+        ),
+      );
+      const handled: string[] = [];
+      const client = yield* RpcTest.makeClient(group).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            group.toLayerHandler(WS_METHODS.composerRequestPrediction, (input) =>
+              Effect.sync(() => {
+                handled.push("sample");
+                return {
+                  requestId: input.requestId,
+                  sourceRunId: input.sourceRunId,
+                  status: "empty" as const,
+                  text: null,
+                };
+              }),
+            ),
+            group.toLayerHandler(WS_METHODS.composerCancelPrediction, () =>
+              Effect.sync(() => {
+                handled.push("cancel");
+              }),
+            ),
+            RpcAuthorization.layer(
+              canOperate ? [AuthOrchestrationOperateScope] : [AuthOrchestrationReadScope],
+            ),
+          ),
+        ),
+      );
+      const input = {
+        threadId: ThreadId.make("thread-a"),
+        sourceRunId: RunId.make("run-a"),
+        requestId: "prediction-a",
+        trigger: "live" as const,
+      };
+      for (const method of tested)
+        expect(clientRpcRequiredScopes(method, input)).toEqual([AuthOrchestrationOperateScope]);
+      const request = client[WS_METHODS.composerRequestPrediction](input);
+      const cancel = client[WS_METHODS.composerCancelPrediction]({
+        threadId: input.threadId,
+        requestId: input.requestId,
+      });
+      if (canOperate) {
+        expect((yield* request).status).toBe("empty");
+        yield* cancel;
+        expect(handled).toEqual(["sample", "cancel"]);
+      } else {
+        expect(yield* request.pipe(Effect.flip)).toMatchObject({
+          requiredPermission: AuthOrchestrationOperateScope,
+        });
+        expect(yield* cancel.pipe(Effect.flip)).toMatchObject({
+          requiredPermission: AuthOrchestrationOperateScope,
+        });
+        expect(handled).toEqual([]);
       }
     }).pipe(Effect.scoped),
 );

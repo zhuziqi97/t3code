@@ -73,3 +73,5 @@ export * from "./secretRequest.ts";
 export * from "./clientRpcPermissions.ts";
 export * from "./conveneProtocol.ts";
 export * from "./workspaceRecovery.ts";
+
+export * from "./composerPrediction.ts";
