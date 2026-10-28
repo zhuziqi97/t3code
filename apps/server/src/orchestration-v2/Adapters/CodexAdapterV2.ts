@@ -39,6 +39,7 @@ import {
 } from "@t3tools/contracts";
 import { SKILL_MENTION_PATTERN } from "@t3tools/shared/composerInlineTokens";
 import { AgentScope } from "@t3tools/shared/AgentScope";
+import * as KeyedLock from "@t3tools/shared/KeyedLock";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import {
   COMPUTER_USE_TOOL_SOURCE,
@@ -1390,8 +1391,38 @@ export function codexThreadRuntimeParams(input: {
 }
 
 const decodeCodexResumeMetadata = Schema.decodeUnknownEffect(
-  Schema.Struct({ thread: Schema.Struct({ id: Schema.String, updatedAt: Schema.Number }) }),
+  Schema.Struct({
+    thread: Schema.Struct({
+      id: Schema.String,
+      updatedAt: Schema.Number,
+      status: Schema.optionalKey(Schema.Struct({ type: Schema.String })),
+    }),
+  }),
 );
+
+const isResumeThreadError = Schema.is(ProviderAdapter.ProviderAdapterResumeThreadError);
+
+const sameCodexMcpConfiguration = (
+  previous: McpProviderSession.McpProviderSessionConfig | undefined,
+  current: McpProviderSession.McpProviderSessionConfig | undefined,
+) => {
+  if (previous === undefined || current === undefined) return previous === current;
+  if (
+    previous.endpoint !== current.endpoint ||
+    previous.authorizationHeader !== current.authorizationHeader
+  )
+    return false;
+  const before = previous.additionalServers ?? {};
+  const after = current.additionalServers ?? {};
+  return (
+    Object.keys(before).length === Object.keys(after).length &&
+    Object.entries(before).every(
+      ([name, server]) =>
+        after[name]?.endpoint === server.endpoint &&
+        after[name]?.authorizationHeader === server.authorizationHeader,
+    )
+  );
+};
 
 const CodexChildSelection = Schema.Struct({
   thread: Schema.Struct({ id: Schema.String }),
@@ -1879,6 +1910,54 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
         const turnTerminalizationPermit = yield* Semaphore.make(1);
         const goalsByNativeThread = new Map<string, OrchestrationV2ProviderGoal | null>();
         const rootProviderThreads = new Map<string, OrchestrationV2ProviderThread>();
+        const nativeThreadTransitions = yield* KeyedLock.make<string>();
+        const nativeConnections = new Map<
+          string,
+          {
+            state: "subscribed" | "unsubscribed" | "unconfirmed" | "notLoaded" | "closed";
+            consumed:
+              | {
+                  mcp: McpProviderSession.McpProviderSessionConfig | undefined;
+                }
+              | undefined;
+            resetObserved: boolean;
+          }
+        >();
+        const rememberNativeConnection = Effect.fn("CodexAdapterV2.rememberNativeConnection")(
+          (
+            threadId: string,
+            consumed?: {
+              mcp: McpProviderSession.McpProviderSessionConfig | undefined;
+            },
+          ) =>
+            Effect.sync(() => {
+              const connection: NonNullable<ReturnType<typeof nativeConnections.get>> = {
+                state: "subscribed",
+                consumed,
+                resetObserved: false,
+              };
+              nativeConnections.set(threadId, connection);
+              return connection;
+            }),
+        );
+        const unsubscribeNativeThread = Effect.fn("CodexAdapterV2.unsubscribeNativeThread")(
+          function* (threadId: string) {
+            const connection =
+              nativeConnections.get(threadId) ?? (yield* rememberNativeConnection(threadId));
+            const wasUnloaded = connection.state === "closed" || connection.state === "notLoaded";
+            if (!wasUnloaded) connection.state = "unconfirmed";
+            const response = yield* client.request("thread/unsubscribe", { threadId });
+            if (nativeConnections.get(threadId) !== connection) return;
+            if (nativeConnections.get(threadId)?.state === "closed") return;
+            if (wasUnloaded) return;
+            if (response.status === "notLoaded") {
+              connection.state = "notLoaded";
+              connection.consumed = undefined;
+            } else {
+              connection.state = "unsubscribed";
+            }
+          },
+        );
         const goalHolds = new Map<string, CodexGoalHold>();
         const goalRuns = new Map<ProviderTurnId, Array<ActiveCodexTurnContext>>();
         const goalActivations = new Map<string, { stopped: boolean }>();
@@ -4638,10 +4717,25 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           });
         });
 
+        // Idle cache rebuild emits notLoaded, not thread/closed; pair it with the resume reply.
+        yield* client.handleServerNotification("thread/status/changed", (payload) =>
+          Effect.sync(() => {
+            const connection = nativeConnections.get(payload.threadId);
+            if (connection && payload.status.type === "notLoaded") {
+              connection.resetObserved = true;
+            }
+          }),
+        );
         // Unloading an idle thread kills its terminals without completing
         // their command items, while the shared provider session stays alive.
         yield* client.handleServerNotification("thread/closed", (payload) =>
           Effect.gen(function* () {
+            const connection = nativeConnections.get(payload.threadId);
+            if (connection) {
+              connection.state = "closed";
+              connection.consumed = undefined;
+              connection.resetObserved = true;
+            }
             const completedAt = yield* DateTime.now;
             for (const context of (yield* Ref.get(settledTurns)).values()) {
               if (context.providerThread.nativeThreadRef?.nativeId !== payload.threadId) continue;
@@ -6607,6 +6701,30 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
             ),
         );
 
+        const hasPendingBackgroundWorkForThread = Effect.fn(
+          "CodexAdapterV2.hasPendingBackgroundWorkForThread",
+        )(function* (providerThread: OrchestrationV2ProviderThread) {
+          if (predictionSources.has(providerThread.nativeThreadRef?.nativeId ?? "")) return true;
+          const contexts = [
+            ...(yield* Ref.get(activeTurns)).values(),
+            ...(yield* Ref.get(settledTurns)).values(),
+          ];
+          const roots = contexts.filter(
+            (context) => context.providerThread.id === providerThread.id,
+          );
+          for (const context of contexts) {
+            if (!roots.some((root) => context === root || isDescendantCodexTurn(context, root)))
+              continue;
+            if (yield* turnHasRetainedBackgroundWork(context.nativeTurnId)) return true;
+            if (
+              context.subagent !== null &&
+              (yield* Ref.get(activeTurns)).has(context.nativeTurnId)
+            )
+              return true;
+          }
+          return false;
+        });
+
         const mcpAppsError = (detail: string) => (cause: unknown) =>
           new ProviderAdapter.ProviderAdapterProtocolError({
             driver: CODEX_PROVIDER,
@@ -6771,85 +6889,118 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
             }
             return false;
           }),
-          hasPendingBackgroundWorkForThread: Effect.fn(
-            "CodexAdapterV2.hasPendingBackgroundWorkForThread",
-          )(function* (providerThread) {
-            if (predictionSources.has(providerThread.nativeThreadRef?.nativeId ?? "")) return true;
-            const contexts = [
-              ...(yield* Ref.get(activeTurns)).values(),
-              ...(yield* Ref.get(settledTurns)).values(),
-            ];
-            const roots = contexts.filter(
-              (context) => context.providerThread.id === providerThread.id,
+          hasPendingBackgroundWorkForThread,
+          isThreadLoaded: Effect.fn("CodexAdapterV2.isThreadLoaded")(function* (providerThread) {
+            const nativeId = providerThread.nativeThreadRef?.nativeId;
+            const connection = nativeId == null ? undefined : nativeConnections.get(nativeId);
+            if (
+              !connection ||
+              connection.state !== "subscribed" ||
+              connection.resetObserved ||
+              connection.consumed === undefined
+            )
+              return false;
+            return sameCodexMcpConfiguration(
+              connection.consumed.mcp,
+              yield* readMcpSession(providerThread.appThreadId),
             );
-            for (const context of contexts) {
-              if (!roots.some((root) => context === root || isDescendantCodexTurn(context, root)))
-                continue;
-              if (yield* turnHasRetainedBackgroundWork(context.nativeTurnId)) return true;
-              if (
-                context.subagent !== null &&
-                (yield* Ref.get(activeTurns)).has(context.nativeTurnId)
-              )
-                return true;
-            }
-            return false;
           }),
-          ensureThread: (threadInput) =>
-            ensureInitialized.pipe(
-              Effect.andThen(mcpSessions.read(threadInput.threadId)),
-              Effect.flatMap((mcpSession) =>
-                client.request(
-                  "thread/start",
-                  codexThreadRuntimeParams({
-                    mcpSession,
-                    modelSelection: threadInput.modelSelection,
-                    runtimePolicy: threadInput.runtimePolicy,
-                  }),
+          ensureThread: Effect.fn("CodexAdapterV2.ensureThread")(
+            function* (threadInput) {
+              yield* ensureInitialized;
+              const mcpSession = yield* mcpSessions.read(threadInput.threadId);
+              const response = yield* client.request(
+                "thread/start",
+                codexThreadRuntimeParams({
+                  mcpSession,
+                  modelSelection: threadInput.modelSelection,
+                  runtimePolicy: threadInput.runtimePolicy,
+                }),
+              );
+              yield* rememberNativeConnection(response.thread.id, {
+                mcp: mcpSession,
+              });
+              return providerThreadFromCodexThread({
+                appThreadId: threadInput.threadId,
+                idAllocator,
+                ownerNodeId: null,
+                providerSessionId: input.providerSessionId,
+                providerInstanceId: adapterOptions.instanceId,
+                thread: response.thread,
+                model: response.model,
+                reasoningEffort: response.reasoningEffort,
+              });
+            },
+            (effect, threadInput) =>
+              effect.pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new ProviderAdapter.ProviderAdapterEnsureThreadError({
+                      driver: CODEX_PROVIDER,
+                      threadId: threadInput.threadId,
+                      cause: normalizeCodexCause(cause),
+                    }),
                 ),
               ),
-              Effect.map((response): OrchestrationV2ProviderThread =>
-                providerThreadFromCodexThread({
-                  appThreadId: threadInput.threadId,
-                  idAllocator,
-                  ownerNodeId: null,
-                  providerSessionId: input.providerSessionId,
-                  providerInstanceId: adapterOptions.instanceId,
-                  thread: response.thread,
-                  model: response.model,
-                  reasoningEffort: response.reasoningEffort,
-                }),
-              ),
-              Effect.mapError(
-                (cause) =>
-                  new ProviderAdapter.ProviderAdapterEnsureThreadError({
-                    driver: CODEX_PROVIDER,
-                    threadId: threadInput.threadId,
-                    cause: normalizeCodexCause(cause),
-                  }),
-              ),
-            ),
+          ),
           resumeThread: Effect.fn("CodexAdapterV2.resumeThread")(
             function* (threadInput) {
               const nativeThreadId = yield* getNativeThreadId(threadInput.providerThread);
-              // excludeTurns is not in the generated request schema yet.
-              const resume = client.raw.request("thread/resume", {
-                threadId: nativeThreadId,
-                excludeTurns: true,
-                ...codexThreadRuntimeParams({
-                  mcpSession: yield* readMcpSession(
+              return yield* nativeThreadTransitions.withLock(
+                nativeThreadId,
+                Effect.gen(function* () {
+                  yield* ensureInitialized;
+                  const mcpSession = yield* readMcpSession(
                     threadInput.threadId ?? threadInput.providerThread.appThreadId,
-                  ),
-                  ...(threadInput.modelSelection === undefined
-                    ? {}
-                    : { modelSelection: threadInput.modelSelection }),
-                  ...(threadInput.runtimePolicy === undefined
-                    ? {}
-                    : { runtimePolicy: threadInput.runtimePolicy }),
-                }),
-              });
-              const response = yield* ensureInitialized.pipe(
-                Effect.andThen(
-                  resume.pipe(
+                  );
+                  const previous = nativeConnections.get(nativeThreadId);
+                  const connection = previous ?? (yield* rememberNativeConnection(nativeThreadId));
+                  if (previous === undefined) connection.state = "unconfirmed";
+                  const reuseConfiguration =
+                    connection.consumed !== undefined &&
+                    connection.state !== "closed" &&
+                    connection.state !== "notLoaded" &&
+                    !connection.resetObserved &&
+                    sameCodexMcpConfiguration(connection.consumed.mcp, mcpSession);
+                  const preserve = () =>
+                    new ProviderAdapter.ProviderAdapterResumeThreadError({
+                      driver: CODEX_PROVIDER,
+                      providerSessionId: input.providerSessionId,
+                      providerThreadId: threadInput.providerThread.id,
+                      preserveNativeThread: true,
+                    });
+                  if (
+                    previous !== undefined &&
+                    connection.state !== "closed" &&
+                    connection.state !== "notLoaded" &&
+                    !reuseConfiguration
+                  ) {
+                    if (yield* hasPendingBackgroundWorkForThread(threadInput.providerThread)) {
+                      return yield* preserve();
+                    }
+                  }
+                  const coldBeforeResume =
+                    previous === undefined ||
+                    connection.state === "closed" ||
+                    connection.state === "notLoaded";
+                  if (!coldBeforeResume) connection.resetObserved = false;
+                  // Model/cwd are applied by turn/start; resume must preserve unchanged MCP resources.
+                  const resume = client.raw.request("thread/resume", {
+                    threadId: nativeThreadId,
+                    excludeTurns: true,
+                    ...(reuseConfiguration
+                      ? {}
+                      : codexThreadRuntimeParams({
+                          mcpSession,
+                          ...(threadInput.modelSelection === undefined
+                            ? {}
+                            : { modelSelection: threadInput.modelSelection }),
+                          ...(threadInput.runtimePolicy === undefined
+                            ? {}
+                            : { runtimePolicy: threadInput.runtimePolicy }),
+                        })),
+                  });
+                  const response = yield* resume.pipe(
                     Effect.catchTags({
                       CodexAppServerRequestError: (cause) => {
                         if (
@@ -6864,34 +7015,79 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                           .pipe(Effect.andThen(resume));
                       },
                     }),
-                  ),
-                ),
-                Effect.flatMap(decodeCodexResumeMetadata),
+                    Effect.flatMap(decodeCodexResumeMetadata),
+                    Effect.onError(() =>
+                      Effect.sync(() => {
+                        if (connection.state !== "closed" && connection.state !== "notLoaded") {
+                          connection.state = "unconfirmed";
+                          connection.consumed = undefined;
+                        }
+                      }),
+                    ),
+                  );
+                  if (response.thread.id !== nativeThreadId) return yield* preserve();
+                  if (connection) {
+                    if (reuseConfiguration && connection.resetObserved) {
+                      yield* rememberNativeConnection(nativeThreadId);
+                      return yield* preserve();
+                    }
+                    if (
+                      !reuseConfiguration &&
+                      !coldBeforeResume &&
+                      !(connection.resetObserved && response.thread.status?.type === "idle")
+                    ) {
+                      connection.state = "subscribed";
+                      return yield* preserve();
+                    }
+                  }
+                  if (reuseConfiguration) {
+                    connection.state = "subscribed";
+                  } else {
+                    yield* rememberNativeConnection(nativeThreadId, {
+                      mcp: mcpSession,
+                    });
+                  }
+                  if (
+                    !sameCodexMcpConfiguration(
+                      mcpSession,
+                      yield* readMcpSession(
+                        threadInput.threadId ?? threadInput.providerThread.appThreadId,
+                      ),
+                    )
+                  )
+                    return yield* preserve();
+                  return {
+                    ...threadInput.providerThread,
+                    providerSessionId: input.providerSessionId,
+                    providerInstanceId: adapterOptions.instanceId,
+                    status: "idle",
+                    nativeThreadRef: {
+                      driver: CODEX_PROVIDER,
+                      nativeId: response.thread.id,
+                      strength: "strong",
+                    },
+                    nativeConversationHeadRef: threadInput.providerThread.nativeConversationHeadRef,
+                    updatedAt: codexTimestamp(response.thread.updatedAt),
+                  } satisfies OrchestrationV2ProviderThread;
+                }),
               );
-              return {
-                ...threadInput.providerThread,
-                providerSessionId: input.providerSessionId,
-                providerInstanceId: adapterOptions.instanceId,
-                status: "idle",
-                nativeThreadRef: {
-                  driver: CODEX_PROVIDER,
-                  nativeId: response.thread.id,
-                  strength: "strong",
-                },
-                nativeConversationHeadRef: threadInput.providerThread.nativeConversationHeadRef,
-                updatedAt: codexTimestamp(response.thread.updatedAt),
-              } satisfies OrchestrationV2ProviderThread;
             },
             (effect, threadInput) =>
               effect.pipe(
-                Effect.mapError(
-                  (cause) =>
-                    new ProviderAdapter.ProviderAdapterResumeThreadError({
-                      driver: CODEX_PROVIDER,
-                      providerSessionId: input.providerSessionId,
-                      providerThreadId: threadInput.providerThread.id,
-                      cause: normalizeCodexCause(cause),
-                    }),
+                Effect.mapError((cause) =>
+                  isResumeThreadError(cause)
+                    ? cause
+                    : new ProviderAdapter.ProviderAdapterResumeThreadError({
+                        driver: CODEX_PROVIDER,
+                        providerSessionId: input.providerSessionId,
+                        providerThreadId: threadInput.providerThread.id,
+                        ...(nativeConnections.has(
+                          threadInput.providerThread.nativeThreadRef?.nativeId ?? "",
+                        )
+                          ? { preserveNativeThread: true as const }
+                          : {}),
+                        cause: normalizeCodexCause(cause),
+                      }),
                 ),
               ),
           ),
@@ -7022,7 +7218,10 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
             function* (unloadInput) {
               const nativeThreadId = yield* getNativeThreadId(unloadInput.providerThread);
               sessionApprovals.delete(nativeThreadId);
-              yield* client.request("thread/unsubscribe", { threadId: nativeThreadId });
+              yield* nativeThreadTransitions.withLock(
+                nativeThreadId,
+                unsubscribeNativeThread(nativeThreadId),
+              );
             },
             (effect, unloadInput) =>
               effect.pipe(
@@ -7613,6 +7812,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
             function* (threadInput) {
               const threadId = yield* getNativeThreadId(threadInput.sourceProviderThread);
               const boundary = yield* resolveCodexForkBoundary(threadInput);
+              const mcpSession = yield* mcpSessions.read(threadInput.targetThreadId);
               const response = yield* ensureInitialized.pipe(
                 Effect.andThen(
                   client.request("thread/fork", {
@@ -7621,7 +7821,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                       ? {}
                       : { lastTurnId: boundary.lastTurnId }),
                     ...codexThreadRuntimeParams({
-                      mcpSession: yield* mcpSessions.read(threadInput.targetThreadId),
+                      mcpSession,
                       ...(threadInput.modelSelection === undefined
                         ? {}
                         : { modelSelection: threadInput.modelSelection }),
@@ -7666,6 +7866,9 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                   ),
                 )).thread;
               }
+              yield* rememberNativeConnection(response.thread.id, {
+                mcp: mcpSession,
+              });
               return providerThreadFromCodexThread({
                 appThreadId: threadInput.targetThreadId,
                 idAllocator,

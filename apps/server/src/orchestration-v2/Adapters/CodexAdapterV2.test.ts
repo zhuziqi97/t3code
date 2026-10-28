@@ -1488,6 +1488,7 @@ describe("CodexAdapterV2 session initialize", () => {
         beforeEmitInbound === undefined ? {} : { beforeEmitInbound },
       );
       let initializeRequests = 0;
+      const requests: Array<string> = [];
       const adapter = yield* CodexAdapterV2.makeCodexAdapterV2({
         instanceId: CodexAdapterV2.CODEX_DEFAULT_INSTANCE_ID,
         settings: DEFAULT_CODEX_SETTINGS,
@@ -1502,8 +1503,16 @@ describe("CodexAdapterV2 session initialize", () => {
                 (client) =>
                   ({
                     ...client,
+                    raw: {
+                      ...client.raw,
+                      request: (method, params) =>
+                        Effect.sync(() => {
+                          requests.push(method);
+                        }).pipe(Effect.andThen(client.raw.request(method, params))),
+                    },
                     request: (method, params) =>
                       Effect.sync(() => {
+                        requests.push(method);
                         if (method === "initialize") initializeRequests++;
                       }).pipe(Effect.andThen(client.request(method, params))),
                   }) satisfies CodexClient.CodexAppServerClient["Service"],
@@ -1537,6 +1546,7 @@ describe("CodexAdapterV2 session initialize", () => {
             runtimePolicy: CODEX_TEST_RUNTIME_POLICY,
           }),
         initializeRequests: () => initializeRequests,
+        requests,
         nativePrediction: runtime.nativePrediction,
         runtime,
       };
@@ -1767,6 +1777,26 @@ describe("CodexAdapterV2 session initialize", () => {
         const retainedSession = yield* session.runtime.hasPendingBackgroundWork!;
         const retainedThread =
           yield* session.runtime.hasPendingBackgroundWorkForThread!(providerThread);
+        if (end === "result") {
+          const sessions = yield* McpProviderSessions.McpProviderSessions;
+          yield* sessions.set({
+            environmentId: EnvironmentId.make("mock-prediction-env"),
+            threadId: providerThread.appThreadId!,
+            providerSessionId: "mock-prediction-current",
+            providerInstanceId: CodexAdapterV2.CODEX_DEFAULT_INSTANCE_ID,
+            endpoint: "http://127.0.0.1:43123/mcp",
+            authorizationHeader: "Bearer mock-prediction-current",
+            browserToolsAvailable: true,
+          });
+          const beforeResume = [...session.requests];
+          const resumed = yield* Effect.result(session.runtime.resumeThread({ providerThread }));
+          assert.equal(resumed._tag, "Failure");
+          assert.deepEqual(
+            session.requests,
+            beforeResume,
+            "pending prediction cannot trigger native rebuild",
+          );
+        }
         yield* Deferred.succeed(releaseSample, undefined);
         const response = yield* Fiber.join(sampling);
         assert.isTrue(retainedSession);
@@ -1857,6 +1887,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
     options: {
       readonly onRawRequest?: (method: string, params: unknown) => Effect.Effect<void>;
       readonly existingProviderThread?: OrchestrationV2ProviderThread;
+      readonly beforeEmitInbound?: CodexReplay.CodexAppServerReplayDriver["beforeEmitInbound"];
     } = {},
   ) =>
     Effect.gen(function* () {
@@ -1868,7 +1899,13 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         [];
       const clientFactory: CodexAdapterV2.CodexAppServerClientFactoryShape = {
         open: (openInput) =>
-          Layer.build(CodexReplay.layerReplay(transcript)).pipe(
+          CodexReplay.makeReplayDriver(
+            transcript,
+            options.beforeEmitInbound === undefined
+              ? {}
+              : { beforeEmitInbound: options.beforeEmitInbound },
+          ).pipe(
+            Effect.flatMap((driver) => Layer.build(CodexReplay.layerReplayWithDriver(driver))),
             Effect.mapError(
               (cause) =>
                 new ProviderAdapter.ProviderAdapterOpenSessionError({
@@ -3138,7 +3175,6 @@ describe("CodexAdapterV2 post-settle continuation", () => {
                 params: {
                   threadId: nativeThreadId,
                   excludeTurns: true,
-                  config: CodexAdapterV2.CODEX_THREAD_CONFIG,
                 },
               },
             },
@@ -3202,10 +3238,23 @@ describe("CodexAdapterV2 post-settle continuation", () => {
           prompt: "unused",
         });
         const resumeEntries: Array<CodexReplay.CodexAppServerReplayEntry> = [
+          ...(freshTransport
+            ? []
+            : ([
+                {
+                  type: "expect_outbound",
+                  frame: {
+                    id: 3,
+                    method: "thread/unsubscribe",
+                    params: { threadId: nativeThreadId },
+                  },
+                },
+                { type: "emit_inbound", frame: { id: 3, result: { status: "unsubscribed" } } },
+              ] as const)),
           {
             type: "expect_outbound",
             frame: {
-              id: freshTransport ? 2 : 3,
+              id: freshTransport ? 2 : 4,
               method: "thread/resume",
               params: {
                 threadId: nativeThreadId,
@@ -3214,11 +3263,24 @@ describe("CodexAdapterV2 post-settle continuation", () => {
               },
             },
           },
+          ...(freshTransport
+            ? []
+            : ([
+                {
+                  type: "emit_inbound",
+                  frame: {
+                    method: "thread/status/changed",
+                    params: { threadId: nativeThreadId, status: { type: "notLoaded" } },
+                  },
+                },
+              ] as const)),
           {
             type: "emit_inbound",
             frame: {
-              id: freshTransport ? 2 : 3,
-              result: { thread: { id: nativeThreadId, updatedAt: 1782622450 } },
+              id: freshTransport ? 2 : 4,
+              result: {
+                thread: { id: nativeThreadId, updatedAt: 1782622450, status: { type: "idle" } },
+              },
             },
           },
         ];
@@ -3247,6 +3309,8 @@ describe("CodexAdapterV2 post-settle continuation", () => {
           endpoint: "http://127.0.0.1:44123/mcp",
           authorizationHeader: "Bearer replacement-test-credential",
         };
+        if (!freshTransport)
+          yield* initial.runtime.unloadThread!({ providerThread: initial.providerThread });
         yield* sessions.set(replacement);
         const harness = freshTransport
           ? yield* makeCodexReplayHarness(
@@ -3277,6 +3341,667 @@ describe("CodexAdapterV2 post-settle continuation", () => {
       ),
   );
 
+  it.effect("does not accept changed MCP after unsubscribe ACK without native close", () =>
+    Effect.gen(function* () {
+      const scenario = "mcp-unsubscribe-unconfirmed";
+      const nativeThreadId = "native-mcp-unsubscribe-unconfirmed";
+      const threadId = ThreadId.make("thread-mcp-unsubscribe-unconfirmed");
+      const sessions = yield* McpProviderSessions.McpProviderSessions;
+      const config = {
+        environmentId: EnvironmentId.make("environment-mcp-unconfirmed"),
+        threadId,
+        providerSessionId: "original-mcp",
+        providerInstanceId: CodexAdapterV2.CODEX_DEFAULT_INSTANCE_ID,
+        endpoint: "http://127.0.0.1:43123/mcp",
+        authorizationHeader: "Bearer original-test-credential",
+        browserToolsAvailable: true,
+      };
+      yield* sessions.set(config);
+      const observed: Array<{ method: string; params: unknown }> = [];
+      const observe = (method: string, params: unknown) =>
+        Effect.sync(() => observed.push({ method, params })).pipe(Effect.asVoid);
+      const session = yield* makeCodexReplayHarness(
+        makeCodexReplayTranscript({
+          scenario,
+          entries: [
+            ...codexReplayPreamble({
+              nativeThreadId,
+              nativeTurnId: "unused",
+              prompt: "unused",
+            }).slice(0, 5),
+            {
+              type: "expect_outbound",
+              frame: { id: 3, method: "thread/unsubscribe", params: { threadId: nativeThreadId } },
+            },
+            { type: "emit_inbound", frame: { id: 3, result: { status: "unsubscribed" } } },
+            {
+              type: "expect_outbound",
+              frame: {
+                id: 4,
+                method: "thread/resume",
+                params: {
+                  threadId: nativeThreadId,
+                  excludeTurns: true,
+                  config: CodexAdapterV2.CODEX_THREAD_CONFIG,
+                },
+              },
+            },
+            {
+              type: "emit_inbound",
+              frame: {
+                id: 4,
+                result: {
+                  thread: {
+                    id: nativeThreadId,
+                    updatedAt: 1782622450,
+                    status: { type: "systemError" },
+                  },
+                },
+              },
+            },
+          ],
+        }),
+        undefined,
+        observe,
+        undefined,
+        undefined,
+        { onRawRequest: observe },
+      );
+      const providerThread = session.providerThread;
+      assert.equal(providerThread.nativeThreadRef?.nativeId, nativeThreadId);
+      const sentMcp = (method: string) =>
+        (
+          observed.find((entry) => entry.method === method)!.params as {
+            config: { "mcp_servers.t3-code": { http_headers: { Authorization: string } } };
+          }
+        ).config["mcp_servers.t3-code"].http_headers.Authorization;
+      assert.equal(sentMcp("thread/start"), config.authorizationHeader);
+      yield* session.runtime.unloadThread!({ providerThread });
+      yield* sessions.set({
+        ...config,
+        providerSessionId: "current-mcp",
+        authorizationHeader: "Bearer current-test-credential",
+      });
+      const resumed = yield* Effect.result(session.runtime.resumeThread({ providerThread }));
+      assert.equal(sentMcp("thread/resume"), "Bearer current-test-credential");
+      assert.equal(resumed._tag, "Failure");
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),
+      ),
+    ),
+  );
+
+  it.effect.each([
+    { change: "none", notification: "none", status: "systemError", accepted: true },
+    { change: "model", notification: "none", status: "idle", accepted: true },
+    { change: "cwd", notification: "none", status: "idle", accepted: true },
+    { change: "t3", notification: "notLoaded", status: "idle", accepted: true },
+    { change: "convene", notification: "notLoaded", status: "idle", accepted: true },
+    { change: "t3", notification: "none", status: "idle", accepted: false },
+    { change: "t3", notification: "none", status: "active", accepted: false },
+    { change: "t3", notification: "not-loaded-ack", status: "idle", accepted: true },
+    { change: "t3", notification: "notLoaded", status: "notLoaded", accepted: false },
+    { change: "t3", notification: "closed-before-ack", status: "idle", accepted: true },
+    { change: "t3", notification: "unrelated-close", status: "systemError", accepted: false },
+  ])(
+    "rejoins $change after detach with $notification / $status",
+    ({ change, notification, status, accepted }) =>
+      Effect.gen(function* () {
+        const scenario = `rejoin-${change}-${notification}-${status}`;
+        const nativeThreadId = `native-${scenario}`;
+        const threadId = ThreadId.make(`thread-${scenario}`);
+        const sessions = yield* McpProviderSessions.McpProviderSessions;
+        const initial = {
+          environmentId: EnvironmentId.make("environment-rejoin"),
+          threadId,
+          providerSessionId: "mock-current",
+          providerInstanceId: CodexAdapterV2.CODEX_DEFAULT_INSTANCE_ID,
+          endpoint: "http://127.0.0.1:43123/mcp",
+          authorizationHeader: "Bearer mock-current",
+          browserToolsAvailable: true,
+          additionalServers: {
+            convene: {
+              endpoint: "http://127.0.0.1:43124/mcp",
+              authorizationHeader: "Bearer mock-convene",
+            },
+          },
+        };
+        yield* sessions.set(initial);
+        const selectedModel =
+          change === "model" ? "different-native-model" : CODEX_TEST_MODEL_SELECTION.model;
+        const selectedCwd =
+          change === "cwd" ? "/different-workspace" : CODEX_TEST_RUNTIME_POLICY.cwd;
+        const notifications: Array<CodexReplay.CodexAppServerReplayEntry> =
+          notification === "notLoaded"
+            ? [
+                {
+                  type: "emit_inbound",
+                  frame: {
+                    method: "thread/status/changed",
+                    params: { threadId: nativeThreadId, status: { type: "notLoaded" } },
+                  },
+                },
+              ]
+            : notification === "unrelated-close"
+              ? [
+                  {
+                    type: "emit_inbound",
+                    frame: { method: "thread/closed", params: { threadId: "unrelated-native" } },
+                  },
+                ]
+              : [];
+        const observed: Array<{ method: string; params: unknown }> = [];
+        const observe = (method: string, params: unknown) =>
+          Effect.sync(() => {
+            observed.push({ method, params });
+          });
+        const harness = yield* makeCodexReplayHarness(
+          makeCodexReplayTranscript({
+            scenario,
+            entries: [
+              ...codexReplayPreamble({
+                nativeThreadId,
+                nativeTurnId: "unused",
+                prompt: "unused",
+              }).slice(0, 5),
+              {
+                type: "expect_outbound",
+                frame: {
+                  id: 3,
+                  method: "thread/unsubscribe",
+                  params: { threadId: nativeThreadId },
+                },
+              },
+              ...(notification === "closed-before-ack"
+                ? ([
+                    {
+                      type: "emit_inbound",
+                      frame: { method: "thread/closed", params: { threadId: nativeThreadId } },
+                    },
+                  ] as const)
+                : []),
+              {
+                type: "emit_inbound",
+                frame: {
+                  id: 3,
+                  result: {
+                    status: notification === "not-loaded-ack" ? "notLoaded" : "unsubscribed",
+                  },
+                },
+              },
+              {
+                type: "expect_outbound",
+                frame: {
+                  id: 4,
+                  method: "thread/resume",
+                  params: {
+                    threadId: nativeThreadId,
+                    excludeTurns: true,
+                    ...(["none", "model", "cwd"].includes(change)
+                      ? {}
+                      : { config: CodexAdapterV2.CODEX_THREAD_CONFIG }),
+                  },
+                },
+              },
+              ...notifications,
+              {
+                type: "emit_inbound",
+                frame: {
+                  id: 4,
+                  result: {
+                    model: selectedModel,
+                    cwd: selectedCwd,
+                    thread: { id: nativeThreadId, updatedAt: 1782622450, status: { type: status } },
+                  },
+                },
+              },
+            ],
+          }),
+          undefined,
+          observe,
+          undefined,
+          undefined,
+          { onRawRequest: observe },
+        );
+        assert.isTrue(yield* harness.runtime.isThreadLoaded!(harness.providerThread));
+        yield* harness.runtime.unloadThread!({ providerThread: harness.providerThread });
+        assert.isFalse(yield* harness.runtime.isThreadLoaded!(harness.providerThread));
+        if (change === "t3")
+          yield* sessions.set({ ...initial, authorizationHeader: "Bearer mock-replacement" });
+        if (change === "convene")
+          yield* sessions.set({
+            ...initial,
+            additionalServers: {
+              convene: {
+                ...initial.additionalServers.convene,
+                authorizationHeader: "Bearer mock-convene-replacement",
+              },
+            },
+          });
+        const result = yield* Effect.result(
+          harness.runtime.resumeThread({
+            providerThread: harness.providerThread,
+            modelSelection: { ...CODEX_TEST_MODEL_SELECTION, model: selectedModel },
+            runtimePolicy: { ...CODEX_TEST_RUNTIME_POLICY, cwd: selectedCwd },
+          }),
+        );
+        const request = observed.find((entry) => entry.method === "thread/resume")!
+          .params as Record<string, unknown>;
+        if (["none", "model", "cwd"].includes(change)) {
+          assert.deepEqual(request, { threadId: nativeThreadId, excludeTurns: true });
+        } else {
+          assert.equal(request.model, selectedModel);
+          assert.equal(request.cwd, selectedCwd);
+          assert.isDefined(request.config);
+        }
+        assert.equal(result._tag, accepted ? "Success" : "Failure");
+        if (result._tag === "Success") {
+          assert.equal(result.success.nativeThreadRef?.nativeId, nativeThreadId);
+          assert.deepEqual(
+            result.success.nativeConversationHeadRef,
+            harness.providerThread.nativeConversationHeadRef,
+          );
+          assert.isTrue(yield* harness.runtime.isThreadLoaded!(result.success));
+        } else {
+          assert.equal(result.failure._tag, "ProviderAdapterResumeThreadError");
+          if (result.failure._tag === "ProviderAdapterResumeThreadError") {
+            assert.equal(result.failure.preserveNativeThread, true);
+          }
+          assert.isFalse(yield* harness.runtime.isThreadLoaded!(harness.providerThread));
+        }
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(
+          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),
+        ),
+      ),
+  );
+
+  it.effect("does not detach a subscribed connection to force MCP configuration reload", () =>
+    Effect.gen(function* () {
+      const scenario = "subscribed-mcp-change";
+      const nativeThreadId = `native-${scenario}`;
+      const threadId = ThreadId.make(`thread-${scenario}`);
+      const sessions = yield* McpProviderSessions.McpProviderSessions;
+      const config = {
+        environmentId: EnvironmentId.make("mock-subscribed-env"),
+        threadId,
+        providerSessionId: "mock-subscribed",
+        providerInstanceId: CodexAdapterV2.CODEX_DEFAULT_INSTANCE_ID,
+        endpoint: "http://127.0.0.1:43123/mcp",
+        authorizationHeader: "Bearer mock-subscribed",
+        browserToolsAvailable: true,
+      };
+      yield* sessions.set(config);
+      const requests: Array<string> = [];
+      const observe = (method: string) =>
+        Effect.sync(() => {
+          requests.push(method);
+        });
+      let acknowledged = false;
+      const harness = yield* makeCodexReplayHarness(
+        makeCodexReplayTranscript({
+          scenario,
+          entries: [
+            ...codexReplayPreamble({
+              nativeThreadId,
+              nativeTurnId: "unused",
+              prompt: "unused",
+            }).slice(0, 5),
+            {
+              type: "expect_outbound",
+              frame: {
+                id: 3,
+                method: "thread/resume",
+                params: {
+                  threadId: nativeThreadId,
+                  excludeTurns: true,
+                  config: CodexAdapterV2.CODEX_THREAD_CONFIG,
+                },
+              },
+            },
+            {
+              type: "emit_inbound",
+              label: "subscribed-ack",
+              frame: {
+                id: 3,
+                result: {
+                  thread: { id: nativeThreadId, updatedAt: 1782622450, status: { type: "idle" } },
+                },
+              },
+            },
+          ],
+        }),
+        undefined,
+        observe,
+        undefined,
+        undefined,
+        {
+          onRawRequest: observe,
+          beforeEmitInbound: (entry) =>
+            Effect.sync(() => {
+              if (entry.label === "subscribed-ack") acknowledged = true;
+            }),
+        },
+      );
+      yield* sessions.set({ ...config, authorizationHeader: "Bearer mock-subscribed-current" });
+      const result = yield* Effect.result(
+        harness.runtime.resumeThread({ providerThread: harness.providerThread }),
+      );
+      assert.notInclude(
+        requests,
+        "thread/unsubscribe",
+        "configuration changes cannot introduce a resource-releasing detach",
+      );
+      assert.isTrue(acknowledged);
+      assert.equal(
+        result._tag,
+        "Failure",
+        "a loaded Idle ACK without reset evidence does not apply overrides",
+      );
+      assert.isFalse(yield* harness.runtime.isThreadLoaded!(harness.providerThread));
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),
+      ),
+    ),
+  );
+
+  it.effect.each([false, true])(
+    "keeps cancelled resume unconfirmed until native close (first cold: %s)",
+    (firstCold) =>
+      Effect.gen(function* () {
+        const scenario = `cancelled-resume-${firstCold}`;
+        const nativeThreadId = `native-${scenario}`;
+        const preamble = codexReplayPreamble({
+          nativeThreadId,
+          nativeTurnId: "unused",
+          prompt: "unused",
+        });
+        const original = firstCold
+          ? yield* makeCodexReplayHarness(
+              makeCodexReplayTranscript({ scenario, entries: preamble.slice(0, 5) }),
+            )
+          : undefined;
+        const pending = yield* Deferred.make<void>();
+        const release = yield* Deferred.make<void>();
+        let systemErrorAck = false;
+        const firstId = firstCold ? 2 : 3;
+        const harness = yield* makeCodexReplayHarness(
+          makeCodexReplayTranscript({
+            scenario,
+            entries: [
+              ...preamble.slice(0, firstCold ? 3 : 5),
+              {
+                type: "expect_outbound",
+                frame: {
+                  id: firstId,
+                  method: "thread/resume",
+                  params: {
+                    threadId: nativeThreadId,
+                    excludeTurns: true,
+                    ...(firstCold ? { config: CodexAdapterV2.CODEX_THREAD_CONFIG } : {}),
+                  },
+                },
+              },
+              {
+                type: "emit_inbound",
+                label: "held-resume",
+                frame: {
+                  id: firstId,
+                  result: {
+                    thread: {
+                      id: nativeThreadId,
+                      updatedAt: 1782622450,
+                      status: { type: "systemError" },
+                    },
+                  },
+                },
+              },
+              {
+                type: "expect_outbound",
+                frame: {
+                  id: firstId + 1,
+                  method: "thread/resume",
+                  params: {
+                    threadId: nativeThreadId,
+                    excludeTurns: true,
+                    config: CodexAdapterV2.CODEX_THREAD_CONFIG,
+                  },
+                },
+              },
+              {
+                type: "emit_inbound",
+                label: "system-error-ack",
+                frame: {
+                  id: firstId + 1,
+                  result: {
+                    thread: {
+                      id: nativeThreadId,
+                      updatedAt: 1782622450,
+                      status: { type: "systemError" },
+                    },
+                  },
+                },
+              },
+              {
+                type: "expect_outbound",
+                frame: {
+                  id: firstId + 2,
+                  method: "thread/unsubscribe",
+                  params: { threadId: nativeThreadId },
+                },
+              },
+              {
+                type: "emit_inbound",
+                frame: { method: "thread/closed", params: { threadId: nativeThreadId } },
+              },
+              {
+                type: "emit_inbound",
+                frame: { id: firstId + 2, result: { status: "notSubscribed" } },
+              },
+              {
+                type: "expect_outbound",
+                frame: {
+                  id: firstId + 3,
+                  method: "thread/resume",
+                  params: {
+                    threadId: nativeThreadId,
+                    excludeTurns: true,
+                    config: CodexAdapterV2.CODEX_THREAD_CONFIG,
+                  },
+                },
+              },
+              {
+                type: "emit_inbound",
+                frame: {
+                  id: firstId + 3,
+                  result: {
+                    thread: { id: nativeThreadId, updatedAt: 1782622450, status: { type: "idle" } },
+                  },
+                },
+              },
+            ],
+          }),
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          {
+            ...(original === undefined ? {} : { existingProviderThread: original.providerThread }),
+            beforeEmitInbound: (entry) =>
+              entry.label === "held-resume"
+                ? Deferred.succeed(pending, undefined).pipe(Effect.andThen(Deferred.await(release)))
+                : Effect.sync(() => {
+                    if (entry.label === "system-error-ack") systemErrorAck = true;
+                  }),
+          },
+        );
+        const resumed = yield* harness.runtime
+          .resumeThread({ providerThread: harness.providerThread })
+          .pipe(Effect.forkChild);
+        yield* Deferred.await(pending);
+        yield* Fiber.interrupt(resumed);
+        assert.isFalse(yield* harness.runtime.isThreadLoaded!(harness.providerThread));
+        yield* Deferred.succeed(release, undefined);
+        const sessions = yield* McpProviderSessions.McpProviderSessions;
+        yield* sessions.set({
+          environmentId: EnvironmentId.make("mock-cancel-env"),
+          threadId: harness.threadId,
+          providerSessionId: "mock-cancel-current",
+          providerInstanceId: CodexAdapterV2.CODEX_DEFAULT_INSTANCE_ID,
+          endpoint: "http://127.0.0.1:43123/mcp",
+          authorizationHeader: "Bearer mock-cancel-current",
+          browserToolsAvailable: true,
+        });
+        const changed = yield* Effect.result(
+          harness.runtime.resumeThread({ providerThread: harness.providerThread }),
+        );
+        assert.isTrue(
+          systemErrorAck,
+          "the replacement request must reach a real SystemError ACK, not fail a frame match",
+        );
+        assert.equal(changed._tag, "Failure");
+        assert.isFalse(yield* harness.runtime.isThreadLoaded!(harness.providerThread));
+        yield* harness.runtime.unloadThread!({ providerThread: harness.providerThread });
+        const recovered = yield* harness.runtime.resumeThread({
+          providerThread: harness.providerThread,
+        });
+        assert.equal(recovered.nativeThreadRef?.nativeId, nativeThreadId);
+        assert.isTrue(yield* harness.runtime.isThreadLoaded!(recovered));
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(
+          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),
+        ),
+      ),
+  );
+
+  it.effect("retains a real close when the matching resume subsequently fails", () =>
+    Effect.gen(function* () {
+      const nativeThreadId = "native-closed-resume-error";
+      const harness = yield* makeCodexReplayHarness(
+        makeCodexReplayTranscript({
+          scenario: "closed-resume-error",
+          entries: [
+            ...codexReplayPreamble({
+              nativeThreadId,
+              nativeTurnId: "unused",
+              prompt: "unused",
+            }).slice(0, 5),
+            {
+              type: "expect_outbound",
+              frame: {
+                id: 3,
+                method: "thread/resume",
+                params: { threadId: nativeThreadId, excludeTurns: true },
+              },
+            },
+            {
+              type: "emit_inbound",
+              frame: { method: "thread/closed", params: { threadId: nativeThreadId } },
+            },
+            {
+              type: "emit_inbound",
+              frame: { id: 3, error: { code: -32603, message: "mock resume failed after close" } },
+            },
+            {
+              type: "expect_outbound",
+              frame: {
+                id: 4,
+                method: "thread/resume",
+                params: {
+                  threadId: nativeThreadId,
+                  excludeTurns: true,
+                  config: CodexAdapterV2.CODEX_THREAD_CONFIG,
+                },
+              },
+            },
+            {
+              type: "emit_inbound",
+              frame: {
+                id: 4,
+                result: {
+                  thread: { id: nativeThreadId, updatedAt: 1782622450, status: { type: "idle" } },
+                },
+              },
+            },
+          ],
+        }),
+        undefined,
+        (method) =>
+          Effect.sync(() => {
+            assert.notEqual(
+              method,
+              "thread/unsubscribe",
+              "a confirmed close must survive the subsequent resume error",
+            );
+          }),
+      );
+      const failed = yield* Effect.result(
+        harness.runtime.resumeThread({ providerThread: harness.providerThread }),
+      );
+      assert.equal(failed._tag, "Failure");
+      assert.isFalse(yield* harness.runtime.isThreadLoaded!(harness.providerThread));
+      const recovered = yield* harness.runtime.resumeThread({
+        providerThread: harness.providerThread,
+      });
+      assert.equal(recovered.nativeThreadRef?.nativeId, nativeThreadId);
+      assert.isTrue(yield* harness.runtime.isThreadLoaded!(recovered));
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),
+      ),
+    ),
+  );
+
+  it.effect("preserves native identity after a transport loss during resume", () =>
+    Effect.gen(function* () {
+      const nativeThreadId = "native-disconnected-resume";
+      const harness = yield* makeCodexReplayHarness(
+        makeCodexReplayTranscript({
+          scenario: "disconnected-resume",
+          entries: [
+            ...codexReplayPreamble({
+              nativeThreadId,
+              nativeTurnId: "unused",
+              prompt: "unused",
+            }).slice(0, 5),
+            {
+              type: "expect_outbound",
+              frame: {
+                id: 3,
+                method: "thread/resume",
+                params: { threadId: nativeThreadId, excludeTurns: true },
+              },
+            },
+            { type: "runtime_exit", status: "error", error: "mock transport disconnected" },
+          ],
+        }),
+      );
+      const result = yield* Effect.result(
+        harness.runtime.resumeThread({ providerThread: harness.providerThread }),
+      );
+      assert.equal(result._tag, "Failure");
+      if (result._tag === "Failure") {
+        assert.equal(result.failure._tag, "ProviderAdapterResumeThreadError");
+        if (result.failure._tag === "ProviderAdapterResumeThreadError") {
+          assert.equal(result.failure.preserveNativeThread, true);
+        }
+      }
+      assert.isFalse(yield* harness.runtime.isThreadLoaded!(harness.providerThread));
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),
+      ),
+    ),
+  );
+
   // regression: #15389 archived native Codex sessions resume via thread/unarchive
   it.effect.each(
     (
@@ -3304,9 +4029,6 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         const params = {
           threadId: nativeThreadId,
           excludeTurns: true,
-          cwd: CODEX_TEST_RUNTIME_POLICY.cwd,
-          model: CODEX_TEST_MODEL_SELECTION.model,
-          config: CodexAdapterV2.CODEX_THREAD_CONFIG,
         };
         const entries: Array<CodexReplay.CodexAppServerReplayEntry> = [
           ...codexReplayPreamble({
@@ -3946,6 +4668,214 @@ describe("CodexAdapterV2 post-settle continuation", () => {
       },
     ],
   });
+
+  it.effect(
+    "rejoins background commands without rebuilding and refuses changed MCP without killing them",
+    () =>
+      Effect.gen(function* () {
+        const requests: Array<string> = [];
+        const changedSelection = { ...CODEX_TEST_MODEL_SELECTION, model: "gpt-5.4-mini" };
+        const changedPolicy = { ...CODEX_TEST_RUNTIME_POLICY, cwd: "/changed-workspace" };
+        const harness = yield* makeCodexReplayHarness(
+          makeCodexReplayTranscript({
+            scenario: BG_SCENARIO,
+            entries: [
+              ...backgroundExecTranscript.entries.slice(0, -1),
+              {
+                type: "expect_outbound",
+                frame: {
+                  id: 4,
+                  method: "thread/resume",
+                  params: { threadId: BG_NATIVE_THREAD, excludeTurns: true },
+                },
+              },
+              {
+                type: "emit_inbound",
+                frame: {
+                  id: 4,
+                  result: {
+                    thread: {
+                      id: BG_NATIVE_THREAD,
+                      updatedAt: 1782622450,
+                      status: { type: "idle" },
+                    },
+                  },
+                },
+              },
+              {
+                type: "expect_outbound",
+                frame: {
+                  id: 5,
+                  method: "config/read",
+                  params: { cwd: changedPolicy.cwd, includeLayers: false },
+                },
+              },
+              {
+                type: "emit_inbound",
+                frame: {
+                  id: 5,
+                  result: { config: { model_reasoning_effort: "medium" }, origins: {} },
+                },
+              },
+              {
+                type: "expect_outbound",
+                frame: {
+                  id: 6,
+                  method: "turn/start",
+                  params: {
+                    threadId: BG_NATIVE_THREAD,
+                    input: [{ type: "text", text: "Continue with new selection" }],
+                    cwd: changedPolicy.cwd,
+                    model: changedSelection.model,
+                    summary: "detailed",
+                    approvalsReviewer: "user",
+                    serviceTier: null,
+                    effort: "medium",
+                    collaborationMode: {
+                      mode: "default",
+                      settings: { model: changedSelection.model, reasoning_effort: "medium" },
+                    },
+                  },
+                },
+              },
+              {
+                type: "emit_inbound",
+                frame: {
+                  id: 6,
+                  result: {
+                    turn: makeCodexReplayTurn({
+                      id: "changed-selection-turn",
+                      status: "inProgress",
+                    }),
+                  },
+                },
+              },
+              {
+                type: "emit_inbound",
+                frame: {
+                  method: "turn/completed",
+                  params: {
+                    threadId: BG_NATIVE_THREAD,
+                    turn: makeCodexReplayTurn({
+                      id: "changed-selection-turn",
+                      status: "completed",
+                    }),
+                  },
+                },
+              },
+              {
+                type: "expect_outbound",
+                frame: {
+                  id: 7,
+                  method: "thread/resume",
+                  params: { threadId: BG_NATIVE_THREAD, excludeTurns: true },
+                },
+              },
+              {
+                type: "emit_inbound",
+                frame: {
+                  id: 7,
+                  result: {
+                    thread: {
+                      id: BG_NATIVE_THREAD,
+                      updatedAt: 1782622450,
+                      status: { type: "idle" },
+                    },
+                  },
+                },
+              },
+            ],
+          }),
+          undefined,
+          (method) =>
+            Effect.sync(() => {
+              requests.push(method);
+            }),
+          undefined,
+          undefined,
+          {
+            onRawRequest: (method) =>
+              Effect.sync(() => {
+                requests.push(method);
+              }),
+          },
+        );
+        yield* harness.runtime.startTurn(
+          makeCodexTestTurnInput({
+            threadId: harness.threadId,
+            providerThread: harness.providerThread,
+            now: yield* DateTime.now,
+            attemptId: RunAttemptId.make("attempt-preserved-background"),
+            text: BG_PROMPT,
+          }),
+        );
+        yield* harness.firstTerminal;
+        assert.isTrue(
+          yield* harness.runtime.hasPendingBackgroundWorkForThread!(harness.providerThread),
+        );
+        const resumeChanged = {
+          providerThread: harness.providerThread,
+          modelSelection: changedSelection,
+          runtimePolicy: changedPolicy,
+        };
+        const resumed = yield* Effect.result(harness.runtime.resumeThread(resumeChanged));
+        assert.equal(
+          resumed._tag,
+          "Success",
+          "per-turn selection changes must not require releasing background resources",
+        );
+        yield* harness.runtime.startTurn({
+          ...makeCodexTestTurnInput({
+            threadId: harness.threadId,
+            providerThread: harness.providerThread,
+            now: yield* DateTime.now,
+            attemptId: RunAttemptId.make("attempt-changed-selection"),
+            text: "Continue with new selection",
+          }),
+          providerTurnOrdinal: 2,
+          modelSelection: changedSelection,
+          previousModelSelection: CODEX_TEST_MODEL_SELECTION,
+          runtimePolicy: changedPolicy,
+        });
+        yield* harness.awaitTerminal(2);
+        yield* harness.runtime.resumeThread(resumeChanged);
+        assert.isTrue(
+          yield* harness.runtime.hasPendingBackgroundWorkForThread!(harness.providerThread),
+        );
+        const beforeChange = [...requests];
+        const sessions = yield* McpProviderSessions.McpProviderSessions;
+        yield* sessions.set({
+          environmentId: EnvironmentId.make("mock-background-env"),
+          threadId: harness.threadId,
+          providerSessionId: "mock-new",
+          providerInstanceId: CodexAdapterV2.CODEX_DEFAULT_INSTANCE_ID,
+          endpoint: "http://127.0.0.1:43123/mcp",
+          authorizationHeader: "Bearer mock-new",
+          browserToolsAvailable: true,
+        });
+        const result = yield* Effect.result(
+          harness.runtime.resumeThread({ providerThread: harness.providerThread }),
+        );
+        assert.equal(result._tag, "Failure");
+        assert.deepEqual(
+          requests,
+          beforeChange,
+          "no unsubscribe, interrupt or replacement RPC may kill background resources",
+        );
+        assert.isTrue(
+          yield* harness.runtime.hasPendingBackgroundWorkForThread!(harness.providerThread),
+        );
+        assert.deepEqual(
+          harness.terminalEvents().map((event) => event.status),
+          ["completed", "completed"],
+        );
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(
+          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),
+        ),
+      ),
+  );
 
   it.effect.each([false, true])(
     "keeps commands interrupted after native thread closure (persistent tool: %s)",

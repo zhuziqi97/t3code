@@ -211,6 +211,7 @@ export class ProviderAdapterResumeThreadError extends Schema.TaggedError<Provide
     driver: ProviderDriverKind,
     providerSessionId: ProviderSessionId,
     providerThreadId: ProviderThreadId,
+    preserveNativeThread: Schema.optional(Schema.Literal(true)),
     cause: Schema.optional(Schema.Defect()),
   },
 ) {
@@ -589,6 +590,9 @@ export interface ProviderAdapterV2SessionRuntime {
     readonly modelSelection?: ModelSelection;
     readonly runtimePolicy?: ProviderAdapterV2RuntimePolicy;
   }) => Effect.Effect<OrchestrationV2ProviderThread, ProviderAdapterV2Error>;
+  readonly isThreadLoaded?: (
+    providerThread: OrchestrationV2ProviderThread,
+  ) => Effect.Effect<boolean>;
   /** False means the native protocol explicitly does not support history injection. */
   readonly injectHistory?: (
     input: ProviderAdapterV2HistoricalContext & {
