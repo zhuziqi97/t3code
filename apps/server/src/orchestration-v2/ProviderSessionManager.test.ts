@@ -3891,9 +3891,11 @@ function instanceLifecycleRegistry(input: {
   otherState: Ref.Ref<TestProviderRuntimeState>;
   beforeOpen?: () => Effect.Effect<void, never, Scope.Scope>;
   spawnBeforeOpen?: boolean;
-  runtimeMethods?: Pick<
-    ProviderAdapter.ProviderAdapterV2SessionRuntime,
-    "ensureThread" | "resumeThread" | "forkThread" | "startTurn"
+  runtimeMethods?: Partial<
+    Pick<
+      ProviderAdapter.ProviderAdapterV2SessionRuntime,
+      "ensureThread" | "resumeThread" | "forkThread" | "startTurn"
+    >
   >;
 }) {
   const driver: ProviderDriver<
@@ -4150,6 +4152,128 @@ const makeLifecycleConveneLayer = (
   );
 
 const layerLifecycleConvene = makeLifecycleConveneLayer();
+
+it.effect("resumes with the registered MCP credential after switching away and back", () =>
+  Effect.gen(function* () {
+    const state = yield* Ref.make(emptyState);
+    const otherState = yield* Ref.make(emptyState);
+    const consumed: Array<McpProviderSession.McpProviderSessionConfig> = [];
+    let configs: McpProviderSessions.McpProviderSessions["Service"];
+    yield* Effect.gen(function* () {
+      const manager = yield* ProviderSessionManager.ProviderSessionManagerV2;
+      const sink = yield* EventSink.EventSinkV2;
+      const ids = yield* IdAllocator.IdAllocatorV2;
+      const registry = yield* McpSessionRegistry.McpSessionRegistry;
+      configs = yield* McpProviderSessions.McpProviderSessions;
+      const threadId = ThreadId.make("thread-resume-mcp-switch");
+      const now = yield* DateTime.now;
+      yield* sink.write({
+        events: [yield* makeThreadCreatedEvent({ idAllocator: ids, threadId, now })],
+      });
+      const sessions = [modelSelection.instanceId, otherLifecycleInstance].map((instanceId) => ({
+        instanceId,
+        id: ids.derive.providerSession({ providerInstanceId: instanceId }),
+      }));
+      const providerThreads = sessions.map((session) => ({
+        ...makeProviderThread({
+          idAllocator: ids,
+          threadId,
+          providerSessionId: session.id,
+          nativeThreadId: `native-${session.instanceId}`,
+          now,
+        }),
+        providerInstanceId: session.instanceId,
+      }));
+      const tokenOf = (config: McpProviderSession.McpProviderSessionConfig) =>
+        config.authorizationHeader.replace(/^Bearer\s+/, "");
+      const runtimes: Array<ProviderAdapter.ProviderAdapterV2SessionRuntime> = [];
+      for (const index of [0, 1, 0]) {
+        const session = sessions[index]!;
+        const selection = { ...modelSelection, instanceId: session.instanceId };
+        const runtime = yield* manager.open({
+          threadId,
+          providerSessionId: session.id,
+          modelSelection: selection,
+          runtimePolicy,
+        });
+        runtimes.push(runtime);
+        yield* sink.write({
+          events: [
+            {
+              id: yield* ids.allocate.event({ threadId }),
+              type: "provider-thread.updated",
+              threadId,
+              driver: CODEX_DRIVER,
+              occurredAt: now,
+              payload: providerThreads[index]!,
+            },
+          ],
+        });
+        const resume = runtime.resumeThread({
+          threadId,
+          providerThread: providerThreads[index]!,
+          modelSelection: selection,
+          runtimePolicy,
+        });
+        yield* resume;
+        yield* resume;
+        assert.lengthOf(consumed, runtimes.length, "only an already loaded thread skips resume");
+        const current = consumed.at(-1)!;
+        const caller = yield* registry.resolve(tokenOf(current));
+        assert.equal(caller?.thread.threadId, threadId);
+        assert.equal(caller?.thread.providerInstanceId, session.instanceId);
+        assert.equal(caller?.thread.providerSessionId, current.providerSessionId);
+        assert.equal((yield* configs.read(threadId))?.providerSessionId, current.providerSessionId);
+        for (const previous of consumed.slice(0, -1)) {
+          assert.isUndefined(yield* registry.resolve(tokenOf(previous)));
+        }
+        yield* manager.detach({ providerSessionId: session.id, threadId });
+        assert.isDefined(yield* registry.resolve(tokenOf(current)));
+      }
+      assert.strictEqual(runtimes[0], runtimes[2], "returning reuses the live Codex runtime");
+      assert.equal((yield* Ref.get(state)).openCount, 1);
+      assert.deepEqual((yield* Ref.get(state)).unloadedNativeThreadIds, [
+        "native-codex",
+        "native-codex",
+      ]);
+      assert.deepEqual((yield* Ref.get(otherState)).unloadedNativeThreadIds, [
+        "native-codex_other",
+      ]);
+      const current = consumed.at(-1)!;
+      yield* manager.close(sessions[1]!.id);
+      yield* registry.touch(threadId);
+      assert.isDefined(yield* registry.resolve(tokenOf(current)));
+      for (const previous of consumed.slice(0, -1)) {
+        assert.isUndefined(yield* registry.resolve(tokenOf(previous)));
+      }
+      yield* manager.close(sessions[0]!.id);
+      yield* registry.touch(threadId);
+      assert.isUndefined(yield* registry.resolve(tokenOf(current)));
+    }).pipe(
+      Effect.provide(
+        layerTest({
+          state,
+          idleTimeoutMs: 60_000,
+          instanceRegistryLayer: instanceLifecycleRegistry({
+            state,
+            otherState,
+            runtimeMethods: {
+              resumeThread: (input) =>
+                configs.read(input.threadId!).pipe(
+                  Effect.flatMap((config) =>
+                    config === undefined
+                      ? Effect.die("MCP must be registered before native resume")
+                      : Effect.sync(() => consumed.push(config)),
+                  ),
+                  Effect.as(input.providerThread),
+                ),
+            },
+          }),
+        }),
+      ),
+    );
+  }),
+);
 
 const lifecycleProject = ProjectId.make("lifecycle-project");
 const otherLifecycleProject = ProjectId.make("lifecycle-other-project");
