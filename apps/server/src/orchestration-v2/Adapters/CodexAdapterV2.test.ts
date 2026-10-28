@@ -560,7 +560,7 @@ describe("CodexAdapterV2 process spawning", () => {
         model: "gpt-5.4",
         config: {
           "tools.update_plan.enabled": true,
-          // Codex waits up to 10 s, not 1 s, for MCP servers before the first request (#13437).
+          // Codex waits up to 10 s, not 1 s, for MCP servers before the first request.
           mcp_optional_startup_grace_ms: 10_000,
           "mcp_servers.convene": {
             url: "http://127.0.0.1:43123/convene/mcp",
@@ -1643,6 +1643,10 @@ describe("CodexAdapterV2 post-settle continuation", () => {
     onRequest: (method: string, params: unknown) => Effect.Effect<void> = () => Effect.void,
     readChildMetadata?: Parameters<typeof withCodexReplayChildMetadata>[2],
     selection: ModelSelection = CODEX_TEST_MODEL_SELECTION,
+    options: {
+      readonly onRawRequest?: (method: string, params: unknown) => Effect.Effect<void>;
+      readonly existingProviderThread?: OrchestrationV2ProviderThread;
+    } = {},
   ) =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
@@ -1671,6 +1675,13 @@ describe("CodexAdapterV2 post-settle continuation", () => {
                   (client) =>
                     ({
                       ...client,
+                      raw: {
+                        ...client.raw,
+                        request: (method, params) =>
+                          (options.onRawRequest?.(method, params) ?? Effect.void).pipe(
+                            Effect.andThen(client.raw.request(method, params)),
+                          ),
+                      },
                       request: (method, params) =>
                         onRequest(method, params).pipe(
                           Effect.andThen(client.request(method, params)),
@@ -1705,11 +1716,13 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         modelSelection: selection,
         runtimePolicy: CODEX_TEST_RUNTIME_POLICY,
       });
-      const providerThread = yield* runtime.ensureThread({
-        threadId,
-        modelSelection: selection,
-        runtimePolicy: CODEX_TEST_RUNTIME_POLICY,
-      });
+      const providerThread =
+        options.existingProviderThread ??
+        (yield* runtime.ensureThread({
+          threadId,
+          modelSelection: selection,
+          runtimePolicy: CODEX_TEST_RUNTIME_POLICY,
+        }));
       const events: Array<ProviderAdapter.ProviderAdapterV2Event> = [];
       const firstTerminal = yield* Deferred.make<void>();
       yield* runtime.events.pipe(
@@ -2938,6 +2951,116 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         ),
       ),
     ),
+  );
+
+  it.effect.each([false, true])(
+    "passes the current MCP credential to native resume (fresh transport: %s)",
+    (freshTransport) =>
+      Effect.gen(function* () {
+        const scenario = `codex-resume-current-mcp-${freshTransport}`;
+        const nativeThreadId = `native-${scenario}`;
+        const threadId = ThreadId.make(`thread-${scenario}`);
+        const sessions = yield* McpProviderSessions.McpProviderSessions;
+        const config = {
+          environmentId: EnvironmentId.make("environment-resume-current-mcp"),
+          threadId,
+          providerSessionId: "original-credential",
+          providerInstanceId: CodexAdapterV2.CODEX_DEFAULT_INSTANCE_ID,
+          endpoint: "http://127.0.0.1:43123/mcp",
+          authorizationHeader: "Bearer original-test-credential",
+          browserToolsAvailable: true,
+        };
+        yield* sessions.set(config);
+        const McpConfig = Schema.Struct({
+          threadId: Schema.String,
+          config: Schema.Struct({
+            "mcp_servers.t3-code": Schema.Struct({
+              url: Schema.String,
+              http_headers: Schema.Struct({ Authorization: Schema.String }),
+            }),
+          }),
+        });
+        const decodeMcpConfig = Schema.decodeUnknownEffect(McpConfig);
+        const resumeRequests: Array<typeof McpConfig.Type> = [];
+        const preamble = codexReplayPreamble({
+          nativeThreadId,
+          nativeTurnId: "unused",
+          prompt: "unused",
+        });
+        const resumeEntries: Array<CodexReplay.CodexAppServerReplayEntry> = [
+          {
+            type: "expect_outbound",
+            frame: {
+              id: freshTransport ? 2 : 3,
+              method: "thread/resume",
+              params: {
+                threadId: nativeThreadId,
+                excludeTurns: true,
+                config: CodexAdapterV2.CODEX_THREAD_CONFIG,
+              },
+            },
+          },
+          {
+            type: "emit_inbound",
+            frame: {
+              id: freshTransport ? 2 : 3,
+              result: { thread: { id: nativeThreadId, updatedAt: 1782622450 } },
+            },
+          },
+        ];
+        const observe = (method: string, params: unknown) =>
+          method === "thread/resume"
+            ? decodeMcpConfig(params).pipe(
+                Effect.tap((request) => Effect.sync(() => resumeRequests.push(request))),
+                Effect.asVoid,
+                Effect.orDie,
+              )
+            : Effect.void;
+        const initial = yield* makeCodexReplayHarness(
+          makeCodexReplayTranscript({
+            scenario,
+            entries: [...preamble.slice(0, 5), ...(freshTransport ? [] : resumeEntries)],
+          }),
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          { onRawRequest: observe },
+        );
+        const replacement = {
+          ...config,
+          providerSessionId: "replacement-credential",
+          endpoint: "http://127.0.0.1:44123/mcp",
+          authorizationHeader: "Bearer replacement-test-credential",
+        };
+        yield* sessions.set(replacement);
+        const harness = freshTransport
+          ? yield* makeCodexReplayHarness(
+              makeCodexReplayTranscript({
+                scenario,
+                entries: [...preamble.slice(0, 3), ...resumeEntries],
+              }),
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              { existingProviderThread: initial.providerThread, onRawRequest: observe },
+            )
+          : initial;
+        yield* harness.runtime.resumeThread({ providerThread: harness.providerThread });
+        assert.lengthOf(resumeRequests, 1);
+        assert.equal(resumeRequests[0]!.threadId, nativeThreadId);
+        assert.equal(resumeRequests[0]!.config["mcp_servers.t3-code"].url, replacement.endpoint);
+        assert.equal(
+          resumeRequests[0]!.config["mcp_servers.t3-code"].http_headers.Authorization,
+          replacement.authorizationHeader,
+        );
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(
+          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),
+        ),
+      ),
   );
 
   // regression: #15389 archived native Codex sessions resume via thread/unarchive

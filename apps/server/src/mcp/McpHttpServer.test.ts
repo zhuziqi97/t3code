@@ -21,6 +21,7 @@ import { HttpBody, HttpClient, HttpClientRequest, HttpRouter } from "effect/http
 import * as ProjectService from "../project/ProjectService.ts";
 import * as PullRequestReviewGuideService from "../pullRequest/PullRequestReviewGuideService.ts";
 import * as ServerConfig from "../config.ts";
+import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as McpHttpServer from "./McpHttpServer.ts";
 import * as McpToolAccess from "./McpToolAccess.ts";
 import * as McpToolAccessTestkit from "./McpToolAccess.testkit.ts";
@@ -838,6 +839,127 @@ it.effect("admits provider and OAuth client credentials and points only clients 
       expect(deadProvider.headers["www-authenticate"]).toBe('Bearer error="invalid_token"');
     }),
   ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+);
+
+it.effect(
+  "authenticates registry replacements and rejects retired credentials after touch and restart",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const makeRegistry = McpSessionRegistry.__testing.make().pipe(
+          Effect.provideService(ServerEnvironment.ServerEnvironment, {
+            getEnvironmentId: Effect.succeed(environmentId),
+            getDescriptor: Effect.die("unused"),
+          }),
+        );
+        let registry = yield* makeRegistry;
+        const seen: Array<McpInvocationContext.McpInvocationScope> = [];
+        const ProbeToolkit = Toolkit.make(
+          Tool.make("probe", {
+            description: "Reports the caller.",
+            success: Schema.Struct({ ok: Schema.Boolean }),
+            failure: OrchestratorMcpFailure,
+            failureMode: "return",
+            dependencies: [McpInvocationContext.McpInvocationContext],
+          }),
+        );
+        const serverLayer = McpHttpServer.toolkitRegistration(
+          ProbeToolkit,
+          McpToolAccess.toLayer(ProbeToolkit, {
+            probe: McpToolAccess.reads(() =>
+              McpInvocationContext.McpInvocationContext.pipe(
+                Effect.tap((scope) => Effect.sync(() => seen.push(scope))),
+                Effect.as({ ok: true }),
+              ),
+            ),
+          }),
+        ).pipe(
+          Layer.provideMerge(McpHttpServer.layerMcpTransport),
+          Layer.provide(
+            Layer.succeed(McpSessionRegistry.McpSessionRegistry, {
+              ...registry,
+              resolve: (token) => Effect.suspend(() => registry.resolve(token)),
+            }),
+          ),
+        );
+        yield* HttpRouter.serve(serverLayer, { disableListenLog: true, disableLogger: true }).pipe(
+          Layer.build,
+        );
+        const http = yield* HttpClient.HttpClient;
+        const issue = (providerInstanceId: ProviderInstanceId) =>
+          registry.issue({ threadId, providerInstanceId, browserToolsAvailable: false });
+        const call = (credential: { readonly config: { readonly authorizationHeader: string } }) =>
+          Effect.gen(function* () {
+            const headers = {
+              accept: "application/json, text/event-stream",
+              authorization: credential.config.authorizationHeader,
+            };
+            const initialized = yield* http.post("/mcp", {
+              headers,
+              body: HttpBody.text(
+                JSON.stringify({
+                  jsonrpc: "2.0",
+                  id: 1,
+                  method: "initialize",
+                  params: {
+                    protocolVersion: "2025-06-18",
+                    capabilities: {},
+                    clientInfo: { name: "probe", version: "1" },
+                  },
+                }),
+                "application/json",
+              ),
+            });
+            if (initialized.status !== 200) return initialized.status;
+            const sessionHeaders = {
+              ...headers,
+              "mcp-session-id": initialized.headers["mcp-session-id"]!,
+            };
+            const response = yield* http.post("/mcp", {
+              headers: { ...sessionHeaders, "mcp-protocol-version": "2025-06-18" },
+              body: HttpBody.text(
+                JSON.stringify({
+                  jsonrpc: "2.0",
+                  id: 2,
+                  method: "tools/call",
+                  params: { name: "probe", arguments: {} },
+                }),
+                "application/json",
+              ),
+            });
+            yield* response.text;
+            yield* http.del("/mcp", { headers: sessionHeaders });
+            return response.status;
+          });
+        const codex = ProviderInstanceId.make("codex");
+        const other = ProviderInstanceId.make("opencode");
+        const retired = [];
+        for (const instanceId of [codex, other, codex]) {
+          const credential = yield* issue(instanceId);
+          expect(yield* call(credential)).toBe(200);
+          const caller = seen.at(-1);
+          expect(caller?.thread).toMatchObject({
+            threadId,
+            providerInstanceId: instanceId,
+            providerSessionId: credential.config.providerSessionId,
+          });
+          expect(caller?.capabilities.has("preview")).toBe(false);
+          yield* registry.revokeProviderSession(credential.config.providerSessionId);
+          yield* registry.touch(threadId);
+          retired.push(credential);
+          for (const previous of retired) expect(yield* call(previous)).toBe(401);
+        }
+        const beforeRestart = yield* issue(codex);
+        expect(yield* call(beforeRestart)).toBe(200);
+        registry = yield* makeRegistry;
+        yield* registry.touch(threadId);
+        expect(yield* call(beforeRestart)).toBe(401);
+        const afterRestart = yield* issue(codex);
+        expect(yield* call(afterRestart)).toBe(200);
+        expect(seen).toHaveLength(5);
+        expect(seen.at(-1)?.thread?.providerSessionId).toBe(afterRestart.config.providerSessionId);
+      }),
+    ).pipe(Effect.provide(Layer.merge(NodeHttpServer.layerTest, NodeServices.layer))),
 );
 
 it.effect("lists pull request watch tools only to threads that are not delegated children", () =>
