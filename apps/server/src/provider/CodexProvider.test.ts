@@ -4,6 +4,7 @@ import { CodexSettings } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Queue from "effect/Queue";
@@ -276,6 +277,8 @@ const startProbe = Effect.fn("startProbe")(function* (hang: ReadonlyArray<string
                   yield* reply(id, {
                     rateLimits: { primary: null, secondary: null, credits: null, planType: "pro" },
                   });
+                } else if (method === "config/read") {
+                  yield* reply(id, { config: {}, origins: {}, layers: null });
                 }
               }),
             { discard: true },
@@ -297,6 +300,8 @@ const startProbe = Effect.fn("startProbe")(function* (hang: ReadonlyArray<string
     fiber,
     requested,
     authenticate: requested("account/read").pipe(Effect.flatMap((id) => reply(id, account))),
+    finishSkills: requested("skills/list").pipe(Effect.flatMap((id) => reply(id, { data: [] }))),
+    stopped,
   };
 });
 
@@ -334,26 +339,30 @@ it.layer(NodeServices.layer)("Codex probe budget", (it) => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect("bounds stalled skills and usage discovery by the remaining account probe budget", () =>
-    Effect.gen(function* () {
-      const probe = yield* startProbe(["skills/list", "account/rateLimits/read"]);
-      yield* probe.requested("account/read");
-      yield* TestClock.adjust(18_500);
-      yield* probe.authenticate;
-      yield* probe.requested("skills/list");
-      yield* probe.requested("account/rateLimits/read");
-      yield* probe.requested("model/list/2");
-      yield* TestClock.adjust(1_500);
-      const provider = yield* Fiber.join(probe.fiber);
-      assert.strictEqual(provider.status, "ready");
-      assert.strictEqual(provider.auth.status, "authenticated");
-      assert.deepStrictEqual(
-        provider.models.map((model) => model.slug),
-        ["gpt-test", "custom-model"],
-      );
-      assert.deepStrictEqual(provider.skills, []);
-      assert.strictEqual(provider.usageLimits?.unavailable?.reason, "probeFailed");
-    }).pipe(Effect.scoped),
+  it.effect(
+    "starts discovery budgets after account readiness and waits for the skills response",
+    () =>
+      Effect.gen(function* () {
+        const probe = yield* startProbe(["skills/list", "account/rateLimits/read"]);
+        yield* probe.requested("account/read");
+        yield* TestClock.adjust("20 seconds");
+        yield* probe.authenticate;
+        yield* probe.requested("skills/list");
+        yield* probe.requested("account/rateLimits/read");
+        yield* probe.requested("model/list/2");
+        yield* TestClock.adjust("3 seconds");
+        assert.isFalse(yield* Deferred.isDone(probe.stopped));
+        yield* probe.finishSkills;
+        const provider = yield* Fiber.join(probe.fiber);
+        assert.strictEqual(provider.status, "ready");
+        assert.strictEqual(provider.auth.status, "authenticated");
+        assert.deepStrictEqual(
+          provider.models.map((model) => model.slug),
+          ["gpt-test", "custom-model"],
+        );
+        assert.deepStrictEqual(provider.skills, []);
+        assert.strictEqual(provider.usageLimits?.unavailable?.reason, "probeFailed");
+      }).pipe(Effect.scoped),
   );
 
   it.effect("retains a completed probe when cleanup exceeds the work budget", () =>
@@ -386,18 +395,17 @@ it.layer(NodeServices.layer)("Codex probe budget", (it) => {
     }),
   );
 
-  it.effect("still errors when account authentication never answers", () =>
-    Effect.gen(function* () {
-      const probe = yield* startProbe([]);
-      yield* probe.requested("account/read");
-      yield* TestClock.adjust("20 seconds");
-      const provider = yield* Fiber.join(probe.fiber);
-      assert.strictEqual(provider.status, "error");
-      assert.strictEqual(provider.auth.status, "unknown");
-      assert.strictEqual(
-        provider.message,
-        "Timed out while checking Codex app-server provider status.",
-      );
-    }).pipe(Effect.scoped),
+  it.effect(
+    "keeps waiting for account readiness beyond the former budget and releases on cancel",
+    () =>
+      Effect.gen(function* () {
+        const probe = yield* startProbe([]);
+        yield* probe.requested("account/read");
+        yield* TestClock.adjust("20 seconds");
+        assert.isFalse(yield* Deferred.isDone(probe.stopped));
+        yield* Fiber.interrupt(probe.fiber);
+        assert.isTrue(Exit.hasInterrupts(yield* Fiber.await(probe.fiber)));
+        yield* Deferred.await(probe.stopped);
+      }).pipe(Effect.scoped),
   );
 });
