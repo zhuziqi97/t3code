@@ -1,3 +1,4 @@
+import { useEffect, useLayoutEffect } from "react";
 import "~/index.css";
 import { act, render as renderTestUi, type Screen } from "../../test/render";
 import type { ServerLifecycleLegacyThreadMigrationPayload } from "@t3tools/contracts";
@@ -5,6 +6,7 @@ import type { ServerLifecycleLegacyThreadMigrationPayload } from "@t3tools/contr
 import { expect, it, vi } from "vite-plus/test";
 
 const state = vi.hoisted(() => ({
+  notify: null as null | (() => void),
   migration: null as ServerLifecycleLegacyThreadMigrationPayload | null,
   add: vi.fn(() => "migration-qa"),
   update: vi.fn(),
@@ -23,8 +25,27 @@ vi.mock("./ui/toast", async (original) => ({
   toastManager: state,
 }));
 import { changeLanguage } from "../i18n";
-import { LegacyThreadMigrationToast } from "./LegacyThreadMigrationToast";
+import { startLegacyThreadMigrationToast } from "./LegacyThreadMigrationToast";
 
+vi.mock("../rpc/atomRegistry", () => ({
+  appAtomRegistry: {
+    get: () => state.migration,
+    subscribe: (_atom: unknown, notify: () => void) => {
+      state.notify = notify;
+      notify();
+      return () => {
+        state.notify = null;
+      };
+    },
+  },
+}));
+function LegacyThreadMigrationToast() {
+  useEffect(startLegacyThreadMigrationToast, []);
+  useLayoutEffect(() => {
+    state.notify?.();
+  });
+  return null;
+}
 let renderer: Screen | undefined;
 
 it("updates the same running toast across language and count changes and closes it on completion", async () => {

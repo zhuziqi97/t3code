@@ -165,7 +165,15 @@ vi.mock("../ui/toast", async (original) => ({
 }));
 
 import { changeLanguage } from "../../i18n";
-import { IntegrationsSettingsPanel } from "./IntegrationsSettings";
+import { BrowserSettingsPanel, DevicesSettingsPanel } from "./IntegrationsSettings";
+function IntegrationsSettingsPanel() {
+  return (
+    <>
+      <BrowserSettingsPanel />
+      <DevicesSettingsPanel />
+    </>
+  );
+}
 
 let root: Screen;
 let container: HTMLDivElement;

@@ -24,70 +24,24 @@ describe("resolveProviderInteractionMode", () => {
 });
 
 describe("resolvePendingTaskInteractionMode", () => {
-  it.each([false, true])(
-    "clears a queued unsupported plan mode with preferenceLoaded=%s",
-    (preferenceLoaded) => {
-      expect(
-        resolvePendingTaskInteractionMode({
-          preferenceLoaded,
-          planModeEnabled: true,
-          draftInteractionMode: "plan",
-          queuedInteractionMode: "plan",
-          provider: { showInteractionModeToggle: false },
-        }),
-      ).toBe("default");
-    },
-  );
-
-  it("preserves a queued plan task while the preference is still loading", () => {
+  it("uses build mode when disabled or unsupported", () => {
+    expect(
+      resolvePendingTaskInteractionMode({ planModeEnabled: false, draftInteractionMode: "plan" }),
+    ).toBe("default");
     expect(
       resolvePendingTaskInteractionMode({
-        preferenceLoaded: false,
-        planModeEnabled: false,
+        planModeEnabled: true,
         draftInteractionMode: "plan",
-        queuedInteractionMode: "plan",
-      }),
-    ).toBe("plan");
-  });
-
-  it("forces build mode once the disabled preference has loaded", () => {
-    expect(
-      resolvePendingTaskInteractionMode({
-        preferenceLoaded: true,
-        planModeEnabled: false,
-        draftInteractionMode: "plan",
-        queuedInteractionMode: "plan",
+        provider: { showInteractionModeToggle: false },
       }),
     ).toBe("default");
   });
-
-  it("keeps a fresh draft in build mode while the preference is loading", () => {
+  it("preserves a supported draft choice when enabled", () => {
     expect(
-      resolvePendingTaskInteractionMode({
-        preferenceLoaded: false,
-        planModeEnabled: false,
-        draftInteractionMode: "plan",
-        queuedInteractionMode: undefined,
-      }),
-    ).toBe("default");
-  });
-
-  it("honors the draft's mode when the plan preference is enabled", () => {
-    expect(
-      resolvePendingTaskInteractionMode({
-        preferenceLoaded: true,
-        planModeEnabled: true,
-        draftInteractionMode: "plan",
-        queuedInteractionMode: undefined,
-      }),
+      resolvePendingTaskInteractionMode({ planModeEnabled: true, draftInteractionMode: "plan" }),
     ).toBe("plan");
     expect(
-      resolvePendingTaskInteractionMode({
-        preferenceLoaded: true,
-        planModeEnabled: true,
-        draftInteractionMode: undefined,
-        queuedInteractionMode: "plan",
-      }),
+      resolvePendingTaskInteractionMode({ planModeEnabled: true, draftInteractionMode: undefined }),
     ).toBe("default");
   });
 });

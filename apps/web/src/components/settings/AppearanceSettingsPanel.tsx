@@ -30,6 +30,7 @@ import {
   SettingsSection,
 } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
+import { AdvancedSettings } from "./AdvancedSettings";
 import { PanelAnimationsPreview } from "./PanelAnimationsPreview";
 import { TypographySection } from "./TypographySettings";
 
@@ -111,6 +112,27 @@ export function AppearanceSettingsPanel() {
       </SettingsSection>
 
       <SettingsSection id="appearance-interface" title={t("appearance.interface")}>
+        <SettingsRow
+          {...searchableSetting("new-design")}
+          description="A true black dark mode, dimmer read threads, and simpler composer controls. Turn it off for the classic look."
+          resetAction={
+            settings.redesignEnabled !== DEFAULT_UNIFIED_SETTINGS.redesignEnabled ? (
+              <SettingResetButton
+                label="new design"
+                onClick={() =>
+                  updateSettings({ redesignEnabled: DEFAULT_UNIFIED_SETTINGS.redesignEnabled })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.redesignEnabled}
+              onCheckedChange={(checked) => updateSettings({ redesignEnabled: Boolean(checked) })}
+              aria-label="New design"
+            />
+          }
+        />
         <SettingsRow
           {...searchableSetting("setting-appearance-contrast", t)}
           description={t("appearance.contrastDescription")}
@@ -205,133 +227,6 @@ export function AppearanceSettingsPanel() {
           }
         />
 
-        {showEnvironmentIdentification ? (
-          <SettingsRow
-            {...searchableSetting("environment-identification", t)}
-            description={t("appearance.environmentDescription")}
-            resetAction={
-              settings.environmentIdentificationMode !== DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE ? (
-                <SettingResetButton
-                  label={t("appearance.environmentReset")}
-                  onClick={() =>
-                    updateSettings({
-                      environmentIdentificationMode: DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE,
-                    })
-                  }
-                />
-              ) : null
-            }
-            control={
-              <Select
-                value={settings.environmentIdentificationMode}
-                onValueChange={(value) => {
-                  if (value === "artwork" || value === "pill" || value === "none") {
-                    updateSettings({ environmentIdentificationMode: value });
-                  }
-                }}
-              >
-                <SelectTrigger
-                  size="sm"
-                  className="w-full sm:w-40"
-                  aria-label={t("settings.search.environment-identification.title")}
-                >
-                  <SelectValue>
-                    {t(ENVIRONMENT_IDENTIFICATION_LABELS[settings.environmentIdentificationMode])}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectPopup align="end" alignItemWithTrigger={false}>
-                  {Object.entries(ENVIRONMENT_IDENTIFICATION_LABELS).map(([value, label]) => (
-                    <SelectItem hideIndicator key={value} value={value}>
-                      {t(label)}
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
-            }
-          />
-        ) : null}
-
-        <SettingsRow
-          {...searchableSetting("diff-color-scheme", t)}
-          description={t("appearance.diffDescription")}
-          resetAction={
-            settings.diffColorScheme !== DEFAULT_UNIFIED_SETTINGS.diffColorScheme ? (
-              <SettingResetButton
-                label={t("appearance.diffReset")}
-                onClick={() =>
-                  updateSettings({ diffColorScheme: DEFAULT_UNIFIED_SETTINGS.diffColorScheme })
-                }
-              />
-            ) : null
-          }
-          control={
-            <div className="w-full sm:w-40">
-              <Select
-                value={settings.diffColorScheme}
-                onValueChange={(value) => {
-                  if (value === "red-green" || value === "blue-orange")
-                    updateSettings({ diffColorScheme: value });
-                }}
-              >
-                <SelectTrigger
-                  size="sm"
-                  className="w-full min-w-0"
-                  aria-label={t("settings.search.diff-color-scheme.title")}
-                >
-                  <span
-                    aria-hidden="true"
-                    className={
-                      settings.diffColorScheme === "blue-orange"
-                        ? "flex shrink-0 flex-row-reverse gap-1"
-                        : "flex shrink-0 gap-1"
-                    }
-                  >
-                    <span className="size-2 rounded-full bg-diff-deletion" />
-                    <span className="size-2 rounded-full bg-diff-addition" />
-                  </span>
-                  <SelectValue>
-                    {settings.diffColorScheme === "blue-orange"
-                      ? t("appearance.diffBlueOrange")
-                      : t("appearance.diffRedGreen")}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectPopup align="end" alignItemWithTrigger={false}>
-                  <SelectItem value="red-green">{t("appearance.diffRedGreenDefault")}</SelectItem>
-                  <SelectItem value="blue-orange">{t("appearance.diffBlueOrange")}</SelectItem>
-                </SelectPopup>
-              </Select>
-            </div>
-          }
-        />
-
-        <SettingsRow
-          {...searchableSetting("composer-context", t)}
-          description={t("appearance.composerDescription")}
-          resetAction={
-            settings.persistComposerContextStrip !==
-            DEFAULT_UNIFIED_SETTINGS.persistComposerContextStrip ? (
-              <SettingResetButton
-                label={t("appearance.composerReset")}
-                onClick={() =>
-                  updateSettings({
-                    persistComposerContextStrip:
-                      DEFAULT_UNIFIED_SETTINGS.persistComposerContextStrip,
-                  })
-                }
-              />
-            ) : null
-          }
-          control={
-            <Switch
-              checked={settings.persistComposerContextStrip}
-              onCheckedChange={(checked) =>
-                updateSettings({ persistComposerContextStrip: Boolean(checked) })
-              }
-              aria-label={t("appearance.composerKeep")}
-            />
-          }
-        />
-
         <SettingsRow
           {...searchableSetting("chat-width", t)}
           description={t("appearance.widthDescription")}
@@ -393,62 +288,142 @@ export function AppearanceSettingsPanel() {
             />
           }
         />
-      </SettingsSection>
-
-      <SettingsSection id="motion" title={t("appearance.motion")}>
-        <SettingsRow
-          {...searchableSetting("panel-animations", t)}
-          description={t("appearance.motionDescription")}
-          control={
-            <div className="grid w-full grid-cols-[5rem_minmax(0,1fr)] items-center gap-3 sm:w-auto sm:grid-cols-[7rem_13rem] sm:gap-4">
-              <PanelAnimationsPreview durationMs={settings.panelAnimationDurationMs} />
-              <div className="flex w-full items-center gap-3">
-                <output
-                  className="min-w-16 rounded-md bg-muted px-2 py-1 text-center font-mono text-xs font-medium tabular-nums text-foreground"
-                  htmlFor="panel-animation-duration"
-                >
-                  {t("appearance.milliseconds", {
-                    milliseconds: settings.panelAnimationDurationMs,
-                  })}
-                </output>
-                <input
-                  aria-label={t("appearance.motionDuration")}
-                  className="settings-slider min-w-0 flex-1"
-                  id="panel-animation-duration"
-                  max={MAX_PANEL_ANIMATION_DURATION_MS}
-                  min={MIN_PANEL_ANIMATION_DURATION_MS}
-                  onChange={(event) => {
-                    const panelAnimationDurationMs = Number(event.currentTarget.value);
-                    if (
-                      Number.isInteger(panelAnimationDurationMs) &&
-                      panelAnimationDurationMs >= MIN_PANEL_ANIMATION_DURATION_MS &&
-                      panelAnimationDurationMs <= MAX_PANEL_ANIMATION_DURATION_MS
-                    ) {
-                      updateSettings({ panelAnimationDurationMs });
+        <AdvancedSettings
+          targetIds={[
+            searchableSetting("panel-animations").id,
+            searchableSetting("environment-identification").id,
+            // Environment identification's search result lands on this section.
+            "appearance-interface",
+            searchableSetting("composer-context").id,
+          ]}
+        >
+          <SettingsRow
+            {...searchableSetting("panel-animations", t)}
+            description={t("appearance.motionDescription")}
+            control={
+              <div className="grid w-full grid-cols-[5rem_minmax(0,1fr)] items-center gap-3 sm:w-auto sm:grid-cols-[7rem_13rem] sm:gap-4">
+                <PanelAnimationsPreview durationMs={settings.panelAnimationDurationMs} />
+                <div className="flex w-full items-center gap-3">
+                  <output
+                    className="min-w-16 rounded-md bg-muted px-2 py-1 text-center font-mono text-xs font-medium tabular-nums text-foreground"
+                    htmlFor="panel-animation-duration"
+                  >
+                    {t("appearance.milliseconds", {
+                      milliseconds: settings.panelAnimationDurationMs,
+                    })}
+                  </output>
+                  <input
+                    aria-label={t("appearance.motionDuration")}
+                    className="settings-slider min-w-0 flex-1"
+                    id="panel-animation-duration"
+                    max={MAX_PANEL_ANIMATION_DURATION_MS}
+                    min={MIN_PANEL_ANIMATION_DURATION_MS}
+                    onChange={(event) => {
+                      const panelAnimationDurationMs = Number(event.currentTarget.value);
+                      if (
+                        Number.isInteger(panelAnimationDurationMs) &&
+                        panelAnimationDurationMs >= MIN_PANEL_ANIMATION_DURATION_MS &&
+                        panelAnimationDurationMs <= MAX_PANEL_ANIMATION_DURATION_MS
+                      ) {
+                        updateSettings({ panelAnimationDurationMs });
+                      }
+                    }}
+                    step={25}
+                    style={panelAnimationDurationSliderStyle}
+                    type="range"
+                    value={settings.panelAnimationDurationMs}
+                  />
+                </div>
+              </div>
+            }
+            resetAction={
+              settings.panelAnimationDurationMs !==
+              DEFAULT_UNIFIED_SETTINGS.panelAnimationDurationMs ? (
+                <SettingResetButton
+                  label="panel animations"
+                  onClick={() =>
+                    updateSettings({
+                      panelAnimationDurationMs: DEFAULT_UNIFIED_SETTINGS.panelAnimationDurationMs,
+                    })
+                  }
+                />
+              ) : null
+            }
+          />
+          {showEnvironmentIdentification ? (
+            <SettingsRow
+              {...searchableSetting("environment-identification")}
+              description="Choose how Dev and Nightly environments are identified."
+              resetAction={
+                settings.environmentIdentificationMode !==
+                DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE ? (
+                  <SettingResetButton
+                    label="environment identification"
+                    onClick={() =>
+                      updateSettings({
+                        environmentIdentificationMode: DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE,
+                      })
+                    }
+                  />
+                ) : null
+              }
+              control={
+                <Select
+                  value={settings.environmentIdentificationMode}
+                  onValueChange={(value) => {
+                    if (value === "artwork" || value === "pill" || value === "none") {
+                      updateSettings({ environmentIdentificationMode: value });
                     }
                   }}
-                  step={25}
-                  style={panelAnimationDurationSliderStyle}
-                  type="range"
-                  value={settings.panelAnimationDurationMs}
+                >
+                  <SelectTrigger
+                    size="sm"
+                    className="w-full sm:w-40"
+                    aria-label="Environment identification"
+                  >
+                    <SelectValue>
+                      {ENVIRONMENT_IDENTIFICATION_LABELS[settings.environmentIdentificationMode]}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectPopup align="end" alignItemWithTrigger={false}>
+                    {Object.entries(ENVIRONMENT_IDENTIFICATION_LABELS).map(([value, label]) => (
+                      <SelectItem hideIndicator key={value} value={value}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectPopup>
+                </Select>
+              }
+            />
+          ) : null}
+          <SettingsRow
+            {...searchableSetting("composer-context")}
+            description="Keep branch and worktree controls below the composer after a thread starts."
+            resetAction={
+              settings.persistComposerContextStrip !==
+              DEFAULT_UNIFIED_SETTINGS.persistComposerContextStrip ? (
+                <SettingResetButton
+                  label="composer context"
+                  onClick={() =>
+                    updateSettings({
+                      persistComposerContextStrip:
+                        DEFAULT_UNIFIED_SETTINGS.persistComposerContextStrip,
+                    })
+                  }
                 />
-              </div>
-            </div>
-          }
-          resetAction={
-            settings.panelAnimationDurationMs !==
-            DEFAULT_UNIFIED_SETTINGS.panelAnimationDurationMs ? (
-              <SettingResetButton
-                label={t("appearance.motionReset")}
-                onClick={() =>
-                  updateSettings({
-                    panelAnimationDurationMs: DEFAULT_UNIFIED_SETTINGS.panelAnimationDurationMs,
-                  })
+              ) : null
+            }
+            control={
+              <Switch
+                checked={settings.persistComposerContextStrip}
+                onCheckedChange={(checked) =>
+                  updateSettings({ persistComposerContextStrip: Boolean(checked) })
                 }
+                aria-label="Keep composer context visible in active threads"
               />
-            ) : null
-          }
-        />
+            }
+          />
+        </AdvancedSettings>
       </SettingsSection>
 
       <TypographySection />

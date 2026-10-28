@@ -8,11 +8,11 @@ import * as TestClock from "effect/testing/TestClock";
 import { ProviderDriverKind, ProviderInstanceId, type ServerProvider } from "@t3tools/contracts";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import * as Cause from "effect/Cause";
+
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
-import * as Result from "effect/Result";
+
 import { probeClaudeCapabilities, probeClaudeWorkspaceSnapshot } from "./ClaudeProvider.ts";
 import { COMPACT_SLASH_COMMAND } from "@t3tools/provider-core/server/snapshotProbe";
 // @effect-diagnostics nodeBuiltinImport:off - cleanup uses Node's retrying rm, which the FileSystem service does not expose.
@@ -20,9 +20,10 @@ import { vi } from "vite-plus/test";
 import { assert, it } from "@effect/vitest";
 
 import { buildClaudeCapabilitiesProbeQueryOptions } from "./ClaudeProvider.ts";
-const decodeClaudeSettings = Schema.decodeSync(ClaudeSettings);
 
 vi.mock("@anthropic-ai/claude-agent-sdk", { spy: true });
+
+const decodeClaudeSettings = Schema.decodeSync(ClaudeSettings);
 
 it("drops strict MCP mode, and only that, next to an administrator's managed-mcp.json", () => {
   const options = buildClaudeCapabilitiesProbeQueryOptions({
@@ -471,4 +472,16 @@ it.effect("owns the native gateway discovery grace and closes its process before
     assert.equal(capabilities?.models?.[0]?.displayName, "Gateway Native");
     assert.equal(abortSignal?.aborted, true);
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+it.effect("reports a deleted worktree's scan as finished, not pending", () =>
+  Effect.gen(function* () {
+    const snapshot = yield* probeClaudeWorkspaceSnapshot(
+      decodeClaudeSettings({}),
+      { skills: [], slashCommands: [] } as unknown as ServerProvider,
+      "/nonexistent/t3-deleted-worktree",
+      { HOME: "/nonexistent/t3-home" },
+    );
+    assert.strictEqual(snapshot.slashCommandsPending, false);
+  }).pipe(Effect.provide(NodeServices.layer)),
 );

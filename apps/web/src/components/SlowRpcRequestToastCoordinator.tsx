@@ -1,8 +1,6 @@
-import { useEffect, useRef } from "react";
 import type { TFunction } from "i18next";
-import { useTranslate } from "../i18n";
-
-import { type SlowRpcAckRequest, useSlowRpcAckRequests } from "../rpc/requestLatencyState";
+import { i18n, useTranslate } from "../i18n";
+import { type SlowRpcAckRequest, subscribeSlowRpcAckRequests } from "../rpc/requestLatencyState";
 import { toastManager } from "./ui/toast";
 
 function describeSlowRequests(requests: ReadonlyArray<SlowRpcAckRequest>, t: TFunction): string {
@@ -35,16 +33,18 @@ function SlowRequestDetails({ requests }: { requests: ReadonlyArray<SlowRpcAckRe
   );
 }
 
-export function SlowRpcRequestToastCoordinator() {
-  const t = useTranslate();
-  const slowRequests = useSlowRpcAckRequests();
-  const toastIdRef = useRef<ReturnType<typeof toastManager.add> | null>(null);
+/** One warning toast that tracks the set of slow requests while any are outstanding. */
+export function startSlowRpcRequestToasts(): () => void {
+  const t = i18n.t;
+  let toastId: ReturnType<typeof toastManager.add> | null = null;
 
-  useEffect(() => {
+  let currentRequests: ReadonlyArray<SlowRpcAckRequest> = [];
+  const render = (slowRequests: ReadonlyArray<SlowRpcAckRequest>) => {
+    currentRequests = slowRequests;
     if (slowRequests.length === 0) {
-      if (toastIdRef.current !== null) {
-        toastManager.close(toastIdRef.current);
-        toastIdRef.current = null;
+      if (toastId !== null) {
+        toastManager.close(toastId);
+        toastId = null;
       }
       return;
     }
@@ -64,21 +64,18 @@ export function SlowRpcRequestToastCoordinator() {
       type: "warning" as const,
     };
 
-    if (toastIdRef.current === null) {
-      toastIdRef.current = toastManager.add(nextToast);
+    if (toastId === null) {
+      toastId = toastManager.add(nextToast);
     } else {
-      toastManager.update(toastIdRef.current, nextToast);
+      toastManager.update(toastId, nextToast);
     }
-  }, [slowRequests, t]);
-
-  useEffect(
-    () => () => {
-      if (toastIdRef.current !== null) {
-        toastManager.close(toastIdRef.current);
-      }
-    },
-    [],
-  );
-
-  return null;
+  };
+  const unsubscribe = subscribeSlowRpcAckRequests(render);
+  const translate = () => render(currentRequests);
+  i18n.on("languageChanged", translate);
+  return () => {
+    unsubscribe();
+    i18n.off("languageChanged", translate);
+    if (toastId !== null) toastManager.close(toastId);
+  };
 }

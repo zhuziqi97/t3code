@@ -1,5 +1,5 @@
 import "~/index.css";
-import { act, render as renderTestUi, type Screen } from "../../../test/render";
+import { fakeTimers, act, render as renderTestUi, type Screen } from "../../../test/render";
 
 import { expect, it, vi } from "vite-plus/test";
 
@@ -50,7 +50,11 @@ let root: Screen;
 let container: HTMLDivElement;
 
 async function render() {
-  await act(async () => root.rerender(<ThemeSearchSection open onInstalled={state.installed} />));
+  await act(async () =>
+    root.rerender(
+      <ThemeSearchSection signal={new AbortController().signal} onInstalled={state.installed} />,
+    ),
+  );
 }
 function searchInput() {
   return container.querySelector<HTMLInputElement>('input[type="search"]')!;
@@ -208,7 +212,7 @@ async function setupLifecycle() {
     vi.unstubAllGlobals();
   });
 
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  stack.use(fakeTimers());
   await changeLanguage("en");
   localStorage.clear();
   invalidateCustomThemes();

@@ -39,7 +39,8 @@ export function snapShotSetupSummary(
     return state.kdeHelper?.status === "error"
       ? t("snapshots.status.check-access")
       : t("snapshots.status.install-helper");
-  if (captureSetupBackend(state) === "picker") return t("snapshots.status.manual");
+  if (captureSetupBackend(state) === "picker")
+    return "Manual capture only. You'll choose a window each time";
   if (!enabled) return t("snapshots.status.enable-continue");
   if (state.shortcutPending)
     return state.linuxBackend === "hyprland"

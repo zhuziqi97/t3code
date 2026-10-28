@@ -215,18 +215,16 @@ const makeImporter = Effect.fn(function* (
           }),
           Layer.mock(ProjectService.ProjectService)({
             getById: () =>
-              Effect.succeed(
-                Option.some({
-                  id: projectId,
-                  title: "Project",
-                  workspaceRoot: "/workspace/project",
-                  defaultModelSelection: null,
-                  scripts: [],
-                  createdAt: timestamp,
-                  updatedAt: timestamp,
-                  deletedAt: null,
-                }),
-              ),
+              Effect.succeedSome({
+                id: projectId,
+                title: "Project",
+                workspaceRoot: "/workspace/project",
+                defaultModelSelection: null,
+                scripts: [],
+                createdAt: timestamp,
+                updatedAt: timestamp,
+                deletedAt: null,
+              }),
           }),
           Layer.mock(Orchestrator.OrchestratorV2)({
             getThreadRecords: (threadId, fields) =>
@@ -464,8 +462,7 @@ it.effect.each([
           recentThreads: () => Stream.succeed(outcome),
         }),
         Layer.mock(ProjectService.ProjectService)({
-          getById: () =>
-            Effect.succeed(Option.some({ id: projectId, workspaceRoot: "/repo" } as never)),
+          getById: () => Effect.succeedSome({ id: projectId, workspaceRoot: "/repo" } as never),
         }),
         Layer.mock(Orchestrator.OrchestratorV2)({
           getThreadRecords: () =>
@@ -539,8 +536,7 @@ it.effect.each([true, false])(
             recentThreads: () => Stream.succeed({ _tag: "Skipped" }),
           }),
           Layer.mock(ProjectService.ProjectService)({
-            getById: () =>
-              Effect.succeed(Option.some({ id: projectId, workspaceRoot: "/repo" } as never)),
+            getById: () => Effect.succeedSome({ id: projectId, workspaceRoot: "/repo" } as never),
           }),
           Layer.mock(ProviderSessionRuntime.ProviderSessionRuntimeRepository)({
             list: () =>

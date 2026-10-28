@@ -182,7 +182,7 @@ it.effect(
     ).pipe(Effect.provide(NodeHttpServer.layerTest)),
 );
 
-const thread = Schema.decodeUnknownSync(OrchestrationV2AppThreadJson)({
+const thread = Schema.decodeSync(OrchestrationV2AppThreadJson)({
   id: "stopped-thread",
   projectId: "message-project",
   title: "Stopped thread",

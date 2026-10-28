@@ -23,11 +23,7 @@ import { sortModelsForProviderInstance } from "./modelOrdering";
 export const MAX_CUSTOM_MODEL_LENGTH = 256;
 const DEFAULT_TEXT_GENERATION_INSTANCE_ID = ProviderInstanceId.make("codex");
 
-/**
- * Custom instances intentionally do not read the legacy per-driver bucket;
- * otherwise one custom model added to `claude_openrouter` can appear on the
- * stock `claudeAgent` instance.
- */
+// Legacy per-driver buckets would leak custom-instance models into stock instances.
 function readInstanceCustomModels(
   settings: UnifiedSettings,
   instanceId: ProviderInstanceId,
@@ -117,16 +113,7 @@ function applyInstanceModelPreferences(
   );
 }
 
-/**
- * Instance-scoped variant of {@link getAppModelOptions}. Built-in models
- * come from the instance's own `entry.models` snapshot (rather than the
- * first-matching-kind fallback in `getProviderModels`), so each custom
- * instance gets the precise model list its driver reported. Custom model
- * slugs come from the instance's own `providerInstances[id].config.customModels`,
- * so two instances of the same kind never leak custom slugs into each other. Custom rows reported by the server are
- * ignored so a slug removed in Settings disappears without waiting for the
- * next provider probe.
- */
+/** Models and custom slugs belong to each provider instance. Ignore server custom rows so removing a slug takes effect before the next probe. */
 export function getAppModelOptionsForInstance(
   settings: UnifiedSettings,
   entry: ProviderInstanceEntry,
@@ -163,15 +150,6 @@ export function getAppModelOptionsForInstance(
     selectedModel,
     preferences.hiddenModels,
   );
-}
-
-function resolveAppModelSelection(
-  provider: ProviderDriverKind,
-  settings: UnifiedSettings,
-  providers: ReadonlyArray<ServerProvider>,
-  selectedModel: string | null | undefined,
-): string {
-  return selectedModel ?? "";
 }
 
 export function resolveAppModelSelectionForInstance(

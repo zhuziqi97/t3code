@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { fakeTimers } from "../../test/render";
 import "~/index.css";
 import { act, render as renderTestUi } from "../../test/render";
@@ -12,8 +13,13 @@ vi.mock("@tanstack/react-router", async (importOriginal) => ({
 import { i18n } from "../i18n";
 import { AppAtomRegistryProvider } from "../rpc/atomRegistry";
 import { acknowledgeRpcRequest, trackRpcRequestSent } from "../rpc/requestLatencyState";
-import { SlowRpcRequestToastCoordinator } from "./SlowRpcRequestToastCoordinator";
+import { startSlowRpcRequestToasts } from "./SlowRpcRequestToastCoordinator";
 import { ToastProvider, toastManager } from "./ui/toast";
+
+function SlowRpcRequestToastCoordinator() {
+  useEffect(startSlowRpcRequestToasts, []);
+  return null;
+}
 
 describe("slow-request notifications", () => {
   it("retranslates one expanded notification, keeps raw request labels and closes after acknowledgement", async () => {

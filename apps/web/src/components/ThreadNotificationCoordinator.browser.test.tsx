@@ -1,11 +1,16 @@
+import { Atom, AtomRegistry } from "effect/reactivity";
+import type { AnyRouter } from "@tanstack/react-router";
+import { fakeTimers } from "../../test/render";
+import { WORKING_EXIT_GRACE_MS } from "@t3tools/client-runtime/state/thread-inbox";
 import type { ClientSettings } from "@t3tools/contracts/settings";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { render, stubGlobal, type Screen } from "../../test/render";
+import { stubGlobal } from "../../test/render";
 
 const state = vi.hoisted(() => ({
+  settingsListeners: new Set<() => void>(),
   mode: "off" as ClientSettings["notificationMode"],
   inApp: true,
   active: { environmentId: "env-1", threadId: "other-thread" },
@@ -129,7 +134,14 @@ vi.mock(import("../hooks/useSettings"), async (original) => ({
       settings: Pick<ClientSettings, "notificationMode" | "inAppNotificationsEnabled">,
     ) => unknown,
   ) => select({ notificationMode: state.mode, inAppNotificationsEnabled: state.inApp })) as never,
-  getClientSettings: (() => ({ notificationMode: state.mode })) as never,
+  getClientSettings: (() => ({
+    notificationMode: state.mode,
+    inAppNotificationsEnabled: state.inApp,
+  })) as never,
+  subscribeClientSettings: ((listener: () => void) => {
+    state.settingsListeners.add(listener);
+    return () => state.settingsListeners.delete(listener);
+  }) as never,
 }));
 vi.mock(import("../state/environments"), async (original) => ({
   ...(await original()),
@@ -148,7 +160,26 @@ vi.mock(import("./ui/toast"), async (original) => {
   };
 });
 
-import { ThreadNotificationCoordinator } from "./ThreadNotificationCoordinator";
+import { startThreadNotifications } from "./ThreadNotificationCoordinator";
+
+const notificationEnvironmentIds = Atom.make<ReadonlyArray<string>>([]);
+const notificationShell = Atom.make<unknown>(null);
+vi.mock(import("../state/presentation"), async (original) => ({
+  ...(await original()),
+  environmentSummaries: {
+    ...(await original()).environmentSummaries,
+    get environmentIdsAtom() {
+      return notificationEnvironmentIds as never;
+    },
+  },
+}));
+vi.mock(import("../state/shell"), async (original) => ({
+  ...(await original()),
+  environmentShell: {
+    ...(await original()).environmentShell,
+    stateValueAtom: (() => notificationShell) as never,
+  },
+}));
 
 // The mocked modules read `state`, so every test starts by resetting all of it. The first
 // render is left to the test because some tests change state before the coordinator mounts.
@@ -183,10 +214,29 @@ function setup() {
   stack.use(
     stubGlobal("Notification", Object.assign(state.notification, { permission: "granted" })),
   );
-  let screen: Screen | undefined;
+  const registry = AtomRegistry.make();
+  stack.defer(() => registry.dispose());
+  stack.use(fakeTimers());
+  let started = false;
   const renderCoordinator = async () => {
-    if (screen) await screen.rerender(<ThreadNotificationCoordinator />);
-    else screen = stack.use(await render(<ThreadNotificationCoordinator />));
+    for (const listener of state.settingsListeners) listener();
+    registry.set(notificationEnvironmentIds, ["env-1"]);
+    registry.set(notificationShell, {
+      status: state.live ? "live" : "disconnected",
+      snapshot: Option.some({ threads: mockThreads() }),
+    });
+    if (!started) {
+      started = true;
+      stack.defer(
+        startThreadNotifications(registry, {
+          get state() {
+            return { matches: [{ params: state.active }] };
+          },
+          navigate: state.navigate,
+        } as unknown as AnyRouter),
+      );
+    }
+    await vi.advanceTimersByTimeAsync(WORKING_EXIT_GRACE_MS);
   };
   return {
     render: renderCoordinator,

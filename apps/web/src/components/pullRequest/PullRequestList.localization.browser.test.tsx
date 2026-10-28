@@ -20,6 +20,7 @@ function FiltersHarness() {
   const [filters, setFilters] = useState<PullRequestListFilters>({ review: "approved" });
   return (
     <PullRequestFiltersMenu
+      optionScope={[]}
       state="open"
       stateOptions={[
         { value: "open", label: t("pullRequest.state.open"), Icon: PullRequestGlyph.pullRequest },
@@ -63,7 +64,7 @@ it("keeps a typed host query when its input switches language", async () => {
 
   function SearchHarness() {
     const [query, setQuery] = useState("");
-    return <PullRequestSearchInput value={query} onChange={setQuery} />;
+    return <PullRequestSearchInput value={query} onChange={setQuery} onSubmit={setQuery} />;
   }
   await act(async () => root.rerender(<SearchHarness />));
   const input = container.querySelector("input")!;
@@ -153,7 +154,7 @@ it("translates retry without changing a server diagnostic or its host link", asy
     root.rerender(
       <PullRequestsUnavailableState
         error="Raw host diagnostic 原文"
-        gitHubUrl={url}
+        host={{ url, openLabel: "Open on GitHub" }}
         onRetry={retry}
       />,
     ),

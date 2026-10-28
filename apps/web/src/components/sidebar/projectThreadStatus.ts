@@ -9,6 +9,7 @@ export type ProjectThreadStatus = Omit<ThreadStatusPill, "label"> & {
 const priority: Record<ProjectThreadStatus["label"], number> = {
   "Pending Approval": 5,
   "Awaiting Input": 4,
+  "Guest Request": 4,
   Failed: 3.5,
   Limited: 3.5,
   Working: 3,

@@ -95,68 +95,67 @@ export const make = Effect.gen(function* () {
       .pipe(Effect.andThen(window.sendAll(IpcChannels.UPDATE_STATE_CHANNEL, next)));
   const getState = Ref.get(state);
   const checkedAt = DateTime.now.pipe(Effect.map(DateTime.formatIso));
-  const check = (_reason: string) =>
-    Effect.gen(function* () {
-      if (baseUrl === null || config.disableAutoUpdate || checking === generation) {
-        return { checked: false, state: yield* getState };
-      }
-      const source = baseUrl;
-      const epoch = generation;
-      checking = epoch;
-      const previous = yield* getState;
-      yield* setState({ ...previous, status: "checking", message: null, errorContext: null });
-      const result = yield* http.get(conveneUrl(source, "downloads/release.json")).pipe(
-        Effect.flatMap(HttpClientResponse.schemaBodyJson(ConveneRelease)),
-        Effect.flatMap((release) =>
-          Effect.try(() =>
-            resolveConveneRelease(release, {
-              version: environment.appVersion,
-              buildId,
-              baseUrl: source,
-              platform: environment.platform,
-              runtimeInfo: environment.runtimeInfo,
-              packageType,
-              appImage: Option.isSome(config.appImagePath),
-            }),
-          ),
+  const check = Effect.fn("ConveneReleaseUpdates.check")(function* (_reason: string) {
+    if (baseUrl === null || config.disableAutoUpdate || checking === generation) {
+      return { checked: false, state: yield* getState };
+    }
+    const source = baseUrl;
+    const epoch = generation;
+    checking = epoch;
+    const previous = yield* getState;
+    yield* setState({ ...previous, status: "checking", message: null, errorContext: null });
+    const result = yield* http.get(conveneUrl(source, "downloads/release.json")).pipe(
+      Effect.flatMap(HttpClientResponse.schemaBodyJson(ConveneRelease)),
+      Effect.flatMap((release) =>
+        Effect.try(() =>
+          resolveConveneRelease(release, {
+            version: environment.appVersion,
+            buildId,
+            baseUrl: source,
+            platform: environment.platform,
+            runtimeInfo: environment.runtimeInfo,
+            packageType,
+            appImage: Option.isSome(config.appImagePath),
+          }),
         ),
-        Effect.timeout("15 seconds"),
-        Effect.exit,
-      );
-      if (checking === epoch) checking = undefined;
-      if (epoch !== generation) return { checked: false, state: yield* getState };
-      const timestamp = yield* checkedAt;
-      if (result._tag === "Failure") {
-        yield* setState({
-          ...previous,
-          status: "error",
-          availableVersion: null,
-          message: CHECK_FAILED,
-          errorContext: "check",
-          canRetry: true,
-          checkedAt: timestamp,
-          convene: emptySource(source),
-        });
-      } else {
-        const release = result.value;
-        const available = release.relation === "newer" || release.relation === "different-build";
-        yield* setState({
-          ...previous,
-          status: available
-            ? "available"
-            : release.relation === "unknown-build"
-              ? "idle"
-              : "up-to-date",
-          availableVersion: available ? release.releaseVersion : null,
-          checkedAt: timestamp,
-          message: releaseMessage(release),
-          errorContext: null,
-          canRetry: false,
-          convene: release,
-        });
-      }
-      return { checked: true, state: yield* getState };
-    });
+      ),
+      Effect.timeout("15 seconds"),
+      Effect.exit,
+    );
+    if (checking === epoch) checking = undefined;
+    if (epoch !== generation) return { checked: false, state: yield* getState };
+    const timestamp = yield* checkedAt;
+    if (result._tag === "Failure") {
+      yield* setState({
+        ...previous,
+        status: "error",
+        availableVersion: null,
+        message: CHECK_FAILED,
+        errorContext: "check",
+        canRetry: true,
+        checkedAt: timestamp,
+        convene: emptySource(source),
+      });
+    } else {
+      const release = result.value;
+      const available = release.relation === "newer" || release.relation === "different-build";
+      yield* setState({
+        ...previous,
+        status: available
+          ? "available"
+          : release.relation === "unknown-build"
+            ? "idle"
+            : "up-to-date",
+        availableVersion: available ? release.releaseVersion : null,
+        checkedAt: timestamp,
+        message: releaseMessage(release),
+        errorContext: null,
+        canRetry: false,
+        convene: release,
+      });
+    }
+    return { checked: true, state: yield* getState };
+  });
   const rejectInstall = getState.pipe(
     Effect.map((current) => ({
       accepted: false,

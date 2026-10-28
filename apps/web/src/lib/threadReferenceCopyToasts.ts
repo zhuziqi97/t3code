@@ -1,4 +1,4 @@
-import type { ThreadReferenceCopyTarget } from "@t3tools/shared/threadReference";
+import type { ThreadReferenceCopyTarget } from "@t3tools/client-runtime/thread-reference";
 import * as Schema from "effect/Schema";
 
 import { ClipboardApiUnavailableError, ClipboardWriteError } from "../hooks/useCopyToClipboard";

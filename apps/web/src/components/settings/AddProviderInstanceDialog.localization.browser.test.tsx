@@ -1,3 +1,4 @@
+import type { ComponentProps } from "react";
 import "~/index.css";
 import { act, render as renderTestUi, type Screen } from "../../../test/render";
 import { type ReactNode } from "react";
@@ -75,7 +76,13 @@ vi.mock("../ui/toast", async (original) => ({
 }));
 import { changeLanguage } from "../../i18n";
 import { AddProviderInstanceDialog } from "./AddProviderInstanceDialog";
-import { AcpRegistrySearchStep } from "./AcpRegistrySearchStep";
+import { AcpRegistrySearchStep, useAcpRegistrySearch } from "./AcpRegistrySearchStep";
+function RegistrySearchFixture(
+  props: Omit<ComponentProps<typeof AcpRegistrySearchStep>, "registry">,
+) {
+  const registry = useAcpRegistrySearch(props.environmentId, true);
+  return <AcpRegistrySearchStep {...props} registry={registry} />;
+}
 
 const environmentId = EnvironmentId.make("controlled-environment");
 let root: Screen;
@@ -173,7 +180,7 @@ it("keeps a pending ACP preparation through language changes and returns the ori
   );
   const onPrepared = vi.fn();
   await render(
-    <AcpRegistrySearchStep
+    <RegistrySearchFixture
       environmentId={environmentId}
       providerInstances={{}}
       onPrepared={onPrepared}

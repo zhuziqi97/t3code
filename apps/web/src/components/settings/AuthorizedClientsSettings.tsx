@@ -29,7 +29,7 @@ import {
   selectQrEndpointOption,
   togglePairingScopeSelection,
 } from "./ConnectionsSettings.logic";
-import { useRelativeTimeTick } from "./settingsLayout";
+import { useNowSecond } from "../../hooks/useNowSecond";
 import { Input } from "../ui/input";
 import { Checkbox } from "../ui/checkbox";
 import {
@@ -157,7 +157,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
   canRevoke,
 }: PairingLinkListRowProps) {
   const t = useTranslate();
-  const nowMs = useRelativeTimeTick(1_000);
+  const nowMs = useNowSecond();
   const expiresAtMs = new Date(pairingLink.expiresAt).getTime();
   const [isRevealDialogOpen, setIsRevealDialogOpen] = useState(false);
   const [isQrPanelOpen, setIsQrPanelOpen] = useState(false);
@@ -378,7 +378,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
                       size={132}
                       level="M"
                       marginSize={2}
-                      title={t("connections.qrLabel")}
+                      title="Pairing link. Scan to open on another device"
                     />
                   </div>
                 ) : null}
@@ -483,7 +483,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
                 size={168}
                 level="M"
                 marginSize={1}
-                title={t("connections.qrLabel")}
+                title="Pairing link. Scan to open on another device"
               />
             </div>
           ) : (
@@ -515,7 +515,7 @@ const ConnectedClientListRow = memo(function ConnectedClientListRow({
   canRevoke,
 }: ConnectedClientListRowProps) {
   const t = useTranslate();
-  const nowMs = useRelativeTimeTick(1_000);
+  const nowMs = useNowSecond();
   const isLive = clientSession.current || clientSession.connected;
   const lastConnectedAt = clientSession.lastConnectedAt;
   const statusTooltip = isLive

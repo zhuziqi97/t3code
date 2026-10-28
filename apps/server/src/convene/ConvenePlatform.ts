@@ -107,7 +107,7 @@ const make = Effect.gen(function* () {
     Effect.flatMap((bytes) =>
       Option.isNone(bytes)
         ? Effect.succeed(Option.none<Connection>())
-        : decodeConnection(new TextDecoder().decode(bytes.value)).pipe(Effect.map(Option.some)),
+        : decodeConnection(new TextDecoder().decode(bytes.value)).pipe(Effect.asSome),
     ),
     Effect.mapError((cause) => new ConvenePlatformError({ operation: "read-connection", cause })),
   );
@@ -160,9 +160,11 @@ const make = Effect.gen(function* () {
   });
   const connection = readConnection.pipe(
     Effect.flatMap((value) =>
-      Option.isSome(value)
-        ? Effect.succeed(value.value)
-        : Effect.fail(new ConvenePlatformError({ operation: "connection", code: "NOT_PAIRED" })),
+      Effect.fromOption(value).pipe(
+        Effect.mapError(
+          () => new ConvenePlatformError({ operation: "connection", code: "NOT_PAIRED" }),
+        ),
+      ),
     ),
   );
   const tokenFor = Effect.fn("ConvenePlatform.tokenFor")(function* (current: Connection) {
@@ -202,8 +204,9 @@ const make = Effect.gen(function* () {
       const current = yield* connection;
       return yield* post(current.baseUrl, path, body, schema, yield* tokenFor(current));
     }),
-    beginPairing: (baseUrl) =>
+    beginPairing: Effect.fn("ConvenePlatform.beginPairing")((baseUrl) =>
       post(baseUrl, "execution-runner-pairings/create", { client_type: "t3" }, Pairing),
+    ),
     finishPairing: Effect.fn("ConvenePlatform.finishPairing")(function* (baseUrl, deviceCode) {
       const result = yield* post(
         baseUrl,

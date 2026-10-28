@@ -1,7 +1,7 @@
 import { type ServerInstallation } from "@t3tools/contracts";
 import {
   readConfirmDialogState,
-  registerConfirmDialogHost,
+  subscribeConfirmDialogHost,
   respondToConfirmDialog,
 } from "~/confirmDialog";
 import { ServerUpdateProgress } from "./ServerUpdateAction";
@@ -324,7 +324,7 @@ describe("ServerUpdateAction", () => {
     await using _lifecycle = await setupLifecycle();
 
     using _state = setup();
-    registerConfirmDialogHost();
+    subscribeConfirmDialogHost(() => {});
     testState.updateServer.mockResolvedValue(success("desktop-app", "0.0.34"));
 
     await using screen = await renderAction({
@@ -521,7 +521,7 @@ describe("ServerUpdatesAction", () => {
     await using _lifecycle = await setupLifecycle();
 
     using _state = setup();
-    registerConfirmDialogHost();
+    subscribeConfirmDialogHost(() => {});
     await using screen = await mount(
       targets.map((target, index) =>
         index < 2 ? { ...target, selfUpdate: "desktop-managed", desktopAppUpdate: true } : target,

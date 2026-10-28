@@ -180,6 +180,7 @@ async function createMenu() {
   let result!: ReturnType<typeof useThreadActionMenu>;
   function Harness() {
     const actions = useThreadActionMenu({
+      canShareWithGuest: false,
       threadRef: target,
       projectCwd: "/project",
       onStartRename: () => recordEffect("rename"),

@@ -56,23 +56,25 @@ const make = Effect.gen(function* () {
       return { status: "ready" as const, ...page };
     }).pipe(
       Effect.catchTags({
-        ConvenePlatformError: (error) => {
-          if (error.code === "NOT_PAIRED")
-            return Effect.succeed({ status: "disconnected" as const });
-          if (error.status === 403 && error.reason === "MCP_DISABLED")
-            return Effect.succeed({ status: "mcpDisabled" as const });
-          if (error.status === 403 && error.reason === "CAPABILITY_DISABLED")
-            return Effect.succeed({ status: "capabilityDisabled" as const });
-          if (error.status === 403 && error.code === "MCP_SCOPE_INSUFFICIENT")
-            return Effect.succeed({ status: "scopeInsufficient" as const });
-          if (error.status === 401 || error.status === 403)
-            return Effect.succeed({ status: "unauthorized" as const });
-          if (error.status === 404 && error.resourceType === "client_project")
-            return Effect.succeed({ status: "projectUnavailable" as const });
-          return Effect.succeed({ status: "unavailable" as const });
-        },
+        ConvenePlatformError: Effect.fn("ConveneResources.ConvenePlatformError")(
+          (error): Effect.Effect<ConveneResourceSearchResult> => {
+            if (error.code === "NOT_PAIRED")
+              return Effect.succeed({ status: "disconnected" as const });
+            if (error.status === 403 && error.reason === "MCP_DISABLED")
+              return Effect.succeed({ status: "mcpDisabled" as const });
+            if (error.status === 403 && error.reason === "CAPABILITY_DISABLED")
+              return Effect.succeed({ status: "capabilityDisabled" as const });
+            if (error.status === 403 && error.code === "MCP_SCOPE_INSUFFICIENT")
+              return Effect.succeed({ status: "scopeInsufficient" as const });
+            if (error.status === 401 || error.status === 403)
+              return Effect.succeed({ status: "unauthorized" as const });
+            if (error.status === 404 && error.resourceType === "client_project")
+              return Effect.succeed({ status: "projectUnavailable" as const });
+            return Effect.succeed({ status: "unavailable" as const });
+          },
+        ),
       }),
-      Effect.catch(() => Effect.succeed({ status: "unavailable" as const })),
+      Effect.orElseSucceed(() => ({ status: "unavailable" as const })),
     );
   });
   const read = Effect.fn("ConveneResources.read")(function* (
@@ -115,7 +117,7 @@ const make = Effect.gen(function* () {
         },
         ProjectionStoreThreadNotFoundError: () => Effect.succeed(failure("notFound")),
       }),
-      Effect.catch(() => Effect.succeed(failure("unavailable"))),
+      Effect.orElseSucceed(() => failure("unavailable")),
     );
   });
   const changes = (threadId: ThreadId) =>

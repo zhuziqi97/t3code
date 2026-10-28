@@ -2,7 +2,8 @@ import {
   resolveDefaultBranchActionDialogCopy,
   resolveGitActionProgressPresentation,
 } from "./GitActionsControl.logic";
-import type { VcsStatusResult } from "@t3tools/contracts";
+import { SourceControlProviderKind, type VcsStatusResult } from "@t3tools/contracts";
+import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { assert, describe, it } from "vite-plus/test";
 import {
   buildMenuItems,
@@ -133,6 +134,35 @@ describe("when: ref has no upstream configured", () => {
   });
 });
 
+describe("when: the ref is on GitLab", () => {
+  const gitLab = {
+    sourceControlProvider: {
+      kind: SourceControlProviderKind.make("gitlab"),
+      name: "GitLab",
+      baseUrl: "https://gitlab.com",
+    },
+  };
+
+  it("names merge requests in actions and the default-ref dialog", () => {
+    const ahead = status({ ...gitLab, hasUpstream: false, aheadCount: 2 });
+    assert.equal(resolveQuickAction(ahead, false).label, "Push & create MR");
+    assert.equal(
+      resolveQuickAction(status({ ...gitLab, hasWorkingTreeChanges: true }), false).label,
+      "Commit, push & MR",
+    );
+    assert.equal(buildMenuItems(ahead, false).find((item) => item.id === "pr")?.label, "Create MR");
+
+    const copy = resolveDefaultBranchActionDialogCopy({
+      action: "create_pr",
+      branchName: "main",
+      includesCommit: false,
+      terminology: sourceControlClients.get("gitlab").changeRequest,
+    });
+    assert.equal(copy.title, "Push & create MR from default ref?");
+    assert.include(copy.description, "create a merge request on");
+  });
+});
+
 describe("requiresDefaultBranchConfirmation", () => {
   it("requires confirmation for push actions on default ref", () => {
     assert.isFalse(requiresDefaultBranchConfirmation("commit", true));
@@ -210,7 +240,17 @@ it("keeps Git operations and refs unchanged when rendering Chinese labels", asyn
     ],
   );
   const confirmation = resolveDefaultBranchActionDialogCopy(
-    { action: "push", branchName: "main", includesCommit: false },
+    {
+      action: "push",
+      branchName: "main",
+      includesCommit: false,
+      terminology: {
+        singular: "Pull Request",
+        plural: "Pull Requests",
+        shortLabel: "PR",
+        shortLabelWithArticle: "a PR",
+      },
+    },
     t,
   );
   assert.include(confirmation.description, "main");

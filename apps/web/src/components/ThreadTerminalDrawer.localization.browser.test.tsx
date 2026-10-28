@@ -115,11 +115,8 @@ const render = async () =>
         terminalLabel="My npm dev"
         cwd="/controlled/repo"
         onSessionExited={state.command}
-        focusRequestId={0}
         autoFocus={false}
         visible={true}
-        resizeEpoch={0}
-        drawerHeight={200}
         keybindings={[]}
       />,
     ),

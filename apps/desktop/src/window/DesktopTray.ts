@@ -81,7 +81,7 @@ const make = Effect.gen(function* () {
 
   const translate = Effect.fn("desktop.tray.translate")(function* () {
     const stored = yield* clientSettings.get.pipe(
-      Effect.catch(() => Effect.succeed(Option.none<ClientSettings>())),
+      Effect.orElseSucceed(() => Option.none<ClientSettings>()),
     );
     const systemLocale = yield* app.systemLocale;
     return i18n.getFixedT(
@@ -148,7 +148,7 @@ const make = Effect.gen(function* () {
           catch: (cause) => new DesktopTraySetupError({ platform: environment.platform, cause }),
         });
         const settings = yield* clientSettings.get.pipe(
-          Effect.catch(() => Effect.succeed(Option.none<ClientSettings>())),
+          Effect.orElseSucceed(() => Option.none<ClientSettings>()),
         );
         yield* syncLanguage(Option.getOrElse(settings, () => DEFAULT_CLIENT_SETTINGS));
         if (environment.platform === "linux" && tray && !tray.isDestroyed()) {

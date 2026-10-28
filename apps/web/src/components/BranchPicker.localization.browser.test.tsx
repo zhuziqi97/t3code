@@ -77,7 +77,6 @@ function Harness() {
       filteredItems={filteredItems}
       value="main"
       query={query}
-      resultsQuery={query}
       onQueryChange={setQuery}
       open={open}
       onOpenChange={setOpen}

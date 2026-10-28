@@ -13,7 +13,7 @@ import * as Fiber from "effect/Fiber";
 import * as Effect from "effect/Effect";
 import * as PubSub from "effect/PubSub";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
+
 import { HttpClient, HttpClientResponse, HttpServerRequest } from "effect/http";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -105,7 +105,7 @@ it.effect(
         }),
         Layer.mock(ConvenePlatform.ConvenePlatform)({
           changes: yield* PubSub.unbounded<void>(),
-          readConnection: Effect.succeed(Option.none()),
+          readConnection: Effect.succeedNone,
           accessToken: Effect.die("device token must stay in the platform connection service"),
           beginPairing: () => Effect.die("unused"),
           finishPairing: () => Effect.die("unused"),

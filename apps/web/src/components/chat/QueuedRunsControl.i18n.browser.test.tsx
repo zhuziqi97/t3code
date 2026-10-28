@@ -85,6 +85,7 @@ it("keeps queue state and provider commands intact while switching Chinese and E
     await act(async () =>
       root.rerender(
         <QueuedRunsControl
+          editBlockedReason={null}
           environmentId={EnvironmentId.make("environment:test")}
           threadId={ThreadId.make("thread:test")}
           optimisticMessages={[]}

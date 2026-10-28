@@ -20,7 +20,7 @@ it("finds desktop update controls from bilingual queries and keeps the device-lo
         expect.objectContaining({
           id: "desktop-updates",
           title: language === "zh" ? "桌面更新" : "Desktop updates",
-          to: "/settings/general",
+          to: "/settings/about",
           desktopOnly: true,
         }),
       );

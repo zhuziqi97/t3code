@@ -1,7 +1,9 @@
+import { BackgroundThreadContext } from "./backgroundThread";
+import { OPEN_FAVORITE_EDITOR_ATTRIBUTE } from "./OpenInPickerShortcut";
 import { useTranslate } from "../../i18n";
 import { ThreadDetailsControl } from "./ThreadDetailsControl";
 import { EditorId, type EnvironmentId, type ResolvedKeybindingsConfig } from "@t3tools/contracts";
-import { memo, useRef } from "react";
+import { memo, use, useRef } from "react";
 import { shortcutLabelForCommand } from "../../keybindings";
 import {
   usePreferredEditor,
@@ -51,6 +53,7 @@ import {
   RustRoverIcon,
   WebStormIcon,
 } from "../JetBrainsIcons";
+import { announce } from "~/lib/announce";
 import { cn, isMacPlatform, isWindowsPlatform } from "~/lib/utils";
 import {
   THREAD_DETAILS_PANEL_CHEVRON_CLASS,
@@ -238,6 +241,7 @@ export const OpenInPicker = memo(function OpenInPicker({
         title: t("chat.editor.open"),
         description: String(squashAtomCommandFailure(result)),
       });
+    return result._tag === "Success";
   };
   useOpenFavoriteEditorShortcut({
     enabled: enableShortcut,
@@ -252,6 +256,7 @@ export const OpenInPicker = memo(function OpenInPicker({
     keybindings,
     "editor.openFavorite",
   );
+  const backgroundThread = use(BackgroundThreadContext);
   const options: OpenInOption[] = [
     {
       label: t("chat.editor.browser"),
@@ -283,7 +288,7 @@ export const OpenInPicker = memo(function OpenInPicker({
             <Icon aria-hidden="true" className={getOpenInIconClass(kind)} />
             <MenuItemLabel>
               {label}
-              {reason ? ` — ${reason}` : ""}
+              {reason ? `: ${reason}` : ""}
             </MenuItemLabel>
             {value === preferredEditor && openFavoriteEditorShortcutLabel && (
               <MenuShortcut>{openFavoriteEditorShortcutLabel}</MenuShortcut>
@@ -335,7 +340,17 @@ export const OpenInPicker = memo(function OpenInPicker({
         panel={isPanel}
         disabled={!openInCwd || unavailableReason !== null}
         title={unavailableReason ?? primaryOption?.label}
-        onClick={() => openInEditor(preferredEditor)}
+        {...(enableShortcut && !backgroundThread ? { [OPEN_FAVORITE_EDITOR_ATTRIBUTE]: "" } : {})}
+        onClick={() => {
+          if (!preferredEditor) return;
+          const label =
+            preferredEditor === "browser"
+              ? t("chat.editor.browser")
+              : editorLabelForPlatform(preferredEditor, navigator.platform);
+          void openInEditor(preferredEditor).then((opened) => {
+            if (opened) announce(`Opened in ${label}`);
+          });
+        }}
       >
         {primaryOption?.Icon ? (
           <primaryOption.Icon

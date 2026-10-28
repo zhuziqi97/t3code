@@ -82,7 +82,20 @@ vi.mock("./settingsLayout", async (original) => ({
 }));
 
 import { changeLanguage } from "../../i18n";
-import { StorageSettingsPanel } from "./StorageSettings";
+import {
+  WorktreesDirectoryRow,
+  WorktreeCleanupSection,
+  StorageCleanupSections,
+} from "./StorageSettings";
+function StorageSettingsPanel() {
+  return (
+    <>
+      <WorktreesDirectoryRow />
+      <WorktreeCleanupSection />
+      <StorageCleanupSections />
+    </>
+  );
+}
 
 let root: Screen;
 let container: HTMLDivElement;

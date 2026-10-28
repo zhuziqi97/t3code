@@ -1,3 +1,4 @@
+import * as DocumentText from "../../../provider/DocumentText.ts";
 import * as EffectOutbox from "../../../orchestration-v2/EffectOutbox.ts";
 import * as Orchestrator from "../../../orchestration-v2/Orchestrator.ts";
 import * as ThreadWorkspaceRecovery from "../../../orchestration-v2/ThreadWorkspaceRecovery.ts";
@@ -39,6 +40,7 @@ import * as PreviewAutomationBroker from "../../PreviewAutomationBroker.ts";
 import * as PreviewBrowser from "../../../preview/PreviewBrowser.ts";
 
 const layerStubServices = Layer.mergeAll(
+  Layer.mock(DocumentText.DocumentText)({}),
   Layer.mock(Orchestrator.OrchestratorV2)({}),
   Layer.mock(ThreadWorkspaceRecovery.ThreadWorkspaceRecovery)({}),
   Layer.mock(ProjectionStore.ProjectionStoreV2)({}),

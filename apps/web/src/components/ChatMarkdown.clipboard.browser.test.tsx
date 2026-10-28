@@ -512,7 +512,6 @@ function timelineMessage(
         emptyPlaceholderInset={0}
         liveFollowEnabled
         onIsAtEndChange={() => {}}
-        onManualNavigation={() => {}}
         timelineEntries={
           [
             {

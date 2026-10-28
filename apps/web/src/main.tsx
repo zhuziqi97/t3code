@@ -1,39 +1,22 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { createHashHistory, createBrowserHistory } from "@tanstack/react-router";
 
+import "@fontsource-variable/inter";
 import "./index.css";
 
-import { prepareProviderAuthDelivery } from "./providerAuthDelivery";
-import { isElectron } from "./env";
 import { hasCloudPublicConfig } from "./cloud/publicConfig";
-import { getRouter } from "./router";
-import {
-  syncDocumentElectronPlatformClasses,
-  syncDocumentWindowControlsOverlayClass,
-} from "./lib/windowControlsOverlay";
+import { isElectron } from "./env";
+import { startAppServices } from "./appInit";
 import { AppRoot } from "./AppRoot";
 import { chunkLoadRecovery, clearChunkReloadGuard } from "./lib/chunkReloadGuard";
 
-prepareProviderAuthDelivery();
-
-// Electron loads the app from a file-backed shell, so hash history avoids path resolution issues.
-const history = isElectron ? createHashHistory() : createBrowserHistory();
-
-const router = getRouter(history);
-
-if (isElectron) {
-  syncDocumentElectronPlatformClasses(navigator.platform);
-  syncDocumentWindowControlsOverlayClass();
-}
+const router = startAppServices();
 
 const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined;
 
 const app = <AppRoot router={router} />;
 
-// Loading only the selected runtime as a split chunk keeps every Clerk byte out
-// of the startup graph for local-mode users, and keeps the bundled clerk-js out
-// of the browser build entirely.
+// Split by runtime to keep Clerk out of local startup and clerk-js out of browser builds.
 const managedAuthShellModule =
   clerkPublishableKey && hasCloudPublicConfig()
     ? isElectron
@@ -46,8 +29,7 @@ export const startup = Promise.all([
   router.load(),
 ])
   .then(([ManagedAuthShell]) => {
-    // A route chunk failure still resolves router.load(): the error is parked in
-    // the lazy component and surfaces through the route error boundary. Skip the
+    // Route chunk failures resolve router.load() and surface later through the error boundary. Skip the
     // paint when a reload is on its way, and only re-arm the guard after a boot
     // that fetched every chunk it asked for.
     if (chunkLoadRecovery.reloading) return;

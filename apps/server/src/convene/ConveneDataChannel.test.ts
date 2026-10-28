@@ -8,7 +8,7 @@ import * as Effect from "effect/Effect";
 import * as PubSub from "effect/PubSub";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
+
 import * as Schema from "effect/Schema";
 import * as Socket from "effect/socket/Socket";
 import {
@@ -95,7 +95,7 @@ it.live("relays native WebSocket text, binary and close reason", () =>
     const dependencies = Layer.mergeAll(
       Layer.mock(ConvenePlatform.ConvenePlatform)({
         changes: yield* PubSub.unbounded<void>(),
-        readConnection: Effect.succeed(Option.none()),
+        readConnection: Effect.succeedNone,
         accessToken: Effect.succeed("device-access"),
         beginPairing: () => Effect.die("unused"),
         finishPairing: () => Effect.die("unused"),
@@ -182,7 +182,7 @@ it.live("finishes concurrent Web resource responses including HEAD, 204 and 304"
     const dependencies = Layer.mergeAll(
       Layer.mock(ConvenePlatform.ConvenePlatform)({
         changes: yield* PubSub.unbounded<void>(),
-        readConnection: Effect.succeed(Option.none()),
+        readConnection: Effect.succeedNone,
         accessToken: Effect.succeed("device-access"),
         beginPairing: () => Effect.die("unused"),
         finishPairing: () => Effect.die("unused"),
@@ -315,7 +315,7 @@ it.live(
           }),
           Layer.mock(ConvenePlatform.ConvenePlatform)({
             changes: yield* PubSub.unbounded<void>(),
-            readConnection: Effect.succeed(Option.none()),
+            readConnection: Effect.succeedNone,
             accessToken: Effect.succeed("device-access"),
             beginPairing: () => Effect.die("unused"),
             finishPairing: () => Effect.die("unused"),

@@ -1,18 +1,21 @@
-import { i18n, useTranslate } from "../i18n";
+import { i18n } from "../i18n";
+import { RegistryContext } from "@effect/atom-react";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { availableScratchWorkspaceRoot } from "@t3tools/client-runtime/operations/projects";
 import {
   isAtomCommandInterrupted,
+  runAtomCommand,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import type { EnvironmentId } from "@t3tools/contracts";
+import type { AtomRegistry } from "effect/reactivity";
+import { useContext } from "react";
 
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
-import { useEnvironments } from "~/state/environments";
+import { type EnvironmentPresentation, useEnvironments } from "~/state/environments";
 import { projectEnvironment } from "~/state/projects";
-import { useAtomCommand } from "~/state/use-atom-command";
-import { useNewThreadHandler } from "./useHandleNewThread";
+import { type NewThreadHandler, useNewThreadHandler } from "./useHandleNewThread";
 
 function reportScratchFailure(title: string, error: unknown) {
   toastManager.add(
@@ -24,20 +27,27 @@ function reportScratchFailure(title: string, error: unknown) {
   );
 }
 
-export function useScratchProject() {
-  const t = useTranslate();
-  const { environments } = useEnvironments();
-  const openScratch = useAtomCommand(projectEnvironment.openScratch, { reportFailure: false });
-  const handleNewThread = useNewThreadHandler();
+type ScratchEnvironment = Pick<EnvironmentPresentation, "connection" | "serverConfig"> & {
+  readonly environmentId: EnvironmentId;
+};
 
+export function createScratchProjectActions(input: {
+  readonly environments: () => Iterable<ScratchEnvironment>;
+  readonly registry: AtomRegistry.AtomRegistry;
+  readonly handleNewThread: NewThreadHandler;
+}) {
+  const t = i18n.t;
   const scratchWorkspaceRootFor = (environmentId: EnvironmentId | null): string | null => {
-    const environment = environments.find((entry) => entry.environmentId === environmentId);
+    let environment: ScratchEnvironment | undefined;
+    for (const entry of input.environments()) {
+      if (entry.environmentId === environmentId) environment = entry;
+    }
     return availableScratchWorkspaceRoot(environment?.connection.phase, environment?.serverConfig);
   };
 
   const scratchEnvironmentId = (current: EnvironmentId | null): EnvironmentId | null => {
     if (current !== null) return scratchWorkspaceRootFor(current) !== null ? current : null;
-    const offering = environments.filter(
+    const offering = [...input.environments()].filter(
       (entry) => scratchWorkspaceRootFor(entry.environmentId) !== null,
     );
     return offering.length === 1 ? (offering[0]?.environmentId ?? null) : null;
@@ -47,7 +57,13 @@ export function useScratchProject() {
     environmentId: EnvironmentId,
     failureTitle = t("project.scratch.startFailed"),
   ): Promise<EnvironmentProject | null> => {
-    const result = await openScratch({ environmentId, input: {} });
+    const command = projectEnvironment.openScratch;
+    const result = await runAtomCommand(
+      input.registry,
+      command,
+      { environmentId, input: {} },
+      { label: command.label, reportFailure: false, reportDefect: true },
+    );
     if (result._tag === "Success") return result.value;
     if (!isAtomCommandInterrupted(result)) {
       reportScratchFailure(failureTitle, squashAtomCommandFailure(result));
@@ -58,11 +74,22 @@ export function useScratchProject() {
   const startScratchThread = async (environmentId: EnvironmentId) => {
     const project = await openScratchProject(environmentId);
     if (project) {
-      await handleNewThread(scopeProjectRef(project.environmentId, project.id)).catch(
-        (error: unknown) => reportScratchFailure(t("project.scratch.startFailed"), error),
-      );
+      await input
+        .handleNewThread(scopeProjectRef(project.environmentId, project.id))
+        .catch((error: unknown) => reportScratchFailure(t("project.scratch.startFailed"), error));
     }
   };
 
   return { scratchWorkspaceRootFor, scratchEnvironmentId, openScratchProject, startScratchThread };
+}
+
+export function useScratchProject() {
+  const { environments } = useEnvironments();
+  const registry = useContext(RegistryContext);
+  const handleNewThread = useNewThreadHandler();
+  return createScratchProjectActions({
+    environments: () => environments,
+    registry,
+    handleNewThread,
+  });
 }

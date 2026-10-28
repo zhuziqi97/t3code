@@ -6,29 +6,39 @@ import { isMacPlatform, isWindowsPlatform, normalizeSearchText } from "~/lib/uti
 import { STATIC_KEYBINDING_COMMANDS, type KeybindingCommand } from "@t3tools/contracts";
 import type { EnvironmentId } from "@t3tools/contracts";
 import type { EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
-import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
-import { DEFAULT_KEYBINDINGS } from "@t3tools/shared/keybindings";
-import { commandLabel } from "./KeybindingsSettings.logic";
 import {
-  validateSettingsScopeSearch,
-  type ResolvedSettingsScope,
-  type SettingsScopeSearch,
-} from "./settingsScope";
+  sourceControlClients,
+  type SourceControlDefinition,
+} from "@t3tools/client-runtime/source-control-clients";
+import { DEFAULT_KEYBINDINGS } from "@t3tools/shared/keybindings";
+import * as Schema from "effect/Schema";
+import { TYPOGRAPHY_ADVANCED_STORAGE_KEY } from "../../appearanceFonts";
+import { writeLocalStorageValue } from "../../hooks/useLocalStorage";
+import { commandLabel } from "./KeybindingsSettings.logic";
+import type { ResolvedSettingsScope } from "./settingsScope";
 
 export type SettingsPath =
   | "/settings/projects"
   | "/settings/general"
   | "/settings/diagnostics"
   | "/settings/appearance"
+  | "/settings/chat"
+  | "/settings/diffs"
   | "/settings/keybindings"
   | "/settings/snap-shot"
   | "/settings/providers"
-  | "/settings/integrations"
+  | "/settings/threads"
+  | "/settings/browser"
+  | "/settings/devices"
   | "/settings/scheduled-tasks"
   | "/settings/source-control"
-  | "/settings/storage"
+  | "/settings/worktrees"
   | "/settings/connections"
   | "/settings/convene"
+  | "/settings/access"
+  | "/settings/maintenance"
+  | "/settings/labs"
+  | "/settings/about"
   | "/settings/archived";
 
 export type SettingsSearchScope =
@@ -75,45 +85,69 @@ export interface SettingsSearchAvailability {
 }
 
 export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
-  "/settings/diagnostics": "Diagnostics",
-  get "/settings/projects"() {
-    return i18n.t("settings.sections.projects");
-  },
-  get "/settings/general"() {
-    return i18n.t("settings.sections.general");
-  },
-  get "/settings/appearance"() {
-    return i18n.t("settings.sections.appearance");
-  },
-  get "/settings/keybindings"() {
-    return i18n.t("settings.sections.keybindings");
-  },
-  get "/settings/snap-shot"() {
-    return i18n.t("settings.sections.snap-shot");
-  },
-  get "/settings/providers"() {
-    return i18n.t("settings.sections.providers");
-  },
-  get "/settings/integrations"() {
-    return i18n.t("settings.sections.integrations");
-  },
-  get "/settings/scheduled-tasks"() {
-    return i18n.t("settings.sections.scheduled-tasks");
-  },
-  get "/settings/source-control"() {
-    return i18n.t("settings.sections.source-control");
-  },
-  get "/settings/storage"() {
-    return i18n.t("settings.sections.storage");
-  },
-  get "/settings/connections"() {
-    return i18n.t("settings.sections.connections");
-  },
+  "/settings/diagnostics": i18n.t("settings.search.diagnostics.title"),
+  "/settings/projects": "Projects",
+  "/settings/general": i18n.t("settings.sections.general"),
+  "/settings/appearance": i18n.t("settings.sections.appearance"),
+  "/settings/chat": "Chat",
+  "/settings/diffs": "Diffs & pull requests",
+  "/settings/keybindings": i18n.t("settings.sections.keybindings"),
+  "/settings/snap-shot": i18n.t("settings.sections.snap-shot"),
+  "/settings/providers": i18n.t("settings.sections.providers"),
+  "/settings/threads": "Threads",
+  "/settings/browser": "Browser",
+  "/settings/devices": "Devices",
+  "/settings/scheduled-tasks": "Scheduled tasks",
+  "/settings/source-control": i18n.t("settings.search.source-control.title"),
+  "/settings/worktrees": "Worktrees",
+  "/settings/connections": "Environments",
   "/settings/convene": "Convene",
-  get "/settings/archived"() {
-    return i18n.t("settings.sections.archived");
-  },
+  "/settings/access": "Sharing & access",
+  "/settings/maintenance": "Maintenance",
+  "/settings/labs": "Labs",
+  "/settings/about": "About",
+  "/settings/archived": i18n.t("settings.sections.archived"),
 };
+
+/** Sidebar order. A group without a heading is set apart by space alone. */
+export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
+  readonly heading: string | null;
+  readonly paths: ReadonlyArray<SettingsPath>;
+}> = [
+  {
+    heading: null,
+    paths: [
+      "/settings/general",
+      "/settings/appearance",
+      "/settings/chat",
+      "/settings/diffs",
+      "/settings/keybindings",
+      "/settings/snap-shot",
+    ],
+  },
+  {
+    heading: "Agents",
+    paths: [
+      "/settings/providers",
+      "/settings/threads",
+      "/settings/browser",
+      "/settings/devices",
+      "/settings/scheduled-tasks",
+    ],
+  },
+  {
+    heading: "Code",
+    paths: ["/settings/projects", "/settings/source-control", "/settings/worktrees"],
+  },
+  {
+    heading: i18n.t("settings.sections.connections"),
+    paths: ["/settings/connections", "/settings/access"],
+  },
+  {
+    heading: null,
+    paths: ["/settings/maintenance", "/settings/labs", "/settings/about", "/settings/archived"],
+  },
+];
 
 export function keybindingSearchAnchorId<Command extends KeybindingCommand>(command: Command) {
   return `keybinding-${command}` as const;
@@ -146,46 +180,53 @@ export function sourceControlHostSettingsSearchId(kind: string) {
   return `source-control-host-${kind}` as const;
 }
 
-const SOURCE_CONTROL_HOST_SEARCH_ITEMS = sourceControlClients.definitions.flatMap((definition) =>
-  definition.settings && definition.kind !== "github"
-    ? [
-        {
-          id: sourceControlHostSettingsSearchId(definition.kind),
-          get title() {
-            return i18n.t("sourceControl.host.credentials", { host: definition.label });
-          },
-          to: "/settings/source-control" as const,
-          searchTerms: [
-            `${definition.label} ${Object.keys(definition.settings.fields).join(" ")} token credentials sign in`,
-            ...Object.keys(definition.settings.fields).flatMap((key) =>
-              ["en", "zh"].map((language) =>
-                i18n.getFixedT(language)(`sourceControl.fields.${definition.kind}.${key}.label`, {
-                  defaultValue: key,
-                }),
-              ),
+/** Each host's own settings: its accounts and token, or the fields of its settings form. */
+export function sourceControlHostSearchItems(
+  definitions: ReadonlyArray<SourceControlDefinition>,
+): ReadonlyArray<
+  SettingsSearchItem & { readonly id: ReturnType<typeof sourceControlHostSettingsSearchId> }
+> {
+  return definitions.flatMap((definition) => {
+    if (!definition.settings) return [];
+    const names = [definition.label, ...(definition.searchKeywords ?? [])].join(" ");
+    const { credentials } = definition;
+    return [
+      {
+        id: sourceControlHostSettingsSearchId(definition.kind),
+        title: credentials
+          ? `${definition.label} accounts and token`
+          : `${definition.label} credentials`,
+        to: "/settings/source-control" as const,
+        searchTerms: [
+          credentials
+            ? `${names} ${credentials.cliName} account login user host switch multiple accounts disable sign in token personal access token pat api key credential 当前账户 账户 登录 切换 令牌 凭据`
+            : `${names} ${Object.keys(definition.settings.fields).join(" ")} token credentials sign in 账户邮箱 令牌 凭据`,
+          ...Object.keys(definition.settings.fields).flatMap((key) =>
+            ["en", "zh"].map((language) =>
+              i18n.getFixedT(language)(`sourceControl.fields.${definition.kind}.${key}.label`, {
+                defaultValue: key,
+              }),
             ),
-          ],
-          environmentOnly: true,
-          scope: "environment-defaults" as const,
-        },
-      ]
-    : [],
-);
+          ),
+        ],
+        environmentOnly: true,
+        scope: "environment-defaults" as const,
+      },
+    ];
+  });
+}
+
+/** For settings that apply to every host. */
+const SOURCE_CONTROL_HOST_LABELS = sourceControlClients.definitions
+  .map((definition) => definition.label)
+  .join(" ");
 
 export const SETTINGS_SEARCH_ITEMS = [
-  {
-    id: "convene-connection",
-    get title() {
-      return i18n.t("convene.connection.connect");
-    },
-    to: "/settings/convene",
-    searchTerms: ["convene pairing modules MCP client activation", "连接 配对 模块 客户端 激活"],
-  },
   {
     id: "storage-worktree-keep-when",
     targetId: "storage-worktrees",
     title: "Keep worktrees with local changes",
-    to: "/settings/storage",
+    to: "/settings/worktrees",
     scope: "project-defaults",
     searchTerms: [
       "any local files uncommitted changes edited tracked files ignored env build output cleanup",
@@ -194,7 +235,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "storage-delete-now",
     title: "Delete now",
-    to: "/settings/storage",
+    to: "/settings/maintenance",
     scope: "environment-defaults",
     searchTerms: ["storage cleanup run now results report removed kept failed"],
   },
@@ -203,7 +244,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.storage-worktrees.title");
     },
-    to: "/settings/storage",
+    to: "/settings/worktrees",
     scope: "project-defaults",
     searchTerms: [
       "disk storage delete deleted archived threads old inactive merged unchanged worktrees retention days project inherit off custom",
@@ -215,7 +256,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.storage-worktrees-location.title");
     },
-    to: "/settings/storage",
+    to: "/settings/worktrees",
     scope: "environment-defaults",
     searchTerms: [
       "worktree location folder directory path drive external disk",
@@ -227,7 +268,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.storage-artifacts.title");
     },
-    to: "/settings/storage",
+    to: "/settings/maintenance",
     scope: "environment-defaults",
     searchTerms: [
       "disk storage browser screenshots captures rotated logs cleanup retention",
@@ -239,7 +280,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.project-defaults.title");
     },
-    to: "/settings/general",
+    to: "/settings/threads",
     scope: "project-defaults",
     searchTerms: [
       "Project defaults and overrides 项目默认值与覆盖设置",
@@ -257,7 +298,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.default-model.title");
     },
-    to: "/settings/general",
+    to: "/settings/threads",
     scope: "project-defaults",
     searchTerms: ["Default model 默认模型", "new thread project provider reasoning effort"],
   },
@@ -266,7 +307,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.default-permissions.title");
     },
-    to: "/settings/general",
+    to: "/settings/threads",
     scope: "project-defaults",
     searchTerms: [
       "Permissions 权限",
@@ -282,8 +323,8 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [
       "color scheme appearance light dark system mode",
       "颜色模式 浅色 深色 跟随系统外观",
+      "appearance light dark system mode",
     ],
-    // The scheme tiles sit at the top of the Appearance section.
     targetId: "appearance",
   },
   {
@@ -295,9 +336,8 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [
       "appearance colors palette custom import Open VSX community search install",
       "主题 外观 颜色 配色 自定义 导入 社区主题 搜索主题 安装主题 JSON 文件",
+      "appearance colors palette custom import",
     ],
-    // Theme cards live directly under the scheme tiles; the section is the
-    // stable scroll destination for both.
     targetId: "appearance",
   },
   {
@@ -326,7 +366,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.diff-color-scheme.title");
     },
-    to: "/settings/appearance",
+    to: "/settings/diffs",
     searchTerms: [
       "red green blue orange additions deletions changes counts palette colorblind",
       "差异颜色 红绿 蓝橙 新增 删除 变更计数 色盲",
@@ -367,7 +407,6 @@ export const SETTINGS_SEARCH_ITEMS = [
       "dev nightly artwork pill label hide none",
       "环境标识 开发版 Nightly 图形标识 版本标签 不显示",
     ],
-    // The setting is stage-dependent, so its parent section is the stable destination.
     targetId: "appearance-interface",
   },
   {
@@ -404,6 +443,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     },
     to: "/settings/appearance",
     searchTerms: ["typography family size monospace output", "终端字体 等宽字体 字号 输出"],
+  },
+  {
+    id: "separate-fonts",
+    title: "Separate fonts",
+    to: "/settings/appearance",
+    searchTerms: ["typography advanced prompt code terminal font family size individually"],
   },
   {
     id: "font-smoothing",
@@ -460,7 +505,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.snooze-limited-threads.title");
     },
-    to: "/settings/general",
+    to: "/settings/threads",
     searchTerms: [
       "Snooze limited threads 暂缓受用量限制的会话",
       "usage quota rate limit reset wake recover continue",
@@ -471,11 +516,17 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.auto-resume-limited-threads.title");
     },
-    to: "/settings/general",
+    to: "/settings/threads",
     searchTerms: [
       "Auto-resume limited threads 额度重置后自动继续会话",
       "usage quota rate limit reset recover continue",
     ],
+  },
+  {
+    id: "new-design",
+    title: "New design",
+    to: "/settings/appearance",
+    searchTerms: ["redesign look style sidebar composer black quieter classic"],
   },
   {
     id: "working-shelf",
@@ -489,11 +540,18 @@ export const SETTINGS_SEARCH_ITEMS = [
     ],
   },
   {
+    id: "guest-links",
+    title: "Guest links",
+    to: "/settings/labs",
+    scope: "environment",
+    searchTerms: ["beta share guest invite link teammate watch t3 connect tunnel"],
+  },
+  {
     id: "auto-settle-inactive-threads",
     get title() {
       return i18n.t("settings.search.auto-settle-inactive-threads.title");
     },
-    to: "/settings/general",
+    to: "/settings/threads",
     searchTerms: [
       "Auto-settle inactive threads 自动完成不活跃会话",
       "sidebar inactivity days no activity automatically",
@@ -502,19 +560,9 @@ export const SETTINGS_SEARCH_ITEMS = [
     scope: "project-defaults",
   },
   {
-    id: "keep-threads-with-pr",
-    get title() {
-      return i18n.t("settings.search.keep-threads-with-pr.title");
-    },
-    to: "/settings/general",
-    searchTerms: ["PR pull request inactivity merge close 保留 不活跃 自动完成"],
-    requiresThreadAutoSettlement: true,
-    scope: "project-defaults",
-  },
-  {
     id: "compact-idle-threads",
     title: "Compact idle threads",
-    to: "/settings/general",
+    to: "/settings/providers",
     scope: "environment-defaults",
     searchTerms: ["claude context compaction idle cache tokens usage summary resume"],
   },
@@ -523,7 +571,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.auto-settle-merged-threads.title");
     },
-    to: "/settings/general",
+    to: "/settings/threads",
     searchTerms: [
       "Auto-settle merged threads 合并后自动完成会话",
       "pull request merge closed automatically sidebar",
@@ -532,11 +580,20 @@ export const SETTINGS_SEARCH_ITEMS = [
     scope: "project-defaults",
   },
   {
+    id: "keep-threads-with-pull-requests",
+    title: "Keep threads with a PR",
+    to: "/settings/threads",
+    targetId: "auto-settle-inactive-threads",
+    searchTerms: ["pull request inactivity auto-settle merge close sidebar"],
+    requiresThreadAutoSettlement: true,
+    scope: "project-defaults",
+  },
+  {
     id: "days-before-auto-settle",
     get title() {
       return i18n.t("settings.search.days-before-auto-settle.title");
     },
-    to: "/settings/general",
+    to: "/settings/threads",
     targetId: "auto-settle-inactive-threads",
     searchTerms: [
       "Days of inactivity before auto-settle 自动完成前的无活动天数",
@@ -579,21 +636,11 @@ export const SETTINGS_SEARCH_ITEMS = [
     ],
   },
   {
-    id: "language",
-    get title() {
-      return i18n.t("settings.search.language.title");
-    },
-    to: "/settings/general",
-    // Includes the native names so someone searching in their own language
-    // finds the row before it is translated.
-    searchTerms: ["Language 语言", "language locale translation english chinese 语言 中文"],
-  },
-  {
     id: "response-streaming",
     get title() {
       return i18n.t("settings.search.response-streaming.title");
     },
-    to: "/settings/general",
+    to: "/settings/threads",
     scope: "project-defaults",
     searchTerms: [
       "Response streaming 响应显示方式",
@@ -605,7 +652,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.hide-whitespace-changes.title");
     },
-    to: "/settings/general",
+    to: "/settings/diffs",
     searchTerms: ["Hide whitespace changes 隐藏空白字符变化", "diff ignore spaces edits default"],
   },
   {
@@ -613,7 +660,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.default-diff-file-state.title");
     },
-    to: "/settings/general",
+    to: "/settings/diffs",
     searchTerms: [
       "Default diff file state 差异文件默认状态",
       "collapsed expanded collapse expand files pull request pr code tab",
@@ -624,7 +671,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.diff-layout.title");
     },
-    to: "/settings/general",
+    to: "/settings/diffs",
     searchTerms: ["Diff layout 差异布局", "stacked split side by side unified inline view"],
   },
   {
@@ -632,7 +679,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.proactive-panels.title");
     },
-    to: "/settings/general",
+    to: "/settings/diffs",
     searchTerms: [
       "Proactive panels 自动打开相关面板",
       "automatically open diff pull request pr right panel agent completion",
@@ -643,7 +690,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.skills-in-slash-menu.title");
     },
-    to: "/settings/general",
+    to: "/settings/chat",
     searchTerms: [
       "Show skills in slash menu 在斜杠菜单中显示技能",
       "command menu dollar $ slash /",
@@ -654,7 +701,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.composer-rich-text.title");
     },
-    to: "/settings/general",
+    to: "/settings/chat",
     searchTerms: [
       "Rich text composer 富文本输入框",
       "composer rich text tiptap bold italic markdown styled wysiwyg",
@@ -665,7 +712,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.composer-collapse.title");
     },
-    to: "/settings/general",
+    to: "/settings/chat",
     searchTerms: [
       "Collapse composer on scroll 滚动时收起输入框",
       "composer rest resting scroll wheel conversation timeline shrink minimize",
@@ -676,7 +723,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.send-shortcut.title");
     },
-    to: "/settings/general",
+    to: "/settings/chat",
     searchTerms: [
       "Send shortcut 发送快捷键",
       "enter return command ctrl multiline prompt new line composer",
@@ -687,22 +734,10 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.follow-up-behavior.title");
     },
-    to: "/settings/general",
+    to: "/settings/chat",
     searchTerms: [
       "Follow-up behavior 后续消息处理方式",
       "queue steer running turn send default behavior composer",
-    ],
-  },
-  {
-    id: "desktop-updates",
-    get title() {
-      return i18n.t("update.search.title");
-    },
-    to: "/settings/general",
-    desktopOnly: true,
-    searchTerms: [
-      "Desktop updates check for updates update track stable nightly releases download install restart",
-      "桌面更新 应用更新 检查更新 更新渠道 稳定版 每日构建版 下载 安装 重启",
     ],
   },
   {
@@ -710,10 +745,11 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.provider-update-checks.title");
     },
-    to: "/settings/general",
+    to: "/settings/maintenance",
     searchTerms: [
       "Provider update checks 智能体提供方版本检查",
       "installed cli versions newer available codex claude cursor grok opencode",
+      "installed cli versions newer available codex claude cursor grok fx opencode",
     ],
     scope: "environment-defaults",
   },
@@ -722,7 +758,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.continue-threads-after-server-update.title");
     },
-    to: "/settings/general",
+    to: "/settings/maintenance",
     scope: "project-defaults",
     searchTerms: [
       "Continue threads after restarts 重启后继续会话",
@@ -734,7 +770,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.background-activity.title");
     },
-    to: "/settings/general",
+    to: "/settings/maintenance",
     scope: "environment-defaults",
     searchTerms: [
       "Background activity 后台活动",
@@ -746,7 +782,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.new-threads.title");
     },
-    to: "/settings/general",
+    to: "/settings/threads",
     scope: "project-defaults",
     searchTerms: ["New threads 新会话", "default workspace mode draft local worktree"],
   },
@@ -755,7 +791,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.worktree-submodules.title");
     },
-    to: "/settings/general",
+    to: "/settings/worktrees",
     scope: "project-defaults",
     searchTerms: [
       "Submodules 子模块",
@@ -767,11 +803,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.start-from-origin.title");
     },
-    to: "/settings/general",
+    to: "/settings/worktrees",
     scope: "project-defaults",
     searchTerms: [
       "Start from origin 从 origin 创建",
       "new worktrees latest matching remote branch local",
+      "new worktrees start remote origin latest fetched branch local",
     ],
   },
   {
@@ -779,7 +816,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.add-project-starts-in.title");
     },
-    to: "/settings/general",
+    to: "/settings/threads",
     scope: "environment-defaults",
     searchTerms: [
       "Add project starts in 添加项目的起始目录",
@@ -827,7 +864,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.text-generation-model.title");
     },
-    to: "/settings/general",
+    to: "/settings/threads",
     scope: "project-defaults",
     searchTerms: [
       "Text generation model 文本生成模型",
@@ -835,15 +872,22 @@ export const SETTINGS_SEARCH_ITEMS = [
     ],
   },
   {
+    id: "thread-title-instructions",
+    title: "Thread title instructions",
+    to: "/settings/threads",
+    scope: "project-defaults",
+    searchTerms: ["generated thread titles prompt custom style naming rename regenerate"],
+  },
+  {
     id: "app-version",
     title: "Version",
-    to: "/settings/general",
+    to: "/settings/about",
     searchTerms: ["about check for updates download install upgrade release"],
   },
   {
     id: "update-track",
     title: "Update track",
-    to: "/settings/general",
+    to: "/settings/about",
     searchTerms: ["release channel stable latest nightly prerelease"],
     releaseChannelOnly: true,
   },
@@ -852,14 +896,17 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return "t3code-convene";
     },
-    to: "/settings/general",
-    searchTerms: ["t3code-convene 命令 cli terminal shell path install command line"],
+    to: "/settings/about",
+    searchTerms: [
+      "t3code-convene 命令 cli terminal shell path install command line",
+      "cli terminal shell path install command line",
+    ],
     desktopOnly: true,
   },
   {
     id: "mobile-app",
     title: "Mobile app",
-    to: "/settings/general",
+    to: "/settings/about",
     searchTerms: [
       "phone tablet iPhone iPad iOS Android App Store Google Play QR",
       "移动应用 手机 平板",
@@ -868,8 +915,12 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "privacy-policy",
     title: "Privacy policy",
-    to: "/settings/general",
-    searchTerms: ["privacy policy data", "隐私政策 数据"],
+    to: "/settings/about",
+    searchTerms: [
+      "privacy policy data",
+      "隐私政策 数据",
+      "telemetry analytics usage data tracking legal opt out",
+    ],
   },
   {
     id: "telemetry-export",
@@ -884,7 +935,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.diagnostics.title");
     },
-    to: "/settings/general",
+    to: "/settings/maintenance",
     searchTerms: [
       "Diagnostics 诊断",
       "logs traces processes resource history failures spans cpu memory",
@@ -897,24 +948,26 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.open-source-licenses.title");
     },
+    to: "/settings/about",
     searchTerms: ["Open source licenses 开源许可证"],
-    to: "/settings/general",
   },
   {
-    id: "plan-mode",
-    get title() {
-      return i18n.t("settings.search.plan-mode.title");
-    },
-    to: "/settings/general",
-    searchTerms: ["Plan mode 计划模式", "build plan composer /plan /default"],
+    id: "legacy-plan-mode",
+    title: "Plan mode (legacy)",
+    to: "/settings/labs",
+    searchTerms: ["build plan composer old"],
   },
   {
-    id: "context-window-indicator",
-    get title() {
-      return i18n.t("settings.search.context-window-indicator.title");
-    },
-    to: "/settings/general",
-    searchTerms: ["Context window usage 上下文窗口用量", "composer meter usage tokens"],
+    id: "legacy-context-window-indicator",
+    title: "Context window indicator (legacy)",
+    to: "/settings/labs",
+    searchTerms: ["composer meter usage tokens circle old"],
+  },
+  {
+    id: "legacy-sidebar",
+    title: "Sidebar (legacy)",
+    to: "/settings/labs",
+    searchTerms: ["project thread tree old flat list"],
   },
   {
     id: "keybindings",
@@ -999,6 +1052,7 @@ export const SETTINGS_SEARCH_ITEMS = [
       "Providers 智能体提供方 agents cli codex claude cursor grok opencode antigravity google sign in sign out install subscription instances authentication api key models configuration binary path config directory endpoint arguments environment variables display name accent color custom favorite hidden auto compact",
       "智能体 提供方 安装 更新 登录 退出 身份验证 实例 模型 环境变量 配置",
       "ACP 注册表 本地命令 实例 ID 强调色 颜色 参数 可执行文件 原生会话 导入",
+      "agents cli codex claude cursor grok fx opencode antigravity google sign in sign out install subscription instances authentication api key models configuration binary path config directory endpoint arguments environment variables display name accent color custom favorite hidden auto compact",
     ],
   },
   {
@@ -1038,7 +1092,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("defaults.browser.title");
     },
-    to: "/settings/integrations",
+    to: "/settings/browser",
     scope: "project-defaults",
     searchTerms: [
       "Agent browser access 智能体浏览器访问 浏览器权限 项目覆盖",
@@ -1050,7 +1104,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("device.hosts.title");
     },
-    to: "/settings/integrations",
+    to: "/settings/devices",
     searchTerms: [
       "Device hosts 设备主机",
       "设备主机 远程主机 SSH 连接 身份文件 密钥 端口",
@@ -1062,7 +1116,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("device.agent.access");
     },
-    to: "/settings/integrations",
+    to: "/settings/devices",
     targetId: "devices",
     searchTerms: [
       "Agent device access 智能体设备访问",
@@ -1075,7 +1129,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("device.hub.title");
     },
-    to: "/settings/integrations",
+    to: "/settings/devices",
     targetId: "devices",
     searchTerms: [
       "Device hub 设备中心",
@@ -1088,7 +1142,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("device.platform.title");
     },
-    to: "/settings/integrations",
+    to: "/settings/devices",
     targetId: "devices",
     searchTerms: [
       "Simulator support 模拟器支持",
@@ -1101,7 +1155,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.browser-profiles.title");
     },
-    to: "/settings/integrations",
+    to: "/settings/browser",
     targetId: "browser",
     searchTerms: [
       "Browser profiles 浏览器配置",
@@ -1113,7 +1167,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.browser-default-profile.title");
     },
-    to: "/settings/integrations",
+    to: "/settings/browser",
     targetId: "browser-profiles",
     searchTerms: [
       "Default browser profile 默认浏览器配置",
@@ -1125,10 +1179,11 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.browser-default-viewport.title");
     },
-    to: "/settings/integrations",
+    to: "/settings/browser",
     searchTerms: [
       "Default browser viewport 默认浏览器视口",
       "preview size width height device desktop mobile rotate 视口 尺寸 宽度 高度 设备 旋转 横向 纵向",
+      "preview size width height device desktop mobile rotate",
     ],
   },
   {
@@ -1136,10 +1191,11 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.browser-default-zoom.title");
     },
-    to: "/settings/integrations",
+    to: "/settings/browser",
     searchTerms: [
       "Default browser zoom 默认浏览器缩放",
       "preview page scale tabs percent 浏览器 页面 缩放 比例",
+      "preview page scale tabs percent",
     ],
   },
   {
@@ -1147,10 +1203,11 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.browser-default-appearance.title");
     },
-    to: "/settings/integrations",
+    to: "/settings/browser",
     searchTerms: [
       "Default browser appearance 默认浏览器外观",
       "preview color scheme light dark system os 浏览器 外观 配色 浅色 深色 跟随系统",
+      "preview color scheme light dark system os",
     ],
   },
   {
@@ -1158,7 +1215,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.browser-recording-frame-rate.title");
     },
-    to: "/settings/integrations",
+    to: "/settings/browser",
     searchTerms: [
       "Browser recording frame rate 浏览器录制帧率",
       "recording frame rate fps browser preview 录制 帧率",
@@ -1169,10 +1226,11 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.browser-recording-key-presses.title");
     },
-    to: "/settings/integrations",
+    to: "/settings/browser",
     searchTerms: [
       "Show key presses in recordings 在录制中显示按键",
       "browser preview keyboard shortcuts keystrokes overlay capture 浏览器 录制 按键 快捷键",
+      "browser preview keyboard shortcuts keystrokes overlay capture",
     ],
   },
   {
@@ -1180,10 +1238,11 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.browser-recording-mouse-presses.title");
     },
-    to: "/settings/integrations",
+    to: "/settings/browser",
     searchTerms: [
       "Show mouse presses in recordings 在录制中显示鼠标点击",
       "browser preview clicks buttons drag overlay capture 浏览器 录制 鼠标 点击 拖动",
+      "browser preview clicks buttons drag overlay capture",
     ],
   },
   {
@@ -1191,16 +1250,17 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.browser-link-target.title");
     },
-    to: "/settings/integrations",
+    to: "/settings/browser",
     searchTerms: [
       "Open links in 链接打开位置",
       "links default browser in-app browser external open 链接 打开位置 默认浏览器 应用内浏览器",
+      "links default browser in-app browser external open",
     ],
   },
   {
     id: "browser-search-engine",
     title: "Search engine",
-    to: "/settings/integrations",
+    to: "/settings/browser",
     searchTerms: ["address bar duckduckgo google bing brave kagi ecosia custom"],
   },
   {
@@ -1208,7 +1268,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.pull-request-links-open-in-app.title");
     },
-    to: "/settings/integrations",
+    to: "/settings/diffs",
     searchTerms: [
       "pr links github browser external click default pull request view panel PR 链接 打开 浏览器 应用内",
     ],
@@ -1218,10 +1278,11 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.browser-auto-show-floating-preview.title");
     },
-    to: "/settings/integrations",
+    to: "/settings/browser",
     searchTerms: [
       "Auto-show floating preview 自动显示悬浮预览",
       "agent opens browser device simulator pop into view hide 智能体 浏览器 设备 悬浮预览 自动显示",
+      "agent opens browser device simulator pop into view hide",
     ],
   },
   {
@@ -1272,7 +1333,8 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.git-fetch-interval.title");
     },
-    to: "/settings/source-control",
+    to: "/settings/maintenance",
+    targetId: "background-activity",
     searchTerms: [
       "Git fetch interval Git fetch 间隔",
       "automatic remote branch refresh background credentials security keys seconds off",
@@ -1286,7 +1348,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     get title() {
       return i18n.t("settings.search.worktree-branch-naming.title");
     },
-    to: "/settings/source-control",
+    to: "/settings/worktrees",
     searchTerms: [
       "static semantic prefix custom prompt instructions feat fix refactor chore",
       "Git 工作树分支命名 固定前缀 语义前缀 分支前缀 命名指令",
@@ -1294,20 +1356,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     environmentOnly: true,
     scope: "project-defaults",
   },
-  {
-    id: "github-accounts",
-    get title() {
-      return i18n.t("settings.search.github-accounts.title");
-    },
-    to: "/settings/source-control",
-    searchTerms: [
-      "github gh account login user host enterprise ghes switch multiple accounts disable sign in token personal access token pat api key credential",
-      "GitHub 账户 令牌 登录 主机 凭据 当前账户 企业版",
-    ],
-    environmentOnly: true,
-    scope: "environment-defaults",
-  },
-  ...SOURCE_CONTROL_HOST_SEARCH_ITEMS,
+  ...sourceControlHostSearchItems(sourceControlClients.definitions),
   {
     id: "source-control-writing-style",
     get title() {
@@ -1380,7 +1429,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "environment-icon",
     title: "Environment icon",
-    to: "/settings/connections",
+    to: "/settings/access",
     targetId: "connections-environment",
     searchTerms: [
       "machine glyph sidebar mac mini studio laptop desktop server cloud vm",
@@ -1391,7 +1440,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "local-environment",
     title: "Local environment",
     to: "/settings/connections",
-    targetId: "connections-environment",
     searchTerms: [
       "turn off on disable enable local server agents remote only restart",
       "本机 智能体 开关 服务器 重启",
@@ -1401,7 +1449,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "network-access",
     title: "Network access",
-    to: "/settings/connections",
+    to: "/settings/access",
     targetId: "connections-environment",
     searchTerms: [
       "expose backend remote pairing local machine interfaces host restart",
@@ -1412,7 +1460,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "tailscale-https",
     title: "Tailscale HTTPS",
-    to: "/settings/connections",
+    to: "/settings/access",
     targetId: "connections-environment",
     searchTerms: ["serve magicdns endpoint remote secure network", "隧道 网络 远程 安全"],
     desktopOnly: true,
@@ -1421,7 +1469,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "wsl-backend",
     title: "WSL backend",
-    to: "/settings/connections",
+    to: "/settings/access",
     searchTerms: [
       "windows subsystem linux distro second server projects stop windows backend restart",
       "发行版 子系统 后端 重启",
@@ -1435,11 +1483,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "t3-connect",
     localEnvironmentOnly: true,
     title: "T3 Connect",
-    to: "/settings/connections",
+    to: "/settings/access",
     targetId: "connections-environment",
     searchTerms: [
       "managed tunnel cloud other devices remote relay client installation installer",
       "隧道 远程 云端 其他设备 中继客户端 安装中继",
+      "managed tunnel cloud other devices remote",
     ],
     cloudOnly: true,
   },
@@ -1447,7 +1496,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "hold-webhooks-while-offline",
     localEnvironmentOnly: true,
     title: "Hold webhooks while offline",
-    to: "/settings/connections",
+    to: "/settings/access",
     targetId: "connections-environment",
     searchTerms: ["webhook automations offline queue mailbox t3 connect", "离线 队列 自动化 暂存"],
     cloudOnly: true,
@@ -1457,7 +1506,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "publish-agent-activity",
     localEnvironmentOnly: true,
     title: "Publish agent activity",
-    to: "/settings/connections",
+    to: "/settings/access",
     targetId: "connections-environment",
     searchTerms: [
       "mobile push notifications live activities cloud tunnel",
@@ -1468,10 +1517,11 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "connections-environment",
     title: "This machine",
-    to: "/settings/connections",
+    to: "/settings/access",
     searchTerms: [
       "connections server backend local remote access administrative permissions scope pairing links qr code authorized clients sessions revoke endpoint update restart relaunch command",
       "本机 权限 已授权 客户端 配对 凭据 撤销 服务端更新 更新执行环境 重新启动命令",
+      "connections server backend local remote access administrative permissions scope pairing links qr code authorized clients sessions revoke endpoint",
     ],
   },
   {
@@ -1481,6 +1531,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [
       "add pair backend host code ssh config agent tunnel saved t3 connect server update restart relaunch command",
       "远程 设备 连接 主机 配对 SSH 路由 服务端更新 更新执行环境 重新启动命令",
+      "add pair backend host code ssh config agent tunnel saved t3 connect",
     ],
   },
   {
@@ -1493,12 +1544,11 @@ export const SETTINGS_SEARCH_ITEMS = [
     ],
   },
   {
-    id: "github-routing",
-    title: "GitHub sharing",
+    id: "pull-request-routing",
+    title: "Pull request sharing",
     to: "/settings/connections",
     searchTerms: [
-      "pull request trusted environments shared credentials permissions read actions",
-      "共享 权限 拉取请求 信任",
+      `pull request routing trusted environments shared credentials permissions read actions source control ${SOURCE_CONTROL_HOST_LABELS}`,
     ],
   },
   {
@@ -1507,6 +1557,37 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/archived",
     searchTerms: ["restore reopen deleted history projects"],
   },
+  {
+    id: "convene-connection",
+    get title() {
+      return i18n.t("convene.connection.connect");
+    },
+    to: "/settings/convene",
+    searchTerms: ["convene pairing modules MCP client activation", "连接 配对 模块 客户端 激活"],
+  },
+  {
+    id: "language",
+    get title() {
+      return i18n.t("settings.search.language.title");
+    },
+    to: "/settings/general",
+    // Includes the native names so someone searching in their own language
+    // finds the row before it is translated.
+    searchTerms: ["Language 语言", "language locale translation english chinese 语言 中文"],
+  },
+  {
+    id: "desktop-updates",
+    get title() {
+      return i18n.t("update.search.title");
+    },
+    to: "/settings/about",
+    desktopOnly: true,
+    targetId: "app-version",
+    searchTerms: [
+      "Desktop updates check for updates update track stable nightly releases download install restart",
+      "桌面更新 应用更新 检查更新 更新渠道 稳定版 每日构建版 下载 安装 重启",
+    ],
+  },
 ] as const satisfies ReadonlyArray<SettingsSearchItem>;
 
 export type SettingsSearchItemId = (typeof SETTINGS_SEARCH_ITEMS)[number]["id"];
@@ -1514,21 +1595,61 @@ export type SettingsSearchItemId = (typeof SETTINGS_SEARCH_ITEMS)[number]["id"];
 const SEARCH_ITEMS_BY_ID = new Map(SETTINGS_SEARCH_ITEMS.map((item) => [item.id, item] as const));
 
 const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScope | null>> = {
+  "/settings/convene": null,
   "/settings/diagnostics": "environment",
   "/settings/projects": "project",
   "/settings/general": null,
   "/settings/appearance": null,
+  "/settings/chat": null,
+  "/settings/diffs": null,
   "/settings/snap-shot": null,
   "/settings/keybindings": null,
   "/settings/providers": null,
-  "/settings/integrations": null,
+  "/settings/threads": null,
+  "/settings/browser": null,
+  "/settings/devices": null,
   "/settings/source-control": "environment-defaults",
-  "/settings/storage": "project-defaults",
+  "/settings/worktrees": "project-defaults",
   "/settings/connections": "connections",
-  "/settings/convene": null,
+  "/settings/access": "connections",
   "/settings/scheduled-tasks": null,
+  "/settings/maintenance": null,
+  "/settings/labs": null,
+  "/settings/about": null,
   "/settings/archived": "project-defaults",
 };
+
+const RENAMED_SETTINGS_PATHS: Readonly<Record<string, SettingsPath>> = {
+  "/settings/integrations": "/settings/browser",
+  "/settings/storage": "/settings/maintenance",
+  "/settings/beta": "/settings/labs",
+};
+const SPLIT_SETTINGS_PATHS: ReadonlySet<string> = new Set([
+  "/settings/general",
+  "/settings/appearance",
+  "/settings/source-control",
+  "/settings/connections",
+  ...Object.keys(RENAMED_SETTINGS_PATHS),
+]);
+// Section anchors that moved but are not search results themselves.
+const MOVED_SECTION_ANCHORS: Readonly<Record<string, SettingsPath>> = {
+  "authorized-clients": "/settings/access",
+  "legacy-features": "/settings/labs",
+  "text-generation": "/settings/threads",
+  about: "/settings/about",
+};
+
+/** Where an old settings link now lives. Its anchor finds the page its row moved to. */
+export function movedSettingsPath(pathname: string, hash: string): SettingsPath | null {
+  if (!SPLIT_SETTINGS_PATHS.has(pathname)) return null;
+  const items: readonly SettingsSearchItem[] = SETTINGS_SEARCH_ITEMS;
+  const anchored = hash
+    ? (items.find((item) => item.id === hash) ?? items.find((item) => item.targetId === hash))
+    : undefined;
+  const to =
+    anchored?.to ?? MOVED_SECTION_ANCHORS[hash] ?? RENAMED_SETTINGS_PATHS[pathname] ?? null;
+  return to === pathname ? null : to;
+}
 
 export function getSettingsSearchTargetScope(targetId: string) {
   const items: readonly SettingsSearchItem[] = SETTINGS_SEARCH_ITEMS;
@@ -1606,31 +1727,18 @@ export function isSettingsSearchScopeAvailable(
   }
 }
 
-function settingsScopeKindFromSearch(search: SettingsScopeSearch): ResolvedSettingsScope["kind"] {
-  const target = validateSettingsScopeSearch({ ...search });
-  if (target.checkout && !target.project) return "unavailable";
-  if (target.project) return target.checkout ? "checkout" : "project";
-  return target.machine ? "environment" : "all";
-}
-
-export function isSettingsOverviewVisible(search: SettingsScopeSearch): boolean {
-  const kind = settingsScopeKindFromSearch(search);
-  return kind === "project" || kind === "checkout";
-}
-
-/**
- * `id` and `title` props for the element a search item anchors to. Panels
- * spread (or pick from) this instead of restating the strings, so the catalog
- * and the rendered settings cannot drift apart.
- */
 export function settingsSectionLabel(to: SettingsPath, translate: TFunction = i18n.t): string {
-  return translate(`settings.sections.${to.slice("/settings/".length)}`);
+  return translate(`settings.sections.${to.slice("/settings/".length)}`, {
+    defaultValue: SETTINGS_SECTION_LABELS[to],
+  });
 }
 
 export function settingsSearchItemTitle(
   item: SettingsSearchItem,
   translate: TFunction = i18n.t,
 ): string {
+  if (item.id.startsWith("keybinding-"))
+    return commandLabel(item.id.slice("keybinding-".length) as KeybindingCommand, translate);
   return translate(`settings.search.${item.id}.title`, { defaultValue: item.title });
 }
 
@@ -1663,6 +1771,20 @@ export function filterAvailableSettingsSearchItems(
   );
 }
 
+/** The settings that exist on this platform and app channel. */
+export function settingsForThisPlatform(
+  items: ReadonlyArray<SettingsSearchItem>,
+): ReadonlyArray<SettingsSearchItem> {
+  const platform = typeof navigator === "undefined" ? "" : navigator.platform;
+  return items.filter(
+    (item) =>
+      (isElectron || item.desktopOnly !== true) &&
+      (!item.releaseChannelOnly || isElectron || HOSTED_APP_CHANNEL !== null) &&
+      (!item.macOnly || isMacPlatform(platform)) &&
+      (!item.windowsOnly || isWindowsPlatform(platform)),
+  );
+}
+
 export function searchSettings(
   query: string,
   items: ReadonlyArray<SettingsSearchItem> = SETTINGS_SEARCH_ITEMS,
@@ -1671,18 +1793,13 @@ export function searchSettings(
   const normalizedQuery = normalizeSearchText(query);
   if (normalizedQuery.length === 0) return [];
   const queryTokens = normalizedQuery.split(" ");
-  const platform = typeof navigator === "undefined" ? "" : navigator.platform;
 
-  return items
+  return settingsForThisPlatform(items)
     .flatMap((item, index) => {
-      if (!isElectron && item.desktopOnly === true) return [];
-      if (item.releaseChannelOnly && !isElectron && HOSTED_APP_CHANNEL === null) return [];
-      if (item.macOnly && !isMacPlatform(platform)) return [];
-      if (item.windowsOnly && !isWindowsPlatform(platform)) return [];
-
       const title = normalizeSearchText(settingsSearchItemTitle(item, translate));
       const fields = [
         title,
+        normalizeSearchText(item.title),
         normalizeSearchText(settingsSectionLabel(item.to, translate)),
         ...(item.searchTerms ?? []).map(normalizeSearchText),
       ];
@@ -1709,5 +1826,26 @@ export function searchSettings(
         right.rank - left.rank ||
         left.index - right.index,
     )
-    .map(({ item }) => item);
+    .map(({ item }) => ({ ...item, title: settingsSearchItemTitle(item, translate) }));
+}
+
+// These rows only exist with separate fonts on, so a search jump to one turns them on.
+const ADVANCED_TYPOGRAPHY_TARGET_IDS: ReadonlySet<string> = new Set([
+  "prompt-font",
+  "terminal-font",
+]);
+
+export function isAdvancedTypographyTarget(targetId: string): boolean {
+  return ADVANCED_TYPOGRAPHY_TARGET_IDS.has(targetId);
+}
+
+/**
+ * Opens the persisted section a search result lives in before jumping to it, so
+ * its row is mounted to scroll to. The terminal reads the same flag, so it must
+ * stay on after the jump.
+ */
+export function revealSettingsSearchTarget(targetId: string): void {
+  if (isAdvancedTypographyTarget(targetId)) {
+    writeLocalStorageValue(TYPOGRAPHY_ADVANCED_STORAGE_KEY, true, false, Schema.Boolean);
+  }
 }

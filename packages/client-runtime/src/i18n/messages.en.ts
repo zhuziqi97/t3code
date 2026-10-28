@@ -1,19 +1,7 @@
-/**
- * Every message a client can display, in the source language.
- *
- * `en` is authoritative: its keys define what is translatable, and every other
- * catalog falls back to it. Keep values byte-identical to the literals they
- * replace so behaviour does not shift while the UI is being migrated.
- *
- * Interpolation uses i18next's `{{name}}` syntax. Plurals use the `_one` /
- * `_other` suffixes; a language with one form (Chinese, Japanese) only needs
- * `_other`, since i18next falls back to it for every count.
- *
- * Not every message is translatable text: provider names (Codex, Claude Code)
- * and shell commands are deliberately absent, because a client must never
- * rename another product or rewrite a command it tells the user to run.
- */
+/** English keys define the catalog and fallback. Interpolation uses {{name}}; plurals use _one and _other. Keep provider names and shell commands untranslated. */
 export const en = {
+  "filePreview.mermaidSource": "Show Mermaid source",
+  "filePreview.mermaidRendered": "Show rendered diagram",
   "chat.approval.redirectPlaceholder": "Send a message to decline and redirect the agent",
   "chat.approval.draftChangedAfterDecline":
     "Approval declined. Your message changed, so it wasn't sent.",
@@ -380,7 +368,7 @@ export const en = {
   "scheduled.webhookUrl": "Webhook URL",
   "scheduled.changeInConnections": "Change in Connections",
   "scheduled.runAPromptAutomaticallyOnAnIntervalAt":
-    "Run a prompt automatically — on an interval, at a fixed time, or when a webhook is called.",
+    "Run a prompt automatically: on an interval, at a fixed time, or when a webhook is called.",
   "scheduled.reconnectThisEnvironmentBeforeSaving": "Reconnect this environment before saving.",
   "scheduled.runsOn": "Runs on",
   "scheduled.thisScheduledTaskNoLongerExists": "This scheduled task no longer exists.",
@@ -896,7 +884,7 @@ export const en = {
     "This change has more files than the host will report ticks for in one read, so the count is short and some boxes below start empty.",
   "pullRequest.flow.diff.partial": "Some of this diff was not shown",
   "pullRequest.flow.diff.partialHint":
-    "The host withheld part of this diff — a binary file, or a change too large to inline.",
+    "The host withheld part of this diff: a binary file, or a change too large to inline.",
   "pullRequest.flow.diff.wholeChange": "Line comments are written from the whole change",
   "pullRequest.flow.diff.wholeChangeHint":
     "A comment is anchored to the whole change, so switch to All commits to write one.",
@@ -1033,7 +1021,7 @@ export const en = {
   "pullRequest.flow.action.reopened": "Pull request reopened",
   "pullRequest.flow.action.updated": "Branch updated with the base branch",
   "pullRequest.flow.action.autoOn":
-    "Auto-merge turned on — merges as soon as this is ready, sooner if it already is",
+    "Auto-merge turned on: merges as soon as this is ready, sooner if it already is",
   "pullRequest.flow.action.autoOff": "Auto-merge turned off",
   "pullRequest.flow.action.reverted": "Revert pull request opened",
   "pullRequest.flow.action.workflowsApproved": "Workflows approved",
@@ -1056,7 +1044,7 @@ export const en = {
   "pullRequest.flow.action.reopenHint":
     "The host refused it. Check that you have write access, and that the branch still exists.",
   "pullRequest.flow.action.updateHint":
-    "The host refused it. Check that you have write access to the branch — one from a fork also needs its author to allow edits from maintainers — and that it does not conflict with the base.",
+    "The host refused it. Check that you have write access to the branch: one from a fork also needs its author to allow edits from maintainers: and that it does not conflict with the base.",
   "pullRequest.flow.action.autoOnHint":
     "The host refused it. Check that this repository allows auto-merge, that you have write access, and that there is something left for it to wait on.",
   "pullRequest.flow.action.autoOffHint":
@@ -1075,13 +1063,13 @@ export const en = {
   "pullRequest.flow.title.failed": "The title could not be saved",
   "pullRequest.flow.title.refused": "The host refused the new title.",
   "pullRequest.flow.handoff.added": "Added to the composer",
-  "pullRequest.flow.handoff.question": "The question is in the composer — read it over, then send.",
+  "pullRequest.flow.handoff.question": "The question is in the composer: read it over, then send.",
   "pullRequest.flow.handoff.reference":
-    "The pull request is in the composer — type your question, then send.",
+    "The pull request is in the composer: type your question, then send.",
   "pullRequest.flow.handoff.openFailed": "Could not open a thread",
   "pullRequest.flow.handoff.retry": "Try again from the project, or open a thread first.",
   "pullRequest.flow.handoff.asked": "Asked in a thread",
-  "pullRequest.flow.handoff.task": "The task is in the composer — read it over, then send.",
+  "pullRequest.flow.handoff.task": "The task is in the composer: read it over, then send.",
   "pullRequest.flow.checkout.preparing": "Preparing the pull request checkout...",
   "pullRequest.flow.checkout.threadFailed": "Could not open a thread for the checkout",
   "pullRequest.flow.checkout.failed": "Could not prepare the pull request checkout",
@@ -1245,7 +1233,7 @@ export const en = {
   "pullRequest.flow.reviewers.requested": "Already asked",
   "pullRequest.flow.reaction.failed": "The reaction could not be saved",
   "pullRequest.flow.reaction.add": "Add a reaction",
-  "pullRequest.flow.annotation.pending": "Pending — sent when you submit the review",
+  "pullRequest.flow.annotation.pending": "Pending: sent when you submit the review",
   "pullRequest.flow.annotation.discard": "Discard this comment",
   "pullRequest.flow.annotation.outdated": "outdated",
   "pullRequest.flow.annotation.open": "Open",
@@ -1528,7 +1516,7 @@ export const en = {
     "This environment publishes agent activity to your mobile clients.",
   "connect.onboarding.title": "Set up T3 Connect",
   "connect.onboarding.description":
-    "Mesh your devices together — publish this environment and connect the rest, all in one place.",
+    "Mesh your devices together: publish this environment and connect the rest, all in one place.",
   "connect.onboarding.dontShowAgain": "Don't show this again",
   "connect.onboarding.enabling": "Enabling…",
   "connect.onboarding.publish": "Publish",
@@ -2503,7 +2491,7 @@ export const en = {
   "approval.detail.read": "File to read",
   "approval.detail.permission": "Permission request",
   "approval.detail.change": "File change",
-  "approval.notResumable": "Provider process is gone — interrupt or restart the run to respond.",
+  "approval.notResumable": "Provider process is gone: interrupt or restart the run to respond.",
   "approval.more": "More approval options",
   "approval.decline": "Decline",
   "approval.approve": "Approve",
@@ -3246,7 +3234,7 @@ export const en = {
   "chat.compact.chooseProject": "Choose a project before compacting",
   "chat.compact.providerUnavailable": "Compaction is unavailable for this provider",
   "chat.compact.unavailable": "Compacting is unavailable right now",
-  "chat.branch.changed": "Branch changed — was",
+  "chat.branch.changed": "Branch changed: was",
   "chat.branch.lastRun": "This thread last ran on",
   "chat.branch.restore": "Restore branch",
   "chat.branch.dismiss": "Dismiss branch change notice",
@@ -3363,8 +3351,8 @@ export const en = {
 
   "chat.attachment.download": "Download",
   "chat.resume": "Resume thread",
-  "chat.mode.planHint": "Plan mode — click to return to normal build mode",
-  "chat.mode.defaultHint": "Default mode — click to enter plan mode",
+  "chat.mode.planHint": "Plan mode: click to return to normal build mode",
+  "chat.mode.defaultHint": "Default mode: click to enter plan mode",
   "chat.mode.runtime": "Runtime mode",
   "chat.input.filesUpdateServer": "Update this server to send files with question answers",
   "chat.attachment.interruptedOne": "Attach the interrupted file again or remove it",
@@ -3855,8 +3843,8 @@ export const en = {
   "chat.panel.toggleTerminalShortcut": "Toggle terminal drawer{{shortcut}}",
   "chat.panel.toggleRightShortcut": "Toggle right panel{{shortcut}}",
   "chat.editor.openNamed": "Open in {{editor}}",
-  "chat.model.disabled": "{{provider}} — Disabled in settings.",
-  "chat.model.newProvider": "{{provider}} — New",
+  "chat.model.disabled": "{{provider}}: Disabled in settings.",
+  "chat.model.newProvider": "{{provider}}: New",
   "chat.model.newProviderAria": "{{provider}}, new",
   "chat.model.switchProviderHint":
     "{{provider}} is unavailable in this thread. Start a new thread to switch providers.",
@@ -4408,7 +4396,7 @@ export const en = {
   "filePreview.folder.partialEmpty":
     "No entries from this folder are available in the partial workspace index.",
   "filePreview.folder.empty": "This folder is empty.",
-  "filePreview.folder.refreshFailed": "Refresh failed — retry",
+  "filePreview.folder.refreshFailed": "Refresh failed: retry",
   "filePreview.folder.partial": "Some workspace entries are not shown.",
   "filePreview.folder.browse": "Browse {{folder}}",
   "filePreview.error.notFile": "The path is a directory or special file, not a regular file.",
@@ -4578,7 +4566,7 @@ export const en = {
   "browser.captureFailed": "Unable to capture screenshot",
   "browser.pickCaptureFailed": "Could not capture the picked element",
   "browser.annotationKept": "The annotation was kept without the screenshot.",
-  "browser.pickUnavailable": "Page didn't load — pick unavailable until the page renders",
+  "browser.pickUnavailable": "Page didn't load: pick unavailable until the page renders",
   "browser.desktopTab": "This tab is open in the T3 Code desktop app.",
   "browser.environment": "the environment",
   "browser.deviceHost": "Device host",
@@ -4814,7 +4802,7 @@ export const en = {
     "Clipboard copy is unavailable here. Open or manually copy this full pairing URL on the device you want to connect.",
   "connections.manualCode":
     "Clipboard copy is unavailable here. Manually copy this code into another client.",
-  "connections.qrLabel": "Pairing link — scan to open on another device",
+  "connections.qrLabel": "Pairing link: scan to open on another device",
   "connections.done": "Done",
   "connections.revoking": "Revoking…",
   "connections.revoke": "Revoke",
@@ -5529,7 +5517,7 @@ export const en = {
   "provider.instance.removeVariable": "Remove environment variable {{name}}",
   "provider.instance.copied": "{{provider}} update command copied",
   "provider.instance.copyFailed": "Could not copy {{provider}} update command",
-  "provider.instance.details": "{{title}} — view details",
+  "provider.instance.details": "{{title}}: view details",
   "provider.instance.installVersion": "Install {{version}}",
   "provider.instance.select": "Select {{provider}}",
   "provider.instance.updateProgress": "Updating · {{progress}}",
@@ -5706,7 +5694,7 @@ export const en = {
   "terminal.pathFailed": "Unable to open path",
   "terminal.writeFailed": "Terminal write failed",
   "terminal.initFailed": "Unable to initialize libghostty-vt",
-  "terminal.initRetry": "{{message}} — close and reopen the terminal to retry.",
+  "terminal.initRetry": "{{message}}: close and reopen the terminal to retry.",
   "terminal.splitHorizontal": "Split Terminal Horizontally{{shortcut}}",
   "terminal.splitHorizontalLimit_one": "Split Terminal Horizontally (max {{count}} per group)",
   "terminal.splitHorizontalLimit_other": "Split Terminal Horizontally (max {{count}} per group)",
@@ -6674,7 +6662,7 @@ export const en = {
     "{{source}} is open, so its cookies can’t be read yet. Quit it, then continue.",
   "integrations.import.fda-dialog-title": "Let T3 Code read {{source}}’s cookies",
   "integrations.import.fda-description":
-    "To import cookies from {{source}}, T3 Code needs Full Disk Access. Turn it on in System Settings, then come back to finish the import — you can revoke it again once the import is done.",
+    "To import cookies from {{source}}, T3 Code needs Full Disk Access. Turn it on in System Settings, then come back to finish the import: you can revoke it again once the import is done.",
   "integrations.import.fda-permission-description": "Read {{source}}'s cookies for this import.",
   "integrations.import.fda-opening-error": "Could not open System Settings. Try Allow again.",
   "integrations.import.configure-title": "Import from {{source}}",
@@ -6702,7 +6690,7 @@ export const en = {
   "integrations.import.failure.notInstalled": "Not installed on this machine.",
   "integrations.import.failure.needsKeychainApproval": "Needs Keychain access to read its cookies.",
   "integrations.import.failure.keychainItemMissing":
-    "No encryption key in your Keychain — sign in to that browser once, then retry.",
+    "No encryption key in your Keychain: sign in to that browser once, then retry.",
   "integrations.import.failure.needsFullDiskAccess":
     "Give T3 Code Full Disk Access in System Settings → Privacy & Security, then retry.",
   "integrations.import.failure.browserRunning":
@@ -6949,7 +6937,7 @@ export const en = {
   "snapshots.status.check-access": "Check capture access in setup",
   "snapshots.status.install-helper": "Install the capture helper to continue",
   "snapshots.status.active-window": "Set up active-window snapshots",
-  "snapshots.status.manual": "Manual capture only — you'll choose a window each time",
+  "snapshots.status.manual": "Manual capture only: you'll choose a window each time",
   "snapshots.status.enable-continue": "Enable capture to continue",
   "snapshots.status.connecting": "Connecting your shortcut…",
   "snapshots.status.waiting": "Waiting for shortcut permission",
@@ -7522,9 +7510,9 @@ export const en = {
   "providerUpdate.dismiss.tooltip": "Dismiss until provider status changes",
   "providerUpdate.error.generic": "Provider update failed.",
   "providerUpdate.error.unfinished": "Provider update did not finish.",
-  "providerUpdate.error.timeout-retry": "Update timed out — try again.",
+  "providerUpdate.error.timeout-retry": "Update timed out: try again.",
   "providerUpdate.error.disconnected":
-    "This environment isn’t connected — try again once it reconnects.",
+    "This environment isn’t connected: try again once it reconnects.",
   "providerUpdate.message.waiting": "Waiting for another provider update to finish.",
   "providerUpdate.message.checking": "Checking for the latest version",
   "providerUpdate.message.verifying": "Verifying the installed version",
@@ -8240,7 +8228,7 @@ export const en = {
   "provider.status.opencodeQuarantine":
     "macOS is blocking the OpenCode binary (quarantine). Run `xattr -d com.apple.quarantine $(which opencode)` to fix this.",
   "provider.status.opencodeSignature":
-    "macOS killed the OpenCode process due to an invalid code signature. The binary may be corrupted — try reinstalling OpenCode.",
+    "macOS killed the OpenCode process due to an invalid code signature. The binary may be corrupted: try reinstalling OpenCode.",
   "provider.status.opencodeInventoryFailed": "Failed to load OpenCode provider inventory.",
   "provider.status.opencodeHealthFailed": "Failed to execute OpenCode CLI health check.",
   "provider.status.opencodeModelsFailed": "OpenCode could not load its model list.",

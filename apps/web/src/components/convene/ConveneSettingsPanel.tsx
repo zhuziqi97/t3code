@@ -9,7 +9,7 @@ export function ConveneSettingsPanel() {
   const t = useTranslate();
   const { environments } = useEnvironments();
   const primaryId = usePrimaryEnvironmentId();
-  const search = useSearch({ from: "/settings" });
+  const search = useSearch({ from: "/_chat/settings" });
   const navigate = useNavigate();
   const environmentId = search.machine
     ? (environments.find((environment) => environment.environmentId === search.machine)

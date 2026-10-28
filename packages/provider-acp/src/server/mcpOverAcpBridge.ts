@@ -87,7 +87,7 @@ export const makeAcpMcpOverAcpBridge = Effect.fn("AcpMcpOverAcpBridge.make")(fun
 ): Effect.fn.Return<AcpMcpOverAcpBridge> {
   const fetchImplementation = options.fetchImplementation ?? fetch;
   const servers = new Map(Object.entries(options.servers));
-  const connections = new Map<string, Connection>();
+  const connections = yield* Effect.sync(() => new Map<string, Connection>());
 
   const connectionFor = (connectionId: string): Effect.Effect<Connection, AcpMcpOverAcpError> =>
     Effect.suspend(() => {

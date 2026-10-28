@@ -1,3 +1,4 @@
+import { SourceControlProviderKind } from "@t3tools/contracts";
 import "~/index.css";
 import { act, render as renderTestUi, type Screen } from "../../../test/render";
 import { type ReactNode } from "react";
@@ -54,11 +55,10 @@ vi.mock("./settingsLayout", async (original) => ({
   ),
 }));
 import { changeLanguage } from "../../i18n";
-import { GitHubTokenSettings } from "./GitHubTokenSettings";
-import { GitHubAccountSettings } from "./GitHubAccountSettings";
-import { SourceControlHostSettings } from "./SourceControlHostSettings";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
-import { SourceControlProviderKind } from "@t3tools/contracts";
+import { SourceControlTokenSettings as GitHubTokenSettings } from "./SourceControlTokenSettings";
+import { SourceControlAccountSettings as GitHubAccountSettings } from "./SourceControlAccountSettings";
+import { SourceControlHostSettings } from "./SourceControlHostSettings";
 const bitbucketHost = sourceControlClients.get(SourceControlProviderKind.make("bitbucket"));
 const bitbucket = { ...bitbucketHost, settings: bitbucketHost.settings! };
 
@@ -75,10 +75,7 @@ const type = async (id: string, value: string) =>
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
-const button = (label: string) =>
-  [...container.querySelectorAll<HTMLButtonElement>("button")].find(
-    (node) => node.textContent?.trim() === label,
-  )!;
+
 const submit = async () =>
   await act(async () =>
     container
@@ -97,7 +94,16 @@ it("keeps GitHub host and token drafts across languages and does not repeat a pe
       }),
   );
   await act(async () =>
-    root.rerender(<GitHubTokenSettings environmentId={environmentId} onSaved={state.onSaved} />),
+    root.rerender(
+      <GitHubTokenSettings
+        definition={sourceControlClients.get(SourceControlProviderKind.make("github"))}
+        credentials={
+          sourceControlClients.get(SourceControlProviderKind.make("github")).credentials!
+        }
+        environmentId={environmentId}
+        onSaved={state.onSaved}
+      />,
+    ),
   );
   await type(`github-token-host-${environmentId}`, "GHE.Example.test");
   await type(`github-token-${environmentId}`, "Controlled-Raw-Token");
@@ -191,7 +197,15 @@ it("keeps account visibility and raw diagnostics while Chinese account choices s
   };
   await act(async () =>
     root.rerender(
-      <GitHubAccountSettings environmentId={environmentId} auth={auth} onSaved={state.onSaved} />,
+      <GitHubAccountSettings
+        definition={sourceControlClients.get(SourceControlProviderKind.make("github"))}
+        credentials={
+          sourceControlClients.get(SourceControlProviderKind.make("github")).credentials!
+        }
+        environmentId={environmentId}
+        auth={auth}
+        onSaved={state.onSaved}
+      />,
     ),
   );
   await act(async () =>

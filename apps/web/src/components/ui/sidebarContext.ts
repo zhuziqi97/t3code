@@ -12,6 +12,7 @@ export type SidebarContextProps = {
   setOpenMobile: (open: boolean) => void;
   isMobile: boolean;
   toggleSidebar: () => void;
+  onCollapse: (listener: () => void) => () => void;
 };
 
 export type SidebarResolvedResizableOptions = {

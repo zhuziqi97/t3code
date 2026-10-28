@@ -21,7 +21,7 @@ vi.mock("../components/settings/SettingsScopeContext", async (original) => ({
 }));
 
 import { changeLanguage } from "../i18n";
-import { Route } from "./settings.providers";
+import { Route } from "./_chat.settings.providers";
 
 let root: Screen;
 let container: HTMLDivElement;

@@ -3,12 +3,11 @@ import { useAtomValue } from "@effect/atom-react";
 import { EnvironmentId } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { Atom } from "effect/reactivity";
-import { useEffect } from "react";
+import { AsyncResult, Atom } from "effect/reactivity";
 
 import { APP_VERSION } from "~/branding";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
-import { useDesktopUpdateState } from "~/state/desktopUpdate";
+import { desktopUpdateStateAtom } from "~/state/desktopUpdate";
 import { serverEnvironment } from "~/state/server";
 import { resolveVersionMismatch } from "~/versionSkew";
 import type { ServerUpdateOutcome, ServerUpdateTarget } from "../ServerUpdateAction";
@@ -184,8 +183,7 @@ export function saveUpdateEverythingResult(result: UpdateEverythingResult): void
   const handedOff = (run?.machines ?? []).flatMap((machine): HandedOffServer[] => {
     if (machine.result !== null) return [];
     const state = appAtomRegistry.get(serverEnvironment.updateStateAtom(machine.environmentId));
-    // A desktop-managed server installs its own feed's version, which only its
-    // update state knows.
+    // Only the desktop-managed server's update state knows its own feed version.
     const targetVersion =
       machine.handedOffVersion ??
       (state.status === "running" ? state.targetVersion : machine.server?.targetVersion);
@@ -317,49 +315,44 @@ const notifiedClientUpdates = new Set<string>();
 let activeClientUpdateNotice: { identity: string; id: ReturnType<typeof toastManager.add> } | null =
   null;
 
-export function DesktopUpdateLaunchNotice() {
-  const state = useDesktopUpdateState();
-  const notAppliedVersion = state?.notAppliedVersion ?? null;
-
-  useEffect(() => {
-    const identity = getDesktopUpdateNoticeIdentity(state);
-    if (activeClientUpdateNotice && activeClientUpdateNotice.identity !== identity) {
-      toastManager.close(activeClientUpdateNotice.id);
-      activeClientUpdateNotice = null;
-    }
-    const bridge = window.desktopBridge;
-    if (
-      !bridge ||
-      !state ||
-      identity === null ||
-      !claimDesktopUpdateNotice(state, notifiedClientUpdates)
-    )
-      return;
-    activeClientUpdateNotice = { identity, id: showDesktopUpdateAvailableToast(bridge, state) };
-  }, [state]);
-
-  useEffect(() => {
-    const saved = takeSavedUpdateEverythingResult();
-    if (!saved) return;
+export function startDesktopUpdateLaunchNotice(): () => void {
+  const saved = takeSavedUpdateEverythingResult();
+  if (saved) {
     const handedOff = saved.handedOff ?? [];
     showUpdateEverythingResult({ ...saved, restarting: handedOff.map((server) => server.label) });
     followHandedOffServers(handedOff);
-  }, []);
-
-  useEffect(() => {
-    if (notAppliedVersion === null || notifiedNotAppliedVersion === notAppliedVersion) return;
-    notifiedNotAppliedVersion = notAppliedVersion;
-    toastManager.add(
-      stackedThreadToast({
-        type: "error",
-        title: i18n.t("update.everything.notApplied"),
-        description: i18n.t("update.everything.installAgain", {
-          current: APP_VERSION,
-          target: notAppliedVersion,
+  }
+  return appAtomRegistry.subscribe(
+    desktopUpdateStateAtom,
+    (result) => {
+      const state = AsyncResult.getOrElse(result, () => null);
+      const identity = getDesktopUpdateNoticeIdentity(state);
+      if (activeClientUpdateNotice && activeClientUpdateNotice.identity !== identity) {
+        toastManager.close(activeClientUpdateNotice.id);
+        activeClientUpdateNotice = null;
+      }
+      const bridge = window.desktopBridge;
+      if (
+        bridge &&
+        state &&
+        identity !== null &&
+        claimDesktopUpdateNotice(state, notifiedClientUpdates)
+      )
+        activeClientUpdateNotice = { identity, id: showDesktopUpdateAvailableToast(bridge, state) };
+      const notAppliedVersion = state?.notAppliedVersion ?? null;
+      if (notAppliedVersion === null || notifiedNotAppliedVersion === notAppliedVersion) return;
+      notifiedNotAppliedVersion = notAppliedVersion;
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: i18n.t("update.everything.notApplied"),
+          description: i18n.t("update.everything.installAgain", {
+            current: APP_VERSION,
+            target: notAppliedVersion,
+          }),
         }),
-      }),
-    );
-  }, [notAppliedVersion]);
-
-  return null;
+      );
+    },
+    { immediate: true },
+  );
 }

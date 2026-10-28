@@ -97,7 +97,7 @@ const addScopedAppListener = <Args extends ReadonlyArray<unknown>>(
       }),
   ).pipe(Effect.asVoid);
 
-/** @public Service construction is part of the canonical Effect module API. */
+/** @public */
 export const make = ElectronApp.of({
   metadata: Effect.gen(function* () {
     const appVersion = yield* Effect.try({
@@ -126,9 +126,7 @@ export const make = ElectronApp.of({
     };
   }),
   name: Effect.sync(() => Electron.app.name),
-  // macOS derives this from NSLocale, which uses POSIX-style identifiers
-  // (`en_GB`). `Intl` rejects those outright rather than normalizing them, so
-  // the tag is normalized here rather than in the renderer that consumes it.
+  // NSLocale returns en_GB-style tags; Intl requires hyphens.
   systemLocale: Effect.sync(() => Electron.app.getSystemLocale().replace(/_/g, "-")),
   whenReady: Effect.gen(function* () {
     const isPackaged = Electron.app.isPackaged;
@@ -141,59 +139,73 @@ export const make = ElectronApp.of({
   quit: Effect.sync(() => {
     Electron.app.quit();
   }),
-  exit: (code) =>
-    Effect.sync(() => {
+  exit: Effect.fn("ElectronApp.exit")(function (code) {
+    return Effect.sync(() => {
       Electron.app.exit(code);
-    }),
-  relaunch: (options) =>
-    Effect.sync(() => {
+    });
+  }),
+  relaunch: Effect.fn("ElectronApp.relaunch")(function (options) {
+    return Effect.sync(() => {
       Electron.app.relaunch(options);
-    }),
-  setPath: (name, path) =>
-    Effect.sync(() => {
+    });
+  }),
+  setPath: Effect.fn("ElectronApp.setPath")(function (name, path) {
+    return Effect.sync(() => {
       Electron.app.setPath(name, path);
-    }),
-  setName: (name) =>
-    Effect.sync(() => {
+    });
+  }),
+  setName: Effect.fn("ElectronApp.setName")(function (name) {
+    return Effect.sync(() => {
       Electron.app.setName(name);
-    }),
-  setAboutPanelOptions: (options) =>
-    Effect.sync(() => {
+    });
+  }),
+  setAboutPanelOptions: Effect.fn("ElectronApp.setAboutPanelOptions")(function (options) {
+    return Effect.sync(() => {
       Electron.app.setAboutPanelOptions(options);
-    }),
-  setAppUserModelId: (id) =>
-    Effect.sync(() => {
+    });
+  }),
+  setAppUserModelId: Effect.fn("ElectronApp.setAppUserModelId")(function (id) {
+    return Effect.sync(() => {
       Electron.app.setAppUserModelId(id);
-    }),
+    });
+  }),
   getAppMetrics: Effect.sync(() => Electron.app.getAppMetrics()),
-  setAsDefaultProtocolClient: (protocol, path, args) =>
-    Effect.sync(() => {
-      if (path === undefined) {
-        return Electron.app.setAsDefaultProtocolClient(protocol);
-      }
-      return Electron.app.setAsDefaultProtocolClient(protocol, path, [...(args ?? [])]);
-    }),
-  setDesktopName: (desktopName) =>
-    Effect.sync(() => {
+  setAsDefaultProtocolClient: Effect.fn("ElectronApp.setAsDefaultProtocolClient")(
+    function (protocol, path, args) {
+      return Effect.sync(() => {
+        if (path === undefined) {
+          return Electron.app.setAsDefaultProtocolClient(protocol);
+        }
+        return Electron.app.setAsDefaultProtocolClient(protocol, path, [...(args ?? [])]);
+      });
+    },
+  ),
+  setDesktopName: Effect.fn("ElectronApp.setDesktopName")(function (desktopName) {
+    return Effect.sync(() => {
       const linuxApp = Electron.app as Electron.App & {
         setDesktopName?: (desktopName: string) => void;
       };
       linuxApp.setDesktopName?.(desktopName);
-    }),
-  setDockIcon: (iconPath) =>
-    Effect.sync(() => {
+    });
+  }),
+  setDockIcon: Effect.fn("ElectronApp.setDockIcon")(function (iconPath) {
+    return Effect.sync(() => {
       Electron.app.dock?.setIcon(iconPath);
-    }),
-  appendCommandLineSwitch: (switchName, value) =>
-    Effect.sync(() => {
-      if (value === undefined) {
-        Electron.app.commandLine.appendSwitch(switchName);
-        return;
-      }
-      Electron.app.commandLine.appendSwitch(switchName, value);
-    }),
-  onBeforeQuitForUpdate: (listener) =>
-    Effect.acquireRelease(
+    });
+  }),
+  appendCommandLineSwitch: Effect.fn("ElectronApp.appendCommandLineSwitch")(
+    function (switchName, value) {
+      return Effect.sync(() => {
+        if (value === undefined) {
+          Electron.app.commandLine.appendSwitch(switchName);
+          return;
+        }
+        Electron.app.commandLine.appendSwitch(switchName, value);
+      });
+    },
+  ),
+  onBeforeQuitForUpdate: Effect.fn("ElectronApp.onBeforeQuitForUpdate")(function (listener) {
+    return Effect.acquireRelease(
       Effect.sync(() => {
         Electron.autoUpdater.on("before-quit-for-update", listener);
       }),
@@ -201,11 +213,13 @@ export const make = ElectronApp.of({
         Effect.sync(() => {
           Electron.autoUpdater.removeListener("before-quit-for-update", listener);
         }),
-    ).pipe(Effect.asVoid),
-  removeCommandLineSwitch: (switchName) =>
-    Effect.sync(() => {
+    ).pipe(Effect.asVoid);
+  }),
+  removeCommandLineSwitch: Effect.fn("ElectronApp.removeCommandLineSwitch")(function (switchName) {
+    return Effect.sync(() => {
       Electron.app.commandLine.removeSwitch(switchName);
-    }),
+    });
+  }),
   on: addScopedAppListener,
 });
 

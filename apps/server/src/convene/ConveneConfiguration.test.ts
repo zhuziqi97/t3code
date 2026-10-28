@@ -59,13 +59,11 @@ it.effect(
           Layer.provide(
             Layer.mock(ConvenePlatform.ConvenePlatform, {
               changes,
-              readConnection: Effect.succeed(
-                Option.some({
-                  baseUrl: "http://localhost",
-                  runnerId: "runner-a",
-                  refreshCredential: "fixture",
-                }),
-              ),
+              readConnection: Effect.succeedSome({
+                baseUrl: "http://localhost",
+                runnerId: "runner-a",
+                refreshCredential: "fixture",
+              }),
               request: (_path, _body, schema) =>
                 Schema.decodeUnknownEffect(schema)(reply).pipe(
                   Effect.mapError(

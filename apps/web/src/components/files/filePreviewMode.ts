@@ -1,4 +1,5 @@
 import type { AssetResource, ProjectReadFileError, ScopedThreadRef } from "@t3tools/contracts";
+import { mediaFileReference } from "@t3tools/client-runtime/media-reference";
 import { isHostPath, workspaceRelativeFilePath } from "@t3tools/shared/path";
 import type { TFunction } from "i18next";
 import { i18n } from "~/i18n";
@@ -8,7 +9,8 @@ export function resolveFilePreviewPath(path: string | null, cwd: string): string
   return path === "." || workspaceRelativeFilePath(path, cwd) === "." ? null : path;
 }
 
-export const isMarkdownPreviewFile = (path: string): boolean => /\.(?:md|mdx)$/i.test(path);
+export const isMarkdownPreviewFile = (path: string): boolean =>
+  /\.(?:md|mdx|markdown|mdown|mkd)$/i.test(path);
 
 /** Describe existing failure codes without exposing the underlying platform cause. */
 export function filePreviewReadErrorMessage(
@@ -34,10 +36,12 @@ export function filePreviewReadErrorMessage(
 }
 
 export function renderedToggleLabel(
-  mode: "markdown" | "html" | "table",
+  mode: "markdown" | "mermaid" | "html" | "table",
   rendered: boolean,
   t: TFunction = i18n.t,
 ): string {
+  if (mode === "mermaid")
+    return t(rendered ? "filePreview.mermaidSource" : "filePreview.mermaidRendered");
   if (mode === "markdown")
     return t(rendered ? "filePreview.markdownSource" : "filePreview.markdownRendered");
   if (mode === "table") return t(rendered ? "filePreview.source" : "filePreview.table");
@@ -101,6 +105,11 @@ export function setMarkdownTaskChecked(
   return `${markdown.slice(0, markerOffset + 1)}${checked ? "x" : " "}${markdown.slice(markerOffset + 2)}`;
 }
 
+/**
+ * The server only signs `workspace-file` assets below the workspace root, so a
+ * file opened from outside it, such as an absolute link in the thread, goes
+ * through the host `media-file` resource the direct media viewer uses.
+ */
 export function workspaceAssetResource(input: {
   readonly kind: "workspace-file" | "media-file";
   readonly threadRef: ScopedThreadRef;
@@ -111,5 +120,11 @@ export function workspaceAssetResource(input: {
   if (input.draft) {
     return { _tag: "draft-workspace-file", cwd: input.workspaceRoot, path: input.absolutePath };
   }
-  return { _tag: input.kind, threadId: input.threadRef.threadId, path: input.absolutePath };
+  const insideWorkspace =
+    mediaFileReference(input.absolutePath, input.workspaceRoot).relativePath !== undefined;
+  return {
+    _tag: insideWorkspace ? input.kind : "media-file",
+    threadId: input.threadRef.threadId,
+    path: input.absolutePath,
+  };
 }

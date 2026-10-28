@@ -7,6 +7,7 @@ import { makeProviderMaintenanceCapabilities } from "@t3tools/provider-core/serv
 import { vi } from "vite-plus/test";
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as CodexInstallation from "./CodexInstallation.ts";
+import * as CodexManagedTokenBroker from "./CodexManagedTokenBroker.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, it, assert, expect } from "@effect/vitest";
@@ -16,6 +17,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
@@ -334,6 +336,9 @@ const awaitPersistedProvider = (
 const layerTestNodeServices = Layer.mergeAll(
   ProviderLatestVersions.layer,
   NodeServices.layer,
+  Layer.mock(CodexManagedTokenBroker.CodexManagedTokenBroker)({
+    endpoint: Effect.succeed("unused-private-pipe"),
+  }),
   Layer.mock(CodexInstallation.CodexInstallation)({
     managedDirectory: "unused-managed-installation",
   }),
@@ -369,7 +374,7 @@ it.layer(
         assert.strictEqual(status.version, "1.0.0");
         assert.strictEqual(status.auth.status, "authenticated");
         assert.strictEqual(status.auth.type, "chatgpt");
-        assert.strictEqual(status.auth.label, "ChatGPT Pro 20x Subscription");
+        assert.strictEqual(status.auth.label, "ChatGPT Pro 200 Subscription");
         assert.strictEqual(status.auth.email, "test@example.com");
         assert.deepStrictEqual(status.setup, { canAuthenticate: false, canInstall: false });
         assert.deepStrictEqual(status.models, [
@@ -424,6 +429,10 @@ it.layer(
           status.message,
           "Codex CLI is not authenticated. Run `codex login` and try again.",
         );
+        assert.deepStrictEqual(status.usageLimits?.unavailable, {
+          reason: "probeFailed",
+          message: "Codex CLI is not authenticated. Run `codex login` and try again.",
+        });
       }),
     );
 
@@ -792,8 +801,6 @@ it.layer(
         message: "Checking ACP authentication, models, and commands in the background...",
         models: [{ slug: "default", name: "Default", isCustom: false, capabilities: null }],
       } satisfies ServerProvider;
-      // A saved sign-in confirmation marks the readiness snapshot authenticated
-      // before discovery has run.
       const confirmedCheckingProvider = {
         ...checkingProvider,
         auth: { status: "authenticated" },
@@ -824,6 +831,44 @@ it.layer(
           { slug: "default", name: "Default", isCustom: false, capabilities: null },
           { slug: "gpt-5.6-sol", name: "GPT-5.6-Sol", isCustom: false, capabilities: null },
         ],
+      );
+    });
+
+    it("drops Grok models a completed probe no longer advertises", () => {
+      const previousProvider = {
+        instanceId: ProviderInstanceId.make("grok"),
+        driver: ProviderDriverKind.make("grok"),
+        status: "ready",
+        enabled: true,
+        installed: true,
+        auth: { status: "authenticated" },
+        checkedAt: "2026-09-30T00:00:00.000Z",
+        version: "1.0.44",
+        models: [
+          { slug: "grok-4.7", name: "Grok 4.7", isCustom: false, capabilities: null },
+          { slug: "codexhub-removed", name: "Removed", isCustom: false, capabilities: null },
+        ],
+        slashCommands: [],
+        skills: [],
+      } as const satisfies ServerProvider;
+      const refreshedProvider = {
+        ...previousProvider,
+        checkedAt: "2026-09-30T00:01:00.000Z",
+        models: [previousProvider.models[0]],
+      } satisfies ServerProvider;
+      const acpFailedProvider = {
+        ...refreshedProvider,
+        status: "warning",
+        message: "Grok CLI is installed but ACP initialize failed.",
+      } satisfies ServerProvider;
+
+      assert.deepStrictEqual(
+        ProviderRegistry.mergeProviderSnapshot(previousProvider, refreshedProvider).models,
+        [previousProvider.models[0]],
+      );
+      assert.deepStrictEqual(
+        ProviderRegistry.mergeProviderSnapshot(previousProvider, acpFailedProvider).models,
+        [...previousProvider.models],
       );
     });
 
@@ -1502,6 +1547,101 @@ it.layer(
       );
     });
 
+    it.effect(
+      "a second request for a cwd being scanned gets its result, even if the first leaves",
+      () =>
+        Effect.gen(function* () {
+          const driver = ProviderDriverKind.make("codex");
+          const instanceId = ProviderInstanceId.make("codex");
+          const provider = {
+            instanceId,
+            driver,
+            status: "ready",
+            enabled: true,
+            installed: true,
+            auth: { status: "authenticated" },
+            checkedAt: "2026-06-10T00:00:00.000Z",
+            version: "1.0.0",
+            models: [],
+            slashCommands: [],
+            skills: [],
+          } as const satisfies ServerProvider;
+          const scanStarted = yield* Deferred.make<void>();
+          const releaseScan = yield* Deferred.make<void>();
+          const scans = yield* Ref.make(0);
+          const instance: ProviderInstance = {
+            instanceId,
+            driverKind: driver,
+            continuationIdentity: { driverKind: driver, continuationKey: "codex:instance:codex" },
+            displayName: undefined,
+            enabled: true,
+            snapshot: {
+              resolveMaintenance: () =>
+                Effect.succeed(
+                  makeManualOnlyProviderMaintenanceCapabilities({
+                    provider: driver,
+                    packageName: null,
+                  }),
+                ),
+              getSnapshot: Effect.succeed(provider),
+              refresh: Effect.succeed(provider),
+              startRefresh: () => Effect.succeed(provider),
+              cancelRefresh: () => Effect.void,
+              streamChanges: Stream.empty,
+              applyUsageLimits: () => Effect.void,
+            },
+            snapshotForCwd: () =>
+              Ref.update(scans, (count) => count + 1).pipe(
+                Effect.andThen(Deferred.succeed(scanStarted, undefined)),
+                Effect.andThen(Deferred.await(releaseScan)),
+                Effect.as(provider),
+              ),
+            orchestrationAdapter: capabilitiesAdapter(),
+            textGeneration: {} as ProviderInstance["textGeneration"],
+          };
+          const layerInstanceRegistry = Layer.succeed(
+            ProviderInstanceRegistry.ProviderInstanceRegistry,
+            {
+              getInstance: (requestedId) =>
+                Effect.succeed(requestedId === instanceId ? instance : undefined),
+              listInstances: Effect.succeed([instance]),
+              beforeInstanceClose: () => Effect.void,
+              listUnavailable: Effect.succeed([]),
+              streamChanges: Stream.empty,
+              subscribeChanges: Effect.flatMap(PubSub.unbounded<void>(), PubSub.subscribe),
+            },
+          );
+          const scope = yield* Scope.make();
+          yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
+          const runtimeServices = yield* Layer.build(
+            ProviderRegistry.layer.pipe(
+              Layer.provideMerge(layerInstanceRegistry),
+              Layer.provideMerge(
+                ServerConfig.layerTest(process.cwd(), {
+                  prefix: "t3-provider-registry-shared-workspace-scan-",
+                }),
+              ),
+              Layer.provideMerge(NodeServices.layer),
+            ),
+          ).pipe(Scope.provide(scope));
+
+          yield* Effect.gen(function* () {
+            const registry = yield* ProviderRegistry.ProviderRegistry;
+            const refresh = registry.refreshWorkspaceSnapshot({ instanceId, cwd: "/workspace" });
+            const first = yield* Effect.forkChild(refresh);
+            yield* Deferred.await(scanStarted);
+            const second = yield* Effect.forkChild(refresh, { startImmediately: true });
+            yield* Fiber.interrupt(first);
+            yield* Deferred.succeed(releaseScan, undefined);
+            assert.deepStrictEqual(
+              (yield* Fiber.join(second))[0]?.workspaceSnapshots?.map((snapshot) => snapshot.cwd),
+              ["/workspace"],
+            );
+            assert.strictEqual(yield* Ref.get(scans), 1);
+          }).pipe(Effect.provide(runtimeServices));
+        }),
+    );
+
     it.effect("does not run provider probes during layer construction", () =>
       Effect.gen(function* () {
         const codexDriver = ProviderDriverKind.make("codex");
@@ -2147,10 +2287,13 @@ it.layer(
             undefined,
           );
           const callsWhileForced = yield* Ref.get(snapshotCalls);
-          yield* registry.refreshWorkspaceSnapshot({ instanceId, cwd: "/workspace2" });
+          const waitingScan = yield* registry
+            .refreshWorkspaceSnapshot({ instanceId, cwd: "/workspace2" })
+            .pipe(Effect.forkChild({ startImmediately: true }));
           assert.strictEqual(yield* Ref.get(snapshotCalls), callsWhileForced);
           yield* Deferred.succeed(releaseNewer, undefined);
           yield* Fiber.join(newerScan);
+          yield* Fiber.join(waitingScan);
           assert.deepStrictEqual(
             (yield* registry.getProviders)[0]?.workspaceSnapshots?.find(
               (snapshot) => snapshot.cwd === "/workspace2",
@@ -2158,17 +2301,14 @@ it.layer(
             latestSkills,
           );
 
+          const rebuiltUpdate = yield* registry.streamChanges.pipe(
+            Stream.filter((providers) => providers[0]?.checkedAt === rebuiltProvider.checkedAt),
+            Stream.runHead,
+            Effect.forkChild({ startImmediately: true }),
+          );
           yield* Ref.set(instancesRef, [rebuiltInstance]);
           yield* PubSub.publish(registryChanges, undefined);
-          let rebuilt = yield* registry.getProviders;
-          for (
-            let attempt = 0;
-            attempt < 50 && rebuilt[0]?.checkedAt !== rebuiltProvider.checkedAt;
-            attempt += 1
-          ) {
-            yield* Effect.yieldNow;
-            rebuilt = yield* registry.getProviders;
-          }
+          const rebuilt = Option.getOrThrow(yield* Fiber.join(rebuiltUpdate));
           assert.strictEqual(rebuilt[0]?.checkedAt, rebuiltProvider.checkedAt);
           assert.strictEqual(rebuilt[0]?.supportsMcpTools, false);
           assert.strictEqual(rebuilt[0]?.workspaceSnapshots, undefined);
@@ -2268,8 +2408,6 @@ it.layer(
           yield* registry.refreshWorkspaceSnapshot({ instanceId, cwd: "/workspace" });
           assert.deepStrictEqual((yield* workspaceOf)?.slashCommands, [COMPACT_SLASH_COMMAND]);
 
-          // An expired scan runs while the account check fails: the skills are
-          // current, but commands that ride on the health check are unknown.
           yield* TestClock.adjust(PROVIDER_WORKSPACE_SNAPSHOT_TTL_MS);
           yield* Ref.set(scanResult, { ...unhealthyProvider, skills: laterSkills });
           yield* registry.refreshWorkspaceSnapshot({ instanceId, cwd: "/workspace" });
@@ -2281,14 +2419,10 @@ it.layer(
           assert.strictEqual(provider?.status, "error");
           assert.strictEqual(provider?.message, unhealthyProvider.message);
 
-          // A pending entry is rescanned on the next request; an empty scan
-          // removes the skills.
           yield* Ref.set(scanResult, { ...unhealthyProvider, skills: [] });
           yield* registry.refreshWorkspaceSnapshot({ instanceId, cwd: "/workspace" });
           assert.deepStrictEqual((yield* workspaceOf)?.skills, []);
 
-          // A driver that discovers its own commands reports them even while
-          // health is in error.
           const discoveredCommand = { name: "review", description: "Review changes" };
           yield* Ref.set(scanResult, {
             ...unhealthyProvider,
@@ -2300,7 +2434,6 @@ it.layer(
           assert.deepStrictEqual(discovered?.slashCommands, [discoveredCommand]);
           assert.strictEqual(discovered?.slashCommandsPending, undefined);
 
-          // Once health recovers, the next scan restores the full entry.
           yield* TestClock.adjust(PROVIDER_WORKSPACE_SNAPSHOT_TTL_MS);
           yield* Ref.set(scanResult, { ...healthyProvider, skills: laterSkills });
           yield* registry.refreshWorkspaceSnapshot({ instanceId, cwd: "/workspace" });
@@ -3030,7 +3163,6 @@ it.layer(
         const changes = yield* PubSub.unbounded<void>();
         const instancesRef = yield* Ref.make<ReadonlyArray<ProviderInstance>>([codexInstance]);
         const failNextList = yield* Ref.make(false);
-        const wait = () => Effect.yieldNow;
         const layerInstanceRegistry = Layer.succeed(
           ProviderInstanceRegistry.ProviderInstanceRegistry,
           {
@@ -3080,18 +3212,16 @@ it.layer(
           yield* Ref.set(failNextList, true);
           yield* PubSub.publish(changes, undefined);
 
+          const updated = yield* registry.streamChanges.pipe(
+            Stream.filter((providers) =>
+              providers.some((provider) => provider.instanceId === claudeInstanceId),
+            ),
+            Stream.runHead,
+            Effect.forkChild({ startImmediately: true }),
+          );
           yield* Ref.set(instancesRef, [codexInstance, claudeInstance]);
           yield* PubSub.publish(changes, undefined);
-
-          let providers = yield* registry.getProviders;
-          for (
-            let attempt = 0;
-            attempt < 50 && !providers.some((provider) => provider.instanceId === claudeInstanceId);
-            attempt += 1
-          ) {
-            yield* wait();
-            providers = yield* registry.getProviders;
-          }
+          const providers = Option.getOrThrow(yield* Fiber.join(updated));
 
           assert.deepStrictEqual(
             providers.map((provider) => provider.instanceId).toSorted(),
@@ -3158,17 +3288,19 @@ it.layer(
 
         yield* Effect.gen(function* () {
           const registry = yield* ProviderRegistry.ProviderRegistry;
-          let providers = yield* registry.getProviders;
-          for (
-            let attempts = 0;
-            attempts < 50 &&
-            providers.find((provider) => provider.instanceId === "codex_personal")?.status !==
-              "error";
-            attempts += 1
-          ) {
-            yield* Effect.yieldNow;
-            providers = yield* registry.getProviders;
-          }
+          const isPersonalError = (providers: ReadonlyArray<ServerProvider>) =>
+            providers.some(
+              (provider) => provider.instanceId === "codex_personal" && provider.status === "error",
+            );
+          const updated = yield* registry.streamChanges.pipe(
+            Stream.filter(isPersonalError),
+            Stream.runHead,
+            Effect.forkChild({ startImmediately: true }),
+          );
+          const current = yield* registry.getProviders;
+          const providers = isPersonalError(current)
+            ? current
+            : Option.getOrThrow(yield* Fiber.join(updated));
           const codexPersonal = providers.find(
             (provider) => provider.instanceId === "codex_personal",
           );
@@ -3617,6 +3749,7 @@ it.layer(
               "claudeAgent",
               "codex",
               "cursor",
+              "fx",
               "grok",
               "muse",
               "opencode",
@@ -3649,8 +3782,6 @@ it.layer(
   describe("checkClaudeProviderStatus", () => {
     it.effect("reports a logged-out CLI as unauthenticated", () =>
       Effect.gen(function* () {
-        // The capability probe resolves for a logged-out CLI, so `tokenSource:
-        // "none"` is the only thing separating it from an authenticated one.
         const status = yield* checkClaudeProviderStatus(
           defaultClaudeSettings,
           claudeCapabilities({
@@ -3749,8 +3880,6 @@ it.layer(
 
     it.effect("keeps an API key install authenticated when it reports no token source", () =>
       Effect.gen(function* () {
-        // `ANTHROPIC_API_KEY` never populates `tokenSource`, so reading that
-        // field alone would log the install out.
         const status = yield* checkClaudeProviderStatus(
           defaultClaudeSettings,
           claudeCapabilities({
@@ -3774,10 +3903,6 @@ it.layer(
 
     it.effect("keeps a CLI that says nothing about its account authenticated", () =>
       Effect.gen(function* () {
-        // Profile-authenticated installs report no token source at all, and a
-        // CLI too old to send an account payload reports nothing whatsoever.
-        // Only `tokenSource: "none"` disproves authentication; saying nothing
-        // is not the same as saying no.
         const status = yield* checkClaudeProviderStatus(
           defaultClaudeSettings,
           claudeCapabilities(),

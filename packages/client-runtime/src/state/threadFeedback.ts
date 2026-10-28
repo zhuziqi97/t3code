@@ -53,15 +53,6 @@ export function codexFeedbackNotice(submission: CodexFeedbackSubmission, t?: TFu
   }
 }
 
-export function beginCodexFeedbackSubmission(
-  submissionsInFlight: Set<string>,
-  threadKey: string,
-): (() => void) | null {
-  if (submissionsInFlight.has(threadKey)) return null;
-  submissionsInFlight.add(threadKey);
-  return () => submissionsInFlight.delete(threadKey);
-}
-
 export interface LocalChatMessage {
   readonly id: MessageId;
   readonly role: "user" | "assistant";

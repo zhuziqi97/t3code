@@ -66,7 +66,7 @@ const make = Effect.gen(function* () {
     return { type: "status" as const, status: yield* connection.status };
   });
   return ConveneSettings.of({
-    manage: (input) =>
+    manage: Effect.fn("ConveneSettings.manage")((input) =>
       manage(input).pipe(
         Effect.mapError((cause) =>
           isIntegrationError(cause)
@@ -78,6 +78,7 @@ const make = Effect.gen(function* () {
               }),
         ),
       ),
+    ),
     queryProject: Effect.fn("ConveneSettings.queryProject")(function* (projectId: ProjectId) {
       const view = yield* configurations.query(projectId);
       if (view.configuration !== null || (yield* connection.status).phase !== "online") return view;

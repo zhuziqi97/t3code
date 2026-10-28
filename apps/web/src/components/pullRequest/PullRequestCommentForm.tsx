@@ -1,4 +1,5 @@
 import { i18n, useTranslate } from "~/i18n";
+import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { useAtomCommand } from "~/state/use-atom-command";
 import type { EnvironmentId, PullRequestDetailView, PullRequestRef } from "@t3tools/contracts";
 import { SendIcon } from "lucide-react";
@@ -88,13 +89,12 @@ export function PullRequestCommentForm({
     <div className="space-y-2">
       <Textarea
         ref={textareaRef}
-        // Locked while posting: the body is cleared on success, which would otherwise throw
-        // away a new draft typed while the request was still in flight.
+        // Lock while posting because success clears the draft.
         disabled={submitting !== null || actionPending}
         value={body}
         rows={3}
         placeholder={t("pullRequest.flow.comment.placeholder")}
-        aria-label={t("pullRequest.flow.comment.label")}
+        aria-label={`Comment on this ${sourceControlClients.get(detail.provider).changeRequest.singular}`}
         onChange={(event) => setBody(event.target.value)}
         onKeyDown={(event) => {
           if (event.nativeEvent.isComposing || event.keyCode === 229) return;

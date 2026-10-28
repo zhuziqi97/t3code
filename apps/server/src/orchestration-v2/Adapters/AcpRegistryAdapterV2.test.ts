@@ -1,6 +1,6 @@
 const registryUrl = "https://registry.test/registry.json";
 import * as Deferred from "effect/Deferred";
-import * as Option from "effect/Option";
+
 import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
@@ -2109,7 +2109,7 @@ describe("AcpRegistryAdapterV2", () => {
                       startupActive = false;
                     }),
                 ),
-              runBackgroundProbe: (_agentId, effect) => effect.pipe(Effect.map(Option.some)),
+              runBackgroundProbe: (_agentId, effect) => effect.pipe(Effect.asSome),
               withSessionMutation: (effect) => effect,
               clearAvailableCommands: () => Effect.void,
               publishAvailableCommands: (publishedInstanceId, commands) =>
@@ -2117,11 +2117,11 @@ describe("AcpRegistryAdapterV2", () => {
                   instanceId: publishedInstanceId,
                   commands,
                 }).pipe(Effect.asVoid),
-              getAvailableCommands: () => Effect.succeed(Option.none()),
+              getAvailableCommands: () => Effect.succeedNone,
               watchAvailableCommands: () => Effect.never,
               requestUrlAuthentication: () => Effect.succeed(false),
               acceptUrlAuthentication: () => Effect.succeed(false),
-              getUrlAuthAction: () => Effect.succeed(Option.none()),
+              getUrlAuthAction: () => Effect.succeedNone,
               watchUrlAuthAction: () => Effect.never,
             }),
             Layer.mock(AcpRegistrySupport.AcpRegistryCatalog)({

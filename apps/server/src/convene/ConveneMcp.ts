@@ -312,13 +312,14 @@ const make = Effect.gen(function* () {
         synchronize = next ?? Effect.void;
       }),
     ),
-    configure: (next) =>
+    configure: Effect.fn("ConveneMcp.configure")((next) =>
       Effect.sync(() => {
         configurations = next;
         for (const [projectId, cached] of credentials)
           if (!credentialIdentityIsCurrent(projectId, cached)) credentials.delete(projectId);
       }),
-    release: (threadId, providerSessionId) =>
+    ),
+    release: Effect.fn("ConveneMcp.release")((threadId, providerSessionId) =>
       Effect.sync(() => {
         for (const [token, lease] of leases)
           if (
@@ -327,6 +328,7 @@ const make = Effect.gen(function* () {
           )
             leases.delete(token);
       }),
+    ),
   });
 });
 

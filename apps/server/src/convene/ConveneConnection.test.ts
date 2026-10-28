@@ -12,7 +12,7 @@ import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
+
 import * as PubSub from "effect/PubSub";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -176,13 +176,11 @@ it.live("keeps heartbeat, changed directories, refresh ACKs, and reconnection in
       FetchHttpClient.layer,
       Layer.mock(EnvironmentAuth.EnvironmentAuth)({ revokeSession: () => Effect.succeed(true) }),
       Layer.mock(ConvenePlatform.ConvenePlatform)({
-        readConnection: Effect.succeed(
-          Option.some({
-            baseUrl: HttpServer.formatAddress(server.address),
-            runnerId: "runner",
-            refreshCredential: "credential",
-          }),
-        ),
+        readConnection: Effect.succeedSome({
+          baseUrl: HttpServer.formatAddress(server.address),
+          runnerId: "runner",
+          refreshCredential: "credential",
+        }),
         accessToken: Effect.succeed("access"),
         changes: platformChanges,
       }),

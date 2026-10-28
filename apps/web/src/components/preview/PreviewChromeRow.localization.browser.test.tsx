@@ -19,7 +19,10 @@ const props = {
   onRefresh: vi.fn(),
   onSubmit: submit,
 };
-const render = async () => await act(async () => root.rerender(<PreviewChromeRow {...props} />));
+const render = async () =>
+  await act(async () =>
+    root.rerender(<PreviewChromeRow urlInputRef={{ current: null }} {...props} />),
+  );
 
 it("keeps an in-progress address edit through language changes and submits the raw destination once", async () => {
   await using _lifecycle = await setupLifecycle();

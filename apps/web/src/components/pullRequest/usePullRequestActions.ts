@@ -15,6 +15,10 @@ import type {
   PullRequestRef,
 } from "@t3tools/contracts";
 import { useRef, useState } from "react";
+import {
+  sourceControlClients,
+  type ChangeRequestTerminology,
+} from "@t3tools/client-runtime/source-control-clients";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { useClientSettings, useEnvironmentSettings } from "~/hooks/useSettings";
 import {
@@ -33,7 +37,7 @@ import type { ReviewCommentContext } from "~/reviewCommentContext";
 import { pullRequestEnvironment } from "~/state/pullRequests";
 
 import { toastManager } from "../ui/toast";
-import { OFF_HEAD_PULL_REQUEST_CHECKOUT_TOAST } from "./pullRequestCheckoutToast";
+import { offHeadPullRequestCheckoutToast } from "./pullRequestCheckoutToast";
 import {
   checkoutFailureDescription,
   handoffPrompt,
@@ -124,8 +128,9 @@ export function usePullRequestActionRunner({
 }: {
   environmentId: EnvironmentId;
   reference: PullRequestRef | null;
+  terminology: ChangeRequestTerminology;
   onSuccess?: (action: PullRequestAction) => void;
-  /** Small surfaces resolve repository settings on the click, not for every visible row. */
+  /** Resolve repository settings on click to avoid per-row reads. */
   resolveMergeMethod?: (detail: PullRequestDetail) => PullRequestMergeMethod;
 }) {
   const runAction = useAtomCommand(pullRequestEnvironment.runAction, {
@@ -159,7 +164,7 @@ export function usePullRequestActionRunner({
       });
       return;
     }
-    toastManager.add({ type: "success", title: ACTION_SUCCESS_LABELS[action] });
+    toastManager.add({ type: "success", title: i18n.t(ACTION_SUCCESS_LABELS[action]) });
     onSuccess?.(action);
   };
 
@@ -196,7 +201,7 @@ export function usePullRequestCloseBatch(onClosed: (entry: EnvironmentPullReques
         setClosingKeys(new Set(pending.current));
         if (result._tag === "Failure") {
           failures.push(
-            `#${entry.number}: ${readableFailure(squashAtomCommandFailure(result), ACTION_FAILURE_HINTS.close)}`,
+            `#${entry.number}: ${readableFailure(squashAtomCommandFailure(result), i18n.t(ACTION_FAILURE_HINTS.close))}`,
           );
           return;
         }
@@ -241,13 +246,15 @@ export function usePullRequestHandoffs({
     environmentId,
     cwd: detail?.workspaceRoot ?? null,
   });
-  // One at a time whatever the key: they all check the same pull request out.
+  // Serialize all handoffs because they check out the same pull request.
   const [handoff, setHandoff] = useState<string | null>(null);
+  // Prompt links hand over a URL alone, so the URL is what names the host.
+  const terminology = (
+    (detail && sourceControlClients.findByChangeRequestUrl(detail.url)) ||
+    sourceControlClients.get(undefined)
+  ).changeRequest;
 
-  /**
-   * Nothing is checked out: asking a question is not a reason to move somebody's working tree
-   * or to make a worktree they did not ask for.
-   */
+  // Questions must not change checkouts or create worktrees.
   const openThreadWithTask = async (
     projectRef: ReturnType<typeof scopeProjectRef>,
     task: PullRequestThreadTask | null,
@@ -271,8 +278,7 @@ export function usePullRequestHandoffs({
       },
       task.prompt,
     );
-    // Remember the hand-off's own contribution, not the merged prompt: only that sentence is
-    // this session's to take back next time, and the reader's text around it is not.
+    // Track only the handoff contribution so later handoffs preserve user text.
     lastHandoffPromptByDraft.set(session.draftId, task.prompt);
     store.setPrompt(session.draftId, prompt);
     store.setReviewComments(
@@ -301,8 +307,8 @@ export function usePullRequestHandoffs({
       title: i18n.t("pullRequest.flow.handoff.asked"),
       description:
         task.prompt.length > 0
-          ? i18n.t("pullRequest.flow.handoff.question")
-          : i18n.t("pullRequest.flow.handoff.reference"),
+          ? "The question is in the composer. Read it over, then send."
+          : `The ${terminology.singular} is in the composer. Type your question, then send.`,
     });
   };
 
@@ -313,16 +319,13 @@ export function usePullRequestHandoffs({
   ) => {
     if (!detail || handoff !== null) return;
     setHandoff(kind);
-    // It carries no timeout of its own: a loading toast never expires, and an explicit one
-    // would survive the update and pin the result on screen.
+    // Explicit timeouts survive toast updates and would pin the result after loading.
     const toastId = toastManager.add({
       type: "loading",
-      title: i18n.t("pullRequest.flow.checkout.preparing"),
+      title: `Preparing the ${terminology.singular} checkout...`,
     });
     const projectRef = scopeProjectRef(environmentId, detail.projectId);
-    // The thread is opened before the checkout rather than after it, because the project's setup
-    // script only runs for a checkout that knows which thread it is for — and a worktree with no
-    // dependencies installed is not something anyone can test.
+    // Checkout setup requires the thread to exist first.
     const opened = await newThread(projectRef).then(
       (session) => session,
       () => null,
@@ -345,7 +348,7 @@ export function usePullRequestHandoffs({
       setHandoff(null);
       toastManager.update(toastId, {
         type: "error",
-        title: i18n.t("pullRequest.flow.checkout.failed"),
+        title: `Could not prepare the ${terminology.singular} checkout`,
         description: checkoutFailureDescription(
           isAtomCommandInterrupted(prepared) ? undefined : squashAtomCommandFailure(prepared),
         ),
@@ -375,11 +378,7 @@ export function usePullRequestHandoffs({
     // A worktree that was already there and had been worked in keeps whatever it holds, so the
     // thread opens on older code than the pull request carries. Said once, in place of the
     // success, because everything else about the handoff did happen.
-    const staleCheckoutToast = {
-      type: "warning",
-      title: i18n.t("pullRequest.flow.checkout.stale"),
-      description: i18n.t("pullRequest.flow.checkout.staleDescription"),
-    } as const;
+
     if (task === null) {
       toastManager.update(
         toastId,
@@ -392,10 +391,10 @@ export function usePullRequestHandoffs({
                   : i18n.t("pullRequest.flow.checkout.done"),
               description:
                 mode === "local"
-                  ? i18n.t("pullRequest.flow.checkout.hereDescription")
-                  : i18n.t("pullRequest.flow.checkout.worktreeDescription"),
+                  ? `This repository is on the ${terminology.singular}'s branch, with a thread open on it.`
+                  : `The ${terminology.singular} is in its own worktree, with a thread open on it.`,
             }
-          : OFF_HEAD_PULL_REQUEST_CHECKOUT_TOAST,
+          : offHeadPullRequestCheckoutToast(terminology),
       );
       return;
     }
@@ -406,9 +405,9 @@ export function usePullRequestHandoffs({
         ? {
             type: "success",
             title: i18n.t("pullRequest.flow.checkout.ready"),
-            description: i18n.t("pullRequest.flow.handoff.task"),
+            description: "The task is in the composer. Read it over, then send.",
           }
-        : OFF_HEAD_PULL_REQUEST_CHECKOUT_TOAST,
+        : offHeadPullRequestCheckoutToast(terminology),
     );
   };
 

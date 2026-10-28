@@ -196,10 +196,12 @@ const make = Effect.gen(function* () {
   return ConveneWorkspaces.of({
     changes: Stream.fromPubSub(changes),
     list,
-    resolve: (projectId, key) =>
+    resolve: Effect.fn("ConveneWorkspaces.resolve")((projectId, key) =>
       list(projectId).pipe(Effect.map((items) => items.find((item) => item.key === key) ?? null)),
-    threadKey: (projectId, threadId) =>
+    ),
+    threadKey: Effect.fn("ConveneWorkspaces.threadKey")((projectId, threadId) =>
       Effect.sync(() => threadKeys.get(`${projectId}:${threadId}`)?.key ?? null),
+    ),
     rebindThread: Effect.fn("ConveneWorkspaces.rebindThread")(function* (projectId, threadId, key) {
       const target = (yield* list(projectId)).find((workspace) => workspace.key === key);
       if (!target?.available) return yield* new ConveneWorkspaceError({ projectId });
@@ -223,7 +225,7 @@ const make = Effect.gen(function* () {
         )
         .pipe(Effect.mapError((cause) => new ConveneWorkspaceError({ projectId, cause })));
     }),
-    rememberThread: (projectId, threadId, key) =>
+    rememberThread: Effect.fn("ConveneWorkspaces.rememberThread")((projectId, threadId, key) =>
       lock
         .withPermit(
           Effect.gen(function* () {
@@ -234,6 +236,7 @@ const make = Effect.gen(function* () {
           }),
         )
         .pipe(Effect.mapError((cause) => new ConveneWorkspaceError({ projectId, cause }))),
+    ),
   });
 });
 

@@ -1,3 +1,4 @@
+import { i18n } from "../../i18n";
 import { useTranslate } from "../../i18n";
 import { type ProviderDriverKind, type ProviderInstanceId } from "@t3tools/contracts";
 import { memo } from "react";
@@ -16,9 +17,6 @@ import { cn } from "~/lib/utils";
 import { modelPickerModelKey } from "./modelPickerKeys";
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
 
-// Rows take the model's fields rather than the picker's item object, and one shared toggle
-// handler, because the picker rebuilds its items on every search keystroke; that keeps memo
-// effective for rows whose content did not change.
 export const ModelListRow = memo(function ModelListRow(props: {
   index: number;
   slug: string;
@@ -67,7 +65,7 @@ export const ModelListRow = memo(function ModelListRow(props: {
     >
       <div className="min-w-0 flex-1 text-left">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="min-w-0 truncate text-xs font-medium leading-snug">
+          <div className="min-w-0 truncate text-xs font-medium leading-snug redesign:text-sm redesign:font-normal">
             {props.useTriggerLabel
               ? getTriggerDisplayModelLabel(model)
               : getDisplayModelName(
@@ -108,9 +106,6 @@ export const ModelListRow = memo(function ModelListRow(props: {
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5">
-        {props.showSelection && props.isSelected ? (
-          <CheckIcon className="size-3.5" aria-hidden="true" />
-        ) : null}
         {props.jumpLabel ? <Kbd>{props.jumpLabel}</Kbd> : null}
         {props.onToggleFavorite && (
           <Tooltip>
@@ -129,23 +124,34 @@ export const ModelListRow = memo(function ModelListRow(props: {
                   }}
                   disabled={Boolean(props.disabledReason)}
                   aria-label={
-                    props.isFavorite ? t("chat.model.unfavorite") : t("chat.model.favorite")
+                    props.isFavorite
+                      ? i18n.t("chat.model.unfavorite")
+                      : i18n.t("chat.model.favorite")
                   }
                 >
                   <StarIcon
                     className={cn(
                       "size-3.5 sm:size-3",
-                      props.isFavorite && "fill-current text-warning",
+                      props.isFavorite
+                        ? "fill-current text-warning"
+                        : "redesign:opacity-0 redesign:group-hover:opacity-100 redesign:group-data-highlighted:opacity-100 redesign:in-focus-visible:opacity-100 redesign:pointer-coarse:opacity-100",
                     )}
                   />
                 </Button>
               }
             />
             <TooltipPopup side="top" align="center">
-              {props.isFavorite ? t("chat.model.unfavorite") : t("chat.model.favorite")}
+              {props.isFavorite ? i18n.t("chat.model.unfavorite") : i18n.t("chat.model.favorite")}
             </TooltipPopup>
           </Tooltip>
         )}
+        {/* Last, and always reserved, so stars and the check keep fixed columns. */}
+        {props.showSelection ? (
+          <CheckIcon
+            className={cn("size-3.5", !props.isSelected && "invisible")}
+            aria-hidden="true"
+          />
+        ) : null}
       </div>
     </ComboboxItem>
   );

@@ -198,6 +198,7 @@ function Review({ approve = false }: { approve?: boolean }) {
   const [pending, setPending] = useState(false);
   return (
     <PullRequestReviewForm
+      term="pull request"
       environmentId={environmentId}
       reference={reference}
       verdicts={approve ? ["approve"] : ["request-changes"]}
@@ -227,7 +228,7 @@ it.each(["summary", "timeline"] as const)(
   "updates %s comment dates on language changes without rewriting the comment",
   async (tab) => {
     await using _locale = await setup();
-    using _clock = fakeTimers({ toFake: ["Date"] });
+    using _clock = fakeTimers();
     vi.setSystemTime(new Date("2026-10-10T12:00:00Z"));
     const value: PullRequestDetailView = {
       ...detail,
@@ -289,7 +290,7 @@ it.each(["summary", "timeline"] as const)(
 
 it("updates list dates when the language changes while retaining the raw row", async () => {
   await using _locale = await setup();
-  using _clock = fakeTimers({ toFake: ["Date"] });
+  using _clock = fakeTimers();
   vi.setSystemTime(new Date("2026-10-10T12:00:00Z"));
   await using screen = await render(
     <PullRequestRowLines number="#101" title="Raw title 原文" updatedAt="2026-10-10T06:00:00Z" />,

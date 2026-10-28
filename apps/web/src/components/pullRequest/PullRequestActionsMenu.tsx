@@ -1,5 +1,6 @@
 import { useTranslate } from "../../i18n";
 import { useAtomValue } from "@effect/atom-react";
+import type { ChangeRequestTerminology } from "@t3tools/client-runtime/source-control-clients";
 import type {
   EnvironmentId,
   PullRequestAction,
@@ -53,6 +54,7 @@ export function PullRequestActionsMenu({
   reference,
   pullRequestKey,
   detail,
+  terminology,
   linkThreadRef,
   onThreadPickerOpenChange,
   refreshing,
@@ -92,6 +94,7 @@ export function PullRequestActionsMenu({
   reference: PullRequestRef;
   pullRequestKey: string;
   detail: Pick<PullRequestDetail, "url" | "state" | "isDraft" | "headBranch">;
+  terminology: ChangeRequestTerminology;
   linkThreadRef: ScopedThreadRef | null;
   onThreadPickerOpenChange: (open: boolean) => void;
   refreshing: boolean;
@@ -158,7 +161,9 @@ export function PullRequestActionsMenu({
           }
         />
         <TooltipPopup>
-          {refreshing ? t("pullRequest.flow.refreshing") : t("pullRequest.flow.moreActions")}
+          {refreshing
+            ? `Refreshing ${terminology.singular}`
+            : `More ${terminology.singular} actions`}
         </TooltipPopup>
       </Tooltip>
       <MenuPopup align="end" side="bottom">
@@ -182,8 +187,8 @@ export function PullRequestActionsMenu({
             </span>
             <span className="text-xs text-muted-foreground">
               {attachesToComposer
-                ? t("pullRequest.flow.ask.currentHint")
-                : t("pullRequest.flow.ask.newHint")}
+                ? `Adds the ${terminology.singular} to this thread's composer.`
+                : `Opens a thread that knows which ${terminology.singular} you mean.`}
             </span>
           </span>
         </MenuItem>
@@ -308,16 +313,18 @@ export function PullRequestActionsMenu({
           <ArrowUpRightIcon className="size-3.5" />
           {openOnHostText}
         </MenuItem>
-        <MenuItem onClick={() => copyReference(detail.url, "PR link")}>
+        <MenuItem onClick={() => copyReference(detail.url, `${terminology.shortLabel} link`)}>
           <LinkIcon className="size-3.5" />
           {t("pullRequest.flow.copy.link")}
           <MenuShortcut>
             {shortcutLabelForCommand(keybindings, "thread.copyReference")}
           </MenuShortcut>
         </MenuItem>
-        <MenuItem onClick={() => copyReference(`#${reference.number}`, "PR number")}>
+        <MenuItem
+          onClick={() => copyReference(`#${reference.number}`, `${terminology.shortLabel} number`)}
+        >
           <CopyIcon className="size-3.5" />
-          {t("pullRequest.flow.copy.number")}
+          Copy {terminology.shortLabel} number
           <MenuShortcut>
             {shortcutLabelForCommand(keybindings, "pullRequest.copyNumber")}
           </MenuShortcut>
@@ -328,14 +335,14 @@ export function PullRequestActionsMenu({
             <MenuItem
               closeOnClick={inlineConfirm.isArmed("close")}
               aria-label={
-                inlineConfirm.isArmed("close") ? "Confirm close?" : t("pullRequest.flow.close")
+                inlineConfirm.isArmed("close") ? "Confirm close?" : `Close ${terminology.singular}`
               }
               variant="destructive"
               disabled={actionPending}
               {...inlineConfirm.props("close", () => void perform("close"))}
             >
               <PullRequestGlyph.closed className="size-3.5" />
-              {inlineConfirm.isArmed("close") ? "Confirm close?" : t("pullRequest.flow.close")}
+              {inlineConfirm.isArmed("close") ? "Confirm close?" : `Close ${terminology.singular}`}
             </MenuItem>
           </>
         ) : detail.state === "closed" && can("reopen") ? (
@@ -343,7 +350,7 @@ export function PullRequestActionsMenu({
             <MenuSeparator />
             <MenuItem disabled={actionPending} onClick={() => void perform("reopen")}>
               <PullRequestGlyph.reopen className="size-3.5" />
-              {t("pullRequest.flow.reopen")}
+              Reopen {terminology.singular}
             </MenuItem>
           </>
         ) : detail.state === "merged" && can("revert") ? (

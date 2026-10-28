@@ -108,7 +108,7 @@ export const open = Effect.fn("ConveneDataChannel.open")(function* (
     Stream.mapEffect((frame) =>
       typeof frame === "string"
         ? decodeHttpEnd(frame).pipe(Effect.as(Option.none<Uint8Array>()))
-        : Effect.succeed(Option.some(frame)),
+        : Effect.succeedSome(frame),
     ),
     Stream.takeWhile(Option.isSome),
     Stream.map(Option.getOrThrow),

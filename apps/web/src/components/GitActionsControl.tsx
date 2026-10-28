@@ -1,7 +1,7 @@
 import type { TFunction } from "i18next";
 import { i18n, useTranslate } from "../i18n";
 import { ThreadDetailsControl } from "./chat/ThreadDetailsControl";
-import { useAtomValue } from "@effect/atom-react";
+import { useAtomMount, useAtomValue } from "@effect/atom-react";
 import {
   AuthOrchestrationOperateScope,
   AuthSourceControlWriteScope,
@@ -24,6 +24,8 @@ import type {
 import { useNavigate } from "@tanstack/react-router";
 import * as Option from "effect/Option";
 import { type MouseEvent, useEffect, useEffectEvent, useRef, useState } from "react";
+import { useDeadlinePassed } from "../hooks/useDeadline";
+import { useNowSecond } from "../hooks/useNowSecond";
 import { flushSync } from "react-dom";
 import {
   CheckIcon,
@@ -107,7 +109,7 @@ import { serverEnvironment } from "~/state/server";
 import { sourceControlEnvironment } from "~/state/sourceControl";
 import { threadEnvironment } from "~/state/threads";
 import { useAtomCommand } from "~/state/use-atom-command";
-import { vcsActionManager, vcsEnvironment } from "~/state/vcs";
+import { vcsActionManager, vcsEnvironment, vcsStatusRevalidation } from "~/state/vcs";
 import { randomUUID } from "~/lib/utils";
 import { resolvePathLinkTarget } from "@t3tools/shared/fileLinks";
 import { type DraftId, useComposerDraftStore } from "~/composerDraftStore";
@@ -122,6 +124,7 @@ import { getSourceControlPresentation, sourceControlIcon } from "~/sourceControl
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { formatDiffCount } from "@t3tools/client-runtime/diff-count";
 import { useOpenLink } from "~/browser/useOpenLink";
+import { useClientSettings } from "~/hooks/useSettings";
 
 interface GitActionsControlProps {
   presentation?: "toolbar" | "menu";
@@ -159,9 +162,10 @@ interface InlineGitActionSuccess {
   readonly title: string;
   readonly description: string | null;
   readonly scopeKey: string;
+  readonly expiresAtMs: number;
 }
 
-const GIT_STATUS_WINDOW_REFRESH_DEBOUNCE_MS = 250;
+const inlineSuccessExpiresAt = () => Date.now() + GIT_ACTION_SUCCESS_VISIBLE_MS;
 
 type RefreshVcsStatus = (target: {
   readonly environmentId: ScopedThreadRef["environmentId"];
@@ -209,7 +213,7 @@ function getPublishProviderReadiness(
   if (!discovered) {
     return {
       ready: false,
-      hint: t("project.clone.providerUnavailable"),
+      hint: "Provider status unavailable. Open Settings -> Source control and rescan.",
     };
   }
   if (discovered.status !== "available") {
@@ -334,19 +338,19 @@ function GitActionElapsedTime({
   startedAtMs: number | null;
   className?: string;
 }) {
-  const [nowMs, setNowMs] = useState(() => Date.now());
+  return startedAtMs === null ? null : (
+    <RunningGitActionElapsedTime startedAtMs={startedAtMs} className={className} />
+  );
+}
 
-  useEffect(() => {
-    if (startedAtMs === null) {
-      return;
-    }
-
-    const intervalId = window.setInterval(() => {
-      setNowMs(Date.now());
-    }, 1_000);
-    return () => window.clearInterval(intervalId);
-  }, [startedAtMs]);
-
+function RunningGitActionElapsedTime({
+  startedAtMs,
+  className,
+}: {
+  startedAtMs: number;
+  className: string | undefined;
+}) {
+  const nowMs = useNowSecond();
   const elapsed = formatGitActionElapsed(startedAtMs, nowMs);
   if (!elapsed) {
     return null;
@@ -681,7 +685,8 @@ function PublishRepositoryDialog(props: PublishRepositoryDialogProps) {
                           }
                         />
                         <TooltipPopup side="top" align="end">
-                          {readiness.hint ?? t("git.publish.setupHint")}
+                          {readiness.hint ??
+                            "Open Settings -> Source control to configure this provider."}
                         </TooltipPopup>
                       </Tooltip>
                     </div>
@@ -1030,15 +1035,9 @@ export default function GitActionsControl({
     useState<PendingDefaultBranchAction | null>(null);
   const sourceControlScope = { environmentId: activeEnvironmentId, cwd: gitCwd };
   const vcsActionState = useAtomValue(vcsActionManager.stateAtom(sourceControlScope));
-  const visibleInlineSuccess = inlineSuccess?.scopeKey === successScopeKey ? inlineSuccess : null;
-
-  useEffect(() => {
-    if (!inlineSuccess) return;
-    const timeoutId = window.setTimeout(() => {
-      setInlineSuccess(null);
-    }, GIT_ACTION_SUCCESS_VISIBLE_MS);
-    return () => window.clearTimeout(timeoutId);
-  }, [inlineSuccess]);
+  const inlineSuccessExpired = useDeadlinePassed(inlineSuccess?.expiresAtMs ?? null);
+  const visibleInlineSuccess =
+    inlineSuccess?.scopeKey === successScopeKey && !inlineSuccessExpired ? inlineSuccess : null;
 
   const persistThreadBranchSync = (branch: string | null, manualSelection = false) => {
     if (!activeThreadRef) {
@@ -1175,6 +1174,17 @@ export default function GitActionsControl({
       ? (quickAction.hint ?? t("git.unavailable"))
       : null;
   const gitActionProgress = resolveGitActionProgressPresentation(vcsActionState, t);
+  const redesign = useClientSettings((s) => s.redesignEnabled);
+  // A fresh draft or a thread with no turns hides commit, push, and diff rows until there is work.
+  const quietEmptyDraft =
+    redesign &&
+    isPanel &&
+    (draftId !== undefined || activeServerThreadShell?.latestRun === null) &&
+    gitActionProgress === null &&
+    !gitStatusError &&
+    quickAction.disabled &&
+    !changesTotals?.insertions &&
+    !changesTotals?.deletions;
   const pendingDefaultBranchActionCopy = pendingDefaultBranchAction
     ? resolveDefaultBranchActionDialogCopy(
         {
@@ -1186,9 +1196,7 @@ export default function GitActionsControl({
         t,
       )
     : null;
-  // Follows the live status so the button tracks the tree while the dialog is open. Until the
-  // status loads, keep the option enabled: the server stays the authority and rejects a stale
-  // request with its own error.
+  // Keep enabled until live status loads; the server rejects stale requests.
   const featureBranchUnavailableReason = pendingDefaultBranchAction
     ? resolveFeatureBranchUnavailableReason({
         branchName: pendingDefaultBranchAction.branchName,
@@ -1196,41 +1204,15 @@ export default function GitActionsControl({
       })
     : null;
 
-  useEffect(() => {
-    if (gitCwd === null) {
-      return;
-    }
+  useAtomMount(
+    vcsStatusRevalidation(
+      activeEnvironmentId !== null && gitCwd !== null
+        ? { environmentId: activeEnvironmentId, cwd: gitCwd }
+        : null,
+    ),
+  );
 
-    let refreshTimeout: number | null = null;
-    const scheduleRefreshCurrentGitStatus = () => {
-      if (refreshTimeout !== null) {
-        window.clearTimeout(refreshTimeout);
-      }
-      refreshTimeout = window.setTimeout(() => {
-        refreshTimeout = null;
-        requestVcsStatusRefresh(refreshVcsStatus, activeEnvironmentId, gitCwd);
-      }, GIT_STATUS_WINDOW_REFRESH_DEBOUNCE_MS);
-    };
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        scheduleRefreshCurrentGitStatus();
-      }
-    };
-
-    window.addEventListener("focus", scheduleRefreshCurrentGitStatus);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      if (refreshTimeout !== null) {
-        window.clearTimeout(refreshTimeout);
-      }
-      window.removeEventListener("focus", scheduleRefreshCurrentGitStatus);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [activeEnvironmentId, gitCwd, refreshVcsStatus]);
-
-  // Not an effect event: retained toast actions must stay bound to the checkout and
-  // thread of the render that created them, not follow later selections.
+  // Toast actions must retain their original checkout/thread, so do not use an effect event.
   async function runGitActionWithToast({
     action,
     commitMessage,
@@ -1317,10 +1299,14 @@ export default function GitActionsControl({
     const actionResult = result.value;
     syncThreadBranchAfterGitAction(actionResult);
     if (isPanel) {
+      const createdPullRequest = actionResult.pr.status === "created";
       setInlineSuccess({
-        title: actionResult.toast.title,
-        description: actionResult.toast.description ?? null,
+        title: createdPullRequest
+          ? `Created ${changeRequestTerminology.shortLabel}`
+          : actionResult.toast.title,
+        description: createdPullRequest ? null : (actionResult.toast.description ?? null),
         scopeKey: successScopeKey,
+        expiresAtMs: inlineSuccessExpiresAt(),
       });
       return;
     }
@@ -1457,7 +1443,12 @@ export default function GitActionsControl({
               })
             : t("git.synchronized", { ref: pullResult.refName });
         if (isPanel) {
-          setInlineSuccess({ title, description, scopeKey: successScopeKey });
+          setInlineSuccess({
+            title,
+            description,
+            scopeKey: successScopeKey,
+            expiresAtMs: inlineSuccessExpiresAt(),
+          });
           return;
         }
         const successToastTiming = resolveGitActionResultToastTiming("success");
@@ -1640,7 +1631,10 @@ export default function GitActionsControl({
         </MenuItem>
       ) : null}
       {gitStatusForActions?.refName === null && (
-        <p className="px-2 py-1.5 text-xs text-warning">{t("git.detachedHint")}</p>
+        <p className="px-2 py-1.5 text-xs text-warning">
+          Detached HEAD: create and check out a branch to enable push and{" "}
+          {changeRequestTerminology.singular} actions.
+        </p>
       )}
       {gitStatusForActions &&
         gitStatusForActions.refName !== null &&
@@ -1717,7 +1711,7 @@ export default function GitActionsControl({
             {initAction.isPending ? "Initializing..." : t("git.initialize")}
           </span>
         </ThreadDetailsControl>
-      ) : compact && !gitActionProgress && !visibleInlineSuccess ? null : (
+      ) : quietEmptyDraft || (compact && !gitActionProgress && !visibleInlineSuccess) ? null : (
         <ActionGroup
           role="group"
           aria-label={t("git.actions")}
@@ -1854,7 +1848,7 @@ export default function GitActionsControl({
         </ActionGroup>
       )}
 
-      {isPanel && isRepo ? (
+      {isPanel && isRepo && !quietEmptyDraft ? (
         <ThreadDetailsControl
           type="button"
           variant="ghost"
@@ -1867,11 +1861,21 @@ export default function GitActionsControl({
           <span className={cn("flex-1 text-left", THREAD_DETAILS_PANEL_LABEL_CLASS)}>
             {t("git.changes")}
           </span>
-          <span className="flex items-center gap-1 font-mono text-2xs tabular-nums">
-            <span className="text-diff-addition">
+          <span className="flex items-center gap-1.5 font-mono text-xs tabular-nums">
+            <span
+              className={
+                changesTotals?.insertions
+                  ? "text-diff-addition-foreground"
+                  : "text-muted-foreground"
+              }
+            >
               +{formatDiffCount(changesTotals?.insertions ?? 0)}
             </span>
-            <span className="text-diff-deletion">
+            <span
+              className={
+                changesTotals?.deletions ? "text-diff-deletion-foreground" : "text-muted-foreground"
+              }
+            >
               -{formatDiffCount(changesTotals?.deletions ?? 0)}
             </span>
           </span>

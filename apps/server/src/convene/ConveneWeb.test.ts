@@ -59,7 +59,7 @@ it.live(
           Effect.gen(function* () {
             const request = yield* HttpServerRequest.HttpServerRequest;
             const auth = yield* EnvironmentAuth.EnvironmentAuth;
-            yield* auth.authenticateWebSocketUpgrade(request);
+            yield* auth.authenticateWebSocketUpgrade(request, "rpc");
             const socket = yield* request.upgrade;
             const writer = yield* socket.writer;
             const reader = yield* socket.reader;

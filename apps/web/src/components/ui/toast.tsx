@@ -64,27 +64,42 @@ export type ThreadToastData = {
     | "secondary";
 };
 
-type ToastManager = ReturnType<typeof Toast.createToastManager<ThreadToastData>>;
-type ToastId = ReturnType<ToastManager["add"]>;
-const hotData = import.meta.hot?.data as
-  | {
-      toastManager?: ToastManager;
-      anchoredToastManager?: ToastManager;
-      threadToastVisibleTimeoutRemainingMs?: Map<ToastId, number>;
-    }
-  | undefined;
+type BaseToastManager = ReturnType<typeof Toast.createToastManager<ThreadToastData>>;
+type ToastManagerListener = Parameters<BaseToastManager[" subscribe"]>[0];
+type ToastManagerEvent = Parameters<ToastManagerListener>[0];
 
-// Pending operations must keep publishing to the provider's manager after a hot update.
-const toastManager = hotData?.toastManager ?? Toast.createToastManager<ThreadToastData>();
-const anchoredToastManager =
-  hotData?.anchoredToastManager ?? Toast.createToastManager<ThreadToastData>();
-const threadToastVisibleTimeoutRemainingMs =
-  hotData?.threadToastVisibleTimeoutRemainingMs ?? new Map<ToastId, number>();
-if (hotData) {
-  hotData.toastManager = toastManager;
-  hotData.anchoredToastManager = anchoredToastManager;
-  hotData.threadToastVisibleTimeoutRemainingMs = threadToastVisibleTimeoutRemainingMs;
+/**
+ * base-ui's manager drops events while no provider is subscribed. App services raise toasts
+ * from before the first render (and while the root error view replaces the providers), so hold
+ * those until a provider listens.
+ */
+function createBufferedToastManager(): BaseToastManager {
+  const manager = Toast.createToastManager<ThreadToastData>();
+  const listeners = new Set<ToastManagerListener>();
+  const pending: ToastManagerEvent[] = [];
+  manager[" subscribe"]((event) => {
+    if (listeners.size === 0) {
+      pending.push(event);
+      return;
+    }
+    for (const listener of listeners) listener(event);
+  });
+  return {
+    ...manager,
+    " subscribe"(listener) {
+      listeners.add(listener);
+      for (const event of pending.splice(0)) listener(event);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
 }
+
+const toastManager = createBufferedToastManager();
+const anchoredToastManager = createBufferedToastManager();
+type ToastId = ReturnType<typeof toastManager.add>;
+const threadToastVisibleTimeoutRemainingMs = new Map<ToastId, number>();
 
 const TOAST_ICONS = {
   error: CircleAlertIcon,
@@ -601,9 +616,7 @@ function Toasts({ position }: { position: ToastPosition }) {
                   ? "not-data-expanded:[--toast-calc-height:var(--toast-frontmost-height)] data-expanded:[--toast-calc-height:max(var(--toast-frontmost-height,var(--toast-height)),var(--toast-height))]"
                   : "[--toast-calc-height:max(var(--toast-frontmost-height,var(--toast-height)),var(--toast-height))]",
                 "[--toast-gap:--spacing(3)] [--toast-peek:--spacing(3)] [--toast-scale:calc(max(0,1-(var(--toast-index)*.1)))] [--toast-shrink:calc(1-var(--toast-scale))]",
-                // Root height: never `min-h-(--toast-height)` — Base UI measures height by briefly forcing
-                // `height: auto` on this node; an old `min-height` from `--toast-height` blocks shrinking,
-                // so `recalculateHeight` keeps the inflated value after an expandable closes.
+                // Base UI measures with height:auto; --toast-height as min-height would prevent shrinking.
                 visibleIndex > 0
                   ? "not-data-expanded:h-(--toast-calc-height) data-expanded:h-auto"
                   : "h-auto",
@@ -664,8 +677,8 @@ function Toasts({ position }: { position: ToastPosition }) {
               </div>
               <Toast.Content
                 className={cn(
-                  // `overflow-x: clip` avoids the CSS quirk where pairing `hidden` + `y: visible`
-                  // forces `y` to `auto`. Expandable detail panels can extend below without being cut off.
+                  // overflow-x:clip preserves visible vertical overflow; hidden would force overflow-y:auto
+                  // and clip detail panels.
                   "pointer-events-auto min-h-0 overflow-y-visible pl-3.5 text-sm transition-opacity duration-250 [overflow-x:clip] data-expanded:opacity-100",
                   stackedActionLayout
                     ? "flex flex-col gap-2 py-2.5 pr-3.5"

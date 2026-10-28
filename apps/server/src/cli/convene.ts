@@ -10,23 +10,22 @@ import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as ConvenePlatform from "../convene/ConvenePlatform.ts";
 import { authLocationFlags, resolveCliAuthConfig, type CliAuthLocationFlags } from "./config.ts";
 
-const withPlatform = <A, E>(
+const withPlatform = Effect.fn("convene.withPlatform")(function* <A, E>(
   flags: CliAuthLocationFlags,
   operation: (platform: ConvenePlatform.ConvenePlatform["Service"]) => Effect.Effect<A, E>,
-) =>
-  Effect.gen(function* () {
-    const logLevel = yield* GlobalFlag.LogLevel;
-    const config = yield* resolveCliAuthConfig(flags, logLevel);
-    return yield* Effect.flatMap(ConvenePlatform.ConvenePlatform, operation).pipe(
-      Effect.provide(
-        ConvenePlatform.layer.pipe(
-          Layer.provide(ServerSecretStore.layer),
-          Layer.provide(ServerConfig.layer(config)),
-          Layer.provide(FetchHttpClient.layer),
-        ),
+) {
+  const logLevel = yield* GlobalFlag.LogLevel;
+  const config = yield* resolveCliAuthConfig(flags, logLevel);
+  return yield* Effect.flatMap(ConvenePlatform.ConvenePlatform, operation).pipe(
+    Effect.provide(
+      ConvenePlatform.layer.pipe(
+        Layer.provide(ServerSecretStore.layer),
+        Layer.provide(ServerConfig.layer(config)),
+        Layer.provide(FetchHttpClient.layer),
       ),
-    );
-  });
+    ),
+  );
+});
 
 const pair = Command.make("pair", { ...authLocationFlags, url: Flag.String("url") }).pipe(
   Command.withDescription(

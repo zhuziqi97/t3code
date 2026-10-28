@@ -61,7 +61,7 @@ it.each([true, false])(
     const module = { exports: {} as Record<string, string> };
     new Function("module", result.outputFiles[0]!.text)(module);
     expect(module.exports.APP_VERSION).toBe("0.2.3-convene.99");
-    expect(module.exports.UPSTREAM_VERSION).toBe("0.1.2");
+    expect(module.exports.UPSTREAM_VERSION).toBe("0.1.3");
     expect(module.exports.CONVENE_BUILD_ID).toBe(fixture.metadata?.build_id ?? "");
     expect(module.exports.CONVENE_SOURCE_COMMIT).toBe(fixture.metadata?.source_commit ?? "");
     expect(module.exports.APP_DISPLAY_NAME).toBe("T3 Code for Convene (Beta)");

@@ -152,7 +152,15 @@ vi.mock("./settingsLayout", async (original) => ({
 }));
 
 import { changeLanguage } from "../../i18n";
-import { IntegrationsSettingsPanel } from "./IntegrationsSettings";
+import { BrowserSettingsPanel, DevicesSettingsPanel } from "./IntegrationsSettings";
+function IntegrationsSettingsPanel() {
+  return (
+    <>
+      <BrowserSettingsPanel />
+      <DevicesSettingsPanel />
+    </>
+  );
+}
 import { DeviceHostsSettings } from "./DeviceHostsSettings";
 
 const ids = [EnvironmentId.make("native-a"), EnvironmentId.make("native-b")];
