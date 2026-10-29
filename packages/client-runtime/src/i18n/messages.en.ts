@@ -735,6 +735,8 @@ export const en = {
     "Enter a valid Convene platform address starting with http:// or https://.",
   "convene.connection.cancel": "Cancel pairing",
   "convene.connection.url": "Convene platform URL",
+  "convene.connection.changeAddress": "Change address",
+  "convene.connection.changeAddressFailed": "Could not change the address. Try again.",
   "convene.connection.requesting": "Requesting code…",
   "convene.connection.connect": "Connect Convene",
   "convene.connection.clientId": "Client ID: {{id}}",

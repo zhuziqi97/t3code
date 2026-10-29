@@ -1,6 +1,12 @@
 import "~/index.css";
 import { act, fakeTimers, render as renderTestUi, type Screen } from "../../../test/render";
-import { EnvironmentId } from "@t3tools/contracts";
+import {
+  ConveneIntegrationError,
+  EnvironmentId,
+  type ConveneManageResult,
+  type ConveneStatus,
+} from "@t3tools/contracts";
+import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
 
@@ -10,6 +16,8 @@ const model = vi.hoisted(() => ({
   manage: vi.fn(),
   copy: vi.fn(),
   ttl: 30,
+  statuses: new Map<string, ConveneStatus>(),
+  permissions: new Map<string, boolean>(),
   status: {
     platformUrls: ["https://one.example.test", "https://two.example.test/"],
     phase: "unpaired",
@@ -20,11 +28,19 @@ const model = vi.hoisted(() => ({
 }));
 vi.mock("@effect/atom-react", async (original) => ({
   ...(await original<typeof import("@effect/atom-react")>()),
-  useAtomValue: (atom: string) => (atom === "status" ? AsyncResult.success(model.status) : true),
+  useAtomValue: (atom: { type: string; environmentId: string }) =>
+    atom.type === "status"
+      ? AsyncResult.success(model.statuses.get(atom.environmentId) ?? model.status)
+      : (model.permissions.get(atom.environmentId) ?? true),
 }));
 vi.mock("../../state/convene", async (original) => ({
   ...(await original<typeof import("../../state/convene")>()),
-  conveneEnvironment: { status: () => "status", manage: { permissionAtom: () => "permission" } },
+  conveneEnvironment: {
+    status: ({ environmentId }: { environmentId: string }) => ({ type: "status", environmentId }),
+    manage: {
+      permissionAtom: (environmentId: string) => ({ type: "permission", environmentId }),
+    },
+  },
 }));
 vi.mock("../../state/use-atom-command", async (original) => ({
   ...(await original<typeof import("../../state/use-atom-command")>()),
@@ -64,6 +80,194 @@ async function advance(ms: number) {
 }
 const exchanges = () =>
   model.manage.mock.calls.filter(([args]) => args.input.operation === "exchange");
+
+const connectedStatus = {
+  platformUrls: ["https://one.example.test", "https://two.example.test/"],
+  phase: "offline",
+  runnerId: "existing-runner",
+  baseUrl: "http://old.example.test/convene",
+  error: null,
+} satisfies ConveneStatus;
+type ManageResult = AtomCommandResult<typeof ConveneManageResult.Type, Error>;
+
+async function showEnvironment(environmentId = "local") {
+  await act(() =>
+    root.rerender(<ConveneConnectionPanel environmentId={EnvironmentId.make(environmentId)} />),
+  );
+}
+
+it("edits paired address presets and custom input without changing the connection when cancelled", async () => {
+  await using _lifecycle = await setupLifecycle();
+  model.statuses.set("local", connectedStatus);
+  await showEnvironment();
+
+  await click("Change address");
+  expect(container.querySelector("input")!.value).toBe(connectedStatus.baseUrl);
+  await act(() =>
+    container.querySelector<HTMLButtonElement>("[data-slot=autocomplete-trigger]")!.click(),
+  );
+  const options = [...document.querySelectorAll<HTMLElement>("[role=option]")];
+  expect(options.map((option) => option.textContent)).toEqual(connectedStatus.platformUrls);
+  await act(() => options[1]!.click());
+  expect(container.querySelector("input")!.value).toBe("https://two.example.test/");
+  expect(container.textContent).toContain(connectedStatus.baseUrl);
+  expect(container.textContent).toContain(connectedStatus.runnerId);
+  await click("Cancel");
+  expect(container.querySelector("input")).toBeNull();
+  await click("Change address");
+  expect(container.querySelector("input")!.value).toBe(connectedStatus.baseUrl);
+  await enterUrl("https://custom.example.test/prefix");
+  await click("Cancel");
+  expect(container.textContent).toContain(connectedStatus.baseUrl);
+  expect(container.textContent).toContain(connectedStatus.runnerId);
+  expect(model.manage).not.toHaveBeenCalled();
+});
+
+it("saves the paired address without re-pairing or treating the RPC acknowledgement as online status", async () => {
+  await using _lifecycle = await setupLifecycle();
+  model.statuses.set("local", connectedStatus);
+  await showEnvironment();
+  const previousStatus = container.querySelector('[role="status"]')!.textContent;
+  let finishSave!: (result: ManageResult) => void;
+  model.manage.mockReturnValueOnce(
+    new Promise<ManageResult>((resolve) => {
+      finishSave = resolve;
+    }),
+  );
+  const baseUrl = "https://custom.example.test/convene";
+
+  await click("Change address");
+  await enterUrl(baseUrl);
+  await click("Save");
+  expect(model.manage).toHaveBeenCalledExactlyOnceWith({
+    environmentId: "local",
+    input: { operation: "change-address", baseUrl },
+  });
+  expect(container.querySelector("input")!.disabled).toBe(true);
+  expect(container.textContent).toContain(connectedStatus.baseUrl);
+  await act(() =>
+    finishSave(
+      AsyncResult.success({
+        type: "status",
+        status: { ...connectedStatus, phase: "online", baseUrl },
+      }),
+    ),
+  );
+  expect(container.querySelector("input")).toBeNull();
+  expect(container.querySelector('[role="status"]')!.textContent).toBe(previousStatus);
+  expect(container.textContent).toContain(connectedStatus.baseUrl);
+  expect(container.textContent).not.toContain(baseUrl);
+  expect(container.textContent).toContain(connectedStatus.runnerId);
+
+  model.statuses.set("local", { ...connectedStatus, phase: "connecting", baseUrl });
+  await showEnvironment();
+  expect(container.textContent).toContain("Connecting to Convene");
+  expect(container.textContent).toContain(baseUrl);
+  expect(container.textContent).not.toContain(connectedStatus.baseUrl);
+  expect(container.textContent).toContain(connectedStatus.runnerId);
+});
+
+it.each([
+  ["INVALID_PLATFORM_URL", "Enter a valid Convene platform address"],
+  ["PLATFORM_UNAVAILABLE", "Could not change the address"],
+] as const)("keeps the address draft and existing connection after %s", async (code, message) => {
+  await using _lifecycle = await setupLifecycle();
+  model.statuses.set("local", connectedStatus);
+  await showEnvironment();
+  model.manage.mockResolvedValueOnce(
+    AsyncResult.failure(
+      Cause.fail(new ConveneIntegrationError({ operation: "change-address", code })),
+    ),
+  );
+  const baseUrl = "https://replacement.example.test/convene";
+  await click("Change address");
+  await enterUrl(baseUrl);
+  await click("Save");
+  expect(container.querySelector("input")!.value).toBe(baseUrl);
+  expect(container.querySelector('[role="alert"]')!.textContent).toContain(message);
+  expect(container.textContent).toContain(connectedStatus.baseUrl);
+  expect(container.textContent).toContain(connectedStatus.runnerId);
+  expect(model.manage).toHaveBeenCalledExactlyOnceWith({
+    environmentId: "local",
+    input: { operation: "change-address", baseUrl },
+  });
+  await click("Cancel");
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+});
+
+it("blocks submission after the target environment loses manage permission and keeps cancellation available", async () => {
+  await using _lifecycle = await setupLifecycle();
+  model.statuses.set("local", connectedStatus);
+  await showEnvironment();
+  await click("Change address");
+  const baseUrl = "https://replacement.example.test/convene";
+  await enterUrl(baseUrl);
+  model.permissions.set("local", false);
+  await showEnvironment();
+  expect(container.querySelector("input")!.disabled).toBe(true);
+  const save = [...container.querySelectorAll("button")].find(
+    (button) => button.textContent === "Save",
+  )!;
+  expect(save.disabled).toBe(true);
+  await act(() =>
+    container
+      .querySelector("form")!
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
+  );
+  expect(model.manage).not.toHaveBeenCalled();
+  expect(container.querySelector("input")!.value).toBe(baseUrl);
+  expect(container.textContent).toContain(connectedStatus.baseUrl);
+  await click("Cancel");
+  const change = [...container.querySelectorAll("button")].find(
+    (button) => button.textContent === "Change address",
+  )!;
+  expect(change.disabled).toBe(true);
+});
+
+it("keeps saves on their original environment and ignores their late result in another environment's editor", async () => {
+  await using _lifecycle = await setupLifecycle();
+  model.statuses.set("local", connectedStatus);
+  await showEnvironment();
+  let finishSave!: (result: ManageResult) => void;
+  model.manage.mockReturnValueOnce(
+    new Promise<ManageResult>((resolve) => {
+      finishSave = resolve;
+    }),
+  );
+  const localUrl = "https://local.example.test/convene";
+  await click("Change address");
+  await enterUrl(localUrl);
+  await click("Save");
+
+  const remoteStatus = {
+    ...connectedStatus,
+    platformUrls: ["https://remote.example.test/"],
+    baseUrl: "http://old-remote.example.test",
+    runnerId: "remote-runner",
+  };
+  model.statuses.set("remote", remoteStatus);
+  await showEnvironment("remote");
+  expect(container.querySelector("input")).toBeNull();
+  expect(container.textContent).toContain(remoteStatus.baseUrl);
+  expect(container.textContent).toContain(remoteStatus.runnerId);
+  await click("Change address");
+  expect(container.querySelector("input")!.value).toBe(remoteStatus.baseUrl);
+  const remoteUrl = "https://remote.example.test/prefix";
+  await enterUrl(remoteUrl);
+  await act(() => finishSave(AsyncResult.success({ type: "status", status: connectedStatus })));
+  expect(container.querySelector("input")!.value).toBe(remoteUrl);
+  expect(container.textContent).toContain(remoteStatus.baseUrl);
+  expect(container.textContent).not.toContain(connectedStatus.runnerId);
+
+  model.manage.mockResolvedValueOnce(AsyncResult.success({ type: "status", status: remoteStatus }));
+  await click("Save");
+  expect(model.manage.mock.calls.map(([request]) => request)).toEqual([
+    { environmentId: "local", input: { operation: "change-address", baseUrl: localUrl } },
+    { environmentId: "remote", input: { operation: "change-address", baseUrl: remoteUrl } },
+  ]);
+  expect(container.querySelector("input")).toBeNull();
+  expect(container.textContent).toContain(remoteStatus.baseUrl);
+});
 
 it("selects either configured address and keeps a custom address after leaving the input", async () => {
   await using _lifecycle = await setupLifecycle();
@@ -279,6 +483,8 @@ async function setupLifecycle() {
   });
 
   await changeLanguage("en");
+  model.statuses.clear();
+  model.permissions.clear();
   model.ttl = 30;
   model.status = {
     platformUrls: ["https://one.example.test", "https://two.example.test/"],

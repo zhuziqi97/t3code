@@ -707,6 +707,8 @@ export const zh: Partial<Messages> = {
   "convene.connection.invalidUrl": "请输入以 http:// 或 https:// 开头的有效 Convene 平台地址。",
   "convene.connection.cancel": "取消配对",
   "convene.connection.url": "Convene 平台地址",
+  "convene.connection.changeAddress": "修改地址",
+  "convene.connection.changeAddressFailed": "无法修改地址，请重试。",
   "convene.connection.requesting": "正在获取配对码…",
   "convene.connection.connect": "连接 Convene",
   "convene.connection.clientId": "客户端 ID：{{id}}",
