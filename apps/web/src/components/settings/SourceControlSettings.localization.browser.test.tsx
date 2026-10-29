@@ -1,8 +1,8 @@
 import { SourceControlProviderKind } from "@t3tools/contracts";
-// @vitest-environment jsdom
-import { act, type ReactNode } from "react";
-import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
+import "~/index.css";
+import { type ReactNode } from "react";
+import { act, render } from "../../../test/render";
+import { expect, it, vi } from "vite-plus/test";
 import * as Option from "effect/Option";
 import * as Duration from "effect/Duration";
 import {
@@ -14,6 +14,7 @@ import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
 
 const state = vi.hoisted(() => ({
+  settings: null as typeof DEFAULT_UNIFIED_SETTINGS | null,
   discovery: null as SourceControlDiscoveryResult | null,
   error: null as string | null,
   refresh: vi.fn(),
@@ -27,14 +28,16 @@ vi.mock("./SettingsScopeContext", () => ({
       connection: { phase: "connected" },
     };
     return {
-      scope: { environmentIds: [environment.environmentId] },
+      scope: { kind: "environment", environmentIds: [environment.environmentId] },
       environment,
       connectedEnvironments: [environment],
     };
   },
 }));
 vi.mock("./useScopedSettings", () => ({
-  useScopedSettings: () => DEFAULT_UNIFIED_SETTINGS,
+  useScopedSettings: () => state.settings,
+  useScopedSettingsMixed: () => false,
+  useScopedSettingsWriteAllowed: () => true,
   useUpdateScopedSettings: () => state.update,
 }));
 vi.mock("../../state/query", () => ({
@@ -52,10 +55,28 @@ vi.mock("./ProjectDefaultsSettings", () => ({ ProjectDefaultsSettings: () => nul
 vi.mock("./SourceControlWritingSettings", () => ({
   SourceControlWritingSettingsSection: () => null,
 }));
-vi.mock("./GitHubTokenSettings", () => ({ GitHubTokenSettings: () => null }));
-vi.mock("./GitHubAccountSettings", () => ({ GitHubAccountSettings: () => null }));
-vi.mock("./BitbucketCredentialsSettings", () => ({ BitbucketCredentialsSettings: () => null }));
+vi.mock("./SourceControlTokenSettings", () => ({ SourceControlTokenSettings: () => null }));
+vi.mock("./SourceControlAccountSettings", () => ({ SourceControlAccountSettings: () => null }));
+vi.mock("./SourceControlHostSettings", () => ({ SourceControlHostSettings: () => null }));
 vi.mock("./settingsLayout", () => ({
+  SettingsRow: ({
+    title,
+    description,
+    control,
+    children,
+  }: {
+    title: ReactNode;
+    description: ReactNode;
+    control: ReactNode;
+    children: ReactNode;
+  }) => (
+    <section>
+      <h3>{title}</h3>
+      {description}
+      {control}
+      {children}
+    </section>
+  ),
   SettingsSection: ({
     title,
     children,
@@ -82,27 +103,21 @@ vi.mock("./settingsLayout", () => ({
 
 import { changeLanguage } from "../../i18n";
 import { SourceControlSettingsPanel } from "./SourceControlSettings";
+import { BackgroundActivitySettingsRow } from "./BackgroundActivitySettings";
 
-let root: Root;
-let container: HTMLDivElement;
-beforeEach(async () => {
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+async function setup() {
   await changeLanguage("en");
+  state.settings = DEFAULT_UNIFIED_SETTINGS;
   state.discovery = { versionControlSystems: [], sourceControlProviders: [] };
   state.error = null;
   state.refresh.mockReset();
   state.update.mockReset();
-  container = document.createElement("div");
-  document.body.append(container);
-  root = createRoot(container);
-});
-afterEach(async () => {
-  await act(async () => root.unmount());
-  container.remove();
-  await changeLanguage("en");
-  vi.unstubAllGlobals();
-});
-const render = async () => act(async () => root.render(<SourceControlSettingsPanel />));
+  return {
+    async [Symbol.asyncDispose]() {
+      await changeLanguage("en");
+    },
+  };
+}
 const switchLanguage = async () => act(async () => changeLanguage("zh"));
 function provider(
   kind: SourceControlProviderDiscoveryItem["kind"],
@@ -122,8 +137,10 @@ function provider(
 }
 
 it("keeps a failed scan diagnostic and only scans when the translated action is clicked", async () => {
+  await using _setup = await setup();
   state.error = "raw discovery failure: EACCES";
-  await render();
+  await using screen = await render(<SourceControlSettingsPanel />);
+  const container = screen.container;
   await switchLanguage();
   expect(container.textContent).toContain("无法扫描服务器环境");
   expect(container.textContent).toContain("raw discovery failure: EACCES");
@@ -136,6 +153,7 @@ it("keeps a failed scan diagnostic and only scans when the translated action is 
 });
 
 it("localizes discovered states and installation instructions while preserving tool names, versions and commands", async () => {
+  await using _setup = await setup();
   const gitlab = provider(SourceControlProviderKind.make("gitlab"), "Raw GitLab Host", {
     executable: "glab",
   });
@@ -165,7 +183,8 @@ it("localizes discovered states and installation instructions while preserving t
       }),
     ],
   };
-  await render();
+  await using screen = await render(<SourceControlSettingsPanel />);
+  const container = screen.container;
   await switchLanguage();
   expect(container.textContent).toContain("即将支持 Jujutsu。");
   expect(container.textContent).toContain("Raw-JJ-Version");
@@ -178,6 +197,7 @@ it("localizes discovered states and installation instructions while preserving t
 });
 
 it("keeps a revealed account across languages and translates owned details while retaining raw failures", async () => {
+  await using _setup = await setup();
   const github = provider(SourceControlProviderKind.make("github"), "GitHub");
   state.discovery = {
     versionControlSystems: [],
@@ -195,7 +215,8 @@ it("keeps a revealed account across languages and translates owned details while
       },
     ],
   };
-  await render();
+  await using screen = await render(<SourceControlSettingsPanel />);
+  const container = screen.container;
   await act(async () =>
     container
       .querySelector<HTMLButtonElement>(
@@ -225,7 +246,7 @@ it("keeps a revealed account across languages and translates owned details while
       },
     ],
   };
-  await render();
+  await screen.rerender(<SourceControlSettingsPanel />);
   expect(container.textContent).toContain(
     "无法检查 GH_TOKEN 中的令牌：raw HTTP 503\nupstream unavailable",
   );
@@ -243,7 +264,7 @@ it("keeps a revealed account across languages and translates owned details while
       },
     ],
   };
-  await render();
+  await screen.rerender(<SourceControlSettingsPanel />);
   expect(container.textContent).toContain("GitHub CLI 版本过旧，无法报告登录状态。");
   expect(container.textContent).toContain("brew upgrade gh");
   state.discovery = {
@@ -252,12 +273,13 @@ it("keeps a revealed account across languages and translates owned details while
       { ...github, auth: { ...github.auth, detail: Option.some("raw gh diagnostic: denied") } },
     ],
   };
-  await render();
+  await screen.rerender(<SourceControlSettingsPanel />);
   expect(container.textContent).toContain("无法验证 GitHub。raw gh diagnostic: denied");
   expect(state.refresh).not.toHaveBeenCalled();
 });
 
-it("keeps Git details open across languages and submits seconds under the existing background policy", async () => {
+it("keeps provider details open across languages and submits seconds through background activity settings", async () => {
+  await using _setup = await setup();
   state.discovery = {
     versionControlSystems: [
       {
@@ -271,30 +293,48 @@ it("keeps Git details open across languages and submits seconds under the existi
         detail: Option.none(),
       },
     ],
-    sourceControlProviders: [],
+    sourceControlProviders: [provider(SourceControlProviderKind.make("github"), "GitHub")],
   };
-  await render();
-  await act(async () =>
-    container.querySelector<HTMLButtonElement>('button[aria-label="Toggle Git details"]')!.click(),
+  state.settings = {
+    ...DEFAULT_UNIFIED_SETTINGS,
+    backgroundActivity: {
+      schemaVersion: 1,
+      profile: "custom",
+      baseProfile: "balanced",
+      overrides: { automaticGitFetchInterval: Duration.seconds(35) },
+    },
+  };
+  await using screen = await render(
+    <>
+      <SourceControlSettingsPanel />
+      <BackgroundActivitySettingsRow />
+    </>,
   );
+  const container = screen.container;
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('button[aria-label="Toggle GitHub details"]')!
+      .click(),
+  );
+  await screen.getByRole("button", { name: "Configure advanced background activity" }).click();
   await switchLanguage();
   expect(
     container
-      .querySelector('button[aria-label="展开或收起 Git 详情"]')
+      .querySelector('button[aria-label="展开或收起 GitHub 详情"]')
       ?.getAttribute("aria-expanded"),
   ).toBe("true");
   const initial = Math.round(
     Duration.toMillis(
-      resolveServerBackgroundActivitySettings(DEFAULT_UNIFIED_SETTINGS).automaticGitFetchInterval,
+      resolveServerBackgroundActivitySettings(state.settings).automaticGitFetchInterval,
     ) / 1000,
   );
   expect(
-    container.querySelector<HTMLInputElement>('input[aria-label="自动获取 Git 更新的间隔（秒）"]')!
+    document.querySelector<HTMLInputElement>('input[aria-label="自动获取 Git 更新的间隔（秒）"]')!
       .value,
   ).toBe(String(initial));
   expect(state.update).not.toHaveBeenCalled();
   await act(async () =>
-    container.querySelector<HTMLButtonElement>('button[aria-label="延长获取间隔"]')!.click(),
+    document.querySelector<HTMLButtonElement>('button[aria-label="延长获取间隔"]')!.click(),
   );
   expect(state.update).toHaveBeenCalledTimes(1);
   const patch = state.update.mock.calls[0]![0];

@@ -115,6 +115,7 @@ export function formatProviderStatusMessage(message: string, translate: TFunctio
       return translate("provider.status.opencodeMissing");
     case "macOS is blocking the OpenCode binary (quarantine). Run `xattr -d com.apple.quarantine $(which opencode)` to fix this.":
       return translate("provider.status.opencodeQuarantine");
+    // oxlint-disable-next-line t3code/no-em-dash-copy -- Match the provider diagnostic verbatim before translating it.
     case "macOS killed the OpenCode process due to an invalid code signature. The binary may be corrupted — try reinstalling OpenCode.":
       return translate("provider.status.opencodeSignature");
     case "Failed to load OpenCode provider inventory.":
@@ -258,14 +259,6 @@ export function formatProviderAuthLabel(
   return namedKey ? translate("provider.auth.cursorNamedApiKey", { name: namedKey[1] }) : label;
 }
 
-/**
- * Derive the headline + detail copy shown under a provider's name in the
- * settings page. Prefers `provider.message` for server-supplied detail and
- * falls back to generic phrasing when the server has not yet reported any
- * state — which happens before the first probe or when an instance names a
- * driver this build does not ship. A ready provider without account metadata
- * remains available and does not imply an authentication failure.
- */
 // Antigravity's local health check verifies installation, not Google sign-in.
 // API-key and Agent Platform warnings still need attention.
 function isAntigravitySignInUnchecked(provider: ServerProvider): boolean {

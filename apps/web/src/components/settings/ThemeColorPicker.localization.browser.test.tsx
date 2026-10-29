@@ -1,5 +1,5 @@
 import "~/index.css";
-import { act, render as renderTestUi, type Screen } from "../../../test/render";
+import { act, fakeTimers, render as renderTestUi, type Screen } from "../../../test/render";
 import { useState } from "react";
 
 import { expect, it, vi } from "vite-plus/test";
@@ -64,7 +64,7 @@ it("preserves an RGB draft through language changes and retains alpha on a nativ
   expect(changed).toHaveBeenCalledExactlyOnceWith("canvas", "#0c223880");
 });
 
-it("keeps a pending hue adjustment through language changes and commits it once with its original alpha", async () => {
+it("keeps a pending hue adjustment through language changes and commits it once on close with its original alpha", async () => {
   await using _lifecycle = await setupLifecycle();
 
   const hue = document.querySelector<HTMLElement>('[role="slider"][aria-label="Background hue"]')!;
@@ -75,7 +75,9 @@ it("keeps a pending hue adjustment through language changes and commits it once 
   await switchLanguage();
   expect(document.querySelector('[role="slider"][aria-label="背景色相"]')).toBe(hue);
   expect(changed).not.toHaveBeenCalled();
-  await act(async () => vi.advanceTimersToNextFrame());
+  await act(() =>
+    container.querySelector<HTMLButtonElement>('[aria-label="选择背景颜色"]')!.click(),
+  );
   expect(changed).toHaveBeenCalledExactlyOnceWith("canvas", "#ff040080");
 });
 
@@ -87,16 +89,15 @@ async function setupLifecycle() {
     await act(async () => root.unmount());
     container.remove();
     await changeLanguage("en");
-    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
-  vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] });
   await changeLanguage("en");
   changed.mockClear();
   container = document.createElement("div");
   document.body.append(container);
   root = renderStack.use(await renderTestUi(null, { container: container, router: false }));
+  renderStack.use(fakeTimers());
   await act(async () => root.rerender(<Fixture />));
   await act(async () =>
     container.querySelector<HTMLButtonElement>('[aria-label="Choose Background color"]')!.click(),

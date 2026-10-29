@@ -4,7 +4,6 @@ import { SettingsPageContainer } from "./settingsLayout";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { useEnvironments } from "../../state/environments";
 import type { SettingsScopeSearch } from "./settingsScope";
-import { useSettingsProjectGroups } from "./useSettingsProjectGroups";
 import { resolveEnvironmentMachineKind, type EnvironmentId } from "@t3tools/contracts";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { ChevronRightIcon, LayersIcon } from "lucide-react";

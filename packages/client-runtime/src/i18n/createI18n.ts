@@ -1,28 +1,10 @@
-/**
- * The i18next instance every client shares.
- *
- * This module stays React-free so web, desktop, and mobile can each bind their
- * own renderer to one configured instance. The React binding lives in each
- * client (`initReactI18next`), because this package deliberately has no React
- * dependency.
- */
+// Keep shared i18n React-free so each client can bind its own renderer.
 import { createInstance, type i18n as I18nInstance, type Module } from "i18next";
 
 import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, type SupportedLanguage } from "./languages.ts";
 import { resources } from "./resources.ts";
 
-/**
- * Creates an instance with the catalogs already bundled.
- *
- * `initAsync: false` is what makes `t()` usable on the very first render: the
- * default defers initialization to a `setTimeout`, which would show raw keys
- * until that timer fired. It also keeps tests synchronous.
- *
- * Plugins are registered before `init` because i18next only runs a plugin's own
- * `init` hook while the instance is initializing. A `3rdParty` plugin added
- * afterwards — `initReactI18next` is one — never initializes, and
- * `react-i18next` then falls back to an unregistered instance.
- */
+// Register plugins before synchronous init; i18next does not initialize plugins added later.
 export function createI18n(options?: {
   readonly lng?: SupportedLanguage;
   readonly plugins?: ReadonlyArray<Module>;

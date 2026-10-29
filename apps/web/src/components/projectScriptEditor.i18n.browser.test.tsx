@@ -6,7 +6,6 @@ vi.mock("~/hooks/useSettings", async (original) => ({
 }));
 import { i18n } from "../i18n";
 import { EnvironmentId } from "@t3tools/contracts";
-import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
 import { StrictMode, type ReactNode } from "react";
 

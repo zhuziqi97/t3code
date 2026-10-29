@@ -203,6 +203,7 @@ export function deriveLatestContextWindowSnapshot(
 
 export function formatContextWindowTokens(value: number | null): string {
   if (value === null || !Number.isFinite(value)) {
+    // oxlint-disable-next-line t3code/no-em-dash-copy -- A dash represents missing numeric data, not prose.
     return "—";
   }
   if (value < 1_000) {

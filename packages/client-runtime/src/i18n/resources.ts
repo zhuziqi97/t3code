@@ -1,14 +1,4 @@
-/**
- * Language catalogs, statically bundled.
- *
- * `en` is the source of truth; `zh` may be partial, because i18next falls back
- * to `en` per key. Both are imported eagerly: they are a few kilobytes, and an
- * async catalog would show raw keys on the first frame of an untranslated
- * install — exactly the case a fresh client hits first.
- *
- * Chinese has a single plural form, so a `_other` string serves every count;
- * i18next falls back to it when no `_one` form exists.
- */
+// Bundle catalogs eagerly so the first render never waits for translations.
 import { en, type MessageKey } from "./messages.en.ts";
 import { zh } from "./messages.zh.ts";
 

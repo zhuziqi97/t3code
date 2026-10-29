@@ -1,5 +1,5 @@
 import "~/index.css";
-import { act, render as renderTestUi, type Screen } from "../../../test/render";
+import { act, fakeTimers, render as renderTestUi, type Screen } from "../../../test/render";
 
 import { expect, it, vi } from "vite-plus/test";
 import { DEFAULT_CLIENT_SETTINGS, type DesktopSnapShotState } from "@t3tools/contracts";
@@ -128,7 +128,6 @@ async function setupLifecycle() {
     await act(async () => root.unmount());
     container.remove();
     await changeLanguage("en");
-    vi.useRealTimers();
     vi.unstubAllGlobals();
     Reflect.deleteProperty(HTMLElement.prototype, "getAnimations");
   });
@@ -145,11 +144,11 @@ async function setupLifecycle() {
     configurable: true,
     value: () => [],
   });
-  vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
   await changeLanguage("en");
   container = document.createElement("div");
   document.body.append(container);
   root = renderStack.use(await renderTestUi(null, { container: container, router: false }));
+  renderStack.use(fakeTimers());
 
   renderStack = stack.move();
   return renderStack;

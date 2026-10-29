@@ -1,11 +1,4 @@
-/**
- * Languages a client can display.
- *
- * `en` is the source language: every message is written there first, and other
- * catalogs fall back to it. Adding a language means adding it here, adding the
- * matching value to `LanguagePreference` in `@t3tools/contracts`, and adding a
- * catalog to `resources.ts`.
- */
+// Keep supported languages in sync with the preference schema and bundled catalogs.
 export const SUPPORTED_LANGUAGES = ["en", "zh"] as const;
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
 
@@ -44,14 +37,7 @@ function primarySubtag(locale: string): string {
   return locale.trim().toLowerCase().split(/[-_]/)[0] ?? "";
 }
 
-/**
- * Pick the language to display from the stored preference and the host's
- * locales, most preferred first.
- *
- * Only the primary subtag is matched, so `zh-Hans-CN` and `zh-TW` both resolve
- * to `zh`. A host list with nothing we ship — Japanese, say — falls back to
- * English rather than showing untranslated keys.
- */
+// Match host locales by primary subtag; unsupported locales fall back to English.
 export function resolveLanguage(
   preference: LanguagePreference,
   systemLocales: readonly string[] = [],
