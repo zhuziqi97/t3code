@@ -7,10 +7,8 @@ import type {
 import type { ServerUpdateState } from "@t3tools/client-runtime/state/server";
 import { compareSemverVersions, parseSemver } from "@t3tools/shared/semver";
 import * as Schema from "effect/Schema";
-import type { TFunction } from "i18next";
 
 import { APP_VERSION } from "./branding";
-import { i18n } from "./i18n";
 import { getLocalStorageItem, setLocalStorageItem } from "./hooks/useLocalStorage";
 
 export interface VersionMismatch {
@@ -114,17 +112,6 @@ export function manualServerUpdateCommand(
   const runner =
     installation?.kind === "pnpm-dlx" ? "pnpm dlx" : installation?.kind === "bunx" ? "bunx" : "npx";
   return `${runner} t3@${targetVersion}`;
-}
-
-export function serverUpdateGuidance(
-  capability: ServerSelfUpdateCapability,
-  t: TFunction = i18n.t,
-): string {
-  return t(
-    capability === "desktop-managed"
-      ? "server.update.desktopGuidance"
-      : "server.update.syncGuidance",
-  );
 }
 
 export function buildVersionMismatchDismissalKey(

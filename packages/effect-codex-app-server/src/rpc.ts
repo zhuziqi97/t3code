@@ -25,6 +25,7 @@ const ThreadSampleCancelParams = Schema.Struct({
 });
 const ThreadSampleCancelResponse = Schema.Struct({});
 
+/** @public Complete method-name metadata for the rpc entry, including the sampling extensions. */
 export const CLIENT_REQUEST_METHODS = {
   ...Generated.CLIENT_REQUEST_METHODS,
   "thread/sample": "thread/sample",
