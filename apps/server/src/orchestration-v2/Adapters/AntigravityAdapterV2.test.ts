@@ -42,6 +42,8 @@ import {
   makeAntigravityAdapterV2,
 } from "./AntigravityAdapterV2.ts";
 
+const decodeJson = Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown));
+
 const decodeMcpRequest = Schema.decodeUnknownSync(
   Schema.fromJsonString(
     Schema.Struct({
@@ -576,7 +578,7 @@ describe("AntigravityAdapterV2 workspace changes", () => {
 });
 
 describe("AntigravityAdapterV2 client file system under restrictive policies", () => {
-  it.effect("serves in-workspace reads and writes and still refuses outside paths", () =>
+  it.live("serves confined reads and rejects client writes under restrictive policies", () =>
     Effect.gen(function* () {
       const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
       const fileSystem = yield* FileSystem.FileSystem;
@@ -598,8 +600,7 @@ describe("AntigravityAdapterV2 client file system under restrictive policies", (
         { name: "approval-required", policy: { runtimeMode: "approval-required" } },
       ] as const;
       for (const { name, policy } of policies) {
-        let readTextFile: Parameters<RuntimeService["handleReadTextFile"]>[0] | undefined;
-        let writeTextFile: Parameters<RuntimeService["handleWriteTextFile"]>[0] | undefined;
+        let nativeRuntime: RuntimeService | undefined;
         const instanceId = ProviderInstanceId.make(`antigravity-restrictive-${policy.runtimeMode}`);
         const adapter = yield* makeAntigravityAdapterV2({
           instanceId,
@@ -613,21 +614,20 @@ describe("AntigravityAdapterV2 client file system under restrictive policies", (
                 command: process.execPath,
                 args: [mockAgentPath],
                 cwd: input.cwd,
-                env: { T3_ACP_ANTIGRAVITY: "1" },
+                env: {
+                  T3_ACP_ANTIGRAVITY: "1",
+                  T3_ACP_CLIENT_FS_PROBE_PATH: existing,
+                  T3_ACP_CLIENT_FS_PROBE_OUTSIDE_PATH: outsideFile,
+                  T3_ACP_CLIENT_FS_PROBE_LOG_PATH: probeLog,
+                },
               },
             }).pipe(
               Effect.provideService(Crypto.Crypto, crypto),
-              Effect.map((runtime): RuntimeService => ({
-                ...runtime,
-                handleReadTextFile: (handler) =>
-                  Effect.sync(() => {
-                    readTextFile = handler;
-                  }).pipe(Effect.andThen(runtime.handleReadTextFile(handler))),
-                handleWriteTextFile: (handler) =>
-                  Effect.sync(() => {
-                    writeTextFile = handler;
-                  }).pipe(Effect.andThen(runtime.handleWriteTextFile(handler))),
-              })),
+              Effect.tap((runtime) =>
+                Effect.sync(() => {
+                  nativeRuntime = runtime;
+                }),
+              ),
             ),
           withProcess: (_stop, task) => task,
           // @effect-diagnostics-next-line effectSucceedWithVoid:off - The runtime API needs an absent value, not void.
@@ -639,7 +639,10 @@ describe("AntigravityAdapterV2 client file system under restrictive policies", (
         const outside = yield* fileSystem.makeTempDirectoryScoped({
           prefix: "t3-ag-restrictive-outside-",
         });
-        yield* fileSystem.writeFileString(path.join(workspace, "existing.ts"), "existing");
+        const existing = path.join(workspace, "existing.ts");
+        const outsideFile = path.join(outside, "x.ts");
+        const probeLog = path.join(workspace, "fs-probe.ndjson");
+        yield* fileSystem.writeFileString(existing, "existing");
         const threadId = ThreadId.make(`thread-antigravity-restrictive-${policy.runtimeMode}`);
         const runtimePolicy = ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
           ...policy,
@@ -656,27 +659,29 @@ describe("AntigravityAdapterV2 client file system under restrictive policies", (
           runtimePolicy,
         });
         yield* session.ensureThread({ threadId, modelSelection, runtimePolicy });
-        if (readTextFile === undefined || writeTextFile === undefined) {
-          return yield* Effect.die("Antigravity sessions must serve client file requests");
+        if (nativeRuntime === undefined) {
+          return yield* Effect.die("Antigravity session did not start its ACP runtime");
         }
-        const context = (method: string) => ({ requestId: `test-${method}`, method });
-        const read = yield* readTextFile(
-          { sessionId: "mock-session-1", path: path.join(workspace, "existing.ts") },
-          context("fs/read_text_file"),
+        const completed = yield* nativeRuntime.prompt({
+          prompt: [{ type: "text", text: "Synthetic client file probe" }],
+        });
+        assert.equal(completed.stopReason, "end_turn", name);
+        const outcomes = yield* Effect.forEach(
+          (yield* fileSystem.readFileString(probeLog)).trim().split("\n"),
+          (line) => decodeJson(line),
         );
-        assert.equal(read.content, "existing", name);
-        const written = path.join(workspace, "src", "edited.ts");
-        yield* writeTextFile(
-          { sessionId: "mock-session-1", path: written, content: "edited" },
-          context("fs/write_text_file"),
+        assert.deepEqual(
+          outcomes,
+          [
+            { method: "fs/write_text_file", errorCode: -32601 },
+            { method: "fs/read_text_file", result: { content: "existing" } },
+            { method: "fs/write_text_file", errorCode: -32601 },
+            { method: "fs/read_text_file", errorCode: -32602 },
+          ],
+          name,
         );
-        assert.equal(yield* fileSystem.readFileString(written), "edited", name);
-        const outsideWrite = yield* writeTextFile(
-          { sessionId: "mock-session-1", path: path.join(outside, "x.ts"), content: "x" },
-          context("fs/write_text_file"),
-        ).pipe(Effect.exit);
-        assert.isTrue(Exit.isFailure(outsideWrite), name);
-        assert.isFalse(yield* fileSystem.exists(path.join(outside, "x.ts")), name);
+        assert.equal(yield* fileSystem.readFileString(existing), "existing", name);
+        assert.isFalse(yield* fileSystem.exists(outsideFile), name);
       }
     }).pipe(Effect.provide(layerSession), Effect.scoped),
   );

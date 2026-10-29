@@ -51,7 +51,6 @@ describe("CursorAdapterV2", () => {
       const opened: Array<{ operation: string; servers: unknown }> = [];
       const adapter = yield* makeCursorAdapterV2({
         instanceId,
-        settings: yield* decodeCursorSettings({}),
         environment: {},
       }).pipe(
         Effect.provideService(CursorAgentSdk.CursorAgentSdkRunner, {

@@ -2096,7 +2096,7 @@ describe("AcpRegistryAdapterV2", () => {
     }).pipe(Effect.provide(layerTest), Effect.scoped),
   );
 
-  it.effect("opens a real ACP child process resolved from registry configuration", () =>
+  it.live("opens a real ACP child process resolved from registry configuration", () =>
     Effect.gen(function* () {
       const path = yield* Path.Path;
       const host = yield* ProviderHost.ProviderHost;
@@ -2126,7 +2126,7 @@ describe("AcpRegistryAdapterV2", () => {
         settings,
         environment: {
           T3_ACP_SESSION_LIFECYCLE: "1",
-          T3_ACP_COMMAND_ADVERTISEMENT_DELAY_MS: "750",
+          T3_ACP_ADVERTISE_REGISTRY_COMMANDS: "1",
         },
       }).pipe(
         Effect.provide(
