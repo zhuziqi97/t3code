@@ -144,6 +144,8 @@ for (const file of code) {
     if (entry.startsWith(prefix) && TEST.test(entry)) tests.add(NodePath.join(dir, entry));
   }
 }
+const nodeTests = [...tests].filter((file) => /^scripts\/[^/]+\.test\.mjs$/.test(file));
+for (const file of nodeTests) tests.delete(file);
 
 // knip:check cannot be scoped to a package. Any code change can leave a file,
 // export, or dependency unused (removing the last import of a helper does), so
@@ -255,6 +257,10 @@ const steps = [
       ...filters(affected),
       "typecheck",
     ],
+  },
+  nodeTests.length > 0 && {
+    name: `node test (${nodeTests.length} files)`,
+    args: ["exec", "node", "--test", ...nodeTests],
   },
   // From the repo root, the root vite.config.ts hands each file to its package's config.
   tests.size > 0 && {

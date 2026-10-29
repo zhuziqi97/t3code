@@ -5,8 +5,14 @@ import * as NodeTest from "node:test";
 import { prepareBuild, exportWeb } from "./convene-web-build.mjs";
 
 NodeTest.test(
-  "a rebuilt version gets a distinct identity; exporting cannot relabel another build",
+  "a local rebuild gets a distinct identity; exporting cannot relabel another build",
   async (t) => {
+    const githubRunId = process.env.GITHUB_RUN_ID;
+    delete process.env.GITHUB_RUN_ID;
+    t.after(() => {
+      if (githubRunId === undefined) delete process.env.GITHUB_RUN_ID;
+      else process.env.GITHUB_RUN_ID = githubRunId;
+    });
     const root = await NodeFSP.mkdtemp(
       NodePath.join(process.cwd(), ".generated-build-NodeTest.test-"),
     );
