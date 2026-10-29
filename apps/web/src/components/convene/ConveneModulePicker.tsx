@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from "../ui/alert";
 import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
+import { Tooltip, TooltipTrigger, TooltipPopup } from "../ui/tooltip";
 import {
   Dialog,
   DialogPopup,
@@ -46,25 +47,66 @@ export function ConveneModulePicker({
   const [search, setSearch] = useState("");
   const [requestedSearch, setRequestedSearch] = useState("");
   const [project, setProject] = useState<Option | null>(null);
-  const [projects, setProjects] = useState<Options | null>(null);
-  const [modules, setModules] = useState<Options | null>(null);
+  const [projectResponse, setProjectResponse] = useState<{
+    environmentId: EnvironmentId;
+    page: number;
+    search: string;
+    translate: typeof t;
+    result: Options | null;
+    error: string | null;
+  } | null>(null);
+  const [moduleResponse, setModuleResponse] = useState<{
+    environmentId: EnvironmentId;
+    project: Option;
+    translate: typeof t;
+    result: Options | null;
+    error: string | null;
+  } | null>(null);
   const [scope, setScope] = useState<Scope>(initialScope);
   const [moduleSearch, setModuleSearch] = useState("");
   const [moduleId, setModuleId] = useState<string | null>(null);
   const [names, setNames] = useState(initialNames ?? {});
-  const [projectError, setProjectError] = useState<string | null>(null);
-  const [moduleError, setModuleError] = useState<string | null>(null);
+  const currentProjects =
+    projectResponse?.environmentId === environmentId &&
+    projectResponse.page === page &&
+    projectResponse.search === requestedSearch &&
+    projectResponse.translate === t
+      ? projectResponse
+      : null;
+  const currentModuleResponse =
+    moduleResponse?.environmentId === environmentId &&
+    moduleResponse.project === project &&
+    moduleResponse.translate === t
+      ? moduleResponse
+      : null;
+  const projects = currentProjects?.result ?? null;
+  const projectError = currentProjects?.error ?? null;
+  const modules = currentModuleResponse?.result ?? null;
+  const moduleError = currentModuleResponse?.error ?? null;
+  // oxlint-disable-next-line t3code/react-effect-budget -- Project queries follow the destination environment and filter; cleanup rejects stale replies.
   useEffect(() => {
     let active = true;
-    setProjects(null);
-    setProjectError(null);
     void options({ environmentId, input: { page, search: requestedSearch } }).then((result) => {
       if (!active) return;
       if (result._tag === "Failure") {
         const cause = squashAtomCommandFailure(result);
-        setProjectError(cause instanceof Error ? cause.message : t("convene.error.options"));
+        setProjectResponse({
+          environmentId,
+          page,
+          search: requestedSearch,
+          translate: t,
+          result: null,
+          error: cause instanceof Error ? cause.message : t("convene.error.options"),
+        });
       } else {
-        setProjects(result.value);
+        setProjectResponse({
+          environmentId,
+          page,
+          search: requestedSearch,
+          translate: t,
+          result: result.value,
+          error: null,
+        });
         setProject((current) => current ?? result.value.items[0] ?? null);
       }
     });
@@ -72,19 +114,30 @@ export function ConveneModulePicker({
       active = false;
     };
   }, [environmentId, options, page, requestedSearch, t]);
+  // oxlint-disable-next-line t3code/react-effect-budget -- Selected platform projects load remote module permissions with cancellation on cleanup.
   useEffect(() => {
     let active = true;
-    setModules(null);
-    setModuleError(null);
     if (project)
       void options({ environmentId, input: { projectId: project.id, page: 1, search: "" } }).then(
         (result) => {
           if (!active) return;
           if (result._tag === "Failure") {
             const cause = squashAtomCommandFailure(result);
-            setModuleError(cause instanceof Error ? cause.message : t("convene.error.options"));
+            setModuleResponse({
+              environmentId,
+              project,
+              translate: t,
+              result: null,
+              error: cause instanceof Error ? cause.message : t("convene.error.options"),
+            });
           } else {
-            setModules(result.value);
+            setModuleResponse({
+              environmentId,
+              project,
+              translate: t,
+              result: result.value,
+              error: null,
+            });
             setNames((previous) => ({
               ...previous,
               ...Object.fromEntries(
@@ -204,7 +257,7 @@ export function ConveneModulePicker({
                       className="w-full justify-start"
                       onClick={() => {
                         if (project?.id !== item.id) {
-                          setModules(null);
+                          setModuleResponse(null);
                           setModuleSearch("");
                           setModuleId(null);
                           setProject(item);
@@ -257,14 +310,20 @@ export function ConveneModulePicker({
                     <p className="text-xs text-muted-foreground">
                       {t("convene.scope.modulesLabel")}
                     </p>
-                    <h3
-                      className="truncate text-sm font-medium"
-                      title={project?.display_name ?? project?.name}
-                    >
-                      {project
-                        ? (project.display_name ?? project.name)
-                        : t("convene.scope.chooseProject")}
-                    </h3>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={<h3 className="truncate text-sm font-medium" tabIndex={0} />}
+                      >
+                        {project
+                          ? (project.display_name ?? project.name)
+                          : t("convene.scope.chooseProject")}
+                      </TooltipTrigger>
+                      <TooltipPopup>
+                        {project
+                          ? (project.display_name ?? project.name)
+                          : t("convene.scope.chooseProject")}
+                      </TooltipPopup>
+                    </Tooltip>
                   </div>
                   {onScope && (
                     <div className="flex items-center gap-3">
@@ -339,12 +398,16 @@ export function ConveneModulePicker({
                           checked={selected !== undefined}
                           onCheckedChange={(checked) => update(item.id, checked ? "READ" : null)}
                         />
-                        <span
-                          className="min-w-0 flex-1 truncate text-sm"
-                          title={item.display_name ?? item.name}
-                        >
-                          {item.display_name ?? item.name}
-                        </span>
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <span className="min-w-0 flex-1 truncate text-sm" tabIndex={0} />
+                            }
+                          >
+                            {item.display_name ?? item.name}
+                          </TooltipTrigger>
+                          <TooltipPopup>{item.display_name ?? item.name}</TooltipPopup>
+                        </Tooltip>
                         {selected && (
                           <Select
                             value={selected.permission}
@@ -425,17 +488,21 @@ export function ConveneModulePicker({
                       key={entry.module_id}
                       className="flex items-center gap-2 rounded-md bg-muted/30 px-3 py-1"
                     >
-                      <span
-                        className="min-w-0 flex-1 truncate text-xs"
-                        title={names[entry.module_id]}
-                      >
-                        {names[entry.module_id] ?? t("convene.scope.selectedModule")} ·{" "}
-                        {t(
-                          entry.permission === "WRITE"
-                            ? "convene.permission.write"
-                            : "convene.permission.read",
-                        )}
-                      </span>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={<span className="min-w-0 flex-1 truncate text-xs" tabIndex={0} />}
+                        >
+                          {names[entry.module_id] ?? t("convene.scope.selectedModule")} ·{" "}
+                          {t(
+                            entry.permission === "WRITE"
+                              ? "convene.permission.write"
+                              : "convene.permission.read",
+                          )}
+                        </TooltipTrigger>
+                        <TooltipPopup>
+                          {names[entry.module_id] ?? t("convene.scope.selectedModule")}
+                        </TooltipPopup>
+                      </Tooltip>
                       <Button
                         variant="ghost"
                         size="sm"

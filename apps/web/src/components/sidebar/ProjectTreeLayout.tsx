@@ -31,12 +31,14 @@ function ProjectBlock(props: {
   const hasBody = props.items.length > 1;
   const dragging = active !== null;
   const motionPass = { layoutKey: bodyKey, animate: !dragging };
+  // oxlint-disable-next-line t3code/react-effect-budget -- The DOM motion controller must be created and disposed with its list element.
   useLayoutEffect(() => {
     if (!hasBody || !bodyRef.current) return;
     const current = createSidebarListMotion(bodyRef.current);
     motion.current = current;
     return () => current.dispose();
   }, [hasBody]);
+  // oxlint-disable-next-line t3code/react-effect-budget -- Committed list geometry and drag state drive the external animation controller.
   useLayoutEffect(() => {
     motion.current?.update(motionPass.animate);
   }, [motionPass]);

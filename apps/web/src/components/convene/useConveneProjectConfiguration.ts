@@ -9,7 +9,8 @@ import type {
   ProjectId,
 } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { useStableCallback } from "../../hooks/useStableCallback";
 import { conveneEnvironment } from "~/state/convene";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { useConveneStatus } from "./ConveneConnectionPanel";
@@ -34,18 +35,11 @@ export function useConveneProjectConfiguration(environmentId: EnvironmentId, pro
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastOperation, setLastOperation] = useState<ConveneProjectMutation | null>(null);
-  const current = useRef({ configuration, draft });
-  useEffect(() => {
-    current.current = { configuration, draft };
-  }, [configuration, draft]);
-  const keyFor = useCallback(
-    (value: ConveneProjectConfiguration) =>
-      `convene-draft:${environmentId}:${projectId}:${value.client_project_id}`,
-    [environmentId, projectId],
-  );
-  const accept = useCallback(
-    (value: ConveneProjectConfiguration, saved = false) => {
-      const previous = current.current;
+  const keyFor = (value: ConveneProjectConfiguration) =>
+    `convene-draft:${environmentId}:${projectId}:${value.client_project_id}`;
+  const accept = useStableCallback(
+    (value: ConveneProjectConfiguration, saved: boolean, storageKey: string) => {
+      const previous = { configuration, draft };
       const preserved =
         !saved &&
         previous.configuration?.client_project_id === value.client_project_id &&
@@ -58,34 +52,67 @@ export function useConveneProjectConfiguration(environmentId: EnvironmentId, pro
         preserved ??
           (saved
             ? configurationDraft(value)
-            : (readConveneDraft(keyFor(value)) ?? configurationDraft(value))),
+            : (readConveneDraft(storageKey) ?? configurationDraft(value))),
       );
-      if (saved) writeConveneDraft(keyFor(value), null);
+      if (saved) writeConveneDraft(storageKey, null);
     },
-    [keyFor],
   );
-  const refresh = useCallback(async () => {
+  const refreshContext = { environmentId, projectId, online, query, t };
+  const [loadedContext, setLoadedContext] = useState<typeof refreshContext | null>(null);
+  const loading =
+    loadedContext?.environmentId !== environmentId ||
+    loadedContext.projectId !== projectId ||
+    loadedContext.online !== online ||
+    loadedContext.query !== query ||
+    loadedContext.t !== t;
+  const completeLoad = useStableCallback(
+    (context: typeof refreshContext, result: Awaited<ReturnType<typeof query>>) => {
+      if (
+        context.environmentId !== environmentId ||
+        context.projectId !== projectId ||
+        context.online !== online ||
+        context.query !== query ||
+        context.t !== t
+      )
+        return;
+      setLoadedContext(context);
+      setBusy(false);
+      if (result._tag === "Failure") {
+        const cause = squashAtomCommandFailure(result);
+        setError(cause instanceof Error ? cause.message : t("convene.error.load"));
+        setFresh(false);
+        return;
+      }
+      setFresh(result.value.fresh);
+      setError(result.value.error);
+      if (result.value.configuration)
+        accept(
+          result.value.configuration,
+          false,
+          `convene-draft:${environmentId}:${projectId}:${result.value.configuration.client_project_id}`,
+        );
+      else {
+        setConfiguration(null);
+        setDraft(null);
+      }
+    },
+  );
+  const load = useStableCallback(async (context: typeof refreshContext) => {
+    const result = await context.query({
+      environmentId: context.environmentId,
+      input: { projectId: context.projectId },
+    });
+    completeLoad(context, result);
+  });
+  const refresh = () => {
     setBusy(true);
     setError(null);
-    const result = await query({ environmentId, input: { projectId } });
-    setBusy(false);
-    if (result._tag === "Failure") {
-      const cause = squashAtomCommandFailure(result);
-      setError(cause instanceof Error ? cause.message : t("convene.error.load"));
-      setFresh(false);
-      return;
-    }
-    setFresh(result.value.fresh);
-    setError(result.value.error);
-    if (result.value.configuration) accept(result.value.configuration);
-    else {
-      setConfiguration(null);
-      setDraft(null);
-    }
-  }, [query, environmentId, projectId, accept, t]);
+    return load(refreshContext);
+  };
+  // oxlint-disable-next-line t3code/react-effect-budget -- Connection transitions invalidate the remote project configuration without discarding its local draft.
   useEffect(() => {
-    void refresh();
-  }, [refresh, online]);
+    void load({ environmentId, projectId, online, query, t });
+  }, [load, environmentId, projectId, online, query, t]);
   const edit = (value: ConveneDraft) => {
     setDraft(value);
     if (configuration) {
@@ -104,7 +131,7 @@ export function useConveneProjectConfiguration(environmentId: EnvironmentId, pro
     setBusy(true);
     setError(null);
     setLastOperation(input);
-    const mcpWasEnabled = current.current.configuration?.mcp_enabled;
+    const mcpWasEnabled = configuration?.mcp_enabled;
     const result = await mutate({ environmentId, input });
     setBusy(false);
     if (result._tag === "Failure") {
@@ -115,7 +142,7 @@ export function useConveneProjectConfiguration(environmentId: EnvironmentId, pro
     if (input.operation === "save" && !mcpWasEnabled && result.value.mcp_enabled) {
       toastManager.add({ type: "success", title: t("convene.project.mcpEnabled") });
     }
-    accept(result.value, input.operation === "save");
+    accept(result.value, input.operation === "save", keyFor(result.value));
     setLastOperation(null);
     return true;
   };
@@ -142,8 +169,8 @@ export function useConveneProjectConfiguration(environmentId: EnvironmentId, pro
     draft,
     dirty,
     fresh,
-    busy,
-    error,
+    busy: busy || loading,
+    error: loading ? null : error,
     online,
     needsConnection:
       AsyncResult.isSuccess(statusResult) &&
@@ -155,6 +182,6 @@ export function useConveneProjectConfiguration(environmentId: EnvironmentId, pro
     run,
     save,
     discard,
-    canWrite: online && fresh && permitted && !busy,
+    canWrite: online && fresh && permitted && !busy && !loading,
   };
 }

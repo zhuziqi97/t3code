@@ -7,7 +7,7 @@ import {
   type UncontrolledCodeViewProps,
 } from "@pierre/diffs/react";
 /* oxlint-enable eslint/no-restricted-imports */
-import { useMemo, type Ref } from "react";
+import type { Ref } from "react";
 
 import { useTranslate } from "~/i18n";
 import { DIFF_SURFACE_THEME_UNSAFE_CSS } from "~/lib/diffRendering";
@@ -227,7 +227,7 @@ export function StyledDiffCodeView<LAnnotation = undefined>({
   ...props
 }: StyledDiffCodeViewProps<LAnnotation>) {
   const t = useTranslate();
-  const uiLabels = useMemo(() => diffViewerLabels(t), [t]);
+  const uiLabels = diffViewerLabels(t);
   return (
     <DiffWorkerPoolProvider>
       <CodeView<LAnnotation>

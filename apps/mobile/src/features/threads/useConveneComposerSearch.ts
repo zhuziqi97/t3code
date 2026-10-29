@@ -95,6 +95,7 @@ export function useConveneComposerSearch(input: {
       return { status: failed.status === "unauthorized" ? "unauthorized" : "unavailable" };
     }, setState),
   );
+  // oxlint-disable-next-line t3code/react-effect-budget -- Debounced targets and permission pushes drive remote search with cancellation on cleanup.
   useEffect(() => {
     if (settledTarget && permitted && phase === "online") void reader.load(settledTarget);
     return reader.clear;

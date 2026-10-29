@@ -215,6 +215,71 @@ it("keeps the activation notice when a configuration refresh arrives before the 
   expect(model.toast).toHaveBeenCalledTimes(1);
 });
 
+it("does not refetch on draft edits and keeps an edit made while a refresh is pending", async () => {
+  await using _lifecycle = await setupLifecycle();
+
+  await mount();
+  expect(model.query).toHaveBeenCalledTimes(1);
+  await act(async () => renderer.rerender(<Harness />));
+  await act(async () => state.edit({ ...state.draft!, enabled: true }));
+  expect(model.query).toHaveBeenCalledTimes(1);
+
+  let finish!: (value: unknown) => void;
+  model.query.mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = resolve;
+    }),
+  );
+  let refreshing!: ReturnType<typeof state.refresh>;
+  await act(async () => {
+    refreshing = state.refresh();
+  });
+  expect(state.busy).toBe(true);
+  await act(async () =>
+    state.edit({
+      ...state.draft!,
+      scope: [{ module_id: "pending-edit", permission: "READ" }],
+    }),
+  );
+  await act(async () => {
+    finish(AsyncResult.success({ configuration, fresh: true, error: null }));
+    await refreshing;
+  });
+  expect(model.query).toHaveBeenCalledTimes(2);
+  expect(state.busy).toBe(false);
+  expect(state.dirty).toBe(true);
+  expect(state.draft?.scope).toEqual([{ module_id: "pending-edit", permission: "READ" }]);
+});
+
+it("keeps the current connection result when an older connection query replies last", async () => {
+  await using _lifecycle = await setupLifecycle();
+
+  await mount();
+  let finish!: (value: unknown) => void;
+  model.query.mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = resolve;
+    }),
+  );
+  model.online = false;
+  await act(async () => renderer.rerender(<Harness />));
+  expect(state.busy).toBe(true);
+
+  model.query.mockResolvedValueOnce(
+    AsyncResult.success({ configuration, fresh: true, error: null }),
+  );
+  model.online = true;
+  await act(async () => renderer.rerender(<Harness />));
+  expect(state.busy).toBe(false);
+  await act(async () =>
+    finish(AsyncResult.success({ configuration, fresh: false, error: "Offline" })),
+  );
+  expect(state.busy).toBe(false);
+  expect(state.fresh).toBe(true);
+  expect(state.error).toBeNull();
+  expect(model.query).toHaveBeenCalledTimes(3);
+});
+
 let renderStack: AsyncDisposableStack;
 async function setupLifecycle() {
   await using stack = new AsyncDisposableStack();

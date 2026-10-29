@@ -494,6 +494,68 @@ it("filters modules and limits bulk selection to visible results without losing 
   expect(container.textContent).toContain("Platform project / Beta service");
 });
 
+it("hides a previous module query and ignores its late reply after switching projects", async () => {
+  await using _lifecycle = await setupLifecycle();
+
+  let finishA!: (value: unknown) => void;
+  let finishB!: (value: unknown) => void;
+  model.options.mockImplementation(({ input }) => {
+    if (input.projectId === "one")
+      return new Promise((resolve) => {
+        finishA = resolve;
+      });
+    if (input.projectId === "two")
+      return new Promise((resolve) => {
+        finishB = resolve;
+      });
+    return Promise.resolve(
+      AsyncResult.success({
+        items: [
+          { id: "one", name: "Project one", display_name: null, path: "/", can_write: true },
+          { id: "two", name: "Project two", display_name: null, path: "/", can_write: true },
+        ],
+        total: 2,
+        truncated: false,
+      }),
+    );
+  });
+  await click("Convene MCP");
+  await click("Configure access scope");
+  await click("Project two");
+  expect(document.querySelector('[aria-label="Access Module A"]')).toBeNull();
+  await act(async () =>
+    finishB(
+      AsyncResult.success({
+        items: [{ id: "b", name: "Module B", display_name: null, path: "/", can_write: true }],
+        total: 1,
+        truncated: false,
+      }),
+    ),
+  );
+  await act(async () =>
+    finishA(
+      AsyncResult.success({
+        items: [{ id: "a", name: "Module A", display_name: null, path: "/", can_write: true }],
+        total: 1,
+        truncated: false,
+      }),
+    ),
+  );
+  expect(document.querySelector('[aria-label="Access Module A"]')).toBeNull();
+  await act(async () =>
+    document.querySelector<HTMLButtonElement>('[aria-label="Access Module B"]')!.click(),
+  );
+  await click("Confirm selection");
+  expect(container.textContent).toContain("Project two / Module B");
+  expect(model.options).toHaveBeenCalledTimes(3);
+  expect(model.options.mock.calls.map(([request]) => request.environmentId)).toEqual([
+    "env",
+    "env",
+    "env",
+  ]);
+  expect(model.mutate).not.toHaveBeenCalled();
+});
+
 let renderStack: AsyncDisposableStack;
 async function setupLifecycle() {
   await using stack = new AsyncDisposableStack();

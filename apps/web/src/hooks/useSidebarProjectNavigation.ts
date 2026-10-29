@@ -31,6 +31,7 @@ export function useSidebarProjectNavigation() {
   const project = current ? scopeProjectRef(current.environmentId, current.projectId) : null;
   const projectKey = project ? `${project.environmentId}:${project.projectId}` : null;
   const observed = useRef({ route, projectKey, pending: false });
+  // oxlint-disable-next-line t3code/react-effect-budget -- Route commits synchronize the external sidebar scope and expanded-project store.
   useEffect(() => {
     if (route === null) {
       // Params can briefly be empty while returning from Settings. Only
