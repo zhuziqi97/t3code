@@ -10,13 +10,8 @@ import type { SetStateAction } from "react";
 import { applyClaudePromptEffortPrefix, resolvePromptInjectedEffort } from "@t3tools/shared/model";
 import { getProviderModelCapabilities } from "../providerModels";
 import { sanitizeThreadErrorMessage } from "~/rpc/transportError";
-import type {
-  EnvironmentThread,
-  ThreadStructure,
-  EnvironmentThreadShell,
-} from "@t3tools/client-runtime/state/shell";
+import type { EnvironmentThread, ThreadStructure } from "@t3tools/client-runtime/state/shell";
 import {
-  ANTIGRAVITY_DEFAULT_MODEL,
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   type AssetCreateUrlInput,
   type AssetCreateUrlResult,
@@ -895,18 +890,6 @@ export function recallCheckoutIsRepo(
 
 function threadHasStarted(thread: Thread | null | undefined): boolean {
   return Boolean(thread && (thread.latestRun !== null || thread.itemCount > 0 || thread.runtime));
-}
-
-function threadShellHasStarted(
-  shell:
-    | Pick<EnvironmentThreadShell, "latestRun" | "latestUserMessageAt" | "runtime">
-    | null
-    | undefined,
-): boolean {
-  return Boolean(
-    shell &&
-    (shell.latestRun !== null || shell.latestUserMessageAt !== null || shell.runtime !== null),
-  );
 }
 
 // Imported history lacks a session until its first prompt; resolve its instance before locking the driver.

@@ -1,5 +1,5 @@
 import "~/index.css";
-import { act, render as renderTestUi, type Screen } from "../../test/render";
+import { act, fakeTimers, render as renderTestUi, type Screen } from "../../test/render";
 import { useState } from "react";
 
 import { expect, it, vi } from "vite-plus/test";
@@ -101,18 +101,14 @@ async function setupLifecycle() {
   await using stack = new AsyncDisposableStack();
   renderStack = stack;
   stack.defer(async () => {
-    await act(async () => root.unmount());
-    await settle();
     container.remove();
     styles.remove();
     useBrowserSurfaceStore.setState({ byTabId: {}, activityByTabId: {} });
     await changeLanguage("en");
     vi.restoreAllMocks();
-    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
-  vi.useFakeTimers();
   vi.stubGlobal(
     "ResizeObserver",
     class {
@@ -140,6 +136,7 @@ async function setupLifecycle() {
   container = document.createElement("div");
   document.body.append(container);
   root = renderStack.use(await renderTestUi(null, { container: container, router: false }));
+  renderStack.use(fakeTimers());
   await act(async () => root.rerender(<Harness />));
   await settle();
 

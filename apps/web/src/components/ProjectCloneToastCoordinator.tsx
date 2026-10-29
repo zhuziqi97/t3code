@@ -49,23 +49,6 @@ function renderKey(clone: ProjectCloneSnapshot): string {
   return `${clone.phase}:${clone.stage}:${clone.percent ?? ""}:${clone.detail ?? ""}:${clone.stalled === true}:${clone.error ?? ""}`;
 }
 
-async function runCloneAction(
-  title: string,
-  action: () => Promise<AtomCommandResult<unknown, unknown>>,
-) {
-  const result = await action();
-  if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-    const error = squashAtomCommandFailure(result);
-    toastManager.add(
-      stackedThreadToast({
-        type: "error",
-        title,
-        description: error instanceof Error ? error.message : "An error occurred.",
-      }),
-    );
-  }
-}
-
 function EnvironmentCloneToasts({ environmentId }: { environmentId: EnvironmentId }) {
   const t = useTranslate();
   const clones = useEnvironmentProjectClones(environmentId);

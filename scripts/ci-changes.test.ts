@@ -2,6 +2,13 @@ import { describe, expect, it } from "vite-plus/test";
 import { decide, dependencyTests, readWorkspace } from "../.github/scripts/ci-changes.cjs";
 
 describe("CI dependency and full-run selection", () => {
+  it("runs the web-owned mobile stream bridge regression when its source changes", () => {
+    const files = ["apps/mobile/src/features/browser/preview-stream.browser.ts"];
+    expect(decide(files, readWorkspace(), false).outputs.test_web).toBe(true);
+    expect(dependencyTests(files)).toEqual([
+      "apps/web/src/browser/mobilePreviewStream.browser.test.ts",
+    ]);
+  });
   it("runs native mobile analysis for a full candidate without native source changes", () => {
     expect(decide(["docs/user/index.md"], readWorkspace(), true).outputs.mobile_native).toBe(true);
   });

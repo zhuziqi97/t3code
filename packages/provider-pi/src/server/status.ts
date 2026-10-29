@@ -1,14 +1,5 @@
 import { reportProviderProgress } from "@t3tools/provider-core/server/managedProvider";
-/**
- * PiProvider — snapshot/probe layer for the Pi coding agent.
- *
- * Health is probed with `pi --version`. Models, the user's default model, and
- * the user's commands (extension slash commands, prompt templates, skills)
- * are discovered through a short-lived ephemeral RPC session
- * (`pi --mode rpc --no-session`), so everything the user configured in
- * `~/.pi/agent` — custom providers, models.json entries, extensions, skills —
- * shows up in T3 without any hardcoded catalog.
- */
+// Discover native models and commands through an ephemeral Pi RPC session, without a static catalog.
 import {
   type CustomModelSetting,
   type ServerProvider,

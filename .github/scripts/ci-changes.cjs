@@ -20,6 +20,7 @@ const RUNS_EVERYTHING = [
 
 // Includes cross-package reads absent from package.json dependencies.
 const EXTRA_OWNERS = [
+  [/^apps\/mobile\/src\/features\/browser\/preview-stream\.browser\.ts$/, ["@t3tools/web"]],
   [/^patches\/@pierre%2Fdiffs@[^/]+\.patch$/, ["@t3tools/web"]],
   // Vite configs and tsconfigs of these apps import scripts/lib directly.
   [/^scripts\/lib\//, ["@t3tools/desktop", "@t3tools/mobile", "@t3tools/web", "t3"]],
@@ -185,9 +186,12 @@ function main() {
 }
 
 function dependencyTests(files) {
-  return files.some((file) => /^patches\/@pierre%2Fdiffs@[^/]+\.patch$/.test(file))
-    ? ["apps/web/src/components/diffs/codeViewLocalization.browser.test.ts"]
-    : [];
+  const tests = [];
+  if (files.includes("apps/mobile/src/features/browser/preview-stream.browser.ts"))
+    tests.push("apps/web/src/browser/mobilePreviewStream.browser.test.ts");
+  if (files.some((file) => /^patches\/@pierre%2Fdiffs@[^/]+\.patch$/.test(file)))
+    tests.push("apps/web/src/components/diffs/codeViewLocalization.browser.test.ts");
+  return tests;
 }
 
 module.exports = { readWorkspace, decide, dependencyTests };

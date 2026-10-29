@@ -1,5 +1,5 @@
 import "~/index.css";
-import { act, render as renderTestUi, type Screen } from "../../test/render";
+import { act, fakeTimers, render as renderTestUi, type Screen } from "../../test/render";
 import type { DeviceHubAccess } from "@t3tools/client-runtime/device/hub-access";
 
 import { EnvironmentId } from "@t3tools/contracts";
@@ -215,26 +215,15 @@ it.each(["connection", "unauthorized"] as const)(
   },
 );
 
-it("bounds failed access acquisition and recovers when fresh access becomes available", async () => {
+it("stops a stream without access and reconnects when fresh access becomes available", async () => {
   await using _lifecycle = await setupLifecycle();
 
   state.access = null;
-  for (let failure = 0; failure < 3; failure++) {
-    state.failed = true;
-    await render();
-    await act(async () => vi.runOnlyPendingTimers());
-    if (failure < 2) {
-      state.failed = false;
-      await render();
-    }
-  }
-  expect(state.refresh).toHaveBeenCalledTimes(2);
-  expect(container.querySelector('[role="alert"]')?.textContent).toBe(
-    "Could not connect to the browser.",
-  );
-  await act(async () => vi.runAllTimers());
-  expect(state.refresh).toHaveBeenCalledTimes(2);
-  await click("Reconnect");
+  state.failed = true;
+  await render();
+  expect(state.stop).toHaveBeenCalledTimes(1);
+  expect(state.create).toHaveBeenCalledTimes(1);
+  expect(container.querySelector('[role="alert"]')).toBeNull();
   state.access = {
     httpBase: "http://qa.test/stream",
     wsBase: "ws://qa.test/stream",
@@ -245,6 +234,7 @@ it("bounds failed access acquisition and recovers when fresh access becomes avai
   await render();
   expect(container.querySelector('[role="alert"]')).toBeNull();
   expect(state.create).toHaveBeenCalledTimes(2);
+  expect(state.create.mock.calls[1]?.[0].access).toEqual(state.access);
 });
 
 let renderStack: AsyncDisposableStack;
@@ -252,15 +242,12 @@ async function setupLifecycle() {
   await using stack = new AsyncDisposableStack();
   renderStack = stack;
   stack.defer(async () => {
-    await act(async () => root.unmount());
     container.remove();
     await changeLanguage("en");
     vi.restoreAllMocks();
-    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
-  vi.useFakeTimers();
   vi.clearAllMocks();
   state.events = null;
   state.failed = false;
@@ -299,6 +286,7 @@ async function setupLifecycle() {
   container = document.createElement("div");
   document.body.append(container);
   root = renderStack.use(await renderTestUi(null, { container: container, router: false }));
+  renderStack.use(fakeTimers());
   await render();
   await act(async () => vi.runAllTimers());
   expect(state.create).toHaveBeenCalledTimes(1);

@@ -33,6 +33,8 @@
     "test",
     "scripts/warm-dep-cache.ts",
     "../../scripts/lib/public-config.ts",
+    "../mobile/src/features/browser/preview-stream.browser.ts",
+    "../mobile/src/features/browser/preview-stream-document.ts",
     "../../scripts/lib/third-party-licenses.ts"
   ]
 }

@@ -1,5 +1,5 @@
 import "~/index.css";
-import { act, render as renderTestUi, type Screen } from "../../test/render";
+import { act, fakeTimers, render as renderTestUi, type Screen } from "../../test/render";
 
 import {
   DndContext,
@@ -111,14 +111,11 @@ async function setupLifecycle() {
   await using stack = new AsyncDisposableStack();
   renderStack = stack;
   stack.defer(async () => {
-    await act(async () => root.unmount());
     container.remove();
     await changeLanguage("en");
-    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   started.mockClear();
   cancelled.mockClear();
   dropped.mockClear();
@@ -126,6 +123,7 @@ async function setupLifecycle() {
   container = document.createElement("div");
   document.body.append(container);
   root = renderStack.use(await renderTestUi(null, { container: container, router: false }));
+  renderStack.use(fakeTimers());
 
   renderStack = stack.move();
   return renderStack;

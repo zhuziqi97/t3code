@@ -75,7 +75,7 @@ export function PullRequestRowLines({
   metaClassName?: string;
   updatedAt?: string | null | undefined;
 }) {
-  const t = useTranslate();
+  useTranslate();
   return (
     <span className="min-w-0 flex-1">
       <span className="flex min-w-0 items-center gap-1.5">
