@@ -6,6 +6,7 @@ import {
   isProviderNativeSubagentThread,
   MessageId,
   type ModelSelection,
+  type OrchestrationV2StoredEvent,
   OrchestratorMcpDelegateTaskResult,
   OrchestratorMcpThreadInterruptResult,
   OrchestratorMcpThreadSendResult,
@@ -232,6 +233,25 @@ describe("orchestrator MCP toolkit", () => {
 
         yield* Effect.gen(function* () {
           const orchestrator = yield* Orchestrator.OrchestratorV2;
+          const checkRunFailure = Effect.fn("McpToolkitReplay.checkRunFailure")(function* (
+            stored: OrchestrationV2StoredEvent,
+          ) {
+            const event = stored.event;
+            if (event.type === "run.updated" && event.payload.status === "failed") {
+              const projection = yield* orchestrator.getThreadProjection(event.payload.threadId);
+              const reasons = projection.turnItems.flatMap((item) =>
+                item.runId === event.payload.id && item.type === "error"
+                  ? [item.failure.message]
+                  : [],
+              );
+              return yield* Effect.die(
+                new Error(
+                  `Replay run ${event.payload.id} failed before its expected milestone: ${reasons.join("; ")}`,
+                ),
+              );
+            }
+            return stored;
+          });
           const server = yield* McpServer.McpServer;
           const parentCreate = yield* orchestrator.dispatch({
             type: "thread.create",
@@ -265,6 +285,7 @@ describe("orchestrator MCP toolkit", () => {
               afterSequence: parentCreate.sequence,
             })
             .pipe(
+              Stream.mapEffect(checkRunFailure),
               Stream.filter(
                 (stored) =>
                   stored.event.type === "provider-turn.updated" &&
@@ -320,6 +341,10 @@ describe("orchestrator MCP toolkit", () => {
               afterSequence: delegationStartSequence,
             })
             .pipe(
+              Stream.merge(
+                orchestrator.streamStoredEventsFrom({ threadId: delegatedStart.childThreadId }),
+              ),
+              Stream.mapEffect(checkRunFailure),
               Stream.filter(
                 (stored) =>
                   stored.event.type === "context-transfer.created" &&
@@ -373,6 +398,7 @@ describe("orchestrator MCP toolkit", () => {
               afterSequence: followupStartSequence,
             })
             .pipe(
+              Stream.mapEffect(checkRunFailure),
               Stream.filter(
                 (stored) =>
                   stored.event.type === "provider-turn.updated" &&
@@ -469,6 +495,7 @@ describe("orchestrator MCP toolkit", () => {
               afterSequence: finalSequence,
             })
             .pipe(
+              Stream.mapEffect(checkRunFailure),
               Stream.filter(
                 (stored) =>
                   stored.event.type === "run.updated" &&
@@ -505,6 +532,7 @@ describe("orchestrator MCP toolkit", () => {
               afterSequence: finalSequence,
             })
             .pipe(
+              Stream.mapEffect(checkRunFailure),
               Stream.filter(
                 (stored) =>
                   stored.event.type === "subagent.updated" &&
