@@ -112,7 +112,7 @@ it.layer(NodeServices.layer)("DesktopCliCommand", (it) => {
       });
       const installed = yield* command.install;
       expect(installed.installedPath).toBe(link);
-      expect(installed.launcherPath).toBe(path.join(home, ".t3", "bin", "t3"));
+      expect(installed.launcherPath).toBe(path.join(home, ".t3", "bin", "t3code-convene"));
       expect(yield* fs.readLink(link)).toBe(path.join(home, ".t3", "bin", "t3code-convene"));
       expect((yield* command.install).installedPath).toBe(link);
 
@@ -234,11 +234,13 @@ it.layer(NodeServices.layer)("DesktopCliCommand", (it) => {
           supported: true,
           installedPath: null,
           onPath: false,
+          launcherPath: null,
         });
         expect(yield* command.install).toEqual({
           supported: true,
           installedPath: path.join(userBin, "t3code-convene"),
           onPath: userDirectoryFirst,
+          launcherPath: path.join(home, ".t3", "bin", "t3code-convene"),
         });
         expect(yield* fs.realPath(systemLink)).toBe(executable);
 
