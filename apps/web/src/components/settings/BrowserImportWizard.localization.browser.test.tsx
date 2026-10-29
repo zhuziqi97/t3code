@@ -8,6 +8,12 @@ import { changeLanguage } from "../../i18n";
 import { BrowserImportWizard } from "./BrowserImportWizard";
 import type { ImportOutcome } from "./browserImportWizard.logic";
 
+// Keep focus returns outside this language-and-polling fixture.
+vi.mock("~/lib/documentActivity", () => ({
+  getDocumentActivity: () => ({ visible: true, focused: true }),
+  subscribeDocumentActivity: () => () => {},
+}));
+
 const source: BrowserImportSource = {
   id: "helium",
   name: "Helium",

@@ -329,12 +329,11 @@ it("keeps provider details open across languages and submits seconds through bac
     ) / 1000,
   );
   expect(
-    document.querySelector<HTMLInputElement>('input[aria-label="自动获取 Git 更新的间隔（秒）"]')!
-      .value,
+    document.querySelector<HTMLInputElement>('input[aria-label="Git 获取间隔（秒）"]')!.value,
   ).toBe(String(initial));
   expect(state.update).not.toHaveBeenCalled();
   await act(async () =>
-    document.querySelector<HTMLButtonElement>('button[aria-label="延长获取间隔"]')!.click(),
+    document.querySelector<HTMLButtonElement>('button[aria-label="延长 Git 获取间隔"]')!.click(),
   );
   expect(state.update).toHaveBeenCalledTimes(1);
   const patch = state.update.mock.calls[0]![0];

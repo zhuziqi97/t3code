@@ -13,6 +13,7 @@ import * as ServerConfig from "../config.ts";
 import * as ModelManifest from "./ModelManifest.ts";
 import * as ProviderRegistry from "./ProviderRegistry.ts";
 import * as ProviderInstanceRegistry from "./ProviderInstanceRegistry.ts";
+import { CodexProviderCapabilitiesV2 } from "../orchestration-v2/Adapters/CodexAdapterV2.ts";
 import type { ProviderInstance } from "@t3tools/provider-core/server/driver";
 import { makeManualOnlyProviderMaintenanceCapabilities } from "@t3tools/provider-core/server/maintenanceResolver";
 import * as Schema from "effect/Schema";
@@ -242,7 +243,9 @@ it.effect("a remote policy refresh preserves a newer health result on the regist
             makeManualOnlyProviderMaintenanceCapabilities({ provider: driver, packageName: null }),
           ),
       },
-      orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
+      orchestrationAdapter: {
+        getCapabilities: () => Effect.succeed(CodexProviderCapabilitiesV2),
+      } as ProviderInstance["orchestrationAdapter"],
       textGeneration: {} as ProviderInstance["textGeneration"],
     };
     const refresh = Deferred.succeed(started, undefined).pipe(
