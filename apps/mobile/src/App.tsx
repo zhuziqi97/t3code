@@ -168,6 +168,7 @@ function LanguageSync() {
     ? (preferencesResult.value.languagePreference ?? "system")
     : "system";
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- applies the persisted language preference to the external i18next instance after preferences load
   useEffect(() => {
     const language = resolveLanguage(languagePreference, [deviceLocale()]);
     if (i18n.resolvedLanguage !== language) {

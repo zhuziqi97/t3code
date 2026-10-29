@@ -1,4 +1,4 @@
-import { useTranslate } from "../../i18n";
+import { i18n, useTranslate } from "../../i18n";
 import { useAtomValue } from "@effect/atom-react";
 import { Fragment, useState, type ReactNode } from "react";
 import * as Cause from "effect/Cause";
@@ -176,7 +176,7 @@ export function DeviceSourcesSettings(props: {
   /** Writes one settings patch per environment; reports the environments it could not change. */
   const write = async (
     patches: ReadonlyArray<{ environmentId: EnvironmentId; patch: ServerSettingsPatch }>,
-    failedTitle: string,
+    failedTitle: () => string,
   ) => {
     if (projectScope) return false;
     const name = (environmentId: EnvironmentId) =>
@@ -187,7 +187,7 @@ export function DeviceSourcesSettings(props: {
     if (unwritable.length > 0) {
       toastManager.add({
         type: "error",
-        title: failedTitle,
+        title: failedTitle(),
         description: `This connection cannot change settings on ${unwritable.map((patch) => name(patch.environmentId)).join(", ")}.`,
       });
       return false;
@@ -206,7 +206,7 @@ export function DeviceSourcesSettings(props: {
         : [];
     });
     if (failed.length === 0) return true;
-    toastManager.add({ type: "error", title: failedTitle, description: failed.join("\n") });
+    toastManager.add({ type: "error", title: failedTitle(), description: failed.join("\n") });
     return false;
   };
 
@@ -231,7 +231,7 @@ export function DeviceSourcesSettings(props: {
               ),
             },
           })),
-        remove ? "Device host not removed everywhere" : "Device host not saved everywhere",
+        () => (remove ? "Device host not removed everywhere" : i18n.t("device.hosts.save-failed")),
       );
       if (saved) setEditing(null);
     } catch (error) {
@@ -261,7 +261,7 @@ export function DeviceSourcesSettings(props: {
           ),
         },
       })),
-      remove ? "EAS host not removed everywhere" : "EAS host not saved everywhere",
+      () => (remove ? "EAS host not removed everywhere" : "EAS host not saved everywhere"),
     );
     if (saved) setEditing(null);
   };
@@ -282,7 +282,7 @@ export function DeviceSourcesSettings(props: {
         environmentId: patch.environmentId,
         patch: { simlockDeviceHosts: patch.hosts },
       })),
-      "Simlock host not saved everywhere",
+      () => "Simlock host not saved everywhere",
     );
     if (saved) setEditing(null);
   };
@@ -294,7 +294,7 @@ export function DeviceSourcesSettings(props: {
           environmentId: environment.environmentId,
           patch: { simlockDeviceHosts: updateSimlockDeviceHosts(environment.hosts, host, true) },
         })),
-      "Simlock host not removed everywhere",
+      () => "Simlock host not removed everywhere",
     );
 
   const [testing, setTesting] = useState<ReadonlySet<string>>(new Set());
@@ -312,8 +312,12 @@ export function DeviceSourcesSettings(props: {
     toastManager.add({
       type: failed.length ? "error" : "success",
       title: failed.length
-        ? `${host.label}: ${failed.length} of ${targets.length} environments failed`
-        : `${host.label}: connection checks passed`,
+        ? i18n.t("device.hosts.check-failed", {
+            host: host.label,
+            count: failed.length,
+            total: targets.length,
+          })
+        : i18n.t("device.hosts.check-passed", { host: host.label }),
       description: failed.length
         ? failed
             .map((target) => {
@@ -321,7 +325,7 @@ export function DeviceSourcesSettings(props: {
               return `${target.label}: ${result?.status === "failed" ? result.error : "failed"}`;
             })
             .join("\n")
-        : "Connected or already available locally on each selected environment.",
+        : i18n.t("device.hosts.connected-description"),
     });
   };
 

@@ -242,7 +242,7 @@ export function useSelectedThreadGitActions() {
       : AsyncResult.success(undefined);
     branchState.refresh();
     await refreshSelectedThreadGitStatus({ quiet: true, cwd: input.cwd });
-    return AsyncResult.isFailure(updateResult)
+    return updateResult._tag === "Failure"
       ? AsyncResult.failure(updateResult.cause)
       : AsyncResult.success(undefined);
   };

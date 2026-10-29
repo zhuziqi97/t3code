@@ -10,6 +10,7 @@ import {
   useAndroidFloatingTabs,
 } from "../settings/appearance/AppearancePreferencesProvider";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import type { EnvironmentThreadStatus } from "@t3tools/client-runtime/state/threads";
 import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { AsyncResult } from "effect/reactivity";
 import { useAtomValue } from "@effect/atom-react";
@@ -205,6 +206,7 @@ export interface ThreadComposerProps {
   readonly bottomInset?: number;
   readonly connectionState: RemoteClientConnectionState;
   readonly environmentLabel: string | null;
+  readonly threadSyncStatus?: EnvironmentThreadStatus;
   readonly selectedThread: EnvironmentThreadShell;
   readonly reportedModelSelection?: ModelSelection | null;
   readonly hasCompactableConversation: boolean;
@@ -836,7 +838,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
               props.activeThreadBusy ||
               props.queueCount > 0 ||
               queuedEdit !== null ||
-              props.threadSyncPhase != null ||
+              (props.threadSyncStatus !== undefined && props.threadSyncStatus !== "live") ||
               pendingPastedTextAttachmentCount > 0
             }
             focus={() => inputRef.current?.focus()}

@@ -159,6 +159,7 @@ export function TerminalFontPreview({ family, size }: { family: string; size: nu
   const mountRef = useRef<HTMLDivElement>(null);
   const [surface, setSurface] = useState<GhosttyTerminalSurface | null>(null);
   const [initialFont] = useState(() => previewTerminalFont(family, size));
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- updates the Ghostty preview's DOM accessibility labels when the locale or surface changes
   useEffect(() => {
     surface?.setAccessibleLabels(t("terminal.inputLabel"), t("terminal.scrollbackLabel"));
   }, [surface, t]);

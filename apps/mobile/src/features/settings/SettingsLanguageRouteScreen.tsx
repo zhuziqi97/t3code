@@ -10,7 +10,7 @@ import {
 
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
-import { SettingsChoiceRow } from "./components/SettingsChoiceRow";
+import { ListChoiceRow } from "../../components/ui/ListChoiceRow";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { SettingsSection } from "./components/SettingsSection";
 
@@ -52,7 +52,7 @@ export function SettingsLanguageRouteScreen() {
       >
         <SettingsSection title="Language">
           {LANGUAGE_OPTIONS.map((option, index) => (
-            <SettingsChoiceRow
+            <ListChoiceRow
               key={option.preference}
               label={option.label}
               description={option.description}

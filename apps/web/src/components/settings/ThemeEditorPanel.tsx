@@ -364,6 +364,7 @@ export function ThemeEditorPanel({
   const [selectedRole, setSelectedRole] = useState<ThemeColorRole | null>(null);
   const [usageCount, setUsageCount] = useState<number | null>(null);
   const hoveredInspectionRef = useRef<ThemeElementInspection | null>(null);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- retranslates the inspector's imperative DOM hover overlay when the locale changes
   useEffect(() => {
     const inspection = hoveredInspectionRef.current;
     if (inspection) {

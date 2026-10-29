@@ -129,9 +129,18 @@ vi.mock("./settingsLayout", async (original) => ({
       {children}
     </section>
   ),
-  SettingsSection: ({ title, children }: { title: ReactNode; children: ReactNode }) => (
+  SettingsSection: ({
+    title,
+    headerAction,
+    children,
+  }: {
+    title: ReactNode;
+    headerAction: ReactNode;
+    children: ReactNode;
+  }) => (
     <section>
       {title}
+      {headerAction}
       {children}
     </section>
   ),
@@ -161,7 +170,7 @@ function IntegrationsSettingsPanel() {
     </>
   );
 }
-import { DeviceHostsSettings } from "./DeviceHostsSettings";
+import { DeviceSourcesSettings } from "./DeviceSourcesSettings";
 
 const ids = [EnvironmentId.make("native-a"), EnvironmentId.make("native-b")];
 const environments = ids.map((environmentId, index) => ({
@@ -295,8 +304,9 @@ it("preserves a pending host draft after partial save failure and closes only af
 
   const pending = deferred<AsyncResult.AsyncResult<undefined, string>>();
   api.update.mockReturnValue(pending.promise);
-  await render(<DeviceHostsSettings environmentId={ids[0]!} />);
-  await click("Add host");
+  await render(<DeviceSourcesSettings supportsEas={false} supportsSimlock={false} />);
+  await click("Add source");
+  await click("Machine over SSH");
   const name = field("Name");
   await type(name, "Raw new host");
   await type(field("SSH target"), "dev@new-host");
@@ -313,7 +323,7 @@ it("preserves a pending host draft after partial save failure and closes only af
   expect(api.toast).toHaveBeenCalledExactlyOnceWith({
     type: "error",
     title: "设备主机未能保存到所有执行环境",
-    description: "无法更新 Native A, Native B。",
+    description: "Native A: Raw failure\nNative B: Raw failure",
   });
   const native = api.update.mock.calls[0]![0].input.patch.deviceHosts[0];
   expect(native).toMatchObject({ label: "Raw new host", target: "dev@new-host" });
@@ -343,7 +353,8 @@ it("reports host connection results in the current language without repeating pr
     >
   >();
   api.test.mockReturnValue(pending.promise);
-  await render(<DeviceHostsSettings environmentId={ids[0]!} />);
+  await render(<DeviceSourcesSettings supportsEas={false} supportsSimlock={false} />);
+  await click("More");
   await click("Test connection");
   expect(api.test).toHaveBeenCalledTimes(2);
   await language("zh");

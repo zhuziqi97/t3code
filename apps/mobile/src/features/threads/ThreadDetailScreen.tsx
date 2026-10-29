@@ -1600,6 +1600,7 @@ function ThreadDetailBody(props: ThreadDetailScreenProps) {
                         draftControls={props.draftMode?.controls}
                         connectionState={props.connectionStateLabel}
                         environmentLabel={props.environmentLabel}
+                        threadSyncStatus={props.threadSyncStatus}
                         selectedThread={props.selectedThread}
                         hasCompactableConversation={
                           hasCompactableConversation && !props.isCompacting

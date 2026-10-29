@@ -17,7 +17,7 @@ import { AppText as Text } from "../../components/ui/AppText";
 import { useTranslate } from "../../i18n";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { SettingsActionRow } from "./components/SettingsActionRow";
+import { ListActionRow } from "../../components/ui/ListActionRow";
 
 export function AcpRegistryUpdateRow({
   instance,
@@ -101,7 +101,7 @@ function AcpRegistryUpdateAction({
           {t("provider.registry.update.lastChecked", { time: advisory.checkedAt })}
         </Text>
       ) : null}
-      <SettingsActionRow
+      <ListActionRow
         icon="arrow.down.circle"
         label={t(
           state.phase === "preparing"

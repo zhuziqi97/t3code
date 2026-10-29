@@ -18,6 +18,7 @@ export default function ProviderAuthTerminal({
   const t = useTranslate();
   const [surface, setSurface] = useState<GhosttyTerminalSurface | null>(null);
   const written = useRef(0);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- updates the Ghostty terminal's DOM accessibility labels when the locale or surface changes
   useEffect(() => {
     surface?.setAccessibleLabels(t("terminal.inputLabel"), t("terminal.scrollbackLabel"));
   }, [surface, t]);
