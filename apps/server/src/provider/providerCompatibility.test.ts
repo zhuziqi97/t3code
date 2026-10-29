@@ -245,7 +245,7 @@ it.effect("a remote policy refresh preserves a newer health result on the regist
       },
       orchestrationAdapter: {
         getCapabilities: () => Effect.succeed(CodexProviderCapabilitiesV2),
-      } as ProviderInstance["orchestrationAdapter"],
+      } as unknown as ProviderInstance["orchestrationAdapter"],
       textGeneration: {} as ProviderInstance["textGeneration"],
     };
     const refresh = Deferred.succeed(started, undefined).pipe(
