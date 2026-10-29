@@ -700,9 +700,10 @@ const ConversationTimeline = memo(function ConversationTimeline({
     !awaitingUser
       ? runEndState(latestRun)
       : null;
-  const rows = useStableRows(
+  const stableRows = useStableRows(rawRows, listIdentityKey);
+  const rows =
     endFeedback?.kind === "stopped"
-      ? rawRows.filter((row) => {
+      ? stableRows.filter((row) => {
           if (row.kind !== "event") return true;
           const item = row.projectedItem.item;
           return !(
@@ -711,9 +712,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
             (item.message === "Stopped by user" || item.message === "Run interrupted by user")
           );
         })
-      : rawRows,
-    listIdentityKey,
-  );
+      : stableRows;
   const endFeedbackRow =
     endFeedback && latestRun
       ? rows.findLast(
