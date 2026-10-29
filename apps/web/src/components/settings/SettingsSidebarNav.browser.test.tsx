@@ -107,8 +107,11 @@ it.each(["en", "zh"] as const)(
       name: language === "en" ? /Connect Convene/ : /连接 Convene/,
     });
     await expect
-      .element(result)
-      .toHaveTextContent(language === "en" ? "Connect Convene" : "连接 Convene");
+      .element(
+        result.getByText(language === "en" ? "Connect Convene" : "连接 Convene", { exact: true }),
+      )
+      .toBeVisible();
+    await expect.element(result.getByText("Convene", { exact: true })).toBeVisible();
     await result.click();
     await expect
       .element(screen.getByRole("heading", { name: "Convene destination" }))
