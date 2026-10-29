@@ -843,7 +843,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
       onGrow={onFooterGrow}
     >
       {endFeedback && !endFeedbackRow ? (
-        <div className="px-1 py-2">
+        <div className="chat-content-lane px-1 py-2">
           <RunEndStateFeedback end={endFeedback} timestampFormat={timestampFormat} />
         </div>
       ) : null}
