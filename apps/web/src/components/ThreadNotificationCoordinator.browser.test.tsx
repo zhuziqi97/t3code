@@ -25,7 +25,7 @@ const state = vi.hoisted(() => ({
   turnError: false,
   limited: false,
   subagent: false,
-  background: [] as Array<{ taskId: string; kind: "command" | "monitor" }>,
+  background: [] as Array<{ taskId: string; kind: "command" | "monitor"; awaited?: boolean }>,
   delegatedChild: null as "running" | "approval" | null,
   add: vi.fn(
     (_toast: { title: string; description: string; actionProps: { onClick: () => void } }) =>
@@ -163,7 +163,7 @@ vi.mock(import("./ui/toast"), async (original) => {
 import { startThreadNotifications } from "./ThreadNotificationCoordinator";
 
 const notificationEnvironmentIds = Atom.make<ReadonlyArray<string>>([]);
-const notificationShell = Atom.make<unknown>(null);
+const notificationShell = Atom.make<unknown>(null).pipe(Atom.keepAlive);
 vi.mock(import("../state/presentation"), async (original) => ({
   ...(await original()),
   environmentSummaries: {
@@ -202,6 +202,7 @@ function setup() {
     subagent: false,
     background: [],
     delegatedChild: null,
+    settingsListeners: new Set<() => void>(),
   });
   stableParent = null;
   const stack = new AsyncDisposableStack();
@@ -211,6 +212,7 @@ function setup() {
       .mockImplementation(() => state.visible as DocumentVisibilityState),
   );
   stack.use(vi.spyOn(document, "hasFocus").mockImplementation(() => state.focused));
+  stack.use(vi.spyOn(navigator, "platform", "get").mockReturnValue("Linux x86_64"));
   stack.use(
     stubGlobal("Notification", Object.assign(state.notification, { permission: "granted" })),
   );
@@ -219,12 +221,12 @@ function setup() {
   stack.use(fakeTimers());
   let started = false;
   const renderCoordinator = async () => {
-    for (const listener of state.settingsListeners) listener();
     registry.set(notificationEnvironmentIds, ["env-1"]);
     registry.set(notificationShell, {
       status: state.live ? "live" : "disconnected",
       snapshot: Option.some({ threads: mockThreads() }),
     });
+    for (const listener of state.settingsListeners) listener();
     if (!started) {
       started = true;
       stack.defer(
@@ -340,13 +342,14 @@ describe("thread notifications", () => {
       body: "Fix the login form",
       tag: expect.any(String),
       silent: true,
+      requireInteraction: false,
     });
   });
 
   it("alerts when only a dev server is left running, not while a monitor can wake the agent", async () => {
     await using app = setup();
     await app.render();
-    state.background = [{ taskId: "watch", kind: "monitor" }];
+    state.background = [{ taskId: "watch", kind: "monitor", awaited: true }];
     await app.complete();
     expect(state.add).not.toHaveBeenCalled();
     state.background = [{ taskId: "dev", kind: "command" }];
@@ -418,6 +421,7 @@ describe("thread notifications", () => {
       body: "Fix the login form",
       tag: expect.any(String),
       silent: true,
+      requireInteraction: false,
     });
   });
 

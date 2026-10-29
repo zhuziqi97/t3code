@@ -189,7 +189,7 @@ it("retranslates initialization errors while retaining raw diagnostics and avoid
   state.createSurface.mockRejectedValue(new Error("raw WASM diagnostic"));
   await render();
   expect(container.textContent).toBe(
-    "raw WASM diagnostic — close and reopen the terminal to retry.",
+    "raw WASM diagnostic: close and reopen the terminal to retry.",
   );
   await switchLanguage("zh");
   expect(container.textContent).toBe("raw WASM diagnostic；请关闭并重新打开终端后重试。");

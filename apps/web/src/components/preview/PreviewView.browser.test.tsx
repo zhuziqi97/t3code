@@ -9,11 +9,13 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import { type ComponentProps } from "react";
+import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 
 import "~/index.css";
 import { act, render } from "../../../test/render";
+import type { Project } from "~/types";
 
 import type { PreviewableServer } from "./useDiscoveredLocalServers";
 
@@ -36,7 +38,8 @@ const mocks = vi.hoisted(() => ({
   nativeServerTab: false,
   serverEpoch: null as string | null,
   servers: [] as PreviewableServer[],
-  projectId: null as string | null,
+  shellProjectId: null as string | null,
+  projects: [] as Project[],
   recordingTabIds: new Set<string>(),
   recordingRuntimeTabId: null as string | null,
   recordVisitForThread: vi.fn(),
@@ -132,7 +135,20 @@ vi.mock(import("~/state/environments"), async (original) => ({
   useEnvironment: (() => ({ label: "WSL" })) as never,
   useEnvironmentHttpBaseUrl: () => "http://172.25.85.75:3773",
   usePrimaryEnvironmentId: () => null,
+  readPrimaryEnvironmentId: () => null,
 }));
+vi.mock(import("~/hooks/useSettings"), async (original) => {
+  const { DEFAULT_CLIENT_SETTINGS } = await import("@t3tools/contracts/settings");
+  return {
+    ...(await original()),
+    getClientSettings: () => DEFAULT_CLIENT_SETTINGS,
+    useClientSettings: ((select?: (settings: typeof DEFAULT_CLIENT_SETTINGS) => unknown) =>
+      select
+        ? select(DEFAULT_CLIENT_SETTINGS)
+        : DEFAULT_CLIENT_SETTINGS) as typeof import("~/hooks/useSettings").useClientSettings,
+    isClientSettingsHydrated: () => true,
+  };
+});
 vi.mock(import("~/browser/browserRecording"), async (original) => ({
   ...(await original()),
   findActiveBrowserRecordingRuntimeTabId: () => mocks.recordingRuntimeTabId,
@@ -158,7 +174,7 @@ vi.mock(import("~/browser/previewRuntime"), async (original) => ({
 
 vi.mock(import("~/browser/browserViewportActions"), { spy: true });
 
-import { useComposerDraftStore } from "~/composerDraftStore";
+import { DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { useBrowserPointerStore } from "~/browser/browserPointerStore";
 import { previewRuntimeTabId } from "~/browser/previewRuntimeTabId";
 import { usePreviewMiniPlayerStore } from "~/previewMiniPlayerStore";
@@ -197,6 +213,20 @@ function annotation(id: string, screenshot: unknown = null) {
   };
 }
 
+function project(environmentId: string, projectId: string): Project {
+  return {
+    environmentId: EnvironmentId.make(environmentId),
+    id: ProjectId.make(projectId),
+    title: projectId,
+    workspaceRoot: `/workspace/${projectId}`,
+    repositoryIdentity: null,
+    defaultModelSelection: null,
+    scripts: [],
+    createdAt: "2026-07-13T00:00:00.000Z",
+    updatedAt: "2026-07-13T00:00:00.000Z",
+  };
+}
+
 // The mocked modules and stores are shared by the whole file, so every test starts by
 // resetting them.
 function setup() {
@@ -210,12 +240,16 @@ function setup() {
   mocks.nativeServerTab = false;
   mocks.serverEpoch = null;
   mocks.servers = [];
-  mocks.projectId = null;
+  mocks.shellProjectId = null;
+  mocks.projects = [];
   mocks.recordingTabIds = new Set();
   mocks.recordingRuntimeTabId = null;
   useComposerDraftStore.setState({
     addPreviewAnnotation: mocks.addPreviewAnnotation,
     addImage: mocks.addImage,
+    draftThreadsByThreadKey: {},
+    logicalProjectDraftThreadKeyByLogicalProjectKey: {},
+    draftsByThreadKey: {},
   });
   usePreviewMiniPlayerStore.setState({ byThreadKey: {} });
   useBrowserPointerStore.setState({ byTabId: {} });
@@ -293,11 +327,20 @@ describe("PreviewView", () => {
 
 vi.mock(import("~/state/entities"), async (original) => ({
   ...(await original()),
-  useThreadShell: (() =>
-    mocks.projectId ? { projectId: ProjectId.make(mocks.projectId) } : null) as never,
+  readThreadShell: (() =>
+    mocks.shellProjectId ? { projectId: ProjectId.make(mocks.shellProjectId) } : null) as never,
+  useQuietThreadShell: (() =>
+    mocks.shellProjectId ? { projectId: ProjectId.make(mocks.shellProjectId) } : null) as never,
+  readProject: (ref) =>
+    mocks.projects.find(
+      (candidate) =>
+        candidate.environmentId === ref.environmentId && candidate.id === ref.projectId,
+    ) ?? null,
+  readProjects: () => mocks.projects,
+  useProjects: () => mocks.projects,
 }));
 describe("PreviewView navigation", () => {
-  it("publishes pending visits after project hydration and shares history only within the same environment and project", async () => {
+  it("publishes pending visits on the next navigation after project hydration and keeps separate environment histories", async () => {
     setup();
 
     const history =
@@ -315,34 +358,54 @@ describe("PreviewView navigation", () => {
         root.rerender(<PreviewView threadRef={TEST_THREAD_REF} tabId="tab-1" visible />),
       );
       expect(history.useBrowserHistoryStore.getState().byProjectKey).toEqual({});
-      mocks.projectId = "project-a";
+      mocks.shellProjectId = "project-a";
+      mocks.projects = [
+        project("environment-1", "project-a"),
+        project("other-environment", "project-a"),
+      ];
       await act(() =>
         root.rerender(<PreviewView threadRef={TEST_THREAD_REF} tabId="tab-1" visible />),
       );
+      await act(() =>
+        history.recordVisitForThread(TEST_THREAD_REF, "http://localhost:3000/hydrated", 124),
+      );
       expect(
-        history.useBrowserHistoryStore.getState().byProjectKey["environment-1:project-a"],
-      ).toEqual([{ url: "http://localhost:3000/one", lastVisitedAt: 123 }]);
+        history.useBrowserHistoryStore.getState().byProjectKey[
+          "environment-1:/workspace/project-a"
+        ],
+      ).toEqual([
+        { url: "http://localhost:3000/hydrated", lastVisitedAt: 124 },
+        { url: "http://localhost:3000/one", lastVisitedAt: 123 },
+      ]);
       await act(() =>
         root.rerender(<PreviewView threadRef={secondThread} tabId="tab-1" visible />),
       );
-      await act(() => history.recordVisitForThread(secondThread, "http://localhost:3000/two", 124));
+      await act(() => history.recordVisitForThread(secondThread, "http://localhost:3000/two", 125));
       expect(
         history.useBrowserHistoryStore
           .getState()
-          .byProjectKey["environment-1:project-a"]?.map((entry) => entry.url),
-      ).toEqual(["http://localhost:3000/two", "http://localhost:3000/one"]);
+          .byProjectKey["environment-1:/workspace/project-a"]?.map((entry) => entry.url),
+      ).toEqual([
+        "http://localhost:3000/two",
+        "http://localhost:3000/hydrated",
+        "http://localhost:3000/one",
+      ]);
       await act(() =>
         root.rerender(<PreviewView threadRef={remoteThread} tabId="tab-1" visible />),
       );
       await act(() =>
-        history.recordVisitForThread(remoteThread, "http://localhost:3000/remote", 125),
+        history.recordVisitForThread(remoteThread, "http://localhost:3000/remote", 126),
       );
       expect(
-        history.useBrowserHistoryStore.getState().byProjectKey["other-environment:project-a"],
-      ).toEqual([{ url: "http://localhost:3000/remote", lastVisitedAt: 125 }]);
+        history.useBrowserHistoryStore.getState().byProjectKey[
+          "other-environment:/workspace/project-a"
+        ],
+      ).toEqual([{ url: "http://localhost:3000/remote", lastVisitedAt: 126 }]);
       expect(
-        history.useBrowserHistoryStore.getState().byProjectKey["environment-1:project-a"],
-      ).toHaveLength(2);
+        history.useBrowserHistoryStore.getState().byProjectKey[
+          "environment-1:/workspace/project-a"
+        ],
+      ).toHaveLength(3);
       expect(history.useBrowserHistoryStore.getState().pendingVisitsByThreadKey).toEqual({});
     } finally {
       await act(() => root.unmount());
@@ -357,9 +420,15 @@ describe("PreviewView navigation", () => {
     const history =
       await vi.importActual<typeof import("~/browserHistoryStore")>("~/browserHistoryStore");
     history.resetBrowserHistoryForTests();
-    const draftLookup = vi
-      .spyOn(useComposerDraftStore.getState(), "getDraftThreadByRef")
-      .mockReturnValue({ projectId: ProjectId.make("draft-project") } as never);
+    mocks.projects = [project("environment-1", "draft-project")];
+    useComposerDraftStore
+      .getState()
+      .setLogicalProjectDraftThreadId(
+        "environment-1:/workspace/draft-project",
+        scopeProjectRef(TEST_THREAD_REF.environmentId, ProjectId.make("draft-project")),
+        DraftId.make("draft-1"),
+        { threadId: TEST_THREAD_REF.threadId },
+      );
     await using root = await render(null, { router: false });
     try {
       await act(() =>
@@ -368,17 +437,14 @@ describe("PreviewView navigation", () => {
       await act(() =>
         history.recordVisitForThread(TEST_THREAD_REF, "http://localhost:3000/draft", 126),
       );
-      mocks.projectId = "draft-project";
-      await act(() =>
-        root.rerender(<PreviewView threadRef={TEST_THREAD_REF} tabId="tab-1" visible />),
-      );
       expect(
-        history.useBrowserHistoryStore.getState().byProjectKey["environment-1:draft-project"],
+        history.useBrowserHistoryStore.getState().byProjectKey[
+          "environment-1:/workspace/draft-project"
+        ],
       ).toEqual([{ url: "http://localhost:3000/draft", lastVisitedAt: 126 }]);
     } finally {
       await act(() => root.unmount());
       history.resetBrowserHistoryForTests();
-      draftLookup.mockRestore();
       vi.unstubAllGlobals();
     }
   });

@@ -5,6 +5,8 @@ import { type ReactNode } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
 import type { DesktopUpdateState } from "@t3tools/contracts";
 
+const RELEASES_URL = `https://github.com/${import.meta.env.T3CODE_DESKTOP_UPDATE_REPOSITORY || "pingdotgg/t3code"}/releases`;
+
 const testState = vi.hoisted(() => ({ addToast: vi.fn() }));
 vi.mock("./ui/toast", async (original) => ({
   ...(await original<typeof import("./ui/toast")>()),
@@ -65,9 +67,7 @@ describe("desktop update notifications", () => {
       showDesktopUpdateDownloadedToast({ openExternal }, downloadedState({ downloadedVersion }));
       await renderToast();
       await act(async () => container.querySelector("button")!.click());
-      expect(openExternal).toHaveBeenCalledExactlyOnceWith(
-        "https://github.com/pingdotgg/t3code/releases/tag/v0.0.30",
-      );
+      expect(openExternal).toHaveBeenCalledExactlyOnceWith(`${RELEASES_URL}/tag/v0.0.30`);
       expect(testState.addToast).toHaveBeenCalledTimes(1);
     },
   );
@@ -126,9 +126,7 @@ describe("desktop update notifications", () => {
     expect(button.textContent).toBe("查看详情");
     expect(document.activeElement).toBe(button);
     await act(async () => button.click());
-    expect(openExternal).toHaveBeenCalledExactlyOnceWith(
-      "https://github.com/pingdotgg/t3code/releases/tag/v0.0.31-nightly.2",
-    );
+    expect(openExternal).toHaveBeenCalledExactlyOnceWith(`${RELEASES_URL}/tag/v0.0.31-nightly.2`);
     await act(async () => {
       await changeLanguage("en");
     });
