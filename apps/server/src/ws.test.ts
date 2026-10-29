@@ -32,6 +32,7 @@ import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import { Headers } from "effect/http";
 import { RpcGroup, RpcMessage, RpcServer } from "effect/rpc";
+import type * as Rpc from "effect/rpc/Rpc";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
@@ -680,7 +681,10 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
     };
     const providerChanges = yield* Queue.unbounded<ReadonlyArray<ServerProvider>>();
     const pulled = yield* Queue.unbounded<void>();
-    const responses = yield* Queue.unbounded<unknown>();
+    const responses = yield* Queue.unbounded<
+      unknown,
+      Rpc.ErrorExit<typeof WsSubscribeServerConfigRpc | typeof WsServerRefreshProvidersRpc>
+    >();
     const configRpcServices = Layer.mergeAll(
       layerUnusedConfigRpcServices,
       Layer.mock(ExternalLauncher.ExternalLauncher)({
@@ -740,8 +744,10 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
             ? Effect.forEach(response.values, (value) => Queue.offer(responses, value), {
                 discard: true,
               })
-            : response._tag === "Exit" && response.exit._tag === "Success"
-              ? Queue.offer(responses, response.exit.value)
+            : response._tag === "Exit"
+              ? response.exit._tag === "Success"
+                ? Queue.offer(responses, response.exit.value)
+                : Queue.failCause(responses, response.exit.cause)
               : Effect.void,
       },
     ).pipe(
