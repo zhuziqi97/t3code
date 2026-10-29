@@ -8,6 +8,8 @@ Connecting Convene is optional. Local projects, providers and sessions remain av
 
 During first setup, the **Convene** step follows agent setup. You can skip it and connect later from **Settings → Convene**, beside **Connections**. The main sidebar shows the connection status for each environment and links to its settings. Enter the platform URL, then open or copy the pairing link. It prefills the code and preserves it through login. Confirm authorization in Convene; T3 checks automatically and completes the connection. You can also copy the code separately. Cancel to stop waiting, retry a failed check, or request a new code after expiration. Pairing and reconnecting do not restart the T3 server.
 
+When your platform's address changes, choose **Change address** in **Settings → Convene**, edit or select the URL, then **Save**. This keeps the same platform client and project associations. A failed save leaves the existing address in use.
+
 **Disconnect Convene** unpairs that environment and removes its platform associations and MCP configuration. It closes its platform access, while local projects and provider sessions remain available. Pairing again creates a new platform client and requires configuring its projects again.
 
 Adding a folder, creating a project or starting a clone offers optional Convene configuration after the native project has been created. Closing the dialog or a platform failure keeps the native project. Reopen it from **Settings → choose the project → Project → Configure Convene**. Grouped repositories configure each native project and environment separately.
