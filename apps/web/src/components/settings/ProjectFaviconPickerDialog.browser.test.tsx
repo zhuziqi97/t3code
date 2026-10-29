@@ -131,7 +131,13 @@ const imageUrl = `data:image/svg+xml,${encodeURIComponent(
 
 function addFiles(paths: string[]) {
   state.entries = paths.map((path) => ({ path, kind: "file" }));
-  for (const path of paths) state.assets.set(path, Atom.make<AssetResult>(AsyncResult.initial()));
+  // Production asset queries retain their URLs between React subscriptions for an hour.
+  for (const path of paths) {
+    state.assets.set(
+      path,
+      Atom.make<AssetResult>(AsyncResult.initial()).pipe(Atom.setIdleTTL(60 * 60_000)),
+    );
+  }
 }
 
 function fileRow(path: string) {

@@ -1,6 +1,6 @@
 import "~/index.css";
 
-import { expect, it } from "vite-plus/test";
+import { expect, it, vi } from "vite-plus/test";
 import { page } from "vite-plus/test/browser";
 
 import { act, render as renderUi } from "../../../test/render";
@@ -120,10 +120,15 @@ it("remeasures the heading across language changes and chat lane resizing", asyn
     const { host, render, label, title, expectAboveComposer } = fixture;
     await page.viewport(1440, 900);
     await render("obsidian-arr");
-    expect(title().innerText).toBe("What should we build in");
+    await document.fonts.ready;
+    await vi.waitFor(() => expect(title().innerText).toBe("What should we build in"));
+    const inline = host.querySelector<HTMLElement>('[aria-hidden="true"] > span')!;
+    const englishInlineWidth = inline.getBoundingClientRect().width;
+    expect(englishInlineWidth).toBeGreaterThan(0);
 
     await act(async () => changeLanguage("zh"));
-    await expect.poll(() => title().innerText).toBe("接下来在");
+    await document.fonts.ready;
+    await vi.waitFor(() => expect(title().innerText).toBe("接下来在"));
     expect(host.querySelector("h1")!.innerText).toContain("中做什么？");
     expect(label().textContent).toBe("obsidian-arr");
     expect(label().getBoundingClientRect().top).toBeLessThan(
@@ -131,17 +136,20 @@ it("remeasures the heading across language changes and chat lane resizing", asyn
     );
     expectAboveComposer();
 
-    host.style.width = "350px";
-    await expect.poll(() => title().innerText).toBe("接下来做什么？");
+    const chineseInlineWidth = inline.getBoundingClientRect().width;
+    expect(chineseInlineWidth).toBeGreaterThan(0);
+    // The fit threshold follows rendered glyph widths, which differ across platform fonts.
+    host.style.width = `${Math.floor(Math.min(englishInlineWidth, chineseInlineWidth)) - 32}px`;
+    await vi.waitFor(() => expect(title().innerText).toBe("接下来做什么？"));
     expect(label().getBoundingClientRect().top).toBeGreaterThanOrEqual(
       title().getBoundingClientRect().bottom,
     );
     expectAboveComposer();
 
     await act(async () => changeLanguage("en"));
-    await expect.poll(() => title().innerText).toBe("What should we build?");
+    await vi.waitFor(() => expect(title().innerText).toBe("What should we build?"));
     host.style.width = "700px";
-    await expect.poll(() => title().innerText).toBe("What should we build in");
+    await vi.waitFor(() => expect(title().innerText).toBe("What should we build in"));
     expect(label().textContent).toBe("obsidian-arr");
     expectAboveComposer();
   } finally {
