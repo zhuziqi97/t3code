@@ -25,14 +25,19 @@ vi.mock("../../state/session", async (original) => ({
   useEnvironmentScope: () => true,
   readEnvironmentScope: () => true,
 }));
-vi.mock("../../state/server", async (original) => ({
-  ...(await original<typeof import("../../state/server")>()),
-  EMPTY_SERVER_PROVIDERS: [],
-  serverEnvironment: {
-    searchAcpRegistry: () => "controlled-search",
-    prepareAcpRegistryAgent: state.prepare,
-  },
-}));
+vi.mock("../../state/server", async (original) => {
+  const { Atom } = await import("effect/reactivity");
+  const providers = Atom.make([]);
+  return {
+    ...(await original<typeof import("../../state/server")>()),
+    EMPTY_SERVER_PROVIDERS: [],
+    serverEnvironment: {
+      providersValueAtom: () => providers,
+      searchAcpRegistry: () => "controlled-search",
+      prepareAcpRegistryAgent: state.prepare,
+    },
+  };
+});
 vi.mock("../../state/query", async (original) => ({
   ...(await original<typeof import("../../state/query")>()),
   useEnvironmentQuery: () => ({

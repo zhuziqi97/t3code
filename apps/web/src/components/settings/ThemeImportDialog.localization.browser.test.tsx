@@ -196,8 +196,9 @@ it("keeps successful batch imports and retranslates individual failures while re
   );
   await switchLanguage();
   expect(document.body.textContent).toContain(
-    'Raw Invalid.json："RawRole" 不是受支持的主题颜色字段。 — Raw Large.json：文件过大',
+    'Raw Invalid.json："RawRole" 不是受支持的主题颜色字段。',
   );
+  expect(document.body.textContent).toContain("Raw Large.json：文件过大");
   expect(getCustomThemes().map((theme) => theme.id)).toEqual([input.id]);
   expect(readValid).toHaveBeenCalledTimes(1);
   expect(readInvalid).toHaveBeenCalledTimes(1);

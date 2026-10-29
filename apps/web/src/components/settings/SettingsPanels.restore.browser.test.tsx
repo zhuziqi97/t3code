@@ -72,9 +72,8 @@ function setup() {
 describe("restoring V2 settings", () => {
   it.each([
     ["persistComposerContextStrip", "Composer context"],
-    ["compactIdleThreads", "Compact idle Claude threads (beta)"],
-    ["autoResumeLimitedThreads", "Auto-resume limited threads"],
-    ["snoozeLimitedThreads", "Snooze limited threads"],
+    ["autoResumeLimitedThreads", "Resume after usage limits"],
+    ["snoozeLimitedThreads", "Snooze until limits reset"],
   ] as const)("restores %s when it is the only changed setting", async (key, label) => {
     await using _lifecycle = await setupLifecycle();
 
@@ -91,8 +90,31 @@ describe("restoring V2 settings", () => {
     expect(state.update.mock.calls[0]?.[0][key]).toBe(DEFAULT_UNIFIED_SETTINGS[key]);
   });
 
+  it("leaves Provider compaction modes outside the general settings reset", async () => {
+    await using _lifecycle = await setupLifecycle();
+
+    setup();
+    state.settings = {
+      ...DEFAULT_UNIFIED_SETTINGS,
+      compactIdleThreads: true,
+      idleCompaction: "beforeCacheExpires",
+      autoResumeLimitedThreads: true,
+    };
+    await using screen = await renderRestore();
+    expect(screen.restore.changedSettingLabels).toEqual(["Resume after usage limits"]);
+    await act(() => screen.restore.restoreDefaults());
+
+    expect(state.confirm).toHaveBeenCalledOnce();
+    expect(state.update).toHaveBeenCalledOnce();
+    expect(state.update.mock.calls[0]?.[0].autoResumeLimitedThreads).toBe(
+      DEFAULT_UNIFIED_SETTINGS.autoResumeLimitedThreads,
+    );
+    expect(state.update.mock.calls[0]?.[0]).not.toHaveProperty("compactIdleThreads");
+    expect(state.update.mock.calls[0]?.[0]).not.toHaveProperty("idleCompaction");
+  });
+
   it.each([false, true])(
-    "ignores the retired project sort preference regardless of the old sidebar choice (%s)",
+    "restores project order while preserving the sidebar choice (%s)",
     async (legacySidebarEnabled) => {
       await using _lifecycle = await setupLifecycle();
 
@@ -105,9 +127,13 @@ describe("restoring V2 settings", () => {
       await using screen = await renderRestore();
       await act(() => screen.restore.restoreDefaults());
 
-      expect(screen.restore.changedSettingLabels).toEqual([]);
-      expect(state.confirm).not.toHaveBeenCalled();
-      expect(state.update).not.toHaveBeenCalled();
+      expect(screen.restore.changedSettingLabels).toEqual(["Project order"]);
+      expect(state.confirm).toHaveBeenCalledOnce();
+      expect(state.update).toHaveBeenCalledOnce();
+      expect(state.update.mock.calls[0]?.[0].sidebarProjectSortOrder).toBe(
+        DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder,
+      );
+      expect(state.update.mock.calls[0]?.[0]).not.toHaveProperty("legacySidebarEnabled");
     },
   );
 
@@ -126,20 +152,31 @@ describe("restoring V2 settings", () => {
     expect(state.update).not.toHaveBeenCalled();
   });
 
-  it("includes language in the confirmation and restores the system preference", async () => {
+  it("preserves the selected language while restoring general settings", async () => {
     await using _lifecycle = await setupLifecycle();
 
     setup();
-    state.settings = { ...DEFAULT_UNIFIED_SETTINGS, languagePreference: "zh" };
+    state.settings = {
+      ...DEFAULT_UNIFIED_SETTINGS,
+      languagePreference: "zh",
+      persistComposerContextStrip: true,
+    };
     await using screen = await renderRestore();
-    expect(screen.restore.changedSettingLabels).toEqual(["Language"]);
+    expect(screen.restore.changedSettingLabels).toEqual(["Composer context"]);
     await act(async () => {
       await changeLanguage("zh");
     });
-    expect(screen.restore.changedSettingLabels).toEqual(["语言"]);
+    expect(screen.restore.changedSettingLabels).toEqual(["输入框上下文"]);
     await act(() => screen.restore.restoreDefaults());
-    expect(state.confirm.mock.calls[0]?.[0]).toBe("恢复默认设置？\n以下设置将被重置：语言。");
-    expect(state.update.mock.calls[0]?.[0].languagePreference).toBe("system");
+    expect(state.confirm.mock.calls[0]?.[0]).toBe(
+      "恢复默认设置？\n以下设置将被重置：输入框上下文。",
+    );
+    expect(state.update).toHaveBeenCalledOnce();
+    expect(state.update.mock.calls[0]?.[0].persistComposerContextStrip).toBe(
+      DEFAULT_UNIFIED_SETTINGS.persistComposerContextStrip,
+    );
+    expect(state.update.mock.calls[0]?.[0]).not.toHaveProperty("languagePreference");
+    expect(state.settings.languagePreference).toBe("zh");
   });
 });
 
