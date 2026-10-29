@@ -118,7 +118,8 @@ it("keeps queue state and provider commands intact while switching Chinese and E
       text: "保持 user prompt 原文",
       attachments: [attachment],
     });
-    await click("引导");
+    await click("Send now");
+    expect(state.command).toHaveBeenCalledTimes(1);
     expect(state.command).toHaveBeenLastCalledWith(expect.any(Symbol), {
       environmentId: "environment:test",
       input: { threadId: "thread:test", queuedRunId: "run:queued", targetRunId: "run:active" },
@@ -128,6 +129,7 @@ it("keeps queue state and provider commands intact while switching Chinese and E
     });
     expect(container.textContent).toContain("保持 user prompt 原文");
     await click("Remove queued message");
+    expect(state.command).toHaveBeenCalledTimes(2);
     expect(state.command).toHaveBeenLastCalledWith(expect.any(Symbol), {
       environmentId: "environment:test",
       input: { threadId: "thread:test", runId: "run:queued" },

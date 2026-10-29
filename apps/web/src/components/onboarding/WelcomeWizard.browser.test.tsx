@@ -10,6 +10,7 @@ import { expect, it, vi } from "vite-plus/test";
 const mocks = vi.hoisted(() => ({
   importThreads: vi.fn(),
   createProject: vi.fn(),
+  waitForProject: vi.fn(),
   complete: vi.fn(),
   refresh: vi.fn(),
   toast: vi.fn(),
@@ -49,6 +50,7 @@ vi.mock("../../state/entities", async (original) => ({
   ...(await original<typeof import("../../state/entities")>()),
   useProjects: () => mocks.projects,
   readProjects: () => mocks.projects,
+  waitForProject: mocks.waitForProject,
 }));
 vi.mock("../../state/environments", async (original) => {
   const environment = {
@@ -158,6 +160,7 @@ function setup() {
   );
   stack.use(vi.spyOn(Element.prototype, "getAnimations").mockReturnValue([]));
   mocks.projects = [{ id: "test-project", environmentId: "test-env", workspaceRoot: "/project" }];
+  mocks.waitForProject.mockReset().mockResolvedValue(mocks.projects[0]);
   mocks.complete.mockReset().mockResolvedValue(undefined);
   mocks.refresh.mockReset().mockResolvedValue(undefined);
   mocks.importThreads
@@ -178,12 +181,32 @@ it("enters the workspace after a partial import and warns after navigation finis
   const navigation = new Promise<void>((resolve) => {
     finishNavigation = resolve;
   });
+  let publishProject!: () => void;
+  let markProjectWaitStarted!: () => void;
+  const projectWaitStarted = new Promise<void>((resolve) => {
+    markProjectWaitStarted = resolve;
+  });
+  mocks.waitForProject.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        publishProject = () => resolve(mocks.projects[0]);
+        markProjectWaitStarted();
+      }),
+  );
   const onDone = vi.fn(() => navigation);
   await using _screen = await render(<WelcomeWizard localAvailable onDone={onDone} />);
   await click("Continue");
   await click("Continue");
   await click("Continue to projects");
   await click("Import 1 project");
+  await projectWaitStarted;
+  expect(mocks.waitForProject).toHaveBeenCalledExactlyOnceWith({
+    environmentId: EnvironmentId.make("test-env"),
+    projectId: ProjectId.make("test-project"),
+  });
+  expect(onDone).not.toHaveBeenCalled();
+  expect(mocks.toast).not.toHaveBeenCalled();
+  await act(async () => publishProject());
   expect(onDone).toHaveBeenCalledWith({
     environmentId: EnvironmentId.make("test-env"),
     projectId: ProjectId.make("test-project"),

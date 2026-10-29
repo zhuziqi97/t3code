@@ -38,6 +38,9 @@ vi.mock("@clerk/react", async (original) => {
       ),
   };
 });
+vi.mock("../clerk/T3ConnectAccountPages", () => ({
+  useT3ConnectAccountPage: () => ({ open: state.auth.isSignedIn ? vi.fn() : null, portals: null }),
+}));
 vi.mock("@effect/atom-react", async (original) => ({
   ...(await original<typeof import("@effect/atom-react")>()),
   useAtomValue: () => ({ _tag: "Success" }),

@@ -1,7 +1,6 @@
-import { createEnvironmentThreadShellAtoms } from "@t3tools/client-runtime/state/threads";
 import type { OrchestrationV2ShellSnapshot } from "@t3tools/contracts";
 import type { EnvironmentCatalogState } from "@t3tools/client-runtime/state/connections";
-import { Atom, AtomRegistry } from "effect/reactivity";
+import { AtomRegistry } from "effect/reactivity";
 import type { AnyRouter } from "@tanstack/react-router";
 import { fakeTimers } from "../../test/render";
 import { WORKING_EXIT_GRACE_MS } from "@t3tools/client-runtime/state/thread-inbox";
@@ -165,18 +164,26 @@ vi.mock(import("./ui/toast"), async (original) => {
 
 import { startThreadNotifications } from "./ThreadNotificationCoordinator";
 
-const notificationEnvironmentIds = Atom.make<ReadonlyArray<string>>([]);
-const notificationShell = Atom.make<unknown>(null).pipe(Atom.keepAlive);
-const notificationSnapshot = Atom.make((get) => {
-  const shell = get(notificationShell) as {
-    snapshot: Option.Option<OrchestrationV2ShellSnapshot>;
-  } | null;
-  return shell ? Option.getOrNull(shell.snapshot) : null;
-});
-const notificationThreadShells = createEnvironmentThreadShellAtoms({
-  catalogValueAtom: Atom.make<EnvironmentCatalogState>({ isReady: true, entries: new Map() }),
-  snapshotAtom: () => notificationSnapshot,
-});
+const { notificationEnvironmentIds, notificationShell, notificationThreadShells } =
+  await vi.hoisted(async () => {
+    const { Atom } = await import("effect/reactivity");
+    const Option = await import("effect/Option");
+    const { createEnvironmentThreadShellAtoms } =
+      await import("@t3tools/client-runtime/state/threads");
+    const notificationEnvironmentIds = Atom.make<ReadonlyArray<string>>([]);
+    const notificationShell = Atom.make<unknown>(null).pipe(Atom.keepAlive);
+    const notificationSnapshot = Atom.make((get) => {
+      const shell = get(notificationShell) as {
+        snapshot: Option.Option<OrchestrationV2ShellSnapshot>;
+      } | null;
+      return shell ? Option.getOrNull(shell.snapshot) : null;
+    });
+    const notificationThreadShells = createEnvironmentThreadShellAtoms({
+      catalogValueAtom: Atom.make<EnvironmentCatalogState>({ isReady: true, entries: new Map() }),
+      snapshotAtom: () => notificationSnapshot,
+    });
+    return { notificationEnvironmentIds, notificationShell, notificationThreadShells };
+  });
 vi.mock(import("../state/threads"), async (original) => ({
   ...(await original()),
   get environmentThreadShells() {

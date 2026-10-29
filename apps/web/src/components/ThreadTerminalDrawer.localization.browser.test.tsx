@@ -5,7 +5,7 @@ import { expect, it, vi } from "vite-plus/test";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts/settings";
 import { nextTerminalAttachSeedState } from "@t3tools/client-runtime/state/terminal";
-import { AsyncResult } from "effect/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import type { GhosttyTerminalSurfaceOptions } from "~/terminal/ghostty/surface";
 
 const state = vi.hoisted(() => ({
@@ -51,7 +51,7 @@ vi.mock("../state/use-atom-command", async (original) => ({
 }));
 vi.mock("../state/terminalSessions", async (original) => ({
   ...(await original<typeof import("../state/terminalSessions")>()),
-  useAttachedTerminalSession: () => session,
+  attachedTerminalSessionAtom: () => terminalSessionAtom,
 }));
 vi.mock("../state/session", async (original) => ({
   ...(await original<typeof import("../state/session")>()),
@@ -68,6 +68,7 @@ vi.mock("~/lib/selectionActions", async (importOriginal) => ({
 }));
 
 import { changeLanguage } from "../i18n";
+import { AppAtomRegistryProvider } from "../rpc/atomRegistry";
 import { TerminalViewport } from "./ThreadTerminalDrawer";
 
 const threadRef = {
@@ -75,6 +76,7 @@ const threadRef = {
   threadId: ThreadId.make("controlled-thread"),
 };
 const session = { ...nextTerminalAttachSeedState(), status: "running" as const, version: 1 };
+const terminalSessionAtom = Atom.make(session);
 let root: Screen;
 let container: HTMLDivElement;
 let surface: ReturnType<typeof createSurface>;
@@ -83,6 +85,7 @@ function createSurface() {
     input: document.createElement("textarea"),
     setAccessibleLabels: vi.fn((input: string) => surface.input.setAttribute("aria-label", input)),
     setVisible: vi.fn(),
+    setSharedGrid: vi.fn(),
     setTheme: vi.fn(),
     setFont: vi.fn(),
     refreshLinkActivation: vi.fn(),
@@ -107,18 +110,20 @@ function createSurface() {
 const render = async () =>
   await act(async () =>
     root.rerender(
-      <TerminalViewport
-        advancedTypography={false}
-        threadRef={threadRef}
-        threadId={threadRef.threadId}
-        terminalId="raw-terminal-id"
-        terminalLabel="My npm dev"
-        cwd="/controlled/repo"
-        onSessionExited={state.command}
-        autoFocus={false}
-        visible={true}
-        keybindings={[]}
-      />,
+      <AppAtomRegistryProvider>
+        <TerminalViewport
+          advancedTypography={false}
+          threadRef={threadRef}
+          threadId={threadRef.threadId}
+          terminalId="raw-terminal-id"
+          terminalLabel="My npm dev"
+          cwd="/controlled/repo"
+          onSessionExited={state.command}
+          autoFocus={false}
+          visible={true}
+          keybindings={[]}
+        />
+      </AppAtomRegistryProvider>,
     ),
   );
 const switchLanguage = async (language: "en" | "zh") =>
@@ -238,11 +243,23 @@ it("uses the completion language when a clipboard read fails after switching", a
   const pending = new Promise<string>((_, reject) => {
     rejectRead = reject;
   });
-  vi.stubGlobal("navigator", { clipboard: { readText: () => pending } });
+  let markReadStarted!: () => void;
+  const readStarted = new Promise<void>((resolve) => {
+    markReadStarted = resolve;
+  });
+  const readText = vi.fn(() => {
+    markReadStarted();
+    return pending;
+  });
+  vi.stubGlobal("navigator", { clipboard: { readText } });
   state.menu.mockResolvedValue("paste");
   await render();
   const options = state.createSurface.mock.calls[0]![1];
-  await act(async () => options.onContextMenu?.(new MouseEvent("contextmenu")));
+  await act(async () => {
+    options.onContextMenu?.(new MouseEvent("contextmenu"));
+    await readStarted;
+  });
+  expect(readText).toHaveBeenCalledOnce();
   expect(surface.write).not.toHaveBeenCalled();
   await switchLanguage("zh");
   await act(async () => rejectRead(new Error("raw delayed clipboard denial")));

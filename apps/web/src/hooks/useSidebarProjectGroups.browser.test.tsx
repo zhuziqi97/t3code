@@ -87,9 +87,10 @@ it("keeps saved manual project order despite an old activity-sort setting and re
   expect(order()).toEqual(["b", "a"]);
 });
 
-it("uses stable creation order for projects without saved preferences", async () => {
+it("honors creation and activity sorting for projects without a saved manual order", async () => {
   setup();
   state.order = [];
+  state.sort = "created_at";
   await using screen = await render(<ProjectOrder />);
   const order = () => [...screen.container.querySelectorAll("li")].map((item) => item.textContent);
   expect(order()).toEqual(["b", "a"]);
@@ -98,4 +99,7 @@ it("uses stable creation order for projects without saved preferences", async ()
     .map((entry) => ({ ...entry, updatedAt: "2026-10-22T12:00:00.000Z" }));
   await screen.rerender(<ProjectOrder />);
   expect(order()).toEqual(["b", "a"]);
+  state.sort = "updated_at";
+  await screen.rerender(<ProjectOrder />);
+  expect(order()).toEqual(["a", "b"]);
 });

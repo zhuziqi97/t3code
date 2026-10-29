@@ -259,11 +259,12 @@ function ScaledRows(props: Omit<Parameters<typeof RowPage>[0], "page">) {
   const ref = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [layout, setLayout] = useState({ offset: 0, height: 0, rowHeight: 29 });
-  const [top, setTop] = useState(0);
+  const [scrollPosition, setScrollPosition] = useState({ top: 0, remainder: 0 });
+  const { top, remainder } = scrollPosition;
   const handledReveal = useRef<string | null>(null);
   const pendingReveal = useRef<{ row: number; attempts: number } | null>(null);
   const pendingEnd = useRef(false);
-  const position = { top, height: props.viewportHeight };
+  const position = { top: top + remainder, height: props.viewportHeight };
   const scrollHeight = Math.min(8_000_000, props.count * 29);
   // Chromium caps a scroll surface at 33 million pixels. Scale the track for
   // multi-million-line logs while retaining real row heights in the viewport.
@@ -286,8 +287,9 @@ function ScaledRows(props: Omit<Parameters<typeof RowPage>[0], "page">) {
     const node = ref.current;
     if (!node || (previous.scale === scale && previous.maxFirst === maxFirst)) return;
     const previousEnd = previous.maxFirst * 29 * previous.scale;
-    let logicalTop = Math.min(previous.maxFirst * 29, node.scrollTop / previous.scale);
-    let remaining = Math.max(0, node.scrollTop - previousEnd);
+    const previousTop = node.scrollTop + remainder;
+    let logicalTop = Math.min(previous.maxFirst * 29, previousTop / previous.scale);
+    let remaining = Math.max(0, previousTop - previousEnd);
     // Native-tail pixels cross rows of different heights before returning to the scaled track.
     for (const height of previous.heights) {
       logicalTop += Math.min(1, remaining / height) * 29;
@@ -301,8 +303,10 @@ function ScaledRows(props: Omit<Parameters<typeof RowPage>[0], "page">) {
       remaining = Math.max(0, remaining - 1);
       if (!remaining) break;
     }
-    node.scrollTop = Math.min(maxFirst * 29, logicalTop) * scale + nativeOffset;
-    setTop(node.scrollTop);
+    const requestedTop = Math.min(maxFirst * 29, logicalTop) * scale + nativeOffset;
+    node.scrollTop = requestedTop;
+    // Fractional track pixels can span many wrapped-row pixels after scaling.
+    setScrollPosition({ top: node.scrollTop, remainder: requestedTop - node.scrollTop });
   });
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Scroll the DOM viewport to a requested line after its virtual track has committed.
   useLayoutEffect(() => {
@@ -316,7 +320,7 @@ function ScaledRows(props: Omit<Parameters<typeof RowPage>[0], "page">) {
     if (!node || !props.count || handledReveal.current === key) return;
     const row = Math.min(props.count, Math.max(1, props.revealLine)) - 1;
     node.scrollTop = Math.max(0, (row - headerRows) * 29) * scale;
-    setTop(node.scrollTop);
+    setScrollPosition({ top: node.scrollTop, remainder: 0 });
     pendingEnd.current = false;
     pendingReveal.current = { row, attempts: 0 };
     handledReveal.current = key;
@@ -404,7 +408,7 @@ function ScaledRows(props: Omit<Parameters<typeof RowPage>[0], "page">) {
       return;
     }
     node.scrollTop += delta * (nativeTail ? 1 : (scale * 29) / Math.max(29, bounds.height));
-    setTop(node.scrollTop);
+    setScrollPosition({ top: node.scrollTop, remainder: 0 });
   });
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Complete End-key scrolling after the final worker row has loaded and its DOM layout has settled.
   useLayoutEffect(() => {
@@ -426,7 +430,7 @@ function ScaledRows(props: Omit<Parameters<typeof RowPage>[0], "page">) {
     )
       return;
     node.scrollTop = node.scrollHeight;
-    setTop(node.scrollTop);
+    setScrollPosition({ top: node.scrollTop, remainder: 0 });
     if (Math.abs(row.getBoundingClientRect().bottom - node.getBoundingClientRect().bottom) < 1)
       pendingEnd.current = false;
   });
@@ -456,10 +460,13 @@ function ScaledRows(props: Omit<Parameters<typeof RowPage>[0], "page">) {
           pendingEnd.current = event.key === "End";
           pendingReveal.current = null;
           node.scrollTop = event.key === "Home" ? 0 : node.scrollHeight;
-          setTop(node.scrollTop);
+          setScrollPosition({ top: node.scrollTop, remainder: 0 });
         }
       }}
-      onScroll={(event) => setTop(event.currentTarget.scrollTop)}
+      onScroll={(event) => {
+        const top = event.currentTarget.scrollTop;
+        setScrollPosition((previous) => ({ ...previous, top }));
+      }}
     >
       <div className="relative" style={{ height: scrollHeight }}>
         <div
@@ -471,7 +478,7 @@ function ScaledRows(props: Omit<Parameters<typeof RowPage>[0], "page">) {
                 ? 0
                 : nativeTail
                   ? maxFirst * scale * 29 - layout.offset
-                  : position.top +
+                  : top +
                     (atStart
                       ? 0
                       : -layout.offset - ((position.top / scale / 29) % 1) * layout.rowHeight),
