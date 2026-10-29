@@ -2,12 +2,25 @@ import { useAtomMount } from "@effect/atom-react";
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { createThreadVisitTracker } from "@t3tools/client-runtime/state/thread-visits";
 import { type ScopedThreadRef } from "@t3tools/contracts";
+import { Atom } from "effect/reactivity";
 
+import { getDocumentActivity, subscribeDocumentActivity } from "../lib/documentActivity";
 import { useUiStateStore } from "../uiStateStore";
 import { environmentThreadShells, threadEnvironment } from "../state/threads";
 
+const documentActivityAtom = Atom.make((get) => {
+  get.addFinalizer(subscribeDocumentActivity(() => get.setSelf(getDocumentActivity())));
+  return getDocumentActivity();
+});
+
 const threadVisitTracker = createThreadVisitTracker({
-  threadShellAtom: environmentThreadShells.threadShellAtom,
+  threadShellAtom: (ref) =>
+    Atom.make((get) => {
+      const activity = get(documentActivityAtom);
+      return activity.visible && activity.focused
+        ? get(environmentThreadShells.threadShellAtom(ref))
+        : null;
+    }),
   visit: threadEnvironment.visit,
   markLocalVisit: (ref, visitedAt) =>
     useUiStateStore.getState().markThreadVisited(scopedThreadKey(ref), visitedAt),
