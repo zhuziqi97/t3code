@@ -7224,6 +7224,7 @@ export const zh: Partial<Messages> = {
   "chat.tools.quantity.HTML page_other": "{{count}} 个 HTML 页面",
   "chat.tools.object.threads": "会话（{{times}}）",
   "chat.tools.object.task status": "任务状态（{{times}}）",
+  "chat.tools.object.background waits": "后台等待状态（{{times}}）",
   "chat.tools.object.scheduled tasks": "定时任务（{{times}}）",
   "chat.tools.object.thread configuration": "会话配置（{{times}}）",
   "chat.tools.object.thread model": "会话模型（{{times}}）",

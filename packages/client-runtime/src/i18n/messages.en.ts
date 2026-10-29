@@ -7705,6 +7705,7 @@ export const en = {
   "chat.tools.quantity.HTML page_other": "{{count}} HTML pages",
   "chat.tools.object.threads": "threads {{times}}",
   "chat.tools.object.task status": "task status {{times}}",
+  "chat.tools.object.background waits": "background waits {{times}}",
   "chat.tools.object.scheduled tasks": "scheduled tasks {{times}}",
   "chat.tools.object.thread configuration": "thread configuration {{times}}",
   "chat.tools.object.thread model": "thread model {{times}}",

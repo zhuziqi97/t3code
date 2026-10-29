@@ -15,6 +15,40 @@ describe.each([
     action: Parameters<typeof summarizeCalls>[0],
     calls: ReadonlyArray<T3ToolSummaryCall>,
   ) => summarizeCalls(action, calls, translate);
+
+  it("preserves background wait update counts and failed or unfinished attempts", () => {
+    const success = completed(
+      { taskIds: ["monitor:raw"], waiting: true },
+      { matched: ["monitor:raw"], unmatched: [] },
+    );
+    const failure = completed(
+      { taskIds: ["command:raw"], waiting: true },
+      { _tag: "OrchestratorMcpFailure", message: "Raw failure 原文" },
+    );
+    const unfinished: T3ToolSummaryCall = {
+      input: { taskIds: ["pending:raw"], waiting: false },
+      output: undefined,
+      outcome: "unfinished",
+    };
+    expect(summarizeT3ToolCalls("background-wait", [success])).toEqual({
+      label: "Updated background waits 1 time",
+      failedCount: 0,
+    });
+    expect(
+      summarizeT3ToolCalls("background-wait", [success, success, failure, unfinished]),
+    ).toEqual({
+      label: "Updated background waits 2 times",
+      failedCount: 1,
+    });
+    expect(summarizeT3ToolCalls("background-wait", [unfinished])).toEqual({
+      label: "Tried to update background waits 1 time",
+      failedCount: 0,
+    });
+    expect(summarizeT3ToolCalls("background-wait", [failure])).toEqual({
+      label: "Tried to update background waits 1 time",
+      failedCount: 1,
+    });
+  });
   it("counts registered projects, repository destinations, and accepted thread launches", () => {
     expect(
       summarizeT3ToolCalls("project-create", [
@@ -221,6 +255,19 @@ describe.each([
 
 describe("Chinese T3 summaries", () => {
   const t = createI18n({ lng: "zh" }).t;
+
+  it.each([
+    [1, "更新了后台等待状态（1次）"],
+    [2, "更新了后台等待状态（2次）"],
+  ] as const)("localizes %s background wait update calls", (count, label) => {
+    const calls = Array.from({ length: count }, (_, index) =>
+      completed(
+        { taskIds: ["monitor:原文"], waiting: index === 0 },
+        { matched: ["monitor:原文"], unmatched: [] },
+      ),
+    );
+    expect(summarizeCalls("background-wait", calls, t)).toEqual({ label, failedCount: 0 });
+  });
   it("deduplicates successful effects while retaining failed-call status", () => {
     const success = completed({ threadId: "first" }, { messageId: "sent", threadId: "first" });
     const failure = completed({ threadId: "other" }, { isError: true });

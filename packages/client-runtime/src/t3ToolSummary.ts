@@ -202,7 +202,7 @@ export function summarizeT3ToolCalls(
       label = phrase("Checked", "check", repeated("task status"));
       break;
     case "background-wait":
-      label = phrase("Updated", "update", `background waits ${times}`);
+      label = phrase("Updated", "update", repeated("background waits"));
       break;
     case "task-cancel":
       label = phrase(
