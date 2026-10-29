@@ -1,12 +1,4 @@
-/**
- * The web client's i18next binding.
- *
- * The instance is configured and initialized at module load, so the first
- * render already has catalogs in memory and never flashes raw keys. Registering
- * the instance with `initReactI18next` also lets `useTranslation` find it
- * without a provider, which keeps component tests that render a screen directly
- * working unchanged.
- */
+// Initialize the React binding before first render, including screens rendered without a provider.
 import { getI18n, initReactI18next, setI18n, useTranslation } from "react-i18next";
 import { useSyncExternalStore } from "react";
 

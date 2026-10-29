@@ -463,7 +463,9 @@ const PROVIDER_UPDATE_MESSAGE_KEYS = {
     "providerUpdate.access.details",
   "Provider update failed.": "providerUpdate.error.generic",
   "Provider update did not finish.": "providerUpdate.error.unfinished",
+  // oxlint-disable-next-line t3code/no-em-dash-copy -- Match the server diagnostic verbatim before translating it.
   "Update timed out — try again.": "providerUpdate.error.timeout-retry",
+  // oxlint-disable-next-line t3code/no-em-dash-copy -- Match the server diagnostic verbatim before translating it.
   "This environment isn’t connected — try again once it reconnects.":
     "providerUpdate.error.disconnected",
   "Waiting for another provider update to finish.": "providerUpdate.message.waiting",

@@ -104,7 +104,7 @@ function buildFileContextMenuItems(
             : (EDITOR_LABEL_BY_ID.get(editorId) ?? editorId);
         return {
           id: `editor:${editorId}` as FileContextMenuAction,
-          label: reason ? `${label} — ${reason}` : label,
+          label: reason ? `${label}: ${reason}` : label,
           ...(reason ? { disabled: true } : {}),
         };
       }),

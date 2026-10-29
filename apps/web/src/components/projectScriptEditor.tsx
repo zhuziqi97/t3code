@@ -152,7 +152,7 @@ export function ProjectScriptEditorDialog({
   onDelete: (scriptId: string) => void;
   onClose: () => void;
 }) {
-  const t = useTranslate();
+  useTranslate();
   const canEditActions = useEnvironmentScope(environmentId, editScope);
   // Scope errors by request so late saves cannot overwrite a newer request's error.
   const [errorState, setErrorState] = useState<{

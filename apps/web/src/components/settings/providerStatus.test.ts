@@ -136,6 +136,7 @@ describe("getProviderSummary", () => {
       "opencode",
       "macOS killed the OpenCode process due to an invalid code signature. The binary may be corrupted — try reinstalling OpenCode.",
       "macOS 因代码签名无效而终止了 OpenCode 进程。可执行文件可能已损坏，请尝试重新安装 OpenCode。",
+      "macOS killed the OpenCode process due to an invalid code signature. The binary may be corrupted: try reinstalling OpenCode.",
     ],
     [
       "opencode",
@@ -218,17 +219,20 @@ describe("getProviderSummary", () => {
     ["muse", "Muse Code CLI is installed but failed to run.", "Muse Code CLI 已安装，但无法运行。"],
     ["muse", "Muse Code SDK could not read the model catalog.", "无法加载模型。"],
     ["muse", "Muse Code returned no models.", "暂无可用模型。"],
-  ])("translates %s guidance in the settings summary: %s", (driver, message, chinese) => {
-    const status = {
-      ...provider,
-      driver: ProviderDriverKind.make(driver),
-      message,
-      auth: { status: "unknown" as const },
-    };
-    expect(getProviderSummary(status, createI18n({ lng: "zh" }).t).detail).toBe(chinese);
-    expect(getProviderSummary(status, createI18n({ lng: "en" }).t).detail).toBe(message);
-    expect(status.message).toBe(message);
-  });
+  ])(
+    "translates %s guidance in the settings summary: %s",
+    (driver, message, chinese, expectedEnglish = message) => {
+      const status = {
+        ...provider,
+        driver: ProviderDriverKind.make(driver),
+        message,
+        auth: { status: "unknown" as const },
+      };
+      expect(getProviderSummary(status, createI18n({ lng: "zh" }).t).detail).toBe(chinese);
+      expect(getProviderSummary(status, createI18n({ lng: "en" }).t).detail).toBe(expectedEnglish);
+      expect(status.message).toBe(message);
+    },
+  );
 
   it.each([
     [

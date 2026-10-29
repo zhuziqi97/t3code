@@ -17,14 +17,8 @@ import {
   isClaudeUltrathinkPrompt,
   isReasoningOption,
 } from "@t3tools/shared/model";
-import { REASONING_EFFORT_OPTION_IDS } from "./state/threadExecution.ts";
 
 export const ULTRATHINK_PROMPT_PREFIX = "Ultrathink:\n";
-
-const REASONING_SELECT_DESCRIPTOR_IDS: ReadonlySet<string> = new Set([
-  ...REASONING_EFFORT_OPTION_IDS,
-  "thinking",
-]);
 
 export function replaceDescriptorCurrentValue(
   descriptors: ReadonlyArray<ProviderOptionDescriptor>,
