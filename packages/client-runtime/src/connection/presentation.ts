@@ -198,6 +198,17 @@ export function formatConnectionErrorMessage(message: string, t?: TFunction): st
     const match = pattern.exec(message);
     if (match?.groups) return t(key, match.groups);
   }
+  const paidTunnelLimit =
+    /^Relay refused the link: this account already has its maximum of (\d+) managed tunnels\. Unlink an environment, or link a paid T3 Chat account in your T3 Connect account settings on web or desktop\. Pro raises the default limit to (\d+) and Premier to (\d+)\.$/u.exec(
+      message,
+    );
+  if (paidTunnelLimit)
+    return t("connections.error.relayLinkLimitPaid", {
+      count: Number(paidTunnelLimit[1]),
+      maximum: paidTunnelLimit[1],
+      pro: paidTunnelLimit[2],
+      premier: paidTunnelLimit[3],
+    });
   const tunnelLimit =
     /^Relay refused the link: this account already has its maximum of (\d+) managed tunnels\. Unlink an environment to free one up\.$/u.exec(
       message,

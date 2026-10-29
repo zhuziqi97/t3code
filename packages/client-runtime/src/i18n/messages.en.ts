@@ -1601,6 +1601,10 @@ export const en = {
   "connections.error.relayInternal": "Relay encountered an internal error ({{reason}}).",
   "connections.error.relayLinkLimit_one":
     "Relay refused the link: this account already has its maximum of {{maximum}} managed tunnel. Unlink an environment to free one up.",
+  "connections.error.relayLinkLimitPaid_one":
+    "Relay refused the link: this account already has its maximum of {{maximum}} managed tunnel. Unlink an environment, or link a paid T3 Chat account in your T3 Connect account settings on web or desktop. Pro raises the default limit to {{pro}} and Premier to {{premier}}.",
+  "connections.error.relayLinkLimitPaid_other":
+    "Relay refused the link: this account already has its maximum of {{maximum}} managed tunnels. Unlink an environment, or link a paid T3 Chat account in your T3 Connect account settings on web or desktop. Pro raises the default limit to {{pro}} and Premier to {{premier}}.",
   "connections.error.relayLinkLimit_other":
     "Relay refused the link: this account already has its maximum of {{maximum}} managed tunnels. Unlink an environment to free one up.",
   "connections.error.relay.tokenExchange.failed": "Could not exchange relay DPoP access token.",

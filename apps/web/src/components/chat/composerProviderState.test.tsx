@@ -321,7 +321,16 @@ describe("getComposerReasoningStep", () => {
     expect(
       step({
         provider: ProviderDriverKind.make("antigravity"),
-        models: modelWith([selectDescriptor("thinking_level", LEVELS)]),
+        models: modelWith([
+          {
+            ...selectDescriptor("thinking_level", [
+              { id: "low", label: "Low" },
+              { id: "high", label: "High" },
+            ]),
+            category: "thought_level",
+            currentValue: "low",
+          },
+        ]),
       })?.modelOptions,
     ).toStrictEqual(selections(["thinking_level", "high"]));
   });

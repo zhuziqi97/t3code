@@ -357,10 +357,21 @@ it("keeps tunnel counts and gives a singular English limit without changing rela
     traceId: "trace-limit-raw",
   });
   const message = relayProtectedErrorMessage(error);
+  expect(message).toBe(
+    "Relay refused the link: this account already has its maximum of 1 managed tunnels. Unlink an environment, or link a paid T3 Chat account in your T3 Connect account settings on web or desktop. Pro raises the default limit to 10 and Premier to 100.",
+  );
   expect(formatConnectionErrorMessage(message, createI18n({ lng: "en" }).t)).toBe(
-    "Relay refused the link: this account already has its maximum of 1 managed tunnel. Unlink an environment to free one up.",
+    "Relay refused the link: this account already has its maximum of 1 managed tunnel. Unlink an environment, or link a paid T3 Chat account in your T3 Connect account settings on web or desktop. Pro raises the default limit to 10 and Premier to 100.",
   );
   expect(formatConnectionErrorMessage(message, createI18n({ lng: "zh" }).t)).toBe(
+    "中继拒绝了关联：此账号已达到 1 条托管隧道的上限。请解除一个执行环境的关联，或在网页端或桌面端的 T3 Connect 账户设置中关联付费 T3 Chat 账户。Pro 将默认上限提高至 10 条，Premier 提高至 100 条。",
+  );
+  const legacy =
+    "Relay refused the link: this account already has its maximum of 1 managed tunnels. Unlink an environment to free one up.";
+  expect(formatConnectionErrorMessage(legacy, createI18n({ lng: "en" }).t)).toBe(
+    "Relay refused the link: this account already has its maximum of 1 managed tunnel. Unlink an environment to free one up.",
+  );
+  expect(formatConnectionErrorMessage(legacy, createI18n({ lng: "zh" }).t)).toBe(
     "中继拒绝了关联：此账号已达到 1 条托管隧道的上限。请解除一个执行环境的关联，以释放名额。",
   );
   expect(formatConnectionErrorMessage(message)).toBe(message);
