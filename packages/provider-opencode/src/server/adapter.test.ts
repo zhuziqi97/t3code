@@ -1817,6 +1817,7 @@ describe("OpenCodeAdapterV2", () => {
           },
           mcp: { add: async () => ({ data: true }) },
         },
+        true,
         {
           resolveAttachmentPath: () => "/workspace/report.docx",
           resolveExtractedTextPath: () =>
@@ -1854,7 +1855,11 @@ describe("OpenCodeAdapterV2", () => {
           },
         })
         .pipe(Effect.exit, Effect.forkScoped);
-      yield* Deferred.await(lookup);
+      const first = yield* Effect.raceFirst(
+        Deferred.await(lookup).pipe(Effect.as("lookup-started")),
+        Fiber.await(steer).pipe(Effect.as("steer-finished")),
+      );
+      assert.equal(first, "lookup-started");
       yield* harness.runtime.interruptTurn({
         providerThread: harness.providerThread,
         providerTurnId: turn.id,
