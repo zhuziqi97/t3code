@@ -2511,6 +2511,7 @@ it.effect("emits run_interrupt_result when hard-stop finalizes the active attemp
     const { written, observed, committedEffects } = yield* captureRootRunTermination({
       key: "hard-stop",
       shouldFinalizeRun: () => Effect.succeed(true),
+      loadRunInterruptReason: () => Effect.succeed(RunExecutionService.USER_STOP_REASON),
     });
     assert.deepEqual(
       written.map((item) => item.type),
@@ -2518,7 +2519,7 @@ it.effect("emits run_interrupt_result when hard-stop finalizes the active attemp
     );
     assert.equal(
       written[0]?.type === "run_interrupt_result" && written[0].message,
-      "Run interrupted by user",
+      RunExecutionService.USER_STOP_REASON,
     );
     assert.deepEqual(observed, ["run:interrupted", "pull-requests-refreshed"]);
     assert.deepEqual(
@@ -2996,6 +2997,7 @@ function captureRootRunTermination(input: {
   readonly rejectTerminalWrite?: boolean;
   readonly hasUnpairedRunInterruptRequest?: () => Effect.Effect<boolean, never>;
   readonly interruptMessage?: () => Effect.Effect<string | undefined>;
+  readonly loadRunInterruptReason?: () => Effect.Effect<string | undefined>;
   readonly hasPendingBackgroundWorkForThread?: ProviderAdapter.ProviderAdapterV2SessionRuntime["hasPendingBackgroundWorkForThread"];
   readonly seedOpenSubagent?: boolean;
   readonly events?: (
@@ -3191,6 +3193,9 @@ function captureRootRunTermination(input: {
         ...(input.interruptMessage === undefined
           ? {}
           : { interruptMessage: input.interruptMessage }),
+        ...(input.loadRunInterruptReason === undefined
+          ? {}
+          : { loadRunInterruptReason: input.loadRunInterruptReason }),
         message: {
           messageId: MessageId.make(`message:${input.key}`),
           text: "interrupt projection",
