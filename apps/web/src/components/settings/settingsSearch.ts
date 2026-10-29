@@ -141,7 +141,7 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
   },
   {
     heading: i18n.t("settings.sections.connections"),
-    paths: ["/settings/connections", "/settings/access"],
+    paths: ["/settings/connections", "/settings/convene", "/settings/access"],
   },
   {
     heading: null,
