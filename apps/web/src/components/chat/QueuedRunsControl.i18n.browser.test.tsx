@@ -97,6 +97,8 @@ it("keeps queue state and provider commands intact while switching Chinese and E
           editingRunId={null}
           onEditQueuedRun={edit}
           onCancelEdit={() => {}}
+          timestampFormat="locale"
+          onOpenThread={() => {}}
         />,
       ),
     );

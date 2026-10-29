@@ -14,6 +14,9 @@ import { GlobeIcon, LoaderCircleIcon, SquareIcon } from "lucide-react";
 import { type MouseEvent, useState } from "react";
 
 import { resolveDiscoveredServerUrl } from "../../browser/browserTargetResolver";
+import { openUrlInPreview } from "../../browser/openFileInPreview";
+import { previewRuntimeFor } from "../../browser/previewRuntime";
+import { recordVisitForThread } from "../../browserHistoryStore";
 import { readLocalApi } from "../../localApi";
 import { cn, isMacPlatform } from "../../lib/utils";
 import { useThreadDiscoveredPorts } from "../../portDiscoveryState";
@@ -21,7 +24,6 @@ import { useEnvironment } from "../../state/environments";
 import { previewEnvironment } from "../../state/preview";
 import { useEnvironmentScope } from "../../state/session";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { openDiscoveredPort } from "../preview/openDiscoveredPort";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { ThreadDetailsControl } from "./ThreadDetailsControl";
@@ -74,7 +76,12 @@ export function ThreadServersPanel(props: {
         .catch((error: unknown) => reportFailure("Unable to open in browser", error));
       return;
     }
-    const result = await openDiscoveredPort({ threadRef, port: server, openPreview });
+    const url =
+      previewRuntimeFor(props.environmentId) === "server"
+        ? server.url
+        : resolveDiscoveredServerUrl(props.environmentId, server.url);
+    const result = await openUrlInPreview({ threadRef, url, openPreview });
+    if (result._tag === "Success") recordVisitForThread(threadRef, server.url);
     if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
       reportFailure("Unable to open preview", squashAtomCommandFailure(result));
     }

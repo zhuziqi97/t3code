@@ -533,6 +533,7 @@ function TerminalSessionViewport({
   const containerRef = useRef<HTMLDivElement>(null);
   const autoFocusedRef = useRef(false);
   const terminalRef = useRef<GhosttyTerminalSurface | null>(null);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Ghostty initialization writes retry text outside React; keep that DOM text in the current language.
   useEffect(() => {
     const failure = initializationFailureRef.current;
     const mount = containerRef.current;
@@ -541,6 +542,7 @@ function TerminalSessionViewport({
       message: failure.message ?? t("terminal.initFailed"),
     });
   }, [t]);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Ghostty owns its input and scrollback DOM; update their accessible labels when the language changes.
   useEffect(() => {
     terminalRef.current?.setAccessibleLabels(
       t("terminal.inputLabel"),

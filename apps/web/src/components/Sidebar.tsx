@@ -1392,6 +1392,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const shelfRoute =
     routeTarget?.kind === "draft" ? `draft:${routeTarget.draftId}` : routeThreadKey;
   const observedShelfRoute = useRef({ route: shelfRoute, pending: false });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Persist the routed shelf in localStorage after history or link navigation resolves its shell; manual shelf toggles must survive later shell updates.
   useEffect(() => {
     const observed = observedShelfRoute.current;
     const pending = observed.pending || observed.route !== shelfRoute;
@@ -1480,6 +1481,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       return thread ? [thread] : [];
     });
   })();
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Remove vanished rows from the shared keyboard and bulk-action selection after committed stream, filter or page changes; no single input handler owns those removals.
   useEffect(() => {
     const visible = new Set(
       orderedThreads.map((thread) =>
@@ -3548,11 +3550,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             ) : (
                               <ProjectThreadPageControls
                                 hiddenThreads={pages.hiddenByProject.get(group.projectKey) ?? []}
-                                pageSize={
-                                  item.section === "settled"
-                                    ? SETTLED_TAIL_PAGE_COUNT
-                                    : sidebarThreadPreviewCount
-                                }
+                                pageSize={sidebarThreadPreviewCount}
                                 expanded={pages.expandedProjects.has(group.projectKey)}
                                 onMore={() => pages.showMore(group.projectKey)}
                                 onLess={() => pages.showLess(group.projectKey)}

@@ -63,6 +63,7 @@ export function useOpenFavoriteEditorShortcut({
 }) {
   const action = useEditorAction(environmentId, availableEditors, workspace);
   const t = useTranslate();
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Register the window keydown listener while this editor shortcut target is enabled, and remove it on replacement or unmount.
   useEffect(() => {
     if (!enabled || !openInCwd) return;
     const handler = (event: globalThis.KeyboardEvent) => {

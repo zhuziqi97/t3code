@@ -24,6 +24,7 @@ const testState = vi.hoisted(() => ({
   clipboard: vi.fn(),
   sessionAtom: null as unknown,
   serverVersions: new Map<string, string>(),
+  serverSettings: new Map<string, { continueThreadsAfterServerUpdate: boolean }>(),
 }));
 
 vi.mock(import("~/hooks/useCopyToClipboard"), async (original) => ({
@@ -52,7 +53,7 @@ vi.mock(import("~/state/entities"), async (original) => ({
     new Map(
       [...testState.serverVersions].map(([id, serverVersion]) => [
         id,
-        { environment: { serverVersion } },
+        { environment: { serverVersion }, settings: testState.serverSettings.get(id) },
       ]),
     )) as never,
 }));
@@ -105,6 +106,7 @@ function setup(): Disposable {
   testState.toast.mockReset();
   testState.clipboard.mockReset();
   testState.serverVersions.clear();
+  testState.serverSettings.clear();
   sessionAtom = Atom.make<SessionResult>(AsyncResult.success(currentSession));
   testState.sessionAtom = sessionAtom;
   resetConfirmDialogForTests();
@@ -351,36 +353,25 @@ describe("ServerUpdateAction", () => {
     });
   });
 
-  it("leaves thread continuation off by default", async () => {
-    await using _lifecycle = await setupLifecycle();
+  it.each([false, true])(
+    "leaves the saved continuation preference %s to the target environment",
+    async (continueThreadsAfterServerUpdate) => {
+      await using _lifecycle = await setupLifecycle();
 
-    using _state = setup();
-    testState.updateServer.mockResolvedValue(success());
+      using _state = setup();
+      testState.updateServer.mockResolvedValue(success());
+      testState.serverVersions.set("env-test", "0.0.30");
+      testState.serverSettings.set("env-test", { continueThreadsAfterServerUpdate });
 
-    await using screen = await renderAction({ threadContinuation: true });
-    await click(screen, "Update");
+      await using screen = await renderAction();
+      await click(screen, "Update");
 
-    expect(testState.updateServer).toHaveBeenCalledWith({
-      environmentId: "env-test",
-      input: { targetVersion: "0.0.31" },
-    });
-  });
-
-  it("applies the saved thread continuation preference automatically", async () => {
-    await using _lifecycle = await setupLifecycle();
-
-    using _state = setup();
-    testState.updateServer.mockResolvedValue(success());
-    testState.continueThreadsAfterServerUpdate = true;
-
-    await using screen = await renderAction({ threadContinuation: true });
-    await click(screen, "Update");
-
-    expect(testState.updateServer).toHaveBeenCalledWith({
-      environmentId: "env-test",
-      input: { targetVersion: "0.0.31", continueRunningThreads: true },
-    });
-  });
+      expect(testState.updateServer).toHaveBeenCalledExactlyOnceWith({
+        environmentId: "env-test",
+        input: { targetVersion: "0.0.31" },
+      });
+    },
+  );
 
   it.each(["success", "failure"] as const)(
     "uses the completion language for a delayed %s and keeps raw result details",
@@ -445,18 +436,22 @@ describe("ServerUpdatesAction", () => {
 
   const mount = (batch = targets) => renderUpdate(<ServerUpdatesAction targets={batch} />);
 
-  it("updates both supported machines with their own continuation preference and skips the manual machine", async () => {
+  it("updates both supported machines without overriding their continuation preferences and skips the manual machine", async () => {
     await using _lifecycle = await setupLifecycle();
 
     using _state = setup();
     testState.updateServer.mockResolvedValue(success());
+    testState.serverVersions.set("batch-a", "0.0.30");
+    testState.serverVersions.set("batch-b", "0.0.30");
+    testState.serverSettings.set("batch-a", { continueThreadsAfterServerUpdate: true });
+    testState.serverSettings.set("batch-b", { continueThreadsAfterServerUpdate: false });
     await using screen = await mount();
     await click(screen, "Update all");
 
     expect(testState.updateServer.mock.calls.map(([target]) => target)).toEqual([
       {
         environmentId: "batch-a",
-        input: { targetVersion: "0.0.31", continueRunningThreads: true },
+        input: { targetVersion: "0.0.31" },
       },
       { environmentId: "batch-b", input: { targetVersion: "0.0.31" } },
     ]);

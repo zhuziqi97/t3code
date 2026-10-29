@@ -36,7 +36,10 @@ import {
   decodeComposerContextClipboardHtml,
   decodeComposerContextFragment,
 } from "@t3tools/shared/composerContextClipboard";
-import { formatComposerContextReference } from "@t3tools/shared/composerContextReferences";
+import {
+  formatComposerContextReference,
+  threadContextRecord,
+} from "@t3tools/shared/composerContextReferences";
 import { expect, it, vi } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
 
@@ -73,17 +76,13 @@ vi.mock(import("./chat/MermaidDiagram"), async (original) => ({
 
 import ChatMarkdown from "./ChatMarkdown";
 import {
-  ComposerPromptEditor,
+  ComposerPromptEditorTiptap as ComposerPromptEditor,
   type ComposerPromptEditorHandle,
   type ComposerPromptEditorProps,
-} from "./ComposerPromptEditor";
+} from "./ComposerPromptEditorTiptap";
 import { submitComposerDraft } from "./chat/composerSubmission";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
-import {
-  asKnownContextRecord,
-  buildMessageContext,
-  threadContextRecord,
-} from "../lib/composerContextRecords";
+import { asKnownContextRecord, buildMessageContext } from "../lib/composerContextRecords";
 
 function setup() {
   query.mockReset().mockResolvedValue(AsyncResult.success({ entries: [] }));
@@ -107,6 +106,7 @@ function mockSender(messageContext?: () => OrchestrationMessageContext | undefin
               subscribeServerConfig: () => Stream.never,
               ready: Effect.void,
               probe: Effect.void,
+              inboundFrames: Effect.succeed(0),
               closed: Effect.never,
             };
             return EnvironmentSupervisor.EnvironmentSupervisor.of({
@@ -495,7 +495,6 @@ function timelineMessage(
         onOpenTurnDiff={() => {}}
         onOpenThread={() => {}}
         onForkFromRun={async () => {}}
-        onRollbackCheckpoint={() => {}}
         supportsConversationRollback={false}
         onRevertToTurnCount={() => {}}
         isRevertingCheckpoint={false}
