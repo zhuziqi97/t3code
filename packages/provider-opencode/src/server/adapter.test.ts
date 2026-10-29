@@ -306,6 +306,7 @@ describe("OpenCodeAdapterV2", () => {
           get: async () => ({
             data: {
               id: "root",
+              directory: "/workspace",
               permission: openCodePermissionRules(fullAccess),
               time: { created: 1, updated: 1 },
             },
@@ -369,6 +370,7 @@ describe("OpenCodeAdapterV2", () => {
           get: async ({ sessionID }: { sessionID: string }) => ({
             data: {
               id: sessionID,
+              directory: "/workspace",
               ...(sessionID === child ? { parentID: root } : {}),
               permission: nativePermissions.get(sessionID),
               time: { created: 1, updated: 1 },

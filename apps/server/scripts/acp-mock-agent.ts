@@ -41,6 +41,7 @@ const hangPromptForever = process.env.T3_ACP_HANG_PROMPT_FOREVER === "1";
 const emitTrackedToolCallKindThenHang = process.env.T3_ACP_EMIT_TRACKED_TOOL_CALL_KIND_THEN_HANG;
 const clientFsProbePath = process.env.T3_ACP_CLIENT_FS_PROBE_PATH;
 const clientFsProbeLogPath = process.env.T3_ACP_CLIENT_FS_PROBE_LOG_PATH;
+const clientFsProbeOutsidePath = process.env.T3_ACP_CLIENT_FS_PROBE_OUTSIDE_PATH;
 const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 const emitEmptySuccessfulBash = process.env.T3_ACP_EMIT_EMPTY_SUCCESSFUL_BASH === "1";
 const emitEmptySuccessfulBashThenHang =
@@ -59,6 +60,7 @@ const emitEmptyDefaultAgentOption = process.env.T3_ACP_EMIT_EMPTY_DEFAULT_AGENT_
 const promptResponseText = process.env.T3_ACP_PROMPT_RESPONSE_TEXT;
 const promptDelayMs = Number(process.env.T3_ACP_PROMPT_DELAY_MS ?? "0");
 const supportsSessionLifecycle = process.env.T3_ACP_SESSION_LIFECYCLE === "1";
+const advertiseRegistryCommands = process.env.T3_ACP_ADVERTISE_REGISTRY_COMMANDS === "1";
 const supportsAcpMcp = process.env.T3_ACP_MCP_ACP === "1";
 const supportsV2Management = process.env.T3_ACP_V2_MANAGEMENT === "1";
 const advertisedAuthMethodId = process.env.T3_ACP_AUTH_METHOD_ID?.trim();
@@ -564,6 +566,22 @@ const program = Effect.gen(function* () {
       if (antigravityProfile) {
         yield* publishAntigravityCommands(sessionId);
       }
+      if (advertiseRegistryCommands) {
+        yield* agent.client.sessionUpdate({
+          sessionId,
+          update: {
+            sessionUpdate: "available_commands_update",
+            availableCommands: [
+              {
+                name: "review",
+                description: "Review the current changes",
+                input: { type: "text", hint: "focus" },
+              },
+              { name: "$workspace-skill", description: "Run the workspace skill" },
+            ],
+          },
+        });
+      }
       return {
         sessionId,
         configOptions: configOptions(),
@@ -913,6 +931,22 @@ const program = Effect.gen(function* () {
             { sessionId: requestedSessionId, path: clientFsProbePath, content: "probe" },
           ],
           ["fs/read_text_file", { sessionId: requestedSessionId, path: clientFsProbePath }],
+          ...(clientFsProbeOutsidePath === undefined
+            ? []
+            : [
+                [
+                  "fs/write_text_file",
+                  {
+                    sessionId: requestedSessionId,
+                    path: clientFsProbeOutsidePath,
+                    content: "probe",
+                  },
+                ] as const,
+                [
+                  "fs/read_text_file",
+                  { sessionId: requestedSessionId, path: clientFsProbeOutsidePath },
+                ] as const,
+              ]),
         ] as const;
         for (const [method, params] of probes) {
           const outcome = yield* agent.raw.request(method, params).pipe(
