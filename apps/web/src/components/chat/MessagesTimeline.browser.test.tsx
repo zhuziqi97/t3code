@@ -1234,12 +1234,23 @@ describe("latest run end feedback", () => {
         {...props}
         timelineEntries={entries}
         latestRun={{ ...run, status, completedAt }}
-        completionHeld={backgroundWorkHoldsCompletion([{ kind: "monitor" }])}
+        completionHeld={backgroundWorkHoldsCompletion([{ kind: "monitor", awaited: true }])}
         footer={<p>Waiting for monitor</p>}
       />,
     );
     expect(screen.container.querySelector('[data-testid="latest-run-end-state"]')).toBeNull();
     expect(screen.container.textContent).toContain("Waiting for monitor");
+    await screen.rerender(
+      <MessagesTimeline
+        {...props}
+        timelineEntries={entries}
+        latestRun={{ ...run, status, completedAt }}
+        completionHeld={backgroundWorkHoldsCompletion([{ kind: "monitor" }])}
+      />,
+    );
+    expect(
+      screen.container.querySelector('[data-testid="latest-run-end-state"]')?.textContent,
+    ).toContain(label);
     await screen.rerender(
       <MessagesTimeline
         {...props}
