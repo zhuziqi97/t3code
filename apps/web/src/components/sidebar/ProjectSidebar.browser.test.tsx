@@ -290,6 +290,7 @@ it("keeps an editable draft mounted before the project groups while reordering",
   await using screen = await render(<Fixture threads={threads()} draft />);
   const draft = screen.getByRole("textbox", { name: "Draft message" });
   await expect.element(draft).toBeVisible();
+  const draftElement = draft.element();
   await userEvent.fill(draft, "Keep edited draft");
   await userEvent.dragAndDrop(
     screen.getByRole("button", { name: "Project A" }),
@@ -297,7 +298,5 @@ it("keeps an editable draft mounted before the project groups while reordering",
   );
   await expect.element(screen.getByTestId("order")).toHaveTextContent("B,A");
   await expect.element(draft).toHaveValue("Keep edited draft");
-  expect(screen.container.querySelector('ul[role="presentation"]')?.firstElementChild).toBe(
-    screen.container.querySelector('[aria-label="Draft message"]'),
-  );
+  expect(screen.getByRole("tree").element().firstElementChild).toBe(draftElement);
 });
