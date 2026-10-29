@@ -1,4 +1,5 @@
-import type { CodeViewItem } from "@pierre/diffs";
+import { File, type CodeViewItem } from "@pierre/diffs";
+import { Editor } from "@pierre/diffs/edit";
 import { parsePatchFiles } from "@pierre/diffs/utils/parsePatchFiles";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -63,4 +64,16 @@ describe("collectMatches", () => {
     expect(find("oldName")).toEqual(["file-0:deletions:2:6-13", "file-0:additions:3:14-21"]);
     expect(find("nil")).toEqual(["file-1:deletions:1:0-3", "file-1:additions:1:2-5"]);
   });
+});
+
+it("updates file options with a real attached editor before its first DOM render", () => {
+  const file = new File();
+  const detach = file.__attachEditor(new Editor("file"));
+  try {
+    expect(() => file.setOptions({ uiLabels: { search: "搜索" } })).not.toThrow();
+    expect(() => file.setOptions({})).not.toThrow();
+  } finally {
+    detach();
+    file.cleanUp();
+  }
 });
