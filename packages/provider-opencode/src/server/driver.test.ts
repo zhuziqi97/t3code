@@ -188,8 +188,8 @@ it.layer(layer)("OpenCodeDriver runtime selection", (it) => {
         const initial = yield* instance.snapshot.streamChanges.pipe(
           Stream.filter(
             (snapshot) =>
-              snapshot.installed &&
-              snapshot.status === (initialCatalog === "empty" ? "warning" : "error"),
+              snapshot.installed === true &&
+              snapshot.status === (initialCatalog === "probe" ? "error" : "warning"),
           ),
           Stream.take(1),
           Stream.runCollect,
@@ -212,7 +212,9 @@ it.layer(layer)("OpenCodeDriver runtime selection", (it) => {
 
         catalogAvailable = true;
         const recovered = yield* instance.snapshot.streamChanges.pipe(
-          Stream.filter((snapshot) => snapshot.status === "ready"),
+          Stream.filter(
+            (snapshot) => snapshot.status === "ready" && snapshot.auth.status === "authenticated",
+          ),
           Stream.take(1),
           Stream.runCollect,
           Effect.forkChild,
