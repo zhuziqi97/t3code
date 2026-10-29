@@ -1,12 +1,15 @@
 import "~/index.css";
 import { render } from "../../../test/render";
 import {
+  CodeView,
   DiffHunksRenderer,
+  File,
+  FileDiff,
   getSharedHighlighter,
   parseDiffFromFile,
   parsePatchFiles,
 } from "@pierre/diffs";
-import { TextDocument } from "@pierre/diffs/edit";
+import { Editor, TextDocument } from "@pierre/diffs/edit";
 import { createI18n } from "@t3tools/client-runtime/i18n";
 import { expect, it, vi } from "vite-plus/test";
 
@@ -206,6 +209,118 @@ it("retains the package's English defaults when a host supplies no labels", asyn
   input("name");
   expect(document.querySelector("[data-matches]")?.textContent).toBe("1 of 3");
   expect(button("Match Case")).not.toBeNull();
+});
+
+const sourceFile = {
+  name: "raw.txt",
+  contents: "Raw name 原文\nRaw name 原文\nraw names 原文\n",
+};
+
+async function checkLiveSearchLabels(root: ShadowRoot, updateLabels: () => void) {
+  const query = root.querySelector<HTMLInputElement>("input[data-search]")!;
+  const press = (label: string) => {
+    const target = root.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
+    expect(target, label).not.toBeNull();
+    target.click();
+    return target;
+  };
+  query.value = "name";
+  query.dispatchEvent(new Event("input", { bubbles: true }));
+  press("Match case");
+  press("Match whole word");
+  press("Use regular expression");
+  // Await the panel's initial search through its observable result.
+  await vi.waitFor(() => expect(root.querySelector("[data-matches]")?.textContent).toBe("1 of 2"));
+  press("Next");
+  expect(root.querySelector("[data-matches]")?.textContent).toBe("2 of 2");
+
+  updateLabels();
+
+  expect(root.querySelector("input[data-search]")).toBe(query);
+  expect(query.value).toBe("name");
+  expect(query.getAttribute("aria-label")).toBe("搜索代码");
+  expect(root.querySelector("[data-matches]")?.textContent).toBe("2 / 2");
+  for (const label of ["区分大小写", "全字匹配", "使用正则表达式"]) {
+    expect(root.querySelector(`[aria-label="${label}"]`)?.getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+  }
+  press("上一个匹配项");
+  expect(root.querySelector("[data-matches]")?.textContent).toBe("1 / 2");
+  press("关闭搜索");
+  expect(root.querySelector("[data-search-panel]")).toBeNull();
+}
+
+it.each(["file", "file-diff"] as const)(
+  "updates %s options with its real Editor and an open search panel",
+  async (type) => {
+    await getSharedHighlighter({ themes: ["pierre-dark"], langs: ["text"] });
+    await using screen = await render(null);
+    using cleanup = new DisposableStack();
+    const options = { theme: "pierre-dark", uiLabels: en, disableErrorHandling: true };
+    const preview = (() => {
+      if (type === "file") {
+        const file = new File(options);
+        cleanup.defer(() => file.cleanUp());
+        file.render({ file: sourceFile, containerWrapper: screen.container });
+        const editor = new Editor("file");
+        editor.edit(file);
+        return {
+          setLabels: (uiLabels: typeof en) => file.setOptions({ ...file.options, uiLabels }),
+          editor,
+        };
+      }
+      const file = new FileDiff({ ...options, diffStyle: "unified" });
+      cleanup.defer(() => file.cleanUp());
+      file.render({
+        fileDiff: parseDiffFromFile({ ...sourceFile, contents: "before\n" }, sourceFile),
+        containerWrapper: screen.container,
+      });
+      const editor = new Editor("file-diff");
+      editor.edit(file);
+      return {
+        setLabels: (uiLabels: typeof en) => file.setOptions({ ...file.options, uiLabels }),
+        editor,
+      };
+    })();
+
+    expect(() => preview.setLabels(en)).not.toThrow();
+    const root = screen.container.querySelector("diffs-container")!.shadowRoot!;
+    await vi.waitFor(() => expect(root.querySelector('[contenteditable="true"]')).not.toBeNull());
+    root.querySelector('[contenteditable="true"]')!.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "f",
+        code: "KeyF",
+        bubbles: true,
+        cancelable: true,
+        metaKey: navigator.platform.includes("Mac"),
+        ctrlKey: !navigator.platform.includes("Mac"),
+      }),
+    );
+    await vi.waitFor(() => expect(root.querySelector("input[data-search]")).not.toBeNull());
+    await checkLiveSearchLabels(root, () => preview.setLabels(zh));
+    expect(preview.editor.getText()).toBe(sourceFile.contents);
+  },
+);
+
+it("updates an open CodeView search through setOptions without resetting search state", async () => {
+  await getSharedHighlighter({ themes: ["pierre-dark"], langs: ["text"] });
+  await using screen = await render(null);
+  using cleanup = new DisposableStack();
+  const options = { theme: "pierre-dark", uiLabels: en, disableErrorHandling: true };
+  const view = new CodeView(options);
+  cleanup.defer(() => view.cleanUp());
+  screen.container.style.height = "400px";
+  screen.container.style.overflow = "auto";
+  view.setup(screen.container);
+  const fileDiff = parseDiffFromFile(null, sourceFile);
+  view.setItems([{ id: "raw", type: "diff", fileDiff }]);
+  view.openSearch();
+  const host = view.getContainerElement()!.querySelector("[data-diffs-search]")!;
+  await checkLiveSearchLabels(host.shadowRoot!, () =>
+    view.setOptions({ ...options, uiLabels: zh }),
+  );
+  expect(fileDiff.additionLines.join("")).toBe(sourceFile.contents);
 });
 
 async function setupLifecycle() {
