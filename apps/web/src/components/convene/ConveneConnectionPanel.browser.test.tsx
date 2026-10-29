@@ -1,5 +1,5 @@
 import "~/index.css";
-import { act, render as renderTestUi, type Screen } from "../../../test/render";
+import { act, fakeTimers, render as renderTestUi, type Screen } from "../../../test/render";
 import { EnvironmentId } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
@@ -275,11 +275,8 @@ async function setupLifecycle() {
   stack.defer(async () => {
     await act(async () => root.unmount());
     container.remove();
-    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
-
-  vi.useFakeTimers();
 
   await changeLanguage("en");
   model.ttl = 30;
@@ -314,6 +311,7 @@ async function setupLifecycle() {
     root.rerender(<ConveneConnectionPanel environmentId={EnvironmentId.make("local")} />),
   );
 
+  stack.use(fakeTimers());
   renderStack = stack.move();
   return renderStack;
 }

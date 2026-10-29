@@ -33,6 +33,7 @@ export function ThreadWorkspaceRecovery({
   const [error, setError] = useState<string | null>(null);
   const recheck = useEffectEvent(() => query.refresh());
   const failedRunId = thread?.latestRun?.status === "failed" ? thread.latestRun.runId : null;
+  // oxlint-disable-next-line t3code/react-effect-budget -- A failed provider run invalidates the server workspace-availability query.
   useEffect(() => {
     if (failedRunId !== null) recheck();
   }, [failedRunId]);
@@ -94,7 +95,7 @@ export function ThreadWorkspaceRecovery({
         {query.data.choices.map((choice) => (
           <option key={choice.path} value={choice.path}>
             {choice.displayName}
-            {choice.branch ? ` (${choice.branch})` : ""} — {choice.path}
+            {choice.branch ? ` (${choice.branch})` : ""}: {choice.path}
           </option>
         ))}
       </select>

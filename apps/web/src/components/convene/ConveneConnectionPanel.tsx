@@ -55,11 +55,13 @@ export function ConveneConnectionPanel({ environmentId }: { environmentId: Envir
         ? t("convene.connection.expired")
         : t("convene.connection.checkFailed");
   };
+  // oxlint-disable-next-line t3code/react-effect-budget -- Clipboard feedback owns a timer that must be cancelled when the feedback changes or unmounts.
   useEffect(() => {
     if (!copied) return;
     const timer = window.setTimeout(() => setCopied(null), 2000);
     return () => window.clearTimeout(timer);
   }, [copied]);
+  // oxlint-disable-next-line t3code/react-effect-budget -- Pairing expiry follows the server deadline and cancels its timer on completion or unmount.
   useEffect(() => {
     if (!pairing || paired) return;
     const timer = window.setTimeout(
@@ -68,6 +70,7 @@ export function ConveneConnectionPanel({ environmentId }: { environmentId: Envir
     );
     return () => window.clearTimeout(timer);
   }, [pairing, paired]);
+  // oxlint-disable-next-line t3code/react-effect-budget -- Server-directed pairing exchanges stop on cancellation, expiry, errors, or revoked permission.
   useEffect(() => {
     if (!pairing || paired || expired || error || !permitted) return;
     let cancelled = false;
