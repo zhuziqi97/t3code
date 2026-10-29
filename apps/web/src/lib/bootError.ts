@@ -1,3 +1,4 @@
+import { CONVENE_DESKTOP_IDENTITY } from "@t3tools/shared/conveneDesktopIdentity";
 import {
   isLanguagePreference,
   resolveLanguage,
@@ -6,10 +7,54 @@ import {
 import { CLIENT_SETTINGS_STORAGE_KEY } from "../clientSettingsStorageKey";
 
 // Startup errors must render even when the React/i18next application chunk cannot load.
+const appName = CONVENE_DESKTOP_IDENTITY.name;
 const messages = {
-  en: { failed: "T3 Code could not load.", reload: "Reload" },
-  zh: { failed: "T3 Code 无法加载。", reload: "重新加载" },
+  en: {
+    failed: `${appName} could not load.`,
+    reload: "Reload",
+    offline: "This browser appears to be offline. Check the connection, then reload.",
+    retry: "We are not sure why. Try a reload first.",
+    more: "More options if it keeps failing",
+    reinstall: `Download and reinstall ${appName}`,
+    triage: `Run this on the computer that runs ${appName}. Your agent can check the local logs using this command.`,
+    privacy: "Details may include local file paths and names. Check before sharing.",
+    copyCommand: "Copy command",
+    copyDetails: "Copy error details",
+    copied: "Copied",
+    copiedAnnouncement: "Copied to clipboard.",
+    copyBlocked: "Copy was blocked. The text is selected so you can copy it manually.",
+    copyMac: "Press ⌘C to copy",
+    copyOther: "Press Ctrl+C to copy",
+    download: "Download update",
+    downloading: (percent: number) => `Downloading update (${percent}%)`,
+    install: "Restart to update",
+    downloadFailed: "The update download failed. Try Download update again.",
+    installFailed: "The update install failed. Try Restart to update again.",
+  },
+  zh: {
+    failed: `${appName} 无法加载。`,
+    reload: "重新加载",
+    offline: "此浏览器似乎已离线。请检查连接后重新加载。",
+    retry: "暂时无法确定原因，请先重新加载。",
+    more: "持续失败时的更多选项",
+    reinstall: `下载并重新安装 ${appName}`,
+    triage: `请在运行 ${appName} 的电脑上执行此命令，智能体可用它检查本地日志。`,
+    privacy: "详情可能包含本地文件路径和名称，分享前请先检查。",
+    copyCommand: "复制命令",
+    copyDetails: "复制错误详情",
+    copied: "已复制",
+    copiedAnnouncement: "已复制到剪贴板。",
+    copyBlocked: "复制被阻止，文本已选中，可手动复制。",
+    copyMac: "按 ⌘C 复制",
+    copyOther: "按 Ctrl+C 复制",
+    download: "下载更新",
+    downloading: (percent: number) => `正在下载更新（${percent}%）`,
+    install: "重启并更新",
+    downloadFailed: "更新下载失败，请再次点击“下载更新”。",
+    installFailed: "更新安装失败，请再次点击“重启并更新”。",
+  },
 };
+type BootMessages = (typeof messages)[keyof typeof messages];
 
 function bootMessages() {
   let preference: LanguagePreference = "system";
@@ -33,16 +78,11 @@ function bootMessages() {
 /** Shows startup failures before React can replace the boot splash. */
 import type { DesktopBridge, DesktopUpdateState } from "@t3tools/contracts";
 
-const FALLBACK_TRIAGE_COMMAND = "npx t3 triage";
-const DOWNLOAD_URL = "https://t3.codes/download";
-const ISSUE_URL = "https://github.com/pingdotgg/t3code/issues/new";
+const FALLBACK_TRIAGE_COMMAND = `${CONVENE_DESKTOP_IDENTITY.executableName} triage`;
 const LAST_FAILURE_KEY = "t3code:boot-failed-at";
 const REPEAT_FAILURE_MS = 5 * 60_000;
 const MAX_CAUSES = 3;
 const MAX_ERROR_CHARS = 6_000;
-const COPY_BLOCKED = "Copy was blocked. The text is selected so you can copy it manually.";
-const UPDATE_DOWNLOAD_FAILED = "The update download failed. Try Download update again.";
-const UPDATE_INSTALL_FAILED = "The update install failed. Try Restart to update again.";
 
 /** The Windows launcher is a `.cmd` run from PowerShell, which needs `&` to run a quoted path. */
 function launcherCommand(launcherPath: string) {
@@ -56,13 +96,15 @@ function launcherCommand(launcherPath: string) {
     : `'${launcherPath.replaceAll("'", `'"'"'`)}'`;
 }
 
-/** Desktop can run its bundled launcher without Node; everything else falls back to npx. */
+/** The bundled launcher works without Node; other hosts use the installed Convene CLI. */
 export async function resolveTriageCommand(bridge: DesktopBridge | undefined) {
   try {
     const state = await bridge?.cliCommand?.getState();
     // Windows reports onPath from its PATH entry alone; only an existing launcher proves it runs.
     if (state?.launcherPath) {
-      return state.onPath ? "t3 triage" : `${launcherCommand(state.launcherPath)} triage`;
+      return state.onPath
+        ? FALLBACK_TRIAGE_COMMAND
+        : `${launcherCommand(state.launcherPath)} triage`;
     }
   } catch (error) {
     console.warn("Could not read the desktop CLI state.", error);
@@ -79,6 +121,10 @@ export function updateActionFor(state: DesktopUpdateState | null | undefined) {
       return { kind: "downloading", percent: Math.round(state.downloadPercent ?? 0) } as const;
     case "downloaded":
       return { kind: "install" } as const;
+    case "error":
+      return state.canRetry && state.errorContext === "download"
+        ? ({ kind: "download" } as const)
+        : null;
     default:
       return null;
   }
@@ -218,13 +264,11 @@ function copySelection() {
 }
 
 /** Plain http has no Clipboard API, but the legacy copy command still works on a selection. */
-function copyText(target: HTMLElement, onCopied: () => void, onBlocked: (hint: string) => void) {
+function copyText(target: HTMLElement, onCopied: () => void, onBlocked: () => void) {
   const fallback = () => {
     selectContents(target);
     if (copySelection()) return onCopied();
-    onBlocked(
-      /Mac|iPhone|iPad/.test(navigator.platform) ? "Press ⌘C to copy" : "Press Ctrl+C to copy",
-    );
+    onBlocked();
   };
   const clipboard = window.isSecureContext ? navigator.clipboard : undefined;
   if (typeof clipboard?.writeText !== "function") return fallback();
@@ -235,24 +279,29 @@ function mountUpdateButton(
   bridge: DesktopBridge,
   button: HTMLButtonElement,
   note: HTMLParagraphElement,
+  labels: () => BootMessages,
+  downloads: (url: string | null) => void,
   announce: (text: string) => void,
 ) {
   let action: ReturnType<typeof updateActionFor> = null;
+  let latest: DesktopUpdateState | null = null;
   const render = (state: DesktopUpdateState) => {
+    latest = state;
+    const text = labels();
+    downloads(state.convene?.downloadsUrl ?? null);
     action = updateActionFor(state);
     button.hidden = action === null;
     // aria-disabled keeps keyboard focus on the button while the download runs.
     button.setAttribute("aria-disabled", String(action?.kind === "downloading"));
-    if (action?.kind === "download") button.textContent = "Download update";
-    if (action?.kind === "downloading")
-      button.textContent = `Downloading update (${action.percent}%)`;
-    if (action?.kind === "install") button.textContent = "Restart to update";
+    if (action?.kind === "download") button.textContent = text.download;
+    if (action?.kind === "downloading") button.textContent = text.downloading(action.percent);
+    if (action?.kind === "install") button.textContent = text.install;
     const failure = !action
       ? ""
       : state.errorContext === "download"
-        ? UPDATE_DOWNLOAD_FAILED
+        ? text.downloadFailed
         : state.errorContext === "install"
-          ? UPDATE_INSTALL_FAILED
+          ? text.installFailed
           : "";
     if (failure === note.textContent) return;
     note.textContent = failure;
@@ -268,7 +317,7 @@ function mountUpdateButton(
           : undefined;
     run?.then(
       (result) => render(result.state),
-      (error: unknown) => console.warn("Could not update T3 Code.", error),
+      (error: unknown) => console.warn(`Could not update ${appName}.`, error),
     );
   });
   // A pushed state is newer than the initial read, so the read must not overwrite it.
@@ -279,24 +328,27 @@ function mountUpdateButton(
       render(state);
     });
     bridge.getUpdateState().then(
-      (state) => pushed || render(state),
+      (state) => {
+        if (!pushed) render(state);
+      },
       (error: unknown) => console.warn("Could not read the desktop update state.", error),
     );
   } catch (error) {
     console.warn("Could not read the desktop update state.", error);
   }
+  return () => {
+    if (latest) render(latest);
+  };
 }
 
 export function showBootError(error: unknown) {
-  console.error("T3 Code failed to start.", error);
+  console.error(`${appName} failed to start.`, error);
   const bootShell = document.getElementById("boot-shell");
   if (!bootShell) return;
-
-  const labels = bootMessages();
+  let labels = bootMessages();
   const bridge = window.desktopBridge;
   const environment = readEnvironment(bridge);
   const offline = !bridge && navigator.onLine === false;
-
   const status = element("span", { className: "boot-error-sr" });
   status.setAttribute("aria-live", "polite");
   // Clearing first makes screen readers announce a repeated message.
@@ -306,54 +358,52 @@ export function showBootError(error: unknown) {
     status.textContent = "";
     announcement = setTimeout(() => (status.textContent = text), 100);
   };
-
-  const message = element("div", {}, [
-    element("h1", { textContent: "T3 Code failed to start" }),
-    element("p", {
-      textContent: offline
-        ? "This browser appears to be offline. Check the connection, then reload."
-        : "We are not sure why. Try a reload first.",
-    }),
-  ]);
+  const heading = element("h1");
+  const explanation = element("p");
+  const message = element("div", {}, [heading, explanation]);
   message.setAttribute("role", "alert");
-
-  const reload = element("button", {
-    id: "boot-error-reload",
-    type: "button",
-    textContent: labels.reload,
-  });
+  const reload = element("button", { id: "boot-error-reload", type: "button" });
   reload.addEventListener("click", () => window.location.reload());
   const update = element("button", { id: "boot-error-update", type: "button", hidden: true });
   const updateNote = element("p", { id: "boot-error-update-note", hidden: true });
-  if (bridge) mountUpdateButton(bridge, update, updateNote, announce);
-
   const command = element("code", { textContent: FALLBACK_TRIAGE_COMMAND });
   const copyCommand = element("button", {
     className: "boot-error-icon",
     type: "button",
-    title: "Copy command",
     innerHTML: COPY_ICON,
   });
-  copyCommand.setAttribute("aria-label", "Copy command");
+  let commandCopy: "idle" | "copied" | "blocked" = "idle";
+  let detailsCopy: "idle" | "copied" | "blocked" = "idle";
+  const manualCopyHint = () =>
+    /Mac|iPhone|iPad/.test(navigator.platform) ? labels.copyMac : labels.copyOther;
+  const renderCommandCopy = () => {
+    const text =
+      commandCopy === "copied"
+        ? labels.copied
+        : commandCopy === "blocked"
+          ? manualCopyHint()
+          : labels.copyCommand;
+    if (commandCopy === "blocked") copyCommand.textContent = text;
+    copyCommand.title = text;
+    copyCommand.setAttribute("aria-label", text);
+  };
   copyCommand.addEventListener("click", () =>
     copyText(
       command,
       () => {
+        commandCopy = "copied";
         copyCommand.innerHTML = CHECK_ICON;
-        copyCommand.title = "Copied";
-        copyCommand.setAttribute("aria-label", "Copied");
-        announce("Copied to clipboard.");
+        renderCommandCopy();
+        announce(labels.copiedAnnouncement);
       },
-      (hint) => {
-        copyCommand.textContent = hint;
-        copyCommand.title = hint;
-        copyCommand.setAttribute("aria-label", hint);
-        announce(COPY_BLOCKED);
+      () => {
+        commandCopy = "blocked";
+        renderCommandCopy();
+        announce(labels.copyBlocked);
       },
     ),
   );
   void resolveTriageCommand(bridge).then((value) => (command.textContent = value));
-
   let report = "(no error message)";
   try {
     report = buildErrorReport(error, environment);
@@ -361,62 +411,71 @@ export function showBootError(error: unknown) {
     console.warn("Could not describe the startup error.", reportError);
   }
   const details = element("pre", { id: "boot-error-details", tabIndex: 0, textContent: report });
-  const copyDetails = element("button", { type: "button", textContent: "Copy error details" });
+  const copyDetails = element("button", { type: "button" });
+  const renderDetailsCopy = () => {
+    copyDetails.textContent =
+      detailsCopy === "copied"
+        ? labels.copied
+        : detailsCopy === "blocked"
+          ? manualCopyHint()
+          : labels.copyDetails;
+  };
   copyDetails.addEventListener("click", () =>
     copyText(
       details,
       () => {
-        copyDetails.textContent = "Copied";
-        announce("Copied to clipboard.");
+        detailsCopy = "copied";
+        renderDetailsCopy();
+        announce(labels.copiedAnnouncement);
       },
-      (hint) => {
-        copyDetails.textContent = hint;
-        announce(COPY_BLOCKED);
+      () => {
+        detailsCopy = "blocked";
+        renderDetailsCopy();
+        announce(labels.copyBlocked);
       },
     ),
   );
-
-  const issue = new URL(ISSUE_URL);
-  issue.searchParams.set("template", "bug_report.yml");
-  issue.searchParams.set("title", "T3 Code failed to start");
-  issue.searchParams.set("area", "apps/web");
-  issue.searchParams.set("version", `${environment.version} (${environment.channel})`);
-  issue.searchParams.set("environment", `${environment.surface}, ${environment.platform}`);
-  const link = (href: string, textContent: string) =>
-    element("a", { href, textContent, target: "_blank", rel: "noreferrer" });
-  const nightly = environment.channel === "nightly";
-
+  const reinstall = element("a", { target: "_blank", rel: "noreferrer", hidden: true });
+  reinstall.addEventListener("click", (event) => {
+    event.preventDefault();
+    if (bridge && !reinstall.hidden) {
+      void bridge
+        .openExternal(reinstall.href)
+        .catch((cause: unknown) =>
+          console.warn("Could not open the Convene downloads page.", cause),
+        );
+    }
+  });
+  const summary = element("summary");
+  const guidance = element("p");
+  const privacy = element("p");
   const more = element("details", { open: isRepeatFailure(Date.now()) }, [
-    element("summary", { textContent: "More options if it keeps failing" }),
-    ...(bridge
-      ? [
-          link(
-            nightly ? `${DOWNLOAD_URL}?channel=nightly` : DOWNLOAD_URL,
-            nightly
-              ? "Download and reinstall the latest nightly build"
-              : "Download and reinstall T3 Code",
-          ),
-        ]
-      : []),
+    summary,
+    ...(bridge ? [reinstall] : []),
     element("div", {}, [
-      element("p", {
-        textContent:
-          "Run this on the computer that runs T3 Code. Your agent can check the local logs and help you file a bug report.",
-      }),
+      guidance,
       element("div", { id: "boot-error-command" }, [command, copyCommand]),
     ]),
     element("div", {}, [
       details,
-      element("p", {
-        textContent: "Details may include local file paths and names. Check before sharing.",
-      }),
-      element("div", { id: "boot-error-report" }, [
-        copyDetails,
-        link(issue.href, "File a bug report on GitHub"),
-      ]),
+      privacy,
+      element("div", { id: "boot-error-report" }, [copyDetails]),
     ]),
   ]);
-
+  let refreshUpdateLabels = () => {};
+  const renderLabels = () => {
+    heading.textContent = labels.failed;
+    explanation.textContent = offline ? labels.offline : labels.retry;
+    reload.textContent = labels.reload;
+    summary.textContent = labels.more;
+    reinstall.textContent = labels.reinstall;
+    guidance.textContent = labels.triage;
+    privacy.textContent = labels.privacy;
+    renderCommandCopy();
+    renderDetailsCopy();
+    refreshUpdateLabels();
+  };
+  renderLabels();
   bootShell.replaceChildren(
     element("div", { id: "boot-error" }, [
       message,
@@ -426,17 +485,26 @@ export function showBootError(error: unknown) {
       status,
     ]),
   );
-
-  if (typeof window !== "undefined" && window.desktopBridge) {
-    return window.desktopBridge.getClientSettings().then(
+  if (bridge) {
+    refreshUpdateLabels = mountUpdateButton(
+      bridge,
+      update,
+      updateNote,
+      () => labels,
+      (url) => {
+        reinstall.hidden = url === null;
+        reinstall.href = url ?? "";
+      },
+      announce,
+    );
+    return bridge.getClientSettings().then(
       (settings) => {
         const locales = typeof navigator === "undefined" ? [] : navigator.languages;
-        const labels = messages[resolveLanguage(settings?.languagePreference ?? "system", locales)];
-        message.textContent = labels.failed;
-        reload.textContent = labels.reload;
+        labels = messages[resolveLanguage(settings?.languagePreference ?? "system", locales)];
+        renderLabels();
       },
       () => {
-        // Keep the working fallback when desktop settings cannot be read during startup.
+        /* Keep the working fallback when desktop settings cannot be read. */
       },
     );
   }
