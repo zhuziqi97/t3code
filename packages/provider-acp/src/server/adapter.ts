@@ -6859,19 +6859,18 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
               }
               yield* runtime.setConfigOption(selection.id, selection.value).pipe(
                 Effect.catchTags({
-                  AcpRequestError: (cause) =>
-                    Effect.gen(function* () {
-                      const actual = findSessionConfigOption(
-                        yield* runtime.getConfigOptions,
-                        selection.id,
-                      )?.currentValue;
-                      return yield* cause.code === -32602
-                        ? new AcpConfigurationError({
-                            detail: `${cause.errorMessage}; The agent rejected configuration option '${selection.id}' value '${selection.value}'; actual value is '${actual ?? "unavailable"}'.`,
-                            cause,
-                          })
-                        : cause;
-                    }),
+                  AcpRequestError: Effect.fn("AcpAdapterV2.configOptionError")(function* (cause) {
+                    const actual = findSessionConfigOption(
+                      yield* runtime.getConfigOptions,
+                      selection.id,
+                    )?.currentValue;
+                    return yield* cause.code === -32602
+                      ? new AcpConfigurationError({
+                          detail: `${cause.errorMessage}; The agent rejected configuration option '${selection.id}' value '${selection.value}'; actual value is '${actual ?? "unavailable"}'.`,
+                          cause,
+                        })
+                      : cause;
+                  }),
                 }),
               );
               const actual = findSessionConfigOption(
@@ -6901,16 +6900,15 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
               if (modeState.currentModeId !== modeSelection.value)
                 yield* runtime.setMode(modeSelection.value).pipe(
                   Effect.catchTags({
-                    AcpRequestError: (cause) =>
-                      Effect.gen(function* () {
-                        const actualMode = (yield* runtime.getModeState)?.currentModeId;
-                        return yield* cause.code === -32602
-                          ? new AcpConfigurationError({
-                              detail: `${cause.errorMessage}; The agent rejected session mode '${modeSelection.value}'; actual value is '${actualMode ?? "unavailable"}'.`,
-                              cause,
-                            })
-                          : cause;
-                      }),
+                    AcpRequestError: Effect.fn("AcpAdapterV2.sessionModeError")(function* (cause) {
+                      const actualMode = (yield* runtime.getModeState)?.currentModeId;
+                      return yield* cause.code === -32602
+                        ? new AcpConfigurationError({
+                            detail: `${cause.errorMessage}; The agent rejected session mode '${modeSelection.value}'; actual value is '${actualMode ?? "unavailable"}'.`,
+                            cause,
+                          })
+                        : cause;
+                    }),
                   }),
                 );
               const actualMode = (yield* runtime.getModeState)?.currentModeId;
