@@ -1,5 +1,5 @@
 import "~/index.css";
-import { act, render as renderTestUi, type Screen } from "../../test/render";
+import { act, fakeTimers, render as renderTestUi, type Screen } from "../../test/render";
 
 import { type ComponentProps } from "react";
 
@@ -78,7 +78,9 @@ async function renderPanel(overrides: Partial<ComponentProps<typeof RightPanelTa
     ),
   );
   await act(() => vi.advanceTimersByTimeAsync(0));
-  await act(() => vi.advanceTimersToNextFrame());
+  await expect
+    .element(root.getByRole("button", { name: "Open browser in a profile" }))
+    .toBeVisible();
 }
 
 it("keeps the browser profile chooser usable after a language switch", async () => {
@@ -112,16 +114,13 @@ async function setupLifecycle() {
   await using stack = new AsyncDisposableStack();
   renderStack = stack;
   stack.defer(async () => {
-    await act(() => root.unmount());
     container.remove();
     await changeLanguage("en");
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
-    vi.useRealTimers();
   });
 
   await changeLanguage("en");
-  vi.useFakeTimers();
 
   vi.stubGlobal(
     "ResizeObserver",
@@ -140,6 +139,7 @@ async function setupLifecycle() {
   container = document.createElement("div");
   document.body.append(container);
   root = renderStack.use(await renderTestUi(null, { container: container, router: false }));
+  renderStack.use(fakeTimers());
 
   renderStack = stack.move();
   return renderStack;

@@ -1,4 +1,3 @@
-import { CONVENE_DESKTOP_IDENTITY } from "@t3tools/shared/conveneDesktopIdentity";
 import * as Mime from "effect/http/Mime";
 import {
   AuthOrchestrationOperateScope,

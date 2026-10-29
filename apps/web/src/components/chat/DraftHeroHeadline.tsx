@@ -317,20 +317,6 @@ export function DraftHeroHeadline({
     </button>
   );
 
-  // The composer hero is a sentence, so the heading's accessible name must be
-  // a complete sentence too. The project picker is a control rendered inline
-  // in the h1; without an explicit label its widget state bleeds into the
-  // announced phrase.
-  const headingLabel = isScratchDraft
-    ? t("chat.hero.question")
-    : hasResolvedProject
-      ? t("chat.hero.projectQuestion", { project: activeProjectDisplayName })
-      : canChooseProject
-        ? t("chat.hero.startProject", {
-            project: activeProjectDisplayName ?? t("chat.project.choose"),
-          })
-        : t("chat.hero.addFirst");
-
   // One click out of the project, phrased as the alternative to the question
   // above it. Focus moves to the project picker once this line has gone.
   const noProjectShortcut = shortcutLabelForCommand(keybindings, "chat.newWithoutProject");

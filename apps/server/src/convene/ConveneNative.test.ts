@@ -343,5 +343,4 @@ it.effect(
       });
       assert.isTrue(created.type === "receipt" && created.accepted);
     }).pipe(Effect.provide(Layer.merge(layer, NodeServices.layer)), Effect.scoped),
-  { timeout: 20_000 },
 );

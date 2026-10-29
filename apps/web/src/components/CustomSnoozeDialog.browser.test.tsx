@@ -1,5 +1,5 @@
 import "~/index.css";
-import { act, render as renderTestUi, type Screen } from "../../test/render";
+import { act, fakeTimers, render as renderTestUi, type Screen } from "../../test/render";
 
 import { expect, it, vi } from "vite-plus/test";
 import { changeLanguage } from "../i18n";
@@ -58,9 +58,7 @@ async function setupLifecycle() {
   await using stack = new AsyncDisposableStack();
   renderStack = stack;
   stack.defer(async () => {
-    await act(async () => root.unmount());
     container.remove();
-    vi.useRealTimers();
     vi.unstubAllGlobals();
     await changeLanguage("en");
   });
@@ -77,12 +75,11 @@ async function setupLifecycle() {
     configurable: true,
     value: () => [],
   });
-  vi.useFakeTimers({ toFake: ["Date"] });
-  vi.setSystemTime(new Date(2026, 9, 9, 10, 0));
   await changeLanguage("en");
   container = document.createElement("div");
   document.body.append(container);
   root = renderStack.use(await renderTestUi(null, { container: container, router: false }));
+  renderStack.use(fakeTimers({ now: new Date(2026, 9, 9, 10, 0) }));
   await act(async () => root.rerender(<CustomSnoozeDialogHost />));
 
   renderStack = stack.move();
