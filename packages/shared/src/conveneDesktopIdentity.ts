@@ -11,7 +11,7 @@ export const CONVENE_DESKTOP_IDENTITY = {
 } as const;
 
 // Release packaging rewrites package versions; this records the fixed upstream input.
-export const CONVENE_UPSTREAM_VERSION = "0.1.3";
+export const CONVENE_UPSTREAM_VERSION = "0.1.5";
 
 /** Default fork release for the checked-out upstream base. Explicit artifact versions override it. */
 export function resolveConveneVersion(upstreamVersion: string): string {
