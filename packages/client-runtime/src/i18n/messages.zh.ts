@@ -3466,6 +3466,8 @@ export const zh: Partial<Messages> = {
   "chat.secret.save": "安全保存",
   "chat.queue.collapse": "收起排队消息",
   "chat.queue.expand": "展开排队消息",
+  "chat.queue.showAll": "显示全部 {{count}} 条排队消息",
+  "chat.queue.showFewer": "收起",
   "chat.queue.reorder": "调整排队消息顺序（拖动或按方向键）",
   "chat.queue.editing": "正在编辑排队消息：",
   "chat.queue.saving": "正在保存排队消息",

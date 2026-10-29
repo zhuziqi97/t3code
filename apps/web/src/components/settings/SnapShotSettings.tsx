@@ -1,4 +1,4 @@
-import { useTranslate } from "../../i18n";
+import { i18n, useTranslate } from "../../i18n";
 import { formatSnapShotMessage } from "./snapShotMessages";
 
 import { RegistryContext, useAtomValue } from "@effect/atom-react";
@@ -176,8 +176,8 @@ export function SnapShotSettings() {
     if (result._tag === "Failure") {
       reportSetupError(
         action === "retry-shortcut"
-          ? "snapshots.error.shortcut-permissions"
-          : "snapshots.error.setup",
+          ? i18n.t("snapshots.error.shortcut-permissions")
+          : i18n.t("snapshots.error.setup"),
         Cause.squash(result.cause),
       );
     }
@@ -198,7 +198,7 @@ export function SnapShotSettings() {
       await updateClientSettings(patch);
       return await refreshState();
     } catch (error) {
-      reportSetupError("snapshots.error.save", error);
+      reportSetupError(i18n.t("snapshots.error.save"), error);
     }
   };
 
@@ -208,7 +208,7 @@ export function SnapShotSettings() {
         await bridge?.requestSnapShotPermissions(true);
       await save({ snapShotIncludeAccessibility: includeAccessibility });
     } catch (error) {
-      reportSetupError("snapshots.error.app-text", error);
+      reportSetupError(i18n.t("snapshots.error.app-text"), error);
     }
   };
 

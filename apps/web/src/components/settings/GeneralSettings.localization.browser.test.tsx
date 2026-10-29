@@ -64,17 +64,17 @@ it("updates the actual General rows in both directions without remounting", asyn
   await using _lifecycle = await setupLifecycle();
 
   await act(async () => root.rerender(<GeneralSettingsPanel />));
-  expect(container.querySelector("#send-shortcut h3")?.textContent).toBe("Send shortcut");
+  expect(container.querySelector("#project-grouping h3")?.textContent).toBe("Project grouping");
   await act(async () => {
     await changeLanguage("zh");
   });
-  expect(container.querySelector("#send-shortcut h3")?.textContent).toBe("发送快捷键");
-  expect(container.querySelector("#worktree-submodules h3")?.textContent).toBe("子模块");
+  expect(container.querySelector("#project-grouping h3")?.textContent).toBe("项目分组");
+  expect(container.querySelector("#time-format h3")?.textContent).toBe("时间格式");
   await act(async () => {
     await changeLanguage("en");
   });
-  expect(container.querySelector("#send-shortcut h3")?.textContent).toBe("Send shortcut");
-  expect(container.querySelector("#worktree-submodules h3")?.textContent).toBe("Submodules");
+  expect(container.querySelector("#project-grouping h3")?.textContent).toBe("Project grouping");
+  expect(container.querySelector("#time-format h3")?.textContent).toBe("Time format");
   const reset = container.querySelector<HTMLButtonElement>(
     '[aria-label="Reset Language to default"]',
   )!;

@@ -293,7 +293,7 @@ function AboutVersionSection() {
   return (
     <>
       <SettingsRow
-        id={searchableSetting("app-version").id}
+        id={searchableSetting("app-version", t).id}
         title={<AboutVersionTitle />}
         description={description}
         control={
@@ -839,7 +839,7 @@ export function GeneralSettingsPanel() {
     <SettingsPageContainer>
       <SettingsSection id="language" title={t("settings.language.title")}>
         <SettingsRow
-          {...searchableSetting("language", i18n.t)}
+          {...searchableSetting("language", t)}
           // The search index supplies the English title every other row uses;
           // this row is new, so it overrides that with a translated one and
           // stays consistent with its own translated description and value.
@@ -894,7 +894,7 @@ export function GeneralSettingsPanel() {
       <SettingsSection id="notifications" title="Notifications">
         <NotificationSettings />
         <SettingsRow
-          {...searchableSetting("in-app-notifications")}
+          {...searchableSetting("in-app-notifications", t)}
           description={t("general.inAppNotifications.description")}
           control={
             <Switch
@@ -908,7 +908,7 @@ export function GeneralSettingsPanel() {
 
       <SettingsSection id="sidebar" title="Sidebar">
         <SettingsRow
-          {...searchableSetting("project-grouping")}
+          {...searchableSetting("project-grouping", t)}
           description={t("general.projectGrouping.description")}
           resetAction={
             settings.sidebarProjectGroupingMode !==
@@ -943,7 +943,7 @@ export function GeneralSettingsPanel() {
           }
         />
         <SettingsRow
-          {...searchableSetting("project-order")}
+          {...searchableSetting("project-order", t)}
           description="Order of projects in the sidebar project picker and command palette."
           resetAction={
             settings.sidebarProjectSortOrder !==
@@ -983,7 +983,7 @@ export function GeneralSettingsPanel() {
           }
         />
         <SettingsRow
-          {...searchableSetting("working-shelf")}
+          {...searchableSetting("working-shelf", t)}
           description={t("general.working.description")}
           resetAction={
             settings.sidebarWorkingShelfEnabled !==
@@ -1012,7 +1012,7 @@ export function GeneralSettingsPanel() {
 
       <SettingsSection id="confirmations" title={t("section.confirmations")}>
         <SettingsRow
-          {...searchableSetting("unpin-confirmation")}
+          {...searchableSetting("unpin-confirmation", t)}
           description={t("general.unpin.description")}
           resetAction={
             settings.confirmThreadUnpin !== DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin ? (
@@ -1037,7 +1037,7 @@ export function GeneralSettingsPanel() {
           }
         />
         <SettingsRow
-          {...searchableSetting("archive-confirmation")}
+          {...searchableSetting("archive-confirmation", t)}
           description={t("general.archive.description")}
           resetAction={
             settings.confirmThreadArchive !== DEFAULT_UNIFIED_SETTINGS.confirmThreadArchive ? (
@@ -1062,7 +1062,7 @@ export function GeneralSettingsPanel() {
           }
         />
         <SettingsRow
-          {...searchableSetting("delete-confirmation")}
+          {...searchableSetting("delete-confirmation", t)}
           description={t("general.delete.description")}
           resetAction={
             settings.confirmThreadDelete !== DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete ? (
@@ -1088,7 +1088,7 @@ export function GeneralSettingsPanel() {
         />
         {isElectron ? (
           <SettingsRow
-            {...searchableSetting("quit-confirmation")}
+            {...searchableSetting("quit-confirmation", t)}
             description={t("general.quit.note")}
             resetAction={
               settings.confirmQuit !== DEFAULT_UNIFIED_SETTINGS.confirmQuit ? (
@@ -1131,7 +1131,7 @@ export function GeneralSettingsPanel() {
 
       <SettingsSection id="display" title="Display">
         <SettingsRow
-          {...searchableSetting("time-format")}
+          {...searchableSetting("time-format", t)}
           description={t("general.time.description")}
           resetAction={
             settings.timestampFormat !== DEFAULT_UNIFIED_SETTINGS.timestampFormat ? (
@@ -1195,7 +1195,7 @@ export function ChatSettingsPanel() {
     <SettingsPageContainer>
       <SettingsSection id="composer" title="Composer">
         <SettingsRow
-          {...searchableSetting("codex-native-predictions")}
+          {...searchableSetting("codex-native-predictions", t)}
           description={i18n.t("prediction.setting.description")}
           control={
             <Switch
@@ -1206,7 +1206,7 @@ export function ChatSettingsPanel() {
           }
         />
         <SettingsRow
-          {...searchableSetting("composer-rich-text")}
+          {...searchableSetting("composer-rich-text", t)}
           description={i18n.t("general.richText.description")}
           resetAction={
             settings.composerRichTextEnabled !==
@@ -1232,7 +1232,7 @@ export function ChatSettingsPanel() {
           }
         />
         <SettingsRow
-          {...searchableSetting("send-shortcut")}
+          {...searchableSetting("send-shortcut", t)}
           description={i18n.t("general.send.description")}
           resetAction={
             settings.sendShortcut !== DEFAULT_UNIFIED_SETTINGS.sendShortcut ? (
@@ -1278,7 +1278,7 @@ export function ChatSettingsPanel() {
           }
         />
         <SettingsRow
-          {...searchableSetting("composer-collapse")}
+          {...searchableSetting("composer-collapse", t)}
           description={i18n.t("general.collapse.description")}
           resetAction={
             settings.composerCollapseOnScroll !==
@@ -1303,9 +1303,9 @@ export function ChatSettingsPanel() {
             />
           }
         />
-        <AdvancedSettings targetIds={[searchableSetting("skills-in-slash-menu").id]}>
+        <AdvancedSettings targetIds={[searchableSetting("skills-in-slash-menu", t).id]}>
           <SettingsRow
-            {...searchableSetting("skills-in-slash-menu")}
+            {...searchableSetting("skills-in-slash-menu", t)}
             description={i18n.t("general.skills.description")}
             resetAction={
               settings.showSkillsInSlashMenu !== DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu ? (
@@ -1334,7 +1334,7 @@ export function ChatSettingsPanel() {
 
       <SettingsSection id="follow-ups" title="Follow-ups">
         <SettingsRow
-          {...searchableSetting("follow-up-behavior")}
+          {...searchableSetting("follow-up-behavior", t)}
           description={
             t("general.followUp.description") +
             " " +
@@ -1394,12 +1394,12 @@ function DiffColorsSettingsRow() {
   const updateSettings = useUpdateScopedSettings();
   return (
     <SettingsRow
-      {...searchableSetting("diff-color-scheme")}
+      {...searchableSetting("diff-color-scheme", t)}
       description="Choose colors for additions and deletions, including change counts."
       resetAction={
         settings.diffColorScheme !== DEFAULT_UNIFIED_SETTINGS.diffColorScheme ? (
           <SettingResetButton
-            label="diff colors"
+            label={t("appearance.diffReset")}
             onClick={() =>
               updateSettings({ diffColorScheme: DEFAULT_UNIFIED_SETTINGS.diffColorScheme })
             }
@@ -1432,12 +1432,16 @@ function DiffColorsSettingsRow() {
                 <span className="size-2 rounded-full bg-diff-addition" />
               </span>
               <SelectValue>
-                {settings.diffColorScheme === "blue-orange" ? "Blue & orange" : "Red & green"}
+                {t(
+                  settings.diffColorScheme === "blue-orange"
+                    ? "appearance.diffBlueOrange"
+                    : "appearance.diffRedGreen",
+                )}
               </SelectValue>
             </SelectTrigger>
             <SelectPopup align="end" alignItemWithTrigger={false}>
-              <SelectItem value="red-green">Red & green (default)</SelectItem>
-              <SelectItem value="blue-orange">Blue & orange</SelectItem>
+              <SelectItem value="red-green">{t("appearance.diffRedGreenDefault")}</SelectItem>
+              <SelectItem value="blue-orange">{t("appearance.diffBlueOrange")}</SelectItem>
             </SelectPopup>
           </Select>
         </div>
@@ -1455,7 +1459,7 @@ export function DiffsSettingsPanel() {
     <SettingsPageContainer>
       <SettingsSection id="diffs" title="Diffs">
         <SettingsRow
-          {...searchableSetting("diff-layout")}
+          {...searchableSetting("diff-layout", t)}
           description={t("general.diffLayout.description")}
           resetAction={
             settings.diffLayout !== DEFAULT_UNIFIED_SETTINGS.diffLayout ? (
@@ -1493,7 +1497,7 @@ export function DiffsSettingsPanel() {
           }
         />
         <SettingsRow
-          {...searchableSetting("hide-whitespace-changes")}
+          {...searchableSetting("hide-whitespace-changes", t)}
           description={t("general.whitespace.description")}
           resetAction={
             settings.diffIgnoreWhitespace !== DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace ? (
@@ -1518,7 +1522,7 @@ export function DiffsSettingsPanel() {
           }
         />
         <SettingsRow
-          {...searchableSetting("default-diff-file-state")}
+          {...searchableSetting("default-diff-file-state", t)}
           description={t("general.diffFiles.description")}
           resetAction={
             settings.diffFilesCollapsed !== DEFAULT_UNIFIED_SETTINGS.diffFilesCollapsed ? (
@@ -1568,7 +1572,7 @@ export function DiffsSettingsPanel() {
 
       <SettingsSection id="pull-requests" title="Pull requests">
         <SettingsRow
-          {...searchableSetting("proactive-panels")}
+          {...searchableSetting("proactive-panels", t)}
           description={t("general.proactive.description")}
           resetAction={
             settings.proactivePanelsEnabled !== DEFAULT_UNIFIED_SETTINGS.proactivePanelsEnabled ? (
@@ -1615,7 +1619,7 @@ function ScopedCompactIdleThreadsRow() {
       serverScoped
       settingKeys={["idleCompaction", "compactIdleThreads"]}
       mixed={idleCompaction.mixed}
-      {...searchableSetting("compact-idle-threads")}
+      {...searchableSetting("compact-idle-threads", t)}
       description={t("general.compactIdle.description")}
       resetAction={
         globalIdleCompaction(settings) !== globalIdleCompaction(DEFAULT_UNIFIED_SETTINGS) ? (
@@ -1734,7 +1738,7 @@ export function ThreadsSettingsPanel() {
         <SettingsRow
           serverScoped
           settingKeys={["addProjectBaseDirectory"]}
-          {...searchableSetting("add-project-starts-in")}
+          {...searchableSetting("add-project-starts-in", t)}
           description={t("general.baseDirectory.description")}
           resetAction={
             settings.addProjectBaseDirectory !==
@@ -1768,7 +1772,7 @@ export function ThreadsSettingsPanel() {
       <SettingsSection id="usage-limits" title="Usage limits">
         <SettingsRow
           serverScoped
-          {...searchableSetting("auto-resume-limited-threads")}
+          {...searchableSetting("auto-resume-limited-threads", t)}
           description={t("general.autoResume.description")}
           settingKeys={["autoResumeLimitedThreads"]}
           control={
@@ -1784,7 +1788,7 @@ export function ThreadsSettingsPanel() {
         />
         <SettingsRow
           serverScoped
-          {...searchableSetting("snooze-limited-threads")}
+          {...searchableSetting("snooze-limited-threads", t)}
           description="Snooze usage-limit stops until reset. Pair with resume to continue on wake."
           settingKeys={["snoozeLimitedThreads"]}
           control={
@@ -1805,7 +1809,7 @@ export function ThreadsSettingsPanel() {
           <SettingsRow
             serverScoped
             settingKeys={["sidebarAutoSettleOnMerge"]}
-            {...searchableSetting("auto-settle-merged-threads")}
+            {...searchableSetting("auto-settle-merged-threads", t)}
             description={t("general.settleMerge.description")}
             resetAction={
               settings.sidebarAutoSettleOnMerge !==
@@ -1835,7 +1839,7 @@ export function ThreadsSettingsPanel() {
           <SettingsRow
             serverScoped
             settingKeys={["sidebarAutoSettleAfterDays"]}
-            {...searchableSetting("auto-settle-inactive-threads")}
+            {...searchableSetting("auto-settle-inactive-threads", t)}
             description={t("general.settleInactive.description")}
             resetAction={
               settings.sidebarAutoSettleAfterDays !==
@@ -1868,7 +1872,7 @@ export function ThreadsSettingsPanel() {
             <SettingsRow
               serverScoped
               settingKeys={["sidebarAutoSettleAfterDays"]}
-              title={searchableSetting("days-before-auto-settle").title}
+              title={searchableSetting("days-before-auto-settle", t).title}
               description={t("general.settleInactive.note")}
               control={
                 <AutoSettleDaysInput
@@ -1903,7 +1907,7 @@ export function ThreadsSettingsPanel() {
         <SettingsRow
           serverScoped
           settingKeys={["textGenerationModelSelection"]}
-          {...searchableSetting("text-generation-model")}
+          {...searchableSetting("text-generation-model", t)}
           description={t("general.textModel.description")}
           resetAction={
             hasServerTargets && isTextGenerationModelDirty ? (
@@ -1998,15 +2002,15 @@ export function ThreadsSettingsPanel() {
         />
         <AdvancedSettings
           targetIds={[
-            searchableSetting("thread-title-instructions").id,
-            searchableSetting("response-streaming").id,
+            searchableSetting("thread-title-instructions", t).id,
+            searchableSetting("response-streaming", t).id,
           ]}
         >
           <ThreadTitleInstructionsSettings />
           <SettingsRow
             serverScoped
             settingKeys={["responseStreamingMode"]}
-            {...searchableSetting("response-streaming")}
+            {...searchableSetting("response-streaming", t)}
             description={
               mixedResponseStreamingMode
                 ? t("general.streaming.mixed")
@@ -2080,7 +2084,7 @@ export function MaintenanceSettingsPanel() {
         <SettingsRow
           serverScoped
           settingKeys={["enableProviderUpdateChecks"]}
-          {...searchableSetting("provider-update-checks")}
+          {...searchableSetting("provider-update-checks", t)}
           description="Check installed provider CLIs for newer available versions and fetch model catalog updates. When off, new models may not appear."
           resetAction={
             settings.enableProviderUpdateChecks !==
@@ -2107,7 +2111,7 @@ export function MaintenanceSettingsPanel() {
           }
         />
         <SettingsRow
-          {...searchableSetting("continue-threads-after-server-update")}
+          {...searchableSetting("continue-threads-after-server-update", t)}
           serverScoped
           settingKeys={["continueThreadsAfterServerUpdate"]}
           description={t("general.restart.description")}
@@ -2149,7 +2153,7 @@ export function MaintenanceSettingsPanel() {
 
       <SettingsSection id="diagnostics-section" title={t("about.diagnostics")}>
         <SettingsRow
-          {...searchableSetting("diagnostics")}
+          {...searchableSetting("diagnostics", t)}
           description={
             isEnvironmentScope
               ? t("about.diagnostics.description")
@@ -2182,7 +2186,7 @@ export function AboutSettingsPanel() {
         ) : (
           <>
             <SettingsRow
-              id={searchableSetting("app-version").id}
+              id={searchableSetting("app-version", t).id}
               title={<AboutVersionTitle />}
               description={t("about.version.description")}
             />
@@ -2193,7 +2197,7 @@ export function AboutSettingsPanel() {
 
       <SettingsSection id="legal" title="Legal">
         <SettingsRow
-          {...searchableSetting("open-source-licenses")}
+          {...searchableSetting("open-source-licenses", t)}
           description={t("about.licenses.description")}
           control={
             <Button

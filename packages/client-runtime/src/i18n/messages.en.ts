@@ -3673,6 +3673,8 @@ export const en = {
   "chat.secret.save": "Save securely",
   "chat.queue.collapse": "Collapse queued messages",
   "chat.queue.expand": "Expand queued messages",
+  "chat.queue.showAll": "Show all {{count}} queued",
+  "chat.queue.showFewer": "Show fewer",
   "chat.queue.reorder": "Reorder queued message (drag, or press the arrow keys)",
   "chat.queue.editing": "Editing queued message:",
   "chat.queue.saving": "Saving queued message",

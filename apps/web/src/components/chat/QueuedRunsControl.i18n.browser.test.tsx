@@ -70,6 +70,11 @@ it("keeps queue state and provider commands intact while switching Chinese and E
         text: "保持 user prompt 原文",
         attachments: [attachment],
       },
+      ...[2, 3, 4].map((ordinal) => ({
+        run: { id: `run:queued-${ordinal}`, userMessageId: `message:queued-${ordinal}` },
+        text: `Raw queued message ${ordinal}`,
+        attachments: [],
+      })),
     ],
   };
   async function click(label: string) {
@@ -95,11 +100,14 @@ it("keeps queue state and provider commands intact while switching Chinese and E
         />,
       ),
     );
-    await click("Collapse queued messages");
+    await click("Show all 4 queued");
     await act(async () => {
       await changeLanguage("zh");
     });
-    await click("展开排队消息");
+    expect(container.textContent).toContain("Raw queued message 4");
+    await click("收起");
+    expect(container.textContent).not.toContain("Raw queued message 4");
+    await click("显示全部 4 条排队消息");
     expect(container.textContent).toContain("保持 user prompt 原文");
     await click("编辑排队消息");
     expect(edit).toHaveBeenCalledWith({

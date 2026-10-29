@@ -1,6 +1,6 @@
 import "~/index.css";
 import { act, render as renderTestUi, type Screen } from "../../../test/render";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { expect, it, vi } from "vite-plus/test";
 import * as DateTime from "effect/DateTime";
@@ -15,6 +15,8 @@ import {
 } from "@t3tools/contracts";
 
 const state = vi.hoisted(() => ({
+  revision: 0,
+  listeners: new Set<() => void>(),
   session: null as SessionGrantInput | null,
   trace: null as ServerTraceDiagnosticsResult | null,
   processes: null as ServerProcessDiagnosticsResult | null,
@@ -70,6 +72,13 @@ vi.mock("../../state/server", async (original) => ({
 vi.mock("../../state/query", async (original) => ({
   ...(await original<typeof import("../../state/query")>()),
   useEnvironmentQuery: (atom: string | null) => {
+    useSyncExternalStore(
+      (listener) => {
+        state.listeners.add(listener);
+        return () => state.listeners.delete(listener);
+      },
+      () => state.revision,
+    );
     useEffect(() => {
       if (atom) state.subscriptions(atom);
     }, [atom]);
@@ -158,7 +167,12 @@ const longMessage = "raw native failure\n" + "provider-command --raw-option ".re
 let root: Screen;
 let container: HTMLDivElement;
 
-const render = async () => await act(async () => root.rerender(<DiagnosticsSettingsPanel />));
+const render = async () =>
+  await act(async () => {
+    state.revision++;
+    for (const listener of state.listeners) listener();
+    await root.rerender(<DiagnosticsSettingsPanel />);
+  });
 const language = async (value: "en" | "zh") => await act(async () => changeLanguage(value));
 function buttons(label: string) {
   return [...document.querySelectorAll<HTMLButtonElement>("button")].filter(

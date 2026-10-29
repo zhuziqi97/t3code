@@ -31,7 +31,7 @@ describe("HtmlRenderFrame", () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "Open full screen" }));
+    await userEvent.click(screen.getByRole("button", { name: "Open in panel" }));
     await expect.element(screen.getByRole("dialog")).toBeVisible();
     expect(onFullscreenChange).toHaveBeenLastCalledWith(true);
 

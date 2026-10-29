@@ -1,6 +1,8 @@
 import "~/index.css";
 import { act, render as renderTestUi, type Screen } from "../../../test/render";
 import { type ReactNode } from "react";
+import { RegistryContext } from "@effect/atom-react";
+import { AtomRegistry } from "effect/reactivity";
 
 import { expect, it, vi } from "vite-plus/test";
 import {
@@ -14,6 +16,7 @@ import { parseKeybindingShortcut } from "@t3tools/shared/keybindings";
 
 const api = vi.hoisted(() => ({
   settings: null as ClientSettings | null,
+  registry: null as unknown as AtomRegistry.AtomRegistry,
   state: null as DesktopSnapShotState | null,
   listeners: new Set<() => void>(),
   get: vi.fn(),
@@ -43,14 +46,13 @@ vi.mock("../../lib/desktopSnapShot", async (original) => ({
   ...(await original<typeof import("../../lib/desktopSnapShot")>()),
   getDesktopSnapShotBridge: () => bridge,
 }));
-vi.mock("@effect/atom-react", async (original) => ({
-  ...(await original<typeof import("@effect/atom-react")>()),
-  useAtomValue: () => [],
-}));
-vi.mock("../../state/server", async (original) => ({
-  ...(await original<typeof import("../../state/server")>()),
-  primaryServerKeybindingsAtom: {},
-}));
+vi.mock("../../state/server", async (original) => {
+  const { Atom } = await import("effect/reactivity");
+  return {
+    ...(await original<typeof import("../../state/server")>()),
+    primaryServerKeybindingsAtom: Atom.make([]),
+  };
+});
 vi.mock("../../hooks/useSettings", async (original) => {
   const { useSyncExternalStore } = await import("react");
   return {
@@ -167,7 +169,10 @@ function persist(patch: ClientSettingsPatch) {
   api.state = { ...api.state!, shortcut: api.settings.snapShotShortcut };
   for (const listener of api.listeners) listener();
 }
-const render = async (node: ReactNode) => await act(async () => root.rerender(node));
+const render = async (node: ReactNode) =>
+  await act(async () =>
+    root.rerender(<RegistryContext.Provider value={api.registry}>{node}</RegistryContext.Provider>),
+  );
 const language = async (lang: "en" | "zh") => await act(async () => changeLanguage(lang));
 function button(label: string) {
   const result = [
@@ -416,6 +421,8 @@ it("keeps a saved warning open and removes only the approved binding without com
 let renderStack: AsyncDisposableStack;
 async function setupLifecycle() {
   await using stack = new AsyncDisposableStack();
+  api.registry = AtomRegistry.make();
+  stack.defer(() => api.registry.dispose());
   renderStack = stack;
   stack.defer(async () => {
     await act(async () => root.unmount());

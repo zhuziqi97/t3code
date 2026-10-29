@@ -74,6 +74,7 @@ vi.mock("../SidebarStageBackdrop", async (original) => ({
 }));
 
 import { AppearanceSettingsPanel } from "./AppearanceSettingsPanel";
+import { DiffsSettingsPanel } from "./SettingsPanels";
 import { changeLanguage } from "../../i18n";
 let root: Screen;
 let container: HTMLDivElement;
@@ -123,9 +124,12 @@ it("keeps advanced typography open and saves native pixel counts from Chinese fo
 
   await render();
   await act(async () =>
-    container
-      .querySelector<HTMLButtonElement>('[aria-label="Show advanced typography settings"]')!
+    [...container.querySelectorAll<HTMLButtonElement>("#typography button")]
+      .find((button) => button.textContent?.trim() === "Advanced")!
       .click(),
+  );
+  await act(async () =>
+    container.querySelector<HTMLButtonElement>('[aria-label="Separate fonts"]')!.click(),
   );
   expect(container.querySelector('input[aria-label="Prompt font family"]')).not.toBeNull();
   await switchLanguage();
@@ -144,6 +148,7 @@ it("saves native width and color enums from translated choices without writing o
   expect(state.update).not.toHaveBeenCalled();
   await choose("聊天宽度", "全宽");
   expect(state.update).toHaveBeenCalledExactlyOnceWith({ chatWidth: "full" });
+  await act(async () => root.rerender(<DiffsSettingsPanel />));
   await choose("差异颜色", "蓝橙");
   expect(state.update).toHaveBeenLastCalledWith({ diffColorScheme: "blue-orange" });
   expect(state.update).toHaveBeenCalledTimes(2);
