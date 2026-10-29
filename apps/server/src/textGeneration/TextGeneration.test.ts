@@ -1,3 +1,4 @@
+import * as ServerSettings from "../serverSettings.ts";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as PubSub from "effect/PubSub";
@@ -5,7 +6,7 @@ import * as Result from "effect/Result";
 import * as Stream from "effect/Stream";
 import { describe, expect } from "vite-plus/test";
 
-import { ProviderInstanceId } from "@t3tools/contracts";
+import { ProviderInstanceId, ProviderDriverKind } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 
 import type { ProviderInstance } from "@t3tools/provider-core/server/driver";
@@ -41,7 +42,27 @@ const makeStubInstance = (
     },
     displayName: undefined,
     enabled: true,
-    snapshot: {} as ProviderInstance["snapshot"],
+    snapshot: {
+      getSnapshot: Effect.succeed({
+        instanceId,
+        driver: ProviderDriverKind.make(String(instanceId)),
+        enabled: true,
+        installed: true,
+        version: null,
+        status: "ready",
+        auth: { status: "authenticated" },
+        checkedAt: "2026-01-01T00:00:00Z",
+        models: [],
+        skills: [],
+        slashCommands: [],
+      }),
+      refresh: Effect.die("unused"),
+      startRefresh: () => Effect.die("unused"),
+      cancelRefresh: () => Effect.die("unused"),
+      resolveMaintenance: () => Effect.die("unused"),
+      applyUsageLimits: () => Effect.die("unused"),
+      streamChanges: Stream.empty,
+    },
     orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
     textGeneration,
   }) satisfies ProviderInstance;
@@ -79,6 +100,7 @@ describe("TextGeneration.make", () => {
         }),
       );
       const generation = yield* TextGeneration.make.pipe(
+        Effect.provide(ServerSettings.layerTest()),
         Effect.provideService(
           ProviderInstanceRegistry.ProviderInstanceRegistry,
           makeStubRegistry([instance]),
@@ -123,6 +145,7 @@ describe("TextGeneration.make", () => {
       );
 
       const tg = yield* TextGeneration.make.pipe(
+        Effect.provide(ServerSettings.layerTest()),
         Effect.provideService(
           ProviderInstanceRegistry.ProviderInstanceRegistry,
           makeStubRegistry([personal, work]),
@@ -148,6 +171,7 @@ describe("TextGeneration.make", () => {
   it.effect("fails with TextGenerationError when the instance is unknown", () =>
     Effect.gen(function* () {
       const tg = yield* TextGeneration.make.pipe(
+        Effect.provide(ServerSettings.layerTest()),
         Effect.provideService(
           ProviderInstanceRegistry.ProviderInstanceRegistry,
           makeStubRegistry([]),

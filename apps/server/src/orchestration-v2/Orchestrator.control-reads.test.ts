@@ -1625,11 +1625,7 @@ it.effect(
           );
           assert.equal(savedKey, "new-key");
           assert.deepEqual(sequence, ["metadata", "bind:new-key", "report"]);
-          assert.isTrue(
-            Option.isNone(
-              yield* outbox.claimNext({ workerId: "another-worker", leaseDurationMs: 1000 }),
-            ),
-          );
+          assert.isTrue(Option.isNone(yield* outbox.claimNext({ workerId: "another-worker" })));
           yield* Deferred.succeed(ack, undefined);
           yield* Fiber.join(working);
           assert.deepEqual(sequence, [
