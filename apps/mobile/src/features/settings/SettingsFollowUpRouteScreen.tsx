@@ -2,18 +2,16 @@ import { useTranslate } from "../../i18n";
 import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { useNavigation } from "@react-navigation/native";
 import { AsyncResult } from "effect/reactivity";
 import { Platform, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AndroidScreenHeader } from "../../components/ui/AndroidScreenHeader";
 import { AppText as Text } from "../../components/ui/AppText";
-import { NativeStackScreenOptions } from "../../native/StackHeader";
 import { DEFAULT_FOLLOW_UP_BEHAVIOR, type FollowUpBehavior } from "../../lib/followUpBehavior";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
-import { SettingsChoiceRow } from "./components/SettingsChoiceRow";
+import { ListChoiceRow as SettingsChoiceRow } from "../../components/ui/ListChoiceRow";
 import { SettingsSection } from "./components/SettingsSection";
+import { SettingsScreen } from "./components/SettingsScreen";
 
 const FOLLOW_UP_OPTIONS: ReadonlyArray<{
   readonly behavior: FollowUpBehavior;
@@ -34,7 +32,6 @@ const FOLLOW_UP_OPTIONS: ReadonlyArray<{
 
 export function SettingsFollowUpRouteScreen() {
   const t = useTranslate();
-  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
@@ -43,52 +40,52 @@ export function SettingsFollowUpRouteScreen() {
     ? (preferencesResult.value.followUpBehavior ?? DEFAULT_FOLLOW_UP_BEHAVIOR)
     : null;
 
-  return (
-    <View collapsable={false} className="flex-1 bg-sheet">
-      {Platform.OS === "android" ? (
-        <>
-          <NativeStackScreenOptions options={{ headerShown: false }} />
-          <AndroidScreenHeader title="Chat" onBack={() => navigation.goBack()} />
-        </>
-      ) : null}
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        showsVerticalScrollIndicator={false}
-        className="flex-1"
-        contentContainerClassName="gap-3 px-5 pt-4"
-        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
-      >
-        <SettingsSection title={t("prediction.setting.label")}>
-          <SettingsSwitchRow
-            icon="sparkles"
-            label={t("prediction.setting.label")}
-            subtitle={t("prediction.setting.description")}
-            value={
-              AsyncResult.isSuccess(preferencesResult) &&
-              preferencesResult.value.codexNativePredictions === true
-            }
+  const content = (
+    <ScrollView
+      contentInsetAdjustmentBehavior="automatic"
+      showsVerticalScrollIndicator={false}
+      className="flex-1"
+      contentContainerClassName="gap-3 px-5 pt-4"
+      contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
+    >
+      <SettingsSection title={t("prediction.setting.label")}>
+        <SettingsSwitchRow
+          icon="sparkles"
+          label={t("prediction.setting.label")}
+          subtitle={t("prediction.setting.description")}
+          value={
+            AsyncResult.isSuccess(preferencesResult) &&
+            preferencesResult.value.codexNativePredictions === true
+          }
+          disabled={!preferencesReady}
+          onValueChange={(value) => savePreferences({ codexNativePredictions: value })}
+        />
+      </SettingsSection>
+      <SettingsSection title="While the agent is running">
+        {FOLLOW_UP_OPTIONS.map((option, index) => (
+          <SettingsChoiceRow
+            key={option.behavior}
+            label={option.label}
+            description={option.description}
+            selected={selectedBehavior === option.behavior}
+            separated={index > 0}
             disabled={!preferencesReady}
-            onValueChange={(value) => savePreferences({ codexNativePredictions: value })}
+            onPress={() => savePreferences({ followUpBehavior: option.behavior })}
           />
-        </SettingsSection>
-        <SettingsSection title="While the agent is running">
-          {FOLLOW_UP_OPTIONS.map((option, index) => (
-            <SettingsChoiceRow
-              key={option.behavior}
-              label={option.label}
-              description={option.description}
-              selected={selectedBehavior === option.behavior}
-              separated={index > 0}
-              disabled={!preferencesReady}
-              onPress={() => savePreferences({ followUpBehavior: option.behavior })}
-            />
-          ))}
-        </SettingsSection>
-        <Text className="px-2 text-sm text-foreground-muted">
-          Long-press the send button to use the other option for a single message. With a hardware
-          keyboard, hold Command while sending.
-        </Text>
-      </ScrollView>
+        ))}
+      </SettingsSection>
+      <Text className="px-2 text-sm text-foreground-muted">
+        Long-press the send button to use the other option for a single message. With a hardware
+        keyboard, hold Command while sending.
+      </Text>
+    </ScrollView>
+  );
+
+  return Platform.OS === "android" ? (
+    <SettingsScreen title="Chat">{content}</SettingsScreen>
+  ) : (
+    <View collapsable={false} className="flex-1 bg-sheet">
+      {content}
     </View>
   );
 }

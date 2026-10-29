@@ -2,7 +2,7 @@ import { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { expect, it, vi } from "vite-plus/test";
 import { render } from "../../test/render";
 import type { Project } from "../types";
-import { getProjectOrderKey } from "../logicalProject";
+import { getProjectOrderKey } from "@t3tools/client-runtime/state/project-grouping";
 
 const state = vi.hoisted(() => ({
   projects: [] as Project[],
@@ -12,6 +12,8 @@ const state = vi.hoisted(() => ({
 vi.mock(import("../state/entities"), async (original) => ({
   ...(await original()),
   useProjects: (() => state.projects) as never,
+  useQuietThreadShells: () => [],
+  useDelegatedUnderParent: () => new Set<string>(),
 }));
 vi.mock(import("../state/environments"), async (original) => ({
   ...(await original()),

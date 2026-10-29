@@ -121,9 +121,8 @@ vi.mock("./ProjectDefaultsSettings", async (original) => ({
   ...(await original<typeof import("./ProjectDefaultsSettings")>()),
   ProjectDefaultsSettings: () => null,
 }));
-vi.mock("./DeviceHostsSettings", async (original) => ({
-  ...(await original<typeof import("./DeviceHostsSettings")>()),
-  DeviceHostsSettings: () => null,
+vi.mock("./DeviceSourcesSettings", () => ({
+  DeviceSourcesSettings: () => null,
 }));
 vi.mock("./settingsLayout", async (original) => ({
   ...(await original<typeof import("./settingsLayout")>()),

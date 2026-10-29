@@ -8,6 +8,7 @@ import {
   type DesktopHostTelemetryMessage as DesktopHostTelemetryMessageValue,
   type DesktopHostTelemetrySnapshot,
   DesktopTelemetryControlMessage,
+  type DesktopUpdateChannel,
   type DesktopUpdateStatusReport,
   type ResourceTelemetrySourceStatus,
 } from "@t3tools/contracts";
@@ -26,6 +27,7 @@ import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as Ndjson from "effect/encoding/Ndjson";
 
+import { eventVersion as messageVersion } from "./NativeTelemetryClient.ts";
 import * as ServerConfig from "../config.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { subscribeBeforeSnapshotWithoutMutex } from "../utils/subscribeBeforeSnapshot.ts";
@@ -148,6 +150,12 @@ export interface DesktopTelemetryReceiverHealth {
   readonly lastError: Option.Option<string>;
 }
 
+/** Moves the desktop app to `channel` and installs only `targetVersion`. */
+export interface DesktopTrackSwitch {
+  readonly channel: DesktopUpdateChannel;
+  readonly targetVersion: string;
+}
+
 export class DesktopTelemetryReceiver extends Context.Service<
   DesktopTelemetryReceiver,
   {
@@ -181,6 +189,7 @@ export class DesktopTelemetryReceiver extends Context.Service<
         requestId. */
     readonly requestDesktopUpdate: (
       requestId: string,
+      trackSwitch?: DesktopTrackSwitch,
     ) => Effect.Effect<void, DesktopTelemetryControlError>;
     readonly commitDesktopUpdate: (
       requestId: string,
@@ -261,12 +270,6 @@ function normalizeReceiverError(error: unknown): DesktopTelemetryReceiverError {
     return error;
   }
   return new DesktopTelemetryDecodeFailed({ cause: error });
-}
-
-function messageVersion(value: unknown): number | undefined {
-  if (typeof value !== "object" || value === null) return undefined;
-  const version = Reflect.get(value, "version");
-  return typeof version === "number" ? version : undefined;
 }
 
 const writeAllToFileDescriptor = Effect.fn(
@@ -647,11 +650,12 @@ export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")
       (baseUrl) => sendControlMessage({ version: 1, type: "conveneUpdateSource", baseUrl }),
     ),
     requestDesktopUpdate: Effect.fn("DesktopTelemetryReceiver.requestDesktopUpdate")(
-      function (requestId) {
+      function (requestId, trackSwitch) {
         return sendControlMessage({
           version: 1,
           type: "requestDesktopUpdate",
           requestId,
+          ...trackSwitch,
         });
       },
     ),

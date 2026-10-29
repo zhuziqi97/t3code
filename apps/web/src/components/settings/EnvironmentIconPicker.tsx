@@ -32,9 +32,6 @@ export function resolveEnvironmentIconPickerLock(
   if (input.serverConfig === null) {
     return t("connections.iconConnect");
   }
-  if (input.serverConfig.environment.capabilities.environmentIcon !== true) {
-    return t("connections.iconUpdate");
-  }
   if (input.operateAccess !== "granted") {
     return t("connections.iconPermission");
   }

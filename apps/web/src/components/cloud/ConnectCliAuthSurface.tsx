@@ -8,36 +8,10 @@ import {
 } from "../../cloud/connectCliAuth";
 import { isElectron } from "../../env";
 import { useTranslate } from "../../i18n";
-import { AuthSurfaceShell } from "../auth/AuthSurfaceShell";
+import { StandalonePage, StandalonePageHeader } from "../ui/standalone-page";
 import { resolveClerkSignInProps } from "../clerk/authRedirect";
 import { Button } from "../ui/button";
 
-function ConnectCliAuthMessage({
-  eyebrow,
-  title,
-  description,
-}: {
-  readonly eyebrow?: string;
-  readonly title: string;
-  readonly description: string;
-}) {
-  return (
-    <>
-      {eyebrow ? (
-        <p className="text-3xs font-semibold tracking-widest text-primary uppercase">{eyebrow}</p>
-      ) : null}
-      <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
-      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{description}</p>
-    </>
-  );
-}
-
-/**
- * /connect: the URL the CLI prints for the loopback flow. Waits for a Clerk
- * session, then forwards the CLI's PKCE request to Clerk's authorize endpoint
- * with the loopback redirect URI so the code returns straight to the waiting
- * CLI. Headless hosts use Clerk's device authorization page instead.
- */
 export function ConnectCliAuthorizeSurface() {
   const t = useTranslate();
   const [request] = useState(() => readConnectAuthorizeRequest(new URL(window.location.href)));
@@ -59,6 +33,7 @@ export function ConnectCliAuthorizeSurface() {
   };
   const openSignInOnLoad = useEffectEvent(openSignIn);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- opens Clerk sign-in or navigates the window to the authorize URL once Clerk has loaded
   useEffect(() => {
     if (!request || !isLoaded || redirecting.current) {
       return;
@@ -80,20 +55,20 @@ export function ConnectCliAuthorizeSurface() {
 
   if (!request) {
     return (
-      <AuthSurfaceShell>
-        <ConnectCliAuthMessage
-          eyebrow={t("connect.cli.request")}
+      <StandalonePage>
+        <StandalonePageHeader
+          context={t("connect.cli.request")}
           title={t("connect.cli.invalidTitle")}
           description={t("connect.cli.invalidDescription")}
         />
-      </AuthSurfaceShell>
+      </StandalonePage>
     );
   }
 
   return (
-    <AuthSurfaceShell>
-      <ConnectCliAuthMessage
-        eyebrow={t("connect.cli.browserAuthorization")}
+    <StandalonePage>
+      <StandalonePageHeader
+        context={t("connect.cli.browserAuthorization")}
         title={t("connect.cli.title")}
         description={isSignedIn ? t("connect.cli.redirecting") : t("connect.cli.signInDescription")}
       />
@@ -104,6 +79,6 @@ export function ConnectCliAuthorizeSurface() {
           </Button>
         </div>
       ) : null}
-    </AuthSurfaceShell>
+    </StandalonePage>
   );
 }

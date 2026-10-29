@@ -106,9 +106,7 @@ export function usageLimitRunPresentedAsLatest(
   return blocked !== null && runs.some((run) => run.ordinal > blocked.ordinal) ? blocked : null;
 }
 
-export function latestUnheldRun(
-  runs: ReadonlyArray<OrchestrationV2Run>,
-): OrchestrationV2Run | null {
+function latestUnheldRun(runs: ReadonlyArray<OrchestrationV2Run>): OrchestrationV2Run | null {
   let latest: OrchestrationV2Run | null = null;
   for (const run of runs) {
     if (run.status === "queued" && run.queueHeld === true) continue;

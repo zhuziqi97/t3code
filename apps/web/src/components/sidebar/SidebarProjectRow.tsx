@@ -55,12 +55,13 @@ export const SidebarProjectRow = memo(function SidebarProjectRow(props: {
   onSelect: () => void;
   onNewThread: () => void;
   onSettings: () => void;
+  onContextMenu?: (position: { x: number; y: number }) => void;
   dragHandle?: ProjectDragHandle | undefined;
 }) {
   const t = useTranslate();
   const canCreate = useEnvironmentScope(props.project.environmentId, AuthOrchestrationOperateScope);
   const threads = useThreadShellsForProjectRefs(props.project.memberProjectRefs);
-  const status = useProjectThreadStatus(filterSidebarV2VisibleThreads(threads, null));
+  const status = useProjectThreadStatus(filterSidebarV2VisibleThreads(threads, null, new Set()));
   return (
     <div
       className={cn(
@@ -76,9 +77,17 @@ export const SidebarProjectRow = memo(function SidebarProjectRow(props: {
               {...props.dragHandle?.attributes}
               {...props.dragHandle?.listeners}
               type="button"
+              role="treeitem"
+              tabIndex={-1}
+              data-sidebar-row={`project:${props.project.projectKey}`}
               aria-expanded={props.expanded}
               aria-pressed={props.selected}
               onClick={props.onSelect}
+              onContextMenu={(event) => {
+                if (!props.onContextMenu) return;
+                event.preventDefault();
+                props.onContextMenu({ x: event.clientX, y: event.clientY });
+              }}
               className={cn(
                 "flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-sm text-sidebar-foreground outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring pointer-coarse:min-h-11",
                 props.dragHandle ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",

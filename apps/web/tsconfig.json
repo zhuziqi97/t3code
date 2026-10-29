@@ -31,6 +31,7 @@
     "vite.config.ts",
     "vercel.ts",
     "test",
+    "scripts/verify-built-boot.ts",
     "scripts/warm-dep-cache.ts",
     "../../scripts/lib/public-config.ts",
     "../mobile/src/features/browser/preview-stream.browser.ts",

@@ -2,18 +2,17 @@ import "~/index.css";
 import { act, render as renderTestUi, type Screen } from "../../../test/render";
 
 import { expect, it, vi } from "vite-plus/test";
-import type { ComposerPromptEditorProps } from "../ComposerPromptEditor";
+import type { ComposerPromptEditorProps } from "../ComposerPromptEditorTiptap";
 
 const state = vi.hoisted(() => ({
   editorRef: null as ComposerPromptEditorProps["editorRef"] | null,
 }));
-vi.mock("../ComposerPromptEditor", async (original) => {
-  const actual = await original<typeof import("../ComposerPromptEditor")>();
+vi.mock("../ComposerPromptEditorTiptap", async (original) => {
+  const actual = await original<typeof import("../ComposerPromptEditorTiptap")>();
   return {
-    ...actual,
-    ComposerPromptEditor: (props: ComposerPromptEditorProps) => {
+    ComposerPromptEditorTiptap: (props: ComposerPromptEditorProps) => {
       state.editorRef = props.editorRef;
-      return <actual.ComposerPromptEditor {...props} />;
+      return <actual.ComposerPromptEditorTiptap {...props} />;
     },
   };
 });

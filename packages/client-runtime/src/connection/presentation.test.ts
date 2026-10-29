@@ -20,7 +20,6 @@ import {
   connectionStatusText,
   connectionStatusTitle,
   formatConnectionErrorMessage,
-  presentEnvironmentConnection,
   presentConnectionState,
 } from "./presentation.ts";
 import {
@@ -193,7 +192,7 @@ describe("connection presentation", () => {
 
   it("preserves an explicitly available environment while offline", () => {
     expect(
-      presentEnvironmentConnection(
+      presentConnectionState(
         supervisorState({
           desired: false,
           network: "offline",

@@ -1,5 +1,6 @@
 import { i18n, useTranslate } from "../i18n";
 import type { TFunction } from "i18next";
+import { workspaceAreaProps } from "../lib/workspaceFocus";
 import { useAtomMount, useAtomValue } from "@effect/atom-react";
 import {
   isAtomCommandInterrupted,
@@ -532,6 +533,7 @@ function TerminalSessionViewport({
   const containerRef = useRef<HTMLDivElement>(null);
   const autoFocusedRef = useRef(false);
   const terminalRef = useRef<GhosttyTerminalSurface | null>(null);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Ghostty initialization writes retry text outside React; keep that DOM text in the current language.
   useEffect(() => {
     const failure = initializationFailureRef.current;
     const mount = containerRef.current;
@@ -540,6 +542,7 @@ function TerminalSessionViewport({
       message: failure.message ?? t("terminal.initFailed"),
     });
   }, [t]);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Ghostty owns its input and scrollback DOM; update their accessible labels when the language changes.
   useEffect(() => {
     terminalRef.current?.setAccessibleLabels(
       t("terminal.inputLabel"),
@@ -661,6 +664,7 @@ function TerminalSessionViewport({
       openTerminalLinkInPreview({ url, threadRef, openPreview, fallbackToBrowser, forceBrowser }),
   );
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- sets the terminal input's readOnly from the operate grant and consumes a pending focus request
   useLayoutEffect(() => {
     if (terminalRef.current) terminalRef.current.input.readOnly = !canOperateTerminal;
     if (canOperateTerminal && visibleRef.current)
@@ -669,12 +673,14 @@ function TerminalSessionViewport({
 
   // Links re-read the grant on activation; only the hovered link's styling needs a nudge.
   const linkActivationScopeRef = useRef(canOpenEditor);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- refreshes link activation styling on the imperative terminal surface when the editor grant changes
   useEffect(() => {
     if (linkActivationScopeRef.current === canOpenEditor) return;
     linkActivationScopeRef.current = canOpenEditor;
     terminalRef.current?.refreshLinkActivation();
   }, [canOpenEditor]);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- pushes visibility into the terminal surface before paint and consumes focus requests made while hidden
   useLayoutEffect(() => {
     visibleRef.current = visible;
     terminalRef.current?.setVisible(visible);
@@ -682,6 +688,7 @@ function TerminalSessionViewport({
     if (visible) consumePendingTerminalFocus(threadRef, terminalId);
   }, [terminalId, threadRef, visible]);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- applies font family and size changes to the live Ghostty terminal surface
   useEffect(() => {
     const current = terminalFontRef.current;
     if (current.family === terminalFontFamily && current.size === terminalFontSize) return;
@@ -689,6 +696,7 @@ function TerminalSessionViewport({
     void terminalRef.current?.setFont(terminalFontOptions(terminalFontFamily, terminalFontSize));
   }, [terminalFontFamily, terminalFontSize]);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- creates the Ghostty terminal in the mount node and subscribes it to the terminal session
   useEffect(() => {
     const mount = containerRef.current;
     if (!mount) return;
@@ -735,6 +743,7 @@ function TerminalSessionViewport({
         i18n.t("terminal.inputLabel"),
         i18n.t("terminal.scrollbackLabel"),
       );
+      terminal.input.setAttribute("data-workspace-focus-default", "");
       terminal.input.readOnly = !hasTerminalWriteAccess();
       // Reapply font settings hydrated during loading, when terminalRef was null.
       const currentFont = terminalFontRef.current;
@@ -742,6 +751,7 @@ function TerminalSessionViewport({
         void terminal.setFont(terminalFontOptions(currentFont.family, currentFont.size));
       }
       const latestSession = readTerminalSession();
+      terminal.setSharedGrid(latestSession.grid);
       const initialOutput = readTerminalOutputUpdate(
         latestSession.output,
         INITIAL_TERMINAL_OUTPUT_CURSOR,
@@ -767,6 +777,7 @@ function TerminalSessionViewport({
           }
           const previous = previousSession;
           previousSession = session;
+          terminal.setSharedGrid(session.grid);
           synchronizeTerminalStatus(terminal, session.status, session.version);
           outputCursorRef.current = synchronizeTerminalSession(
             terminal,
@@ -1505,6 +1516,7 @@ export default function ThreadTerminalDrawer({
 }: ThreadTerminalDrawerProps) {
   const t = useTranslate();
   const canOperateTerminal = useEnvironmentScope(threadRef.environmentId, AuthTerminalOperateScope);
+  const terminalArea = workspaceAreaProps("terminal", 5, "Terminal");
   const isPanel = mode === "panel";
   const [advancedTypography] = useLocalStorage(
     TYPOGRAPHY_ADVANCED_STORAGE_KEY,
@@ -1763,6 +1775,7 @@ export default function ThreadTerminalDrawer({
       if (heightBudgetChanged) setDrawerLayout(layout);
     },
   );
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- measures the drawer before visible paint and observes window and chat column resizes while visible
   useLayoutEffect(() => {
     if (!visible) {
       return;
@@ -1789,6 +1802,7 @@ export default function ThreadTerminalDrawer({
     return (
       <aside
         ref={drawerRef}
+        {...(!isPanel && visible ? terminalArea : {})}
         data-thread-terminal-drawer
         data-terminal-owner={isPanel ? "right-panel" : "drawer"}
         className={cn(
@@ -1825,6 +1839,7 @@ export default function ThreadTerminalDrawer({
   return (
     <aside
       ref={drawerRef}
+      {...(!isPanel && visible ? terminalArea : {})}
       data-thread-terminal-drawer
       data-terminal-owner={isPanel ? "right-panel" : "drawer"}
       className={cn(

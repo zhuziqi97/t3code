@@ -256,6 +256,7 @@ describe("AcpRegistrySupport", () => {
           version: "2026.11.1",
           distribution: { npx: { package: "@example/acp@2.0.0" } },
         };
+        yield* TestClock.adjust("1 hour");
         yield* resolver.search({ query: agent.id });
         const restarted = yield* AcpRegistrySupport.makeAcpRegistryCatalog(options);
         expect(
@@ -312,6 +313,8 @@ describe("AcpRegistrySupport", () => {
         yield* resolver.refresh({ force: false });
         expect(requests).toBe(2);
         expect((yield* resolver.search({ query: agent.id })).agents[0]?.version).toBe("1.2.3");
+        expect(requests).toBe(2);
+        yield* resolver.refresh();
         expect(requests).toBe(3);
         yield* TestClock.adjust("5 minutes");
         yield* resolver.refresh({ force: false });
@@ -368,6 +371,7 @@ describe("AcpRegistrySupport", () => {
             },
           },
         };
+        yield* TestClock.adjust("1 hour");
         yield* resolver.search({ query: agent.id });
         const restarted = yield* AcpRegistrySupport.makeAcpRegistryCatalog(options);
         const resolved = yield* restarted.resolve(settings(), "/workspace");
@@ -1140,6 +1144,9 @@ describe("AcpRegistrySupport", () => {
       yield* Fiber.join(explicit);
       expect(requests).toBe(1);
       yield* resolver.search({ query: "example" });
+      expect(requests).toBe(1);
+      yield* TestClock.adjust("1 hour");
+      yield* resolver.search({ query: "example" });
       expect(requests).toBe(2);
     }).pipe(
       Effect.scoped,
@@ -1148,6 +1155,99 @@ describe("AcpRegistrySupport", () => {
           requests += 1;
           return reply.pipe(
             Effect.as(HttpClientResponse.fromWeb(request, new Response(makeRegistry(agent)))),
+          );
+        }),
+      ),
+    );
+  });
+
+  it.effect("searches retry the network after falling back to the cached index", () => {
+    const agent = makeAgent({ npx: { package: "@example/acp@1.2.3" } });
+    let requests = 0;
+    return Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const cacheDir = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-acp-registry-retry-",
+      });
+      yield* fileSystem.makeDirectory(`${cacheDir}/acp-registry`, { recursive: true });
+      yield* fileSystem.writeFileString(
+        `${cacheDir}/acp-registry/registry.json`,
+        makeRegistry(agent),
+      );
+      const resolver = yield* AcpRegistrySupport.makeAcpRegistryCatalog({
+        cacheDir,
+        toolsDir: `${cacheDir}/tools`,
+        registryUrl,
+      });
+      const offline = yield* resolver.search({ query: "example" });
+      expect(offline.agents.map((result) => result.id)).toEqual([agent.id]);
+      expect(requests).toBe(1);
+      yield* resolver.search({ query: "example" });
+      expect(requests).toBe(1);
+      yield* TestClock.adjust("5 minutes");
+      yield* resolver.search({ query: "example" });
+      expect(requests).toBe(2);
+      yield* resolver.search({ query: "example" });
+      expect(requests).toBe(2);
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        layerResolver((request) => {
+          requests += 1;
+          return Effect.succeed(
+            HttpClientResponse.fromWeb(
+              request,
+              requests === 1
+                ? new Response("unavailable", { status: 503 })
+                : new Response(makeRegistry(agent)),
+            ),
+          );
+        }),
+      ),
+    );
+  });
+
+  it.effect("searches retry the network after a refresh falls back within the reuse window", () => {
+    const agent = makeAgent({ npx: { package: "@example/acp@1.2.3" } });
+    let requests = 0;
+    let online = true;
+    return Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const cacheDir = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-acp-registry-refresh-fallback-",
+      });
+      const resolver = yield* AcpRegistrySupport.makeAcpRegistryCatalog({
+        cacheDir,
+        toolsDir: `${cacheDir}/tools`,
+        registryUrl,
+      });
+      yield* resolver.search({ query: "example" });
+      expect(requests).toBe(1);
+
+      // Prepare always refreshes; an unknown agent stops it right after the refresh.
+      online = false;
+      const missing = yield* resolver.prepare({ agentId: "missing-agent" }).pipe(Effect.flip);
+      expect(missing.reason).toBe("agent_not_found");
+      expect(requests).toBe(2);
+
+      online = true;
+      yield* resolver.search({ query: "example" });
+      expect(requests).toBe(2);
+      yield* TestClock.adjust("5 minutes");
+      yield* resolver.search({ query: "example" });
+      expect(requests).toBe(3);
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        layerResolver((request) => {
+          requests += 1;
+          return Effect.succeed(
+            HttpClientResponse.fromWeb(
+              request,
+              online
+                ? new Response(makeRegistry(agent))
+                : new Response("unavailable", { status: 503 }),
+            ),
           );
         }),
       ),

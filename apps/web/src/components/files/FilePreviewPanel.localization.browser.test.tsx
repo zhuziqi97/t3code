@@ -98,9 +98,9 @@ vi.mock("./projectFilesQueryState", async (original) => ({
   getProjectFileContents: () => state.file.data?.contents,
   setProjectFileQueryData: vi.fn(),
 }));
-vi.mock("./useFileSaveCoordinator", async (original) => ({
-  ...(await original<typeof import("./useFileSaveCoordinator")>()),
-  useFileSaveCoordinator: () => ({ change: state.save }),
+vi.mock(import("./fileSaveSessions"), () => ({
+  useFileSaveSession: () => {},
+  changeFileSaveSession: state.save,
 }));
 vi.mock("~/components/chat/OpenInPicker", async (original) => ({
   ...(await original<typeof import("~/components/chat/OpenInPicker")>()),

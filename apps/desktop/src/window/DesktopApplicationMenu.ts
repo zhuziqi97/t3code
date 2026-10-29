@@ -252,8 +252,9 @@ export const make = Effect.gen(function* () {
                 },
                 { type: "separator" as const },
               ]),
+          // Cmd/Ctrl+W belongs to the renderer's tab close, not the window.
           environment.platform === "darwin"
-            ? { role: "close", label: t("menu.closeWindow") }
+            ? { label: t("menu.closeWindow"), click: (_item, window) => window?.close() }
             : {
                 role: "quit",
                 label: t(environment.platform === "win32" ? "menu.exit" : "menu.quit"),
@@ -364,7 +365,7 @@ export const make = Effect.gen(function* () {
                 { type: "separator" as const },
                 { role: "front" as const, label: t("menu.bringAllToFront") },
               ]
-            : [{ role: "close" as const, label: t("menu.close") }]),
+            : []),
         ],
       },
       {

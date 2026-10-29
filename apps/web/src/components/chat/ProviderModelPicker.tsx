@@ -15,17 +15,9 @@ import { cn } from "~/lib/utils";
 import { ModelPickerContent, resolveModelPickerSelectedModel } from "./ModelPickerContent";
 import { ChatGptSharingControl } from "./ChatGptSharingControl";
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
-import {
-  ModelEsque,
-  getTriggerDisplayModelLabel,
-  getTriggerDisplayModelName,
-} from "./providerIconUtils";
+import { ModelEsque, getDisplayModelName, getTriggerDisplayModelName } from "./providerIconUtils";
 import { shouldShowInstanceBadge, type ProviderInstanceEntry } from "../../providerInstances";
-import {
-  ComposerControl,
-  ComposerControlChevron,
-  type ComposerControlSize,
-} from "./ComposerControl";
+import { ComposerControl, type ComposerControlSize } from "./ComposerControl";
 import { useComposerMenuProps } from "./composerEventScope";
 import { shortcutLabelForCommand } from "../../keybindings";
 
@@ -128,14 +120,14 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
         reportedModel.model)
       : undefined;
   const triggerTitle = selectedModel
-    ? getTriggerDisplayModelName(selectedModel)
+    ? getTriggerDisplayModelName(selectedModel, activeEntry?.driverKind)
     : props.model === ANTIGRAVITY_DEFAULT_MODEL
       ? t("chat.model.choose")
       : props.model || t("convene.model.default");
   const triggerLabel = reportedName
     ? t("convene.model.reported", { model: reportedName })
     : selectedModel
-      ? `${getTriggerDisplayModelLabel(selectedModel)}${selectedModel.isUnavailable ? t("convene.model.unavailableSuffix") : ""}`
+      ? `${getTriggerDisplayModelName(selectedModel, activeEntry?.driverKind)}${selectedModel.isUnavailable ? t("convene.model.unavailableSuffix") : ""}`
       : triggerTitle;
   const showInstanceBadge =
     activeEntry !== null && shouldShowInstanceBadge(activeEntry, props.instanceEntries);
@@ -165,12 +157,14 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
       model: selection.model,
       options: props.modelOptionsByInstance.get(selection.instanceId) ?? [],
     });
+    const unavailable = model?.isUnavailable ? t("convene.model.unavailableSuffix") : "";
     return {
       ...selection,
       entry,
       label: model
-        ? `${getTriggerDisplayModelName(model)}${model.isUnavailable ? t("convene.model.unavailableSuffix") : ""}`
+        ? `${getTriggerDisplayModelName(model, entry?.driverKind)}${unavailable}`
         : selection.model,
+      fullLabel: model ? `${getDisplayModelName(model)}${unavailable}` : selection.model,
     };
   });
   const multipleLabel = selectedEntries
@@ -184,7 +178,8 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
           )}${selectedEntries.length > 2 ? t("chat.model.more", { count: selectedEntries.length - 2 }) : ""}`
     : undefined;
   const allModelNames = selectedEntries
-    ? selectedEntries.map((selection) => selection.label).join(", ") || t("chat.model.chooseMany")
+    ? selectedEntries.map((selection) => selection.fullLabel).join(", ") ||
+      t("chat.model.chooseMany")
     : undefined;
   const triggerTooltipContent = shortcutLabel
     ? `${props.triggerLabel ?? allModelNames ?? triggerLabel} · ${shortcutLabel}`
@@ -204,7 +199,9 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
       <PopoverTrigger
         render={
           <ComposerControl
-            aria-label={props.triggerAriaLabel ?? allModelNames}
+            aria-label={
+              props.triggerAriaLabel ?? props.triggerLabel ?? allModelNames ?? triggerLabel
+            }
             size={size}
             data-chat-provider-model-picker="true"
             className={cn(
@@ -222,7 +219,11 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
           className={cn("flex min-w-0 flex-1 items-center", size === "xs" ? "gap-1" : "gap-1.5")}
         >
           {selectedEntries && props.triggerLabel === undefined ? (
-            <span className="flex shrink-0 items-center -space-x-1" aria-hidden="true">
+            <span
+              data-chat-provider-model-picker-icon
+              className="flex shrink-0 items-center -space-x-1"
+              aria-hidden="true"
+            >
               {selectedEntries
                 .slice(0, 3)
                 .map((selection) =>
@@ -244,21 +245,24 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
               ) : null}
             </span>
           ) : activeEntry && props.triggerLabel === undefined ? (
-            <ProviderInstanceIcon
-              driverKind={activeEntry.driverKind}
-              displayName={activeEntry.displayName}
-              accentColor={activeEntry.accentColor}
-              acpRegistryAgentId={activeEntry.acpRegistryAgentId}
-              acpRegistryIconUrl={activeEntry.acpRegistryIconUrl}
-              showBadge={showInstanceBadge}
-              className="size-4"
-              iconClassName={cn("size-4", props.activeProviderIconClassName)}
-              indicatorBackground={props.instanceIndicatorBackground ?? "var(--contrast-input)"}
-              badgeClassName={cn(
-                "right-[-0.125rem] bottom-[-0.125rem] h-3 min-w-3 px-0.5 text-5xs",
-                size === "xs" && "shadow-none",
-              )}
-            />
+            // Narrow compacted composers hide the provider icon before truncating the name.
+            <span data-chat-provider-model-picker-icon className="contents">
+              <ProviderInstanceIcon
+                driverKind={activeEntry.driverKind}
+                displayName={activeEntry.displayName}
+                accentColor={activeEntry.accentColor}
+                acpRegistryAgentId={activeEntry.acpRegistryAgentId}
+                acpRegistryIconUrl={activeEntry.acpRegistryIconUrl}
+                showBadge={showInstanceBadge}
+                className="size-4"
+                iconClassName={cn("size-4", props.activeProviderIconClassName)}
+                indicatorBackground={props.instanceIndicatorBackground ?? "var(--contrast-input)"}
+                badgeClassName={cn(
+                  "right-[-0.125rem] bottom-[-0.125rem] h-3 min-w-3 px-0.5 text-5xs",
+                  size === "xs" && "shadow-none",
+                )}
+              />
+            </span>
           ) : null}
           <Tooltip>
             <TooltipTrigger
@@ -280,9 +284,6 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
               {t("common.unavailable")}
             </Badge>
           ) : null}
-        </span>
-        <span aria-hidden="true" className="flex items-center">
-          <ComposerControlChevron size={size} />
         </span>
       </PopoverTrigger>
       <PopoverPopup

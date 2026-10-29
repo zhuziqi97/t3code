@@ -5,6 +5,7 @@ import { useLayoutEffect, useRef, type ReactNode, type Ref } from "react";
 import type { SidebarListItem } from "../Sidebar.logic";
 import { sidebarListItemId } from "../Sidebar.logic";
 import { createSidebarListMotion } from "../Sidebar.motion";
+import { SIDEBAR_TREE_PROPS } from "../../lib/sidebarTree";
 import { cn } from "../../lib/utils";
 
 export function sidebarProjectDragId(key: string) {
@@ -31,14 +32,14 @@ function ProjectBlock(props: {
   const hasBody = props.items.length > 1;
   const dragging = active !== null;
   const motionPass = { layoutKey: bodyKey, animate: !dragging };
-  // oxlint-disable-next-line t3code/react-effect-budget -- The DOM motion controller must be created and disposed with its list element.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- The DOM motion controller must be created and disposed with its list element.
   useLayoutEffect(() => {
     if (!hasBody || !bodyRef.current) return;
     const current = createSidebarListMotion(bodyRef.current);
     motion.current = current;
     return () => current.dispose();
   }, [hasBody]);
-  // oxlint-disable-next-line t3code/react-effect-budget -- Committed list geometry and drag state drive the external animation controller.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Committed list geometry and drag state drive the external animation controller.
   useLayoutEffect(() => {
     motion.current?.update(motionPass.animate);
   }, [motionPass]);
@@ -122,7 +123,7 @@ export function ProjectTreeLayout({
     }
   }
   return (
-    <ul ref={listRef} role="presentation" className={cn("relative space-y-1", className)}>
+    <ul ref={listRef} {...SIDEBAR_TREE_PROPS} className={cn("relative space-y-1", className)}>
       {children}
       {top.map((item) => renderItem(item))}
       {projectKeys.map((key) => {

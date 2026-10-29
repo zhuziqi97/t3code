@@ -1,5 +1,4 @@
 import { useTranslate } from "../../i18n";
-/** Fixed sidebar actions and global thread search. */
 import { FolderPlusIcon, SearchIcon, SquarePenIcon, XIcon } from "lucide-react";
 import {
   type ComponentProps,
@@ -16,11 +15,15 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
 export interface SidebarThreadHeaderProps {
   searchFieldRef?: RefObject<HTMLDivElement | null>;
+  newThreadTargetLabel: string | null;
+  hasProjects: boolean;
+  projectScope: ReactNode;
   onNewProject: () => void;
   onNewThread: (event: ReactMouseEvent) => void;
   newThreadDisabled: boolean;
   newThreadShortcutLabel: string | null | undefined;
-  newThreadTargetLabel: string | null;
+  newThreadInProjectShortcutLabel: string | null | undefined;
+  showNewThreadInProjectHint: boolean;
   searchInputRef: RefObject<HTMLInputElement | null>;
   searchQuery: string;
   onSearchQueryChange: (value: string) => void;
@@ -33,11 +36,15 @@ export interface SidebarThreadHeaderProps {
 
 export function SidebarThreadHeader({
   searchFieldRef,
+  newThreadTargetLabel,
+  hasProjects,
+  projectScope,
   onNewProject,
   onNewThread,
   newThreadDisabled,
   newThreadShortcutLabel,
-  newThreadTargetLabel,
+  newThreadInProjectShortcutLabel,
+  showNewThreadInProjectHint,
   searchInputRef,
   searchQuery,
   onSearchQueryChange,
@@ -51,40 +58,18 @@ export function SidebarThreadHeader({
   const resultsVisible = isSearching && searchResultCount > 0;
   // Shrinking results can remove the active option; never leave aria-activedescendant pointing at it.
   const activeResultExists = resultsVisible && activeSearchResultIndex < searchResultCount;
-  const newThreadLabel = newThreadTargetLabel
+  const targetLabel = newThreadTargetLabel
     ? t("convene.sidebar.newInProject", { project: newThreadTargetLabel })
     : t("convene.sidebar.newThread");
+  const newThreadLabel = newThreadShortcutLabel
+    ? `${targetLabel} (${newThreadShortcutLabel})`
+    : targetLabel;
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-1">
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={newThreadDisabled}
-                onClick={onNewThread}
-              />
-            }
-          >
-            <SquarePenIcon /> {t("thread.new")}
-          </TooltipTrigger>
-          <TooltipPopup>
-            {newThreadLabel}
-            {newThreadShortcutLabel ? ` (${newThreadShortcutLabel})` : ""}
-          </TooltipPopup>
-        </Tooltip>
-        <div className="ml-auto">
-          <SidebarHeaderIconButton label={t("project.add")} onClick={onNewProject}>
-            <FolderPlusIcon />
-          </SidebarHeaderIconButton>
-        </div>
-      </div>
+    <div className="flex items-center gap-1">
       <div
         ref={searchFieldRef}
-        className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground redesign:focus-within:bg-sidebar-row-hover redesign:focus-within:text-sidebar-foreground redesign:focus-within:ring-1 redesign:focus-within:ring-inset redesign:focus-within:ring-ring/70"
+        className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-within:bg-sidebar-row-hover focus-within:text-sidebar-foreground focus-within:ring-1 focus-within:ring-inset focus-within:ring-ring/70"
       >
         <SearchIcon className="size-4 shrink-0 text-(--sidebar-icon-color)" />
         <SidebarInput
@@ -123,11 +108,41 @@ export function SidebarThreadHeader({
           </Button>
         ) : null}
       </div>
+      <div className="flex shrink-0 items-center">
+        {hasProjects ? (
+          <>
+            {projectScope}
+            <SidebarHeaderIconButton label={t("project.add")} onClick={onNewProject}>
+              <FolderPlusIcon />
+            </SidebarHeaderIconButton>
+          </>
+        ) : null}
+        <SidebarHeaderIconButton
+          label={targetLabel}
+          tooltip={
+            showNewThreadInProjectHint ? (
+              <span className="flex flex-col gap-0.5">
+                <span>{newThreadLabel}</span>
+                <span className="text-muted-foreground">
+                  New thread in current project: Shift+click
+                  {newThreadInProjectShortcutLabel ? ` (${newThreadInProjectShortcutLabel})` : ""}
+                </span>
+              </span>
+            ) : (
+              newThreadLabel
+            )
+          }
+          disabled={newThreadDisabled}
+          onClick={onNewThread}
+        >
+          <SquarePenIcon />
+        </SidebarHeaderIconButton>
+      </div>
     </div>
   );
 }
 
-function SidebarHeaderIconButton({
+export function SidebarHeaderIconButton({
   label,
   tooltip = label,
   className,

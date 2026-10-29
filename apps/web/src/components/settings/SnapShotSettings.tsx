@@ -158,7 +158,7 @@ export function SnapShotSettings() {
         : t("snapshots.sound.click");
 
   const setup = async (action: DesktopSnapShotSetupAction) => {
-    if (!bridge?.setupSnapShot || setupBusy) return;
+    if (!bridge || setupBusy) return;
     setSetupBusy(true);
     setSetupError(null);
     const result = await settlePromise(async () => {
@@ -170,7 +170,7 @@ export function SnapShotSettings() {
         // macOS can quit the app from its permission prompt.
         saveSnapShotSetupResume(wizard.wasEnabled);
       }
-      await bridge.setupSnapShot!(action);
+      await bridge.setupSnapShot(action);
       await refreshState();
     });
     if (result._tag === "Failure") {
@@ -314,8 +314,7 @@ export function SnapShotSettings() {
     const verified = await settlePromise(async () => {
       if (state?.macPermissions) {
         saveSnapShotSetupResume(wizard?.wasEnabled ?? settings.snapShotEnabled);
-        if (!bridge?.setupSnapShot) throw new Error("Restart T3 Code to finish capture setup.");
-        await bridge.setupSnapShot("test-mac-capture");
+        await bridge?.setupSnapShot("test-mac-capture");
       }
       if (state?.mode === "direct")
         await bridge?.requestSnapShotPermissions(settings.snapShotIncludeAccessibility);

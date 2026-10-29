@@ -5,6 +5,7 @@ import {
   DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE,
   DEFAULT_UNIFIED_SETTINGS,
   type ChatWidth,
+  type EffortDisplay,
   type EnvironmentIdentificationMode,
   MAX_APPEARANCE_CONTRAST,
   MAX_GLASS_OPACITY,
@@ -14,7 +15,8 @@ import {
   MIN_PANEL_ANIMATION_DURATION_MS,
 } from "@t3tools/contracts/settings";
 import {
-  resolveEnvironmentIdentificationPillLabel,
+  resolveSidebarStageBackdropVariant,
+  type SidebarStageBackdropVariant,
   useEnvironmentStageLabel,
 } from "../SidebarStageBackdrop";
 import { useCustomThemes } from "../../hooks/useCustomThemes";
@@ -33,17 +35,54 @@ import { searchableSetting } from "./settingsSearch";
 import { AdvancedSettings } from "./AdvancedSettings";
 import { PanelAnimationsPreview } from "./PanelAnimationsPreview";
 import { TypographySection } from "./TypographySettings";
+import { ThreadDetailsItemsRow } from "./ThreadDetailsItemsRow";
 
 const ENVIRONMENT_IDENTIFICATION_LABELS: Record<EnvironmentIdentificationMode, string> = {
   artwork: "appearance.environment.artwork",
+  "nightly-artwork": "appearance.environment.nightlyArtwork",
+  "dev-artwork": "appearance.environment.devArtwork",
   pill: "appearance.environment.pill",
   none: "appearance.environment.none",
 };
+
+// The default "artwork" follows the running channel, so it is labeled as that channel's art,
+// or as t("appearance.environment.none") on Latest. The other channel's art is offered as a fixed choice.
+function environmentIdentificationOptions(
+  stageVariant: SidebarStageBackdropVariant | null,
+  t: ReturnType<typeof useTranslate>,
+): ReadonlyArray<readonly [EnvironmentIdentificationMode, string]> {
+  if (stageVariant === "dev") {
+    return [
+      ["artwork", t("appearance.environment.devArtwork")],
+      ["nightly-artwork", t("appearance.environment.nightlyArtwork")],
+      ["pill", t("appearance.environment.pill")],
+      ["none", t("appearance.environment.none")],
+    ];
+  }
+  if (stageVariant === "nightly") {
+    return [
+      ["artwork", t("appearance.environment.nightlyArtwork")],
+      ["dev-artwork", t("appearance.environment.devArtwork")],
+      ["pill", t("appearance.environment.pill")],
+      ["none", t("appearance.environment.none")],
+    ];
+  }
+  return [
+    ["artwork", t("appearance.environment.none")],
+    ["nightly-artwork", t("appearance.environment.nightlyArtwork")],
+    ["dev-artwork", t("appearance.environment.devArtwork")],
+  ];
+}
 
 const CHAT_WIDTH_LABELS: Record<ChatWidth, string> = {
   comfortable: "appearance.width.comfortable",
   wide: "appearance.width.wide",
   full: "appearance.width.full",
+};
+
+const EFFORT_DISPLAY_LABELS: Record<EffortDisplay, string> = {
+  label: "Word",
+  bars: "Bars",
 };
 
 export function AppearanceSettingsPanel() {
@@ -63,8 +102,15 @@ export function AppearanceSettingsPanel() {
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
   const environmentStageLabel = useEnvironmentStageLabel();
-  const showEnvironmentIdentification =
-    resolveEnvironmentIdentificationPillLabel(environmentStageLabel) !== null;
+  const environmentStageVariant = resolveSidebarStageBackdropVariant(environmentStageLabel);
+  const environmentIdentificationOptionList = environmentIdentificationOptions(
+    environmentStageVariant,
+    t,
+  );
+  const environmentIdentificationLabel =
+    environmentIdentificationOptionList.find(
+      ([value]) => value === settings.environmentIdentificationMode,
+    )?.[1] ?? t(ENVIRONMENT_IDENTIFICATION_LABELS[settings.environmentIdentificationMode]);
   const glassOpacityRatio =
     (settings.glassOpacity - MIN_GLASS_OPACITY) / (MAX_GLASS_OPACITY - MIN_GLASS_OPACITY);
   const glassOpacitySliderStyle = {
@@ -112,27 +158,6 @@ export function AppearanceSettingsPanel() {
       </SettingsSection>
 
       <SettingsSection id="appearance-interface" title={t("appearance.interface")}>
-        <SettingsRow
-          {...searchableSetting("new-design")}
-          description="A true black dark mode, dimmer read threads, and simpler composer controls. Turn it off for the classic look."
-          resetAction={
-            settings.redesignEnabled !== DEFAULT_UNIFIED_SETTINGS.redesignEnabled ? (
-              <SettingResetButton
-                label="new design"
-                onClick={() =>
-                  updateSettings({ redesignEnabled: DEFAULT_UNIFIED_SETTINGS.redesignEnabled })
-                }
-              />
-            ) : null
-          }
-          control={
-            <Switch
-              checked={settings.redesignEnabled}
-              onCheckedChange={(checked) => updateSettings({ redesignEnabled: Boolean(checked) })}
-              aria-label="New design"
-            />
-          }
-        />
         <SettingsRow
           {...searchableSetting("setting-appearance-contrast", t)}
           description={t("appearance.contrastDescription")}
@@ -263,6 +288,40 @@ export function AppearanceSettingsPanel() {
             </div>
           }
         />
+        <ThreadDetailsItemsRow />
+        <SettingsRow
+          {...searchableSetting("effort-display")}
+          description="Show reasoning effort in the composer as its name, such as High, or as bars."
+          resetAction={
+            settings.effortDisplay !== DEFAULT_UNIFIED_SETTINGS.effortDisplay ? (
+              <SettingResetButton
+                label="effort display"
+                onClick={() =>
+                  updateSettings({ effortDisplay: DEFAULT_UNIFIED_SETTINGS.effortDisplay })
+                }
+              />
+            ) : null
+          }
+          control={
+            <div className="w-full sm:w-40">
+              <Select
+                value={settings.effortDisplay}
+                onValueChange={(value) => {
+                  if (value === "bars" || value === "label")
+                    updateSettings({ effortDisplay: value });
+                }}
+              >
+                <SelectTrigger size="sm" className="w-full min-w-0" aria-label="Effort display">
+                  <SelectValue>{EFFORT_DISPLAY_LABELS[settings.effortDisplay]}</SelectValue>
+                </SelectTrigger>
+                <SelectPopup align="end" alignItemWithTrigger={false}>
+                  <SelectItem value="label">Word (default)</SelectItem>
+                  <SelectItem value="bars">Bars</SelectItem>
+                </SelectPopup>
+              </Select>
+            </div>
+          }
+        />
         <SettingsRow
           {...searchableSetting("math-rendering", t)}
           description={t("appearance.math.description")}
@@ -350,52 +409,52 @@ export function AppearanceSettingsPanel() {
               ) : null
             }
           />
-          {showEnvironmentIdentification ? (
-            <SettingsRow
-              {...searchableSetting("environment-identification")}
-              description={t("appearance.environmentDescription")}
-              resetAction={
-                settings.environmentIdentificationMode !==
-                DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE ? (
-                  <SettingResetButton
-                    label={t("appearance.environmentReset")}
-                    onClick={() =>
-                      updateSettings({
-                        environmentIdentificationMode: DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE,
-                      })
-                    }
-                  />
-                ) : null
-              }
-              control={
-                <Select
-                  value={settings.environmentIdentificationMode}
-                  onValueChange={(value) => {
-                    if (value === "artwork" || value === "pill" || value === "none") {
-                      updateSettings({ environmentIdentificationMode: value });
-                    }
-                  }}
+          <SettingsRow
+            {...searchableSetting("environment-identification")}
+            description={
+              environmentStageVariant
+                ? "Choose how Dev and Nightly environments are identified."
+                : "Show Dev or Nightly artwork in the sidebar header."
+            }
+            resetAction={
+              settings.environmentIdentificationMode !== DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE ? (
+                <SettingResetButton
+                  label={t("appearance.environmentReset")}
+                  onClick={() =>
+                    updateSettings({
+                      environmentIdentificationMode: DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE,
+                    })
+                  }
+                />
+              ) : null
+            }
+            control={
+              <Select
+                value={settings.environmentIdentificationMode}
+                onValueChange={(value) => {
+                  const option = environmentIdentificationOptionList.find(
+                    ([optionValue]) => optionValue === value,
+                  );
+                  if (option) updateSettings({ environmentIdentificationMode: option[0] });
+                }}
+              >
+                <SelectTrigger
+                  size="sm"
+                  className="w-full sm:w-40"
+                  aria-label={t("settings.search.environment-identification.title")}
                 >
-                  <SelectTrigger
-                    size="sm"
-                    className="w-full sm:w-40"
-                    aria-label={t("settings.search.environment-identification.title")}
-                  >
-                    <SelectValue>
-                      {ENVIRONMENT_IDENTIFICATION_LABELS[settings.environmentIdentificationMode]}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectPopup align="end" alignItemWithTrigger={false}>
-                    {Object.entries(ENVIRONMENT_IDENTIFICATION_LABELS).map(([value, label]) => (
-                      <SelectItem hideIndicator key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectPopup>
-                </Select>
-              }
-            />
-          ) : null}
+                  <SelectValue>{environmentIdentificationLabel}</SelectValue>
+                </SelectTrigger>
+                <SelectPopup align="end" alignItemWithTrigger={false}>
+                  {environmentIdentificationOptionList.map(([value, label]) => (
+                    <SelectItem hideIndicator key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
+            }
+          />
           <SettingsRow
             {...searchableSetting("composer-context")}
             description={t("appearance.composerDescription")}

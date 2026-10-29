@@ -39,7 +39,7 @@ export function resolveTimestampLocale(
 
 function readHostSystemLocale(): string | null {
   if (typeof window === "undefined") return null;
-  return window.desktopBridge?.getSystemLocale?.() ?? null;
+  return window.desktopBridge?.getSystemLocale() ?? null;
 }
 
 const timestampLocale = resolveTimestampLocale(readHostSystemLocale());

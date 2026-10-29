@@ -9,7 +9,7 @@ import {
 } from "@t3tools/contracts";
 import { Radio as RadioPrimitive } from "@base-ui/react/radio";
 import { isLoopbackHost } from "@t3tools/shared/preview";
-import { EyeIcon } from "lucide-react";
+import { EyeIcon, type LucideIcon } from "lucide-react";
 import type * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -24,7 +24,19 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { RadioGroup } from "../ui/radio-group";
 import { Spinner } from "../ui/spinner";
-import { AuthSurfaceShell } from "./AuthSurfaceShell";
+import { StandalonePage, StandalonePageHeader } from "../ui/standalone-page";
+
+export const accessConfig: Record<
+  AuthMcpClientAccess,
+  { readonly label: string; readonly description: string; readonly icon: LucideIcon }
+> = {
+  "read-only": {
+    label: "Read only",
+    description: "Read projects and threads. Cannot start, message or change anything.",
+    icon: EyeIcon,
+  },
+  ...runtimeModeConfig,
+};
 
 /** A CLI agent's callback is a loopback address; a hosted agent's is its own server. */
 function redirectsToThisComputer(redirectHost: string): boolean {
@@ -86,6 +98,7 @@ export function ConnectAgentSurface() {
   >(null);
   const [pending, setPending] = useState<"approve" | "deny" | null>(null);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- fetches the MCP OAuth approval and redirects the window or stores details, ignoring stale answers
   useEffect(() => {
     let cancelled = false;
     void runApproval((client) => client.mcpOAuth.approval({ payload: authorization })).then(
@@ -133,25 +146,25 @@ export function ConnectAgentSurface() {
 
   if (loaded.status === "loading") {
     return (
-      <AuthSurfaceShell>
+      <StandalonePage>
         <ConnectAgentHeading
           title={t("agentConnect.checking")}
           description={t("agentConnect.checkingDescription")}
         />
         <Spinner className="mt-6" size="lg" tone="muted" />
-      </AuthSurfaceShell>
+      </StandalonePage>
     );
   }
 
   if (loaded.status === "invalid") {
     return (
-      <AuthSurfaceShell>
+      <StandalonePage>
         <ConnectAgentHeading
           title={t("agentConnect.invalid")}
           description={loaded.message ?? t("agentConnect.unreachable")}
         />
         <p className="mt-4 text-sm text-muted-foreground">{t("agentConnect.restart")}</p>
-      </AuthSurfaceShell>
+      </StandalonePage>
     );
   }
 
@@ -160,7 +173,7 @@ export function ConnectAgentSurface() {
   const canApprove = pending === null && (oneClick || pairingCode.trim().length > 0);
 
   return (
-    <AuthSurfaceShell>
+    <StandalonePage>
       <ConnectAgentHeading
         title={t("agentConnect.title", { client: details.clientName })}
         description={
@@ -255,7 +268,7 @@ export function ConnectAgentSurface() {
           </Button>
         </div>
       </form>
-    </AuthSurfaceShell>
+    </StandalonePage>
   );
 }
 
@@ -268,13 +281,11 @@ function ConnectAgentHeading({
 }) {
   const t = useTranslate();
   return (
-    <>
-      <p className="text-3xs font-semibold tracking-widest text-primary uppercase">
-        {t("agentConnect.eyebrow")}
-      </p>
-      <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
-      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{description}</p>
-    </>
+    <StandalonePageHeader
+      context={t("agentConnect.eyebrow")}
+      title={title}
+      description={description}
+    />
   );
 }
 

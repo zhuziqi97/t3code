@@ -17,20 +17,14 @@ export class AnalyticsService extends Context.Service<
       source: "client" | "server",
     ) => Effect.Effect<void>;
   }
->()("t3/telemetry/AnalyticsService") {
-  static readonly layerTest = Layer.succeed(
-    AnalyticsService,
-    AnalyticsService.of({
-      record: Effect.fn("AnalyticsService.record")(function () {
-        return Effect.void;
-      }),
-      flush: Effect.void,
-      recordOwners: Effect.fn("AnalyticsService.recordOwners")(function () {
-        return Effect.void;
-      }),
-    }),
-  );
-}
+>()("t3/telemetry/AnalyticsService") {}
 
 // Convene distributions never enable upstream product analytics, including via env overrides.
-export const layer = AnalyticsService.layerTest;
+export const layer = Layer.succeed(
+  AnalyticsService,
+  AnalyticsService.of({
+    record: Effect.fn("AnalyticsService.record")(() => Effect.void),
+    flush: Effect.void,
+    recordOwners: Effect.fn("AnalyticsService.recordOwners")(() => Effect.void),
+  }),
+);

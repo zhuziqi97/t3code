@@ -23,6 +23,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as DesktopConfig from "../app/DesktopConfig.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
+import * as DesktopBackendPool from "../backend/DesktopBackendPool.ts";
 import * as ElectronShell from "../electron/ElectronShell.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as DesktopTelemetryPublisher from "../telemetry/DesktopTelemetryPublisher.ts";
@@ -348,6 +349,7 @@ it.effect(
         yield* DesktopRemoteUpdates.listen.pipe(
           Effect.provideService(DesktopUpdates.DesktopUpdates, h.updates),
           Effect.provideService(DesktopTelemetryPublisher.DesktopTelemetryPublisher, h.publisher),
+          Effect.provide(Layer.mock(DesktopBackendPool.DesktopBackendPool)({})),
         );
         yield* Queue.offer(h.remoteRequests, {
           version: 1,

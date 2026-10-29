@@ -29,3 +29,14 @@ it("finds desktop update controls from bilingual queries and keeps the device-lo
     expect(getSettingsSearchTargetScope("desktop-updates")?.scope).toBeNull();
   }
 });
+
+it("finds the desktop relay installation through its original Chinese query", async () => {
+  await changeLanguage("zh");
+  expect(searchSettings("安装中继")).toContainEqual(
+    expect.objectContaining({
+      id: "t3-connect",
+      to: "/settings/access",
+      targetId: "connections-environment",
+    }),
+  );
+});

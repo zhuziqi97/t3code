@@ -1,3 +1,8 @@
+import * as PeerLinks from "../../../peer/PeerLinks.ts";
+import * as PeerLinkRequests from "../../../peer/PeerLinkRequests.ts";
+import * as PeerForwarding from "../../../peer/PeerForwarding.ts";
+import * as RemoteDelegation from "../../../peer/RemoteDelegation.ts";
+import * as WorktreeMcpService from "../../WorktreeMcpService.ts";
 import * as DocumentText from "../../../provider/DocumentText.ts";
 import * as EffectOutbox from "../../../orchestration-v2/EffectOutbox.ts";
 import * as Orchestrator from "../../../orchestration-v2/Orchestrator.ts";
@@ -40,6 +45,11 @@ import * as PreviewAutomationBroker from "../../PreviewAutomationBroker.ts";
 import * as PreviewBrowser from "../../../preview/PreviewBrowser.ts";
 
 const layerStubServices = Layer.mergeAll(
+  Layer.mock(PeerLinks.PeerLinks)({}),
+  Layer.mock(PeerLinkRequests.PeerLinkRequests)({}),
+  Layer.mock(PeerForwarding.PeerForwarding)({}),
+  Layer.mock(RemoteDelegation.RemoteDelegation)({}),
+  Layer.mock(WorktreeMcpService.WorktreeMcpService)({}),
   Layer.mock(DocumentText.DocumentText)({}),
   Layer.mock(Orchestrator.OrchestratorV2)({}),
   Layer.mock(ThreadWorkspaceRecovery.ThreadWorkspaceRecovery)({}),

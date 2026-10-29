@@ -11,14 +11,14 @@ import { AppText as Text } from "../../components/ui/AppText";
 import * as Dialog from "../../components/ui/Dialog";
 import { useTranslate } from "../../i18n";
 import { mobilePreferencesAtom } from "../../state/preferences";
-import { useThreadProjection } from "../../state/use-thread-detail";
+import { useQuietThreadStructure } from "../../state/use-thread-detail";
 
 export function ThreadContextWindowMeter(props: {
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
 }) {
   const t = useTranslate();
-  const thread = useThreadProjection(props);
+  const thread = useQuietThreadStructure(props);
   const preferences = useAtomValue(mobilePreferencesAtom);
   const usage = deriveThreadContextWindowSnapshot(thread?.projection);
   if (

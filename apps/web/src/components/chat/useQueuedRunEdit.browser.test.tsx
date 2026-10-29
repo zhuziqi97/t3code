@@ -135,6 +135,7 @@ const savedContent = (prompt: string) => ({
   reviewComments: [],
   previewAnnotations: [],
   threadContexts: [],
+  environmentContexts: [],
 });
 
 const promptOf = (ref: ScopedThreadRef) =>

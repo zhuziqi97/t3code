@@ -1,4 +1,8 @@
-import type { EditorId, EnvironmentId, ResolvedKeybindingsConfig } from "@t3tools/contracts";
+import {
+  type EditorId,
+  type EnvironmentId,
+  type ResolvedKeybindingsConfig,
+} from "@t3tools/contracts";
 import { useEffect } from "react";
 import {
   readPreferredEditor,
@@ -59,10 +63,16 @@ export function useOpenFavoriteEditorShortcut({
 }) {
   const action = useEditorAction(environmentId, availableEditors, workspace);
   const t = useTranslate();
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Register the window keydown listener while this editor shortcut target is enabled, and remove it on replacement or unmount.
   useEffect(() => {
     if (!enabled || !openInCwd) return;
     const handler = (event: globalThis.KeyboardEvent) => {
-      if (event.defaultPrevented || !isOpenFavoriteEditorShortcut(event, keybindings)) return;
+      if (
+        event.repeat ||
+        event.defaultPrevented ||
+        !isOpenFavoriteEditorShortcut(event, keybindings)
+      )
+        return;
       event.preventDefault();
       const preferredEditor = readPreferredEditor();
       const label =
