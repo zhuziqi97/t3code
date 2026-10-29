@@ -739,12 +739,18 @@ describe("presentPendingBackgroundWork", () => {
       ])?.title,
     ).toBe("Waiting on subagent Review src/math.ts");
     expect(presentPendingBackgroundWork([{ taskId: "a", kind: "monitor" }])?.title).toBe(
-      "Waiting on a monitor",
+      "Running a monitor",
     );
+    expect(
+      presentPendingBackgroundWork([{ taskId: "a", kind: "monitor", awaited: true }]),
+    ).toMatchObject({
+      title: "Waiting on a monitor",
+      waiting: true,
+    });
     expect(presentPendingBackgroundWork([])).toBeNull();
   });
 
-  it("says only commands are running, not waited on", () => {
+  it("says commands and monitors are running unless awaited", () => {
     expect(
       presentPendingBackgroundWork([
         { taskId: "dev", kind: "command", description: "Start the shared dev server" },
@@ -760,12 +766,28 @@ describe("presentPendingBackgroundWork", () => {
         { taskId: "b", kind: "command", description: "tailscale serve" },
       ]),
     ).toMatchObject({ title: "Running 2 commands", waiting: false });
-    expect(
-      presentPendingBackgroundWork([
-        { taskId: "a", kind: "command", description: "vp run dev" },
-        { taskId: "b", kind: "monitor", description: "Watch PR checks" },
-      ]),
-    ).toMatchObject({ title: "Waiting on 1 command and 1 monitor", waiting: true });
+    const background = [
+      { taskId: "a", kind: "command", description: "vp run dev" },
+      { taskId: "b", kind: "monitor", description: "Watch PR checks" },
+    ] as const;
+    expect(presentPendingBackgroundWork(background)).toMatchObject({
+      title: "Running 1 command and 1 monitor",
+      waiting: false,
+    });
+    for (const awaitedKind of ["command", "monitor"] as const) {
+      expect(
+        presentPendingBackgroundWork(
+          background.map((task) => (task.kind === awaitedKind ? { ...task, awaited: true } : task)),
+        ),
+      ).toMatchObject({
+        title: "Waiting on 1 command and 1 monitor",
+        waiting: true,
+        items: [
+          { taskId: "a", kind: "command", label: "vp run dev" },
+          { taskId: "b", kind: "monitor", label: "Watch PR checks" },
+        ],
+      });
+    }
   });
 
   it("groups work by kind, subagents first, and keeps each name", () => {
