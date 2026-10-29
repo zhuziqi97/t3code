@@ -68,6 +68,7 @@ export interface SettingsSearchItem {
   readonly localEnvironmentOnly?: boolean;
   readonly wslAvailableOnly?: boolean;
   readonly managedTunnelOnly?: boolean;
+  readonly peerLinksOnly?: boolean;
   readonly secondary?: boolean;
   readonly requiresThreadAutoSettlement?: boolean;
 }
@@ -82,6 +83,7 @@ export interface SettingsSearchAvailability {
   readonly isWslSettingsRowVisible: boolean;
   readonly hasThreadAutoSettlement: boolean;
   readonly managedTunnelActive?: boolean;
+  readonly hasPeerLinkHost?: boolean;
 }
 
 export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
@@ -112,6 +114,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
 /** Sidebar order. A group without a heading is set apart by space alone. */
 export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
   readonly heading: string | null;
+  readonly headingKey?: string;
   readonly paths: ReadonlyArray<SettingsPath>;
 }> = [
   {
@@ -140,7 +143,8 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
     paths: ["/settings/projects", "/settings/source-control", "/settings/worktrees"],
   },
   {
-    heading: i18n.t("settings.sections.connections"),
+    heading: null,
+    headingKey: "settings.sections.connections",
     paths: ["/settings/connections", "/settings/convene", "/settings/access"],
   },
   {
@@ -384,6 +388,20 @@ export const SETTINGS_SEARCH_ITEMS = [
     ],
   },
   {
+    id: "thread-details-items",
+    title: "Thread details",
+    to: "/settings/appearance",
+    searchTerms: [
+      "customize show hide panel card environment editor scripts branch pull request git changes servers automations lineage usage limits 5 hour weekly quota tokens context window",
+    ],
+  },
+  {
+    id: "effort-display",
+    title: "Effort display",
+    to: "/settings/appearance",
+    searchTerms: ["reasoning effort thinking bars graph word label level composer"],
+  },
+  {
     id: "math-rendering",
     title: "Render math",
     to: "/settings/appearance",
@@ -404,7 +422,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     },
     to: "/settings/appearance",
     searchTerms: [
-      "dev nightly artwork pill label hide none",
+      "dev nightly latest channel artwork pill label hide none",
       "环境标识 开发版 Nightly 图形标识 版本标签 不显示",
     ],
     targetId: "appearance-interface",
@@ -468,10 +486,7 @@ export const SETTINGS_SEARCH_ITEMS = [
       return i18n.t("settings.search.word-wrap.title");
     },
     to: "/settings/appearance",
-    searchTerms: [
-      "long lines code blocks tables diffs file previews",
-      "自动换行 长行 代码 表格 差异 文件预览",
-    ],
+    searchTerms: ["long lines code blocks diffs file previews", "自动换行 长行 代码 差异 文件预览"],
   },
   {
     id: "composer-context",
@@ -501,6 +516,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["Project order 项目顺序", "sort projects sidebar manual created recent"],
   },
   {
+    id: "snooze-options",
+    title: "Snooze options",
+    to: "/settings/threads",
+    searchTerms: ["snooze presets times later tonight tomorrow next week remind"],
+    environmentOnly: true,
+    scope: "environment-defaults",
+  },
+  {
     id: "snooze-limited-threads",
     get title() {
       return i18n.t("settings.search.snooze-limited-threads.title");
@@ -523,12 +546,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     ],
   },
   {
-    id: "new-design",
-    title: "New design",
-    to: "/settings/appearance",
-    searchTerms: ["redesign look style sidebar composer black quieter classic"],
-  },
-  {
     id: "working-shelf",
     get title() {
       return i18n.t("settings.search.working-shelf.title");
@@ -540,11 +557,37 @@ export const SETTINGS_SEARCH_ITEMS = [
     ],
   },
   {
+    id: "boring-sidebar",
+    title: "Boring sidebar (group by project)",
+    to: "/settings/labs",
+    searchTerms: ["beta folders project tree legacy old classic sidebar"],
+  },
+  {
+    id: "boring-sidebar-multiline",
+    title: "Two-line folder rows",
+    to: "/settings/labs",
+    searchTerms: ["beta boring sidebar folder rows multiline branch pull request details"],
+  },
+  {
     id: "guest-links",
     title: "Guest links",
     to: "/settings/labs",
     scope: "environment",
     searchTerms: ["beta share guest invite link teammate watch t3 connect tunnel"],
+  },
+  {
+    id: "linked-environments-beta",
+    title: "Linked environments",
+    to: "/settings/labs",
+    scope: "environment",
+    searchTerms: ["beta link another machine vps peer agents work there delegate"],
+  },
+  {
+    id: "simlock-hosts",
+    title: "Simlock device hosts (alpha)",
+    to: "/settings/labs",
+    scope: "environment",
+    searchTerms: ["beta alpha simlock callstack simulator emulator ios android pool lease gateway"],
   },
   {
     id: "auto-settle-inactive-threads",
@@ -713,17 +756,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [
       "Rich text composer 富文本输入框",
       "composer rich text tiptap bold italic markdown styled wysiwyg",
-    ],
-  },
-  {
-    id: "composer-collapse",
-    get title() {
-      return i18n.t("settings.search.composer-collapse.title");
-    },
-    to: "/settings/chat",
-    searchTerms: [
-      "Collapse composer on scroll 滚动时收起输入框",
-      "composer rest resting scroll wheel conversation timeline shrink minimize",
     ],
   },
   {
@@ -972,12 +1004,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["composer meter usage tokens circle old"],
   },
   {
-    id: "legacy-sidebar",
-    title: "Sidebar (legacy)",
-    to: "/settings/labs",
-    searchTerms: ["project thread tree old flat list"],
-  },
-  {
     id: "keybindings",
     get title() {
       return i18n.t("settings.search.keybindings.title");
@@ -1108,15 +1134,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     ],
   },
   {
-    id: "device-hosts",
+    id: "device-sources",
     get title() {
-      return i18n.t("device.hosts.title");
+      return i18n.t("device.sources.title");
     },
     to: "/settings/devices",
     searchTerms: [
-      "Device hosts 设备主机",
-      "设备主机 远程主机 SSH 连接 身份文件 密钥 端口",
-      "ssh remote simulator emulator ios android mac mini identity key connection",
+      "设备来源 远程主机 SSH 设备主机",
+      "device hosts ssh remote mac mini identity key connection eas expo cloud simlock pool gateway local simulators",
     ],
   },
   {
@@ -1135,27 +1160,25 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "device-hub",
     get title() {
-      return i18n.t("device.hub.title");
+      return i18n.t("device.hub.enable");
     },
     to: "/settings/devices",
     targetId: "devices",
     searchTerms: [
-      "Device hub 设备中心",
+      "device hub simulator emulator ios android install start version",
       "设备中心 模拟器 安装 启动",
-      "simulator emulator ios android install start",
     ],
   },
   {
     id: "device-platform-support",
     get title() {
-      return i18n.t("device.platform.title");
+      return i18n.t("device.sources.local");
     },
     to: "/settings/devices",
-    targetId: "devices",
+    targetId: "device-sources",
     searchTerms: [
-      "Simulator support 模拟器支持",
-      "模拟器支持 运行时 安卓 苹果",
-      "xcode android studio sdk avd runtime",
+      "simulator support xcode android studio sdk avd runtime",
+      "本地模拟器 模拟器支持",
     ],
   },
   {
@@ -1498,6 +1521,7 @@ export const SETTINGS_SEARCH_ITEMS = [
       "隧道 远程 云端 其他设备 中继客户端 安装中继",
       "managed tunnel cloud other devices remote",
     ],
+    desktopOnly: true,
     cloudOnly: true,
   },
   {
@@ -1531,6 +1555,14 @@ export const SETTINGS_SEARCH_ITEMS = [
       "本机 权限 已授权 客户端 配对 凭据 撤销 服务端更新 更新执行环境 重新启动命令",
       "connections server backend local remote access administrative permissions scope pairing links qr code authorized clients sessions revoke endpoint",
     ],
+  },
+  {
+    id: "linked-environments",
+    peerLinksOnly: true,
+    title: "Linked environments",
+    to: "/settings/connections",
+    targetId: "linked-environments",
+    searchTerms: ["link peer another machine vps agents work there handoff pairing code"],
   },
   {
     id: "remote-environments",
@@ -1676,11 +1708,7 @@ export function getSettingsSearchTargetScope(targetId: string) {
 interface AutoSettlementSearchEnvironment {
   readonly environmentId: EnvironmentId;
   readonly connection: { readonly phase: EnvironmentConnectionPhase };
-  readonly serverConfig: {
-    readonly environment: {
-      readonly capabilities: { readonly threadAutoSettlement?: boolean };
-    };
-  } | null;
+  readonly serverConfig: object | null;
 }
 
 export function getThreadAutoSettlementSearchAvailability(
@@ -1691,12 +1719,7 @@ export function getThreadAutoSettlementSearchAvailability(
     (environment) =>
       environment.connection.phase === "connected" && environment.serverConfig !== null,
   );
-  const eligibleEnvironmentIds = connected
-    .filter(
-      (environment) =>
-        environment.serverConfig?.environment.capabilities.threadAutoSettlement === true,
-    )
-    .map((environment) => environment.environmentId);
+  const eligibleEnvironmentIds = connected.map((environment) => environment.environmentId);
   const selected = connected.filter((environment) =>
     scope?.environmentIds.includes(environment.environmentId),
   );
@@ -1775,7 +1798,8 @@ export function filterAvailableSettingsSearchItems(
       (!item.localEnvironmentOnly || !availability.localEnvironmentDisabled) &&
       (!item.wslAvailableOnly || availability.isWslSettingsRowVisible) &&
       (!item.requiresThreadAutoSettlement || availability.hasThreadAutoSettlement) &&
-      (!item.managedTunnelOnly || availability.managedTunnelActive === true),
+      (!item.managedTunnelOnly || availability.managedTunnelActive === true) &&
+      (!item.peerLinksOnly || availability.hasPeerLinkHost === true),
   );
 }
 

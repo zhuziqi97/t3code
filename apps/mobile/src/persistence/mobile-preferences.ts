@@ -15,6 +15,7 @@ import {
   type SidebarProjectGroupingMode,
 } from "@t3tools/contracts";
 import { isLanguagePreference, type LanguagePreference } from "@t3tools/client-runtime/i18n";
+import type { AndroidNavigationStyle } from "../lib/androidNavigationStyle";
 import type { ComposerEnterBehavior } from "../lib/composerEnterBehavior";
 import type { FollowUpBehavior } from "../lib/followUpBehavior";
 import { isMicrophoneKind, type MicrophoneEntry } from "../lib/microphonePriority";
@@ -80,6 +81,11 @@ export type WorkspaceSelections = typeof WorkspaceSelections.Type;
 const isThreadListFilters = Schema.is(ThreadListFilters);
 const isWorkspaceSelections = Schema.is(WorkspaceSelections);
 const isPullRequestListPreferences = Schema.is(PullRequestListPreferences);
+const ThreadProject = Schema.Struct({
+  environmentId: Schema.NonEmptyString,
+  projectId: Schema.NonEmptyString,
+});
+const isThreadProject = Schema.is(ThreadProject);
 
 export interface Preferences {
   readonly navigationTabOrder?: readonly string[];
@@ -91,12 +97,14 @@ export interface Preferences {
   readonly lightThemeId?: MobileThemeId;
   readonly darkThemeId?: MobileThemeId;
   readonly themeMode?: MobileThemeMode;
+  readonly androidNavigationStyle?: AndroidNavigationStyle;
   readonly baseFontSize?: number;
   readonly terminalFontSize?: number | null;
   readonly markdownFontSize?: number;
   readonly codeFontSize?: number | null;
   readonly codeWordBreak?: boolean;
   readonly mathRenderingEnabled?: boolean;
+  /** Unset means on: crash reports are sent unless the user turns them off. */
   readonly connectOnboardingOptOutAccounts?: ReadonlyArray<string>;
   readonly collapsedProjectGroups?: readonly string[];
   readonly dismissedDatabaseStorageNotices?: readonly string[];
@@ -113,6 +121,8 @@ export interface Preferences {
   readonly planModeEnabled?: boolean;
   readonly contextWindowMeterEnabled?: boolean;
   readonly workingShelfEnabled?: boolean;
+  readonly useLastProjectForNewThreads?: boolean;
+  readonly lastThreadProject?: typeof ThreadProject.Type;
   readonly modelFavorites?: ReadonlyArray<{
     readonly provider: ProviderInstanceId;
     readonly model: string;
@@ -173,6 +183,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     lightThemeId?: MobileThemeId;
     darkThemeId?: MobileThemeId;
     themeMode?: MobileThemeMode;
+    androidNavigationStyle?: AndroidNavigationStyle;
     baseFontSize?: number;
     terminalFontSize?: number | null;
     markdownFontSize?: number;
@@ -192,6 +203,8 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     planModeEnabled?: boolean;
     contextWindowMeterEnabled?: boolean;
     workingShelfEnabled?: boolean;
+    useLastProjectForNewThreads?: boolean;
+    lastThreadProject?: typeof ThreadProject.Type;
     modelFavorites?: Preferences["modelFavorites"];
     threadListSettledShelfExpanded?: boolean;
     threadListSnoozedShelfExpanded?: boolean;
@@ -252,6 +265,9 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     parsed.themeMode === "dark"
   ) {
     preferences.themeMode = parsed.themeMode;
+  }
+  if (parsed.androidNavigationStyle === "one-ui" || parsed.androidNavigationStyle === "material") {
+    preferences.androidNavigationStyle = parsed.androidNavigationStyle;
   }
   if (typeof parsed.baseFontSize === "number") preferences.baseFontSize = parsed.baseFontSize;
   if (typeof parsed.terminalFontSize === "number" || parsed.terminalFontSize === null) {
@@ -321,6 +337,12 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   if (typeof parsed.workingShelfEnabled === "boolean") {
     preferences.workingShelfEnabled = parsed.workingShelfEnabled;
   }
+  if (typeof parsed.useLastProjectForNewThreads === "boolean") {
+    preferences.useLastProjectForNewThreads = parsed.useLastProjectForNewThreads;
+  }
+  if (isThreadProject(parsed.lastThreadProject)) {
+    preferences.lastThreadProject = parsed.lastThreadProject;
+  }
   if (Array.isArray(parsed.modelFavorites)) {
     preferences.modelFavorites = parsed.modelFavorites.filter(
       (favorite) =>
@@ -353,7 +375,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   return preferences;
 }
 
-export const make = Effect.fn("MobilePreferencesStore.make")(function* () {
+const make = Effect.fn("MobilePreferencesStore.make")(function* () {
   const database = yield* MobileDatabase.MobileDatabase;
   const secureStorage = yield* MobileSecureStorage.MobileSecureStorage;
   const lock = yield* Semaphore.make(1);

@@ -114,7 +114,7 @@ export function buildTraitsTriggerDisplay(
     reportedModelSelection?: ModelSelection | null | undefined;
   },
   t?: TFunction,
-): { label: string } {
+): { label: string; speedLabel: string | null; otherLabels: ReadonlyArray<string> } {
   let fastModeFallbackLabel: string | null = null;
   let speedLabel: string | null = null;
   let reasoningLabelIndex = -1;
@@ -189,8 +189,9 @@ export function buildTraitsTriggerDisplay(
     }
   }
 
+  const otherLabels = labels.filter((_, index) => index !== reasoningLabelIndex);
   if (labels.length === 0 && fastModeFallbackLabel !== null) {
-    return { label: fastModeFallbackLabel };
+    return { label: fastModeFallbackLabel, speedLabel, otherLabels };
   }
   if (speedLabel) {
     if (reasoningLabelIndex >= 0) {
@@ -199,5 +200,5 @@ export function buildTraitsTriggerDisplay(
       labels.push(speedLabel);
     }
   }
-  return { label: labels.join(" · ") };
+  return { label: labels.join(" · "), speedLabel, otherLabels };
 }
