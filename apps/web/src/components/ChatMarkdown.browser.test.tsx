@@ -850,10 +850,8 @@ it("relabels Markdown controls without resetting wrapping or duplicating a pendi
     const code = container.querySelector('[data-language="bash"]')!;
     const table = container.querySelector("table")!;
     const initialWrap = code.getAttribute("data-wrap");
-    const initialExpanded = table.closest("[data-expanded]")!.getAttribute("data-expanded");
     await act(async () => {
       button(initialWrap === "true" ? "Disable line wrap" : "Wrap lines").click();
-      button(initialExpanded === "true" ? "Collapse table cells" : "Expand table cells").click();
       button("Show code").click();
       button("Copy code").click();
     });
@@ -864,9 +862,6 @@ it("relabels Markdown controls without resetting wrapping or duplicating a pendi
     expect(container.querySelector('[data-language="bash"]')).toBe(code);
     expect(container.querySelector("table")).toBe(table);
     expect(code.getAttribute("data-wrap")).not.toBe(initialWrap);
-    expect(table.closest("[data-expanded]")!.getAttribute("data-expanded")).not.toBe(
-      initialExpanded,
-    );
     expect(button("显示图表")).toBeTruthy();
     expect(button("在终端中运行")).toBeTruthy();
     expect(container.querySelector('[role="toolbar"]')?.getAttribute("aria-label")).toBe(

@@ -195,8 +195,11 @@ it("keeps the selected view and explorer preference across language changes with
   await click("显示文件浏览器");
   expect(container.querySelector("pre")?.textContent).toBe("# Keep raw 原文");
   await click("关闭自动换行");
-  expect(state.update).toHaveBeenCalledExactlyOnceWith({ wordWrap: false });
+  expect(container.querySelector('button[aria-label="启用自动换行"]')).not.toBeNull();
+  expect(state.update).not.toHaveBeenCalled();
   await act(async () => changeLanguage("en"));
+  expect(container.querySelector('button[aria-label="Enable word wrap"]')).not.toBeNull();
+  expect(state.update).not.toHaveBeenCalled();
   expect(container.querySelector("[data-browser-fixture]")).not.toBeNull();
   expect(state.save).not.toHaveBeenCalled();
 });

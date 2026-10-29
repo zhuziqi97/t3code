@@ -690,7 +690,6 @@ const ConversationTimeline = memo(function ConversationTimeline({
     availableRevertTurnCounts,
     worktreeSetup,
   });
-  const rows = useStableRows(rawRows, listIdentityKey);
   const endFeedback =
     !isWorking &&
     !activeTurnInProgress &&
@@ -701,6 +700,20 @@ const ConversationTimeline = memo(function ConversationTimeline({
     !awaitingUser
       ? runEndState(latestRun)
       : null;
+  const rows = useStableRows(
+    endFeedback?.kind === "stopped"
+      ? rawRows.filter((row) => {
+          if (row.kind !== "event") return true;
+          const item = row.projectedItem.item;
+          return !(
+            item.type === "run_interrupt_result" &&
+            item.runId === latestRun?.runId &&
+            (item.message === "Stopped by user" || item.message === "Run interrupted by user")
+          );
+        })
+      : rawRows,
+    listIdentityKey,
+  );
   const endFeedbackRow =
     endFeedback && latestRun
       ? rows.findLast(

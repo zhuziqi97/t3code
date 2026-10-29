@@ -1214,6 +1214,47 @@ describe("latest run end feedback", () => {
     expect(getComputedStyle(end).opacity).toBe("1");
     await userEvent.hover(screen.getByText("The final reply"));
     expect(end.textContent).toContain(label);
+    if (status === "interrupted" || status === "cancelled") {
+      const interruption = (message: string, resultRunId = run.runId): Entry => ({
+        id: "stop-result",
+        kind: "event",
+        createdAt: completedAt,
+        projectedItem: v2Item("run_interrupt_result", { runId: resultRunId, message }),
+      });
+      for (const reason of ["Stopped by user", "Run interrupted by user"]) {
+        await screen.rerender(
+          <MessagesTimeline
+            {...props}
+            timelineEntries={[...entries, interruption(reason)]}
+            latestRun={{ ...run, status, completedAt }}
+          />,
+        );
+        await expect.element(screen.getByText(label, { exact: true })).toBeVisible();
+        expect(
+          screen.container.querySelectorAll('[data-testid="latest-run-end-state"]'),
+        ).toHaveLength(1);
+        await expect
+          .element(screen.getByText("Run interrupted", { exact: true }))
+          .not.toBeInTheDocument();
+      }
+      await screen.rerender(
+        <MessagesTimeline
+          {...props}
+          timelineEntries={[...entries, interruption("Raw stop failure 原文")]}
+          latestRun={{ ...run, status, completedAt }}
+        />,
+      );
+      await vi.waitFor(() => expect(screen.text()).toContain("Raw stop failure 原文"));
+      await screen.rerender(
+        <MessagesTimeline
+          {...props}
+          timelineEntries={[interruption("Stopped by user", RunId.make("earlier-run")), ...entries]}
+          latestRun={{ ...run, status, completedAt }}
+        />,
+      );
+      await expect.element(screen.getByText("Run interrupted", { exact: true })).toBeVisible();
+      await expect.element(screen.getByText(label, { exact: true })).toBeVisible();
+    }
     await screen.rerender(
       <MessagesTimeline
         {...props}
@@ -1568,12 +1609,23 @@ it("keeps concurrent approvals actionable outside collapsed work and restores se
     .element(screen.getByRole("button", { name: "Allow once", exact: true }))
     .toBeEnabled();
   await screen.rerender(
-    ui({ pendingApprovals: [{ ...approvals[0]!, responseCapability: "not_resumable" }] }),
+    ui({
+      pendingApprovals: [{ ...approvals[0]!, responseCapability: "not_resumable" }, approvals[1]!],
+    }),
   );
   await expect
-    .element(screen.getByText("Provider process is gone. Interrupt or restart the run to respond."))
-    .toBeVisible();
+    .element(
+      screen
+        .getByRole("group", { name: "Command approval" })
+        .getByLabelText("Command", { exact: true }),
+    )
+    .toHaveTextContent("Provider process is gone. Interrupt or restart the run to respond.");
   await vi.waitFor(() => expect(screen.buttons("Approve")).toHaveLength(0));
+  await expect
+    .element(screen.getByRole("button", { name: "Allow once", exact: true }))
+    .toBeEnabled();
+  await click(screen.button("Allow once"));
+  expect(onRespondToApproval).toHaveBeenLastCalledWith(appRequest, "accept");
   await screen.rerender(
     ui({ pendingApprovals: [], timelineEntries: entries(true), isWorking: false }),
   );

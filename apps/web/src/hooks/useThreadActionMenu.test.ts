@@ -108,8 +108,13 @@ vi.mock("../components/Sidebar.snooze", () => ({
   ],
   snoozeWakeDescription: () => "later",
 }));
-vi.mock("./useCopyToClipboard", () => ({
+vi.mock("./useCopyToClipboard", async (original) => ({
+  ...(await original<typeof import("./useCopyToClipboard")>()),
   useCopyToClipboard: () => ({ copyToClipboard: () => recordEffect("copy") }),
+  writeTextToClipboard: async () => {
+    recordEffect("copy");
+    return true;
+  },
 }));
 vi.mock("./useHandleNewThread", () => ({
   useNewThreadHandler: () => async () => recordEffect("draft"),

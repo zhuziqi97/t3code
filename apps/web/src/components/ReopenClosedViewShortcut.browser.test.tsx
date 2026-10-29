@@ -350,6 +350,22 @@ describe("root reopen shortcut", () => {
     setup();
     await using _view = await renderShortcut();
     expect(state.setShortcuts).toHaveBeenLastCalledWith([
+      expect.objectContaining({
+        command: "workspace.focusNext",
+        shortcut: expect.objectContaining({ key: "f6", modKey: true, shiftKey: false }),
+      }),
+      expect.objectContaining({
+        command: "workspace.focusNext",
+        shortcut: expect.objectContaining({ key: "f6", modKey: false, shiftKey: false }),
+      }),
+      expect.objectContaining({
+        command: "workspace.focusPrevious",
+        shortcut: expect.objectContaining({ key: "f6", modKey: true, shiftKey: true }),
+      }),
+      expect.objectContaining({
+        command: "workspace.focusPrevious",
+        shortcut: expect.objectContaining({ key: "f6", modKey: false, shiftKey: true }),
+      }),
       expect.objectContaining({ command: "sidebar.toggle" }),
       expect.objectContaining({ command: "rightPanel.toggle" }),
     ]);

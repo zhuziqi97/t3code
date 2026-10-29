@@ -843,11 +843,13 @@ describe("large text preview recovery", () => {
         )!;
       await vi.waitFor(() => expect(visibleRow()).toBeDefined());
       const before = visibleRow().dataset.previewRow;
+      const height = visibleRow().offsetHeight;
       const offset =
         visibleRow().getBoundingClientRect().top - viewport().getBoundingClientRect().top;
       await screen.rerender(view(1_000_000));
       await vi.waitFor(() => {
         expect(visibleRow().dataset.previewRow).toBe(before);
+        expect(visibleRow().offsetHeight).toBe(height);
         expect(
           Math.abs(
             visibleRow().getBoundingClientRect().top -
