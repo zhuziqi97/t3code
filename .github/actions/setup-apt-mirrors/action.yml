@@ -5,6 +5,7 @@ runs:
   steps:
     - shell: bash
       run: |
+        if [[ ! -f /etc/apt/blacksmith-ubuntu-mirrors.txt ]]; then exit 0; fi
         # Replace the existing Blacksmith mirror list as well as direct sources.
         printf '%s\tpriority:%s\n' \
           https://archive.ubuntu.com/ubuntu 1 \

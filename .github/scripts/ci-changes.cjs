@@ -20,6 +20,7 @@ const RUNS_EVERYTHING = [
 
 // Includes cross-package reads absent from package.json dependencies.
 const EXTRA_OWNERS = [
+  [/^patches\/@pierre%2Fdiffs@[^/]+\.patch$/, ["@t3tools/web"]],
   // Vite configs and tsconfigs of these apps import scripts/lib directly.
   [/^scripts\/lib\//, ["@t3tools/desktop", "@t3tools/mobile", "@t3tools/web", "t3"]],
   // scripts/build-desktop-artifact.ts reads the GNOME extension manifest.
@@ -162,7 +163,7 @@ function decide(files, packages, full) {
       test_server: has("t3"),
       rust: everything || rust,
       release_smoke: scriptsChanged,
-      mobile_native: files === null || files.some((file) => MOBILE_NATIVE.test(file)),
+      mobile_native: full || files === null || files.some((file) => MOBILE_NATIVE.test(file)),
     },
   };
 }
@@ -183,6 +184,12 @@ function main() {
   for (const [key, value] of Object.entries(outputs)) console.log(`${key}=${value}`);
 }
 
-module.exports = { readWorkspace, decide };
+function dependencyTests(files) {
+  return files.some((file) => /^patches\/@pierre%2Fdiffs@[^/]+\.patch$/.test(file))
+    ? ["apps/web/src/components/diffs/codeViewLocalization.browser.test.ts"]
+    : [];
+}
+
+module.exports = { readWorkspace, decide, dependencyTests };
 
 if (require.main === module) main();

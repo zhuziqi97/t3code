@@ -17,16 +17,28 @@ env:
   APP_VERSION: 0.1.3-1
 
 jobs:
+  quality:
+    name: Candidate quality
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/ci.yml
+
   bundle:
+    needs: quality
     name: Build shared bundle and Windows WSL runtime
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     outputs:
+      source_sha: ${{ steps.source.outputs.source_sha }}
       version: ${{ steps.candidate.outputs.version }}
       desktop_matrix: ${{ steps.platforms.outputs.desktop_matrix }}
     steps:
       - name: Checkout
+        id: source
         shell: bash
+        env:
+          QUALITY_SHA: ${{ needs.quality.outputs.source_sha }}
         run: |
           set -euo pipefail
           git init .
@@ -34,6 +46,10 @@ jobs:
           git fetch --no-tags --depth=1 origin "$GITHUB_SHA"
           git sparse-checkout set --no-cone '/*' '!/.repos/'
           git checkout --detach FETCH_HEAD
+          actual=$(git rev-parse HEAD)
+          test "$actual" = "$GITHUB_SHA"
+          test "$actual" = "$QUALITY_SHA"
+          echo "source_sha=$actual" >> "$GITHUB_OUTPUT"
       - name: Select all publication platforms
         id: platforms
         run: |
@@ -131,7 +147,7 @@ jobs:
       rust_target: ${{ matrix.rust_target }}
       resource_key: ${{ matrix.resource_key }}
       version: ${{ needs.bundle.outputs.version }}
-      ref: ${{ github.sha }}
+      ref: ${{ needs.bundle.outputs.source_sha }}
       release_channel: preview
       relay_client_tracing: false
       clerk_publishable_key: ""
@@ -141,11 +157,14 @@ jobs:
 
   publication-input:
     name: Prepare the selected client packages
-    needs: [bundle, desktop]
+    needs: [quality, bundle, desktop]
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout publication adapter
         shell: bash
+        env:
+          QUALITY_SHA: ${{ needs.quality.outputs.source_sha }}
+          BUNDLE_SHA: ${{ needs.bundle.outputs.source_sha }}
         run: |
           set -euo pipefail
           git init .
@@ -153,6 +172,10 @@ jobs:
           git fetch --no-tags --depth=1 origin "$GITHUB_SHA"
           git sparse-checkout set --no-cone '/*' '!/.repos/'
           git checkout --detach FETCH_HEAD
+          actual=$(git rev-parse HEAD)
+          test "$actual" = "$GITHUB_SHA"
+          test "$actual" = "$QUALITY_SHA"
+          test "$actual" = "$BUNDLE_SHA"
       - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1
         with:
           node-version-file: package.json

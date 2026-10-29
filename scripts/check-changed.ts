@@ -17,7 +17,7 @@ import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
-import { decide, readWorkspace } from "../.github/scripts/ci-changes.cjs";
+import { decide, dependencyTests, readWorkspace } from "../.github/scripts/ci-changes.cjs";
 
 const root = NodePath.resolve(import.meta.dirname, "..");
 const CODE = /\.[cm]?[jt]sx?$/;
@@ -130,7 +130,13 @@ const { affected, outputs } = decide(files, packages, false);
 // `related` reaches most of a package: one leaf server file pulled in 252 of
 // 406 server test files and took 7 minutes. CI runs the rest.
 const TEST = /\.test\.[cm]?[jt]sx?$/;
-const tests = new Set(code.filter((file) => TEST.test(file)));
+const dependencyBehaviorTests = dependencyTests(files);
+for (const file of dependencyBehaviorTests) {
+  if (!NodeFS.existsSync(NodePath.join(root, file))) {
+    throw new Error(`Mapped dependency behavior test is missing: ${file}`);
+  }
+}
+const tests = new Set([...code.filter((file) => TEST.test(file)), ...dependencyBehaviorTests]);
 for (const file of code) {
   const dir = NodePath.dirname(file);
   const prefix = `${NodePath.basename(file).replace(CODE, "")}.`;

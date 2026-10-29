@@ -7,6 +7,8 @@ interface WorkspacePackage {
 
 export function readWorkspace(): Array<WorkspacePackage>;
 
+export function dependencyTests(files: ReadonlyArray<string>): Array<string>;
+
 export function decide(
   files: ReadonlyArray<string> | null,
   packages: ReadonlyArray<WorkspacePackage>,

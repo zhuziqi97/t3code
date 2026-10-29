@@ -84,6 +84,14 @@ Agent 生命周期实施计划：[convene-agent-lifecycle-plan.md](../plan/conve
 5. 按受影响范围执行必要测试、类型与构建；原生 UI／实际请求／发行包各自记录证据，不把单元测试当实机推理。
 6. 验证后冻结集成候选；发布后 main 接纳实际发行源码与记录，正式 tag 指向打包提交。新包不继承旧包已验收声明。
 
+候选自动质量与打包沿用 `convene-clients.yml`：协调者推送冻结候选后，执行
+`gh workflow run convene-clients.yml --repo zhuziqi97/t3code --ref <候选分支>`。
+该入口复用同提交的完整 CI，各质量任务与打包 checkout 均核对实际 HEAD；必需任务
+缺失、失败、取消、跳过或来源不一致均阻断候选包。完成的运行须保留 run ID、attempt
+和 head SHA；queued 或未运行不是通过。它只生成加密候选产物，不执行正式存储发布。
+`ci.yml` 也可单独手动运行完整质量；在默认分支尚无其 dispatch 声明时使用前述既有
+候选入口，无需先将未验收源码合入 main。实际客户端验收与正式发布仍独立记录。
+
 ## 本次同步：64972461c → 72fbad7b1
 
 上游新增 168 提交，初次试合并有 64 文件冲突；演练详情见平台仓库 `docs/plan/t3code-convene-upstream-rehearsal-20261011.md`。
