@@ -5101,6 +5101,45 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       occurredAt: now,
       payload: checkpointScope,
     });
+    if (restartHandoff !== null) {
+      yield* emitEvent({
+        type: "turn-item.updated",
+        threadId: input.command.threadId,
+        runId: targetRun.id,
+        nodeId: nextRootNodeId,
+        providerInstanceId: input.modelSelection.instanceId,
+        occurredAt: now,
+        payload: {
+          id: idAllocator.derive.runSignalTurnItem({
+            runId: targetRun.id,
+            signal: `context-handoff:${restartHandoff.id}`,
+          }),
+          threadId: input.command.threadId,
+          runId: targetRun.id,
+          nodeId: nextRootNodeId,
+          providerThreadId: restartProviderThread.id,
+          providerTurnId: null,
+          nativeItemRef: null,
+          parentItemId: null,
+          ordinal: yield* nextTurnItemOrdinal(input.projection),
+          status: "completed",
+          title: "Provider handoff",
+          startedAt: now,
+          completedAt: now,
+          updatedAt: now,
+          type: "handoff",
+          contextHandoffId: restartHandoff.id,
+          fromProviderThreadIds: restartHandoff.fromProviderThreadIds,
+          toProviderThreadId: restartHandoff.toProviderThreadId,
+          fromProviderInstanceIds: [targetRun.providerInstanceId],
+          toProviderInstanceId: input.modelSelection.instanceId,
+          fromModelSelections: [targetRun.modelSelection],
+          toModel: input.modelSelection.model,
+          strategy: restartHandoff.strategy,
+          summary: restartHandoff.summaryText,
+        },
+      });
+    }
     yield* appendSteeringMessage({
       runId: targetRun.id,
       nodeId: nextRootNodeId,

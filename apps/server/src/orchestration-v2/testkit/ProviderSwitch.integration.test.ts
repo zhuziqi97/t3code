@@ -13,6 +13,7 @@ import {
   type OrchestrationV2ProviderThread,
   type OrchestrationV2ProviderTurnTokenUsage,
   type OrchestrationV2ThreadProjection,
+  type OrchestrationV2TurnItem,
   ProjectId,
   ProviderInstanceId,
   ProviderSessionId,
@@ -119,6 +120,7 @@ function makeTestAdapter(input: {
   readonly subagentOnlyBackgroundWork?: boolean;
   readonly holdFirstTurn?: Deferred.Deferred<void>;
   readonly releaseFirstTurn?: Deferred.Deferred<void>;
+  readonly interrupt?: Effect.Effect<void>;
 }): ProviderAdapter.ProviderAdapterV2["Service"] {
   return {
     instanceId: input.instanceId,
@@ -372,7 +374,7 @@ function makeTestAdapter(input: {
               }
             }),
           steerTurn: () => Effect.void,
-          interruptTurn: () => Effect.void,
+          interruptTurn: () => input.interrupt ?? Effect.void,
           respondToRuntimeRequest: () => Effect.void,
           readThreadSnapshot: () =>
             unimplemented(input.driver, "readThreadSnapshot unused in provider switch test"),
@@ -1884,216 +1886,439 @@ describe("orchestration v2 provider switching", () => {
     ),
   );
 
-  it.live("hands completed Grok steering context to earlier queued Codex and later Claude", () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const cwd = yield* checkpointWorkspace("queued-steer-provider-switch");
-        const capturedTurns = yield* Ref.make<ReadonlyArray<CapturedTurn>>([]);
-        const started = yield* Deferred.make<void>();
-        const layerRegistry = ProviderAdapterRegistry.layerFromAdapters([
-          makeTestAdapter({
-            instanceId: CODEX_MODEL_SELECTION.instanceId,
-            driver: CODEX_DRIVER,
-            capabilities: CodexProviderCapabilitiesV2,
-            modelSelection: CODEX_MODEL_SELECTION,
-            responseByRunOrdinal: { 2: "Codex queued response" },
-            capturedTurns,
-            holdFirstTurn: started,
-          }),
-          makeTestAdapter({
-            instanceId: CLAUDE_MODEL_SELECTION.instanceId,
-            driver: CLAUDE_DRIVER,
-            capabilities: ClaudeProviderCapabilitiesV2,
-            modelSelection: CLAUDE_MODEL_SELECTION,
-            responseByRunOrdinal: { 3: "Claude queued response" },
-            capturedTurns,
-          }),
-          makeTestAdapter({
-            instanceId: GROK_MODEL_SELECTION.instanceId,
-            driver: GROK_DRIVER,
-            capabilities: AcpProviderCapabilitiesV2,
-            modelSelection: GROK_MODEL_SELECTION,
-            responseByRunOrdinal: { 1: "Grok steered response" },
-            capturedTurns,
-          }),
-        ]);
-        const queuedThreadId = ThreadId.make("thread:queued-steer-provider-switch");
-        const projection = yield* Effect.gen(function* () {
-          const orchestrator = yield* Orchestrator.OrchestratorV2;
-          const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
-          const eventSink = yield* EventSink.EventSinkV2;
-          const dispatch = (
-            key: string,
-            modelSelection: ModelSelection,
-            dispatchMode: Extract<
-              OrchestrationV2Command,
-              { readonly type: "message.dispatch" }
-            >["dispatchMode"],
-          ) =>
-            orchestrator.dispatch({
-              type: "message.dispatch",
+  it.live.each(["completed", "native-default", "start-failed", "stopped"] as const)(
+    "records a Grok steering handoff before queued Codex and later Claude (%s)",
+    (outcome) =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const cwd = yield* checkpointWorkspace("queued-steer-provider-switch");
+          const capturedTurns = yield* Ref.make<ReadonlyArray<CapturedTurn>>([]);
+          const started = yield* Deferred.make<void>();
+          const interruptRequested = yield* Deferred.make<void>();
+          const releaseInterrupt = yield* Deferred.make<void>();
+          const failStartOnce = yield* Ref.make(outcome === "start-failed");
+          const steerSelection: ModelSelection = {
+            ...GROK_MODEL_SELECTION,
+            model: outcome === "native-default" ? null : GROK_MODEL_SELECTION.model,
+          };
+          const layerDatabase = SqlitePersistence.layerMemory;
+          const layerMaintenance = ProjectionMaintenance.layer.pipe(
+            Layer.provide(Layer.mergeAll(EventStore.layer, ProjectionStore.layer)),
+            Layer.provide(layerDatabase),
+          );
+          const layerRegistry = ProviderAdapterRegistry.layerFromAdapters([
+            makeTestAdapter({
+              instanceId: CODEX_MODEL_SELECTION.instanceId,
+              driver: CODEX_DRIVER,
+              capabilities: CodexProviderCapabilitiesV2,
+              modelSelection: CODEX_MODEL_SELECTION,
+              responseByRunOrdinal: { 2: "Codex queued response" },
+              capturedTurns,
+              holdFirstTurn: started,
+              interrupt: Deferred.succeed(interruptRequested, undefined).pipe(
+                Effect.andThen(Deferred.await(releaseInterrupt)),
+              ),
+            }),
+            makeTestAdapter({
+              instanceId: CLAUDE_MODEL_SELECTION.instanceId,
+              driver: CLAUDE_DRIVER,
+              capabilities: ClaudeProviderCapabilitiesV2,
+              modelSelection: CLAUDE_MODEL_SELECTION,
+              responseByRunOrdinal: { 3: "Claude queued response" },
+              capturedTurns,
+            }),
+            makeTestAdapter({
+              instanceId: GROK_MODEL_SELECTION.instanceId,
+              driver: GROK_DRIVER,
+              capabilities: AcpProviderCapabilitiesV2,
+              modelSelection: steerSelection,
+              responseByRunOrdinal: { 1: "Grok steered response" },
+              capturedTurns,
+              failStartOnce,
+            }),
+          ]);
+          const queuedThreadId = ThreadId.make("thread:queued-steer-provider-switch");
+          const projection = yield* Effect.gen(function* () {
+            const orchestrator = yield* Orchestrator.OrchestratorV2;
+            const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
+            const eventSink = yield* EventSink.EventSinkV2;
+            const maintenance = yield* ProjectionMaintenance.ProjectionMaintenanceV2;
+            const dispatch = (
+              key: string,
+              modelSelection: ModelSelection,
+              dispatchMode: Extract<
+                OrchestrationV2Command,
+                { readonly type: "message.dispatch" }
+              >["dispatchMode"],
+            ) =>
+              orchestrator.dispatch({
+                type: "message.dispatch",
+                createdBy: "user",
+                creationSource: "web",
+                commandId: CommandId.make(`command:queued-steer-provider-switch:${key}`),
+                threadId: queuedThreadId,
+                messageId: MessageId.make(`message:queued-steer-provider-switch:${key}`),
+                text: `Prompt ${key}`,
+                attachments: [],
+                modelSelection,
+                dispatchMode,
+              });
+            yield* orchestrator.dispatch({
+              type: "thread.create",
               createdBy: "user",
               creationSource: "web",
-              commandId: CommandId.make(`command:queued-steer-provider-switch:${key}`),
+              commandId: CommandId.make("command:queued-steer-provider-switch:create"),
               threadId: queuedThreadId,
-              messageId: MessageId.make(`message:queued-steer-provider-switch:${key}`),
-              text: `Prompt ${key}`,
-              attachments: [],
-              modelSelection,
-              dispatchMode,
+              projectId: ProjectId.make("project:queued-steer-provider-switch"),
+              title: "Queued steer provider switch",
+              modelSelection: CODEX_MODEL_SELECTION,
+              runtimeMode: "full-access",
+              interactionMode: "default",
+              branch: null,
+              worktreePath: cwd,
             });
-          yield* orchestrator.dispatch({
-            type: "thread.create",
-            createdBy: "user",
-            creationSource: "web",
-            commandId: CommandId.make("command:queued-steer-provider-switch:create"),
-            threadId: queuedThreadId,
-            projectId: ProjectId.make("project:queued-steer-provider-switch"),
-            title: "Queued steer provider switch",
-            modelSelection: CODEX_MODEL_SELECTION,
-            runtimeMode: "full-access",
-            interactionMode: "default",
-            branch: null,
-            worktreePath: cwd,
-          });
-          yield* dispatch("first", CODEX_MODEL_SELECTION, { type: "start_immediately" });
-          yield* Deferred.await(started);
-          yield* worker.drain();
-          yield* dispatch("codex-queued", CODEX_MODEL_SELECTION, { type: "queue_after_active" });
-          yield* dispatch("claude-queued", CLAUDE_MODEL_SELECTION, { type: "queue_after_active" });
-          const beforeSteer = yield* orchestrator.getThreadProjection(queuedThreadId);
-          assert.deepEqual(
-            beforeSteer.runs.map((run) => run.status),
-            ["running", "queued", "queued"],
-          );
-          assert.equal(beforeSteer.thread.providerInstanceId, CODEX_MODEL_SELECTION.instanceId);
-          assert.lengthOf(beforeSteer.contextHandoffs, 0);
-          const now = yield* DateTime.now;
-          yield* eventSink.write({
-            events: [
-              {
-                id: EventId.make("event:queued-steer-provider-switch:first-turn-running"),
-                type: "provider-turn.updated",
-                threadId: queuedThreadId,
-                runId: beforeSteer.runs[0]!.id,
-                nodeId: beforeSteer.runs[0]!.rootNodeId!,
-                driver: CODEX_DRIVER,
-                providerInstanceId: CODEX_MODEL_SELECTION.instanceId,
-                occurredAt: now,
-                payload: {
-                  id: ProviderTurnId.make("provider-turn:queued-steer-provider-switch:first"),
-                  providerThreadId: beforeSteer.runs[0]!.providerThreadId!,
+            yield* dispatch("first", CODEX_MODEL_SELECTION, { type: "start_immediately" });
+            yield* Deferred.await(started);
+            yield* worker.drain();
+            yield* dispatch("codex-queued", CODEX_MODEL_SELECTION, { type: "queue_after_active" });
+            yield* dispatch("claude-queued", CLAUDE_MODEL_SELECTION, {
+              type: "queue_after_active",
+            });
+            const beforeSteer = yield* orchestrator.getThreadProjection(queuedThreadId);
+            assert.deepEqual(
+              beforeSteer.runs.map((run) => run.status),
+              ["running", "queued", "queued"],
+            );
+            assert.equal(beforeSteer.thread.providerInstanceId, CODEX_MODEL_SELECTION.instanceId);
+            assert.lengthOf(beforeSteer.contextHandoffs, 0);
+            const now = yield* DateTime.now;
+            const oldOutput: Extract<OrchestrationV2TurnItem, { type: "assistant_message" }> = {
+              id: TurnItemId.make("turn-item:queued-steer-provider-switch:old-output"),
+              threadId: queuedThreadId,
+              runId: beforeSteer.runs[0]!.id,
+              nodeId: beforeSteer.runs[0]!.rootNodeId!,
+              providerThreadId: beforeSteer.runs[0]!.providerThreadId!,
+              providerTurnId: ProviderTurnId.make(
+                "provider-turn:queued-steer-provider-switch:first",
+              ),
+              nativeItemRef: null,
+              parentItemId: null,
+              ordinal: 101,
+              status: "running",
+              title: null,
+              startedAt: now,
+              completedAt: null,
+              updatedAt: now,
+              type: "assistant_message",
+              messageId: MessageId.make("message:queued-steer-provider-switch:old-output"),
+              text: "Old Codex partial",
+              streaming: true,
+            };
+            yield* eventSink.write({
+              events: [
+                {
+                  id: EventId.make("event:queued-steer-provider-switch:first-turn-running"),
+                  type: "provider-turn.updated",
+                  threadId: queuedThreadId,
+                  runId: beforeSteer.runs[0]!.id,
                   nodeId: beforeSteer.runs[0]!.rootNodeId!,
-                  runAttemptId: beforeSteer.runs[0]!.activeAttemptId!,
-                  nativeTurnRef: null,
-                  ordinal: 1,
-                  status: "running",
-                  startedAt: now,
-                  completedAt: null,
-                },
-              },
-            ],
-          });
-          const queuedClaudeCompleted = yield* orchestrator.streamStoredEvents.pipe(
-            Stream.filter(
-              (event) =>
-                event.event.type === "run.updated" &&
-                event.event.runId === beforeSteer.runs[2]?.id &&
-                event.event.payload.status === "completed",
-            ),
-            Stream.runHead,
-            Effect.forkScoped,
-          );
-          yield* dispatch("grok-steer", GROK_MODEL_SELECTION, {
-            type: "steer_active",
-            targetRunId: beforeSteer.runs[0]!.id,
-          });
-          const afterSteer = yield* orchestrator.getThreadProjection(queuedThreadId);
-          assert.deepEqual(afterSteer.thread.modelSelection, GROK_MODEL_SELECTION);
-          const interruptedTurn = afterSteer.providerTurns.find(
-            (turn) => turn.runAttemptId === beforeSteer.runs[0]?.activeAttemptId,
-          )!;
-          const interruptedAttempt = afterSteer.attempts.find(
-            (attempt) => attempt.id === beforeSteer.runs[0]?.activeAttemptId,
-          )!;
-          const interruptedAt = yield* DateTime.now;
-          yield* eventSink.write({
-            events: [
-              {
-                id: EventId.make("event:queued-steer-provider-switch:first-turn-interrupted"),
-                type: "provider-turn.updated",
-                threadId: queuedThreadId,
-                runId: beforeSteer.runs[0]!.id,
-                nodeId: beforeSteer.runs[0]!.rootNodeId!,
-                driver: CODEX_DRIVER,
-                providerInstanceId: CODEX_MODEL_SELECTION.instanceId,
-                occurredAt: interruptedAt,
-                payload: {
-                  ...interruptedTurn,
-                  status: "interrupted",
-                  completedAt: interruptedAt,
-                },
-              },
-              {
-                id: EventId.make("event:queued-steer-provider-switch:first-attempt-interrupted"),
-                type: "run-attempt.updated",
-                threadId: queuedThreadId,
-                runId: beforeSteer.runs[0]!.id,
-                nodeId: beforeSteer.runs[0]!.rootNodeId!,
-                providerInstanceId: CODEX_MODEL_SELECTION.instanceId,
-                occurredAt: interruptedAt,
-                payload: {
-                  ...interruptedAttempt,
-                  status: "interrupted",
-                  completedAt: interruptedAt,
-                },
-              },
-            ],
-          });
-          yield* worker.drain();
-          yield* Fiber.join(queuedClaudeCompleted);
-          return yield* orchestrator.getThreadProjection(queuedThreadId);
-        }).pipe(
-          Effect.provide(
-            ProviderReplayHarness.layerWithRegistry(
-              {
-                name: "queued-steer-provider-switch",
-                runtimePolicyOverride: {
-                  cwd,
-                  approvalPolicy: "never",
-                  sandboxPolicy: {
-                    type: "readOnly",
-                    access: { type: "fullAccess" },
-                    networkAccess: false,
+                  driver: CODEX_DRIVER,
+                  providerInstanceId: CODEX_MODEL_SELECTION.instanceId,
+                  occurredAt: now,
+                  payload: {
+                    id: ProviderTurnId.make("provider-turn:queued-steer-provider-switch:first"),
+                    providerThreadId: beforeSteer.runs[0]!.providerThreadId!,
+                    nodeId: beforeSteer.runs[0]!.rootNodeId!,
+                    runAttemptId: beforeSteer.runs[0]!.activeAttemptId!,
+                    nativeTurnRef: null,
+                    ordinal: 1,
+                    status: "running",
+                    startedAt: now,
+                    completedAt: null,
                   },
                 },
-              },
-              layerRegistry,
+                {
+                  id: EventId.make("event:queued-steer-provider-switch:old-output"),
+                  type: "turn-item.updated",
+                  threadId: queuedThreadId,
+                  runId: oldOutput.runId!,
+                  nodeId: oldOutput.nodeId!,
+                  driver: CODEX_DRIVER,
+                  providerInstanceId: CODEX_MODEL_SELECTION.instanceId,
+                  occurredAt: now,
+                  payload: oldOutput,
+                },
+              ],
+            });
+            const sourceOutput = yield* orchestrator.getTurnItem({
+              threadId: queuedThreadId,
+              itemId: oldOutput.id,
+            });
+            const queuedClaudeCompleted = yield* orchestrator.streamStoredEvents.pipe(
+              Stream.filter(
+                (event) =>
+                  event.event.type === "run.updated" &&
+                  event.event.runId === beforeSteer.runs[2]?.id &&
+                  event.event.payload.status === "completed",
+              ),
+              Stream.runHead,
+              Effect.forkScoped,
+            );
+            const steerMode = {
+              type: "steer_active",
+              targetRunId: beforeSteer.runs[0]!.id,
+            } as const;
+            yield* dispatch("grok-steer", steerSelection, steerMode);
+            yield* Deferred.await(interruptRequested);
+            const afterSteer = yield* orchestrator.getThreadProjection(queuedThreadId);
+            assert.deepEqual(afterSteer.thread.modelSelection, steerSelection);
+            const handoffs = afterSteer.turnItems.filter(
+              (item): item is Extract<OrchestrationV2TurnItem, { type: "handoff" }> =>
+                item.type === "handoff" &&
+                item.contextHandoffId === afterSteer.runs[0]?.contextHandoffId,
+            );
+            assert.lengthOf(handoffs, 1);
+            const handoff = handoffs[0]!;
+            const restartedRun = afterSteer.runs[0]!;
+            const newAttempt = afterSteer.attempts.find(
+              (attempt) => attempt.id === restartedRun.activeAttemptId,
+            )!;
+            assert.equal(restartedRun.status, "starting");
+            assert.equal(newAttempt.status, "pending");
+            assert.equal(handoff.status, "completed");
+            assert.equal(handoff.nodeId, newAttempt.rootNodeId);
+            assert.equal(handoff.providerThreadId, newAttempt.providerThreadId);
+            assert.equal(handoff.providerTurnId, null);
+            assert.deepEqual(handoff.fromProviderInstanceIds, [CODEX_MODEL_SELECTION.instanceId]);
+            assert.deepEqual(handoff.fromModelSelections, [beforeSteer.runs[0]!.modelSelection]);
+            assert.deepEqual(handoff.fromProviderThreadIds, [
+              beforeSteer.runs[0]!.providerThreadId!,
+            ]);
+            assert.equal(handoff.toProviderInstanceId, steerSelection.instanceId);
+            assert.equal(handoff.toProviderThreadId, restartedRun.providerThreadId);
+            assert.equal(handoff.toModel, steerSelection.model);
+            assert.deepEqual(
+              (yield* Ref.get(capturedTurns)).map((turn) => turn.driver),
+              [CODEX_DRIVER],
+            );
+            const steerItem = afterSteer.turnItems.find(
+              (item) =>
+                item.type === "user_message" &&
+                item.messageId ===
+                  MessageId.make("message:queued-steer-provider-switch:grok-steer"),
+            )!;
+            assert.isBelow(sourceOutput!.ordinal, handoff.ordinal);
+            assert.isBelow(handoff.ordinal, steerItem.ordinal);
+            const stored = [
+              ...(yield* eventSink
+                .readByCommandId({
+                  commandId: CommandId.make("command:queued-steer-provider-switch:grok-steer"),
+                })
+                .pipe(Stream.runCollect)),
+            ];
+            const recordedHandoffs = stored.filter(
+              ({ event }) => event.type === "turn-item.updated" && event.payload.type === "handoff",
+            );
+            assert.lengthOf(recordedHandoffs, 1);
+            assert.isBelow(
+              recordedHandoffs[0]!.sequence,
+              stored.find(
+                ({ event }) =>
+                  event.type === "turn-item.updated" && event.payload.id === steerItem.id,
+              )!.sequence,
+            );
+            const records = yield* orchestrator.getThreadRecords(queuedThreadId, ["turnItems"]);
+            assert.deepEqual(
+              records.turnItems.find((item) => item.id === handoff.id),
+              handoff,
+            );
+            const activity = yield* orchestrator.getTimelinePage(queuedThreadId, {
+              view: "activity",
+              limit: 50,
+            });
+            assert.deepEqual(
+              activity.items.find((row) => row.item.id === handoff.id)?.item,
+              handoff,
+            );
+            const replay = yield* dispatch("grok-steer", steerSelection, steerMode);
+            assert.isTrue(replay.replayed);
+            assert.lengthOf(
+              (yield* orchestrator.getThreadRecords(queuedThreadId, [
+                "turnItems",
+              ])).turnItems.filter((item) => item.id === handoff.id),
+              1,
+            );
+            if (outcome === "stopped") {
+              yield* orchestrator.dispatch({
+                type: "run.interrupt",
+                commandId: CommandId.make("command:queued-steer-provider-switch:stop"),
+                threadId: queuedThreadId,
+                runId: restartedRun.id,
+                holdQueue: true,
+              });
+            }
+            const interruptedTurn = afterSteer.providerTurns.find(
+              (turn) => turn.runAttemptId === beforeSteer.runs[0]?.activeAttemptId,
+            )!;
+            const interruptedAttempt = afterSteer.attempts.find(
+              (attempt) => attempt.id === beforeSteer.runs[0]?.activeAttemptId,
+            )!;
+            const interruptedAt = yield* DateTime.now;
+            yield* eventSink.write({
+              events: [
+                {
+                  id: EventId.make("event:queued-steer-provider-switch:first-turn-interrupted"),
+                  type: "provider-turn.updated",
+                  threadId: queuedThreadId,
+                  runId: beforeSteer.runs[0]!.id,
+                  nodeId: beforeSteer.runs[0]!.rootNodeId!,
+                  driver: CODEX_DRIVER,
+                  providerInstanceId: CODEX_MODEL_SELECTION.instanceId,
+                  occurredAt: interruptedAt,
+                  payload: {
+                    ...interruptedTurn,
+                    status: "interrupted",
+                    completedAt: interruptedAt,
+                  },
+                },
+                {
+                  id: EventId.make("event:queued-steer-provider-switch:first-attempt-interrupted"),
+                  type: "run-attempt.updated",
+                  threadId: queuedThreadId,
+                  runId: beforeSteer.runs[0]!.id,
+                  nodeId: beforeSteer.runs[0]!.rootNodeId!,
+                  providerInstanceId: CODEX_MODEL_SELECTION.instanceId,
+                  occurredAt: interruptedAt,
+                  payload: {
+                    ...interruptedAttempt,
+                    status: "interrupted",
+                    completedAt: interruptedAt,
+                  },
+                },
+                {
+                  id: EventId.make("event:queued-steer-provider-switch:old-tail"),
+                  type: "turn-item.updated",
+                  threadId: queuedThreadId,
+                  runId: oldOutput.runId!,
+                  nodeId: oldOutput.nodeId!,
+                  driver: CODEX_DRIVER,
+                  providerInstanceId: CODEX_MODEL_SELECTION.instanceId,
+                  occurredAt: interruptedAt,
+                  payload: {
+                    ...oldOutput,
+                    status: "completed",
+                    streaming: false,
+                    text: "Old Codex partial and final tail",
+                    completedAt: interruptedAt,
+                    updatedAt: interruptedAt,
+                  },
+                },
+              ],
+            });
+            yield* Deferred.succeed(releaseInterrupt, undefined);
+            yield* worker.drain();
+            if (outcome !== "stopped") yield* Fiber.join(queuedClaudeCompleted);
+            const settled = yield* orchestrator.getThreadProjection(queuedThreadId);
+            const oldTail = settled.turnItems.find((item) => item.id === oldOutput.id)!;
+            assert.equal(oldTail.ordinal, sourceOutput!.ordinal);
+            assert.equal(oldTail.nodeId, beforeSteer.runs[0]!.rootNodeId);
+            assert.equal(oldTail.providerTurnId, oldOutput.providerTurnId);
+            assert.equal(
+              oldTail.type === "assistant_message" ? oldTail.text : null,
+              "Old Codex partial and final tail",
+            );
+            const targetOutput = settled.turnItems.find(
+              (item) =>
+                item.type === "assistant_message" &&
+                item.providerThreadId === handoff.toProviderThreadId,
+            );
+            if (outcome === "completed" || outcome === "native-default") {
+              assert.isDefined(targetOutput);
+              assert.equal(targetOutput!.nodeId, newAttempt.rootNodeId);
+              assert.isBelow(steerItem.ordinal, targetOutput!.ordinal);
+              assert.equal(
+                settled.providerTurns.find((turn) => turn.id === targetOutput!.providerTurnId)
+                  ?.runAttemptId,
+                newAttempt.id,
+              );
+            } else {
+              assert.isUndefined(targetOutput);
+              assert.equal(
+                settled.attempts.find((attempt) => attempt.id === newAttempt.id)?.status,
+                outcome === "stopped" ? "interrupted" : "failed",
+              );
+              assert.isTrue(
+                settled.turnItems.some(
+                  (item) =>
+                    item.runId === restartedRun.id &&
+                    item.type === (outcome === "stopped" ? "run_interrupt_result" : "error"),
+                ),
+              );
+            }
+            assert.isTrue((yield* maintenance.rebuild).valid);
+            const rebuilt = yield* orchestrator.getThreadRecords(queuedThreadId, ["turnItems"]);
+            assert.deepEqual(rebuilt.turnItems, settled.turnItems);
+            return settled;
+          }).pipe(
+            Effect.provide(
+              Layer.merge(
+                ProviderReplayHarness.layerWithRegistry(
+                  {
+                    name: "queued-steer-provider-switch",
+                    runtimePolicyOverride: {
+                      cwd,
+                      approvalPolicy: "never",
+                      sandboxPolicy: {
+                        type: "readOnly",
+                        access: { type: "fullAccess" },
+                        networkAccess: false,
+                      },
+                    },
+                  },
+                  layerRegistry,
+                  { databaseLayer: layerDatabase },
+                ),
+                layerMaintenance,
+              ),
             ),
-          ),
-        );
-        assert.deepEqual(
-          projection.runs.map((run) => [run.providerInstanceId, run.status]),
-          [
-            [GROK_MODEL_SELECTION.instanceId, "completed"],
-            [CODEX_MODEL_SELECTION.instanceId, "completed"],
-            [CLAUDE_MODEL_SELECTION.instanceId, "completed"],
-          ],
-        );
-        const turns = yield* Ref.get(capturedTurns);
-        assert.deepEqual(
-          turns.map((turn) => turn.driver),
-          [CODEX_DRIVER, GROK_DRIVER, CODEX_DRIVER, CLAUDE_DRIVER],
-        );
-        assert.include(turns[2]?.text ?? "", "Grok steered response");
-        assert.include(turns[3]?.text ?? "", "Grok steered response");
-        assert.include(turns[3]?.text ?? "", "Codex queued response");
-        assert.deepEqual(
-          projection.contextHandoffs.map((handoff) => handoff.targetRunId),
-          [projection.runs[0]?.id, projection.runs[1]?.id, projection.runs[2]?.id],
-        );
-      }),
-    ),
+          );
+          assert.deepEqual(
+            projection.runs.map((run) => [run.providerInstanceId, run.status]),
+            [
+              [
+                GROK_MODEL_SELECTION.instanceId,
+                outcome === "stopped"
+                  ? "interrupted"
+                  : outcome === "start-failed"
+                    ? "failed"
+                    : "completed",
+              ],
+              [CODEX_MODEL_SELECTION.instanceId, outcome === "stopped" ? "queued" : "completed"],
+              [CLAUDE_MODEL_SELECTION.instanceId, outcome === "stopped" ? "queued" : "completed"],
+            ],
+          );
+          const turns = yield* Ref.get(capturedTurns);
+          assert.deepEqual(
+            turns.map((turn) => turn.driver),
+            outcome === "stopped"
+              ? [CODEX_DRIVER]
+              : outcome === "start-failed"
+                ? [CODEX_DRIVER, CODEX_DRIVER, CLAUDE_DRIVER]
+                : [CODEX_DRIVER, GROK_DRIVER, CODEX_DRIVER, CLAUDE_DRIVER],
+          );
+          if (outcome === "completed" || outcome === "native-default") {
+            assert.include(turns[2]?.text ?? "", "Grok steered response");
+            assert.include(turns[3]?.text ?? "", "Grok steered response");
+            assert.include(turns[3]?.text ?? "", "Codex queued response");
+          }
+          assert.deepEqual(
+            projection.contextHandoffs.map((handoff) => handoff.targetRunId),
+            outcome === "stopped"
+              ? [projection.runs[0]?.id]
+              : [projection.runs[0]?.id, projection.runs[1]?.id, projection.runs[2]?.id],
+          );
+        }),
+      ),
   );
 
   it.live("resumes a queued account switch without requiring a portable handoff", () =>
