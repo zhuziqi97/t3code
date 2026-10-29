@@ -53,7 +53,9 @@ function visitedThreadIds() {
   );
 }
 
-it("records the visit of the next thread at once after switching threads", async () => {
+it("records the next thread at once after switching threads in the active window", async () => {
+  using _focus = vi.spyOn(document, "hasFocus").mockReturnValue(true);
+  using _visible = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
   mocks.visitRun.mockReset();
   mocks.visitRun.mockResolvedValue(AsyncResult.success(undefined));
   setShell(threadA, "2026-01-02T00:00:00.000Z");
