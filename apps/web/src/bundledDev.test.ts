@@ -56,6 +56,9 @@ export const startup = Promise.resolve().then(() => globalThis.onStarted(Shared(
           "@t3tools/client-runtime/i18n/languages": NodeURL.fileURLToPath(
             new URL("../../../packages/client-runtime/src/i18n/languages.ts", import.meta.url),
           ),
+          "@t3tools/shared/conveneDesktopIdentity": NodeURL.fileURLToPath(
+            new URL("../../../packages/shared/src/conveneDesktopIdentity.ts", import.meta.url),
+          ),
         },
       },
       experimental: { bundledDev: true },

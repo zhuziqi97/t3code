@@ -1,11 +1,17 @@
 import "~/index.css";
 
+import type { ClientSettings } from "@t3tools/contracts/settings";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 
-vi.mock("~/hooks/useSettings", () => ({
-  useEnvironmentIdentificationMode: () => "none",
-}));
+vi.mock("~/hooks/useSettings", async () => {
+  const { DEFAULT_CLIENT_SETTINGS } = await import("@t3tools/contracts/settings");
+  return {
+    useEnvironmentIdentificationMode: () => "none",
+    useClientSettings: (select: (settings: ClientSettings) => unknown) =>
+      select(DEFAULT_CLIENT_SETTINGS),
+  };
+});
 vi.mock("../SidebarStageBackdrop", () => ({
   StageBackdropButtonArt: () => null,
   useSidebarStageBackdropVariant: () => null,
