@@ -5,6 +5,8 @@ import { type ReactNode } from "react";
 
 import { describe, expect, it, vi } from "vite-plus/test";
 
+const RELEASES_URL = `https://github.com/${import.meta.env.T3CODE_DESKTOP_UPDATE_REPOSITORY || "pingdotgg/t3code"}/releases`;
+
 const testState = vi.hoisted(() => ({ addToast: vi.fn() }));
 vi.mock("../ui/toast", async (original) => ({
   ...(await original<typeof import("../ui/toast")>()),
@@ -88,9 +90,7 @@ describe("SidebarUpdateReleaseNotes", () => {
     expect(document.activeElement).toBe(focused);
     expect(openExternal).not.toHaveBeenCalled();
     await act(async () => focused.click());
-    expect(openExternal).toHaveBeenCalledExactlyOnceWith(
-      "https://github.com/pingdotgg/t3code/releases/tag/v0.0.36-nightly.2",
-    );
+    expect(openExternal).toHaveBeenCalledExactlyOnceWith(`${RELEASES_URL}/tag/v0.0.36-nightly.2`);
     await act(async () => {
       await changeLanguage("en");
     });
@@ -120,9 +120,7 @@ describe("SidebarUpdateReleaseNotes", () => {
       });
       expect(link.textContent).toBe(`在 GitHub 查看 ${count} 个更早版本`);
       await act(async () => link.click());
-      expect(openExternal).toHaveBeenCalledExactlyOnceWith(
-        "https://github.com/pingdotgg/t3code/releases",
-      );
+      expect(openExternal).toHaveBeenCalledExactlyOnceWith(`${RELEASES_URL}`);
     },
   );
 
@@ -144,9 +142,7 @@ describe("SidebarUpdateReleaseNotes", () => {
     const toast = testState.addToast.mock.calls[0]![0] as { title: ReactNode };
     await act(async () => root.rerender(<>{toast.title}</>));
     expect(container.textContent).toBe("无法打开发布说明");
-    expect(openExternal).toHaveBeenCalledExactlyOnceWith(
-      "https://github.com/pingdotgg/t3code/releases/tag/v0.0.36-nightly.3",
-    );
+    expect(openExternal).toHaveBeenCalledExactlyOnceWith(`${RELEASES_URL}/tag/v0.0.36-nightly.3`);
   });
 });
 
