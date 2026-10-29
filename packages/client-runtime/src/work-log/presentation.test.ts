@@ -286,6 +286,8 @@ describe("summarizeToolGroup", () => {
 
 describe("resolveWorkEntryToolPresentation", () => {
   it("presents and summarizes every T3 tool using the same structured identity", () => {
+    const translateEnglish = createI18n({ lng: "en" }).t;
+    const translateChinese = createI18n({ lng: "zh" }).t;
     for (const tool of T3_MCP_TOOL_NAMES) {
       const entry: WorkLogPresentationEntry = {
         id: tool,
@@ -309,14 +311,10 @@ describe("resolveWorkEntryToolPresentation", () => {
       ] as const) {
         const current = { ...entry, toolLifecycleStatus };
         expect(
-          resolveWorkEntryToolPresentation(current, undefined, createI18n({ lng: "en" }).t),
+          resolveWorkEntryToolPresentation(current, undefined, translateEnglish),
           `${tool}: ${toolLifecycleStatus}`,
         ).toEqual(resolveWorkEntryToolPresentation(current));
-        const chinese = resolveWorkEntryToolPresentation(
-          current,
-          undefined,
-          createI18n({ lng: "zh" }).t,
-        );
+        const chinese = resolveWorkEntryToolPresentation(current, undefined, translateChinese);
         expect(chinese?.displayName, `${tool}: ${toolLifecycleStatus}`).toMatch(/[\u4e00-\u9fff]/);
         expect(chinese?.displayName, `${tool}: ${toolLifecycleStatus}`).not.toMatch(
           /chat\.tools\.|\{\{/,
@@ -326,8 +324,8 @@ describe("resolveWorkEntryToolPresentation", () => {
       const summary = summarizeToolGroup([entry]);
       expect(summary.summary, tool).not.toMatch(/Used (?:1 tool|T3 Code integration)/);
       expect(summary.hasFailure, tool).toBe(false);
-      expect(summarizeToolGroup([entry], createI18n({ lng: "en" }).t), tool).toEqual(summary);
-      const translated = summarizeToolGroup([entry], createI18n({ lng: "zh" }).t);
+      expect(summarizeToolGroup([entry], translateEnglish), tool).toEqual(summary);
+      const translated = summarizeToolGroup([entry], translateChinese);
       expect(translated.summary, tool).toMatch(/[\u4e00-\u9fff]/);
       expect(translated.summary, tool).not.toMatch(/chat\.tools\.|\{\{/);
       const failed = { ...entry, toolLifecycleStatus: "failed" as const };
