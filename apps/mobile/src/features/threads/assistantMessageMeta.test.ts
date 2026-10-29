@@ -19,7 +19,9 @@ describe("mobile end feedback", () => {
   it.each(["monitor", "subagent"] as const)(
     "waits for pending %s even when the runtime is idle",
     (kind) => {
-      const pending = presentPendingBackgroundWork([{ kind, taskId: "pending-work" }]);
+      const pending = presentPendingBackgroundWork([
+        { kind, taskId: "pending-work", ...(kind === "monitor" ? { awaited: true } : {}) },
+      ]);
       expect(
         mobileRunEndFeedback({ ...completed, completionHeld: pending?.waiting ?? false }),
       ).toBeNull();
@@ -27,14 +29,15 @@ describe("mobile end feedback", () => {
     },
   );
 
-  it("keeps non-blocking commands from holding a completed reply", () => {
-    const pending = presentPendingBackgroundWork([
-      { kind: "command", taskId: "background-command" },
-    ]);
-    expect(
-      mobileRunEndFeedback({ ...completed, completionHeld: pending?.waiting ?? false })?.kind,
-    ).toBe("ended");
-  });
+  it.each(["command", "monitor"] as const)(
+    "keeps non-blocking %s from holding a completed reply",
+    (kind) => {
+      const pending = presentPendingBackgroundWork([{ kind, taskId: "background-work" }]);
+      expect(
+        mobileRunEndFeedback({ ...completed, completionHeld: pending?.waiting ?? false })?.kind,
+      ).toBe("ended");
+    },
+  );
 
   it("uses the same visible meta predicate for the status owner and the assistant row", () => {
     const input = {

@@ -238,6 +238,7 @@ vi.mock("../components/FilePreviewModal", () => ({
     props.source ? createElement("div", { "data-file-preview": props.source.name }) : null,
 }));
 vi.mock("../components/VideoPreviewModal", () => ({ VideoPreviewModal: () => null }));
+vi.mock("../features/threads/ConveneResourceModal", () => ({ ConveneResourceModal: () => null }));
 vi.mock("../components/ComposerContextSheet", () => ({}));
 vi.mock("../native/useOpenPullRequest", () => ({ useOpenPullRequest: () => vi.fn() }));
 vi.mock("../native/useMarkdownImageSource", () => ({ useMarkdownImageSource: () => vi.fn() }));
