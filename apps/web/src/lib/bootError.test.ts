@@ -19,42 +19,52 @@ const notOnPath = (launcherPath: string | null): DesktopCliCommandState => ({
 });
 
 describe("resolveTriageCommand", () => {
-  it("prefers t3 on PATH, then the desktop launcher", async () => {
-    const onPath = { ...notOnPath("/home/me/.t3/bin/t3"), onPath: true };
-    await expect(resolveTriageCommand(desktopWith(async () => onPath))).resolves.toBe("t3 triage");
+  it("prefers the Convene CLI on PATH, then the desktop launcher", async () => {
+    const onPath = { ...notOnPath("/home/me/.convene-code/bin/t3code-convene"), onPath: true };
+    await expect(resolveTriageCommand(desktopWith(async () => onPath))).resolves.toBe(
+      "t3code-convene triage",
+    );
     await expect(
-      resolveTriageCommand(desktopWith(async () => notOnPath("/home/me/.t3/bin/t3"))),
-    ).resolves.toBe("/home/me/.t3/bin/t3 triage");
+      resolveTriageCommand(
+        desktopWith(async () => notOnPath("/home/me/.convene-code/bin/t3code-convene")),
+      ),
+    ).resolves.toBe("/home/me/.convene-code/bin/t3code-convene triage");
   });
 
   it("quotes launcher paths for the shell that runs them", async () => {
     await expect(
-      resolveTriageCommand(desktopWith(async () => notOnPath("/Users/O'Neil/.t3/bin/t3"))),
-    ).resolves.toBe(`'/Users/O'"'"'Neil/.t3/bin/t3' triage`);
-    await expect(
-      resolveTriageCommand(desktopWith(async () => notOnPath("C:\\Users\\Me\\.t3\\bin\\t3.cmd"))),
-    ).resolves.toBe("C:\\Users\\Me\\.t3\\bin\\t3.cmd triage");
+      resolveTriageCommand(
+        desktopWith(async () => notOnPath("/Users/O'Neil/.convene-code/bin/t3code-convene")),
+      ),
+    ).resolves.toBe(`'/Users/O'"'"'Neil/.convene-code/bin/t3code-convene' triage`);
     await expect(
       resolveTriageCommand(
-        desktopWith(async () => notOnPath("C:\\Users\\Jo O'Neil\\.t3\\bin\\t3.cmd")),
+        desktopWith(async () => notOnPath("C:\\Users\\Me\\.convene-code\\bin\\t3code-convene.cmd")),
       ),
-    ).resolves.toBe("& 'C:\\Users\\Jo O''Neil\\.t3\\bin\\t3.cmd' triage");
+    ).resolves.toBe("C:\\Users\\Me\\.convene-code\\bin\\t3code-convene.cmd triage");
+    await expect(
+      resolveTriageCommand(
+        desktopWith(async () =>
+          notOnPath("C:\\Users\\Jo O'Neil\\.convene-code\\bin\\t3code-convene.cmd"),
+        ),
+      ),
+    ).resolves.toBe("& 'C:\\Users\\Jo O''Neil\\.convene-code\\bin\\t3code-convene.cmd' triage");
   });
 
-  it("falls back to npx without a usable desktop launcher", async () => {
+  it("uses the Convene CLI without a usable desktop launcher", async () => {
     using _warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    await expect(resolveTriageCommand(undefined)).resolves.toBe("npx t3 triage");
-    await expect(resolveTriageCommand({} as DesktopBridge)).resolves.toBe("npx t3 triage");
+    await expect(resolveTriageCommand(undefined)).resolves.toBe("t3code-convene triage");
+    await expect(resolveTriageCommand({} as DesktopBridge)).resolves.toBe("t3code-convene triage");
     await expect(resolveTriageCommand(desktopWith(async () => notOnPath(null)))).resolves.toBe(
-      "npx t3 triage",
+      "t3code-convene triage",
     );
     const staleWindowsPathEntry = { ...notOnPath(null), supported: true, onPath: true };
     await expect(
       resolveTriageCommand(desktopWith(async () => staleWindowsPathEntry)),
-    ).resolves.toBe("npx t3 triage");
+    ).resolves.toBe("t3code-convene triage");
     await expect(
       resolveTriageCommand(desktopWith(() => Promise.reject(new Error("ipc closed")))),
-    ).resolves.toBe("npx t3 triage");
+    ).resolves.toBe("t3code-convene triage");
   });
 });
 
@@ -116,6 +126,23 @@ describe("buildErrorReport", () => {
 });
 
 describe("updateActionFor", () => {
+  it("offers the existing native download retry after a retryable failure", () => {
+    expect(
+      updateActionFor({
+        status: "error",
+        errorContext: "download",
+        canRetry: true,
+      } as DesktopUpdateState),
+    ).toEqual({ kind: "download" });
+    expect(
+      updateActionFor({
+        status: "error",
+        errorContext: "download",
+        canRetry: false,
+      } as DesktopUpdateState),
+    ).toBeNull();
+  });
+
   it("offers an action only when a newer build exists", () => {
     const state = (status: DesktopUpdateState["status"], downloadPercent: number | null = null) =>
       ({ status, downloadPercent }) as DesktopUpdateState;
