@@ -110,7 +110,11 @@ export function SourceControlAccountSettings({
           size="icon-xs"
           variant="ghost-muted"
           onClick={() => setRevealed((current) => !current)}
-          aria-label={revealed ? `Hide ${label} accounts` : `Reveal ${label} accounts`}
+          aria-label={
+            revealed
+              ? t("sourceControl.accounts.hide", { provider: label })
+              : t("sourceControl.accounts.reveal", { provider: label })
+          }
           aria-pressed={revealed}
         >
           {revealed ? <EyeOffIcon /> : <EyeIcon />}

@@ -37,6 +37,10 @@ export function PullRequestCommentForm({
   onClose: () => void;
 }) {
   const t = useTranslate();
+  const terminology = sourceControlClients.get(detail.provider).changeRequest;
+  const request = t(`sourceControl.requestTerm.${terminology.singular}`, {
+    defaultValue: terminology.singular,
+  });
   const [body, setBody] = useState("");
   const [submitting, setSubmitting] = useState<"comment" | "close" | "reopen" | null>(null);
   const postComment = useAtomCommand(pullRequestEnvironment.comment, {
@@ -94,7 +98,7 @@ export function PullRequestCommentForm({
         value={body}
         rows={3}
         placeholder={t("pullRequest.flow.comment.placeholder")}
-        aria-label={`Comment on this ${sourceControlClients.get(detail.provider).changeRequest.singular}`}
+        aria-label={t("pullRequest.flow.comment.label", { request })}
         onChange={(event) => setBody(event.target.value)}
         onKeyDown={(event) => {
           if (event.nativeEvent.isComposing || event.keyCode === 229) return;
