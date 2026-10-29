@@ -5,7 +5,7 @@
 Agent 生命周期实施计划：[convene-agent-lifecycle-plan.md](../plan/convene-agent-lifecycle-plan.md)。
 用户明确要求本地 fork 保存计划与合并决定；这些文档随 Convene 分支提交，不提交上游。
 
-当前稳定发行固定上游 `v0.1.2`，不将上游最新 main 当作正式发行基线。
+当前稳定发行固定上游 `v0.1.3`，不将上游最新 main 当作正式发行基线。
 具体冲突裁决及各适配的上游状态见 [V2 稳定版合入核查](convene-v010-upstream-review.md)；
 实施由 [T3Code Issue #8](convene://issues/zzq/software-factory/t3code/8) 追踪。
 
@@ -54,12 +54,15 @@ Agent 生命周期实施计划：[convene-agent-lifecycle-plan.md](../plan/conve
 - 能确定名称就显示实际名称；不能确定时仅显示“默认模型”。不要向用户解释“未报告”等内部探测状态。
 - 多个原生别名指向同名模型时显示原 ID 区分；不写 GLM／Claude 特判。
 - 升级提示不常驻普通模型列表底部；仅在搜索相关受版本限制模型时提供有用提示。
+- Codex 原生预测默认关闭，按实验功能提供；使用目标环境现有稳定版 Codex 的原生上下文、正常配置及 sample/cancel。配置采样率为 0 时不强启，接受建议只写入可编辑草稿。不得承诺第三方免费待遇或完整官方桌面审核等价。
 
 ### 架构边界
 
 - 使用上游 V2 编排，不建立平行会话／执行状态机。Convene 接入集中于 bridge、配置、MCP broker 及必要宿主入口。
 - Convene 权限按连接管理和项目配置分别裁决；新增上游 RPC scope 不能覆盖 Convene 映射，反之亦然。
 - MCP 必须保持项目授权、只读范围和既有生命周期；上游传输变更时连同 additionalServers 一起迁移。
+- Codex 恢复继续使用系统原版 CLI，本轮不分发定制补丁或改变既有 managed 选择。相同有效 MCP 配置热重订阅保留资源；未证实新配置生效时按原操作失败并保留原生上下文，不转 fresh-native/摘要续接，不放宽凭据撤销、不新增卸载延迟设置或前台内部状态。
+- ACP Registry 的目录刷新与程序安装分开：目录可自动刷新，托管程序仅由用户手动升级，保留活跃会话；客户端新版提醒短时可关闭，后续下载沿用侧栏现有更新图标，Provider 动作继续独立确认。
 
 ## 改动来源
 
@@ -309,3 +312,11 @@ Antigravity 需修正初始化与摘要的关系；Grok、Pi 已有的发现降�
 - **验收更正**：曾将文件搜索定位为 `textbox`，实际角色是 `searchbox`，且顶层正文读取没有涵盖已显示的组件内容，造成“刷新后 Files 持续不可用”的假阴性。实际节点、文件正文和截图核实后撤回该结论，原始误判与更正均保留。额外旧 CI399 对照使用全新状态、同一受控用户和单一公网 legacy 入口，仅一次正常打开及一次刷新，实际读取 `CONTROL.txt` 成功；新 999 同样已读文件和评论，没有建立退包可恢复使用的差异依据。临时 runner 经正常 owner API 删除，新增实例及自有状态已精确清理，原审查环境保留。
 - **未扩大的边界**：没有新增生产模型请求、ACL 变更或权限／过期矩阵重跑；此前候选的有限矩阵仍按原交付证据覆盖，不等于自然 12 小时到期、LAN 原生控制或全部 Provider 验收。HTTP 入口不承诺扩展 webview，可信 HTTPS 由既有 [Convene #63](convene://issues/zzq/software-factory/convene/63) 计划承接。用户明确排除 Windows/macOS 原生 GUI 验收，后续未经明确要求不安排；构建检查不能标作 `runtime_verified`。未覆盖的 OPEN 事项不批量关闭。
 - **正式记录与恢复**：[T3 #55](convene://issues/zzq/software-factory/t3code/55)、[#46](convene://issues/zzq/software-factory/t3code/46)、[#52](convene://issues/zzq/software-factory/t3code/52)、[#53](convene://issues/zzq/software-factory/t3code/53) 与 [Convene #206](convene://issues/zzq/software-factory/convene/206) 记录实际交付范围。回退使用本轮新现场快照及不可变旧包／Web 输入，不复用上一发行版的指针快照；客户端数据按已核实的一致备份合同恢复。本次仅向已有 GitHub origin 非强推 main 和正式标签，不创建仓库或 remote，不向 upstream 推送，不再次执行公告或生产发布。
+
+## 2026-10-29 `0.1.3-1` 正式发行
+
+- **发行身份**：上游正式 `v0.1.3` / `d2c440312e5f39d59827ed466838a623516454d6` 正常合入，发行源码与 annotated tag `v0.1.3-1` 固定为 `70693ad5b633befb18c290ae6187eac9b22c1305`。Actions `40809323764` attempt 1，构建 `convene-40809323764-1`；main 接纳发行源码，后继记录不重写原包、Web 或标签身份。
+- **正式结果**：复用既有加密传输与下载 publisher，发布同次 DEB、AppImage、Windows x64 和 macOS arm64 包及匹配 Web。Web current 为 `convene-40809323764-1`，rollback 为 `convene-40647290201-1`。在 Convene 6.6.3 维护入口恢复及最终验收通过后执行，没有再次重启业务服务。
+- **验证边界**：四包私有预置与来源一致；当前 AppImage 完成隔离真实界面受控发送/停止及手动下载，DEB 在断网 Ubuntu 容器实际安装、启动、正常退出和卸载。两个正式入口分别从内网发布机和公网协调机验证四包 HEAD/Range/实际前缀字节、校验文件、Web 元数据/资源及旧 Web 保留。Windows/macOS 维持预览，未扩大原生 mobile、WAN 或真实模型质量证明，本轮无新增真实模型请求。
+- **已收口与保留**：[下一版统筹 #74](convene://issues/zzq/software-factory/t3code/74) 记录各事项实现、实际客户端验收及脚本错误更正；已完成范围随 main 关闭。系统 Codex 的 SystemError 缓存问题及原现场归属仍由 [#70](convene://issues/zzq/software-factory/t3code/70) 跟踪，完整远程/交接与待答组合仍由 [#71](convene://issues/zzq/software-factory/t3code/71) 承接，不以本轮受控分层证明替代完整同链路。
+- **恢复边界**：独立停止态数据由旧版 schema 67 升至本版 69 后保持项目、消息、原生默认模型及中断事实；恢复升级前完整快照后旧版 67 可读，不让旧二进制直接打开新 schema。本次下载清单/Web 旧指针快照与不可变旧包单独保存，客户端数据恢复仍须使用该用户升级前一致备份。
