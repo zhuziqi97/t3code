@@ -1,6 +1,10 @@
 import { assert, it } from "@effect/vitest";
 import {
   ProviderDriverKind,
+  NodeId,
+  ProviderThreadId,
+  ProviderTurnId,
+  RunAttemptId,
   RunId,
   ThreadId,
   type OrchestrationV2ThreadProjection,
@@ -41,8 +45,36 @@ const projectionFixture = () =>
       activeProviderThreadId: "provider-thread",
       modelSelection: { instanceId: "codex", model: null },
     },
-    runs: [{ id: "run-a", ordinal: 1, status: "completed", rootNodeId: "root-node" }],
-    nodes: [{ id: "root-node", providerTurnId: "provider-turn" }],
+    runs: [
+      {
+        id: "run-a",
+        ordinal: 1,
+        status: "completed",
+        rootNodeId: "root-node",
+        activeAttemptId: "attempt-a",
+        providerThreadId: "provider-thread",
+      },
+    ],
+    attempts: [
+      {
+        id: "attempt-a",
+        runId: "run-a",
+        rootNodeId: "root-node",
+        providerThreadId: "provider-thread",
+        providerTurnId: null,
+        status: "completed",
+      },
+    ],
+    nodes: [
+      { id: "root-node", kind: "root_turn", runId: "run-a", providerTurnId: null },
+      {
+        id: "assistant-node",
+        kind: "assistant_message",
+        runId: "run-a",
+        parentNodeId: "root-node",
+        providerTurnId: "provider-turn",
+      },
+    ],
     providerThreads: [
       {
         id: "provider-thread",
@@ -58,6 +90,9 @@ const projectionFixture = () =>
       {
         id: "provider-turn",
         providerThreadId: "provider-thread",
+        nodeId: "root-node",
+        runAttemptId: "attempt-a",
+        ordinal: 1,
         status: "completed",
         nativeTurnRef: { nativeId: "native-turn" },
       },
@@ -73,7 +108,7 @@ const setup = (policy: Schema.Codec.Encoded<typeof CodexPredictionConfig> = conf
     let held = false;
     let interrupted = false;
     let sampleText: string | null = '{"suggestion":"Editable suggestion"}';
-    let sampleSource = "native-turn";
+    let sampleSource: string | null = null;
     let failSample = false;
     const samples: Array<
       Parameters<
@@ -96,7 +131,7 @@ const setup = (policy: Schema.Codec.Encoded<typeof CodexPredictionConfig> = conf
               detail: "fixture failure",
               cause: null,
             });
-          return { sourceTurnId: sampleSource, text: sampleText };
+          return { sourceTurnId: sampleSource ?? value.sourceTurnId, text: sampleText };
         }).pipe(
           Effect.onInterrupt(() =>
             Effect.sync(() => {
@@ -180,11 +215,39 @@ const setup = (policy: Schema.Codec.Encoded<typeof CodexPredictionConfig> = conf
         currentToken = token("account-b");
       },
       advanceParent: () => {
+        const runId = RunId.make("run-b");
+        const rootNodeId = NodeId.make("root-node-b");
+        const attemptId = RunAttemptId.make("attempt-b");
         projection = {
           ...projection,
           runs: [
             ...projection.runs,
-            { ...projection.runs[0]!, id: RunId.make("run-b"), ordinal: 2 },
+            {
+              ...projection.runs[0]!,
+              id: runId,
+              ordinal: 2,
+              rootNodeId,
+              activeAttemptId: attemptId,
+            },
+          ],
+          attempts: [
+            ...projection.attempts,
+            { ...projection.attempts[0]!, id: attemptId, runId, rootNodeId },
+          ],
+          nodes: [...projection.nodes, { ...projection.nodes[0]!, id: rootNodeId, runId }],
+          providerTurns: [
+            ...projection.providerTurns,
+            {
+              ...projection.providerTurns[0]!,
+              id: ProviderTurnId.make("provider-turn-b"),
+              runAttemptId: attemptId,
+              nodeId: rootNodeId,
+              ordinal: 2,
+              nativeTurnRef: {
+                ...projection.providerTurns[0]!.nativeTurnRef!,
+                nativeId: "native-turn-b",
+              },
+            },
           ],
         };
       },
@@ -395,6 +458,79 @@ it.effect("cancels only the matching app request and interrupts native sampling"
     assert.isTrue(h.interrupted());
   }).pipe(Effect.scoped),
 );
+
+it("selects the root native turn by active attempt when node and attempt pointers are null", () => {
+  const source = ComposerPredictions.predictionSource(projectionFixture(), "run-a");
+  assert.equal(source?.turn.nativeTurnRef?.nativeId, "native-turn");
+});
+
+it("selects the latest goal turn within the active attempt rather than a newer foreign attempt", () => {
+  const projection = projectionFixture();
+  const turn = projection.providerTurns[0]!;
+  const source = ComposerPredictions.predictionSource(
+    {
+      ...projection,
+      providerTurns: [
+        {
+          ...turn,
+          id: ProviderTurnId.make("latest-goal-turn"),
+          ordinal: 2,
+          nativeTurnRef: { ...turn.nativeTurnRef!, nativeId: "latest-native-goal-turn" },
+        },
+        {
+          ...turn,
+          id: ProviderTurnId.make("foreign-turn"),
+          runAttemptId: RunAttemptId.make("other-attempt"),
+          ordinal: 20,
+        },
+        turn,
+      ],
+    },
+    "run-a",
+  );
+  assert.equal(source?.turn.nativeTurnRef?.nativeId, "latest-native-goal-turn");
+});
+
+it.each(["attempt", "thread", "child node", "running", "native ref"] as const)(
+  "rejects a source with mismatched %s ownership or state",
+  (field) => {
+    const projection = projectionFixture();
+    const turn = {
+      ...projection.providerTurns[0]!,
+      ...(field === "attempt" ? { runAttemptId: RunAttemptId.make("other-attempt") } : {}),
+      ...(field === "thread"
+        ? { providerThreadId: ProviderThreadId.make("other-provider-thread") }
+        : {}),
+      ...(field === "child node" ? { nodeId: NodeId.make("assistant-node") } : {}),
+      ...(field === "running" ? { status: "running" as const } : {}),
+      ...(field === "native ref" ? { nativeTurnRef: null } : {}),
+    };
+    assert.isNull(
+      ComposerPredictions.predictionSource({ ...projection, providerTurns: [turn] }, "run-a"),
+    );
+  },
+);
+
+it("does not reuse an earlier completed goal turn while its latest turn is running", () => {
+  const projection = projectionFixture();
+  assert.isNull(
+    ComposerPredictions.predictionSource(
+      {
+        ...projection,
+        providerTurns: [
+          ...projection.providerTurns,
+          {
+            ...projection.providerTurns[0]!,
+            id: ProviderTurnId.make("running-goal-turn"),
+            ordinal: 2,
+            status: "running",
+          },
+        ],
+      },
+      "run-a",
+    ),
+  );
+});
 
 it("requires the latest idle root source and never revives an earlier completed run", () => {
   const projection = projectionFixture();
