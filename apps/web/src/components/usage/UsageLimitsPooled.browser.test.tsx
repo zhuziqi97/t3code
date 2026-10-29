@@ -142,10 +142,23 @@ it.each([
   await click("Use reset");
   await click("Use credit");
   expect(consume).toHaveBeenCalledOnce();
-  // Both popups unmount once their exit animations finish.
   await expect.poll(() => document.querySelector('[role="alertdialog"]')).toBeNull();
-  await expect.poll(() => document.querySelector('[data-slot="popover-popup"]')).toBeNull();
-  const status = document.querySelector('[role="status"]');
+  await expect
+    .element(page.getByRole("button", { name: /^Alpha:/ }))
+    .toHaveAttribute("aria-expanded", "false");
+  // Base UI can retain a closed popup while its exit unmount is pending.
+  await vi.waitFor(() => {
+    const popup = document.querySelector('[data-slot="popover-popup"]');
+    if (!popup) return;
+    expect(popup.hasAttribute("data-closed")).toBe(true);
+    expect(getComputedStyle(popup).opacity).toBe("0");
+    const positioner = popup.closest('[data-slot="popover-positioner"]');
+    expect(positioner).not.toBeNull();
+    expect(getComputedStyle(positioner!).pointerEvents).toBe("none");
+  });
+  const status = document.querySelector<HTMLElement>('[role="status"]');
+  await expect.element(status).toBeVisible();
+  expect(status?.closest('[data-slot="popover-popup"], [role="alertdialog"]')).toBeNull();
   expect(status?.textContent).toBe("Alpha Using reset credit…");
   await click("Alpha:");
   const using = Array.from(document.querySelectorAll("button")).find(
@@ -154,6 +167,7 @@ it.each([
   expect(using?.disabled).toBe(true);
   await act(async () => answer(result));
   expect(status?.textContent).toBe(`Alpha ${text}`);
+  expect(consume).toHaveBeenCalledOnce();
 });
 
 it("omits an empty reset plate but keeps countdowns and banked credits visible", async () => {
