@@ -1,38 +1,6 @@
-import { Link2Icon } from "lucide-react";
 import { useTranslate } from "../../i18n";
-import {
-  lazy,
-  Suspense,
-  useEffect,
-  useRef,
-  useState,
-  type ComponentType,
-  type KeyboardEvent,
-} from "react";
-import {
-  ArchiveIcon,
-  FlaskConicalIcon,
-  BotIcon,
-  createLucideIcon,
-  CalendarClockIcon,
-  FileDiffIcon,
-  FolderTreeIcon,
-  GitBranchIcon,
-  GlobeIcon,
-  InfoIcon,
-  MessageSquareTextIcon,
-  MessagesSquareIcon,
-  PanelsTopLeftIcon,
-  KeyboardIcon,
-  PaletteIcon,
-  SearchIcon,
-  ServerIcon,
-  Settings2Icon,
-  ShieldCheckIcon,
-  SmartphoneIcon,
-  WrenchIcon,
-  XIcon,
-} from "lucide-react";
+import { lazy, Suspense, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { SearchIcon, XIcon } from "lucide-react";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 
 import { cn } from "../../lib/utils";
@@ -53,7 +21,6 @@ import {
   settingsSectionLabel,
   settingsSearchItemTitle,
   revealSettingsSearchTarget,
-  SETTINGS_NAV_GROUPS,
   type SettingsPath,
   type SettingsSearchItem,
 } from "./settingsSearch";
@@ -62,17 +29,7 @@ import { validateSettingsScopeSearch } from "./settingsScope";
 import { useSettingsSectionNavigation } from "./useSettingsSectionNavigation";
 import { workspaceAreaProps } from "../../lib/workspaceFocus";
 
-const SnapShotIcon = createLucideIcon("snap-shot", [
-  [
-    "path",
-    {
-      d: "M8 3H6a3 3 0 0 0-3 3v2M16 3h2a3 3 0 0 1 3 3v2M21 16v2a3 3 0 0 1-3 3h-2M8 21H6a3 3 0 0 1-3-3v-2",
-      key: "capture-frame",
-    },
-  ],
-  ["rect", { width: "10", height: "8", x: "7", y: "8", rx: "2", key: "window" }],
-  ["circle", { cx: "12", cy: "12", r: "1.5", key: "lens" }],
-]);
+import { SETTINGS_NAV_GROUPS, SETTINGS_SECTIONS_BY_PATH } from "./settingsSections";
 
 const T3ConnectSidebarSignIn = lazy(() =>
   import("../clerk/T3ConnectSidebarSignIn").then((module) => ({
@@ -84,33 +41,6 @@ const T3ConnectSidebarAvatar = lazy(() =>
     default: module.T3ConnectSidebarAvatar,
   })),
 );
-
-const SETTINGS_SECTION_ICONS: Readonly<
-  Record<SettingsPath, ComponentType<{ className?: string }>>
-> = {
-  "/settings/general": Settings2Icon,
-  "/settings/diagnostics": WrenchIcon,
-  "/settings/appearance": PaletteIcon,
-  "/settings/chat": MessageSquareTextIcon,
-  "/settings/diffs": FileDiffIcon,
-  "/settings/projects": PanelsTopLeftIcon,
-  "/settings/keybindings": KeyboardIcon,
-  "/settings/snap-shot": SnapShotIcon,
-  "/settings/providers": BotIcon,
-  "/settings/threads": MessagesSquareIcon,
-  "/settings/browser": GlobeIcon,
-  "/settings/devices": SmartphoneIcon,
-  "/settings/scheduled-tasks": CalendarClockIcon,
-  "/settings/source-control": GitBranchIcon,
-  "/settings/worktrees": FolderTreeIcon,
-  "/settings/connections": ServerIcon,
-  "/settings/access": ShieldCheckIcon,
-  "/settings/maintenance": WrenchIcon,
-  "/settings/labs": FlaskConicalIcon,
-  "/settings/about": InfoIcon,
-  "/settings/convene": Link2Icon,
-  "/settings/archived": ArchiveIcon,
-};
 
 // Detail pages without a nav entry highlight the page that links to them.
 const SETTINGS_DETAIL_PAGE_PARENTS: Readonly<Record<string, SettingsPath>> = {
@@ -124,7 +54,7 @@ function scrollResultIntoView(row: HTMLElement | null) {
 }
 
 function SettingsSectionIcon({ to }: { to: SettingsPath }) {
-  const Icon = SETTINGS_SECTION_ICONS[to];
+  const Icon = SETTINGS_SECTIONS_BY_PATH.get(to)!.icon;
   return <Icon className="size-4 shrink-0 text-(--sidebar-icon-color)" />;
 }
 
@@ -136,7 +66,9 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
   const currentSearch = useLocation({ select: (location) => location.search });
   const scopeSearch = validateSettingsScopeSearch(currentSearch);
   const activePath = SETTINGS_DETAIL_PAGE_PARENTS[pathname] ?? pathname;
-  const navPaths = SETTINGS_NAV_GROUPS.flatMap((group) => group.paths);
+  const navPaths = SETTINGS_NAV_GROUPS.flatMap((group) =>
+    group.sections.map((section) => section.path),
+  );
   const sectionNavigation = useSettingsSectionNavigation(
     navPaths.find((to) => activePath === to || activePath.startsWith(`${to}/`)) ??
       navPaths[0] ??
@@ -383,11 +315,13 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
                   aria-label="Settings sections"
                   className="flex flex-col gap-4"
                 >
-                  {SETTINGS_NAV_GROUPS.map((group, index) => {
-                    const heading = group.headingKey ? t(group.headingKey) : group.heading;
+                  {SETTINGS_NAV_GROUPS.map((group) => {
+                    const heading = group.headingKey
+                      ? t(group.headingKey, { defaultValue: group.heading })
+                      : null;
                     return (
                       <div
-                        key={group.headingKey ?? group.heading ?? index}
+                        key={group.id}
                         role="group"
                         aria-label={heading ?? undefined}
                         className="flex flex-col gap-1 max-md:border-t max-md:border-sidebar-border max-md:pt-4 max-md:first:border-t-0 max-md:first:pt-0"
@@ -405,8 +339,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
                           </h3>
                         ) : null}
                         <SidebarMenu role="presentation">
-                          {group.paths.map((to) => {
-                            const Icon = SETTINGS_SECTION_ICONS[to];
+                          {group.sections.map(({ path: to, icon: Icon }) => {
                             const isActive = activePath === to || activePath.startsWith(`${to}/`);
                             return (
                               <SidebarMenuItem key={to} role="presentation">

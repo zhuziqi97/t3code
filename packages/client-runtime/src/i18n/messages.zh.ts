@@ -2265,6 +2265,8 @@ export const zh: Partial<Messages> = {
   "settings.sections.storage": "存储",
   "settings.sections.connections": "连接",
   "settings.sections.archived": "归档",
+  "settings.groups.agents": "智能体",
+  "settings.groups.code": "代码",
 
   "legacy.title": "旧版功能",
   "legacy.plan.description": "恢复 Build/Plan、/plan、/default 和 Shift+Tab。关闭后使用执行模式。",

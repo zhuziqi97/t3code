@@ -2406,6 +2406,8 @@ export const en = {
   "settings.sections.storage": "Storage",
   "settings.sections.connections": "Connections",
   "settings.sections.archived": "Archive",
+  "settings.groups.agents": "Agents",
+  "settings.groups.code": "Code",
 
   "legacy.title": "Legacy features",
   "legacy.plan.description":

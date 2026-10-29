@@ -4,16 +4,14 @@ import {
   WorkspaceBreadcrumbItem,
   WorkspaceBreadcrumbSeparator,
 } from "../WorkspaceBreadcrumb";
-import { SETTINGS_SECTION_LABELS, settingsSectionLabel, type SettingsPath } from "./settingsSearch";
+import { settingsSectionLabel } from "./settingsSearch";
+import { SETTINGS_SECTIONS } from "./settingsSections";
 
 export function SettingsBreadcrumb({ pathname }: { pathname: string }) {
   const t = useTranslate();
   const labels: Readonly<Record<string, string>> = {
     ...Object.fromEntries(
-      (Object.keys(SETTINGS_SECTION_LABELS) as SettingsPath[]).map((to) => [
-        to,
-        settingsSectionLabel(to, t),
-      ]),
+      SETTINGS_SECTIONS.map((section) => [section.path, settingsSectionLabel(section.path, t)]),
     ),
     "/settings/diagnostics": t("about.diagnostics"),
     "/settings/open-source-licenses": t("breadcrumb.licenses"),

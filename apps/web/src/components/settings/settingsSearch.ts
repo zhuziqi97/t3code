@@ -17,37 +17,13 @@ import { writeLocalStorageValue } from "../../hooks/useLocalStorage";
 import { commandLabel } from "./KeybindingsSettings.logic";
 import type { ResolvedSettingsScope } from "./settingsScope";
 
-export type SettingsPath =
-  | "/settings/projects"
-  | "/settings/general"
-  | "/settings/diagnostics"
-  | "/settings/appearance"
-  | "/settings/chat"
-  | "/settings/diffs"
-  | "/settings/keybindings"
-  | "/settings/snap-shot"
-  | "/settings/providers"
-  | "/settings/threads"
-  | "/settings/browser"
-  | "/settings/devices"
-  | "/settings/scheduled-tasks"
-  | "/settings/source-control"
-  | "/settings/worktrees"
-  | "/settings/connections"
-  | "/settings/convene"
-  | "/settings/access"
-  | "/settings/maintenance"
-  | "/settings/labs"
-  | "/settings/about"
-  | "/settings/archived";
-
-export type SettingsSearchScope =
-  | "environment"
-  | "environment-defaults"
-  | "project-defaults"
-  | "project"
-  | "checkout"
-  | "connections";
+import {
+  SETTINGS_SECTIONS,
+  SETTINGS_SECTIONS_BY_PATH,
+  type SettingsPath,
+  type SettingsSearchScope,
+} from "./settingsSections";
+export type { SettingsPath, SettingsSearchScope } from "./settingsSections";
 
 export interface SettingsSearchItem {
   readonly id: string;
@@ -85,73 +61,6 @@ export interface SettingsSearchAvailability {
   readonly managedTunnelActive?: boolean;
   readonly hasPeerLinkHost?: boolean;
 }
-
-export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
-  "/settings/diagnostics": i18n.t("settings.search.diagnostics.title"),
-  "/settings/projects": "Projects",
-  "/settings/general": i18n.t("settings.sections.general"),
-  "/settings/appearance": i18n.t("settings.sections.appearance"),
-  "/settings/chat": "Chat",
-  "/settings/diffs": "Diffs & pull requests",
-  "/settings/keybindings": i18n.t("settings.sections.keybindings"),
-  "/settings/snap-shot": i18n.t("settings.sections.snap-shot"),
-  "/settings/providers": i18n.t("settings.sections.providers"),
-  "/settings/threads": "Threads",
-  "/settings/browser": "Browser",
-  "/settings/devices": "Devices",
-  "/settings/scheduled-tasks": "Scheduled tasks",
-  "/settings/source-control": i18n.t("settings.search.source-control.title"),
-  "/settings/worktrees": "Worktrees",
-  "/settings/connections": "Environments",
-  "/settings/convene": "Convene",
-  "/settings/access": "Sharing & access",
-  "/settings/maintenance": "Maintenance",
-  "/settings/labs": "Labs",
-  "/settings/about": "About",
-  "/settings/archived": i18n.t("settings.sections.archived"),
-};
-
-/** Sidebar order. A group without a heading is set apart by space alone. */
-export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
-  readonly heading: string | null;
-  readonly headingKey?: string;
-  readonly paths: ReadonlyArray<SettingsPath>;
-}> = [
-  {
-    heading: null,
-    paths: [
-      "/settings/general",
-      "/settings/appearance",
-      "/settings/chat",
-      "/settings/diffs",
-      "/settings/keybindings",
-      "/settings/snap-shot",
-    ],
-  },
-  {
-    heading: "Agents",
-    paths: [
-      "/settings/providers",
-      "/settings/threads",
-      "/settings/browser",
-      "/settings/devices",
-      "/settings/scheduled-tasks",
-    ],
-  },
-  {
-    heading: "Code",
-    paths: ["/settings/projects", "/settings/source-control", "/settings/worktrees"],
-  },
-  {
-    heading: null,
-    headingKey: "settings.sections.connections",
-    paths: ["/settings/connections", "/settings/convene", "/settings/access"],
-  },
-  {
-    heading: null,
-    paths: ["/settings/maintenance", "/settings/labs", "/settings/about", "/settings/archived"],
-  },
-];
 
 export function keybindingSearchAnchorId<Command extends KeybindingCommand>(command: Command) {
   return `keybinding-${command}` as const;
@@ -1597,14 +1506,18 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/archived",
     searchTerms: ["restore reopen deleted history projects"],
   },
-  {
-    id: "convene-connection",
-    get title() {
-      return i18n.t("convene.connection.connect");
-    },
-    to: "/settings/convene",
-    searchTerms: ["convene pairing modules MCP client activation", "连接 配对 模块 客户端 激活"],
-  },
+  ...SETTINGS_SECTIONS.flatMap((section) =>
+    "search" in section
+      ? section.search.map((item) => ({
+          id: item.id,
+          get title() {
+            return i18n.t(item.titleKey);
+          },
+          to: section.path,
+          searchTerms: item.searchTerms,
+        }))
+      : [],
+  ),
   {
     id: "language",
     get title() {
@@ -1633,31 +1546,6 @@ export const SETTINGS_SEARCH_ITEMS = [
 export type SettingsSearchItemId = (typeof SETTINGS_SEARCH_ITEMS)[number]["id"];
 
 const SEARCH_ITEMS_BY_ID = new Map(SETTINGS_SEARCH_ITEMS.map((item) => [item.id, item] as const));
-
-const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScope | null>> = {
-  "/settings/convene": null,
-  "/settings/diagnostics": "environment",
-  "/settings/projects": "project",
-  "/settings/general": null,
-  "/settings/appearance": null,
-  "/settings/chat": null,
-  "/settings/diffs": null,
-  "/settings/snap-shot": null,
-  "/settings/keybindings": null,
-  "/settings/providers": null,
-  "/settings/threads": null,
-  "/settings/browser": null,
-  "/settings/devices": null,
-  "/settings/source-control": "environment-defaults",
-  "/settings/worktrees": "project-defaults",
-  "/settings/connections": "connections",
-  "/settings/access": "connections",
-  "/settings/scheduled-tasks": null,
-  "/settings/maintenance": null,
-  "/settings/labs": null,
-  "/settings/about": null,
-  "/settings/archived": "project-defaults",
-};
 
 const RENAMED_SETTINGS_PATHS: Readonly<Record<string, SettingsPath>> = {
   "/settings/integrations": "/settings/browser",
@@ -1699,7 +1587,7 @@ export function getSettingsSearchTargetScope(targetId: string) {
   return item
     ? {
         title: item.title,
-        scope: item.scope ?? SETTINGS_CATEGORY_SCOPES[item.to],
+        scope: item.scope ?? SETTINGS_SECTIONS_BY_PATH.get(item.to)!.searchScope ?? null,
         ...(item.requiresThreadAutoSettlement ? { requiresThreadAutoSettlement: true } : {}),
       }
     : null;
@@ -1759,9 +1647,8 @@ export function isSettingsSearchScopeAvailable(
 }
 
 export function settingsSectionLabel(to: SettingsPath, translate: TFunction = i18n.t): string {
-  return translate(`settings.sections.${to.slice("/settings/".length)}`, {
-    defaultValue: SETTINGS_SECTION_LABELS[to],
-  });
+  const section = SETTINGS_SECTIONS_BY_PATH.get(to)!;
+  return translate(section.labelKey, { defaultValue: section.label });
 }
 
 export function settingsSearchItemTitle(
