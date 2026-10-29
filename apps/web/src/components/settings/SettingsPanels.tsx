@@ -424,8 +424,32 @@ function AboutVersionSection() {
   );
 }
 
+function notifyThemeRestoreFailure() {
+  toastManager.add(
+    stackedThreadToast({
+      type: "error",
+      get title() {
+        return i18n.t("restore.themeFailed");
+      },
+      get description() {
+        return i18n.t("restore.tryAgain");
+      },
+    }),
+  );
+}
+
+function notifyTextGenerationModelNotSaved(reason: string) {
+  toastManager.add({
+    type: "error",
+    get title() {
+      return i18n.t("general.textModel.notSaved");
+    },
+    description: reason,
+  });
+}
+
 export function useSettingsRestore(onRestored?: () => void) {
-  useTranslate();
+  const t = useTranslate();
   const {
     theme,
     setTheme,
@@ -445,45 +469,45 @@ export function useSettingsRestore(onRestored?: () => void) {
   const isBackgroundActivityDirty = hasChangedBackgroundActivitySettings(settings);
 
   const changedSettingLabels = [
-    ...(theme !== "system" ? [i18n.t("restore.theme")] : []),
-    ...(!followSystem ? [i18n.t("restore.followSystem")] : []),
-    ...(themeHalves !== null ? [i18n.t("restore.themeMix")] : []),
+    ...(theme !== "system" ? [t("restore.theme")] : []),
+    ...(!followSystem ? [t("restore.followSystem")] : []),
+    ...(themeHalves !== null ? [t("restore.themeMix")] : []),
     ...(settings.appearanceContrast !== DEFAULT_UNIFIED_SETTINGS.appearanceContrast
-      ? [i18n.t("settings.search.setting-appearance-contrast.title")]
+      ? [t("settings.search.setting-appearance-contrast.title")]
       : []),
     ...(settings.glassOpacity !== DEFAULT_UNIFIED_SETTINGS.glassOpacity
-      ? [i18n.t("settings.search.setting-glass-opacity.title")]
+      ? [t("settings.search.setting-glass-opacity.title")]
       : []),
     ...(settings.diffColorScheme !== DEFAULT_UNIFIED_SETTINGS.diffColorScheme
-      ? [i18n.t("settings.search.diff-color-scheme.title")]
+      ? [t("settings.search.diff-color-scheme.title")]
       : []),
     ...(settings.chatWidth !== DEFAULT_UNIFIED_SETTINGS.chatWidth
-      ? [i18n.t("settings.search.chat-width.title")]
+      ? [t("settings.search.chat-width.title")]
       : []),
     ...(settings.mathRenderingEnabled !== DEFAULT_UNIFIED_SETTINGS.mathRenderingEnabled
-      ? [i18n.t("settings.search.math-rendering.title")]
+      ? [t("settings.search.math-rendering.title")]
       : []),
     ...(settings.redesignEnabled !== DEFAULT_UNIFIED_SETTINGS.redesignEnabled
       ? ["New design"]
       : []),
     ...(settings.panelAnimationDurationMs !== DEFAULT_UNIFIED_SETTINGS.panelAnimationDurationMs
-      ? [i18n.t("settings.search.panel-animations.title")]
+      ? [t("settings.search.panel-animations.title")]
       : []),
     ...(settings.environmentIdentificationMode !==
     DEFAULT_UNIFIED_SETTINGS.environmentIdentificationMode
-      ? [i18n.t("settings.search.environment-identification.title")]
+      ? [t("settings.search.environment-identification.title")]
       : []),
     ...(settings.timestampFormat !== DEFAULT_UNIFIED_SETTINGS.timestampFormat
-      ? [i18n.t("settings.search.time-format.title")]
+      ? [t("settings.search.time-format.title")]
       : []),
     ...(settings.notificationMode !== DEFAULT_UNIFIED_SETTINGS.notificationMode
-      ? [i18n.t("settings.search.thread-notifications.title")]
+      ? [t("settings.search.thread-notifications.title")]
       : []),
     ...(settings.inAppNotificationsEnabled !== DEFAULT_UNIFIED_SETTINGS.inAppNotificationsEnabled
-      ? [i18n.t("settings.search.in-app-notifications.title")]
+      ? [t("settings.search.in-app-notifications.title")]
       : []),
     ...(settings.sidebarThreadPreviewCount !== DEFAULT_UNIFIED_SETTINGS.sidebarThreadPreviewCount
-      ? [i18n.t("restore.visibleThreads")]
+      ? [t("restore.visibleThreads")]
       : []),
     ...(settings.sidebarProjectGroupingMode !== DEFAULT_UNIFIED_SETTINGS.sidebarProjectGroupingMode
       ? ["Project Grouping"]
@@ -495,14 +519,14 @@ export function useSettingsRestore(onRestored?: () => void) {
       ? ["Working section"]
       : []),
     ...(settings.sidebarAutoSettleAfterDays !== DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays
-      ? [i18n.t("settings.search.auto-settle-inactive-threads.title")]
+      ? [t("settings.search.auto-settle-inactive-threads.title")]
       : []),
     ...(settings.sidebarAutoSettleKeepPullRequests !==
     DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleKeepPullRequests
-      ? [i18n.t("settings.search.keep-threads-with-pull-requests.title")]
+      ? [t("settings.search.keep-threads-with-pull-requests.title")]
       : []),
     ...(settings.sidebarAutoSettleOnMerge !== DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge
-      ? [i18n.t("general.settleMerge.label")]
+      ? [t("general.settleMerge.label")]
       : []),
     ...(settings.autoResumeLimitedThreads !== DEFAULT_UNIFIED_SETTINGS.autoResumeLimitedThreads
       ? ["Resume after usage limits"]
@@ -511,83 +535,83 @@ export function useSettingsRestore(onRestored?: () => void) {
       ? ["Snooze until limits reset"]
       : []),
     ...(settings.wordWrap !== DEFAULT_UNIFIED_SETTINGS.wordWrap
-      ? [i18n.t("settings.search.word-wrap.title")]
+      ? [t("settings.search.word-wrap.title")]
       : []),
     ...(settings.persistComposerContextStrip !==
     DEFAULT_UNIFIED_SETTINGS.persistComposerContextStrip
-      ? [i18n.t("restore.composerContext")]
+      ? [t("restore.composerContext")]
       : []),
     ...getChangedTypographySettingLabels(settings),
     ...(settings.diffFilesCollapsed !== DEFAULT_UNIFIED_SETTINGS.diffFilesCollapsed
-      ? [i18n.t("general.diffFiles.label")]
+      ? [t("general.diffFiles.label")]
       : []),
     ...(settings.diffIgnoreWhitespace !== DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace
       ? ["Diff whitespace changes"]
       : []),
     ...(settings.diffLayout !== DEFAULT_UNIFIED_SETTINGS.diffLayout
-      ? [i18n.t("general.diffLayout.label")]
+      ? [t("general.diffLayout.label")]
       : []),
     ...(settings.proactivePanelsEnabled !== DEFAULT_UNIFIED_SETTINGS.proactivePanelsEnabled
-      ? [i18n.t("general.proactive.label")]
+      ? [t("general.proactive.label")]
       : []),
     ...(settings.showSkillsInSlashMenu !== DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu
-      ? [i18n.t("general.skills.label")]
+      ? [t("general.skills.label")]
       : []),
     ...(settings.composerCollapseOnScroll !== DEFAULT_UNIFIED_SETTINGS.composerCollapseOnScroll
-      ? [i18n.t("general.collapse.label")]
+      ? [t("general.collapse.label")]
       : []),
     ...(settings.composerRichTextEnabled !== DEFAULT_UNIFIED_SETTINGS.composerRichTextEnabled
-      ? [i18n.t("general.richText.label")]
+      ? [t("general.richText.label")]
       : []),
     ...(settings.sendShortcut !== DEFAULT_UNIFIED_SETTINGS.sendShortcut
-      ? [i18n.t("general.send.label")]
+      ? [t("general.send.label")]
       : []),
     ...(settings.followUpBehavior !== DEFAULT_UNIFIED_SETTINGS.followUpBehavior
-      ? [i18n.t("general.followUp.label")]
+      ? [t("general.followUp.label")]
       : []),
     ...(settings.contextWindowMeterEnabled !== DEFAULT_UNIFIED_SETTINGS.contextWindowMeterEnabled
-      ? [i18n.t("restore.contextWindow")]
+      ? [t("restore.contextWindow")]
       : []),
     ...(settings.responseStreamingMode !== DEFAULT_UNIFIED_SETTINGS.responseStreamingMode
-      ? [i18n.t("general.streaming.label")]
+      ? [t("general.streaming.label")]
       : []),
     ...(settings.enableProviderUpdateChecks !== DEFAULT_UNIFIED_SETTINGS.enableProviderUpdateChecks
-      ? [i18n.t("settings.search.provider-update-checks.title")]
+      ? [t("settings.search.provider-update-checks.title")]
       : []),
     ...(settings.continueThreadsAfterServerUpdate !==
     DEFAULT_UNIFIED_SETTINGS.continueThreadsAfterServerUpdate
-      ? [i18n.t("general.restart.label")]
+      ? [t("general.restart.label")]
       : []),
-    ...(isBackgroundActivityDirty ? [i18n.t("settings.search.background-activity.title")] : []),
+    ...(isBackgroundActivityDirty ? [t("settings.search.background-activity.title")] : []),
     ...(settings.defaultThreadEnvMode !== DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode
-      ? [i18n.t("restore.newThreadMode")]
+      ? [t("restore.newThreadMode")]
       : []),
     ...(settings.newWorktreesStartFromOrigin !==
     DEFAULT_UNIFIED_SETTINGS.newWorktreesStartFromOrigin
-      ? [i18n.t("restore.newWorktreesRemote")]
+      ? [t("restore.newWorktreesRemote")]
       : []),
     ...(settings.addProjectBaseDirectory !== DEFAULT_UNIFIED_SETTINGS.addProjectBaseDirectory
-      ? [i18n.t("general.baseDirectory.label")]
+      ? [t("general.baseDirectory.label")]
       : []),
     ...(settings.confirmThreadUnpin !== DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin
-      ? [i18n.t("settings.search.unpin-confirmation.title")]
+      ? [t("settings.search.unpin-confirmation.title")]
       : []),
     ...(settings.confirmThreadArchive !== DEFAULT_UNIFIED_SETTINGS.confirmThreadArchive
-      ? [i18n.t("settings.search.archive-confirmation.title")]
+      ? [t("settings.search.archive-confirmation.title")]
       : []),
     ...(settings.confirmThreadDelete !== DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete
-      ? [i18n.t("settings.search.delete-confirmation.title")]
+      ? [t("settings.search.delete-confirmation.title")]
       : []),
     ...(settings.confirmQuit !== DEFAULT_UNIFIED_SETTINGS.confirmQuit
-      ? [i18n.t("settings.search.quit-confirmation.title")]
+      ? [t("settings.search.quit-confirmation.title")]
       : []),
-    ...(isTextGenerationModelDirty ? [i18n.t("settings.search.text-generation-model.title")] : []),
+    ...(isTextGenerationModelDirty ? [t("settings.search.text-generation-model.title")] : []),
     ...(settings.threadTitleInstructions !== DEFAULT_UNIFIED_SETTINGS.threadTitleInstructions
       ? ["Thread title instructions"]
       : []),
     ...getChangedBrowserSettingLabels(settings),
     ...(settings.enableAgentBrowserAccess !== DEFAULT_UNIFIED_SETTINGS.enableAgentBrowserAccess
-      ? [i18n.t("restore.agentBrowserAccess")]
+      ? [t("restore.agentBrowserAccess")]
       : []),
   ];
 
@@ -595,7 +619,7 @@ export function useSettingsRestore(onRestored?: () => void) {
     if (changedSettingLabels.length === 0) return;
     const api = readLocalApi();
     const confirmed = await (api ?? ensureLocalApi()).dialogs.confirm(
-      i18n.t("restore.confirm", {
+      t("restore.confirm", {
         settings: changedSettingLabels.join(i18n.resolvedLanguage === "zh" ? "、" : ", "),
       }),
       { variant: "destructive" },
@@ -612,19 +636,6 @@ export function useSettingsRestore(onRestored?: () => void) {
     const needsThemeReset = previousTheme !== "system";
     const needsMixReset = liveHalves !== null;
     const needsFollowSystemReset = readAppearanceModePreference(previousTheme) !== "system";
-    const notifyThemeRestoreFailure = () => {
-      toastManager.add(
-        stackedThreadToast({
-          type: "error",
-          get title() {
-            return i18n.t("restore.themeFailed");
-          },
-          get description() {
-            return i18n.t("restore.tryAgain");
-          },
-        }),
-      );
-    };
     // Restore the base preference before the mix because restoring the base clears the mix.
     const previousHalves = liveHalves;
     const rollbackThemeState = () => {
@@ -734,7 +745,7 @@ function AutoSettleDaysInput({
   value: number;
   onCommit: (days: number) => void;
 }) {
-  useTranslate();
+  const t = useTranslate();
   const [draft, setDraft] = useState(String(value));
   const [draftSource, setDraftSource] = useState(value);
   if (draftSource !== value) {
@@ -762,7 +773,7 @@ function AutoSettleDaysInput({
         }
       }}
       onBlur={() => setDraft(String(value))}
-      aria-label={i18n.t("general.settleInactive.days")}
+      aria-label={t("general.settleInactive.days")}
     />
   );
 }
@@ -817,7 +828,7 @@ export function LegacyFeaturesSection() {
 }
 
 export function GeneralSettingsPanel() {
-  useTranslate();
+  const t = useTranslate();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
   const lastEnabledProjectGroupingMode = useRef<SidebarProjectGroupingMode>(
@@ -826,18 +837,18 @@ export function GeneralSettingsPanel() {
 
   return (
     <SettingsPageContainer>
-      <SettingsSection id="language" title={i18n.t("settings.language.title")}>
+      <SettingsSection id="language" title={t("settings.language.title")}>
         <SettingsRow
           {...searchableSetting("language", i18n.t)}
           // The search index supplies the English title every other row uses;
           // this row is new, so it overrides that with a translated one and
           // stays consistent with its own translated description and value.
-          title={i18n.t("settings.language.title")}
-          description={i18n.t("settings.language.description")}
+          title={t("settings.language.title")}
+          description={t("settings.language.description")}
           resetAction={
             settings.languagePreference !== DEFAULT_UNIFIED_SETTINGS.languagePreference ? (
               <SettingResetButton
-                label={i18n.t("settings.language.title")}
+                label={t("settings.language.title")}
                 onClick={() =>
                   updateSettings({
                     languagePreference: DEFAULT_UNIFIED_SETTINGS.languagePreference,
@@ -858,17 +869,17 @@ export function GeneralSettingsPanel() {
               <SelectTrigger
                 size="sm"
                 className="w-full sm:w-40"
-                aria-label={i18n.t("settings.language.title")}
+                aria-label={t("settings.language.title")}
               >
                 <SelectValue>
                   {settings.languagePreference === "system"
-                    ? i18n.t("settings.language.system")
+                    ? t("settings.language.system")
                     : LANGUAGE_LABELS[settings.languagePreference]}
                 </SelectValue>
               </SelectTrigger>
               <SelectPopup align="end" alignItemWithTrigger={false}>
                 <SelectItem hideIndicator value="system">
-                  {i18n.t("settings.language.system")}
+                  {t("settings.language.system")}
                 </SelectItem>
                 {SUPPORTED_LANGUAGES.map((language) => (
                   <SelectItem key={language} hideIndicator value={language}>
@@ -884,12 +895,12 @@ export function GeneralSettingsPanel() {
         <NotificationSettings />
         <SettingsRow
           {...searchableSetting("in-app-notifications")}
-          description={i18n.t("general.inAppNotifications.description")}
+          description={t("general.inAppNotifications.description")}
           control={
             <Switch
               checked={settings.inAppNotificationsEnabled}
               onCheckedChange={(checked) => updateSettings({ inAppNotificationsEnabled: checked })}
-              aria-label={i18n.t("settings.search.in-app-notifications.title")}
+              aria-label={t("settings.search.in-app-notifications.title")}
             />
           }
         />
@@ -898,12 +909,12 @@ export function GeneralSettingsPanel() {
       <SettingsSection id="sidebar" title="Sidebar">
         <SettingsRow
           {...searchableSetting("project-grouping")}
-          description={i18n.t("general.projectGrouping.description")}
+          description={t("general.projectGrouping.description")}
           resetAction={
             settings.sidebarProjectGroupingMode !==
             DEFAULT_UNIFIED_SETTINGS.sidebarProjectGroupingMode ? (
               <SettingResetButton
-                label={i18n.t("general.projectGrouping.reset")}
+                label={t("general.projectGrouping.reset")}
                 onClick={() =>
                   updateSettings({
                     sidebarProjectGroupingMode: DEFAULT_UNIFIED_SETTINGS.sidebarProjectGroupingMode,
@@ -927,7 +938,7 @@ export function GeneralSettingsPanel() {
                   ),
                 });
               }}
-              aria-label={i18n.t("settings.search.project-grouping.title")}
+              aria-label={t("settings.search.project-grouping.title")}
             />
           }
         />
@@ -973,12 +984,12 @@ export function GeneralSettingsPanel() {
         />
         <SettingsRow
           {...searchableSetting("working-shelf")}
-          description={i18n.t("general.working.description")}
+          description={t("general.working.description")}
           resetAction={
             settings.sidebarWorkingShelfEnabled !==
             DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled ? (
               <SettingResetButton
-                label={i18n.t("general.working.reset")}
+                label={t("general.working.reset")}
                 onClick={() =>
                   updateSettings({
                     sidebarWorkingShelfEnabled: DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled,
@@ -999,14 +1010,14 @@ export function GeneralSettingsPanel() {
         />
       </SettingsSection>
 
-      <SettingsSection id="confirmations" title={i18n.t("section.confirmations")}>
+      <SettingsSection id="confirmations" title={t("section.confirmations")}>
         <SettingsRow
           {...searchableSetting("unpin-confirmation")}
-          description={i18n.t("general.unpin.description")}
+          description={t("general.unpin.description")}
           resetAction={
             settings.confirmThreadUnpin !== DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin ? (
               <SettingResetButton
-                label={i18n.t("general.unpin.reset")}
+                label={t("general.unpin.reset")}
                 onClick={() =>
                   updateSettings({
                     confirmThreadUnpin: DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin,
@@ -1021,17 +1032,17 @@ export function GeneralSettingsPanel() {
               onCheckedChange={(checked) =>
                 updateSettings({ confirmThreadUnpin: Boolean(checked) })
               }
-              aria-label={i18n.t("general.unpin.label")}
+              aria-label={t("general.unpin.label")}
             />
           }
         />
         <SettingsRow
           {...searchableSetting("archive-confirmation")}
-          description={i18n.t("general.archive.description")}
+          description={t("general.archive.description")}
           resetAction={
             settings.confirmThreadArchive !== DEFAULT_UNIFIED_SETTINGS.confirmThreadArchive ? (
               <SettingResetButton
-                label={i18n.t("general.archive.reset")}
+                label={t("general.archive.reset")}
                 onClick={() =>
                   updateSettings({
                     confirmThreadArchive: DEFAULT_UNIFIED_SETTINGS.confirmThreadArchive,
@@ -1046,17 +1057,17 @@ export function GeneralSettingsPanel() {
               onCheckedChange={(checked) =>
                 updateSettings({ confirmThreadArchive: Boolean(checked) })
               }
-              aria-label={i18n.t("general.archive.label")}
+              aria-label={t("general.archive.label")}
             />
           }
         />
         <SettingsRow
           {...searchableSetting("delete-confirmation")}
-          description={i18n.t("general.delete.description")}
+          description={t("general.delete.description")}
           resetAction={
             settings.confirmThreadDelete !== DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete ? (
               <SettingResetButton
-                label={i18n.t("general.delete.reset")}
+                label={t("general.delete.reset")}
                 onClick={() =>
                   updateSettings({
                     confirmThreadDelete: DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete,
@@ -1071,18 +1082,18 @@ export function GeneralSettingsPanel() {
               onCheckedChange={(checked) =>
                 updateSettings({ confirmThreadDelete: Boolean(checked) })
               }
-              aria-label={i18n.t("general.delete.label")}
+              aria-label={t("general.delete.label")}
             />
           }
         />
         {isElectron ? (
           <SettingsRow
             {...searchableSetting("quit-confirmation")}
-            description={i18n.t("general.quit.note")}
+            description={t("general.quit.note")}
             resetAction={
               settings.confirmQuit !== DEFAULT_UNIFIED_SETTINGS.confirmQuit ? (
                 <SettingResetButton
-                  label={i18n.t("general.quit.reset")}
+                  label={t("general.quit.reset")}
                   onClick={() =>
                     updateSettings({ confirmQuit: DEFAULT_UNIFIED_SETTINGS.confirmQuit })
                   }
@@ -1101,7 +1112,7 @@ export function GeneralSettingsPanel() {
                 <SelectTrigger
                   size="sm"
                   className="w-full sm:w-40"
-                  aria-label={i18n.t("general.quit.label")}
+                  aria-label={t("general.quit.label")}
                 >
                   <SelectValue>{QUIT_CONFIRMATION_MODE_LABELS[settings.confirmQuit]}</SelectValue>
                 </SelectTrigger>
@@ -1121,11 +1132,11 @@ export function GeneralSettingsPanel() {
       <SettingsSection id="display" title="Display">
         <SettingsRow
           {...searchableSetting("time-format")}
-          description={i18n.t("general.time.description")}
+          description={t("general.time.description")}
           resetAction={
             settings.timestampFormat !== DEFAULT_UNIFIED_SETTINGS.timestampFormat ? (
               <SettingResetButton
-                label={i18n.t("general.time.reset")}
+                label={t("general.time.reset")}
                 onClick={() =>
                   updateSettings({
                     timestampFormat: DEFAULT_UNIFIED_SETTINGS.timestampFormat,
@@ -1146,7 +1157,7 @@ export function GeneralSettingsPanel() {
               <SelectTrigger
                 size="sm"
                 className="w-full sm:w-40"
-                aria-label={i18n.t("general.time.label")}
+                aria-label={t("general.time.label")}
               >
                 <SelectValue>{TIMESTAMP_FORMAT_LABELS[settings.timestampFormat]}</SelectValue>
               </SelectTrigger>
@@ -1378,7 +1389,7 @@ export function ChatSettingsPanel() {
 }
 
 function DiffColorsSettingsRow() {
-  useTranslate();
+  const t = useTranslate();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
   return (
@@ -1407,7 +1418,7 @@ function DiffColorsSettingsRow() {
             <SelectTrigger
               size="sm"
               className="w-full min-w-0"
-              aria-label={i18n.t("settings.search.diff-color-scheme.title")}
+              aria-label={t("settings.search.diff-color-scheme.title")}
             >
               <span
                 aria-hidden="true"
@@ -1436,7 +1447,7 @@ function DiffColorsSettingsRow() {
 }
 
 export function DiffsSettingsPanel() {
-  useTranslate();
+  const t = useTranslate();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
 
@@ -1445,11 +1456,11 @@ export function DiffsSettingsPanel() {
       <SettingsSection id="diffs" title="Diffs">
         <SettingsRow
           {...searchableSetting("diff-layout")}
-          description={i18n.t("general.diffLayout.description")}
+          description={t("general.diffLayout.description")}
           resetAction={
             settings.diffLayout !== DEFAULT_UNIFIED_SETTINGS.diffLayout ? (
               <SettingResetButton
-                label={i18n.t("general.diffLayout.reset")}
+                label={t("general.diffLayout.reset")}
                 onClick={() => updateSettings({ diffLayout: DEFAULT_UNIFIED_SETTINGS.diffLayout })}
               />
             ) : null
@@ -1466,7 +1477,7 @@ export function DiffsSettingsPanel() {
               <SelectTrigger
                 size="sm"
                 className="w-full sm:w-40"
-                aria-label={i18n.t("general.diffLayout.label")}
+                aria-label={t("general.diffLayout.label")}
               >
                 <SelectValue>{DIFF_LAYOUT_LABELS[settings.diffLayout]}</SelectValue>
               </SelectTrigger>
@@ -1483,11 +1494,11 @@ export function DiffsSettingsPanel() {
         />
         <SettingsRow
           {...searchableSetting("hide-whitespace-changes")}
-          description={i18n.t("general.whitespace.description")}
+          description={t("general.whitespace.description")}
           resetAction={
             settings.diffIgnoreWhitespace !== DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace ? (
               <SettingResetButton
-                label={i18n.t("general.whitespace.reset")}
+                label={t("general.whitespace.reset")}
                 onClick={() =>
                   updateSettings({
                     diffIgnoreWhitespace: DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace,
@@ -1502,17 +1513,17 @@ export function DiffsSettingsPanel() {
               onCheckedChange={(checked) =>
                 updateSettings({ diffIgnoreWhitespace: Boolean(checked) })
               }
-              aria-label={i18n.t("general.whitespace.label")}
+              aria-label={t("general.whitespace.label")}
             />
           }
         />
         <SettingsRow
           {...searchableSetting("default-diff-file-state")}
-          description={i18n.t("general.diffFiles.description")}
+          description={t("general.diffFiles.description")}
           resetAction={
             settings.diffFilesCollapsed !== DEFAULT_UNIFIED_SETTINGS.diffFilesCollapsed ? (
               <SettingResetButton
-                label={i18n.t("general.diffFiles.reset")}
+                label={t("general.diffFiles.reset")}
                 onClick={() =>
                   updateSettings({
                     diffFilesCollapsed: DEFAULT_UNIFIED_SETTINGS.diffFilesCollapsed,
@@ -1533,20 +1544,20 @@ export function DiffsSettingsPanel() {
               <SelectTrigger
                 size="sm"
                 className="w-full sm:w-40"
-                aria-label={i18n.t("general.diffFiles.label")}
+                aria-label={t("general.diffFiles.label")}
               >
                 <SelectValue>
                   {settings.diffFilesCollapsed
-                    ? i18n.t("general.diffFiles.collapsed")
-                    : i18n.t("general.diffFiles.expanded")}
+                    ? t("general.diffFiles.collapsed")
+                    : t("general.diffFiles.expanded")}
                 </SelectValue>
               </SelectTrigger>
               <SelectPopup align="end" alignItemWithTrigger={false}>
                 <SelectItem hideIndicator value="expanded">
-                  {i18n.t("general.diffFiles.expanded")}
+                  {t("general.diffFiles.expanded")}
                 </SelectItem>
                 <SelectItem hideIndicator value="collapsed">
-                  {i18n.t("general.diffFiles.collapsed")}
+                  {t("general.diffFiles.collapsed")}
                 </SelectItem>
               </SelectPopup>
             </Select>
@@ -1558,11 +1569,11 @@ export function DiffsSettingsPanel() {
       <SettingsSection id="pull-requests" title="Pull requests">
         <SettingsRow
           {...searchableSetting("proactive-panels")}
-          description={i18n.t("general.proactive.description")}
+          description={t("general.proactive.description")}
           resetAction={
             settings.proactivePanelsEnabled !== DEFAULT_UNIFIED_SETTINGS.proactivePanelsEnabled ? (
               <SettingResetButton
-                label={i18n.t("general.proactive.reset")}
+                label={t("general.proactive.reset")}
                 onClick={() =>
                   updateSettings({
                     proactivePanelsEnabled: DEFAULT_UNIFIED_SETTINGS.proactivePanelsEnabled,
@@ -1577,7 +1588,7 @@ export function DiffsSettingsPanel() {
               onCheckedChange={(checked) =>
                 updateSettings({ proactivePanelsEnabled: Boolean(checked) })
               }
-              aria-label={i18n.t("general.proactive.label")}
+              aria-label={t("general.proactive.label")}
             />
           }
         />
@@ -1593,7 +1604,7 @@ export function CompactIdleThreadsRow() {
 }
 
 function ScopedCompactIdleThreadsRow() {
-  useTranslate();
+  const t = useTranslate();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
   const { targets } = useSettingsScope();
@@ -1605,7 +1616,7 @@ function ScopedCompactIdleThreadsRow() {
       settingKeys={["idleCompaction", "compactIdleThreads"]}
       mixed={idleCompaction.mixed}
       {...searchableSetting("compact-idle-threads")}
-      description={i18n.t("general.compactIdle.description")}
+      description={t("general.compactIdle.description")}
       resetAction={
         globalIdleCompaction(settings) !== globalIdleCompaction(DEFAULT_UNIFIED_SETTINGS) ? (
           <SettingResetButton
@@ -1628,7 +1639,7 @@ function ScopedCompactIdleThreadsRow() {
             <SelectValue>
               {(value: string | null) =>
                 value === null
-                  ? i18n.t("common.mixed")
+                  ? t("common.mixed")
                   : IDLE_COMPACTION_MODES.find((mode) => mode.value === value)?.label
               }
             </SelectValue>
@@ -1653,7 +1664,7 @@ function ScopedCompactIdleThreadsRow() {
 }
 
 export function ThreadsSettingsPanel() {
-  useTranslate();
+  const t = useTranslate();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
   const navigate = useNavigate();
@@ -1724,12 +1735,12 @@ export function ThreadsSettingsPanel() {
           serverScoped
           settingKeys={["addProjectBaseDirectory"]}
           {...searchableSetting("add-project-starts-in")}
-          description={i18n.t("general.baseDirectory.description")}
+          description={t("general.baseDirectory.description")}
           resetAction={
             settings.addProjectBaseDirectory !==
             DEFAULT_UNIFIED_SETTINGS.addProjectBaseDirectory ? (
               <SettingResetButton
-                label={i18n.t("general.baseDirectory.reset")}
+                label={t("general.baseDirectory.reset")}
                 onClick={() =>
                   updateSettings({
                     addProjectBaseDirectory: DEFAULT_UNIFIED_SETTINGS.addProjectBaseDirectory,
@@ -1744,9 +1755,9 @@ export function ThreadsSettingsPanel() {
               className="w-full sm:w-72"
               value={mixedAddProjectBaseDirectory ? "" : settings.addProjectBaseDirectory}
               onCommit={(next) => updateSettings({ addProjectBaseDirectory: next })}
-              placeholder={mixedAddProjectBaseDirectory ? i18n.t("common.mixed") : "~/"}
+              placeholder={mixedAddProjectBaseDirectory ? t("common.mixed") : "~/"}
               spellCheck={false}
-              aria-label={i18n.t("general.baseDirectory.label")}
+              aria-label={t("general.baseDirectory.label")}
             />
           }
         />
@@ -1758,7 +1769,7 @@ export function ThreadsSettingsPanel() {
         <SettingsRow
           serverScoped
           {...searchableSetting("auto-resume-limited-threads")}
-          description={i18n.t("general.autoResume.description")}
+          description={t("general.autoResume.description")}
           settingKeys={["autoResumeLimitedThreads"]}
           control={
             <ScopedSwitch
@@ -1790,17 +1801,17 @@ export function ThreadsSettingsPanel() {
       </SettingsSection>
 
       {supportsAutoSettlement ? (
-        <SettingsSection id={i18n.t("general.settleInactive.reset")} title="Auto-settle">
+        <SettingsSection id={t("general.settleInactive.reset")} title="Auto-settle">
           <SettingsRow
             serverScoped
             settingKeys={["sidebarAutoSettleOnMerge"]}
             {...searchableSetting("auto-settle-merged-threads")}
-            description={i18n.t("general.settleMerge.description")}
+            description={t("general.settleMerge.description")}
             resetAction={
               settings.sidebarAutoSettleOnMerge !==
               DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge ? (
                 <SettingResetButton
-                  label={i18n.t("general.settleMerge.reset")}
+                  label={t("general.settleMerge.reset")}
                   onClick={() =>
                     updateSettings({
                       sidebarAutoSettleOnMerge: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge,
@@ -1816,7 +1827,7 @@ export function ThreadsSettingsPanel() {
                 onCheckedChange={(checked) =>
                   updateSettings({ sidebarAutoSettleOnMerge: Boolean(checked) })
                 }
-                aria-label={i18n.t("general.settleMerge.label")}
+                aria-label={t("general.settleMerge.label")}
               />
             }
           />
@@ -1825,12 +1836,12 @@ export function ThreadsSettingsPanel() {
             serverScoped
             settingKeys={["sidebarAutoSettleAfterDays"]}
             {...searchableSetting("auto-settle-inactive-threads")}
-            description={i18n.t("general.settleInactive.description")}
+            description={t("general.settleInactive.description")}
             resetAction={
               settings.sidebarAutoSettleAfterDays !==
               DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays ? (
                 <SettingResetButton
-                  label={i18n.t("general.settleInactive.reset")}
+                  label={t("general.settleInactive.reset")}
                   onClick={() =>
                     updateSettings({
                       sidebarAutoSettleAfterDays:
@@ -1849,7 +1860,7 @@ export function ThreadsSettingsPanel() {
                     sidebarAutoSettleAfterDays: checked ? AUTO_SETTLE_DEFAULT_DAYS : null,
                   })
                 }
-                aria-label={i18n.t("settings.search.auto-settle-inactive-threads.title")}
+                aria-label={t("settings.search.auto-settle-inactive-threads.title")}
               />
             }
           />
@@ -1858,7 +1869,7 @@ export function ThreadsSettingsPanel() {
               serverScoped
               settingKeys={["sidebarAutoSettleAfterDays"]}
               title={searchableSetting("days-before-auto-settle").title}
-              description={i18n.t("general.settleInactive.note")}
+              description={t("general.settleInactive.note")}
               control={
                 <AutoSettleDaysInput
                   value={settings.sidebarAutoSettleAfterDays}
@@ -1871,8 +1882,8 @@ export function ThreadsSettingsPanel() {
             <SettingsRow
               serverScoped
               settingKeys={["sidebarAutoSettleKeepPullRequests"]}
-              title={i18n.t("settings.search.keep-threads-with-pull-requests.title")}
-              description={i18n.t("general.keepPr.description")}
+              title={t("settings.search.keep-threads-with-pull-requests.title")}
+              description={t("general.keepPr.description")}
               control={
                 <ScopedSwitch
                   settingKeys={["sidebarAutoSettleKeepPullRequests"]}
@@ -1880,7 +1891,7 @@ export function ThreadsSettingsPanel() {
                   onCheckedChange={(checked) =>
                     updateSettings({ sidebarAutoSettleKeepPullRequests: checked })
                   }
-                  aria-label={i18n.t("settings.search.keep-threads-with-pull-requests.title")}
+                  aria-label={t("settings.search.keep-threads-with-pull-requests.title")}
                 />
               }
             />
@@ -1888,16 +1899,16 @@ export function ThreadsSettingsPanel() {
         </SettingsSection>
       ) : null}
 
-      <SettingsSection id="text-generation" title={i18n.t("section.textGeneration")}>
+      <SettingsSection id="text-generation" title={t("section.textGeneration")}>
         <SettingsRow
           serverScoped
           settingKeys={["textGenerationModelSelection"]}
           {...searchableSetting("text-generation-model")}
-          description={i18n.t("general.textModel.description")}
+          description={t("general.textModel.description")}
           resetAction={
             hasServerTargets && isTextGenerationModelDirty ? (
               <SettingResetButton
-                label={i18n.t("general.textModel.reset")}
+                label={t("general.textModel.reset")}
                 onClick={() =>
                   updateSettings({
                     textGenerationModelSelection:
@@ -1910,12 +1921,10 @@ export function ThreadsSettingsPanel() {
           control={
             !hasServerTargets ? (
               <span className="text-sm text-muted-foreground">
-                {i18n.t("general.textModel.connect")}
+                {t("general.textModel.connect")}
               </span>
             ) : !hasTextGenerationProvider ? (
-              <span className="text-sm text-muted-foreground">
-                {i18n.t("general.textModel.empty")}
-              </span>
+              <span className="text-sm text-muted-foreground">{t("general.textModel.empty")}</span>
             ) : (
               <div className="flex flex-wrap items-center justify-end gap-1.5">
                 <ProviderModelPicker
@@ -1926,7 +1935,7 @@ export function ThreadsSettingsPanel() {
                   instanceEntries={textGenerationModelInstanceEntries}
                   modelOptionsByInstance={textGenerationModelOptionsByInstance}
                   triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
-                  {...(mixedTextGenerationModel ? { triggerLabel: i18n.t("common.mixed") } : {})}
+                  {...(mixedTextGenerationModel ? { triggerLabel: t("common.mixed") } : {})}
                   getModelDisabledReason={textGenerationModelDisabledReason}
                   {...(environmentId
                     ? {
@@ -1941,13 +1950,7 @@ export function ThreadsSettingsPanel() {
                   onInstanceModelChange={(instanceId, model) => {
                     const reason = textGenerationModelDisabledReason(instanceId, model);
                     if (reason) {
-                      toastManager.add({
-                        type: "error",
-                        get title() {
-                          return i18n.t("general.textModel.notSaved");
-                        },
-                        description: reason,
-                      });
+                      notifyTextGenerationModelNotSaved(reason);
                       return;
                     }
                     updateSettings({
@@ -2006,13 +2009,13 @@ export function ThreadsSettingsPanel() {
             {...searchableSetting("response-streaming")}
             description={
               mixedResponseStreamingMode
-                ? i18n.t("general.streaming.mixed")
+                ? t("general.streaming.mixed")
                 : RESPONSE_STREAMING_MODE_DESCRIPTIONS[settings.responseStreamingMode]
             }
             resetAction={
               settings.responseStreamingMode !== DEFAULT_UNIFIED_SETTINGS.responseStreamingMode ? (
                 <SettingResetButton
-                  label={i18n.t("general.streaming.reset")}
+                  label={t("general.streaming.reset")}
                   onClick={() =>
                     updateSettings({
                       responseStreamingMode: DEFAULT_UNIFIED_SETTINGS.responseStreamingMode,
@@ -2033,13 +2036,11 @@ export function ThreadsSettingsPanel() {
                 <SelectTrigger
                   size="sm"
                   className="w-full sm:w-56"
-                  aria-label={i18n.t("general.streaming.label")}
+                  aria-label={t("general.streaming.label")}
                 >
                   <SelectValue>
                     {(value: ResponseStreamingMode | null) =>
-                      value === null
-                        ? i18n.t("common.mixed")
-                        : RESPONSE_STREAMING_MODE_LABELS[value]
+                      value === null ? t("common.mixed") : RESPONSE_STREAMING_MODE_LABELS[value]
                     }
                   </SelectValue>
                 </SelectTrigger>
@@ -2061,7 +2062,7 @@ export function ThreadsSettingsPanel() {
 }
 
 export function MaintenanceSettingsPanel() {
-  useTranslate();
+  const t = useTranslate();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
   const { scope, environment, connectedEnvironments } = useSettingsScope();
@@ -2085,7 +2086,7 @@ export function MaintenanceSettingsPanel() {
             settings.enableProviderUpdateChecks !==
             DEFAULT_UNIFIED_SETTINGS.enableProviderUpdateChecks ? (
               <SettingResetButton
-                label={i18n.t("general.providerUpdates.reset")}
+                label={t("general.providerUpdates.reset")}
                 onClick={() =>
                   updateSettings({
                     enableProviderUpdateChecks: DEFAULT_UNIFIED_SETTINGS.enableProviderUpdateChecks,
@@ -2101,7 +2102,7 @@ export function MaintenanceSettingsPanel() {
               onCheckedChange={(checked) =>
                 updateSettings({ enableProviderUpdateChecks: Boolean(checked) })
               }
-              aria-label={i18n.t("general.providerUpdates.label")}
+              aria-label={t("general.providerUpdates.label")}
             />
           }
         />
@@ -2109,14 +2110,14 @@ export function MaintenanceSettingsPanel() {
           {...searchableSetting("continue-threads-after-server-update")}
           serverScoped
           settingKeys={["continueThreadsAfterServerUpdate"]}
-          description={i18n.t("general.restart.description")}
-          status={!supportsRestartContinuation ? i18n.t("general.restart.unsupported") : undefined}
+          description={t("general.restart.description")}
+          status={!supportsRestartContinuation ? t("general.restart.unsupported") : undefined}
           resetAction={
             supportsRestartContinuation &&
             settings.continueThreadsAfterServerUpdate !==
               DEFAULT_UNIFIED_SETTINGS.continueThreadsAfterServerUpdate ? (
               <SettingResetButton
-                label={i18n.t("general.restart.reset")}
+                label={t("general.restart.reset")}
                 onClick={() =>
                   updateSettings({
                     continueThreadsAfterServerUpdate:
@@ -2134,25 +2135,25 @@ export function MaintenanceSettingsPanel() {
               onCheckedChange={(checked) =>
                 updateSettings({ continueThreadsAfterServerUpdate: Boolean(checked) })
               }
-              aria-label={i18n.t("general.restart.label")}
+              aria-label={t("general.restart.label")}
             />
           }
         />
       </SettingsSection>
 
-      <SettingsSection id="background" title={i18n.t("settings.search.background-activity.title")}>
+      <SettingsSection id="background" title={t("settings.search.background-activity.title")}>
         <BackgroundActivitySettingsRow />
       </SettingsSection>
 
       <StorageCleanupSections />
 
-      <SettingsSection id="diagnostics-section" title={i18n.t("about.diagnostics")}>
+      <SettingsSection id="diagnostics-section" title={t("about.diagnostics")}>
         <SettingsRow
           {...searchableSetting("diagnostics")}
           description={
             isEnvironmentScope
-              ? i18n.t("about.diagnostics.description")
-              : i18n.t("about.diagnostics.oneEnvironment")
+              ? t("about.diagnostics.description")
+              : t("about.diagnostics.oneEnvironment")
           }
           control={
             <Button
@@ -2162,7 +2163,7 @@ export function MaintenanceSettingsPanel() {
               size="sm"
               variant="outline"
             >
-              {i18n.t("about.diagnostics.view")}
+              {t("about.diagnostics.view")}
             </Button>
           }
         />
@@ -2172,7 +2173,7 @@ export function MaintenanceSettingsPanel() {
 }
 
 export function AboutSettingsPanel() {
-  useTranslate();
+  const t = useTranslate();
   return (
     <SettingsPageContainer>
       <SettingsSection id="about" title="App">
@@ -2183,7 +2184,7 @@ export function AboutSettingsPanel() {
             <SettingsRow
               id={searchableSetting("app-version").id}
               title={<AboutVersionTitle />}
-              description={i18n.t("about.version.description")}
+              description={t("about.version.description")}
             />
           </>
         )}
@@ -2193,14 +2194,14 @@ export function AboutSettingsPanel() {
       <SettingsSection id="legal" title="Legal">
         <SettingsRow
           {...searchableSetting("open-source-licenses")}
-          description={i18n.t("about.licenses.description")}
+          description={t("about.licenses.description")}
           control={
             <Button
               render={<Link to="/settings/open-source-licenses" />}
               size="sm"
               variant="outline"
             >
-              {i18n.t("about.licenses.view")}
+              {t("about.licenses.view")}
             </Button>
           }
         />

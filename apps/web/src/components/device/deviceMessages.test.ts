@@ -19,7 +19,17 @@ it("translates current host guidance while preserving SDK paths and unrecognized
   expect(formatDeviceMessage("SSH: Permission denied (publickey) Raw Host", t)).toBe(
     "SSH: Permission denied (publickey) Raw Host",
   );
-  const state = { hosts: [], devices: [], hostStatus: "ready" } as unknown as DeviceServiceState;
+  const state: DeviceServiceState = {
+    hosts: [],
+    devices: [],
+    hostStatus: "ready",
+    hostStatuses: {},
+    sessions: [],
+    onboardingCompleted: false,
+    agentAccessEnabled: false,
+    hubBasePath: "/api/device-hub",
+    revision: 0,
+  };
   expect(platformSetupStatus(state, "android", t)).toEqual({
     ready: false,
     message: "未检测到 Android 支持。",

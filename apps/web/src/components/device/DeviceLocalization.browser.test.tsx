@@ -7,10 +7,14 @@ import { AsyncResult } from "effect/reactivity";
 import { EnvironmentId, type DeviceServiceState, type DeviceHostSummary } from "@t3tools/contracts";
 
 const api = vi.hoisted(() => ({ configure: vi.fn(), list: vi.fn(), test: vi.fn(), allowed: true }));
-vi.mock("../../state/device", async (original) => ({
-  ...(await original<typeof import("../../state/device")>()),
-  deviceEnvironment: { configure: api.configure, list: api.list, testHost: api.test },
-}));
+vi.mock("../../state/device", async (original) => {
+  const module = await original<typeof import("../../state/device")>();
+  return {
+    ...module,
+    deviceHostProbeAtom: () => module.NO_DEVICE_PROBE_ATOM,
+    deviceEnvironment: { configure: api.configure, list: api.list, testHost: api.test },
+  };
+});
 vi.mock("../../state/use-atom-command", async (original) => ({
   ...(await original<typeof import("../../state/use-atom-command")>()),
   useAtomCommand: (command: unknown) => command,
@@ -233,8 +237,7 @@ it("keeps wizard step identity, native operations and one completion while switc
   expect(button("模拟器，第 2 步")).toBe(step);
   expect(document.activeElement).toBe(step);
   expect(api.configure).not.toHaveBeenCalled();
-  expect(api.list).toHaveBeenCalledExactlyOnceWith({ environmentId: envA, input: {} });
-  api.list.mockClear();
+  expect(api.list).not.toHaveBeenCalled();
   const checking = deferred<ReturnType<typeof AsyncResult.success<undefined>>>();
   api.list.mockReturnValueOnce(checking.promise);
   await click("重新检查");

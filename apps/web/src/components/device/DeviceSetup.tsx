@@ -99,7 +99,9 @@ export function platformSetupStatus(
   if (supportingHosts.length === 0) {
     return {
       ready: false,
-      message: availabilities[0]?.reason ?? `${platformName(platform)} support was not detected.`,
+      message:
+        availabilities[0]?.reason ??
+        t("device.platform.undetected", { platform: platformName(platform) }),
     };
   }
   const readyHosts = supportingHosts.filter(
