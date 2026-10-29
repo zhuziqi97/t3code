@@ -256,6 +256,7 @@ describe("AcpRegistrySupport", () => {
           version: "2026.11.1",
           distribution: { npx: { package: "@example/acp@2.0.0" } },
         };
+        yield* TestClock.adjust("1 hour");
         yield* resolver.search({ query: agent.id });
         const restarted = yield* AcpRegistrySupport.makeAcpRegistryCatalog(options);
         expect(
@@ -312,6 +313,8 @@ describe("AcpRegistrySupport", () => {
         yield* resolver.refresh({ force: false });
         expect(requests).toBe(2);
         expect((yield* resolver.search({ query: agent.id })).agents[0]?.version).toBe("1.2.3");
+        expect(requests).toBe(2);
+        yield* resolver.refresh();
         expect(requests).toBe(3);
         yield* TestClock.adjust("5 minutes");
         yield* resolver.refresh({ force: false });
@@ -368,6 +371,7 @@ describe("AcpRegistrySupport", () => {
             },
           },
         };
+        yield* TestClock.adjust("1 hour");
         yield* resolver.search({ query: agent.id });
         const restarted = yield* AcpRegistrySupport.makeAcpRegistryCatalog(options);
         const resolved = yield* restarted.resolve(settings(), "/workspace");
@@ -1227,6 +1231,9 @@ describe("AcpRegistrySupport", () => {
       expect(requests).toBe(2);
 
       online = true;
+      yield* resolver.search({ query: "example" });
+      expect(requests).toBe(2);
+      yield* TestClock.adjust("5 minutes");
       yield* resolver.search({ query: "example" });
       expect(requests).toBe(3);
     }).pipe(

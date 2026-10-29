@@ -878,7 +878,9 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
           currentRevision !== observedRevision ||
           (!force &&
             (now < (yield* Ref.get(nextRegistryAttempt)) ||
-              (current?.checkedAt !== undefined && now < current.checkedAt + REGISTRY_TTL_MS)))
+              (lastError === undefined &&
+                current?.checkedAt !== undefined &&
+                now < current.checkedAt + REGISTRY_TTL_MS)))
         ) {
           if (current !== undefined) return current;
           if (lastError !== undefined) return yield* lastError;
