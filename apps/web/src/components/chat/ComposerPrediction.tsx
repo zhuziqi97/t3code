@@ -97,7 +97,7 @@ export function ComposerPrediction(props: {
       }),
   );
   const prediction = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
-  // oxlint-disable-next-line t3code/react-effect-budget -- Synchronize native prediction work with authoritative thread, connection, settings and draft changes.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Synchronize native prediction work with authoritative thread, connection, settings and draft changes.
   useEffect(() => {
     const unsubscribers = [
       useComposerDraftStore.subscribe(controller.update),
@@ -124,7 +124,7 @@ export function ComposerPrediction(props: {
       controller.dismiss();
     };
   }, [controller, commands, environmentId, threadId]);
-  // oxlint-disable-next-line t3code/react-effect-budget -- Keep the native request reader on the committed composer state.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Keep the native request reader on the committed composer state.
   useLayoutEffect(() => {
     controller.setContextReader(read);
     controller.update();

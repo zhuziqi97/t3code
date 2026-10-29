@@ -33,7 +33,7 @@ export function ThreadWorkspaceRecoveryCard({
   const recheck = useEffectEvent(() => query.refresh());
   const failedRunId =
     selectedThread?.latestRun?.status === "failed" ? selectedThread.latestRun.runId : null;
-  // oxlint-disable-next-line t3code/react-effect-budget -- A failed provider run invalidates the server workspace-availability query.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- A failed provider run invalidates the server workspace-availability query.
   useEffect(() => {
     if (failedRunId !== null) recheck();
   }, [failedRunId]);

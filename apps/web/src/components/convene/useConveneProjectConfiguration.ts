@@ -109,7 +109,7 @@ export function useConveneProjectConfiguration(environmentId: EnvironmentId, pro
     setError(null);
     return load(refreshContext);
   };
-  // oxlint-disable-next-line t3code/react-effect-budget -- Connection transitions invalidate the remote project configuration without discarding its local draft.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Connection transitions invalidate the remote project configuration without discarding its local draft.
   useEffect(() => {
     void load({ environmentId, projectId, online, query, t });
   }, [load, environmentId, projectId, online, query, t]);

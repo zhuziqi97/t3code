@@ -61,7 +61,7 @@ function ResourceDetail(props: {
         : conveneResourceTransportFailure(uri, squashAtomCommandFailure(response));
     }, setState),
   );
-  // oxlint-disable-next-line t3code/react-effect-budget -- URI and permission pushes invalidate remote reads; cleanup rejects late responses.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- URI and permission pushes invalidate remote reads; cleanup rejects late responses.
   useEffect(() => {
     if (permitted && phase !== "offline" && phase !== "unpaired") void reader.load(props.uri);
     return reader.clear;

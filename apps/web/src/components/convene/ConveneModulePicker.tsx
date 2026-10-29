@@ -83,7 +83,7 @@ export function ConveneModulePicker({
   const projectError = currentProjects?.error ?? null;
   const modules = currentModuleResponse?.result ?? null;
   const moduleError = currentModuleResponse?.error ?? null;
-  // oxlint-disable-next-line t3code/react-effect-budget -- Project queries follow the destination environment and filter; cleanup rejects stale replies.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Project queries follow the destination environment and filter; cleanup rejects stale replies.
   useEffect(() => {
     let active = true;
     void options({ environmentId, input: { page, search: requestedSearch } }).then((result) => {
@@ -114,7 +114,7 @@ export function ConveneModulePicker({
       active = false;
     };
   }, [environmentId, options, page, requestedSearch, t]);
-  // oxlint-disable-next-line t3code/react-effect-budget -- Selected platform projects load remote module permissions with cancellation on cleanup.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Selected platform projects load remote module permissions with cancellation on cleanup.
   useEffect(() => {
     let active = true;
     if (project)

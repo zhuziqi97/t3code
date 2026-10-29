@@ -50,7 +50,7 @@ function ResourceDetail({ threadRef, uri }: { threadRef: ScopedThreadRef; uri: s
       : conveneResourceTransportFailure(target, squashAtomCommandFailure(response));
   });
   const [reader] = useState(() => createConveneResourceReader(read, setState));
-  // oxlint-disable-next-line t3code/react-effect-budget -- URI and permission pushes invalidate remote reads; cleanup rejects late responses.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- URI and permission pushes invalidate remote reads; cleanup rejects late responses.
   useEffect(() => {
     if (permitted && phase !== "offline" && phase !== "unpaired") void reader.load(uri);
     return reader.clear;

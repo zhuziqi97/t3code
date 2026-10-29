@@ -8,7 +8,7 @@ export function LanguageSync() {
   const languagePreference = useClientSettings((settings) => settings.languagePreference);
   const settingsHydrated = useClientSettingsHydrated();
 
-  // oxlint-disable-next-line t3code/react-effect-budget -- Sync the hydrated preference to i18next and the document language.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Sync the hydrated preference to i18next and the document language.
   useEffect(() => {
     if (!settingsHydrated) return;
     const language = resolveLanguage(languagePreference, navigator.languages);

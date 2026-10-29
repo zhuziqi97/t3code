@@ -103,12 +103,12 @@ export function ComposerPrediction(props: {
       }),
   );
   const prediction = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
-  // oxlint-disable-next-line t3code/react-effect-budget -- Keep native work synchronized with the committed composer and screen focus.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Keep native work synchronized with the committed composer and screen focus.
   useLayoutEffect(() => {
     controller.setContextReader(read);
     controller.update();
   });
-  // oxlint-disable-next-line t3code/react-effect-budget -- Cancel native work as thread, connection, preferences, draft or app activity changes.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Cancel native work as thread, connection, preferences, draft or app activity changes.
   useEffect(() => {
     const ref = scopeThreadRef(props.environmentId, props.threadId);
     const unsubscribers = [

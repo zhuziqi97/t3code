@@ -33,7 +33,7 @@ export function ThreadWorkspaceRecovery({
   const [error, setError] = useState<string | null>(null);
   const recheck = useEffectEvent(() => query.refresh());
   const failedRunId = thread?.latestRun?.status === "failed" ? thread.latestRun.runId : null;
-  // oxlint-disable-next-line t3code/react-effect-budget -- A failed provider run invalidates the server workspace-availability query.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- A failed provider run invalidates the server workspace-availability query.
   useEffect(() => {
     if (failedRunId !== null) recheck();
   }, [failedRunId]);
