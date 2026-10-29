@@ -1,5 +1,6 @@
 import { decodeJwt } from "jose";
 import {
+  latestProviderTurnForAttempt,
   type ComposerPredictionInput,
   type ComposerPredictionResult,
   type OrchestrationV2ThreadProjection,
@@ -49,10 +50,10 @@ export function predictionSource(projection: OrchestrationV2ThreadProjection, so
     thread.providerInstanceId !== projection.thread.modelSelection.instanceId
   )
     return null;
-  const root = projection.nodes.find((node) => node.id === latest.rootNodeId);
-  const turn = projection.providerTurns.find((turn) => turn.id === root?.providerTurnId);
+  const turn = latestProviderTurnForAttempt(projection.providerTurns, latest.activeAttemptId);
   if (
     !turn ||
+    turn.nodeId !== latest.rootNodeId ||
     turn.status !== "completed" ||
     turn.providerThreadId !== thread.id ||
     !turn.nativeTurnRef?.nativeId
