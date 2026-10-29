@@ -129,6 +129,9 @@ export function PullRequestDetailGhost({
       }
     : entry;
   const terminology = sourceControlClients.get(seed?.provider).changeRequest;
+  const request = t(`sourceControl.requestTerm.${terminology.singular}`, {
+    defaultValue: terminology.singular,
+  });
   const statePresentation = seed
     ? resolvePullRequestState(
         {
@@ -151,7 +154,7 @@ export function PullRequestDetailGhost({
   return (
     <div
       role="status"
-      aria-label={`Loading ${terminology.singular}`}
+      aria-label={t("pullRequest.detail.loading", { request })}
       className={cn(
         "flex h-full min-h-0 flex-col overflow-hidden bg-background",
         !seed && "motion-safe:animate-skeleton",
