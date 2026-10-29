@@ -70,6 +70,7 @@ function ProjectConfigurationContent({
 }) {
   const t = useTranslate();
   const { configuration, draft } = state;
+  const needsInitialConnection = state.needsConnection && configuration === null;
   const [picker, setPicker] = useState<"scope" | "bind" | null>(null);
   const [selectedNames, setSelectedNames] = useState<Record<string, string>>({});
   const scopeNames = {
@@ -92,10 +93,10 @@ function ProjectConfigurationContent({
     .map(([, label]) => label);
   return (
     <div className="space-y-3">
-      {state.error && (
+      {state.error && !needsInitialConnection && (
         <Alert variant="error">
           <AlertDescription>
-            <p>{t("convene.error.save")}</p>
+            <p>{t(state.lastOperation ? "convene.error.save" : "convene.error.load")}</p>
             <details className="mt-2">
               <summary className="cursor-pointer text-xs">
                 {t("convene.project.errorDetails")}
@@ -110,11 +111,13 @@ function ProjectConfigurationContent({
           <p className="min-w-0 truncate text-sm font-medium">
             {configuration.project.display_name}
           </p>
-        ) : (
+        ) : needsInitialConnection ? (
+          <p className="text-sm text-muted-foreground">{t("convene.project.optional")}</p>
+        ) : !state.error ? (
           <p role="status" className="text-sm text-muted-foreground">
             {t("convene.project.waiting")}
           </p>
-        )}
+        ) : null}
         <Button
           variant="ghost"
           size="icon-sm"

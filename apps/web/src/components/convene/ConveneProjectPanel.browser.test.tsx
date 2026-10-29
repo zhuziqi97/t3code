@@ -431,8 +431,19 @@ it("does not embed connection details while loading and routes offline users to 
   await act(async () => render());
   expect(container.textContent).not.toContain("Embedded connection form");
   expect(container.querySelector("a")).toBeNull();
+  model.query.mockResolvedValue(
+    AsyncResult.success({
+      configuration: null,
+      fresh: false,
+      error:
+        "This project has no reported Convene configuration. Connect and refresh to report it.",
+    }),
+  );
   model.status.mockReturnValue(AsyncResult.success({ phase: "unpaired" }));
   await act(async () => render());
+  expect(container.textContent).not.toContain("Loading project");
+  expect(container.textContent).not.toContain("Could not update Convene");
+  expect(container.textContent).toContain("Convene configuration is optional");
   const link = container.querySelector("a")!;
   expect(link.getAttribute("href")).toBe("/settings/convene?machine=env");
   expect(link.textContent).toBe("Open Convene connection settings");
