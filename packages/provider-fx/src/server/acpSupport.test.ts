@@ -21,7 +21,6 @@ it.effect("keeps the native fx model when the selection follows the provider def
   }).pipe(
     Effect.provide(
       Layer.mock(AcpSessionRuntime.AcpSessionRuntime)({
-        processContainment: "none",
         getConfigOptions: Effect.succeed([
           {
             id: "model",

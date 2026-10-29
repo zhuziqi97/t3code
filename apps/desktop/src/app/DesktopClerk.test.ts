@@ -136,6 +136,7 @@ describe("DesktopClerk", () => {
         "setPath:userData:/tmp/app-data/t3code-convene-dev",
         "requestSingleInstanceLock",
         "on:second-instance",
+        "on:open-url",
         "createClerkBridge",
       ]);
       storageMock.mockClear();

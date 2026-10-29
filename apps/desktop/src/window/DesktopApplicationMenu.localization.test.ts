@@ -167,7 +167,22 @@ describe("DesktopApplicationMenu language preference", () => {
               .map((item) => item.role),
             ["minimize", "zoom", "front"],
           );
-          assert.equal(submenu(template, "文件")[0]?.role, "close");
+          const closeWindow = submenu(template, "文件")[0]!;
+          assert.equal(closeWindow.label, "关闭窗口");
+          assert.isUndefined(closeWindow.role);
+          assert.isUndefined(closeWindow.accelerator);
+          let closed = false;
+          if (typeof closeWindow.click !== "function") throw new Error("Missing close action");
+          closeWindow.click(
+            {} as Electron.MenuItem,
+            {
+              close: () => {
+                closed = true;
+              },
+            } as unknown as Electron.BrowserWindow,
+            {} as Electron.KeyboardEvent,
+          );
+          assert.isTrue(closed);
           const settings = application.find((item) => item.label === "设置…");
           assert.equal(settings?.accelerator, "CmdOrCtrl+,");
           click(settings);
