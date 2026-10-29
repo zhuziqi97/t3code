@@ -92,6 +92,10 @@ Agent 生命周期实施计划：[convene-agent-lifecycle-plan.md](../plan/conve
 `ci.yml` 也可单独手动运行完整质量；在默认分支尚无其 dispatch 声明时使用前述既有
 候选入口，无需先将未验收源码合入 main。实际客户端验收与正式发布仍独立记录。
 
+正式发行先准备自上一有效版本以来的新版公告草稿供用户审阅，批准后再发布安装包、
+匹配 Web 与公告。公告须核验详情、列表、通知索引和 Feed；只有包可下载或公告已构建，
+不能报告整次发版完成。草稿使用公告工程的 `_drafts`，不得提前进入 `_posts`。
+
 ## 本次同步：64972461c → 72fbad7b1
 
 上游新增 168 提交，初次试合并有 64 文件冲突；演练详情见平台仓库 `docs/plan/t3code-convene-upstream-rehearsal-20261011.md`。
@@ -321,10 +325,11 @@ Antigravity 需修正初始化与摘要的关系；Grok、Pi 已有的发现降�
 - **未扩大的边界**：没有新增生产模型请求、ACL 变更或权限／过期矩阵重跑；此前候选的有限矩阵仍按原交付证据覆盖，不等于自然 12 小时到期、LAN 原生控制或全部 Provider 验收。HTTP 入口不承诺扩展 webview，可信 HTTPS 由既有 [Convene #63](convene://issues/zzq/software-factory/convene/63) 计划承接。用户明确排除 Windows/macOS 原生 GUI 验收，后续未经明确要求不安排；构建检查不能标作 `runtime_verified`。未覆盖的 OPEN 事项不批量关闭。
 - **正式记录与恢复**：[T3 #55](convene://issues/zzq/software-factory/t3code/55)、[#46](convene://issues/zzq/software-factory/t3code/46)、[#52](convene://issues/zzq/software-factory/t3code/52)、[#53](convene://issues/zzq/software-factory/t3code/53) 与 [Convene #206](convene://issues/zzq/software-factory/convene/206) 记录实际交付范围。回退使用本轮新现场快照及不可变旧包／Web 输入，不复用上一发行版的指针快照；客户端数据按已核实的一致备份合同恢复。本次仅向已有 GitHub origin 非强推 main 和正式标签，不创建仓库或 remote，不向 upstream 推送，不再次执行公告或生产发布。
 
-## 2026-10-29 `0.1.3-1` 正式发行
+## 2026-10-29 `0.1.3-2` 正式发行
 
-- **发行身份**：上游正式 `v0.1.3` / `d2c440312e5f39d59827ed466838a623516454d6` 正常合入，发行源码与 annotated tag `v0.1.3-1` 固定为 `70693ad5b633befb18c290ae6187eac9b22c1305`。Actions `40809323764` attempt 1，构建 `convene-40809323764-1`；main 接纳发行源码，后继记录不重写原包、Web 或标签身份。
-- **正式结果**：复用既有加密传输与下载 publisher，发布同次 DEB、AppImage、Windows x64 和 macOS arm64 包及匹配 Web。Web current 为 `convene-40809323764-1`，rollback 为 `convene-40647290201-1`。在 Convene 6.6.3 维护入口恢复及最终验收通过后执行，没有再次重启业务服务。
-- **验证边界**：四包私有预置与来源一致；当前 AppImage 完成隔离真实界面受控发送/停止及手动下载，DEB 在断网 Ubuntu 容器实际安装、启动、正常退出和卸载。两个正式入口分别从内网发布机和公网协调机验证四包 HEAD/Range/实际前缀字节、校验文件、Web 元数据/资源及旧 Web 保留。Windows/macOS 维持预览，未扩大原生 mobile、WAN 或真实模型质量证明，本轮无新增真实模型请求。
-- **已收口与保留**：[下一版统筹 #74](convene://issues/zzq/software-factory/t3code/74) 记录各事项实现、实际客户端验收及脚本错误更正；已完成范围随 main 关闭。系统 Codex 的 SystemError 缓存问题及原现场归属仍由 [#70](convene://issues/zzq/software-factory/t3code/70) 跟踪，完整远程/交接与待答组合仍由 [#71](convene://issues/zzq/software-factory/t3code/71) 承接，不以本轮受控分层证明替代完整同链路。
-- **恢复边界**：独立停止态数据由旧版 schema 67 升至本版 69 后保持项目、消息、原生默认模型及中断事实；恢复升级前完整快照后旧版 67 可读，不让旧二进制直接打开新 schema。本次下载清单/Web 旧指针快照与不可变旧包单独保存，客户端数据恢复仍须使用该用户升级前一致备份。
+- **发行身份**：基于上游正式 `v0.1.3`，实际打包源码为 `828d30d6c7fd68c7d91847a27eb9ccd5995e1ceb`，Actions `40859486232` attempt 1，构建 `convene-40859486232-1`。后继公告和记录提交不冒充已打包源码。
+- **质量与制品**：同 SHA 的 17 个质量任务全部成功，Web 5890 tests、packages 30/30、8 个 Server shards 及 Mobile native 静态检查通过；三平台构建及 Windows Verify 通过。四包经既有加密传输和认证解密发布，Web current 为本次构建，rollback 为 `convene-40647290201-1`。
+- **公告与流程**：用户先审阅自 `0.1.2-3` 以来的完整公告，并最终指定预测费用表述；已审阅说明于北京时间 20:30 热发布，详情路径为 `/announcements/posts/release-t3code-0-1-3-2/`。公告工程已明确先审草稿、后发行与实际公告上线的完成条件，未重启业务服务。
+- **验证边界**：Linux 最终 AppImage 启动隔离 managed backend，以合成 Provider 完成配对、项目创建、发送、精确 Stop ACK/终态、同线程后续与页面重开；内置文件编辑/自动保存/重开及搜索状态跨语言保留通过。DEB 不冒称本次实际安装验收；Windows/macOS 继续预览，原生 mobile、真实模型质量、流式正文及完整跨机组合未扩大声明。
+- **发行范围**：[本版统筹 #81](convene://issues/zzq/software-factory/t3code/81) 记录 #76–#80、#82/#83 与既有功能的完整门禁及限定验收。新增翻译遗漏留到下一版；[#70](convene://issues/zzq/software-factory/t3code/70) 的系统运行时限制和 [#71](convene://issues/zzq/software-factory/t3code/71) 的完整远程组合边界继续保留，不以分层证明替代真实同链路。
+- **撤下与恢复**：已撤下的发行不再提供安装包或公开版本条目。退役 Web 资源仍遵循当前/回退和有效网页会话保护，不为清理强断会话；剩余技术资源由既有 owner 在引用解除后删除。客户端数据回退仍须恢复用户升级前的一致备份，不让旧二进制直接打开新 schema。
