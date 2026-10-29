@@ -90,7 +90,7 @@ export function SourceControlTokenSettings({
                 />
               }
             >
-              Create a token
+              {t("sourceControl.github.createToken")}
               <ExternalLinkIcon aria-hidden className="size-3" />
             </InlineButton>
           ) : null}

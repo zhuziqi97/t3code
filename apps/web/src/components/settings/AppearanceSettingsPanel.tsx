@@ -340,7 +340,7 @@ export function AppearanceSettingsPanel() {
               settings.panelAnimationDurationMs !==
               DEFAULT_UNIFIED_SETTINGS.panelAnimationDurationMs ? (
                 <SettingResetButton
-                  label="panel animations"
+                  label={t("appearance.motionReset")}
                   onClick={() =>
                     updateSettings({
                       panelAnimationDurationMs: DEFAULT_UNIFIED_SETTINGS.panelAnimationDurationMs,
@@ -353,12 +353,12 @@ export function AppearanceSettingsPanel() {
           {showEnvironmentIdentification ? (
             <SettingsRow
               {...searchableSetting("environment-identification")}
-              description="Choose how Dev and Nightly environments are identified."
+              description={t("appearance.environmentDescription")}
               resetAction={
                 settings.environmentIdentificationMode !==
                 DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE ? (
                   <SettingResetButton
-                    label="environment identification"
+                    label={t("appearance.environmentReset")}
                     onClick={() =>
                       updateSettings({
                         environmentIdentificationMode: DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE,
@@ -379,7 +379,7 @@ export function AppearanceSettingsPanel() {
                   <SelectTrigger
                     size="sm"
                     className="w-full sm:w-40"
-                    aria-label="Environment identification"
+                    aria-label={t("settings.search.environment-identification.title")}
                   >
                     <SelectValue>
                       {ENVIRONMENT_IDENTIFICATION_LABELS[settings.environmentIdentificationMode]}
@@ -398,12 +398,12 @@ export function AppearanceSettingsPanel() {
           ) : null}
           <SettingsRow
             {...searchableSetting("composer-context")}
-            description="Keep branch and worktree controls below the composer after a thread starts."
+            description={t("appearance.composerDescription")}
             resetAction={
               settings.persistComposerContextStrip !==
               DEFAULT_UNIFIED_SETTINGS.persistComposerContextStrip ? (
                 <SettingResetButton
-                  label="composer context"
+                  label={t("appearance.composerReset")}
                   onClick={() =>
                     updateSettings({
                       persistComposerContextStrip:
@@ -419,7 +419,7 @@ export function AppearanceSettingsPanel() {
                 onCheckedChange={(checked) =>
                   updateSettings({ persistComposerContextStrip: Boolean(checked) })
                 }
-                aria-label="Keep composer context visible in active threads"
+                aria-label={t("appearance.composerKeep")}
               />
             }
           />

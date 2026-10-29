@@ -61,7 +61,7 @@ function ProviderCustomColorPanel(props: {
       <div className="grid gap-3 p-3">
         <div onPointerDownCapture={startDrag}>
           <ColorHueSlider
-            label="Accent color hue"
+            label={t("provider.color.hue")}
             value={hsv.h}
             onChange={(h) => changeHsv({ ...hsv, h })}
             onInteractionEnd={endDrag}

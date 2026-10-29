@@ -198,7 +198,7 @@ function CleanupResults({
           entry.kind === "worktree"
             ? ((entry.threadId === null
                 ? entry.path
-                : entry.path?.split(/[\\/]/).findLast(Boolean)) ?? "Worktrees")
+                : entry.path?.split(/[\\/]/).findLast(Boolean)) ?? t("storage.worktrees"))
             : entry.kind === "logs"
               ? "Rotated logs"
               : "Browser artifacts";
@@ -435,6 +435,7 @@ function supportsStorageCleanup(
 
 /** Narrows a mixed selection to the machines that support cleanup. */
 function StorageCleanupScopeNotice() {
+  const t = useTranslate();
   const { connectedEnvironments } = useSettingsScope();
   return (
     <SettingsScopeNotice
@@ -447,7 +448,7 @@ function StorageCleanupScopeNotice() {
         )
         .map((environment) => environment.environmentId)}
     >
-      Update the selected environments to use storage cleanup, or choose a machine that supports it.
+      {t("storage.upgrade")}
     </SettingsScopeNotice>
   );
 }
@@ -583,9 +584,9 @@ export function WorktreeCleanupSection() {
               }
             />
             <SettingsRow
-              title="Delete inactive worktrees"
+              title={t("storage.inactive")}
               status={ruleStatus("worktreeAfterDays")}
-              description="Remove worktrees after their threads have been inactive for this many days. Branches and thread history are kept."
+              description={t("storage.inactiveDescription")}
               serverScoped={!isProjectScope}
               control={
                 <RetentionControl
@@ -630,13 +631,13 @@ export function WorktreeCleanupSection() {
                   />
                 )}
               <SettingsRow
-                title="Delete unchanged worktrees"
+                title={t("storage.unchanged")}
                 status={ruleStatus("worktreeUnchanged")}
-                description="Remove worktrees with no commits beyond the default branch."
+                description={t("storage.unchangedDescription")}
                 serverScoped={!isProjectScope}
                 control={
                   <Switch
-                    aria-label="Delete unchanged worktrees"
+                    aria-label={t("storage.unchanged")}
                     checked={settings.worktreeUnchanged}
                     onCheckedChange={(worktreeUnchanged) => updateWorktree({ worktreeUnchanged })}
                   />
@@ -672,7 +673,7 @@ export function WorktreeCleanupSection() {
                       <SelectTrigger size="sm" aria-label="Keep worktrees with local changes">
                         <SelectValue>
                           {ruleStatus("worktreeKeepWhen")
-                            ? "Mixed"
+                            ? t("storage.mixed")
                             : KEEP_WHEN_LABELS[settings.worktreeKeepWhen]}
                         </SelectValue>
                       </SelectTrigger>
@@ -695,6 +696,7 @@ export function WorktreeCleanupSection() {
 
 /** Retention for logs and captures, and the manual cleanup run, which covers worktrees too. */
 export function StorageCleanupSections() {
+  const t = useTranslate();
   const { scope, connectedEnvironments, targets } = useSettingsScope();
   const scopedSettings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
@@ -718,7 +720,11 @@ export function StorageCleanupSections() {
     return (
       <>
         {databaseStorageNotice}
-        <SettingsSection id="storage-artifacts" title="Artifacts and logs" variant="plain">
+        <SettingsSection
+          id="storage-artifacts"
+          title={t("settings.search.storage-artifacts.title")}
+          variant="plain"
+        >
           <StorageCleanupScopeNotice />
         </SettingsSection>
       </>
@@ -728,28 +734,28 @@ export function StorageCleanupSections() {
   return (
     <>
       {databaseStorageNotice}
-      <SettingsSection id="storage-artifacts" title="Artifacts and logs">
+      <SettingsSection id="storage-artifacts" title={t("settings.search.storage-artifacts.title")}>
         <SettingsRow
-          title="Delete old browser artifacts"
+          title={t("storage.browserArtifacts")}
           status={ruleStatus("browserArtifactsAfterDays")}
-          description="Delete saved browser captures after this many days. Older capture links will no longer open."
+          description={t("storage.browserArtifactsDescription")}
           serverScoped
           control={
             <RetentionControl
-              label="Delete old browser artifacts"
+              label={t("storage.browserArtifacts")}
               value={settings.browserArtifactsAfterDays}
               onChange={(browserArtifactsAfterDays) => update({ browserArtifactsAfterDays })}
             />
           }
         />
         <SettingsRow
-          title="Delete old rotated logs"
+          title={t("storage.logs")}
           status={ruleStatus("logsAfterDays")}
-          description="Delete inactive rotated log files after this many days. Current logs are kept."
+          description={t("storage.logsDescription")}
           serverScoped
           control={
             <RetentionControl
-              label="Delete old rotated logs"
+              label={t("storage.logs")}
               value={settings.logsAfterDays}
               onChange={(logsAfterDays) => update({ logsAfterDays })}
             />

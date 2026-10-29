@@ -59,6 +59,23 @@ const ITEMS: ReadonlyArray<SettingsSearchItem> = [
 ];
 
 describe("searchSettings", () => {
+  it("finds PR thread retention in Chinese and keeps its destination across languages", async () => {
+    await changeLanguage("zh");
+    expect(searchSettings("保留有 PR 的会话")[0]).toMatchObject({
+      id: "keep-threads-with-pull-requests",
+      title: "保留有 PR 的会话",
+      to: "/settings/threads",
+      targetId: "auto-settle-inactive-threads",
+    });
+    await changeLanguage("en");
+    expect(searchSettings("Keep threads with a PR")[0]).toMatchObject({
+      id: "keep-threads-with-pull-requests",
+      title: "Keep threads with a PR",
+      to: "/settings/threads",
+      targetId: "auto-settle-inactive-threads",
+    });
+  });
+
   it("finds the existing connection entries for relay installation and server update in Chinese", async () => {
     await changeLanguage("zh");
     expect(searchSettings("安装中继").map((item) => item.id)).toContain("t3-connect");

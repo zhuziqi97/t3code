@@ -499,7 +499,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       : []),
     ...(settings.sidebarAutoSettleKeepPullRequests !==
     DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleKeepPullRequests
-      ? [i18n.t("settings.search.keep-threads-with-pr.title")]
+      ? [i18n.t("settings.search.keep-threads-with-pull-requests.title")]
       : []),
     ...(settings.sidebarAutoSettleOnMerge !== DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge
       ? [i18n.t("general.settleMerge.label")]
@@ -1170,7 +1170,7 @@ export function GeneralSettingsPanel() {
 }
 
 export function ChatSettingsPanel() {
-  useTranslate();
+  const t = useTranslate();
   const modifierLabel = isMacPlatform(navigator.platform) ? "⌘" : "Ctrl";
   const sendShortcutOptions = [
     { value: "enter", label: "Enter" },
@@ -1325,10 +1325,13 @@ export function ChatSettingsPanel() {
         <SettingsRow
           {...searchableSetting("follow-up-behavior")}
           description={
-            "Queue follow-ups while the agent runs or steer the current run. " +
+            t("general.followUp.description") +
+            " " +
             (settings.sendShortcut === "mod-enter-multiline"
-              ? `Press ${modifierLabel} + Enter for single-line prompts or ${modifierLabel} + Shift + Enter for multiline prompts to do the opposite for one message.`
-              : `Press ${modifierLabel}${settings.sendShortcut === "mod-enter" ? " + Shift" : ""} + Enter to do the opposite for one message.`)
+              ? t("general.followUp.oppositeMultiline", { modifier: modifierLabel })
+              : t("general.followUp.opposite", {
+                  shortcut: `${modifierLabel}${settings.sendShortcut === "mod-enter" ? " + Shift" : ""} + Enter`,
+                }))
           }
           resetAction={
             settings.followUpBehavior !== DEFAULT_UNIFIED_SETTINGS.followUpBehavior ? (
@@ -1868,7 +1871,7 @@ export function ThreadsSettingsPanel() {
             <SettingsRow
               serverScoped
               settingKeys={["sidebarAutoSettleKeepPullRequests"]}
-              title={i18n.t("settings.search.keep-threads-with-pr.title")}
+              title={i18n.t("settings.search.keep-threads-with-pull-requests.title")}
               description={i18n.t("general.keepPr.description")}
               control={
                 <ScopedSwitch
@@ -1877,7 +1880,7 @@ export function ThreadsSettingsPanel() {
                   onCheckedChange={(checked) =>
                     updateSettings({ sidebarAutoSettleKeepPullRequests: checked })
                   }
-                  aria-label={i18n.t("settings.search.keep-threads-with-pr.title")}
+                  aria-label={i18n.t("settings.search.keep-threads-with-pull-requests.title")}
                 />
               }
             />

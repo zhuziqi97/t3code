@@ -400,7 +400,7 @@ export function UsagePage() {
       ) : null}
       <div className="ms-auto hidden shrink-0 items-center justify-end gap-2 @4xl/usage-header:flex">
         <ToggleGroup
-          aria-label="Usage period"
+          aria-label={t("usage.usagePeriod")}
           variant="segmented"
           value={[String(windowDays)]}
           disabled={showingLimits}
@@ -419,7 +419,7 @@ export function UsagePage() {
           ))}
         </ToggleGroup>
         <ToggleGroup
-          aria-label="Usage metric"
+          aria-label={t("usage.usageMetric")}
           variant="segmented"
           value={[metric]}
           onValueChange={(next) => {
@@ -451,7 +451,7 @@ export function UsagePage() {
           onValueChange={(value) => selectWindow(Number(value))}
         >
           <SelectTrigger
-            aria-label="Usage period"
+            aria-label={t("usage.usagePeriod")}
             size="compact"
             variant="ghost"
             className={cn("w-auto min-w-0", showingLimits && "redesign:hidden")}
@@ -479,7 +479,7 @@ export function UsagePage() {
           }}
         >
           <SelectTrigger
-            aria-label="Usage metric"
+            aria-label={t("usage.usageMetric")}
             size="compact"
             variant="ghost"
             className="w-auto min-w-0"

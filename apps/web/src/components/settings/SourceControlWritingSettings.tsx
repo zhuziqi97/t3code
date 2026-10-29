@@ -337,7 +337,7 @@ export function SourceControlWritingSettingsSection() {
                       modelOptionsByInstance={reviewGuideModelOptionsByInstance}
                       triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
                       triggerAriaLabel={t("settings.search.review-guide-model.title")}
-                      {...(mixedReviewGuideModel ? { triggerLabel: "Mixed" } : {})}
+                      {...(mixedReviewGuideModel ? { triggerLabel: t("common.mixed") } : {})}
                       getModelDisabledReason={writerModelDisabledReason}
                       onInstanceModelChange={(instanceId, model) => {
                         const reason = writerModelDisabledReason(instanceId, model);
@@ -469,12 +469,12 @@ export function SourceControlWritingSettingsSection() {
           settingKeys={["sourceControlWritingStyle"]}
           mixed={templatesMixed}
           {...searchableSetting("follow-change-request-templates")}
-          description="Use the repository's template for change request descriptions when available."
+          description={t("sourceControl.writing.templateDescription")}
           resetAction={
             templatesMixed ||
             style.followChangeRequestTemplates !== defaults.followChangeRequestTemplates ? (
               <SettingResetButton
-                label="change request templates"
+                label={t("sourceControl.writing.templateReset")}
                 onClick={() =>
                   updateSettings({
                     sourceControlWritingStyle: {
@@ -496,7 +496,7 @@ export function SourceControlWritingSettingsSection() {
                   },
                 })
               }
-              aria-label="Follow change request templates"
+              aria-label={t("settings.search.follow-change-request-templates.title")}
             />
           }
         />
@@ -505,17 +505,17 @@ export function SourceControlWritingSettingsSection() {
           serverScoped
           settingKeys={["sourceControlWriterModelSelection"]}
           {...searchableSetting("source-control-writer-model")}
-          description="Model for source control text and branch or bookmark names. Off uses the environment's text generation model."
+          description={t("sourceControl.writing.modelDescription")}
           control={
             !hasServerTargets ? (
               <span className="text-sm text-muted-foreground">
-                Connect an environment to choose its source control writer model.
+                {t("sourceControl.writing.connect")}
               </span>
             ) : (
               <div className="flex flex-wrap items-center justify-end gap-2">
                 {usesDedicatedModel && !canEnableDedicatedModel ? (
                   <span className="text-sm text-muted-foreground">
-                    No text generation providers available.
+                    {t("sourceControl.writing.noProviders")}
                   </span>
                 ) : null}
                 {usesDedicatedModel && canEnableDedicatedModel ? (
@@ -527,8 +527,8 @@ export function SourceControlWritingSettingsSection() {
                     instanceEntries={instanceEntries}
                     modelOptionsByInstance={modelOptionsByInstance}
                     triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
-                    triggerAriaLabel="Source control writer model"
-                    {...(mixedWriterModel ? { triggerLabel: "Mixed" } : {})}
+                    triggerAriaLabel={t("settings.search.source-control-writer-model.title")}
+                    {...(mixedWriterModel ? { triggerLabel: t("common.mixed") } : {})}
                     {...(environmentId
                       ? {
                           onOpenProviderSetup: (instanceId: ProviderInstanceId) => {
@@ -545,7 +545,7 @@ export function SourceControlWritingSettingsSection() {
                       if (reason) {
                         toastManager.add({
                           type: "error",
-                          title: "Source control writer model not saved",
+                          title: t("sourceControl.writing.modelNotSaved"),
                           description: reason,
                         });
                         return;
@@ -595,7 +595,7 @@ export function SourceControlWritingSettingsSection() {
                         : null,
                     })
                   }
-                  aria-label="Use a separate source control writer model"
+                  aria-label={t("sourceControl.writing.separateModel")}
                 />
               </div>
             )

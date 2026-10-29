@@ -13,6 +13,7 @@ import { act, render } from "../../../test/render";
 import { useComposerDraftStore } from "../../composerDraftStore";
 import { AppAtomRegistryProvider, appAtomRegistry } from "../../rpc/atomRegistry";
 import { useQueuedRunEdit } from "./useQueuedRunEdit";
+import { changeLanguage } from "../../i18n";
 
 interface RunStatus {
   readonly id: RunId;
@@ -140,6 +141,41 @@ const promptOf = (ref: ScopedThreadRef) =>
   useComposerDraftStore.getState().getComposerDraft(ref)?.prompt ?? "";
 
 describe("useQueuedRunEdit", () => {
+  it("keeps the queued draft and pending save across a language change without resending", async () => {
+    const { hook } = setup();
+    await changeLanguage("en");
+    await using language = new AsyncDisposableStack();
+    language.defer(() => changeLanguage("en").then(() => {}));
+    let markStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    let acknowledge!: (result: { readonly _tag: "Success" }) => void;
+    const acknowledgement = new Promise<{ readonly _tag: "Success" }>((resolve) => {
+      acknowledge = resolve;
+    });
+    mocks.editQueuedRun.mockImplementation(() => {
+      markStarted();
+      return acknowledgement;
+    });
+    await using _screen = await render(view(THREAD_A, "queued", hook));
+    await beginChangedEdit(hook);
+    const saved = requireHook(hook).saveEdit(savedContent("changed"), () => {});
+    await started;
+    await act(() => changeLanguage("zh"));
+    expect(requireHook(hook).isSaving).toBe(true);
+    expect(requireHook(hook).editingRunId).toBe(RUN);
+    expect(
+      useComposerDraftStore.getState().getComposerDraft(requireHook(hook).draftTarget)?.prompt,
+    ).toBe("changed");
+    expect(mocks.editQueuedRun).toHaveBeenCalledTimes(1);
+    acknowledge({ _tag: "Success" });
+    await act(() => saved);
+    expect(requireHook(hook).isSaving).toBe(false);
+    expect(requireHook(hook).isEditing).toBe(false);
+    expect(mocks.editQueuedRun).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps an open edit when the user leaves the thread and comes back", async () => {
     const { hook } = setup();
     await using screen = await render(view(THREAD_A, "queued", hook));
