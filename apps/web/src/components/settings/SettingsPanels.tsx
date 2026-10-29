@@ -595,9 +595,9 @@ export function useSettingsRestore(onRestored?: () => void) {
     if (changedSettingLabels.length === 0) return;
     const api = readLocalApi();
     const confirmed = await (api ?? ensureLocalApi()).dialogs.confirm(
-      ["Restore default settings?", `This will reset: ${changedSettingLabels.join(", ")}.`].join(
-        "\n",
-      ),
+      i18n.t("restore.confirm", {
+        settings: changedSettingLabels.join(i18n.resolvedLanguage === "zh" ? "、" : ", "),
+      }),
       { variant: "destructive" },
     );
     if (!confirmed) return;

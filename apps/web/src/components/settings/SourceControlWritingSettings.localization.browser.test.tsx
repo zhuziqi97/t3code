@@ -83,6 +83,7 @@ vi.mock("./settingsLayout", async (original) => ({
 }));
 
 import { changeLanguage } from "../../i18n";
+import { BranchNamingSettings } from "./BranchNamingSettings";
 import { SourceControlWritingSettingsSection } from "./SourceControlWritingSettings";
 
 let root: Screen;
@@ -148,7 +149,7 @@ it("keeps custom writing drafts through a language switch and saves native writi
 it("preserves a branch prefix draft and writes the original prefix on blur", async () => {
   await using _lifecycle = await setupLifecycle();
 
-  await render();
+  await act(() => root.rerender(<BranchNamingSettings />));
   await type(
     container.querySelector<HTMLInputElement>('input[aria-label="Branch prefix"]')!,
     "alice/",
@@ -165,7 +166,7 @@ it("preserves custom branch instructions and uses the native semantic mode from 
   await using _lifecycle = await setupLifecycle();
 
   state.settings[0] = { ...state.settings[0]!, branchNamingMode: "custom" };
-  await render();
+  await act(() => root.rerender(<BranchNamingSettings />));
   await type(
     container.querySelector<HTMLTextAreaElement>(
       'textarea[aria-label="Branch naming instructions"]',

@@ -206,6 +206,7 @@ it("keeps an uncommitted viewport width through a locale switch and saves native
   await using _lifecycle = await setupLifecycle();
 
   await render();
+  await click("Advanced");
   const input = container.querySelector<HTMLInputElement>(
     'input[aria-label="Default viewport width"]',
   )!;
