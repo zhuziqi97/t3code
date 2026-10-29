@@ -5,6 +5,7 @@ import { useLayoutEffect, useRef, type ReactNode, type Ref } from "react";
 import type { SidebarListItem } from "../Sidebar.logic";
 import { sidebarListItemId } from "../Sidebar.logic";
 import { createSidebarListMotion } from "../Sidebar.motion";
+import { SIDEBAR_TREE_PROPS } from "../../lib/sidebarTree";
 import { cn } from "../../lib/utils";
 
 export function sidebarProjectDragId(key: string) {
@@ -122,7 +123,7 @@ export function ProjectTreeLayout({
     }
   }
   return (
-    <ul ref={listRef} role="presentation" className={cn("relative space-y-1", className)}>
+    <ul ref={listRef} {...SIDEBAR_TREE_PROPS} className={cn("relative space-y-1", className)}>
       {children}
       {top.map((item) => renderItem(item))}
       {projectKeys.map((key) => {

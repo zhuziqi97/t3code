@@ -97,8 +97,8 @@ vi.mock("../localApi", async (original) => ({
     },
   }),
 }));
-vi.mock("../logicalProject", async (original) => ({
-  ...(await original<typeof import("../logicalProject")>()),
+vi.mock("@t3tools/client-runtime/state/project-grouping", async (original) => ({
+  ...(await original<typeof import("@t3tools/client-runtime/state/project-grouping")>()),
   deriveLogicalProjectKeyFromSettings: () => "project",
   derivePhysicalProjectKey: () => "project",
   selectProjectGroupingSettings: () => ({}),

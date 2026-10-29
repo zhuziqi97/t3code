@@ -33,7 +33,7 @@ it("opens implementation actions with a mouse while the composer is resting", as
       promptHasText={false}
       isSendBusy={false}
       sendDisabledReason={null}
-      isConnecting={false}
+
       isEnvironmentUnavailable={false}
       isPreparingWorktree={false}
       hasSendableContent={false}
@@ -64,7 +64,7 @@ function actionProps(
     promptHasText: false,
     isSendBusy: false,
     sendDisabledReason: null,
-    isConnecting: false,
+
     isEnvironmentUnavailable: false,
     isPreparingWorktree: false,
     hasSendableContent: false,
@@ -91,7 +91,7 @@ describe.each([true, false])("composer collapsed=%s", (collapsed) => {
         canInterrupt: true,
         // Sending is blocked during preparation; stopping must remain available.
         isSendBusy: phase === "preparing",
-        isConnecting: phase === "preparing",
+
         sendDisabledReason: phase === "preparing" ? "Preparing worktree" : null,
         preserveComposerFocusOnPointerDown: true,
         onInterrupt,

@@ -1,13 +1,18 @@
 import type { TFunction } from "i18next";
 import { i18n } from "../i18n";
+import type { EnvironmentId } from "@t3tools/contracts";
 import type { TimestampFormat } from "@t3tools/contracts/settings";
 import {
+  pickSnoozePreset as pickSharedSnoozePreset,
   resolveSnoozePresets as resolveSharedSnoozePresets,
   snoozeWakeLabel as sharedSnoozeWakeLabel,
   type SnoozePreset,
 } from "@t3tools/client-runtime/state/thread-settled";
 
-import { formatShortTimestamp, parseTimestampDate } from "../timestampFormat";
+import { appAtomRegistry } from "../rpc/atomRegistry";
+import { serverEnvironment } from "../state/server";
+import { parseTimestampDate, formatShortTimestamp } from "../timestampFormat";
+import { toastManager } from "./ui/toast";
 
 export { type SnoozePreset };
 
@@ -34,24 +39,54 @@ function timeOfDayLabel(date: Date, timestampFormat: TimestampFormat, t: TFuncti
   return formatShortTimestamp(date.toISOString(), timestampFormat, t);
 }
 
+/** The snooze menu for a thread, from its environment's presets, read when the menu opens. */
 export function resolveSnoozePresets(
   now: Date,
   timestampFormat: TimestampFormat,
+  environmentId: EnvironmentId,
   t: TFunction = i18n.t,
 ): ReadonlyArray<SnoozePreset> {
-  return resolveSharedSnoozePresets(now).map((preset) => {
-    const wake = parseTimestampDate(preset.snoozedUntil);
-    if (wake === null) return preset;
-    const time = timeOfDayLabel(wake, timestampFormat, t);
-    return {
+  return resolveSharedSnoozePresets(now, snoozeOptions(timestampFormat, environmentId)).map(
+    (preset) => ({
       ...preset,
-      label: t(`thread.snooze.preset.${preset.id}`),
-      whenLabel:
-        preset.id === "next-week"
-          ? `${wake.toLocaleDateString(i18n.resolvedLanguage === "zh" ? "zh-CN" : undefined, { weekday: "short" })} ${time}`
-          : time,
-    };
+      label: i18n.exists(`thread.snooze.preset.${preset.id}`)
+        ? t(`thread.snooze.preset.${preset.id}`)
+        : preset.label,
+    }),
+  );
+}
+
+/** A shown menu choice as picked; see the shared `pickSnoozePreset`. */
+export function pickSnoozePreset(
+  shown: ReadonlyArray<SnoozePreset>,
+  id: string,
+  timestampFormat: TimestampFormat,
+  environmentId: EnvironmentId,
+): SnoozePreset | undefined {
+  const picked = pickSharedSnoozePreset({
+    shown,
+    id,
+    now: new Date(),
+    ...snoozeOptions(timestampFormat, environmentId),
   });
+  if (!picked) {
+    toastManager.add({
+      type: "warning",
+      title: "Could not snooze thread",
+      description: "That snooze time has passed. Choose another time.",
+    });
+  }
+  return picked;
+}
+
+function snoozeOptions(timestampFormat: TimestampFormat, environmentId: EnvironmentId) {
+  const presets = appAtomRegistry.get(
+    serverEnvironment.settingsValueAtom(environmentId),
+  )?.snoozePresets;
+  return {
+    ...(presets ? { presets } : {}),
+    formatTime: (date: Date) => formatShortTimestamp(date.toISOString(), timestampFormat),
+  };
 }
 
 export function snoozeWakeDescription(

@@ -13,7 +13,7 @@ import {
   threadUndoClaimsShortcut,
   useThreadUndoNotice,
 } from "./showThreadUndoNotice";
-import * as ThreadUndo from "./threadUndo";
+import * as ThreadUndo from "@t3tools/client-runtime/state/thread-undo";
 
 vi.mock("../lib/announce", () => ({ announce: vi.fn(), cancelAnnouncement: vi.fn() }));
 

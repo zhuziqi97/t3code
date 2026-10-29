@@ -19,6 +19,7 @@ import { UnifiedSettings } from "@t3tools/contracts/settings";
 import { ModelEsque } from "./components/chat/providerIconUtils";
 import { type ProviderInstanceEntry, deriveProviderInstanceEntries } from "./providerInstances";
 import { sortModelsForProviderInstance } from "./modelOrdering";
+import { resolveModelShortName } from "@t3tools/client-runtime/provider-clients";
 
 export const MAX_CUSTOM_MODEL_LENGTH = 256;
 const DEFAULT_TEXT_GENERATION_INSTANCE_ID = ProviderInstanceId.make("codex");
@@ -72,13 +73,17 @@ function appendUnavailableDynamicModelSelection(
   return [...options, { slug, name: slug, isCustom: false, isUnavailable: true }];
 }
 
-function toAppModelOption(model: ServerProvider["models"][number]): AppModelOption {
+function toAppModelOption(
+  model: ServerProvider["models"][number],
+  driverKind: ProviderDriverKind,
+): AppModelOption {
   const option: AppModelOption = {
     slug: model.slug,
     name: model.name,
     isCustom: model.isCustom,
   };
-  if (model.shortName) option.shortName = model.shortName;
+  const shortName = resolveModelShortName(model, driverKind);
+  if (shortName) option.shortName = shortName;
   if (model.subProvider) option.subProvider = model.subProvider;
   if (model.aliases) option.aliases = model.aliases;
   if (model.badge) option.badge = model.badge;
@@ -123,7 +128,7 @@ export function getAppModelOptionsForInstance(
   const options = mergeCustomModels(
     entry.models.filter((model) => !model.isCustom),
     customModels,
-  ).map(toAppModelOption);
+  ).map((model) => toAppModelOption(model, entry.driverKind));
   // Empty is a local picker key only; createModelSelection writes null on the wire.
   options.unshift({
     slug: "",

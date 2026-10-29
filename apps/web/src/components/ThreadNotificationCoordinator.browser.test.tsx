@@ -1,3 +1,6 @@
+import { createEnvironmentThreadShellAtoms } from "@t3tools/client-runtime/state/threads";
+import type { OrchestrationV2ShellSnapshot } from "@t3tools/contracts";
+import type { EnvironmentCatalogState } from "@t3tools/client-runtime/state/connections";
 import { Atom, AtomRegistry } from "effect/reactivity";
 import type { AnyRouter } from "@tanstack/react-router";
 import { fakeTimers } from "../../test/render";
@@ -164,6 +167,23 @@ import { startThreadNotifications } from "./ThreadNotificationCoordinator";
 
 const notificationEnvironmentIds = Atom.make<ReadonlyArray<string>>([]);
 const notificationShell = Atom.make<unknown>(null).pipe(Atom.keepAlive);
+const notificationSnapshot = Atom.make((get) => {
+  const shell = get(notificationShell) as {
+    snapshot: Option.Option<OrchestrationV2ShellSnapshot>;
+  } | null;
+  return shell ? Option.getOrNull(shell.snapshot) : null;
+});
+const notificationThreadShells = createEnvironmentThreadShellAtoms({
+  catalogValueAtom: Atom.make<EnvironmentCatalogState>({ isReady: true, entries: new Map() }),
+  snapshotAtom: () => notificationSnapshot,
+});
+vi.mock(import("../state/threads"), async (original) => ({
+  ...(await original()),
+  get environmentThreadShells() {
+    return notificationThreadShells;
+  },
+}));
+
 vi.mock(import("../state/presentation"), async (original) => ({
   ...(await original()),
   environmentSummaries: {
@@ -428,7 +448,10 @@ describe("thread notifications", () => {
   it("reveals the desktop window and opens the thread when a system alert is clicked", async () => {
     await using app = setup();
     const revealWindow = vi.fn(() => Promise.resolve());
-    using _bridge = stubGlobal("desktopBridge", { revealWindow });
+    using _bridge = stubGlobal("desktopBridge", {
+      revealWindow,
+      onNotificationBadgeClear: () => () => {},
+    });
     state.mode = "notifications";
     state.focused = false;
     await app.render();

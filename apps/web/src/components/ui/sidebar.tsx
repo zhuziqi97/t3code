@@ -29,6 +29,7 @@ import {
   type SidebarResolvedResizableOptions,
 } from "./sidebarContext";
 import * as Schema from "effect/Schema";
+import { announceSidebarVisibility } from "~/lib/accessibilityAnnouncements";
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
@@ -67,7 +68,7 @@ function useSidebarVisibility() {
   return isMobile ? openMobile : open;
 }
 
-// Same breakpoint as useIsMobile, also read when a shortcut fires.
+// The `max-md` breakpoint, also read when a shortcut fires.
 const SIDEBAR_MOBILE_QUERY = "(max-width: 767px)";
 
 function isMobileViewport(): boolean {
@@ -115,7 +116,10 @@ function createSidebarOpenStore(defaultOpen: boolean) {
       for (const listener of collapseListeners) listener();
       moveFocusOutOfCollapsingSidebar();
     }
-    if (open !== state.open) publish({ ...state, open });
+    if (open !== state.open) {
+      if (!isMobileViewport()) announceSidebarVisibility(open);
+      publish({ ...state, open });
+    }
     void persistSidebarOpen(open);
   };
   const setOpenMobile = (openMobile: boolean) => {
@@ -287,7 +291,7 @@ function Sidebar({
             }
           >
             <SheetHeader className="sr-only">
-              <SheetTitle>{t("sidebar.title")}</SheetTitle>
+              <SheetTitle>{props["aria-label"] ?? t("sidebar.title")}</SheetTitle>
               <SheetDescription>{t("sidebar.mobileDescription")}</SheetDescription>
             </SheetHeader>
             <div
@@ -690,8 +694,8 @@ const sidebarMenuButtonVariants = cva(
         default:
           "h-8 rounded-[var(--control-radius)] px-[var(--sidebar-row-content-inset)] py-1.5 text-sm",
         icon: "size-8 justify-center rounded-[var(--control-radius)] p-0",
-        lg: "h-12 rounded-lg p-2 text-sm group-data-[collapsible=icon]:p-0!",
-        sm: "h-7 rounded-lg p-2 text-xs",
+        lg: "h-12 rounded-[var(--control-radius)] px-[var(--sidebar-row-content-inset)] py-2 text-sm group-data-[collapsible=icon]:p-0!",
+        sm: "h-7 rounded-[var(--control-radius)] px-[var(--sidebar-row-content-inset)] py-2 text-xs",
       },
       variant: {
         default: "font-medium text-sidebar-muted-foreground/80",

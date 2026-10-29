@@ -181,6 +181,8 @@ export function PreviewChromeRow({
                     }
                   }}
                   placeholder={t("browser.address")}
+                  aria-label={t("browser.address")}
+                  data-workspace-focus-default
                   spellCheck={false}
                   disabled={inputDisabled}
                   data-preview-url-input

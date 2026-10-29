@@ -5,7 +5,7 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import { openCommandPalette } from "../commandPaletteBus";
 import { buildSidebarProjectSnapshots } from "../sidebarProjectGrouping";
-import { selectProjectGroupingSettings } from "../logicalProject";
+import { selectProjectGroupingSettings } from "@t3tools/client-runtime/state/project-grouping";
 import { readProjects, readThreadShell, useProjects } from "../state/entities";
 import { composerDraftHasUserContent, useComposerDraftStore } from "../composerDraftStore";
 import { usePrimaryEnvironmentId } from "../state/environments";

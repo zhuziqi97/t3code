@@ -1,6 +1,13 @@
-import { describe, expect, it } from "vite-plus/test";
+import { EnvironmentId } from "@t3tools/contracts";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { resolveSnoozePresets, snoozeWakeDescription } from "./Sidebar.snooze";
+
+const environmentId = EnvironmentId.make("snooze-test");
+vi.mock("../state/server", () => ({
+  serverEnvironment: { settingsValueAtom: () => "snooze-settings" },
+}));
+vi.mock("../rpc/atomRegistry", () => ({ appAtomRegistry: { get: () => null } }));
 
 function localDate(year: number, month: number, day: number, hour: number, minute = 0): Date {
   return new Date(year, month - 1, day, hour, minute, 0, 0);
@@ -8,7 +15,7 @@ function localDate(year: number, month: number, day: number, hour: number, minut
 
 describe("resolveSnoozePresets", () => {
   it("offers one hour, three hours, evening, tomorrow, and next week in the morning", () => {
-    const presets = resolveSnoozePresets(localDate(2026, 4, 8, 10), "locale");
+    const presets = resolveSnoozePresets(localDate(2026, 4, 8, 10), "locale", environmentId);
     expect(presets.map((preset) => preset.id)).toEqual([
       "hour",
       "three-hours",
@@ -31,7 +38,7 @@ describe("resolveSnoozePresets", () => {
   });
 
   it("whenLabel complements the label instead of repeating it", () => {
-    const presets = resolveSnoozePresets(localDate(2026, 4, 8, 10), "locale");
+    const presets = resolveSnoozePresets(localDate(2026, 4, 8, 10), "locale", environmentId);
     for (const preset of presets) {
       expect(preset.whenLabel.toLowerCase()).not.toContain("tomorrow");
     }
@@ -43,22 +50,30 @@ describe("resolveSnoozePresets", () => {
 
   it("drops the evening preset once evening is near or past", () => {
     expect(
-      resolveSnoozePresets(localDate(2026, 4, 8, 17, 30), "locale").map((preset) => preset.id),
+      resolveSnoozePresets(localDate(2026, 4, 8, 17, 30), "locale", environmentId).map(
+        (preset) => preset.id,
+      ),
     ).toEqual(["hour", "three-hours", "tomorrow", "next-week"]);
     expect(
-      resolveSnoozePresets(localDate(2026, 4, 8, 21), "locale").map((preset) => preset.id),
+      resolveSnoozePresets(localDate(2026, 4, 8, 21), "locale", environmentId).map(
+        (preset) => preset.id,
+      ),
     ).toEqual(["hour", "three-hours", "tomorrow", "next-week"]);
   });
 
   it("puts next week a full week out when today is Monday", () => {
-    const presets = resolveSnoozePresets(localDate(2026, 4, 6, 10), "locale");
+    const presets = resolveSnoozePresets(localDate(2026, 4, 6, 10), "locale", environmentId);
     const nextWeek = new Date(presets.find((preset) => preset.id === "next-week")!.snoozedUntil);
     expect(nextWeek.getDay()).toBe(1);
     expect(nextWeek.getDate()).toBe(13);
   });
   it("formats preset times with the selected clock preference", () => {
-    const twelveHour = resolveSnoozePresets(localDate(2026, 4, 8, 10), "12-hour");
-    const twentyFourHour = resolveSnoozePresets(localDate(2026, 4, 8, 10), "24-hour");
+    const twelveHour = resolveSnoozePresets(localDate(2026, 4, 8, 10), "12-hour", environmentId);
+    const twentyFourHour = resolveSnoozePresets(
+      localDate(2026, 4, 8, 10),
+      "24-hour",
+      environmentId,
+    );
 
     expect(twelveHour.find((preset) => preset.id === "evening")!.whenLabel).toMatch(/PM/i);
     expect(twentyFourHour.find((preset) => preset.id === "evening")!.whenLabel).toBe("18:00");
@@ -93,10 +108,10 @@ describe("snoozeWakeDescription", () => {
 it("switches preset and wake labels to Chinese while preserving the wake instants", async () => {
   const { changeLanguage, i18n } = await import("../i18n");
   const now = localDate(2026, 4, 8, 10);
-  const english = resolveSnoozePresets(now, "24-hour");
+  const english = resolveSnoozePresets(now, "24-hour", environmentId);
   try {
     await changeLanguage("zh");
-    const chinese = resolveSnoozePresets(now, "24-hour", i18n.t);
+    const chinese = resolveSnoozePresets(now, "24-hour", environmentId, i18n.t);
     expect(chinese.map(({ id, snoozedUntil }) => ({ id, snoozedUntil }))).toEqual(
       english.map(({ id, snoozedUntil }) => ({ id, snoozedUntil })),
     );
