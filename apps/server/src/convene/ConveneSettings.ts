@@ -33,7 +33,11 @@ const make = Effect.gen(function* () {
   const manage = Effect.fn("ConveneSettings.manage")(function* (
     input: typeof ConveneManageInput.Type,
   ) {
-    if (input.operation === "pair" || input.operation === "exchange") {
+    if (
+      input.operation === "pair" ||
+      input.operation === "exchange" ||
+      input.operation === "change-address"
+    ) {
       const parsed = yield* Effect.try({
         try: () => new URL(input.baseUrl.trim()),
         catch: (cause) =>
@@ -51,6 +55,10 @@ const make = Effect.gen(function* () {
       const baseUrl = parsed.toString().replace(/\/$/, "");
       if (input.operation === "pair")
         return { type: "pairing" as const, pairing: yield* platform.beginPairing(baseUrl) };
+      if (input.operation === "change-address") {
+        yield* platform.changeAddress(baseUrl);
+        return { type: "status" as const, status: yield* connection.status };
+      }
       const result = yield* platform.finishPairing(baseUrl, input.deviceCode).pipe(
         Effect.catchTags({
           ConvenePlatformError: (error) =>

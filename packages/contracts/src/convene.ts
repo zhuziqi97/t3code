@@ -200,6 +200,7 @@ export const ConveneProjectView = Schema.Struct({
 });
 export const ConveneManageInput = Schema.Union([
   Schema.Struct({ operation: Schema.Literal("pair"), baseUrl: Schema.NonEmptyString }),
+  Schema.Struct({ operation: Schema.Literal("change-address"), baseUrl: Schema.NonEmptyString }),
   Schema.Struct({
     operation: Schema.Literal("exchange"),
     baseUrl: Schema.NonEmptyString,

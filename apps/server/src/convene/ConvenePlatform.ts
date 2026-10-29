@@ -81,6 +81,7 @@ export class ConvenePlatform extends Context.Service<
       baseUrl: string,
       deviceCode: string,
     ) => Effect.Effect<Connection, ConvenePlatformError>;
+    readonly changeAddress: (baseUrl: string) => Effect.Effect<Connection, ConvenePlatformError>;
     readonly disconnect: Effect.Effect<void, ConvenePlatformError>;
     readonly accessToken: Effect.Effect<string, ConvenePlatformError>;
     readonly credential: (
@@ -191,6 +192,22 @@ const make = Effect.gen(function* () {
     return access.token;
   });
   const accessToken = connection.pipe(Effect.flatMap(tokenFor));
+  const persistConnection = Effect.fn("ConvenePlatform.persistConnection")(function* (
+    value: Connection,
+  ) {
+    const encoded = yield* encodeConnection(value).pipe(
+      Effect.mapError(
+        (cause) => new ConvenePlatformError({ operation: "encode-connection", cause }),
+      ),
+    );
+    yield* secrets
+      .set("convene-connection.json", new TextEncoder().encode(encoded))
+      .pipe(
+        Effect.mapError(
+          (cause) => new ConvenePlatformError({ operation: "persist-connection", cause }),
+        ),
+      );
+  });
   return ConvenePlatform.of({
     readConnection,
     accessToken,
@@ -219,19 +236,38 @@ const make = Effect.gen(function* () {
         runnerId: result.runner_id,
         refreshCredential: result.refresh_credential,
       };
-      const encoded = yield* encodeConnection(value).pipe(
-        Effect.mapError(
-          (cause) => new ConvenePlatformError({ operation: "encode-connection", cause }),
-        ),
-      );
-      yield* secrets
-        .set("convene-connection.json", new TextEncoder().encode(encoded))
-        .pipe(
-          Effect.mapError(
-            (cause) => new ConvenePlatformError({ operation: "persist-connection", cause }),
-          ),
-        );
+      yield* persistConnection(value);
       access = undefined;
+      yield* reconnect;
+      return value;
+    }),
+    changeAddress: Effect.fn("ConvenePlatform.changeAddress")(function* (baseUrl) {
+      const current = yield* connection;
+      const result = yield* post(
+        baseUrl,
+        "execution-runner-tokens/refresh",
+        { refresh_credential: current.refreshCredential },
+        Schema.Struct({ access_token: Schema.String, expires_in: Schema.Number }),
+      );
+      const latest = yield* readConnection;
+      if (
+        Option.isNone(latest) ||
+        latest.value.baseUrl !== current.baseUrl ||
+        latest.value.runnerId !== current.runnerId ||
+        latest.value.refreshCredential !== current.refreshCredential
+      )
+        return yield* new ConvenePlatformError({
+          operation: "change-address",
+          code: "CONNECTION_CHANGED",
+        });
+      const value = { ...current, baseUrl };
+      yield* persistConnection(value);
+      access = {
+        token: result.access_token,
+        expiresAt: (yield* Clock.currentTimeMillis) + result.expires_in * 1000,
+        runnerId: current.runnerId,
+        baseUrl,
+      };
       yield* reconnect;
       return value;
     }),
