@@ -47,9 +47,7 @@ export const ComposerFooterModeControls = memo(function ComposerFooterModeContro
     supervisedRuntimeModeOption;
   const RuntimeModeIcon = runtimeModeOption.icon;
   const interactionModeTooltip =
-    props.interactionMode === "plan"
-      ? "Plan mode. Click to return to normal build mode"
-      : "Default mode. Click to enter plan mode";
+    props.interactionMode === "plan" ? t("chat.mode.planHint") : t("chat.mode.defaultHint");
 
   const interactionModeToggle = props.showInteractionModeToggle ? (
     <Tooltip>

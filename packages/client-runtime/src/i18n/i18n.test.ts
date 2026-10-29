@@ -150,3 +150,21 @@ it("preserves the interpolation names and rich-text components in Chinese transl
     expect(components(value), key).toEqual(components(source));
   }
 });
+
+it("localizes queue recovery with a raw thread title across language switches", async () => {
+  const i18n = createI18n({ lng: "en" });
+  const thread = "原始 thread {{model}} <Codex>";
+  expect(i18n.t("chat.queue.editKeptInThread", { thread })).toBe(
+    `Your unsaved edit in “${thread}” was kept in the composer.`,
+  );
+  expect(i18n.t("chat.queue.editDiscardedInThread", { thread })).toBe(
+    `Your unsaved edit in “${thread}” was discarded.`,
+  );
+  await i18n.changeLanguage("zh");
+  expect(i18n.t("chat.queue.editKeptInThread", { thread })).toBe(
+    `会话“${thread}”中未保存的编辑已保留在输入框中。`,
+  );
+  expect(i18n.t("chat.queue.editDiscardedInThread", { thread })).toBe(
+    `会话“${thread}”中未保存的编辑已丢弃。`,
+  );
+});

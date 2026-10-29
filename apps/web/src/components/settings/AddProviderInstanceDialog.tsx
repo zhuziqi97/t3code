@@ -508,7 +508,7 @@ export function AddProviderInstanceDialog({
                       />
                       <div className="flex items-center gap-3 text-xs text-muted-foreground">
                         <div aria-hidden className="flex-1 border-t border-border/70" />
-                        <span>Or choose from ACP Registry</span>
+                        <span>{t("provider.add.chooseRegistry")}</span>
                         <div aria-hidden className="flex-1 border-t border-border/70" />
                       </div>
                       {isAcpRegistry && isManualAcpConfiguration ? (
@@ -516,12 +516,14 @@ export function AddProviderInstanceDialog({
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <h3 className="text-sm font-medium text-foreground">
-                                {isLocalAcp ? "Local ACP command" : "Enter manually"}
+                                {isLocalAcp
+                                  ? t("provider.add.localCommand")
+                                  : t("provider.add.manual")}
                               </h3>
                               <p className="mt-0.5 text-xs text-muted-foreground">
                                 {isLocalAcp
-                                  ? `Run an installed ACP executable on ${environmentLabel}.`
-                                  : "Enter an official registry ID and any local executable or auth override."}
+                                  ? t("provider.add.localHint", { environment: environmentLabel })
+                                  : t("provider.add.manualHint")}
                               </p>
                             </div>
                             <Button
@@ -532,7 +534,7 @@ export function AddProviderInstanceDialog({
                               size="xs"
                               variant="ghost"
                             >
-                              Search registry
+                              {t("provider.add.searchRegistry")}
                             </Button>
                           </div>
                           <SettingsGroup variant="plain">

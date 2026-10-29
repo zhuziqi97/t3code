@@ -1666,9 +1666,10 @@ function BrowserProfilesSetting({ disabled }: { readonly disabled: boolean }) {
 }
 
 export function BrowserSettingsPanel() {
+  const t = useTranslate();
   // Client-local preview defaults are editable only where the preview exists.
   const desktopOnly = !isElectron;
-  const desktopOnlyMessage = desktopOnly ? "Only available in the desktop app." : undefined;
+  const desktopOnlyMessage = desktopOnly ? t("integrations.desktop-only") : undefined;
 
   return (
     <SettingsPageContainer>

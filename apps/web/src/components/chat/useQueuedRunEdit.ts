@@ -264,15 +264,18 @@ export function useQueuedRunEdit(input: {
           const title = appAtomRegistry.get(
             environmentThreadShells.threadShellAtom(threadRef),
           )?.title;
-          const where = title === undefined ? "" : ` in “${title}”`;
           toastManager.add(
             stackedThreadToast({
               type: recovery === "kept" ? "info" : "warning",
-              title: "Queued message is no longer queued",
+              title: i18n.t("chat.queue.notQueued"),
               description:
                 recovery === "kept"
-                  ? `Your unsaved edit${where} was kept in the composer.`
-                  : `Your unsaved edit${where} was discarded.`,
+                  ? title === undefined
+                    ? i18n.t("chat.queue.editKept")
+                    : i18n.t("chat.queue.editKeptInThread", { thread: title })
+                  : title === undefined
+                    ? i18n.t("chat.queue.editDiscarded")
+                    : i18n.t("chat.queue.editDiscardedInThread", { thread: title }),
             }),
           );
         },

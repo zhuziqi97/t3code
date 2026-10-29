@@ -475,13 +475,13 @@ export function WorktreeSubmodulesRow() {
       {...searchableSetting("worktree-submodules")}
       description={
         isProjectScope
-          ? "How new worktrees in this project populate git submodules."
-          : "How new worktrees populate git submodules. Projects and their t3.json can override it."
+          ? t("defaults.submodules.projectDescription")
+          : t("defaults.submodules.description")
       }
       resetAction={
         !isProjectScope && settings.worktreeSubmodules !== null ? (
           <SettingResetButton
-            label="worktree submodules"
+            label={t("defaults.submodules.reset")}
             onClick={() => updateSettings({ worktreeSubmodules: null })}
           />
         ) : null
@@ -493,14 +493,14 @@ export function WorktreeSubmodulesRow() {
             if (isWorktreeSubmodules(value)) updateSettings({ worktreeSubmodules: value });
           }}
         >
-          <SelectTrigger size="sm" aria-label="Worktree submodules">
+          <SelectTrigger size="sm" aria-label={t("defaults.submodules.label")}>
             <SelectValue>
               {(value: string | null) =>
                 isWorktreeSubmodules(value)
                   ? t(`options.submodules.${value}`)
                   : unavailable
-                    ? "Unavailable"
-                    : "Mixed"
+                    ? t("common.unavailable")
+                    : t("common.mixed")
               }
             </SelectValue>
           </SelectTrigger>

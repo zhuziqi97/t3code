@@ -49,7 +49,6 @@ it.each([
 it("explains an unavailable provider response without showing a misleading active command", async () => {
   await using _lifecycle = await setupLifecycle();
 
-  await changeLanguage("zh");
   await act(async () =>
     root.rerender(
       <ComposerPendingApprovalPanel
@@ -64,7 +63,14 @@ it("explains an unavailable provider response without showing a misleading activ
       />,
     ),
   );
-  expect(container.textContent).toContain("智能体提供方进程已退出");
+  const detail = container.querySelector("[data-approval-detail]");
+  expect(detail?.textContent).toBe(
+    "Provider process is gone. Interrupt or restart the run to respond.",
+  );
+  await act(() => changeLanguage("zh"));
+  expect(container.querySelector("[data-approval-detail]")).toBe(detail);
+  expect(detail?.textContent).toBe("智能体提供方进程已退出。请中断或重新启动运行后再处理此请求。");
+  expect(container.textContent).not.toContain("cat /tmp/file");
 });
 
 let renderStack: AsyncDisposableStack;

@@ -287,7 +287,7 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
   const t = useTranslate();
   const { isCompacting, isPreparingWorktree, backgroundWorktreeSetup } =
     use(TimelineRowActivityCtx);
-  const compacting = row.compacting ?? (isCompacting ? "Compacting…" : undefined);
+  const compacting = row.compacting ?? (isCompacting ? t("chat.timeline.compacting") : undefined);
   const shimmer = isPreparingWorktree || compacting !== undefined;
   const label = isPreparingWorktree ? (
     "Setting up worktree…"

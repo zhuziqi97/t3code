@@ -1121,7 +1121,7 @@ export function ProviderInstanceCard({
             disabled={readOnly}
           >
             <ExternalLinkIcon />
-            Continue authentication
+            {t("provider.instance.continueAuth")}
           </Button>
         </div>
       ) : null}

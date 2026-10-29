@@ -155,6 +155,7 @@ export function ThemeImportDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useTranslate();
   // Each opening is a fresh session: its body remounts with clean state, and
   // closing aborts every read, search, and install the session started.
   const [session, setSession] = useState(() => ({
@@ -182,7 +183,7 @@ export function ThemeImportDialog({
     >
       <DialogPopup className="max-w-3xl overflow-hidden">
         <DialogHeader>
-          <DialogTitle>Add a theme</DialogTitle>
+          <DialogTitle>{t("appearance.theme.importTitle")}</DialogTitle>
         </DialogHeader>
         <ThemeImportBody
           key={session.id}
@@ -506,7 +507,7 @@ function ThemeImportBody({
           return (
             <div className="space-y-3">
               <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
-                <p className="text-sm font-medium">Already installed</p>
+                <p className="text-sm font-medium">{t("appearance.theme.alreadyInstalled")}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {conflicts.map((theme) => theme.label).join(", ")}
                 </p>
@@ -538,9 +539,9 @@ function ThemeImportBody({
               {...dropHandlers}
             >
               <div className="min-w-0">
-                <p className="text-sm font-medium">Theme file</p>
+                <p className="text-sm font-medium">{t("appearance.theme.file")}</p>
                 <p className="truncate text-xs text-muted-foreground">
-                  {fileName ?? "Drop T3 Code or VS Code .json files"}
+                  {fileName ?? t("appearance.theme.dropFiles")}
                 </p>
               </div>
               {chooseButton()}
@@ -549,11 +550,11 @@ function ThemeImportBody({
             {editorSection()}
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <Button variant="ghost" onClick={() => onClose()}>
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button disabled={!json.trim() || isReading} onClick={handleSubmit}>
                 <PlusIcon />
-                Add theme
+                {t("appearance.theme.add")}
               </Button>
             </div>
           </div>
