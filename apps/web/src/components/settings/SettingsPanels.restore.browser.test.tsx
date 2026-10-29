@@ -204,11 +204,14 @@ it("translates dirty theme and browser defaults in the confirmation and preserve
   await act(async () => changeLanguage("zh"));
   await act(() => screen.restore.restoreDefaults());
   expect(state.confirm).toHaveBeenCalledExactlyOnceWith(
-    "恢复默认设置？\n以下设置将被重置：主题、跟随系统、主题混合、可见会话数量、浏览器视口、浏览器缩放、浏览器外观、录制帧率、录制按键、录制鼠标点击、链接打开位置、悬浮预览。",
+    "恢复默认设置？\n以下设置将被重置：主题、跟随系统、主题混合、浏览器视口、浏览器缩放、浏览器外观、录制帧率、录制按键、录制鼠标点击、链接打开位置、悬浮预览。",
     { variant: "destructive" },
   );
   expect(state.update).not.toHaveBeenCalled();
   expect(state.theme).toBe("raw-custom-theme");
+  expect(state.settings.sidebarThreadPreviewCount).toBe(
+    DEFAULT_UNIFIED_SETTINGS.sidebarThreadPreviewCount + 1,
+  );
   await act(async () => changeLanguage("en"));
   expect(screen.restore.changedSettingLabels).toContain("Browser viewport");
   expect(state.confirm).toHaveBeenCalledOnce();

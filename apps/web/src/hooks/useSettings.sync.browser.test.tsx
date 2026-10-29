@@ -22,10 +22,7 @@ const state = vi.hoisted(() => ({
     environmentId: EnvironmentId;
     label: string;
     connection: { phase: "connected" | "disconnected" };
-    serverConfig: {
-      environment: { capabilities: { threadAutoSettlement: boolean } };
-      settings: typeof DEFAULT_SERVER_SETTINGS;
-    };
+    serverConfig: { settings: typeof DEFAULT_SERVER_SETTINGS } | null;
   }>,
   persist: vi.fn(),
   toast: vi.fn(),
@@ -108,7 +105,6 @@ function setup() {
     label: environmentId,
     connection: { phase: "connected" },
     serverConfig: {
-      environment: { capabilities: { threadAutoSettlement: true } },
       settings: DEFAULT_SERVER_SETTINGS,
     },
   }));
@@ -210,7 +206,7 @@ describe("shared settings writes", () => {
     });
   });
 
-  it.each(["disconnected", "unsupported"] as const)(
+  it.each(["disconnected", "config-unavailable"] as const)(
     "skips a %s remote even with a cold grant",
     async (condition) => {
       await using _lifecycle = await setupLifecycle();
@@ -218,7 +214,7 @@ describe("shared settings writes", () => {
       setup();
       const remote = state.environments[1]!;
       if (condition === "disconnected") remote.connection.phase = "disconnected";
-      else remote.serverConfig.environment.capabilities.threadAutoSettlement = false;
+      else remote.serverConfig = null;
       await using editor = await mountEditor();
       editor.saveSharedSettings();
 
@@ -361,12 +357,13 @@ describe("shared settings writes", () => {
     ["en", "Setting not saved", "Update older servers to save this setting."],
     ["zh", "设置未保存", "请更新旧版服务端后再保存此设置。"],
   ])(
-    "explains an unsupported shared setting in %s without writing it",
+    "holds a shared restart setting in %s until server configs load",
     async (language, title, description) => {
       await using _lifecycle = await setupLifecycle();
 
       setup();
       await i18n.changeLanguage(language);
+      for (const environment of state.environments) environment.serverConfig = null;
       await using editor = await mountEditor({ continueThreadsAfterServerUpdate: true });
       await act(async () => editor.saveSharedSettings());
       expect(state.persist).not.toHaveBeenCalled();

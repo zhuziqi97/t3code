@@ -1526,6 +1526,10 @@ export const zh: Partial<Messages> = {
   "connections.error.relayInternal": "中继出现内部错误（{{reason}}）。",
   "connections.error.relayLinkLimit_one":
     "中继拒绝了关联：此账号已达到 {{maximum}} 条托管隧道的上限。请解除一个执行环境的关联，以释放名额。",
+  "connections.error.relayLinkLimitPaid_one":
+    "中继拒绝了关联：此账号已达到 {{maximum}} 条托管隧道的上限。请解除一个执行环境的关联，或在网页端或桌面端的 T3 Connect 账户设置中关联付费 T3 Chat 账户。Pro 将默认上限提高至 {{pro}} 条，Premier 提高至 {{premier}} 条。",
+  "connections.error.relayLinkLimitPaid_other":
+    "中继拒绝了关联：此账号已达到 {{maximum}} 条托管隧道的上限。请解除一个执行环境的关联，或在网页端或桌面端的 T3 Connect 账户设置中关联付费 T3 Chat 账户。Pro 将默认上限提高至 {{pro}} 条，Premier 提高至 {{premier}} 条。",
   "connections.error.relayLinkLimit_other":
     "中继拒绝了关联：此账号已达到 {{maximum}} 条托管隧道的上限。请解除一个执行环境的关联，以释放名额。",
   "connections.error.relay.tokenExchange.failed": "无法交换中继 DPoP 访问令牌。",

@@ -17,21 +17,21 @@ describe("resolveSnoozePresets", () => {
   it("offers one hour, three hours, evening, tomorrow, and next week in the morning", () => {
     const presets = resolveSnoozePresets(localDate(2026, 4, 8, 10), "locale", environmentId);
     expect(presets.map((preset) => preset.id)).toEqual([
-      "hour",
-      "three-hours",
-      "evening",
-      "tomorrow",
-      "next-week",
+      "after:60",
+      "after:180",
+      "at:today:18:00",
+      "at:tomorrow:09:00",
+      "at:monday:09:00",
     ]);
-    const threeHours = presets.find((preset) => preset.id === "three-hours");
+    const threeHours = presets.find((preset) => preset.id === "after:180");
     expect(new Date(threeHours!.snoozedUntil).getHours()).toBe(13);
-    const evening = presets.find((preset) => preset.id === "evening");
+    const evening = presets.find((preset) => preset.id === "at:today:18:00");
     expect(new Date(evening!.snoozedUntil).getHours()).toBe(18);
-    const tomorrow = presets.find((preset) => preset.id === "tomorrow");
+    const tomorrow = presets.find((preset) => preset.id === "at:tomorrow:09:00");
     const tomorrowDate = new Date(tomorrow!.snoozedUntil);
     expect(tomorrowDate.getDate()).toBe(9);
     expect(tomorrowDate.getHours()).toBe(9);
-    const nextWeek = presets.find((preset) => preset.id === "next-week");
+    const nextWeek = presets.find((preset) => preset.id === "at:monday:09:00");
     const nextWeekDate = new Date(nextWeek!.snoozedUntil);
     expect(nextWeekDate.getDay()).toBe(1);
     expect(nextWeekDate.getDate()).toBe(13);
@@ -42,28 +42,30 @@ describe("resolveSnoozePresets", () => {
     for (const preset of presets) {
       expect(preset.whenLabel.toLowerCase()).not.toContain("tomorrow");
     }
-    const tomorrow = presets.find((preset) => preset.id === "tomorrow");
+    const tomorrow = presets.find((preset) => preset.id === "at:tomorrow:09:00");
     expect(tomorrow!.whenLabel).toMatch(/9/);
-    const nextWeek = presets.find((preset) => preset.id === "next-week");
+    const nextWeek = presets.find((preset) => preset.id === "at:monday:09:00");
     expect(nextWeek!.whenLabel).toMatch(/Mon/);
   });
 
-  it("drops the evening preset once evening is near or past", () => {
+  it("keeps a future evening preset and drops it only after its time", () => {
     expect(
       resolveSnoozePresets(localDate(2026, 4, 8, 17, 30), "locale", environmentId).map(
         (preset) => preset.id,
       ),
-    ).toEqual(["hour", "three-hours", "tomorrow", "next-week"]);
+    ).toEqual(["at:today:18:00", "after:60", "after:180", "at:tomorrow:09:00", "at:monday:09:00"]);
     expect(
       resolveSnoozePresets(localDate(2026, 4, 8, 21), "locale", environmentId).map(
         (preset) => preset.id,
       ),
-    ).toEqual(["hour", "three-hours", "tomorrow", "next-week"]);
+    ).toEqual(["after:60", "after:180", "at:tomorrow:09:00", "at:monday:09:00"]);
   });
 
   it("puts next week a full week out when today is Monday", () => {
     const presets = resolveSnoozePresets(localDate(2026, 4, 6, 10), "locale", environmentId);
-    const nextWeek = new Date(presets.find((preset) => preset.id === "next-week")!.snoozedUntil);
+    const nextWeek = new Date(
+      presets.find((preset) => preset.id === "at:monday:09:00")!.snoozedUntil,
+    );
     expect(nextWeek.getDay()).toBe(1);
     expect(nextWeek.getDate()).toBe(13);
   });
@@ -75,8 +77,10 @@ describe("resolveSnoozePresets", () => {
       environmentId,
     );
 
-    expect(twelveHour.find((preset) => preset.id === "evening")!.whenLabel).toMatch(/PM/i);
-    expect(twentyFourHour.find((preset) => preset.id === "evening")!.whenLabel).toBe("18:00");
+    expect(twelveHour.find((preset) => preset.id === "at:today:18:00")!.whenLabel).toMatch(/PM/i);
+    expect(twentyFourHour.find((preset) => preset.id === "at:today:18:00")!.whenLabel).toBe(
+      "18:00",
+    );
   });
 });
 
@@ -115,11 +119,11 @@ it("switches preset and wake labels to Chinese while preserving the wake instant
     expect(chinese.map(({ id, snoozedUntil }) => ({ id, snoozedUntil }))).toEqual(
       english.map(({ id, snoozedUntil }) => ({ id, snoozedUntil })),
     );
-    expect(chinese.find(({ id }) => id === "tomorrow")).toMatchObject({
+    expect(chinese.find(({ id }) => id === "at:tomorrow:09:00")).toMatchObject({
       label: "明天",
       whenLabel: "9:00",
     });
-    expect(chinese.find(({ id }) => id === "next-week")?.whenLabel).toContain("周一");
+    expect(chinese.find(({ id }) => id === "at:monday:09:00")?.whenLabel).toContain("周一");
     expect(
       snoozeWakeDescription(localDate(2026, 4, 9, 9).toISOString(), now, "24-hour", i18n.t),
     ).toBe("明天 9:00");

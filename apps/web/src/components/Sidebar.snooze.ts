@@ -16,6 +16,14 @@ import { toastManager } from "./ui/toast";
 
 export { type SnoozePreset };
 
+const PRESET_LABEL_KEYS: Readonly<Record<string, string>> = {
+  "In 1 hour": "thread.snooze.preset.hour",
+  "In 3 hours": "thread.snooze.preset.three-hours",
+  "This evening": "thread.snooze.preset.evening",
+  Tomorrow: "thread.snooze.preset.tomorrow",
+  "Next week": "thread.snooze.preset.next-week",
+};
+
 export function snoozeWakeLabel(
   snoozedUntil: string,
   options: { readonly now: string },
@@ -46,12 +54,10 @@ export function resolveSnoozePresets(
   environmentId: EnvironmentId,
   t: TFunction = i18n.t,
 ): ReadonlyArray<SnoozePreset> {
-  return resolveSharedSnoozePresets(now, snoozeOptions(timestampFormat, environmentId)).map(
+  return resolveSharedSnoozePresets(now, snoozeOptions(timestampFormat, environmentId, t)).map(
     (preset) => ({
       ...preset,
-      label: i18n.exists(`thread.snooze.preset.${preset.id}`)
-        ? t(`thread.snooze.preset.${preset.id}`)
-        : preset.label,
+      label: PRESET_LABEL_KEYS[preset.label] ? t(PRESET_LABEL_KEYS[preset.label]!) : preset.label,
     }),
   );
 }
@@ -79,13 +85,21 @@ export function pickSnoozePreset(
   return picked;
 }
 
-function snoozeOptions(timestampFormat: TimestampFormat, environmentId: EnvironmentId) {
+function snoozeOptions(
+  timestampFormat: TimestampFormat,
+  environmentId: EnvironmentId,
+  t: TFunction = i18n.t,
+) {
   const presets = appAtomRegistry.get(
     serverEnvironment.settingsValueAtom(environmentId),
   )?.snoozePresets;
   return {
     ...(presets ? { presets } : {}),
-    formatTime: (date: Date) => formatShortTimestamp(date.toISOString(), timestampFormat),
+    formatTime: (date: Date) => formatShortTimestamp(date.toISOString(), timestampFormat, t),
+    formatWeekday: (date: Date) =>
+      date.toLocaleDateString(i18n.resolvedLanguage === "zh" ? "zh-CN" : undefined, {
+        weekday: "short",
+      }),
   };
 }
 
