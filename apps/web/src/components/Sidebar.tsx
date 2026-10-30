@@ -2812,7 +2812,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             if (result._tag === "Success") {
               toastManager.add({
                 type: "success",
-                title: "Project created",
+                title: i18n.t("thread.toProject.created"),
                 description: thread.title,
               });
             } else if (!isAtomCommandInterrupted(result)) {
@@ -2820,8 +2820,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               toastManager.add(
                 stackedThreadToast({
                   type: "error",
-                  title: "Could not turn thread into a project",
-                  description: error instanceof Error ? error.message : "An error occurred.",
+                  title: i18n.t("thread.toProject.failed"),
+                  description: error instanceof Error ? error.message : i18n.t("common.error"),
                 }),
               );
             }
