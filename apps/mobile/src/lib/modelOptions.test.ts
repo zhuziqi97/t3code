@@ -18,12 +18,11 @@ import {
   resolveDefaultableModelSelection,
   resolveNewTaskModelSelection,
   resolveSelectableModelSelection,
+  newTaskModelProviders,
   type ModelOption,
 } from "./modelOptions";
 
-// Catalog assertions below inspect native rows; default behavior is covered separately.
-const buildModelOptions: typeof buildAllModelOptions = (...args) =>
-  buildAllModelOptions(...args).filter((option) => option.selection.model !== null);
+const buildModelOptions = buildAllModelOptions;
 
 describe("mobile model options", () => {
   it("distinguishes same-name OpenCode models without changing their routing", () => {
@@ -543,7 +542,7 @@ describe("mobile model options", () => {
     const project = { instanceId: ProviderInstanceId.make("codex"), model: "project" };
     const sticky = { instanceId: ProviderInstanceId.make("codex"), model: "sticky" };
     const providerDefault = {
-      selection: { instanceId: ProviderInstanceId.make("codex"), model: null },
+      selection: { instanceId: ProviderInstanceId.make("codex"), model: "native/default" },
       isDefault: true,
     } as ModelOption;
     const resolve = (
@@ -807,7 +806,7 @@ describe("synchronized mobile model visibility", () => {
   });
 });
 
-it("offers a native default for every usable mobile instance", () => {
+it("keeps unknown native defaults usable without inventing model rows", () => {
   const config = {
     providers: [
       "codex",
@@ -829,14 +828,146 @@ it("offers a native default for every usable mobile instance", () => {
     })),
   } as unknown as ServerConfig;
   const options = buildAllModelOptions(config, null, undefined, null);
-  expect(options).toHaveLength(9);
-  expect(options.every((option) => option.selection.model === null)).toBe(true);
+  expect(options).toEqual([]);
   expect(
     resolveNewTaskModelSelection({
       draftSelection: null,
       projectDefaultSelection: null,
       stickySelection: null,
       modelOptions: options,
+      providers: newTaskModelProviders(config, null),
     }),
   ).toEqual({ instanceId: "codex", model: null });
+});
+
+it("resolves mobile new-task defaults and first-dispatch options from native descriptors", () => {
+  const instanceId = ProviderInstanceId.make("codex_work");
+  const config = {
+    settings: {
+      ...DEFAULT_SERVER_SETTINGS,
+      providerInstances: { [instanceId]: { driver: "codex", enabled: true, config: {} } },
+    },
+    providers: [
+      {
+        instanceId,
+        driver: "codex",
+        enabled: true,
+        installed: true,
+        auth: { status: "authenticated" },
+        models: [
+          {
+            slug: "native/default",
+            name: "Native",
+            isDefault: true,
+            isCustom: false,
+            capabilities: {
+              optionDescriptors: [
+                {
+                  id: "reasoningEffort",
+                  label: "Reasoning",
+                  type: "select",
+                  currentValue: "high",
+                  options: [{ id: "high", label: "High" }],
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  } as unknown as ServerConfig;
+  const options = buildAllModelOptions(config, null, undefined, null);
+  expect(options.map((option) => option.selection.model)).toEqual(["native/default"]);
+  const legacy = { instanceId, model: null };
+  expect(resolveSelectableModelSelection(config, legacy, null)).toBe(legacy);
+  expect(
+    buildAllModelOptions(config, legacy, undefined, null).some(
+      (option) => option.selection.model === null,
+    ),
+  ).toBe(false);
+  expect(legacy.model).toBeNull();
+  const defaults = {
+    draftSelection: null,
+    projectDefaultSelection: null,
+    stickySelection: null,
+    modelOptions: options,
+    providers: newTaskModelProviders(config, null),
+  };
+  const expected = {
+    instanceId,
+    model: "native/default",
+    options: [{ id: "reasoningEffort", value: "high" }],
+  };
+  expect(resolveNewTaskModelSelection(defaults)).toEqual(expected);
+  expect(
+    resolveNewTaskModelSelection({ ...defaults, draftSelection: { instanceId, model: null } }),
+  ).toEqual(expected);
+  const explicit = {
+    instanceId,
+    model: "my/model",
+    options: [{ id: "reasoningEffort", value: "low" }],
+  };
+  expect(resolveNewTaskModelSelection({ ...defaults, draftSelection: explicit })).toBe(explicit);
+  const hidden = {
+    ...config,
+    settings: {
+      ...config.settings,
+      providerModelPreferences: {
+        [instanceId]: { hiddenModels: ["native/default"], modelOrder: [] },
+      },
+    },
+  };
+  expect(buildAllModelOptions(hidden, null, undefined, null)).toEqual([]);
+  expect(
+    resolveNewTaskModelSelection({
+      ...defaults,
+      modelOptions: [],
+      providers: newTaskModelProviders(hidden, null),
+    }),
+  ).toEqual(expected);
+  expect(buildAllModelOptions(hidden, expected, undefined, null, true)[0]?.capabilities).toEqual(
+    config.providers[0]!.models[0]!.capabilities,
+  );
+});
+
+it("does not change the selected mobile instance just because another catalog reports a default", () => {
+  const first = ProviderInstanceId.make("cursor_work");
+  const second = ProviderInstanceId.make("codex_work");
+  const config = {
+    providers: [
+      {
+        instanceId: first,
+        driver: "cursor",
+        enabled: true,
+        installed: true,
+        auth: { status: "authenticated" },
+        models: [],
+      },
+      {
+        instanceId: second,
+        driver: "codex",
+        enabled: true,
+        installed: true,
+        auth: { status: "authenticated" },
+        models: [
+          {
+            slug: "second/default",
+            name: "Second",
+            isDefault: true,
+            isCustom: false,
+            capabilities: null,
+          },
+        ],
+      },
+    ],
+  } as unknown as ServerConfig;
+  expect(
+    resolveNewTaskModelSelection({
+      draftSelection: null,
+      projectDefaultSelection: null,
+      stickySelection: null,
+      modelOptions: buildAllModelOptions(config, null, undefined, null),
+      providers: newTaskModelProviders(config, null),
+    }),
+  ).toEqual({ instanceId: first, model: null });
 });

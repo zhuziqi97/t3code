@@ -18,17 +18,9 @@ import {
   resolveEffectiveDefaultModelSelection,
 } from "./modelSelection";
 
-// Catalogue assertions below exclude the separate native-default action.
-const getAppModelOptionsForInstance: typeof getAllAppModelOptionsForInstance = (...args) =>
-  getAllAppModelOptionsForInstance(...args).filter((model) => model.slug !== "");
+const getAppModelOptionsForInstance = getAllAppModelOptionsForInstance;
 
-const getCustomModelOptionsByInstance: typeof getAllCustomModelOptionsByInstance = (...args) =>
-  new Map(
-    [...getAllCustomModelOptionsByInstance(...args)].map(([instanceId, options]) => [
-      instanceId,
-      options.filter((model) => model.slug !== ""),
-    ]),
-  );
+const getCustomModelOptionsByInstance = getAllCustomModelOptionsByInstance;
 
 function provider(input: {
   provider?: ProviderDriverKind;
@@ -963,7 +955,7 @@ it("merges a native ID with its display override and keeps other instances isola
   ).toBe("shared/id");
 });
 
-it("offers the default choice and all 48 custom models after settings reload", () => {
+it("offers only real native and custom models after settings reload", () => {
   const instanceId = ProviderInstanceId.make("claude_openrouter");
   const settings: UnifiedSettings = {
     ...settingsWithProviderInstances(),
@@ -984,7 +976,7 @@ it("offers the default choice and all 48 custom models after settings reload", (
     provider({ instanceId, models: ["native/model"] }),
   ])[0]!;
   const options = getAllAppModelOptionsForInstance(reloaded, entry);
-  expect(options.find((option) => option.slug === "")?.name).toBe("Follow agent default");
+  expect(options.some((option) => option.slug === "")).toBe(false);
   expect(options.filter((option) => option.isCustom)).toHaveLength(48);
   expect(options.find((option) => option.slug === "custom/47")?.name).toBe("Model 47");
   expect(createModelSelection(instanceId, "").model).toBeNull();
@@ -1047,7 +1039,6 @@ it("keeps a hidden explicit choice without putting hidden models back in the men
   };
   const entry = deriveProviderInstanceEntries(providers)[0]!;
   expect(getAllAppModelOptionsForInstance(settings, entry, "opus").map((row) => row.slug)).toEqual([
-    "",
     "sonnet",
   ]);
   expect(resolveAppModelSelectionForInstance(entry.instanceId, settings, providers, "opus")).toBe(
@@ -1096,4 +1087,160 @@ it("keeps text generation selections while their instance is temporarily unavail
       [],
     ),
   ).toEqual(selection);
+});
+
+it("dispatches a new native default as its concrete model and reasoning choice", () => {
+  const instanceId = ProviderInstanceId.make("codex_work");
+  const snapshot = provider({ instanceId });
+  const providers = [
+    {
+      ...snapshot,
+      models: [
+        {
+          slug: "native/account-model",
+          name: "Native account model",
+          isCustom: false,
+          isDefault: true,
+          capabilities: {
+            optionDescriptors: [
+              {
+                id: "reasoningEffort",
+                label: "Reasoning",
+                type: "select" as const,
+                currentValue: "high",
+                options: [
+                  { id: "medium", label: "Medium", isDefault: true },
+                  { id: "high", label: "High" },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    },
+  ];
+  const state = deriveEffectiveComposerModelState({
+    draft: null,
+    providers,
+    selectedProvider: snapshot.driver,
+    selectedInstanceId: instanceId,
+    threadModelSelection: { instanceId, model: null },
+    projectModelSelection: null,
+    settings: settingsWithProviderInstances(),
+    isNewThread: true,
+  });
+  const dispatch = getComposerProviderState({
+    provider: snapshot.driver,
+    model: state.selectedModel,
+    models: providers[0]!.models,
+    modelOptions: state.modelOptions?.[instanceId],
+    planModeEnabled: true,
+  });
+  expect(
+    createModelSelection(instanceId, state.selectedModel, dispatch.modelOptionsForDispatch),
+  ).toEqual({
+    instanceId,
+    model: "native/account-model",
+    options: [{ id: "reasoningEffort", value: "high" }],
+  });
+  expect(
+    getAllAppModelOptionsForInstance(
+      settingsWithProviderInstances(),
+      deriveProviderInstanceEntries(providers)[0]!,
+    ).map((row) => row.slug),
+  ).toEqual(["native/account-model"]);
+  const hiddenSettings: UnifiedSettings = {
+    ...settingsWithProviderInstances(),
+    providerModelPreferences: {
+      [instanceId]: { hiddenModels: ["native/account-model"], modelOrder: [] },
+    },
+  };
+  const hidden = deriveEffectiveComposerModelState({
+    draft: null,
+    providers,
+    selectedProvider: snapshot.driver,
+    selectedInstanceId: instanceId,
+    threadModelSelection: { instanceId, model: null },
+    projectModelSelection: null,
+    settings: hiddenSettings,
+    isNewThread: true,
+  });
+  expect(hidden).toEqual(state);
+  expect(
+    getAllAppModelOptionsForInstance(
+      hiddenSettings,
+      deriveProviderInstanceEntries(providers)[0]!,
+      hidden.selectedModel,
+    ),
+  ).toEqual([]);
+});
+
+it("keeps old null threads while resolving late new-draft defaults per instance and environment", () => {
+  const instanceId = ProviderInstanceId.make("codex_work");
+  const snapshot = provider({ instanceId });
+  const settings = settingsWithProviderInstances();
+  const makeProviders = (slug: string) => [
+    {
+      ...snapshot,
+      models: [
+        {
+          slug,
+          name: slug,
+          isCustom: false,
+          isDefault: true,
+          capabilities: null,
+        },
+      ],
+    },
+  ];
+  const input = {
+    draft: null,
+    providers: makeProviders("environment-a/model"),
+    selectedProvider: snapshot.driver,
+    selectedInstanceId: instanceId,
+    threadModelSelection: { instanceId, model: null },
+    projectModelSelection: null,
+    settings,
+  };
+  expect(deriveEffectiveComposerModelState(input).selectedModel).toBe("");
+  expect(deriveEffectiveComposerModelState({ ...input, isNewThread: true }).selectedModel).toBe(
+    "environment-a/model",
+  );
+  expect(
+    deriveEffectiveComposerModelState({ ...input, providers: [], isNewThread: true }).selectedModel,
+  ).toBe("");
+  expect(
+    deriveEffectiveComposerModelState({
+      ...input,
+      providers: makeProviders("environment-b/model"),
+      isNewThread: true,
+    }).selectedModel,
+  ).toBe("environment-b/model");
+  const manual = {
+    instanceId,
+    model: "my/choice",
+    options: [{ id: "reasoningEffort", value: "low" }],
+  };
+  const draft = { activeProvider: instanceId, modelSelectionByProvider: { [instanceId]: manual } };
+  expect(
+    deriveEffectiveComposerModelState({
+      ...input,
+      draft,
+      providers: makeProviders("late/default"),
+      isNewThread: true,
+    }),
+  ).toEqual({
+    selectedModel: "my/choice",
+    modelOptions: { [instanceId]: manual.options },
+  });
+  const other = ProviderInstanceId.make("codex_other");
+  expect(
+    deriveEffectiveComposerModelState({
+      ...input,
+      draft,
+      selectedInstanceId: other,
+      providers: [{ ...makeProviders("other/default")[0]!, instanceId: other }],
+      isNewThread: true,
+    }).selectedModel,
+  ).toBe("other/default");
 });

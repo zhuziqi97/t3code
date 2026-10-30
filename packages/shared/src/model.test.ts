@@ -13,6 +13,7 @@ import {
   mergeCustomModels,
   toCustomModelSetting,
   modelSelectionsEqual,
+  resolveNativeDefaultModelSelection,
 } from "./model.ts";
 
 const codexCaps: ModelCapabilities = createModelCapabilities({
@@ -33,6 +34,109 @@ const codexCaps: ModelCapabilities = createModelCapabilities({
       type: "boolean",
     },
   ],
+});
+
+describe("new-conversation native defaults", () => {
+  const instanceId = ProviderInstanceId.make("account_instance");
+  const selection = { instanceId, model: null };
+  const model = {
+    slug: "native/model",
+    name: "Native",
+    isCustom: false,
+    isDefault: true,
+    capabilities: codexCaps,
+  };
+
+  it("uses the marked model and known effort without enabling other traits", () => {
+    expect(
+      resolveNativeDefaultModelSelection(selection, [
+        { ...model, slug: "unrelated/first", isDefault: false },
+        model,
+      ]),
+    ).toEqual({
+      instanceId,
+      model: "native/model",
+      options: [{ id: "reasoningEffort", value: "high" }],
+    });
+  });
+
+  it("leaves unknown models and unknown effort to native execution", () => {
+    expect(resolveNativeDefaultModelSelection(selection, [])).toBe(selection);
+    expect(resolveNativeDefaultModelSelection(selection, [{ ...model, isDefault: false }])).toBe(
+      selection,
+    );
+    expect(
+      resolveNativeDefaultModelSelection(selection, [{ ...model, capabilities: null }]),
+    ).toEqual({ instanceId, model: "native/model" });
+    expect(
+      resolveNativeDefaultModelSelection(selection, [
+        {
+          ...model,
+          capabilities: {
+            optionDescriptors: [
+              {
+                id: "effort",
+                label: "Effort",
+                type: "select",
+                options: [{ id: "high", label: "High" }],
+              },
+            ],
+          },
+        },
+      ]),
+    ).toEqual({ instanceId, model: "native/model" });
+  });
+
+  it("keeps an explicit model and explicit options authoritative", () => {
+    const chosen = {
+      instanceId,
+      model: "saved/model",
+      options: [{ id: "reasoningEffort", value: "opaque" }],
+    };
+    expect(resolveNativeDefaultModelSelection(chosen, [model])).toBe(chosen);
+    expect(resolveNativeDefaultModelSelection({ ...chosen, model: null }, [model])).toEqual({
+      ...chosen,
+      model: "native/model",
+    });
+  });
+
+  it("keeps a provider-advertised default alias as a real catalog choice", () => {
+    expect(resolveNativeDefaultModelSelection(selection, [{ ...model, slug: "default" }])).toEqual({
+      instanceId,
+      model: "default",
+      options: [{ id: "reasoningEffort", value: "high" }],
+    });
+  });
+
+  it("preserves native boolean thinking and omits invalid or prompt-only defaults", () => {
+    expect(
+      resolveNativeDefaultModelSelection(selection, [
+        {
+          ...model,
+          capabilities: {
+            optionDescriptors: [
+              { id: "thinking", label: "Thinking", type: "boolean", currentValue: false },
+              {
+                id: "effort",
+                label: "Effort",
+                type: "select",
+                currentValue: "ultrathink",
+                promptInjectedValues: ["ultrathink"],
+                options: [{ id: "ultrathink", label: "Ultrathink" }],
+              },
+              {
+                id: "reasoningEffort",
+                label: "Reasoning",
+                type: "select",
+                currentValue: "stale",
+                options: [{ id: "low", label: "Low" }],
+              },
+            ],
+          },
+        },
+      ]),
+    ).toEqual({ instanceId, model: "native/model", options: [{ id: "thinking", value: false }] });
+  });
 });
 
 describe("descriptor helpers", () => {

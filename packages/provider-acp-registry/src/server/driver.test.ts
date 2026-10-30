@@ -260,7 +260,7 @@ describe("acpRegistrySnapshotReadiness", () => {
     ]);
   });
 
-  it("keeps a default model only when the agent advertises none", () => {
+  it("keeps an empty-catalog fallback without claiming a reported default model", () => {
     const snapshot = buildCheckedAcpRegistrySnapshot({
       ...identity,
       settings: decodeSettings({ agentId: "test-agent" }),
@@ -288,7 +288,7 @@ describe("acpRegistrySnapshotReadiness", () => {
     });
 
     expect(snapshot.models.map((model) => model.slug)).toEqual(["default"]);
-    expect(snapshot.models[0]?.isDefault).toBe(true);
+    expect(snapshot.models[0]?.isDefault).toBeUndefined();
   });
 
   it.each(["registry", "local"] as const)(

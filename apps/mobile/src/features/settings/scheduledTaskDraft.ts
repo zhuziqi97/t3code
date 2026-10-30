@@ -25,6 +25,7 @@ import {
   buildModelOptions,
   resolveDefaultableModelSelection,
   resolveNewTaskModelSelection,
+  newTaskModelProviders,
 } from "../../lib/modelOptions";
 
 export function scheduledTaskDefaultModel(
@@ -38,6 +39,7 @@ export function scheduledTaskDefaultModel(
     resolveDefaultableModelSelection(config, configured, project?.id ?? null) ??
     resolveDefaultableModelSelection(config, settings.defaultModelSelection, project?.id ?? null);
   return resolveNewTaskModelSelection({
+    providers: newTaskModelProviders(config, project?.id ?? null),
     draftSelection: null,
     projectDefaultSelection,
     stickySelection: null,

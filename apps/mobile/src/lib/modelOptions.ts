@@ -10,11 +10,13 @@ import type {
   ProjectId,
   RuntimeMode,
   ServerConfig as T3ServerConfig,
+  ServerProvider,
 } from "@t3tools/contracts";
 import { isProviderDriverKind, resolveProjectProviderInstanceEnabled } from "@t3tools/contracts";
 import {
   buildExplicitProviderOptionSelectionsFromDescriptors,
   getProviderOptionDescriptors,
+  resolveNativeDefaultModelSelection,
 } from "@t3tools/shared/model";
 import { resolveModelShortName } from "@t3tools/client-runtime/provider-clients";
 
@@ -223,14 +225,59 @@ export function resolveNewTaskModelSelection(input: {
   readonly projectDefaultSelection: ModelSelection | null;
   readonly stickySelection: ModelSelection | null;
   readonly modelOptions: ReadonlyArray<ModelOption>;
+  readonly providers?: ReadonlyArray<ServerProvider>;
 }): ModelSelection | null {
-  return (
+  const firstInstanceId =
+    input.providers?.[0]?.instanceId ??
+    input.modelOptions.find((option) => !option.isUnavailable)?.selection.instanceId;
+  const providerDefault = input.providers?.[0]
+    ? resolveNativeDefaultModelSelection(
+        { instanceId: input.providers[0].instanceId, model: null },
+        input.providers[0].models,
+      )
+    : input.modelOptions.find(
+        (option) =>
+          option.selection.instanceId === firstInstanceId &&
+          option.isDefault &&
+          !option.isUnavailable,
+      )?.selection;
+  const selection =
     input.draftSelection ??
     input.projectDefaultSelection ??
     input.stickySelection ??
-    input.modelOptions.find((option) => option.selection.model === null && !option.isUnavailable)
-      ?.selection ??
-    null
+    providerDefault ??
+    (firstInstanceId ? { instanceId: firstInstanceId, model: null } : null);
+  return selection
+    ? resolveNativeDefaultModelSelection(
+        selection,
+        input.providers?.find((provider) => provider.instanceId === selection.instanceId)?.models ??
+          input.modelOptions
+            .filter(
+              (option) =>
+                option.selection.instanceId === selection.instanceId &&
+                option.selection.model !== null,
+            )
+            .map((option) => ({
+              slug: option.selection.model!,
+              name: option.label,
+              isCustom: false,
+              isDefault: option.isDefault,
+              capabilities: option.capabilities,
+            })),
+      )
+    : null;
+}
+
+export function newTaskModelProviders(
+  config: T3ServerConfig | null | undefined,
+  projectId: ProjectId | null,
+): ReadonlyArray<ServerProvider> {
+  return (config?.providers ?? []).filter(
+    (provider) =>
+      isProviderEnabledForProject(config, provider, projectId) &&
+      provider.installed !== false &&
+      provider.auth.status !== "unauthenticated" &&
+      !(provider.driver === "antigravity" && provider.availability === "unavailable"),
   );
 }
 
@@ -306,22 +353,14 @@ export function buildModelOptions(
     }
 
     const providerLabel = providerDisplayLabel(provider);
+    const nativeDefault = resolveNativeDefaultModelSelection(
+      { instanceId: provider.instanceId, model: null },
+      provider.models,
+    );
     const providerBadge = providerBadgeFor(provider.instanceId);
     const updateRequired = provider.updateRequiredModels?.length
       ? { driver: provider.driver, updateRequiredModels: provider.updateRequiredModels }
       : undefined;
-    options.set(`${provider.instanceId}:`, {
-      key: `${provider.instanceId}:`,
-      label: "Follow agent default",
-      subtitle: "",
-      providerKey: provider.instanceId,
-      providerLabel,
-      providerDriver: provider.driver,
-      isDefault: true,
-      isLegacy: false,
-      capabilities: null,
-      selection: { instanceId: provider.instanceId, model: null },
-    });
     const preferences = config?.settings?.providerModelPreferences?.[provider.instanceId];
     const hiddenModels = new Set(preferences?.hiddenModels ?? []);
     const order = new Map((preferences?.modelOrder ?? []).map((slug, index) => [slug, index]));
@@ -353,10 +392,12 @@ export function buildModelOptions(
         ...(updateRequired ? { providerUpdateRequired: updateRequired } : {}),
         capabilities: model.capabilities,
         selection: normalizeSelectionOptions(
-          {
-            instanceId: provider.instanceId,
-            model: model.slug,
-          },
+          nativeDefault.model === model.slug
+            ? nativeDefault
+            : {
+                instanceId: provider.instanceId,
+                model: model.slug,
+              },
           model.capabilities,
         ),
       });
@@ -364,7 +405,7 @@ export function buildModelOptions(
   }
 
   if (
-    fallbackModelSelection &&
+    fallbackModelSelection?.model != null &&
     (providerInstanceId === undefined ||
       fallbackModelSelection.instanceId === providerInstanceId) &&
     (fallbackModelSelection.model === null ||

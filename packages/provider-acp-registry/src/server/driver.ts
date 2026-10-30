@@ -106,7 +106,6 @@ function modelsFromDiscovery(
             slug: "default",
             name: "Default",
             isCustom: false,
-            isDefault: true,
             capabilities: discovery?.currentModelId == null ? capabilities : EMPTY_CAPABILITIES,
           },
         ]

@@ -1,5 +1,6 @@
 import { ActiveNewTaskContext } from "../../state/active-new-task";
 import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
+import { resolveNativeDefaultModelSelection } from "@t3tools/shared/model";
 import { useNowMinuteMs } from "../../lib/clock";
 import * as Dialog from "../../components/ui/Dialog";
 import React, { useEffect, useRef, useState } from "react";
@@ -33,6 +34,7 @@ import {
   resolveDefaultableModelSelection,
   resolveNewTaskModelSelection,
   resolveSelectableModelSelection,
+  newTaskModelProviders,
 } from "../../lib/modelOptions";
 import { scopedProjectKey } from "../../lib/scopedEntities";
 import { useAtomValue } from "@effect/atom-react";
@@ -509,6 +511,7 @@ export function NewTaskFlowProvider(
     projectDefaultSelection: projectDefaultModelSelection,
     stickySelection: stickyModelSelection,
     modelOptions,
+    providers: newTaskModelProviders(selectedEnvironmentServerConfig, selectedProject?.id ?? null),
   });
   const selectedModel = resolveNewThreadModelSelection({
     defaultSelection: selectedDefaultModel,
@@ -532,7 +535,21 @@ export function NewTaskFlowProvider(
         selectedModel &&
         option.selection.instanceId === selectedModel.instanceId &&
         option.selection.model === selectedModel.model,
-    ) ?? null;
+    ) ??
+    (selectedModel
+      ? buildModelOptions(
+          selectedEnvironmentServerConfig,
+          selectedModel,
+          undefined,
+          selectedProject?.id ?? null,
+          true,
+        ).find(
+          (option) =>
+            option.selection.instanceId === selectedModel.instanceId &&
+            option.selection.model === selectedModel.model,
+        )
+      : undefined) ??
+    null;
   const selectedProviderStatus =
     selectedEnvironmentServerConfig?.providers.find(
       (provider) => provider.instanceId === selectedModel?.instanceId,
@@ -781,12 +798,19 @@ export function NewTaskFlowProvider(
     }
     const draft = getComposerDraftSnapshot(selectedProjectDraftKey);
     const text = draft.text.trim();
-    const draftModelSelection =
-      resolveSelectableModelSelection(
-        selectedEnvironmentServerConfig,
-        draft.modelSelection ?? null,
-        selectedProject.id,
-      ) ?? selectedModel;
+    const savedSelection = resolveSelectableModelSelection(
+      selectedEnvironmentServerConfig,
+      draft.modelSelection ?? null,
+      selectedProject.id,
+    );
+    const draftModelSelection = savedSelection
+      ? resolveNativeDefaultModelSelection(
+          savedSelection,
+          selectedEnvironmentServerConfig?.providers.find(
+            (provider) => provider.instanceId === savedSelection.instanceId,
+          )?.models ?? [],
+        )
+      : selectedModel;
     if ((text.length === 0 && draft.attachments.length === 0) || !draftModelSelection) {
       return null;
     }
