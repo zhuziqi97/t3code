@@ -889,6 +889,13 @@ export function useComposerSend(input: ComposerSendInput) {
       setThreadError(threadIdForSend, attachmentCapabilitiesBeforeUpload.fileBlockReason);
       return;
     }
+    if (isLocalDraftThread && multipleModelSelections === null) {
+      useComposerDraftStore
+        .getState()
+        .setModelSelection(composerDraftTarget, ctxSelectedModelSelection, {
+          replaceOptions: true,
+        });
+    }
     const turnUsesAttachmentUploads =
       composerFilesSnapshot.length > 0
         ? attachmentCapabilitiesBeforeUpload.supportsAttachmentUploads

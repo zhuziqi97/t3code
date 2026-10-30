@@ -131,7 +131,7 @@ import { renderToString } from "react-dom/server";
 import { vi } from "vite-plus/test";
 import { ProviderInstanceId, ProjectId, type ModelSelection } from "@t3tools/contracts";
 import { useComposerSend } from "./useComposerSend";
-import { DraftId } from "../../composerDraftStore";
+import { DraftId, useComposerDraftStore } from "../../composerDraftStore";
 import type { UnifiedSettings } from "@t3tools/contracts/settings";
 
 const sending = vi.hoisted(() => ({ start: vi.fn() }));
@@ -189,6 +189,8 @@ it.each([
     });
     const threadId = ThreadId.make(`thread-${driver}-first-send`);
     const draftId = DraftId.make(`draft-${driver}-first-send`);
+    const drafts = useComposerDraftStore.getState();
+    drafts.setModelSelection(draftId, { instanceId, model: null });
     const route = `route-${driver}-first-send`;
     const noop = () => undefined;
     const input = {
@@ -290,9 +292,19 @@ it.each([
       expect(command.input.modelSelection).toEqual(selection);
       expect(command.input.bootstrap.createThread.modelSelection).toEqual(selection);
       expect(sending.start).toHaveBeenCalledTimes(1);
+      expect(drafts.getComposerDraft(draftId)?.modelSelectionByProvider[instanceId]).toEqual(
+        selection,
+      );
+      drafts.setModelSelection(draftId, { instanceId, model: "chosen-during-send" });
+      releaseAck();
+      await submitted;
+      expect(drafts.getComposerDraft(draftId)?.modelSelectionByProvider[instanceId]?.model).toBe(
+        "chosen-during-send",
+      );
     } finally {
       releaseAck();
       await submitted;
+      drafts.clearDraftThread(draftId);
     }
   },
 );
