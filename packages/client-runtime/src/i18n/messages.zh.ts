@@ -8021,6 +8021,7 @@ export const zh: Partial<Messages> = {
   "thread.menu.moveDown": "下移",
   "thread.menu.turnIntoProject": "转为项目",
   "thread.menu.newOnBranch": "在此分支上新建会话",
+  "thread.menu.newOnNamedBranch": "在 {{branch}} 分支上新建会话",
   "thread.menu.snoozeUntil": "暂缓至",
   "thread.menu.unsent": "尚未发送",
   "thread.shelf.count_one": "{{section}}：{{count}} 个会话",

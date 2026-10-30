@@ -1540,9 +1540,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
                 ? [
                     {
                       id: "new-thread-on-branch",
-                      title: t("thread.menu.newOnBranch", {
-                        defaultValue: getThreadListV2NewBranchMenuTitle(thread.branch),
-                      }),
+                      title: getThreadListV2NewBranchMenuTitle(thread.branch, t),
                       image: "square.and.pencil",
                     },
                   ]

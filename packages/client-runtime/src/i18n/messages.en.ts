@@ -8561,6 +8561,7 @@ export const en = {
   "thread.menu.moveDown": "Move down",
   "thread.menu.turnIntoProject": "Turn into project",
   "thread.menu.newOnBranch": "New thread on branch",
+  "thread.menu.newOnNamedBranch": "New thread on {{branch}}",
   "thread.menu.snoozeUntil": "Snooze until",
   "thread.menu.unsent": "Unsent",
   "thread.shelf.count_one": "{{count}} {{section}} thread",
