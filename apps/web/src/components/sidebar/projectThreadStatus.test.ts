@@ -1,6 +1,11 @@
+import type { TFunction } from "i18next";
 import { describe, expect, it } from "vite-plus/test";
 import { RunId } from "@t3tools/contracts";
-import { highestProjectThreadStatus, resolveProjectThreadStatus } from "./projectThreadStatus";
+import {
+  highestProjectThreadStatus,
+  resolveProjectThreadStatus,
+  resolveSidebarThreadRowStatus,
+} from "./projectThreadStatus";
 
 type Input = Parameters<typeof resolveProjectThreadStatus>[0];
 const readAt = "2026-10-22T01:00:00Z";
@@ -68,5 +73,62 @@ describe("project sidebar status", () => {
       label: "Pending Approval",
     });
     expect(highestProjectThreadStatus([done, input])).toMatchObject({ label: "Awaiting Input" });
+  });
+});
+
+const translate = ((key: string) => key) as TFunction;
+describe("current sidebar row status", () => {
+  it("keeps success unread until visited without turning an empty unread row into success", () => {
+    expect(
+      resolveSidebarThreadRowStatus(ended("completed"), { isWoke: false }, translate)?.icon,
+    ).toBe("done");
+    expect(
+      resolveSidebarThreadRowStatus(
+        { ...ended("completed"), lastVisitedAt: completedAt },
+        { isWoke: false },
+        translate,
+      ),
+    ).toBeNull();
+    expect(resolveSidebarThreadRowStatus(thread(), { isWoke: false }, translate)).toBeNull();
+  });
+  it.each([
+    ["approval", "approval"],
+    ["user_input", "input"],
+  ] as const)("keeps a pending %s ahead of an ended run", (pendingSubagentRequest, icon) => {
+    expect(
+      resolveSidebarThreadRowStatus(
+        { ...ended("completed"), pendingSubagentRequest },
+        { isWoke: false },
+        translate,
+      )?.icon,
+    ).toBe(icon);
+  });
+  it.each([
+    ["running", "working"],
+    ["idle", "waiting"],
+    ["failed", "failed"],
+  ] as const)("shows runtime %s", (status, icon) => {
+    const runtime = { status } as NonNullable<Input["runtime"]>;
+    expect(
+      resolveSidebarThreadRowStatus(thread({ runtime }), { isWoke: false }, translate)?.icon,
+    ).toBe(icon);
+  });
+
+  it.each(["interrupted", "cancelled", "rolled_back"] as const)(
+    "keeps unread %s neutral",
+    (status) => {
+      const display = resolveSidebarThreadRowStatus(ended(status), { isWoke: false }, translate);
+      expect(display?.icon).toBe("stopped");
+      expect(display?.className).toBe("text-muted-foreground");
+    },
+  );
+  it.each([false, true])("keeps a real actionable plan visible after visited=%s", (visited) => {
+    const source = {
+      ...ended("completed"),
+      interactionMode: "plan" as const,
+      hasActionableProposedPlan: true,
+      lastVisitedAt: visited ? completedAt : readAt,
+    };
+    expect(resolveSidebarThreadRowStatus(source, { isWoke: false }, translate)?.icon).toBe("plan");
   });
 });

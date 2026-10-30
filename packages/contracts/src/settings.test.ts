@@ -579,6 +579,16 @@ describe("ClientSettings environment identification", () => {
 describe("ClientSettings sidebar", () => {
   it("defaults to the current sidebar", () => {
     expect(decodeClientSettings({}).legacySidebarEnabled).toBe(false);
+    expect(decodeClientSettings({}).sidebarWorkingShelfEnabled).toBe(false);
+    for (const enabled of [true, false]) {
+      expect(
+        decodeClientSettings({ sidebarWorkingShelfEnabled: enabled }).sidebarWorkingShelfEnabled,
+      ).toBe(enabled);
+      expect(
+        decodeClientSettingsPatch({ sidebarWorkingShelfEnabled: enabled })
+          .sidebarWorkingShelfEnabled,
+      ).toBe(enabled);
+    }
   });
 
   it("drops the retired sidebar v2 beta keys, resetting everyone to the default", () => {

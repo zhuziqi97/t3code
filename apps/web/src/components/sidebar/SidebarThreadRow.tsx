@@ -1,5 +1,6 @@
 import type { TFunction } from "i18next";
 import { useTranslate } from "../../i18n";
+import { resolveSidebarThreadRowStatus } from "./projectThreadStatus";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../ThreadHoverCard";
 import { ThreadTerminalStatusButton } from "../ThreadStatusIndicators";
 import { discardComposerDraft } from "../../lib/discardComposerDraft";
@@ -504,6 +505,7 @@ const TOP_STATUS_ICONS = {
   approval: ShieldQuestionIcon,
   failed: CircleAlertIcon,
   done: CircleCheckIcon,
+  plan: SquarePenIcon,
   stopped: CircleStopIcon,
   woke: AlarmClockIcon,
 } as const;
@@ -701,83 +703,16 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     wokeAtDate !== null &&
     (lastVisitedDate === null || lastVisitedDate < wokeAtDate) &&
     thread.settledOverride !== "settled";
-  const shouldRecede = shouldRecedeSidebarThread({
-    status,
-    isUnread,
-    isWoke,
-    isActive: props.isActive,
-    isSelected,
-  });
-  const topStatus =
-    status === "working"
-      ? {
-          label: thread.goal?.status === "active" ? "Goal" : t("thread.working"),
-          icon: "working" as const,
-          className: "text-info-foreground",
-        }
-      : status === "waiting"
-        ? {
-            label: t("thread.waiting"),
-            icon: "waiting" as const,
-            className: "text-muted-foreground",
-          }
-        : status === "approval"
-          ? {
-              label: "Approval",
-              icon: "approval" as const,
-              className: "text-warning-foreground",
-            }
-          : status === "input"
-            ? {
-                label: "Input",
-                icon: "input" as const,
-                className: "text-indigo-600 dark:text-indigo-300",
-              }
-            : status === "request"
-              ? {
-                  label: "Request",
-                  icon: "request" as const,
-                  className: "text-guest-foreground",
-                }
-              : status === "limited"
-                ? {
-                    label: "Limited",
-                    icon: "failed" as const,
-                    className: "text-warning-foreground",
-                  }
-                : status === "failed"
-                  ? {
-                      label: "Failed",
-                      icon: "failed" as const,
-                      className: "text-error-foreground",
-                    }
-                  : isWoke
-                    ? {
-                        label:
-                          thread.latestRun?.status === "cancelled" ||
-                          thread.latestRun?.status === "interrupted"
-                            ? t("chat.status.stopped")
-                            : thread.latestRun?.status === "rolled_back"
-                              ? t("chat.timeline.runRolledBack", {
-                                  defaultValue: "Turn rolled back",
-                                })
-                              : t("chat.timeline.runEnded", { defaultValue: "Turn ended" }),
-                        icon:
-                          thread.latestRun?.status === "completed"
-                            ? ("done" as const)
-                            : ("stopped" as const),
-                        className:
-                          thread.latestRun?.status === "completed"
-                            ? "text-success"
-                            : "text-muted-foreground",
-                      }
-                    : isUnread
-                      ? {
-                          label: "Done",
-                          icon: "done" as const,
-                          className: "text-success-foreground",
-                        }
-                      : null;
+  const topStatus = resolveSidebarThreadRowStatus({ ...thread, lastVisitedAt }, { isWoke }, t);
+  const shouldRecede =
+    topStatus?.icon !== "plan" &&
+    shouldRecedeSidebarThread({
+      status,
+      isUnread,
+      isWoke,
+      isActive: props.isActive,
+      isSelected,
+    });
   const isWokeStatus = isWoke && topStatus !== null;
 
   const branchMismatch = resolveLocalCheckoutBranchMismatch({
