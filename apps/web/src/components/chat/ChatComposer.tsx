@@ -78,7 +78,6 @@ import {
   extendReplacementRangeForTrailingSpace,
   replaceTextRange,
 } from "../../composer-logic";
-import { DEFAULT_COMPOSER_PLACEHOLDER } from "../../composerPlaceholder";
 import {
   deriveComposerSendState,
   getAntigravitySendBlockReason,
@@ -3416,19 +3415,19 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     placeholder={
                       isComposerApprovalState
                         ? activePendingApproval?.supportsFeedback
-                          ? "Send feedback to decline this request"
+                          ? t("chat.approval.feedbackPlaceholder")
                           : t("chat.approval.redirectPlaceholder")
                         : activePendingProgress
                           ? isChoiceOnlyPendingQuestion
-                            ? "Choose an option above"
-                            : "Type your own answer, or leave this blank to use the selected option"
+                            ? t("chat.input.chooseAbove")
+                            : t("chat.input.ownAnswer")
                           : showPlanFollowUpPrompt && activeProposedPlan
-                            ? "Add feedback to refine the plan, or leave this blank to implement it"
+                            ? t("chat.plan.feedbackPlaceholder")
                             : projectSelectionRequired
-                              ? "Choose a project above to start a thread"
+                              ? t("chat.project.chooseAbove")
                               : showProviderUnavailable
-                                ? "Enable a provider in Settings to send a message"
-                                : DEFAULT_COMPOSER_PLACEHOLDER
+                                ? t("chat.provider.enableToSend")
+                                : t("chat.prompt.hint")
                     }
                     disabled={
                       projectSelectionRequired ||

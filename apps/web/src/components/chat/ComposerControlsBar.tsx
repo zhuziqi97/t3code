@@ -24,6 +24,7 @@ import {
 import type { EffortDisplay } from "@t3tools/contracts/settings";
 import { cn } from "~/lib/utils";
 import { shortcutLabelForCommand } from "../../keybindings";
+import { runtimeModePresentation } from "./runtimeModeConfig";
 import {
   renderProviderTraitsMenuContent,
   renderProviderTraitsPicker,
@@ -180,10 +181,9 @@ export function ComposerControlsBar(props: {
     ...(permissionsChipHidden
       ? {
           extraMenuHint: [
-            `Permissions: ${
-              compatibleRuntimeModeOptions.find((option) => option.mode === compatibleRuntimeMode)
-                ?.label ?? compatibleRuntimeMode
-            }`,
+            t("chat.permissions.current", {
+              mode: runtimeModePresentation(compatibleRuntimeMode, t).label,
+            }),
             shortcutLabelForCommand(keybindings, "composer.mode"),
           ]
             .filter(Boolean)

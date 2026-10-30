@@ -1,10 +1,11 @@
 import type { RuntimeMode } from "@t3tools/contracts";
+import { useTranslate } from "../i18n";
 import { useAtomValue } from "@effect/atom-react";
 
 import { shortcutLabelForCommand } from "../keybindings";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import { ComposerControl } from "./chat/ComposerControl";
-import { runtimeModeConfig } from "./chat/runtimeModeConfig";
+import { runtimeModeConfig, runtimeModePresentation } from "./chat/runtimeModeConfig";
 import { ComposerContextLabel } from "./ComposerContextLabel";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 
@@ -13,11 +14,13 @@ export function ComposerContextPermissions(props: {
   runtimeMode: RuntimeMode;
   onOpen: () => void;
 }) {
+  const t = useTranslate();
   const shortcutLabel = shortcutLabelForCommand(
     useAtomValue(primaryServerKeybindingsAtom),
     "composer.mode",
   );
-  const { icon: Icon, label } = runtimeModeConfig[props.runtimeMode];
+  const { icon: Icon } = runtimeModeConfig[props.runtimeMode];
+  const { label } = runtimeModePresentation(props.runtimeMode, t);
   return (
     <Tooltip>
       <TooltipTrigger
@@ -25,7 +28,7 @@ export function ComposerContextPermissions(props: {
           <ComposerControl
             size="xs"
             className="ms-auto min-w-0 shrink-0"
-            aria-label={`Permissions: ${label}`}
+            aria-label={t("chat.permissions.current", { mode: label })}
             data-composer-context-control
             onClick={props.onOpen}
           />
@@ -34,7 +37,10 @@ export function ComposerContextPermissions(props: {
         <Icon aria-hidden="true" className="size-3" />
         <ComposerContextLabel>{label}</ComposerContextLabel>
       </TooltipTrigger>
-      <TooltipPopup>Permissions{shortcutLabel ? ` · ${shortcutLabel}` : null}</TooltipPopup>
+      <TooltipPopup>
+        {t("chat.permissions.title")}
+        {shortcutLabel ? ` · ${shortcutLabel}` : null}
+      </TooltipPopup>
     </Tooltip>
   );
 }
