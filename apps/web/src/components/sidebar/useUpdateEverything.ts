@@ -1,4 +1,4 @@
-import { i18n } from "~/i18n";
+import { i18n, useTranslate } from "~/i18n";
 import { formatDesktopUpdateMessage } from "@t3tools/client-runtime/i18n";
 import { useAtomValue } from "@effect/atom-react";
 import { PROVIDER_DISPLAY_NAMES } from "@t3tools/contracts";
@@ -56,6 +56,7 @@ export function useUpdateEverything(
   localUpdateVersion: string | null,
   channelSwitch?: ChannelSwitchRelease,
 ) {
+  const t = useTranslate();
   const targetVersion = localUpdateVersion ?? APP_VERSION;
   const { environments } = useEnvironments();
   const environmentIds = environmentIdsKey(environments.map(({ environmentId }) => environmentId));
@@ -76,8 +77,8 @@ export function useUpdateEverything(
     skipped: unreachable,
     waitForNpm,
   } = channelSwitch
-    ? { ...collectChannelSwitchTargets(machines, channelSwitch), waitForNpm: [] }
-    : collectServerUpdateTargets(machines, targetVersion, localUpdateVersion !== null);
+    ? { ...collectChannelSwitchTargets(machines, channelSwitch, t), waitForNpm: [] }
+    : collectServerUpdateTargets(machines, targetVersion, localUpdateVersion !== null, t);
   const published = useNpmReleasePublished(waitForNpm.length > 0 ? targetVersion : null);
   const servers = published
     ? behindServers
@@ -89,7 +90,7 @@ export function useUpdateEverything(
       .map((server) => ({
         environmentId: server.environmentId,
         label: server.serverLabel,
-        reason: `t3@${targetVersion} is not on npm yet`,
+        reason: t("update.skip.npmPending", { version: targetVersion }),
       })),
   ];
   // Track-only hosts save a setting and restart nothing, so they are neither listed nor counted.
@@ -100,19 +101,22 @@ export function useUpdateEverything(
   const providers = channelSwitch ? { machines: [], updateAll: async () => [] } : providerUpdates;
   const updateServer = useServerUpdate();
 
-  const view = describeUpdateEverything({
-    localVersion: localUpdateVersion,
-    localMachines: machines.filter((machine) => machine.hostedByThisApp),
-    servers: moving,
-    skipped,
-    providerMachines: providers.machines.map((machine) => ({
-      environmentId: machine.environmentId,
-      label: machine.label,
-      providers: machine.candidates.map(
-        (candidate) => PROVIDER_DISPLAY_NAMES[candidate.driver] ?? candidate.driver,
-      ),
-    })),
-  });
+  const view = describeUpdateEverything(
+    {
+      localVersion: localUpdateVersion,
+      localMachines: machines.filter((machine) => machine.hostedByThisApp),
+      servers: moving,
+      skipped,
+      providerMachines: providers.machines.map((machine) => ({
+        environmentId: machine.environmentId,
+        label: machine.label,
+        providers: machine.candidates.map(
+          (candidate) => PROVIDER_DISPLAY_NAMES[candidate.driver] ?? candidate.driver,
+        ),
+      })),
+    },
+    t,
+  );
 
   return {
     hasUpdates: servers.length > 0 || providers.machines.length > 0,
@@ -178,7 +182,9 @@ export function useUpdateEverything(
               if (runOutcome.status !== "updated") {
                 providerFailures.set(
                   run.environmentId,
-                  runOutcome.status === "failed" ? runOutcome.line : "Provider update interrupted",
+                  runOutcome.status === "failed"
+                    ? runOutcome.line
+                    : i18n.t("update.providerInterrupted"),
                 );
               }
               return runOutcome;

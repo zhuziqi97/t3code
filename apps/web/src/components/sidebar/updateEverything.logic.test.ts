@@ -5,6 +5,7 @@ import {
 } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 import { claimDesktopUpdateNotice } from "../desktopUpdate.logic";
+import { i18n } from "../../i18n";
 
 import {
   collectChannelSwitchTargets,
@@ -279,6 +280,25 @@ describe("collectServerUpdateTargets", () => {
       ["busy", "already updating"],
       ["manual", "needs a manual update"],
     ]);
+    const translated = collectServerUpdateTargets(
+      [
+        machine("service", "0.0.40", "boot-service"),
+        machine("offline", "0.0.40", "boot-service", { connected: false }),
+        machine("no-scope", "0.0.40", "boot-service", { canMaintain: false }),
+        machine("manual", "0.0.40", undefined),
+      ],
+      "0.0.50",
+      true,
+      i18n.getFixedT("zh"),
+    );
+    expect(
+      translated.targets.map(({ serverLabel, targetVersion }) => [serverLabel, targetVersion]),
+    ).toEqual([["service", "0.0.50"]]);
+    expect(translated.skipped.map(({ label, reason }) => [label, reason])).toEqual([
+      ["offline", "未连接"],
+      ["no-scope", "无权限"],
+      ["manual", "需要手动更新"],
+    ]);
   });
 
   it("waits for npm only for hosts that install from it or when the release may lack archives", () => {
@@ -427,6 +447,21 @@ describe("localSwitchBlockReason", () => {
       localSwitchBlockReason(nightly, stable, [{ connected: false, databaseMigration: 69 }], 1),
     ).toBe("its server is not connected, so its database cannot be checked");
     expect(localSwitchBlockReason("0.1.3", stable, [], 1)).toBeNull();
+    const t = i18n.getFixedT("zh");
+    expect(localSwitchBlockReason(nightly, stable, [windows], 1, t)).toBeNull();
+    expect(
+      localSwitchBlockReason(
+        nightly,
+        stable,
+        [windows, { connected: true, databaseMigration: 72 }],
+        2,
+        t,
+      ),
+    ).toBe("其数据库包含 0.1.3 尚不支持的变更；请保留每日构建版，直至稳定版支持这些变更");
+    expect(localSwitchBlockReason(nightly, stable, [windows], 2, t)).toBe(
+      "其服务器尚未连接，无法检查数据库",
+    );
+    expect(localSwitchBlockReason("0.1.3", stable, [], 1, t)).toBeNull();
   });
 });
 

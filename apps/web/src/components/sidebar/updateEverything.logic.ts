@@ -155,6 +155,7 @@ export function collectServerUpdateTargets(
   machines: ReadonlyArray<UpdateEverythingMachine>,
   targetVersion: string,
   releaseArchivesPublished: boolean,
+  t?: TFunction,
 ): {
   readonly targets: ServerUpdateTarget[];
   readonly skipped: SkippedMachine[];
@@ -174,19 +175,19 @@ export function collectServerUpdateTargets(
     }
     const skip = (reason: string) =>
       skipped.push({ environmentId: machine.environmentId, label: machine.label, reason });
-    const unavailable = unavailableReason(machine);
+    const unavailable = unavailableReason(machine, t);
     if (config === null || unavailable !== null) {
-      skip(unavailable ?? "not connected");
+      skip(unavailable ?? (t ? t("update.skip.notConnected") : "not connected"));
       continue;
     }
     const selfUpdate = resolveServerSelfUpdateCapability(config);
     const desktopAppUpdate = supportsDesktopAppUpdate(config);
     if (selfUpdate === null) {
-      skip("needs a manual update");
+      skip(t ? t("update.skip.manual") : "needs a manual update");
       continue;
     }
     if (selfUpdate === "desktop-managed" && !desktopAppUpdate) {
-      skip("needs a newer desktop app");
+      skip(t ? t("update.skip.newerDesktop") : "needs a newer desktop app");
       continue;
     }
     const serverVersion = config.environment.serverVersion;
@@ -194,7 +195,8 @@ export function collectServerUpdateTargets(
       selfUpdate !== "desktop-managed" &&
       cliReleaseChannelOf(serverVersion) !== cliReleaseChannelOf(targetVersion)
     ) {
-      skip(`on the ${cliReleaseChannelOf(serverVersion)} channel`);
+      const channel = cliReleaseChannelOf(serverVersion);
+      skip(t ? t("update.skip.channel", { channel }) : `on the ${channel} channel`);
       continue;
     }
     const target: ServerUpdateTarget = {
@@ -218,10 +220,12 @@ export function collectServerUpdateTargets(
   return { targets, skipped, waitForNpm };
 }
 
-function unavailableReason(machine: UpdateEverythingMachine): string | null {
-  if (machine.serverConfig === null || !machine.connected) return "not connected";
-  if (!machine.canMaintain) return "no permission";
-  if (machine.updateState.status === "running") return "already updating";
+function unavailableReason(machine: UpdateEverythingMachine, t?: TFunction): string | null {
+  if (machine.serverConfig === null || !machine.connected)
+    return t ? t("update.skip.notConnected") : "not connected";
+  if (!machine.canMaintain) return t ? t("update.skip.noPermission") : "no permission";
+  if (machine.updateState.status === "running")
+    return t ? t("update.skip.alreadyUpdating") : "already updating";
   return null;
 }
 
@@ -232,8 +236,12 @@ export interface ChannelSwitchRelease {
   readonly databaseMigration: number | undefined;
 }
 
-export const channelSwitchLabel = (channel: DesktopUpdateChannel) =>
-  channel === "nightly" ? "Nightly" : "Stable";
+export const channelSwitchLabel = (channel: DesktopUpdateChannel, t?: TFunction) =>
+  t
+    ? t(channel === "nightly" ? "about.nightly" : "about.stable")
+    : channel === "nightly"
+      ? "Nightly"
+      : "Stable";
 
 /** Stable and Nightly each build their own commits, so either can hold migrations the other lacks.
  * Crossing tracks needs proof that the target release knows every migration the database holds. */
@@ -244,18 +252,30 @@ function channelSwitchBlockReason(
   fromVersion: string,
   release: ChannelSwitchRelease,
   currentMigration: number | undefined,
+  t?: TFunction,
 ): string | null {
   if (!crossesTrack(fromVersion, release)) return null;
-  const from = channelSwitchLabel(desktopUpdateChannelOf(fromVersion));
+  const from = channelSwitchLabel(desktopUpdateChannelOf(fromVersion), t);
   // Servers and releases from before this check report no migration number.
   if (currentMigration === undefined) {
-    return `its server predates database checks; update it on ${from} first`;
+    return t
+      ? t("update.skip.oldServerDatabase", { from })
+      : `its server predates database checks; update it on ${from} first`;
   }
   if (release.databaseMigration === undefined) {
-    return `${release.version} predates database checks; wait for a newer ${channelSwitchLabel(release.channel)} release`;
+    const channel = channelSwitchLabel(release.channel, t);
+    return t
+      ? t("update.skip.oldReleaseDatabase", { version: release.version, channel })
+      : `${release.version} predates database checks; wait for a newer ${channel} release`;
   }
   return currentMigration > release.databaseMigration
-    ? `its database has changes ${release.version} does not support yet; stay on ${from} until ${channelSwitchLabel(release.channel)} has them`
+    ? t
+      ? t("update.skip.newerDatabase", {
+          version: release.version,
+          from,
+          channel: channelSwitchLabel(release.channel, t),
+        })
+      : `its database has changes ${release.version} does not support yet; stay on ${from} until ${channelSwitchLabel(release.channel)} has them`
     : null;
 }
 
@@ -270,6 +290,7 @@ export function localSwitchBlockReason(
     readonly databaseMigration: number | undefined;
   }>,
   backendCount: number,
+  t?: TFunction,
 ): string | null {
   if (!crossesTrack(appVersion, release)) return null;
   if (
@@ -277,11 +298,13 @@ export function localSwitchBlockReason(
     hosted.length < backendCount ||
     hosted.some((server) => !server.connected)
   ) {
-    return "its server is not connected, so its database cannot be checked";
+    return t
+      ? t("update.skip.databaseNotConnected")
+      : "its server is not connected, so its database cannot be checked";
   }
   return (
     hosted
-      .map((server) => channelSwitchBlockReason(appVersion, release, server.databaseMigration))
+      .map((server) => channelSwitchBlockReason(appVersion, release, server.databaseMigration, t))
       .find((reason) => reason !== null) ?? null
   );
 }
@@ -291,6 +314,7 @@ export function localSwitchBlockReason(
 export function collectChannelSwitchTargets(
   machines: ReadonlyArray<UpdateEverythingMachine>,
   release: ChannelSwitchRelease,
+  t?: TFunction,
 ): { readonly targets: ServerUpdateTarget[]; readonly skipped: SkippedMachine[] } {
   const targets: ServerUpdateTarget[] = [];
   const skipped: SkippedMachine[] = [];
@@ -321,22 +345,22 @@ export function collectChannelSwitchTargets(
       sameTrack &&
       resolveVersionMismatch(serverVersion, release.version) === null
     ) {
-      const move = trackSwitchMove(config, true);
+      const move = trackSwitchMove(config, true, t);
       if (
         !("skip" in move) &&
         move.selfUpdate === "desktop-managed" &&
-        unavailableReason(machine) === null
+        unavailableReason(machine, t) === null
       ) {
         targets.push({ ...target(move.selfUpdate, serverVersion), trackOnly: true });
       }
       continue;
     }
-    const unavailable = unavailableReason(machine);
+    const unavailable = unavailableReason(machine, t);
     if (config === null || serverVersion === undefined || unavailable !== null) {
-      skip(unavailable ?? "not connected");
+      skip(unavailable ?? (t ? t("update.skip.notConnected") : "not connected"));
       continue;
     }
-    const move = trackSwitchMove(config, sameTrack);
+    const move = trackSwitchMove(config, sameTrack, t);
     if ("skip" in move) {
       skip(move.skip);
       continue;
@@ -345,6 +369,7 @@ export function collectChannelSwitchTargets(
       serverVersion,
       release,
       config.environment.databaseMigration,
+      t,
     );
     if (blocked !== null) {
       skip(blocked);
@@ -355,9 +380,8 @@ export function collectChannelSwitchTargets(
       move.selfUpdate === "boot-service" &&
       compareSemverVersions(release.version, serverVersion) <= 0
     ) {
-      skip(
-        `run \`t3 update --channel ${release.channel === "nightly" ? "nightly" : "stable"} --allow-downgrade\` there`,
-      );
+      const command = `t3 update --channel ${release.channel === "nightly" ? "nightly" : "stable"} --allow-downgrade`;
+      skip(t ? t("update.skip.downgradeCommand", { command }) : `run \`${command}\` there`);
       continue;
     }
     targets.push(target(move.selfUpdate, release.version));
@@ -387,19 +411,20 @@ function isOnTrack(version: string, channel: DesktopUpdateChannel): boolean {
 function trackSwitchMove(
   config: NonNullable<UpdateEverythingMachine["serverConfig"]>,
   sameTrack: boolean,
+  t?: TFunction,
 ): { readonly selfUpdate: ServerSelfUpdateCapability } | { readonly skip: string } {
   if (cliReleaseChannelOf(config.environment.serverVersion) === "preview") {
-    return { skip: "runs a preview build" };
+    return { skip: t ? t("update.skip.preview") : "runs a preview build" };
   }
   const selfUpdate = resolveServerSelfUpdateCapability(config);
-  if (selfUpdate === null) return { skip: "needs a manual update" };
+  if (selfUpdate === null) return { skip: t ? t("update.skip.manual") : "needs a manual update" };
   if (selfUpdate !== "desktop-managed") return { selfUpdate };
   if (config.environment.capabilities.desktopAppChannelSwitch !== true) {
-    return { skip: "needs a newer desktop app" };
+    return { skip: t ? t("update.skip.newerDesktop") : "needs a newer desktop app" };
   }
   // Squirrel.Mac renames the bundle for the new track and then cannot relaunch it.
   if (!sameTrack && config.environment.platform.os === "darwin") {
-    return { skip: "switch the Mac app on that Mac" };
+    return { skip: t ? t("update.skip.switchOnMac") : "switch the Mac app on that Mac" };
   }
   return { selfUpdate };
 }
@@ -692,8 +717,8 @@ export interface UpdateEverythingRow {
   readonly providers: ReadonlyArray<string>;
 }
 
-function countLabel(count: number, noun: string): string | null {
-  return count === 0 ? null : i18n.t(`update.everything.${noun}`, { count });
+function countLabel(count: number, noun: string, t: TFunction = i18n.t): string | null {
+  return count === 0 ? null : t(`update.everything.${noun}`, { count });
 }
 
 function joinList(parts: ReadonlyArray<string>): string {
@@ -704,7 +729,10 @@ function joinList(parts: ReadonlyArray<string>): string {
 }
 
 /** One row per machine: this app's machines first, then servers, provider-only, and skipped. */
-export function describeUpdateEverything(plan: UpdateEverythingPlan): {
+export function describeUpdateEverything(
+  plan: UpdateEverythingPlan,
+  t: TFunction = i18n.t,
+): {
   readonly summary: string;
   readonly version: string | null;
   readonly providerCount: number;
@@ -714,12 +742,12 @@ export function describeUpdateEverything(plan: UpdateEverythingPlan): {
     (count, machine) => count + machine.providers.length,
     0,
   );
-  const summary = i18n.t("update.everything.update", {
+  const summary = t("update.everything.update", {
     items: joinList(
       [
-        plan.localVersion ? i18n.t("update.everything.thisApp") : null,
-        countLabel(plan.servers.length, "server"),
-        countLabel(providerCount, "provider"),
+        plan.localVersion ? t("update.everything.thisApp") : null,
+        countLabel(plan.servers.length, "server", t),
+        countLabel(providerCount, "provider", t),
       ].filter((part) => part !== null),
     ),
   });

@@ -30,6 +30,7 @@ import {
 } from "../ui/alert-dialog";
 import { Button } from "../ui/button";
 import { stackedThreadToast, toastManager } from "../ui/toast";
+import { i18n, useTranslate } from "../../i18n";
 
 /** Moves this app and every connected machine to `channel`. */
 export function UpdateTrackSwitchDialog({
@@ -39,25 +40,28 @@ export function UpdateTrackSwitchDialog({
   readonly channel: DesktopUpdateChannel;
   readonly onClose: () => void;
 }) {
+  const t = useTranslate();
   // npm dist-tags match the desktop channel names.
   const release = useAtomValue(npmReleaseAtom(channel));
   if (AsyncResult.isSuccess(release) && release.value !== null) {
     return <SwitchPlan release={{ channel, ...release.value }} onClose={onClose} />;
   }
-  const label = channelSwitchLabel(channel);
+  const label = channelSwitchLabel(channel, t);
   return (
     <AlertDialog open onOpenChange={(open) => !open && onClose()}>
       <AlertDialogPopup>
         <AlertDialogHeader>
-          <AlertDialogTitle>Switch to {label}</AlertDialogTitle>
+          <AlertDialogTitle>{t("update.track.switch", { channel: label })}</AlertDialogTitle>
           <AlertDialogDescription>
             {AsyncResult.isFailure(release) || AsyncResult.isSuccess(release)
-              ? `Could not find the latest ${label} release on npm. Try again later.`
-              : "Checking releases…"}
+              ? t("update.track.notFound", { channel: label })
+              : t("update.track.checking")}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
+          <AlertDialogClose render={<Button variant="outline" />}>
+            {t("common.cancel")}
+          </AlertDialogClose>
         </AlertDialogFooter>
       </AlertDialogPopup>
     </AlertDialog>
@@ -71,6 +75,7 @@ function SwitchPlan({
   readonly release: ChannelSwitchRelease;
   readonly onClose: () => void;
 }) {
+  const t = useTranslate();
   const updateState = useDesktopUpdateState();
   const { environments } = useEnvironments();
   const crossesLocal = desktopUpdateChannelOf(APP_VERSION) !== release.channel;
@@ -80,7 +85,7 @@ function SwitchPlan({
   const switchesLocal = crossesLocal && !updatesOff;
   const [checking, setChecking] = useState(false);
   const everything = useUpdateEverything(switchesLocal ? release.version : null, release);
-  const label = channelSwitchLabel(release.channel);
+  const label = channelSwitchLabel(release.channel, t);
   // This app's reinstall restarts every server it hosts, so each of their databases must allow it.
   const localBlocked = localSwitchBlockReason(
     APP_VERSION,
@@ -90,6 +95,7 @@ function SwitchPlan({
       databaseMigration: environment.serverConfig?.environment.databaseMigration,
     })),
     window.desktopBridge?.getLocalEnvironmentBootstraps().length ?? 0,
+    t,
   );
 
   const run = async () => {
@@ -99,7 +105,13 @@ function SwitchPlan({
     setChecking(true);
     const fail = (description: string) =>
       toastManager.add(
-        stackedThreadToast({ type: "error", title: `Could not switch to ${label}`, description }),
+        stackedThreadToast({
+          type: "error",
+          title: i18n.t("update.track.switchFailed", {
+            channel: channelSwitchLabel(release.channel, i18n.t),
+          }),
+          description,
+        }),
       );
     const prepared = await prepareLocalTrackSwitch(bridge, {
       channel: release.channel,
@@ -131,8 +143,11 @@ function SwitchPlan({
                   !acceptsTrackSwitchRelease(downloadedVersion, release.channel, release.version)
                 ) {
                   reportError(
-                    "Could not install update",
-                    `This app downloaded ${downloadedVersion ?? "nothing"}, not ${release.version} or newer.`,
+                    "about.updateInstall.error",
+                    i18n.t("update.track.wrongDownload", {
+                      downloaded: downloadedVersion ?? i18n.t("update.track.nothingDownloaded"),
+                      version: release.version,
+                    }),
                   );
                   return false;
                 }
@@ -143,7 +158,7 @@ function SwitchPlan({
     );
     if (result._tag === "Failure") {
       const error = squashAtomCommandFailure(result);
-      fail(error instanceof Error ? error.message : "An unexpected error occurred.");
+      fail(error instanceof Error ? error.message : i18n.t("common.unexpectedError"));
     }
   };
 
@@ -151,26 +166,24 @@ function SwitchPlan({
     <UpdateEverythingDialog
       open
       onOpenChange={(open) => !open && !checking && onClose()}
-      title={`Switch to ${label}?`}
+      title={t("update.track.confirm", { channel: label })}
       version={release.version}
       providerCount={0}
       rows={everything.rows}
       notes={[
         ...(everything.rows.length === 0 && !crossesLocal
-          ? [`Every connected machine is already on ${label}. This only saves the track.`]
+          ? [t("update.track.allCurrent", { channel: label })]
           : []),
-        ...(crossesLocal && updatesOff
-          ? ["This app's updates are off here, so reinstall it yourself to switch."]
-          : []),
-        ...(switchesLocal && isMacPlatform(navigator.platform)
-          ? ["If T3 Code does not reopen after it restarts, open it again."]
-          : []),
+        ...(crossesLocal && updatesOff ? [t("update.track.manual")] : []),
+        ...(switchesLocal && isMacPlatform(navigator.platform) ? [t("update.track.reopen")] : []),
       ]}
       restarts={everything.restarts}
-      confirmLabel={checking ? "Checking…" : `Switch to ${label}`}
+      confirmLabel={checking ? t("about.checking") : t("update.track.switch", { channel: label })}
       busy={checking}
       disabledReason={
-        !switchesLocal || localBlocked === null ? null : `This app cannot switch: ${localBlocked}.`
+        !switchesLocal || localBlocked === null
+          ? null
+          : t("update.track.cannotSwitch", { reason: localBlocked })
       }
       onConfirm={() => void run()}
     />
