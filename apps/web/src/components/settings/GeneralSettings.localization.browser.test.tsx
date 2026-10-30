@@ -67,7 +67,7 @@ it("updates the actual General rows in both directions without remounting", asyn
 
   await act(async () => root.rerender(<GeneralSettingsPanel />));
   expect(container.querySelector("#project-grouping h3")?.textContent).toBe("Project grouping");
-  const timeFormat = container.querySelector('[aria-label="Time format"]');
+  const timeFormat = container.querySelector('[aria-label="Timestamp format"]');
   expect(timeFormat?.textContent).toBe("System default");
   await act(async () => {
     await changeLanguage("zh");
@@ -101,11 +101,13 @@ it("keeps an uncommitted snooze amount and field focus while changing language",
   await using language = new AsyncDisposableStack();
   language.defer(() => changeLanguage("en").then(() => {}));
   await using screen = await renderTestUi(<SnoozePresetsRow />);
-  const amount = screen.getByRole("spinbutton", { name: "Amount" });
+  const amount = screen.getByRole("textbox", { name: "Amount" });
+  await userEvent.click(amount);
   await userEvent.fill(amount, "12");
+  await expect.element(amount).toHaveValue("12");
   const input = amount.element();
   await act(() => changeLanguage("zh"));
-  const translated = screen.getByRole("spinbutton", { name: "时长数值" });
+  const translated = screen.getByRole("textbox", { name: "时长数值" });
   expect(translated.element()).toBe(input);
   await expect.element(translated).toHaveFocus();
   await expect.element(translated).toHaveValue("12");
