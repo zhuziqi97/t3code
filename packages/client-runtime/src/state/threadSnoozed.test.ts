@@ -3,6 +3,7 @@ import { ThreadId } from "@t3tools/contracts";
 import { TurnId } from "@t3tools/contracts";
 import type { SnoozePresetSetting } from "@t3tools/contracts/settings";
 import { describe, expect, it } from "vite-plus/test";
+import { createI18n } from "../i18n/createI18n.ts";
 
 import {
   canSnooze,
@@ -292,6 +293,27 @@ describe("resolveSnoozePresets", () => {
         { kind: "after", minutes: 180 },
       ]),
     ).toEqual(["In 3 hours 23:00", "In 6 hours Thu 2:00", "Tomorrow 21:00", "Next week Mon 18:00"]);
+    const now = localDate(2026, 4, 8, 20);
+    const presets: ReadonlyArray<SnoozePresetSetting> = [
+      { kind: "at", day: "monday", time: "18:00" },
+      { kind: "at", day: "tomorrow", time: "21:00" },
+      { kind: "after", minutes: 360 },
+      { kind: "after", minutes: 180 },
+    ];
+    const chinese = resolveSnoozePresets(now, {
+      presets,
+      formatTime,
+      formatWeekday: (date) => date.toLocaleDateString("zh-CN", { weekday: "short" }),
+      t: createI18n({ lng: "zh" }).t,
+    });
+    expect(
+      chinese.map(({ id, label, whenLabel, snoozedUntil }) => [id, label, whenLabel, snoozedUntil]),
+    ).toEqual([
+      ["after:180", "3 小时后", "23:00", localDate(2026, 4, 8, 23).toISOString()],
+      ["after:360", "6 小时后", "周四 2:00", localDate(2026, 4, 9, 2).toISOString()],
+      ["at:tomorrow:21:00", "明天", "21:00", localDate(2026, 4, 9, 21).toISOString()],
+      ["at:monday:18:00", "下周", "周一 18:00", localDate(2026, 4, 13, 18).toISOString()],
+    ]);
   });
 
   it("drops a today preset once its time passes and moves a weekday on that day to next week", () => {

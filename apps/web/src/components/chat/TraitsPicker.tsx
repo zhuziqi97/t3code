@@ -538,8 +538,9 @@ export const TraitsPicker = memo(function TraitsPicker({
                   {triggerLabel}
                 </span>
               )}
-              {speedLabel === "Fast" || speedLabel === "Ultrafast" ? (
-                <FastBolt ultra={speedLabel === "Ultrafast"} />
+              {speedLabel === t("chat.traits.choice.fast") ||
+              speedLabel === t("chat.traits.choice.ultrafast") ? (
+                <FastBolt ultra={speedLabel === t("chat.traits.choice.ultrafast")} />
               ) : null}
               {otherLabels.length > 0 ? (
                 <span

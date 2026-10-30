@@ -1,5 +1,6 @@
 // @effect-diagnostics globalDate:off -- UI snooze presets use local calendar boundaries and Intl labels.
 import * as DateTime from "effect/DateTime";
+import type { TFunction } from "i18next";
 import { DEFAULT_SNOOZE_PRESETS, type SnoozePresetSetting } from "@t3tools/contracts/settings";
 
 import type { EnvironmentThreadShell, PendingSubagentRequest } from "./models.ts";
@@ -194,6 +195,7 @@ export interface SnoozePresetOptions {
   readonly presets?: ReadonlyArray<SnoozePresetSetting>;
   readonly formatTime?: (date: Date) => string;
   readonly formatWeekday?: (date: Date) => string;
+  readonly t?: TFunction;
 }
 
 function snoozeTimeOfDayLabel(date: Date): string {
@@ -214,10 +216,12 @@ function pluralize(count: number, unit: string): string {
 }
 
 /** "3 hours", "90 minutes", "2 days": the largest unit that divides evenly. */
-function formatSnoozeDuration(minutes: number): string {
-  if (minutes % (24 * 60) === 0) return pluralize(minutes / (24 * 60), "day");
-  if (minutes % 60 === 0) return pluralize(minutes / 60, "hour");
-  return pluralize(minutes, "minute");
+function formatSnoozeDuration(minutes: number, t?: TFunction): string {
+  const unit = minutes % (24 * 60) === 0 ? "days" : minutes % 60 === 0 ? "hours" : "minutes";
+  const count = minutes / (unit === "days" ? 24 * 60 : unit === "hours" ? 60 : 1);
+  return t
+    ? `${count} ${t(`thread.snooze.unit.${unit}`, { count })}`
+    : pluralize(count, unit.slice(0, -1));
 }
 
 function capitalize(word: string): string {
@@ -234,15 +238,20 @@ function snoozePresetDaysAhead(
 }
 
 /** Labels follow the actual day gap, so a Monday option on a Sunday reads "Tomorrow". */
-function snoozePresetLabel(setting: SnoozePresetSetting, daysAhead: number): string {
-  if (setting.kind === "after") return `In ${formatSnoozeDuration(setting.minutes)}`;
+function snoozePresetLabel(setting: SnoozePresetSetting, daysAhead: number, t?: TFunction): string {
+  if (setting.kind === "after") {
+    const duration = formatSnoozeDuration(setting.minutes, t);
+    return t ? t("thread.snooze.inDuration", { duration }) : `In ${duration}`;
+  }
   if (daysAhead === 0) {
     const hour = Number(setting.time.slice(0, 2));
-    return hour < 12 ? "This morning" : hour < 17 ? "This afternoon" : "This evening";
+    const period = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
+    return t ? t(`thread.snooze.preset.${period}`) : `This ${period}`;
   }
-  if (daysAhead === 1) return "Tomorrow";
-  if (setting.day === "monday") return "Next week";
-  return daysAhead === 7 ? `Next ${capitalize(setting.day)}` : capitalize(setting.day);
+  if (daysAhead === 1) return t ? t("thread.snooze.preset.tomorrow") : "Tomorrow";
+  if (setting.day === "monday") return t ? t("thread.snooze.preset.next-week") : "Next week";
+  const day = t ? t(`thread.snooze.day.${setting.day}`) : capitalize(setting.day);
+  return daysAhead === 7 ? (t ? t("thread.snooze.nextDay", { day }) : `Next ${day}`) : day;
 }
 
 export function snoozePresetId(setting: SnoozePresetSetting): string {
@@ -256,6 +265,7 @@ export function resolveSnoozePreset(
   now: Date,
   formatTime: (date: Date) => string = snoozeTimeOfDayLabel,
   formatWeekday?: (date: Date) => string,
+  t?: TFunction,
 ): SnoozePreset | null {
   let wake: Date;
   let daysAhead = 0;
@@ -268,17 +278,20 @@ export function resolveSnoozePreset(
     // A today option whose time has passed is left out until tomorrow.
     if (wake.getTime() <= now.getTime()) return null;
   }
-  const label = snoozePresetLabel(setting, daysAhead);
+  const label = snoozePresetLabel(setting, daysAhead, t);
   // Durations and "Next week" don't name the wake day, so a wake on another day shows it.
-  const labelNamesDay = setting.kind === "at" && label !== "Next week";
+  const labelNamesDay = setting.kind === "at" && (daysAhead <= 1 || setting.day !== "monday");
   const time = formatTime(wake);
+  const weekday = () =>
+    formatWeekday?.(wake) ??
+    (t
+      ? t(`scheduled.weekday.${["sun", "mon", "tue", "wed", "thu", "fri", "sat"][wake.getDay()]}`)
+      : wake.toLocaleDateString(undefined, { weekday: "short" }));
   return {
     id: snoozePresetId(setting),
     label,
     whenLabel:
-      labelNamesDay || wake.toDateString() === now.toDateString()
-        ? time
-        : `${formatWeekday?.(wake) ?? wake.toLocaleDateString(undefined, { weekday: "short" })} ${time}`,
+      labelNamesDay || wake.toDateString() === now.toDateString() ? time : `${weekday()} ${time}`,
     snoozedUntil: wake.toISOString(),
   };
 }
@@ -296,7 +309,8 @@ export function resolveSnoozePresets(
     (options.presets ?? DEFAULT_SNOOZE_PRESETS)
       .flatMap(
         (setting) =>
-          resolveSnoozePreset(setting, now, options.formatTime, options.formatWeekday) ?? [],
+          resolveSnoozePreset(setting, now, options.formatTime, options.formatWeekday, options.t) ??
+          [],
       )
       // flatMap returned a new array; Hermes has no `toSorted`.
       .sort((a, b) => wakeMinute(a) - wakeMinute(b))
@@ -319,6 +333,7 @@ export function pickSnoozePreset(input: {
   readonly presets?: ReadonlyArray<SnoozePresetSetting>;
   readonly formatTime?: (date: Date) => string;
   readonly formatWeekday?: (date: Date) => string;
+  readonly t?: TFunction;
 }): SnoozePreset | undefined {
   const original = input.shown.find((preset) => preset.id === input.id);
   const ahead =
@@ -327,7 +342,8 @@ export function pickSnoozePreset(input: {
     (candidate) => candidate.kind === "after" && snoozePresetId(candidate) === input.id,
   );
   return (
-    (setting && resolveSnoozePreset(setting, input.now, input.formatTime, input.formatWeekday)) ??
+    (setting &&
+      resolveSnoozePreset(setting, input.now, input.formatTime, input.formatWeekday, input.t)) ??
     ahead
   );
 }
