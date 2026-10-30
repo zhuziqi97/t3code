@@ -451,7 +451,9 @@ export const TraitsPicker = memo(function TraitsPicker({
   const isCodexStyle = provider === "codex";
   // In the composer the glyph has no word, so the tooltip and label name the control.
   const triggerDescription = isComposerOwned
-    ? [`Effort: ${triggerLabel}`, speedLabel, extraMenuHint].filter(Boolean).join(" · ")
+    ? [t("chat.traits.currentEffort", { effort: triggerLabel }), speedLabel, extraMenuHint]
+        .filter(Boolean)
+        .join(" · ")
     : triggerLabel;
   const effortGlyph =
     isComposerOwned && primarySelectDescriptor && isReasoningOption(primarySelectDescriptor)

@@ -3,7 +3,8 @@ import { type ReactNode, useRef, useState } from "react";
 import { expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 
-import { render } from "../../../test/render";
+import { act, render } from "../../../test/render";
+import { changeLanguage } from "../../i18n";
 import { ComposerHandleContext, type ComposerHandleRef } from "../../composerHandleContext";
 import { Menu, MenuPopup, MenuRadioGroup, MenuRadioItem, MenuTrigger } from "../ui/menu";
 import {
@@ -44,6 +45,9 @@ function EffortMenu() {
 }
 
 it("reaches Permissions from the effort items with arrow keys, previews, and picks with Enter", async () => {
+  await changeLanguage("en");
+  await using language = new AsyncDisposableStack();
+  language.defer(() => changeLanguage("en").then(() => {}));
   await using screen = await render(<EffortMenu />, { router: false }); // no routes involved
   const trigger = screen.getByRole("button", { name: "Effort" });
   await userEvent.tab();
@@ -57,6 +61,15 @@ it("reaches Permissions from the effort items with arrow keys, previews, and pic
   await expect
     .element(supervised)
     .toHaveAccessibleDescription("Ask before commands and file changes.");
+
+  await act(() => changeLanguage("zh"));
+  await expect.element(page.getByRole("group", { name: "权限" })).toBeVisible();
+  await expect.element(page.getByRole("menuitemradio", { name: "需审批" })).toHaveFocus();
+  await expect
+    .element(page.getByRole("menuitemradio", { name: "完全访问" }))
+    .toHaveAttribute("aria-checked", "true");
+  await expect.element(screen.getByRole("status")).toHaveTextContent("full-access");
+  await act(() => changeLanguage("en"));
 
   await userEvent.keyboard("{ArrowRight}");
   await expect

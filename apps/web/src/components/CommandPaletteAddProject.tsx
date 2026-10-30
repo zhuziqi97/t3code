@@ -81,6 +81,7 @@ export function NewProjectPublishHostPicker(props: {
   readonly value: SourceControlProviderKind;
   readonly onValueChange: (kind: SourceControlProviderKind) => void;
 }) {
+  const t = useTranslate();
   const [open, setOpen] = useState(false);
   return (
     <span
@@ -102,7 +103,7 @@ export function NewProjectPublishHostPicker(props: {
           if (kind !== null) props.onValueChange(kind);
         }}
       >
-        <SelectTrigger size="xs" variant="ghost" aria-label="Host for the new repository">
+        <SelectTrigger size="xs" variant="ghost" aria-label={t("project.new.repositoryHost")}>
           <SelectValue>
             {(kind: SourceControlProviderKind) => sourceControlClients.get(kind).label}
           </SelectValue>
@@ -141,9 +142,11 @@ export function NewProjectSummary(props: {
           </span>
           <span className="truncate text-muted-foreground/85 text-xs">
             {props.name.length > 0
-              ? `Creates ${props.pathPreview}`
-              : `Goes in ${props.projectsRoot}`}
-            {props.environmentLabel === null ? null : ` on ${props.environmentLabel}`}
+              ? t("project.new.createsPath", { path: props.pathPreview })
+              : t("project.new.goesInPath", { path: props.projectsRoot })}
+            {props.environmentLabel === null
+              ? null
+              : t("project.new.onEnvironment", { environment: props.environmentLabel })}
           </span>
         </span>
       </div>

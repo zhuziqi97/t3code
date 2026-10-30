@@ -97,7 +97,10 @@ export const ComposerFooterModeControls = memo(function ComposerFooterModeContro
 
   // The chip opens the same Permissions toggle used in the effort menu.
   const runtimePresentation = runtimeModePresentation(runtimeModeOption.mode, t);
-  const permissionsTooltip = `Permissions: ${runtimePresentation.label}. ${runtimePresentation.description}`;
+  const permissionsTooltip = t("chat.permissions.description", {
+    mode: runtimePresentation.label,
+    description: runtimePresentation.description,
+  });
   const permissionsChip = (
     <Menu
       open={open}
@@ -117,7 +120,7 @@ export const ComposerFooterModeControls = memo(function ComposerFooterModeContro
                   size={size}
                   // Mirrors the effort chip's trailing pe-1 so both gaps around the bars match.
                   className="ps-1.5"
-                  aria-label={`Permissions: ${runtimePresentation.label}`}
+                  aria-label={t("chat.permissions.current", { mode: runtimePresentation.label })}
                 />
               }
             />
@@ -177,9 +180,9 @@ export function ComposerPermissionsSection(props: {
   const descriptionId = useId();
   return (
     <div data-composer-permissions className="grid w-72 gap-1.5 px-2 py-1.5">
-      <div className="font-medium text-muted-foreground text-xs">Permissions</div>
+      <div className="font-medium text-muted-foreground text-xs">{t("chat.permissions.title")}</div>
       <MenuPrimitive.RadioGroup
-        aria-label="Permissions"
+        aria-label={t("chat.permissions.title")}
         value={props.runtimeMode}
         onValueChange={(value: RuntimeMode) => {
           if (value !== props.runtimeMode) props.onRuntimeModeChange(value);
