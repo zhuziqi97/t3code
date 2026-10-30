@@ -12,6 +12,7 @@ import {
   mergeCustomModels,
   normalizeCustomModelSlug,
   resolveSelectableModel,
+  resolveNativeDefaultModelSelection,
 } from "@t3tools/shared/model";
 
 import { UnifiedSettings } from "@t3tools/contracts/settings";
@@ -129,12 +130,6 @@ export function getAppModelOptionsForInstance(
     entry.models.filter((model) => !model.isCustom),
     customModels,
   ).map((model) => toAppModelOption(model, entry.driverKind));
-  // Empty is a local picker key only; createModelSelection writes null on the wire.
-  options.unshift({
-    slug: "",
-    name: entry.models.find((model) => model.isDefault)?.name ?? "Follow agent default",
-    isCustom: false,
-  });
   if (selectedModel && !options.some((option) => option.slug === selectedModel)) {
     options.push({
       slug: selectedModel,
@@ -168,23 +163,21 @@ export function resolveAppModelSelectionForInstance(
     (candidate) => candidate.instanceId === instanceId,
   );
   if (!entry) return null;
-  return selectedModel ?? "";
+  return (
+    resolveNativeDefaultModelSelection({ instanceId, model: selectedModel || null }, entry.models)
+      .model ?? ""
+  );
 }
 
-// New drafts carry the stored selection; capabilities resolve its raw options later.
 export function resolveEffectiveDefaultModelSelection(
-  settings: UnifiedSettings,
+  _settings: UnifiedSettings,
   providers: ReadonlyArray<ServerProvider>,
   selection: ModelSelection,
 ): ModelSelection {
-  const model = resolveAppModelSelectionForInstance(
-    selection.instanceId,
-    settings,
-    providers,
-    selection.model,
-    { preserveUnavailableSelection: true },
+  return resolveNativeDefaultModelSelection(
+    selection,
+    providers.find((provider) => provider.instanceId === selection.instanceId)?.models ?? [],
   );
-  return model === null || model === selection.model ? selection : { ...selection, model };
 }
 
 export function getCustomModelOptionsByInstance(

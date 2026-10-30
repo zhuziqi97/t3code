@@ -877,6 +877,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     selectedModel,
     composerProviderState,
   } = useComposerProviderModel({
+    isNewThread: typeof composerDraftTarget === "string",
     providerStatuses,
     settings,
     activeProjectId,

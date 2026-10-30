@@ -1,6 +1,5 @@
 import { pipe } from "effect/Function";
 import {
-  DEFAULT_MODEL_BY_PROVIDER,
   defaultInstanceIdForDriver,
   resolveProjectProviderInstanceEnabled,
   type ModelSelection,
@@ -18,6 +17,7 @@ import {
   shouldShowInstanceBadge,
 } from "@t3tools/client-runtime/state/provider-instance-display";
 import { canStartProviderSession } from "@t3tools/shared/providerReadiness";
+import { resolveNativeDefaultModelSelection } from "@t3tools/shared/model";
 
 export { normalizeProviderAccentColor, shouldShowInstanceBadge };
 
@@ -198,12 +198,7 @@ export function getDefaultProviderInstanceModel(
 ): string | undefined {
   const entry = getProviderInstanceEntry(providers, instanceId);
   if (!entry) return undefined;
-  return (
-    entry.models.find((model) => model.isDefault && !model.isCustom)?.slug ??
-    entry.models.find((model) => !model.isCustom)?.slug ??
-    entry.models[0]?.slug ??
-    DEFAULT_MODEL_BY_PROVIDER[entry.driverKind]
-  );
+  return entry.models.find((model) => model.isDefault)?.slug;
 }
 
 const isSelectableProviderInstanceEntry = (entry: ProviderInstanceEntry): boolean =>
@@ -239,7 +234,12 @@ export function resolveDefaultProviderModelSelection(
 ): ModelSelection | null {
   if (selection) return selection;
   const instanceId = resolveSelectableProviderInstance(providers, undefined);
-  return instanceId === undefined ? null : { instanceId, model: null };
+  return instanceId === undefined
+    ? null
+    : resolveNativeDefaultModelSelection(
+        { instanceId, model: null },
+        getProviderInstanceEntry(providers, instanceId)?.models ?? [],
+      );
 }
 
 export function resolveProjectDefaultProviderModelSelection(
@@ -254,6 +254,10 @@ export function resolveProjectDefaultProviderModelSelection(
       entries.filter((candidate) => candidate.driverKind === entries[0]?.driverKind),
       undefined,
     ) ?? resolveSelectableProviderInstanceEntry(entries, undefined);
-  const model = entry ? getDefaultProviderInstanceModel(providers, entry.instanceId) : undefined;
-  return entry && model ? { instanceId: entry.instanceId, model } : null;
+  return entry
+    ? resolveNativeDefaultModelSelection(
+        { instanceId: entry.instanceId, model: null },
+        entry.models,
+      )
+    : null;
 }

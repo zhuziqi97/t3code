@@ -1,5 +1,4 @@
 import {
-  DEFAULT_MODEL_BY_PROVIDER,
   ProjectId,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -337,7 +336,7 @@ describe("resolveSelectableProviderInstance", () => {
 });
 
 describe("getDefaultProviderInstanceModel", () => {
-  it("uses the instance's own models, not the default instance of the kind", () => {
+  it("does not guess an instance default from its first catalog model", () => {
     const providers = [
       provider({
         provider: ProviderDriverKind.make("claudeAgent"),
@@ -353,10 +352,10 @@ describe("getDefaultProviderInstanceModel", () => {
 
     expect(
       getDefaultProviderInstanceModel(providers, ProviderInstanceId.make("claude_openrouter")),
-    ).toBe("claude-opus-4-8");
+    ).toBeUndefined();
   });
 
-  it("falls back to the driver default when the instance reports no models", () => {
+  it("leaves the native default unknown when the instance reports no models", () => {
     const providers = [
       provider({ provider: ProviderDriverKind.make("claudeAgent"), instanceId: "claudeAgent" }),
     ];
@@ -365,7 +364,7 @@ describe("getDefaultProviderInstanceModel", () => {
       providers,
       ProviderInstanceId.make("claudeAgent"),
     );
-    expect(resolved).toBe(DEFAULT_MODEL_BY_PROVIDER[ProviderDriverKind.make("claudeAgent")]);
+    expect(resolved).toBeUndefined();
   });
 
   it("honors the instance's declared default before model-list order", () => {
@@ -400,7 +399,7 @@ describe("resolveDefaultProviderModelSelection", () => {
 
     expect(resolveDefaultProviderModelSelection(providers, null)).toEqual({
       instanceId,
-      model: null,
+      model: modelSlug,
     });
   });
 

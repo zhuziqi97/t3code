@@ -43,6 +43,7 @@ import {
   createModelSelection,
   draftModelPickMatchesThread,
   normalizeCustomModelSlug,
+  resolveNativeDefaultModelSelection,
 } from "@t3tools/shared/model";
 import { AsyncResult, Atom, type AtomRegistry } from "effect/reactivity";
 import * as Option from "effect/Option";
@@ -1106,6 +1107,7 @@ export function deriveEffectiveComposerModelState(input: {
   threadModelSelection: ModelSelection | null | undefined;
   projectModelSelection: ModelSelection | null | undefined;
   settings: UnifiedSettings;
+  isNewThread?: boolean;
 }): EffectiveComposerModelState {
   const candidateBase = input.threadModelSelection ?? input.projectModelSelection;
   const baseSelection =
@@ -1132,6 +1134,24 @@ export function deriveEffectiveComposerModelState(input: {
     providerSelectionsFromModelSelection(input.threadModelSelection) ??
     providerSelectionsFromModelSelection(input.projectModelSelection) ??
     null;
+
+  if (input.isNewThread && !selectedModel && input.selectedInstanceId) {
+    const selection = resolveNativeDefaultModelSelection(
+      createModelSelection(
+        input.selectedInstanceId,
+        null,
+        modelOptions?.[input.selectedInstanceId],
+      ),
+      input.providers.find((provider) => provider.instanceId === input.selectedInstanceId)
+        ?.models ?? [],
+    );
+    return {
+      selectedModel: selection.model ?? "",
+      modelOptions: selection.options
+        ? { ...modelOptions, [input.selectedInstanceId]: selection.options }
+        : modelOptions,
+    };
+  }
 
   return {
     selectedModel,

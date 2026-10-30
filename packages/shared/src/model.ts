@@ -53,6 +53,35 @@ export function createModelCapabilities(input: {
   };
 }
 
+/** Resolve only new-conversation defaults; persisted thread selections keep their wire meaning. */
+export function resolveNativeDefaultModelSelection(
+  selection: ModelSelection,
+  models: ReadonlyArray<ServerProviderModel>,
+): ModelSelection {
+  if (selection.model) return selection;
+  const model = models.find((candidate) => candidate.isDefault);
+  if (!model) return selection;
+  const options = [...(selection.options ?? [])];
+  for (const descriptor of model.capabilities?.optionDescriptors ?? []) {
+    if (!isReasoningOption(descriptor) || options.some((option) => option.id === descriptor.id))
+      continue;
+    const value =
+      descriptor.type === "boolean"
+        ? descriptor.currentValue
+        : (descriptor.currentValue ?? descriptor.options.find((option) => option.isDefault)?.id);
+    if (value === undefined) continue;
+    if (
+      descriptor.type === "select" &&
+      (descriptor.promptInjectedValues?.includes(String(value)) ||
+        (descriptor.options.length > 0 &&
+          !descriptor.options.some((option) => option.id === value)))
+    )
+      continue;
+    options.push({ id: descriptor.id, value });
+  }
+  return { ...selection, model: model.slug, ...(options.length > 0 ? { options } : {}) };
+}
+
 function getRawSelectionValueById(
   selections: ReadonlyArray<ProviderOptionSelection> | null | undefined,
   id: string,

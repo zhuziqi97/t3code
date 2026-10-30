@@ -42,7 +42,10 @@ export function ComposerModelControl(props: {
       ).label
     : "";
   const badge = props.modelOption?.providerBadge;
-  const label = props.modelOption?.label ?? props.selection?.model ?? "Choose model";
+  const label =
+    props.modelOption?.label ??
+    props.selection?.model ??
+    (props.selection ? t("convene.model.default") : t("chat.model.choose"));
   return (
     <ComposerInlineControl
       accessibilityLabel={[
