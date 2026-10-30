@@ -97,6 +97,13 @@ async function setup() {
   const _openFavorite = { [Symbol.dispose]: registerOpenFavoriteEditorCommand() };
   stack.use(_openFavorite);
   const screen = stack.use(await renderUi(null));
+  stack.use(fakeTimers());
+  stack.defer(async () => {
+    await act(() => vi.runAllTimersAsync());
+    for (const region of document.querySelectorAll('body > [aria-live="polite"]')) {
+      region.textContent = "";
+    }
+  });
   async function renderPicker(
     availableEditors: readonly EditorId[] = editors,
     panel = false,
@@ -210,29 +217,35 @@ describe("open in editor announcement", () => {
     const { screen, renderPicker, pressOpenFavorite, FavoriteEditorFallback } = fixture;
     state.allowed.add(selected);
     await renderPicker();
-    using _timers = fakeTimers();
     const regions = () => [...document.querySelectorAll('body > [aria-live="polite"]')];
     const spoken = async () => {
-      await act(async () => vi.runAllTimers());
+      await act(() => vi.runAllTimersAsync());
       return regions()
         .map((region) => region.textContent)
         .join("");
     };
-    const refuse = () =>
-      state.run.mockResolvedValueOnce(AsyncResult.failure(Cause.fail(new Error("No editor"))));
+    const openAndRead = async (succeeds: boolean) => {
+      const result = succeeds
+        ? AsyncResult.success(undefined)
+        : AsyncResult.failure(Cause.fail(new Error("No editor")));
+      let resolve!: (value: typeof result) => void;
+      const command = new Promise<typeof result>((complete) => {
+        resolve = complete;
+      });
+      state.run.mockReturnValueOnce(command);
+      await pressOpenFavorite();
+      expect(await spoken()).toBe("");
+      const speech = spoken();
+      resolve(result);
+      return speech;
+    };
 
-    refuse();
-    await pressOpenFavorite();
-    expect(await spoken()).toBe("");
-    await pressOpenFavorite();
-    expect(await spoken()).toBe("Opened in VS Code");
+    expect(await openAndRead(false)).toBe("");
+    expect(await openAndRead(true)).toBe("Opened in VS Code");
 
     for (const region of regions()) region.textContent = "";
     await act(async () => screen.rerender(<FavoriteEditorFallback />));
-    refuse();
-    await pressOpenFavorite();
-    expect(await spoken()).toBe("");
-    await pressOpenFavorite();
-    expect(await spoken()).toBe("Opened in VS Code");
+    expect(await openAndRead(false)).toBe("");
+    expect(await openAndRead(true)).toBe("Opened in VS Code");
   });
 });
