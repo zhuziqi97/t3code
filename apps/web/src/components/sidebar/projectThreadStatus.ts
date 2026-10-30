@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next";
+import type { SidebarThreadSummary } from "../../types";
 import { resolveSidebarThreadStatus, resolveThreadStatusPill } from "../Sidebar.logic";
 import type { ThreadStatusPill } from "../Sidebar.logic";
 
@@ -69,4 +71,68 @@ export function highestProjectThreadStatus(statuses: readonly (ProjectThreadStat
     if (status && (!result || priority[status.label] > priority[result.label])) result = status;
   }
   return result;
+}
+
+const ROW_STATUS = {
+  "Pending Approval": {
+    key: "thread.approval",
+    icon: "approval",
+    className: "text-warning-foreground",
+  },
+  "Awaiting Input": {
+    key: "thread.input",
+    icon: "input",
+    className: "text-indigo-600 dark:text-indigo-300",
+  },
+  "Guest Request": { key: "thread.request", icon: "request", className: "text-guest-foreground" },
+  Working: { key: "thread.working", icon: "working", className: "text-info-foreground" },
+  Connecting: { key: "thread.connecting", icon: "working", className: "text-info-foreground" },
+  Waiting: { key: "thread.waiting", icon: "waiting", className: "text-muted-foreground" },
+  Failed: { key: "thread.failed", icon: "failed", className: "text-error-foreground" },
+  Limited: { key: "thread.limited", icon: "failed", className: "text-warning-foreground" },
+  "Plan Ready": {
+    key: "thread.planReady",
+    icon: "plan",
+    className: "text-violet-600 dark:text-violet-300",
+  },
+  Completed: { key: "thread.done", icon: "done", className: "text-success-foreground" },
+  Stopped: { key: "chat.status.stopped", icon: "stopped", className: "text-muted-foreground" },
+  "Rolled back": {
+    key: "chat.timeline.runRolledBack",
+    icon: "stopped",
+    className: "text-muted-foreground",
+  },
+} as const;
+
+export function resolveSidebarThreadRowStatus(
+  thread: Input & { readonly goal?: SidebarThreadSummary["goal"] },
+  input: { readonly isWoke: boolean },
+  t: TFunction,
+) {
+  const status = resolveProjectThreadStatus(thread);
+  if (status) {
+    const display = ROW_STATUS[status.label];
+    return {
+      label: t(
+        status.label === "Working" && thread.goal?.status === "active"
+          ? "thread.goal"
+          : display.key,
+      ),
+      icon: display.icon,
+      className: display.className,
+    };
+  }
+  if (!input.isWoke) return null;
+  const completed = thread.latestRun?.status === "completed";
+  return {
+    label: t(
+      thread.latestRun?.status === "cancelled" || thread.latestRun?.status === "interrupted"
+        ? "chat.status.stopped"
+        : thread.latestRun?.status === "rolled_back"
+          ? "chat.timeline.runRolledBack"
+          : "chat.timeline.runEnded",
+    ),
+    icon: completed ? ("done" as const) : ("stopped" as const),
+    className: completed ? "text-success" : "text-muted-foreground",
+  };
 }
