@@ -890,11 +890,11 @@ export function useComposerSend(input: ComposerSendInput) {
       return;
     }
     if (isLocalDraftThread && multipleModelSelections === null) {
-      useComposerDraftStore
-        .getState()
-        .setModelSelection(composerDraftTarget, ctxSelectedModelSelection, {
-          replaceOptions: true,
-        });
+      const drafts = useComposerDraftStore.getState();
+      drafts.setModelSelection(composerDraftTarget, ctxSelectedModelSelection, {
+        replaceOptions: true,
+        explicit: drafts.getComposerDraft(composerDraftTarget)?.modelSelectionExplicit === true,
+      });
     }
     const turnUsesAttachmentUploads =
       composerFilesSnapshot.length > 0

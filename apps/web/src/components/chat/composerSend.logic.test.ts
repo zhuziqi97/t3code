@@ -190,7 +190,7 @@ it.each([
     const threadId = ThreadId.make(`thread-${driver}-first-send`);
     const draftId = DraftId.make(`draft-${driver}-first-send`);
     const drafts = useComposerDraftStore.getState();
-    drafts.setModelSelection(draftId, { instanceId, model: null });
+    drafts.setModelSelection(draftId, { instanceId, model: null }, { explicit: model !== null });
     const route = `route-${driver}-first-send`;
     const noop = () => undefined;
     const input = {
@@ -295,12 +295,20 @@ it.each([
       expect(drafts.getComposerDraft(draftId)?.modelSelectionByProvider[instanceId]).toEqual(
         selection,
       );
-      drafts.setModelSelection(draftId, { instanceId, model: "chosen-during-send" });
+      expect(drafts.getComposerDraft(draftId)?.modelSelectionExplicit === true).toBe(
+        model !== null,
+      );
+      drafts.setModelSelection(
+        draftId,
+        { instanceId, model: "chosen-during-send" },
+        { explicit: true },
+      );
       releaseAck();
       await submitted;
       expect(drafts.getComposerDraft(draftId)?.modelSelectionByProvider[instanceId]?.model).toBe(
         "chosen-during-send",
       );
+      expect(drafts.getComposerDraft(draftId)?.modelSelectionExplicit).toBe(true);
     } finally {
       releaseAck();
       await submitted;
