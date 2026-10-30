@@ -181,6 +181,7 @@ export const THREAD_LIST_V2_SETTLED_PAGE_COUNT = 25;
 export function threadHasUnseenCompletion(
   thread: Pick<EnvironmentThreadShell, "latestRun" | "lastVisitedAt">,
 ): boolean {
+  if (thread.latestRun?.status !== "completed") return false;
   const completedAt = thread.latestRun?.completedAt;
   if (!completedAt) return false;
   const completedAtMs = Date.parse(completedAt);

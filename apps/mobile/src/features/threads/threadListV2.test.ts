@@ -140,24 +140,43 @@ describe("resolveThreadListV2Status", () => {
     { roster: "dev server", task: { kind: "command" }, status: "ready" },
     { roster: "dev server watchdog", task: { kind: "monitor" }, status: "ready" },
     { roster: "awaited command", task: { kind: "command", awaited: true }, status: "waiting" },
-  ] as const)(
-    "presents an unseen completion with a $roster roster as $status",
-    ({ task, status }) => {
-      const thread = presentThreadShell(
-        environmentId,
-        makeRawThreadShell({
-          latestRunId: RunId.make("run-background-completion"),
-          status: "completed",
-          latestRunCompletedAt: DateTime.makeUnsafe(NOW),
-          lastVisitedAt: DateTime.makeUnsafe("2026-06-01T23:59:00.000Z"),
-          pendingBackgroundTasks: [{ taskId: "background-work", ...task }],
-        }),
-      );
-
-      expect(resolveThreadListV2Status(thread)).toBe(status);
-      expect(threadHasUnseenCompletion(thread)).toBe(true);
+    {
+      roster: "interrupted turn",
+      task: { kind: "command" },
+      status: "ready",
+      runStatus: "interrupted",
+      unseen: false,
     },
-  );
+    {
+      roster: "cancelled turn",
+      task: { kind: "command" },
+      status: "ready",
+      runStatus: "cancelled",
+      unseen: false,
+    },
+    {
+      roster: "rolled-back turn",
+      task: { kind: "command" },
+      status: "ready",
+      runStatus: "rolled_back",
+      unseen: false,
+    },
+  ] as const)("presents terminal feedback with a $roster roster as $status", (entry) => {
+    const { task, status } = entry;
+    const thread = presentThreadShell(
+      environmentId,
+      makeRawThreadShell({
+        latestRunId: RunId.make("run-background-completion"),
+        status: "runStatus" in entry ? entry.runStatus : "completed",
+        latestRunCompletedAt: DateTime.makeUnsafe(NOW),
+        lastVisitedAt: DateTime.makeUnsafe("2026-06-01T23:59:00.000Z"),
+        pendingBackgroundTasks: [{ taskId: "background-work", ...task }],
+      }),
+    );
+
+    expect(resolveThreadListV2Status(thread)).toBe(status);
+    expect(threadHasUnseenCompletion(thread)).toBe("unseen" in entry ? entry.unseen : true);
+  });
 });
 
 describe("queued messages keep a settled thread active", () => {
