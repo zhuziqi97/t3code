@@ -16,14 +16,6 @@ import { toastManager } from "./ui/toast";
 
 export { type SnoozePreset };
 
-const PRESET_LABEL_KEYS: Readonly<Record<string, string>> = {
-  "In 1 hour": "thread.snooze.preset.hour",
-  "In 3 hours": "thread.snooze.preset.three-hours",
-  "This evening": "thread.snooze.preset.evening",
-  Tomorrow: "thread.snooze.preset.tomorrow",
-  "Next week": "thread.snooze.preset.next-week",
-};
-
 export function snoozeWakeLabel(
   snoozedUntil: string,
   options: { readonly now: string },
@@ -54,12 +46,7 @@ export function resolveSnoozePresets(
   environmentId: EnvironmentId,
   t: TFunction = i18n.t,
 ): ReadonlyArray<SnoozePreset> {
-  return resolveSharedSnoozePresets(now, snoozeOptions(timestampFormat, environmentId, t)).map(
-    (preset) => ({
-      ...preset,
-      label: PRESET_LABEL_KEYS[preset.label] ? t(PRESET_LABEL_KEYS[preset.label]!) : preset.label,
-    }),
-  );
+  return resolveSharedSnoozePresets(now, snoozeOptions(timestampFormat, environmentId, t));
 }
 
 /** A shown menu choice as picked; see the shared `pickSnoozePreset`. */
@@ -78,8 +65,8 @@ export function pickSnoozePreset(
   if (!picked) {
     toastManager.add({
       type: "warning",
-      title: "Could not snooze thread",
-      description: "That snooze time has passed. Choose another time.",
+      title: i18n.t("thread.snooze.expiredTitle"),
+      description: i18n.t("thread.snooze.expiredDescription"),
     });
   }
   return picked;
@@ -94,6 +81,7 @@ function snoozeOptions(
     serverEnvironment.settingsValueAtom(environmentId),
   )?.snoozePresets;
   return {
+    t,
     ...(presets ? { presets } : {}),
     formatTime: (date: Date) => formatShortTimestamp(date.toISOString(), timestampFormat, t),
     formatWeekday: (date: Date) =>

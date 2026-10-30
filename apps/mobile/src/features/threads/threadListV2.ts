@@ -8,6 +8,7 @@ import {
   snoozeWakeLabel,
   threadWokeAt,
 } from "@t3tools/client-runtime/state/thread-settled";
+import type { TFunction } from "i18next";
 import type { SnoozePreset } from "@t3tools/client-runtime/state/thread-settled";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import { resolveThreadProviderStack } from "@t3tools/client-runtime/state/models";
@@ -81,9 +82,13 @@ export function resolveThreadListV2SnoozePresets(input: {
   readonly secondary: "snooze" | null;
   readonly now: string;
   readonly presets: ReadonlyArray<SnoozePresetSetting> | undefined;
+  readonly t?: TFunction;
 }): ReadonlyArray<SnoozePreset> {
   return input.secondary === "snooze"
-    ? resolveSnoozePresets(new Date(input.now), presetOptions(input.presets))
+    ? resolveSnoozePresets(new Date(input.now), {
+        ...presetOptions(input.presets),
+        ...(input.t ? { t: input.t } : {}),
+      })
     : [];
 }
 
@@ -96,6 +101,7 @@ export function resolveThreadListV2SnoozeMenuSelection(input: {
   readonly displayedPresets: ReadonlyArray<SnoozePreset>;
   readonly now: Date;
   readonly presets: ReadonlyArray<SnoozePresetSetting> | undefined;
+  readonly t?: TFunction;
 }):
   | { readonly _tag: "selected"; readonly preset: SnoozePreset }
   | { readonly _tag: "expired" }
@@ -106,6 +112,7 @@ export function resolveThreadListV2SnoozeMenuSelection(input: {
     id: input.event.slice("snooze:".length),
     now: input.now,
     ...presetOptions(input.presets),
+    ...(input.t ? { t: input.t } : {}),
   });
   return preset ? { _tag: "selected", preset } : { _tag: "expired" };
 }

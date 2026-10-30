@@ -426,9 +426,13 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "snooze-options",
-    title: "Snooze options",
+    get title() {
+      return i18n.t("settings.search.snooze-options.title");
+    },
     to: "/settings/threads",
-    searchTerms: ["snooze presets times later tonight tomorrow next week remind"],
+    searchTerms: [
+      "snooze presets times later tonight tomorrow next week remind 暂缓 选项 预设 唤醒 提醒",
+    ],
     environmentOnly: true,
     scope: "environment-defaults",
   },

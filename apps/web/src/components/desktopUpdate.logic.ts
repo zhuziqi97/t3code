@@ -144,7 +144,7 @@ export function getDesktopUpdateButtonTooltip(
     (state.status === "available" || state.status === "downloaded") &&
     getDesktopUpdateDownloadedVersion(state) === state.notAppliedVersion
   ) {
-    return `Update ${state.notAppliedVersion} did not apply. Click to retry.`;
+    return translate("update.notAppliedRetry", { version: state.notAppliedVersion });
   }
   if (state.status === "available") {
     return state.availableVersion
@@ -208,16 +208,21 @@ export function canCheckForUpdate(state: DesktopUpdateState | null): boolean {
 
 export function getDesktopUpdateDisabledReason(
   state: Pick<DesktopUpdateState, "enabled" | "status" | "message"> | null,
+  translate: TFunction = i18n.t,
 ): string | null {
   if (!state || (state.enabled && state.status !== "disabled")) return null;
-  return state.message?.trim() || "Automatic updates are not available in this build.";
+  const message = state.message?.trim();
+  return message
+    ? formatDesktopUpdateMessage(message, translate)
+    : translate("about.updateUnsupported");
 }
 
 export function getDesktopUpdateIdleTooltip(
   state: Pick<DesktopUpdateState, "enabled" | "status" | "message"> | null,
+  translate: TFunction = i18n.t,
 ) {
-  const disabledReason = getDesktopUpdateDisabledReason(state);
+  const disabledReason = getDesktopUpdateDisabledReason(state, translate);
   return disabledReason
-    ? { title: "Updates unavailable", detail: disabledReason }
-    : { title: "Check for updates", detail: null };
+    ? { title: translate("update.unavailable"), detail: disabledReason }
+    : { title: translate("update.check"), detail: null };
 }

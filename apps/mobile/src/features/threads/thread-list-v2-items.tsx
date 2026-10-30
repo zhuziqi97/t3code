@@ -773,6 +773,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     secondary: swipeActions.secondary,
     now: props.snoozePresetMinute || snoozeGateNow,
     presets: props.snoozePresets,
+    t,
   });
   const snoozePresetActions = useMemo<MenuAction[]>(
     () => [
@@ -781,9 +782,9 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         title: preset.label,
         subtitle: preset.whenLabel,
       })),
-      { id: "snooze:custom", title: "Custom…" },
+      { id: "snooze:custom", title: t("thread.snooze.customMenu") },
     ],
-    [snoozePresets],
+    [snoozePresets, t],
   );
   const arrangementMenuItems = useMemo<MenuAction[]>(
     () => [
@@ -970,14 +971,12 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         displayedPresets: snoozePresets,
         now: new Date(),
         presets: props.snoozePresets,
+        t,
       });
       if (snoozeSelection._tag === "selected") {
         handleSnooze(snoozeSelection.preset.snoozedUntil);
       } else if (snoozeSelection._tag === "expired") {
-        Dialog.alert(
-          "Could not snooze thread",
-          "That snooze time has passed. Choose another time.",
-        );
+        Dialog.alert(t("thread.snooze.expiredTitle"), t("thread.snooze.expiredDescription"));
       }
     },
     [
@@ -999,6 +998,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       setCustomSnoozeOpen,
       snoozePresets,
       props.snoozePresets,
+      t,
     ],
   );
   const primaryAction = useMemo(() => {

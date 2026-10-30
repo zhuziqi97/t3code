@@ -16,6 +16,7 @@ import {
   getDesktopUpdateReleaseUrl,
   resolveDesktopUpdateButtonAction,
   getDesktopUpdateNoticeIdentity,
+  getDesktopUpdateIdleTooltip,
   claimDesktopUpdateNotice,
 } from "./desktopUpdate.logic";
 
@@ -340,6 +341,41 @@ describe("canCheckForUpdate", () => {
 
 it("formats native T3 disabled reasons and preserves arbitrary updater diagnostics", () => {
   const t = i18n.getFixedT("zh");
+  expect(
+    getDesktopUpdateIdleTooltip(
+      {
+        ...baseState,
+        enabled: false,
+        status: "disabled",
+        message: "Automatic updates are not available because no update feed is configured.",
+      },
+      t,
+    ),
+  ).toEqual({
+    title: "更新不可用",
+    detail: "未配置更新源，无法自动更新。",
+  });
+  expect(
+    getDesktopUpdateIdleTooltip(
+      {
+        ...baseState,
+        enabled: false,
+        status: "disabled",
+        message: "Network download error /tmp/原文 404",
+      },
+      t,
+    ),
+  ).toEqual({
+    title: "更新不可用",
+    detail: "Network download error /tmp/原文 404",
+  });
+  expect(getDesktopUpdateIdleTooltip(baseState, t)).toEqual({ title: "检查更新", detail: null });
+  expect(
+    getDesktopUpdateButtonTooltip(
+      { ...baseState, status: "available", availableVersion: "1.1.0", notAppliedVersion: "1.1.0" },
+      t,
+    ),
+  ).toBe("更新 1.1.0 未生效。点击重试。");
   expect(
     formatDesktopUpdateMessage(
       "Automatic updates are not available because no update feed is configured.",

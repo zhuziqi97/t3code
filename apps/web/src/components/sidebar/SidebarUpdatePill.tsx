@@ -222,7 +222,7 @@ function SidebarUpdateControl() {
     isClientDownloadPending,
   });
   const idleTooltip =
-    !showUpdateDetails && !showCheckIcon ? getDesktopUpdateIdleTooltip(state) : null;
+    !showUpdateDetails && !showCheckIcon ? getDesktopUpdateIdleTooltip(state, t) : null;
   const clientLabel =
     showClientDownload && state
       ? t(
@@ -345,8 +345,8 @@ function SidebarUpdateControl() {
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: "Could not update everything",
-          description: error instanceof Error ? error.message : "An unexpected error occurred.",
+          title: t("update.everything.couldNotUpdate"),
+          description: error instanceof Error ? error.message : t("common.unexpectedError"),
         }),
       );
     }
