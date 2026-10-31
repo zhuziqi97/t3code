@@ -150,9 +150,19 @@ async function hydrateClientSettings(): Promise<void> {
       if (hydrationGeneration !== clientSettingsHydrationGeneration) {
         return;
       }
-      if (persistedSettings) {
-        replaceClientSettingsSnapshot({ ...DEFAULT_CLIENT_SETTINGS, ...persistedSettings });
+      let settings = { ...DEFAULT_CLIENT_SETTINGS, ...persistedSettings };
+      if (!settings.sidebarWorkingShelfMigrationCompleted) {
+        settings = {
+          ...settings,
+          sidebarWorkingShelfEnabled: false,
+          sidebarWorkingShelfMigrationCompleted: true,
+        };
+        await ensureLocalApi().persistence.setClientSettings(settings);
+        if (hydrationGeneration !== clientSettingsHydrationGeneration) {
+          return;
+        }
       }
+      replaceClientSettingsSnapshot(settings);
       setClientSettingsHydrationStatus("ready");
     } catch (error) {
       if (hydrationGeneration === clientSettingsHydrationGeneration) {

@@ -1,5 +1,10 @@
 import { DEFAULT_SERVER_SETTINGS, ProviderInstanceId } from "@t3tools/contracts";
-import { DEFAULT_CLIENT_SETTINGS, type ClientSettings } from "@t3tools/contracts/settings";
+import {
+  ClientSettingsSchema,
+  DEFAULT_CLIENT_SETTINGS,
+  type ClientSettings,
+} from "@t3tools/contracts/settings";
+import * as Schema from "effect/Schema";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const persistenceMocks = vi.hoisted(() => ({
@@ -16,12 +21,15 @@ import {
   __setClientSettingsForTests,
   ensureClientSettingsHydrated,
   getClientSettings,
+  isClientSettingsHydrated,
   mergeEnvironmentSettings,
   persistClientSettingsPatch,
   persistClientSettingsUpdate,
   prepareModelPreferencesPatch,
 } from "./useSettings";
 import { applyServerSettingsPatch } from "@t3tools/shared/serverSettings";
+
+const decodeClientSettings = Schema.decodeSync(ClientSettingsSchema);
 
 beforeEach(() => {
   persistenceMocks.getClientSettings.mockReset().mockResolvedValue(null);
@@ -36,11 +44,160 @@ afterEach(() => {
 describe("client settings hydration", () => {
   const savedSettings = {
     ...DEFAULT_CLIENT_SETTINGS,
+    sidebarWorkingShelfMigrationCompleted: true,
     timestampFormat: "12-hour" as const,
     favorites: [{ provider: ProviderInstanceId.make("codex_work"), model: "gpt-5.6" }],
   };
   const onboardingCompletedAt = "2026-09-05T12:00:00.000Z";
   const complete = (current: ClientSettings) => ({ ...current, onboardingCompletedAt });
+
+  it.each([true, false, undefined])(
+    "migrates the saved working shelf %s once and preserves a later opt-in",
+    async (oldValue) => {
+      const {
+        sidebarWorkingShelfEnabled: _shelf,
+        sidebarWorkingShelfMigrationCompleted: _migration,
+        ...otherSettings
+      } = savedSettings;
+      const legacySettings = {
+        ...otherSettings,
+        ...(oldValue === undefined ? {} : { sidebarWorkingShelfEnabled: oldValue }),
+      };
+      let stored: ClientSettings | null = decodeClientSettings(legacySettings);
+      persistenceMocks.getClientSettings.mockImplementation(async () => stored);
+      persistenceMocks.setClientSettings.mockImplementation(async (settings) => {
+        stored = settings;
+      });
+
+      await ensureClientSettingsHydrated();
+      const migratedSettings = {
+        ...savedSettings,
+        sidebarWorkingShelfEnabled: false,
+        sidebarWorkingShelfMigrationCompleted: true,
+      };
+      expect(getClientSettings()).toEqual(migratedSettings);
+      expect(stored).toEqual(migratedSettings);
+
+      __resetClientSettingsPersistenceForTests();
+      await ensureClientSettingsHydrated();
+      expect(getClientSettings()).toEqual(migratedSettings);
+      expect(persistenceMocks.setClientSettings).toHaveBeenCalledOnce();
+
+      await persistClientSettingsPatch({ sidebarWorkingShelfEnabled: true });
+      __resetClientSettingsPersistenceForTests();
+      await ensureClientSettingsHydrated();
+      const optedInSettings = {
+        ...migratedSettings,
+        sidebarWorkingShelfEnabled: true,
+      };
+      expect(getClientSettings()).toEqual(optedInSettings);
+      expect(stored).toEqual(optedInSettings);
+      expect(persistenceMocks.setClientSettings).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it("records the migration for a new client before its first opt-in", async () => {
+    let stored: ClientSettings | null = null;
+    persistenceMocks.getClientSettings.mockImplementation(async () => stored);
+    persistenceMocks.setClientSettings.mockImplementation(async (settings) => {
+      stored = settings;
+    });
+
+    await ensureClientSettingsHydrated();
+    expect(stored).toEqual({
+      ...DEFAULT_CLIENT_SETTINGS,
+      sidebarWorkingShelfEnabled: false,
+      sidebarWorkingShelfMigrationCompleted: true,
+    });
+    await persistClientSettingsPatch({ sidebarWorkingShelfEnabled: true });
+    __resetClientSettingsPersistenceForTests();
+    await ensureClientSettingsHydrated();
+    expect(getClientSettings()).toEqual({
+      ...DEFAULT_CLIENT_SETTINGS,
+      sidebarWorkingShelfEnabled: true,
+      sidebarWorkingShelfMigrationCompleted: true,
+    });
+    expect(persistenceMocks.setClientSettings).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not publish migration completion before persistence succeeds", async () => {
+    const legacySettings = {
+      ...savedSettings,
+      sidebarWorkingShelfEnabled: true,
+      sidebarWorkingShelfMigrationCompleted: false,
+    };
+    const failure = new Error("settings write unavailable");
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    persistenceMocks.getClientSettings.mockResolvedValue(legacySettings);
+    persistenceMocks.setClientSettings.mockRejectedValueOnce(failure);
+
+    await expect(ensureClientSettingsHydrated()).rejects.toBe(failure);
+    expect(getClientSettings()).toBe(DEFAULT_CLIENT_SETTINGS);
+    expect(isClientSettingsHydrated()).toBe(false);
+    await ensureClientSettingsHydrated();
+    expect(getClientSettings()).toEqual({
+      ...savedSettings,
+      sidebarWorkingShelfEnabled: false,
+      sidebarWorkingShelfMigrationCompleted: true,
+    });
+    expect(persistenceMocks.setClientSettings).toHaveBeenCalledTimes(2);
+    expect(isClientSettingsHydrated()).toBe(true);
+  });
+
+  it("applies an opt-in queued during the migration after the durable reset", async () => {
+    let finishRead!: (settings: ClientSettings) => void;
+    persistenceMocks.getClientSettings.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishRead = resolve;
+        }),
+    );
+    let finishMigrationWrite!: () => void;
+    const blockedWrite = new Promise<void>((resolve) => {
+      finishMigrationWrite = resolve;
+    });
+    let signalMigrationWrite!: () => void;
+    const migrationWriteStarted = new Promise<void>((resolve) => {
+      signalMigrationWrite = resolve;
+    });
+    let stored: ClientSettings | null = null;
+    persistenceMocks.setClientSettings
+      .mockImplementationOnce(async (settings) => {
+        signalMigrationWrite();
+        await blockedWrite;
+        stored = settings;
+      })
+      .mockImplementation(async (settings) => {
+        stored = settings;
+      });
+
+    const hydration = ensureClientSettingsHydrated();
+    const optIn = persistClientSettingsPatch({ sidebarWorkingShelfEnabled: true });
+    finishRead({
+      ...savedSettings,
+      sidebarWorkingShelfEnabled: true,
+      sidebarWorkingShelfMigrationCompleted: false,
+    });
+    await migrationWriteStarted;
+    expect(getClientSettings()).toBe(DEFAULT_CLIENT_SETTINGS);
+    expect(isClientSettingsHydrated()).toBe(false);
+    expect(stored).toBeNull();
+
+    finishMigrationWrite();
+    await Promise.all([hydration, optIn]);
+    const expected = {
+      ...savedSettings,
+      sidebarWorkingShelfEnabled: true,
+      sidebarWorkingShelfMigrationCompleted: true,
+    };
+    expect(getClientSettings()).toEqual(expected);
+    expect(stored).toEqual(expected);
+    expect(persistenceMocks.setClientSettings).toHaveBeenNthCalledWith(1, {
+      ...expected,
+      sidebarWorkingShelfEnabled: false,
+    });
+    expect(persistenceMocks.setClientSettings).toHaveBeenCalledTimes(2);
+  });
 
   it("waits for saved model preferences before applying the first server edit", async () => {
     const provider = ProviderInstanceId.make("codex_work");
