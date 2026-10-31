@@ -239,5 +239,43 @@ describe("sortWorkingThreadsBySend", () => {
     expect(
       sortWorkingThreadsBySend([launched, sentFirst, sentLast]).map((thread) => thread.id),
     ).toEqual(["sent-last", "sent-first", "launched"]);
+
+    const dispatched = {
+      ...thread("dispatched", true),
+      latestUserAuthoredMessageAt: null,
+      latestUserMessageAt: "2026-06-01T03:00:00.000Z",
+      latestSentMessageAt: "2026-06-01T03:00:00.000Z",
+    };
+    const automaticallyWoken = {
+      ...sentFirst,
+      latestUserMessageAt: "2026-06-01T04:00:00.000Z",
+      latestSentMessageAt: "2026-06-01T01:00:00.000Z",
+    };
+    const automaticOnly = {
+      ...thread("wake-only", true),
+      latestUserAuthoredMessageAt: null,
+      latestUserMessageAt: "2026-06-01T05:00:00.000Z",
+      latestSentMessageAt: null,
+    };
+    const explicitNull = {
+      ...sentLast,
+      id: ThreadId.make("null-field"),
+      latestSentMessageAt: null,
+      latestRun: sentFirst.latestRun,
+    };
+    expect(
+      sortWorkingThreadsBySend([
+        automaticOnly,
+        automaticallyWoken,
+        dispatched,
+        sentLast,
+        explicitNull,
+      ]).map((thread) => thread.id),
+    ).toEqual(["dispatched", "sent-last", "sent-first", "null-field", "wake-only"]);
+    const legacy = { ...thread("legacy", true), latestRun: sentFirst.latestRun };
+    expect(sortWorkingThreadsBySend([sentLast, legacy]).map((thread) => thread.id)).toEqual([
+      "legacy",
+      "sent-last",
+    ]);
   });
 });

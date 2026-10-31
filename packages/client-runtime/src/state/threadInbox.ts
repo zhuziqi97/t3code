@@ -56,7 +56,12 @@ export function sortInboxThreadsByReturn<T extends InboxThreadInput>(
 
 type WorkingSortInput = Pick<
   EnvironmentThreadShell,
-  "id" | "environmentId" | "createdAt" | "latestRun" | "latestUserAuthoredMessageAt"
+  | "id"
+  | "environmentId"
+  | "createdAt"
+  | "latestRun"
+  | "latestUserAuthoredMessageAt"
+  | "latestSentMessageAt"
 >;
 
 export function sortWorkingThreadsBySend<T extends WorkingSortInput>(threads: readonly T[]): T[] {
@@ -66,9 +71,11 @@ export function sortWorkingThreadsBySend<T extends WorkingSortInput>(threads: re
       Math.max(
         toSortableTimestamp(thread.createdAt) ?? 0,
         toSortableTimestamp(
-          (thread.latestUserAuthoredMessageAt === undefined
-            ? thread.latestRun?.requestedAt
-            : thread.latestUserAuthoredMessageAt) ?? undefined,
+          (thread.latestSentMessageAt !== undefined
+            ? thread.latestSentMessageAt
+            : thread.latestUserAuthoredMessageAt !== undefined
+              ? thread.latestUserAuthoredMessageAt
+              : thread.latestRun?.requestedAt) ?? undefined,
         ) ?? 0,
       ),
     ]),

@@ -944,6 +944,7 @@ type ShellThreadRow = {
   readonly pending_link_request_payload_json: string | null;
   readonly latest_user_message_at: string | null;
   readonly latest_user_authored_message_at: string | null;
+  readonly latest_sent_message_at: string | null;
   readonly has_actionable_proposed_plan: number;
 };
 
@@ -1436,6 +1437,13 @@ export function threadShellFromProjection(
         DateTime.toEpochMillis(right.updatedAt) - DateTime.toEpochMillis(left.updatedAt),
     );
   const latestUserMessage = userMessages[0] ?? null;
+  const latestSentMessage = userMessages.find(
+    (message) =>
+      message.scheduledTaskId === undefined &&
+      message.notification === undefined &&
+      (message.createdBy === "user" ||
+        (message.createdBy === "agent" && message.creationSource === "mcp")),
+  );
   const pendingBackgroundTasks = derivePendingBackgroundWork({
     latestRun,
     providerThreads: projection.providerThreads,
@@ -1505,6 +1513,7 @@ export function threadShellFromProjection(
     latestUserMessageAt: latestUserMessage?.updatedAt ?? null,
     latestUserAuthoredMessageAt:
       userMessages.find((message) => message.createdBy === "user")?.updatedAt ?? null,
+    latestSentMessageAt: latestSentMessage?.updatedAt ?? null,
     hasActionableProposedPlan: projection.plans.some(
       (plan) => plan.kind === "proposed_plan" && plan.status === "active",
     ),
@@ -1615,6 +1624,7 @@ type ShellThreadState = {
   readonly pendingRuntimeRequest: OrchestrationV2PendingRuntimeRequestSummary | null;
   readonly latestUserMessageAt: DateTime.Utc | null;
   readonly latestUserAuthoredMessageAt: DateTime.Utc | null;
+  readonly latestSentMessageAt: DateTime.Utc | null;
   readonly hasActionableProposedPlan: boolean;
   readonly pendingBackgroundTasks: OrchestrationV2ThreadShell["pendingBackgroundTasks"];
   readonly providerInstanceHistory: OrchestrationV2ThreadShell["providerInstanceHistory"];
@@ -1779,6 +1789,7 @@ function shellFromState(input: {
     latestVisibleMessage: null,
     latestUserMessageAt: input.state.latestUserMessageAt,
     latestUserAuthoredMessageAt: input.state.latestUserAuthoredMessageAt,
+    latestSentMessageAt: input.state.latestSentMessageAt,
     hasActionableProposedPlan: input.state.hasActionableProposedPlan,
     pendingBackgroundTasks: input.state.pendingBackgroundTasks,
     providerInstanceHistory: input.state.providerInstanceHistory,
@@ -5921,6 +5932,24 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 ORDER BY message.updated_at DESC, message.message_id DESC
                 LIMIT 1
               ) AS latest_user_authored_message_at,
+              (
+                SELECT message.updated_at
+                FROM orchestration_v2_projection_messages message
+                WHERE message.thread_id = t.thread_id
+                  AND message.role = 'user'
+                  AND json_extract(message.payload_json, '$.scheduledTaskId') IS NULL
+                  AND json_extract(message.payload_json, '$.notification') IS NULL
+                  AND NOT ${isIdleCompactionMessage("message")}
+                  AND (
+                    json_extract(message.payload_json, '$.createdBy') = 'user'
+                    OR (
+                      json_extract(message.payload_json, '$.createdBy') = 'agent'
+                      AND json_extract(message.payload_json, '$.creationSource') = 'mcp'
+                    )
+                  )
+                ORDER BY message.updated_at DESC, message.message_id DESC
+                LIMIT 1
+              ) AS latest_sent_message_at,
               EXISTS (
                 SELECT 1
                 FROM orchestration_v2_projection_plans plan
@@ -6513,6 +6542,10 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             row.latest_user_authored_message_at === null
               ? null
               : DateTime.makeUnsafe(row.latest_user_authored_message_at),
+          latestSentMessageAt:
+            row.latest_sent_message_at === null
+              ? null
+              : DateTime.makeUnsafe(row.latest_sent_message_at),
           hasActionableProposedPlan: row.has_actionable_proposed_plan === 1,
           pendingBackgroundTasks,
           providerInstanceHistory: providerInstanceHistoryForShell({

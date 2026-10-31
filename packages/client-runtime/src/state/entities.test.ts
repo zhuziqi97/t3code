@@ -27,6 +27,7 @@ describe("V2 client presentation", () => {
     const running = {
       ...v2ThreadShell,
       snoozedAt: DateTime.makeUnsafe("2026-06-19T23:59:00.000Z"),
+      latestSentMessageAt: DateTime.makeUnsafe("2026-06-19T23:58:00.000Z"),
       snoozedUntil: DateTime.makeUnsafe("2026-06-20T01:00:00.000Z"),
       latestRunId: runId,
       activeRunId: runId,
@@ -39,16 +40,22 @@ describe("V2 client presentation", () => {
       },
     };
     const active = presentThreadShell(environmentId, running);
+    expect(active.latestSentMessageAt).toBe("2026-06-19T23:58:00.000Z");
     expect(active.hasPendingUserInput).toBe(false);
     expect(isThreadWorking(active)).toBe(true);
     expect(canSnooze(active, { now: "2026-06-20T00:05:00.000Z" })).toBe(false);
 
     const completed = presentThreadShell(environmentId, {
       ...running,
+      latestSentMessageAt: null,
       activeRunId: null,
       status: "completed",
     });
     expect(completed.hasPendingUserInput).toBe(true);
+    expect(completed.latestSentMessageAt).toBeNull();
+    expect(presentThreadShell(environmentId, v2ThreadShell)).not.toHaveProperty(
+      "latestSentMessageAt",
+    );
     expect(isThreadWorking(completed)).toBe(false);
     expect(effectiveSnoozed(active, { now: "2026-06-20T00:05:00.000Z" })).toBe(false);
   });

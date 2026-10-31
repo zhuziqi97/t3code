@@ -61,6 +61,7 @@ const SHELL_SNAPSHOT: OrchestrationV2ShellSnapshot = {
       createdBy: "user",
       creationSource: "mobile",
       latestRunId: null,
+      latestSentMessageAt: NOW,
       activeRunId: null,
       status: "idle",
       pendingRuntimeRequest: null,

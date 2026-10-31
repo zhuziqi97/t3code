@@ -4,12 +4,15 @@ import {
   MessageId,
   NodeId,
   type OrchestrationV2AppThread,
+  type OrchestrationV2ConversationMessage,
   type OrchestrationV2Run,
+  OrchestrationV2ThreadShellJson,
   ProjectId,
   ProviderDriverKind,
   ProviderInstanceId,
   ProviderThreadId,
   RunId,
+  ScheduledTaskId,
   RuntimeRequestId,
   ThreadId,
   TurnItemId,
@@ -17,6 +20,7 @@ import {
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
@@ -27,6 +31,8 @@ const now = DateTime.makeUnsafe("2026-09-04T12:00:00Z");
 const old = DateTime.subtract(now, { days: 10 });
 const providerInstanceId = ProviderInstanceId.make("codex");
 const modelSelection = { instanceId: providerInstanceId, model: "test-model" };
+const encodeShellJson = Schema.encodeSync(OrchestrationV2ThreadShellJson);
+const decodeShellJson = Schema.decodeSync(OrchestrationV2ThreadShellJson);
 
 const createThread = Effect.fn(function* (
   name: string,
@@ -299,8 +305,14 @@ it.effect("sql: the user-authored message time ignores agent notifications", () 
     const message = (
       id: string,
       createdBy: "user" | "agent",
-      creationSource: "web" | "provider",
+      creationSource: "web" | "mcp" | "provider" | "server",
       at: DateTime.Utc,
+      extra: Partial<
+        Pick<
+          OrchestrationV2ConversationMessage,
+          "role" | "text" | "notification" | "scheduledTaskId" | "idleCompaction"
+        >
+      > = {},
     ) =>
       store.apply({
         id: EventId.make(`event:settlement:${id}`),
@@ -320,11 +332,32 @@ it.effect("sql: the user-authored message time ignores agent notifications", () 
           streaming: false,
           createdAt: at,
           updatedAt: at,
+          ...extra,
         },
       });
     const written = DateTime.subtract(now, { hours: 2 });
     yield* message("written", "user", "web", written);
-    yield* message("notification", "agent", "provider", now);
+    const dispatched = DateTime.subtract(now, { hours: 1 });
+    yield* message("dispatched", "agent", "mcp", dispatched);
+    const dispatchedShell = (yield* store.getShellSnapshot()).threads.find(
+      (thread) => thread.id === threadId,
+    );
+    assert.equal(
+      DateTime.formatIso(dispatchedShell!.latestUserMessageAt!),
+      DateTime.formatIso(dispatched),
+    );
+    assert.equal(
+      DateTime.formatIso(dispatchedShell!.latestUserAuthoredMessageAt!),
+      DateTime.formatIso(written),
+    );
+    assert.deepInclude(dispatchedShell, { latestSentMessageAt: dispatched });
+    yield* message("notification", "agent", "provider", now, {
+      notification: {
+        source: { kind: "background_task" },
+        outcome: "updated",
+        summary: "Background activity updated",
+      },
+    });
 
     const [candidate] = yield* store.getSettlementCandidates(threadId);
     assert.isDefined(candidate);
@@ -339,6 +372,43 @@ it.effect("sql: the user-authored message time ignores agent notifications", () 
     assert.equal(
       DateTime.formatIso(shellThread!.latestUserAuthoredMessageAt!),
       DateTime.formatIso(written),
+    );
+    assert.deepInclude(shellThread, { latestSentMessageAt: dispatched });
+
+    const scheduledUser = DateTime.add(now, { minutes: 1 });
+    yield* message("scheduled-user", "user", "web", scheduledUser, {
+      scheduledTaskId: ScheduledTaskId.make("scheduled-user"),
+    });
+    yield* message("scheduled-agent", "agent", "mcp", DateTime.add(now, { minutes: 2 }), {
+      scheduledTaskId: ScheduledTaskId.make("scheduled-agent"),
+    });
+    yield* message("assistant", "agent", "provider", DateTime.add(now, { minutes: 3 }), {
+      role: "assistant",
+    });
+    yield* message("idle-compaction", "agent", "server", DateTime.add(now, { minutes: 4 }), {
+      text: "/compact",
+      idleCompaction: "beforeCacheExpires",
+    });
+    const afterAutomatic = (yield* store.getShellSnapshot()).threads.find(
+      (thread) => thread.id === threadId,
+    );
+    assert.deepInclude(afterAutomatic, { latestSentMessageAt: dispatched });
+    assert.equal(
+      DateTime.formatIso(afterAutomatic!.latestUserAuthoredMessageAt!),
+      DateTime.formatIso(scheduledUser),
+    );
+    const encoded = encodeShellJson(afterAutomatic!);
+    assert.equal(encoded.latestSentMessageAt, DateTime.formatIso(dispatched));
+    assert.deepInclude(decodeShellJson(encoded), { latestSentMessageAt: dispatched });
+    const memoryShell = ProjectionStore.threadShellFromProjection(
+      yield* store.getThreadProjection(threadId),
+    );
+    assert.deepInclude(memoryShell, { latestSentMessageAt: dispatched });
+    assert.deepInclude(memoryShell, { latestUserAuthoredMessageAt: scheduledUser });
+    const [afterCandidate] = yield* store.getSettlementCandidates(threadId);
+    assert.equal(
+      DateTime.formatIso(afterCandidate!.latestUserAuthoredMessageAt!),
+      DateTime.formatIso(scheduledUser),
     );
   }).pipe(Effect.provide(layerSql)),
 );
