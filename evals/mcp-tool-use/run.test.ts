@@ -458,6 +458,7 @@ it("grades fixed-reviewer routing without confusing it with independent delegati
       [send, read],
       [read, { ...send, input: { ...send.input, threadId: "wrong-reviewer" } }],
       [read, { ...send, input: { ...send.input, message: "Hello" } }],
+      ...["steer", "restart"].map((mode) => [read, { ...send, input: { ...send.input, mode } }]),
       [read, send, send],
       ...["delegate_task", "Agent", "Workflow", "t3_thread_launch", "create_threads"].map(
         (tool) => [read, send, { step: 2, tool, input: {} }],
@@ -465,6 +466,7 @@ it("grades fixed-reviewer routing without confusing it with independent delegati
     ]) {
       assert.isNotEmpty(failed(testCase.expect, { ...good, calls }), id);
     }
+    assert.isNotEmpty(failed(testCase.expect, { ...good, stopReason: "max_steps" }), id);
     if (id === "fixed-reviewer-real-mode-denial") {
       assert.isNotEmpty(failed(testCase.expect, { ...good, text: "The review started." }));
     }
