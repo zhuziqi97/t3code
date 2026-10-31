@@ -53,6 +53,7 @@ vi.mock("~/localApi", () => ({
   ensureLocalApi: () => ({
     persistence: {
       getClientSettings: async () => ({ favorites: [{ provider, model }] }),
+      setClientSettings: async () => undefined,
     },
   }),
 }));
