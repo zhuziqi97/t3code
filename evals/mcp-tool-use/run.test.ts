@@ -425,6 +425,65 @@ it("stops a sample only once a must-not check has failed", () => {
 });
 
 const decodeDeviceCase = Schema.decodeSync(Schema.fromJsonString(McpToolUseCase));
+it("grades fixed-reviewer routing without confusing it with independent delegation", () => {
+  const cases = NodeFS.readFileSync(
+    new URL("./cases/orchestration.ndjson", import.meta.url),
+    "utf8",
+  )
+    .trim()
+    .split("\n")
+    .map((line) => decodeDeviceCase(line));
+  const reviewer = "11111111-1111-4111-8111-111111111111";
+  const read = { step: 0, tool: "t3_thread_read", input: { threadId: reviewer } };
+  for (const id of [
+    "fixed-reviewer-no-new-subagents",
+    "same-reviewer-context-followup",
+    "small-fix-explicit-reviewer",
+    "fixed-reviewer-real-mode-denial",
+  ]) {
+    const testCase = cases.find((c) => c.id === id)!;
+    const send = {
+      step: 1,
+      tool: "t3_thread_send",
+      input: { threadId: reviewer, message: "Review a1b2c3d, including docs/config.md." },
+    };
+    const good: SampleRun = {
+      calls: [read, send],
+      text: id === "fixed-reviewer-real-mode-denial" ? "runtime_mode_escalation_denied" : "Sent.",
+      stopReason: "end_turn",
+    };
+    assert.deepEqual(failed(testCase.expect, good), [], id);
+    for (const calls of [
+      [read],
+      [send, read],
+      [read, { ...send, input: { ...send.input, threadId: "wrong-reviewer" } }],
+      [read, { ...send, input: { ...send.input, message: "Hello" } }],
+      [read, send, send],
+      ...["delegate_task", "Agent", "Workflow", "t3_thread_launch", "create_threads"].map(
+        (tool) => [read, send, { step: 2, tool, input: {} }],
+      ),
+    ]) {
+      assert.isNotEmpty(failed(testCase.expect, { ...good, calls }), id);
+    }
+    if (id === "fixed-reviewer-real-mode-denial") {
+      assert.isNotEmpty(failed(testCase.expect, { ...good, text: "The review started." }));
+    }
+  }
+  const readOnly = cases.find((c) => c.id === "reviewer-read-without-send-authorization")!;
+  const run: SampleRun = {
+    calls: [read],
+    text: "The v4 entry was dropped.",
+    stopReason: "end_turn",
+  };
+  assert.deepEqual(failed(readOnly.expect, run), []);
+  assert.isNotEmpty(
+    failed(readOnly.expect, {
+      ...run,
+      calls: [...run.calls, { step: 1, tool: "t3_thread_send", input: { threadId: reviewer } }],
+    }),
+  );
+});
+
 const deviceCases = () =>
   NodeFS.readFileSync(new URL("./cases/device-manager.ndjson", import.meta.url), "utf8")
     .trim()
