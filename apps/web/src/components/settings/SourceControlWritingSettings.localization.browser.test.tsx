@@ -85,6 +85,7 @@ vi.mock("./settingsLayout", async (original) => ({
 import { changeLanguage } from "../../i18n";
 import { BranchNamingSettings } from "./BranchNamingSettings";
 import { SourceControlWritingSettingsSection } from "./SourceControlWritingSettings";
+import { ThreadTitleInstructionsSettings } from "./ThreadTitleInstructionsSettings";
 
 let root: Screen;
 let container: HTMLDivElement;
@@ -222,6 +223,42 @@ it("keeps an edited bulk draft without applying it until the translated action i
     },
   });
 });
+
+it.each([false, true])(
+  "keeps title instructions, focus and selection across language changes with mixed targets %s",
+  async (mixedTargets) => {
+    await using _lifecycle = await setupLifecycle();
+    state.settings[0] = {
+      ...state.settings[0]!,
+      threadTitleInstructions: "Keep Project-X and PR #42 unchanged.",
+    };
+    if (mixedTargets) {
+      state.settings.push({
+        ...state.settings[0],
+        threadTitleInstructions: "Other host instructions",
+      });
+    }
+    await act(() => root.rerender(<ThreadTitleInstructionsSettings />));
+    const input = container.querySelector<HTMLTextAreaElement>(
+      'textarea[aria-label="Thread title instructions"]',
+    )!;
+    expect(input.value).toBe(mixedTargets ? "" : "Keep Project-X and PR #42 unchanged.");
+    await type(input, "  Keep USER-TEXT, /tmp/Project-X and PR #42.  ");
+    input.setSelectionRange(7, 16);
+
+    await switchLanguage();
+    expect(container.querySelector('[aria-label="会话标题生成说明"]')).toBe(input);
+    expect(input.value).toBe("  Keep USER-TEXT, /tmp/Project-X and PR #42.  ");
+    expect(document.activeElement).toBe(input);
+    expect([input.selectionStart, input.selectionEnd]).toEqual([7, 16]);
+    expect(state.update).not.toHaveBeenCalled();
+
+    await act(() => input.blur());
+    expect(state.update).toHaveBeenCalledExactlyOnceWith({
+      threadTitleInstructions: "Keep USER-TEXT, /tmp/Project-X and PR #42.",
+    });
+  },
+);
 
 let renderStack: AsyncDisposableStack;
 async function setupLifecycle() {

@@ -1,5 +1,16 @@
 /** English keys define the catalog and fallback. Interpolation uses {{name}}; plurals use _one and _other. Keep provider names and shell commands untranslated. */
 export const en = {
+  "chat.workspace.conversation": "Conversation",
+  "chat.workspace.messageInput": "Message input",
+  "chat.banner.fullTitle": "Show full title: {{title}}",
+  "chat.banner.titleDetails": "Show title details",
+  "chat.banner.namedDetails": "Show details: {{title}}",
+  "threadTitle.instructions.description":
+    "Appended to the prompt for new and regenerated thread titles.",
+  "threadTitle.instructions.reset": "thread title instructions",
+  "threadTitle.instructions.mixed": "Mixed. Enter instructions to apply to all selected targets.",
+  "threadTitle.instructions.placeholder": "Keep titles to a few words. Lead with the main subject.",
+  "server.update.crossTrack": "Switch tracks in About → Update track",
   "prediction.setting.label": "Codex native predictions (experimental)",
   "prediction.setting.description":
     "Suggest a follow-up after Codex finishes. Requires a system Codex CLI with native sampling support (stable 0.165 or newer). May use subscription allowance or incur charges. Accepting adds an editable draft; it does not send it.",
@@ -5863,7 +5874,7 @@ export const en = {
   "sourceControl.writing.customLabel": "Custom instructions",
   "sourceControl.writing.customDescription":
     "Use your instructions for change descriptions and change requests in every project.",
-  "sourceControl.writing.section": "Text generation",
+  "sourceControl.writing.section": "Writing & review",
   "sourceControl.writing.reset": "source control writing style",
   "sourceControl.writing.allInstructions":
     "Custom source control instructions for all selected environments",

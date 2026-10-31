@@ -710,8 +710,8 @@ export default function ChatView(props: ChatViewProps) {
     setPendingServerThreadStartFromOriginByThreadId,
   ] = useState<Record<string, boolean>>({});
   const legendListRef = useRef<LegendListRef | null>(null);
-  const conversationArea = workspaceAreaProps("conversation", 1, "Conversation");
-  const composerArea = workspaceAreaProps("composer", 2, "Message input");
+  const conversationArea = workspaceAreaProps("conversation", 1, t("chat.workspace.conversation"));
+  const composerArea = workspaceAreaProps("composer", 2, t("chat.workspace.messageInput"));
   const [composerOverlayElement, setComposerOverlayElement] = useState<HTMLDivElement | null>(null);
   const [composerTimelineInset, setComposerTimelineInset] = useState(0);
   const composerTimelineInsetRef = useRef(0);
@@ -2446,12 +2446,12 @@ export default function ChatView(props: ChatViewProps) {
   const compactDisabled = compactThreadUnavailable;
   const compactDisabledReason = compactDisabled
     ? !canOperateThread
-      ? "This connection cannot change threads."
+      ? t("thread.action.denied")
       : !activeProject
-        ? "Choose a project before compacting"
+        ? t("chat.compact.chooseProject")
         : !manualCompactionProviderAvailable
-          ? "Compaction is unavailable for this provider"
-          : "Compacting is unavailable right now"
+          ? t("chat.compact.providerUnavailable")
+          : t("chat.compact.unavailable")
     : null;
   const resumeCompactionTokens =
     activeContextWindow &&
@@ -3537,17 +3537,17 @@ export default function ChatView(props: ChatViewProps) {
                               isRevertingCheckpoint={isRevertingCheckpoint}
                               sendDisabledReason={
                                 !canOperateThread
-                                  ? "This connection cannot change threads."
+                                  ? t("thread.action.denied")
                                   : isEnvironmentChanging
-                                    ? "Preparing machine"
+                                    ? t("chat.machine.preparing")
                                     : isRevertingCheckpoint
-                                      ? "Rewinding conversation"
+                                      ? t("chat.conversation.rewinding")
                                       : feedbackUploading
-                                        ? "Sending feedback"
+                                        ? t("chat.feedback.sending")
                                         : threadDetailLoading
-                                          ? "Messages loading"
+                                          ? t("chat.messages.loading")
                                           : worktreeSetupBlocksSend
-                                            ? "Preparing worktree"
+                                            ? t("chat.worktree.preparing")
                                             : projectCloneSendBlockReason
                               }
                               isPreparingWorktree={isPreparingWorktree && !sendQueuesBehindSetup}

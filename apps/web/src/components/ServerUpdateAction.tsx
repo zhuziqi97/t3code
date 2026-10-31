@@ -44,8 +44,6 @@ const pendingUpdateEnvironmentIds = new Set<EnvironmentId>();
 const isClipboardApiUnavailable = Schema.is(ClipboardApiUnavailableError);
 const isClipboardWriteError = Schema.is(ClipboardWriteError);
 
-const CROSS_TRACK_NOTE = "Switch tracks in About → Update track";
-
 /** Hosts refuse a Stable/Nightly crossing outside a track switch, which checks the database first. */
 function refusedCrossing(
   target: {
@@ -64,7 +62,8 @@ function refusedCrossing(
 }
 
 function CrossTrackNote() {
-  return <span className="text-muted-foreground text-xs">{CROSS_TRACK_NOTE}</span>;
+  const t = useTranslate();
+  return <span className="text-muted-foreground text-xs">{t("server.update.crossTrack")}</span>;
 }
 
 function updateFailureMessage(error: unknown): string {

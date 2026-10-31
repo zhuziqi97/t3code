@@ -4,6 +4,16 @@
 import type { Messages } from "./messages.en.ts";
 
 export const zh: Partial<Messages> = {
+  "chat.workspace.conversation": "会话",
+  "chat.workspace.messageInput": "消息输入",
+  "chat.banner.fullTitle": "显示完整标题：{{title}}",
+  "chat.banner.titleDetails": "显示标题详情",
+  "chat.banner.namedDetails": "显示详情：{{title}}",
+  "threadTitle.instructions.description": "附加到新建和重新生成会话标题的提示词中。",
+  "threadTitle.instructions.reset": "会话标题生成说明",
+  "threadTitle.instructions.mixed": "值不一致。输入指令以应用到所有所选目标。",
+  "threadTitle.instructions.placeholder": "标题保持简短，以主要主题开头。",
+  "server.update.crossTrack": "请在“关于 → 更新渠道”中切换渠道",
   "prediction.setting.label": "Codex 原生预测（实验性）",
   "prediction.setting.description":
     "在 Codex 完成后建议下一条消息。需要支持原生采样的系统 Codex CLI（稳定版 0.165 或更新版本），可能消耗订阅额度或产生费用。接受后只填入可编辑草稿，不会自动发送。",
@@ -5533,7 +5543,7 @@ export const zh: Partial<Messages> = {
   "sourceControl.writing.conventionalDescription": "使用约定式提交前缀，并保持变更请求的文字简洁。",
   "sourceControl.writing.customLabel": "自定义指令",
   "sourceControl.writing.customDescription": "在各项目的变更说明和变更请求中使用你的指令。",
-  "sourceControl.writing.section": "文本生成",
+  "sourceControl.writing.section": "写作与审查",
   "sourceControl.writing.reset": "版本控制写作风格",
   "sourceControl.writing.allInstructions": "所选执行环境的版本控制自定义指令",
   "sourceControl.writing.allPlaceholder": "输入所有所选执行环境要使用的指令。",

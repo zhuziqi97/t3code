@@ -144,8 +144,8 @@ function NoticeCard({ item }: { readonly item: ComposerBannerStackItem }) {
           <NoticeText
             detailsLabel={
               typeof item.title === "string"
-                ? `Show full title: ${item.title}`
-                : "Show title details"
+                ? t("chat.banner.fullTitle", { title: item.title })
+                : t("chat.banner.titleDetails")
             }
             className="min-w-0 truncate font-medium leading-7 sm:leading-6"
           >
@@ -155,8 +155,8 @@ function NoticeCard({ item }: { readonly item: ComposerBannerStackItem }) {
             <NoticeText
               detailsLabel={
                 typeof item.title === "string"
-                  ? `Show details: ${item.title}`
-                  : "Show notice details"
+                  ? t("chat.banner.namedDetails", { title: item.title })
+                  : t("chat.banner.showDetails")
               }
               className="w-0 min-w-0 grow truncate text-muted-foreground @max-[400px]:sr-only"
             >

@@ -173,7 +173,7 @@ export function SourceControlWritingSettingsSection() {
   );
 
   return (
-    <SettingsSection id="source-control-text-generation" title="Writing & review">
+    <SettingsSection id="source-control-text-generation" title={t("sourceControl.writing.section")}>
       <SettingsRow
         serverScoped
         settingKeys={["sourceControlWritingStyle"]}
