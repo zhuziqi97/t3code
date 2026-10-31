@@ -1,6 +1,8 @@
 import { BRAND_ASSET_PATHS } from "./lib/brand-assets.ts";
 import {
   createStageWorkspaceConfig,
+  validateLinuxDebArtifact,
+  LinuxDebPermissionsError,
   DESKTOP_ELECTRON_LANGUAGES,
   DESKTOP_EXTRA_RESOURCES,
   LINUX_CAPTURE_EXTRA_RESOURCES,
@@ -26,6 +28,8 @@ const stagePackageExtensions = {
 // @effect-diagnostics nodeBuiltinImport:off - Tests use Node's glob matcher to verify electron-builder exclusions.
 import * as NodeCrypto from "node:crypto";
 import * as NodePath from "node:path";
+import * as NodeModule from "node:module";
+import * as NodeFSP from "node:fs/promises";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { createPackageWithOptions, extractFile } from "@electron/asar";
@@ -260,6 +264,132 @@ const makeMacPayloadFixture = Effect.fn("test.makeMacPayloadFixture")(function* 
 });
 
 it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
+  it.effect("rejects actual writable DEB metadata and accepts the normalized payload", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-deb-metadata-" });
+      const stage = path.join(root, "stage");
+      const appOutDir = path.join(stage, "opt/t3code-convene");
+      yield* fs.makeDirectory(path.join(stage, "DEBIAN"), { recursive: true });
+      yield* fs.makeDirectory(path.join(appOutDir, "resources"), { recursive: true });
+      yield* fs.writeFileString(
+        path.join(stage, "DEBIAN/control"),
+        "Package: convene-permission-fixture\nVersion: 0.1.5-2\nArchitecture: all\nMaintainer: Test <test@example.test>\nDescription: Permission metadata fixture\n",
+      );
+      for (const [name, mode] of Object.entries({
+        "t3code-convene": 0o777,
+        "chrome-sandbox": 0o755,
+        "resources/data.pak": 0o666,
+      })) {
+        yield* fs.writeFileString(path.join(appOutDir, name), "fixture");
+        yield* fs.chmod(path.join(appOutDir, name), mode);
+      }
+      yield* fs.chmod(path.join(appOutDir, "resources"), 0o775);
+      yield* fs.symlink("data.pak", path.join(appOutDir, "resources/current.pak"));
+      const archive = path.join(root, "fixture.deb");
+      const pack = Effect.fn("test.packLinuxDeb")(function* () {
+        const child = yield* spawner.spawn(
+          ChildProcess.make("dpkg-deb", ["--build", "--root-owner-group", stage, archive]),
+        );
+        assert.equal(Number(yield* child.exitCode), 0);
+      });
+      yield* pack();
+      const rejected = yield* Effect.flip(validateLinuxDebArtifact(archive));
+      assert.instanceOf(rejected, LinuxDebPermissionsError);
+      if (rejected._tag !== "LinuxDebPermissionsError")
+        throw new Error("Expected DEB metadata failure");
+      assert.equal(
+        rejected.problems.filter((problem) => problem.startsWith("Group/other writable:")).length,
+        3,
+      );
+      const { default: hook } = yield* Effect.promise(
+        () => import("./lib/linux-package-permissions.ts"),
+      );
+      yield* Effect.promise(() => hook({ appOutDir, electronPlatformName: "linux" }));
+      yield* pack();
+      yield* validateLinuxDebArtifact(archive);
+      yield* fs.chmod(path.join(appOutDir, "t3code-convene"), 0o644);
+      yield* pack();
+      const nonExecutable = yield* Effect.flip(validateLinuxDebArtifact(archive));
+      assert.instanceOf(nonExecutable, LinuxDebPermissionsError);
+      if (nonExecutable._tag !== "LinuxDebPermissionsError")
+        throw new Error("Expected executable metadata failure");
+      assert.equal(
+        nonExecutable.problems.some((problem) => problem.startsWith("Missing executable bit:")),
+        true,
+      );
+    }),
+  );
+
+  it.effect("removes Linux payload write access before both formats without flattening modes", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-linux-permissions-" });
+      const appOutDir = path.join(root, "linux-unpacked");
+      yield* fs.makeDirectory(path.join(appOutDir, "resources"), { recursive: true });
+      const modes = {
+        "t3code-convene": 0o777,
+        "chrome-sandbox": 0o4777,
+        "libffmpeg.so": 0o775,
+        "resources/data.pak": 0o666,
+        "resources/private.json": 0o600,
+      };
+      for (const [name, mode] of Object.entries(modes)) {
+        yield* fs.writeFileString(path.join(appOutDir, name), "fixture");
+        yield* fs.chmod(path.join(appOutDir, name), mode);
+      }
+      yield* fs.chmod(path.join(appOutDir, "resources"), 0o775);
+      yield* fs.symlink("data.pak", path.join(appOutDir, "resources/current.pak"));
+      const before = yield* Effect.promise(() =>
+        NodeFSP.stat(path.join(appOutDir, "t3code-convene")),
+      );
+      const config = yield* createBuildConfig(
+        "linux",
+        "AppImage",
+        "0.1.5-2",
+        false,
+        false,
+        undefined,
+        undefined,
+      );
+      const desktopRequire = NodeModule.createRequire(
+        new URL("../apps/desktop/package.json", import.meta.url),
+      );
+      const builderRequire = NodeModule.createRequire(
+        desktopRequire.resolve("electron-builder/package.json"),
+      );
+      const { resolveFunction } = builderRequire("app-builder-lib/out/util/resolve.js");
+      const hook = yield* Effect.promise(() =>
+        resolveFunction(
+          "commonjs",
+          config.afterPack,
+          "afterPack",
+          path.join(import.meta.dirname, ".."),
+        ),
+      );
+      if (typeof hook === "function")
+        yield* Effect.promise(() => hook({ appOutDir, electronPlatformName: "linux" }));
+      for (const [name, mode] of Object.entries(modes)) {
+        const info = yield* Effect.promise(() => NodeFSP.stat(path.join(appOutDir, name)));
+        assert.equal(info.mode & 0o7777, mode & ~0o022, name);
+      }
+      const after = yield* Effect.promise(() =>
+        NodeFSP.stat(path.join(appOutDir, "t3code-convene")),
+      );
+      assert.equal(after.uid, before.uid);
+      assert.equal(after.gid, before.gid);
+      assert.equal(
+        (yield* Effect.promise(() => NodeFSP.stat(path.join(appOutDir, "resources")))).mode &
+          0o7777,
+        0o755,
+      );
+      assert.equal(yield* fs.readLink(path.join(appOutDir, "resources/current.pak")), "data.pak");
+    }),
+  );
+
   it.effect("rejects overlapping builds from another process until restoration finishes", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

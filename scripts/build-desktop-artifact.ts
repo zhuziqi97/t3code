@@ -861,6 +861,64 @@ const spawnAndCollectOutput = Effect.fn("spawnAndCollectOutput")(function* (
   return { stdout, stderr, exitCode } as const;
 });
 
+export class LinuxDebPermissionsError extends Schema.TaggedError<LinuxDebPermissionsError>()(
+  "LinuxDebPermissionsError",
+  { archive: Schema.String, problems: Schema.Array(Schema.String) },
+) {
+  override get message(): string {
+    return `Invalid Linux DEB payload metadata in ${this.archive}:\n${this.problems.join("\n")}`;
+  }
+}
+
+export const validateLinuxDebArtifact = Effect.fn("validateLinuxDebArtifact")(function* (
+  archive: string,
+) {
+  const listing = yield* spawnAndCollectOutput(
+    ChildProcess.make(
+      "bash",
+      [
+        "-o",
+        "pipefail",
+        "-c",
+        'dpkg-deb --fsys-tarfile "$1" | tar --list --verbose --numeric-owner --file -',
+        "convene-deb-metadata",
+        archive,
+      ],
+      { env: { ...process.env, LC_ALL: "C" } },
+    ),
+  );
+  if (listing.exitCode !== 0)
+    return yield* new BuildCommandFailedError({
+      command: "dpkg-deb --fsys-tarfile | tar --list --numeric-owner",
+      exitCode: listing.exitCode,
+      stderrTail: listing.stderr,
+    });
+  const prefix = `./opt/${CONVENE_DESKTOP_IDENTITY.executableName}/`;
+  const problems: string[] = [];
+  const executables = new Set([CONVENE_DESKTOP_IDENTITY.executableName, "chrome-sandbox"]);
+  let files = 0;
+  for (const line of listing.stdout.split("\n")) {
+    const match = /^([-dl][rwxstST-]{9})\s+(\d+)\/(\d+)\s+\d+\s+\S+\s+\S+\s+(.+)$/.exec(line);
+    if (!match || !match[4]!.startsWith(prefix)) continue;
+    const mode = match[1]!;
+    const uid = match[2]!;
+    const gid = match[3]!;
+    const name = match[4]!;
+    if (uid !== "0" || gid !== "0") problems.push(`Not root:root: ${line}`);
+    if (mode[0] === "l") continue;
+    if (mode[0] === "-") files++;
+    if (mode[5] === "w" || mode[8] === "w") problems.push(`Group/other writable: ${line}`);
+    const executable = name.slice(prefix.length);
+    if (executables.has(executable)) {
+      executables.delete(executable);
+      if (!"xs".includes(mode[3]!)) problems.push(`Missing executable bit: ${line}`);
+    }
+  }
+  if (files === 0) problems.push(`No regular files under ${prefix}`);
+  for (const name of executables) problems.push(`Missing executable ${prefix}${name}`);
+  if (problems.length > 0) return yield* new LinuxDebPermissionsError({ archive, problems });
+});
+
 const resolveGitCommitHash = Effect.fn("resolveGitCommitHash")(function* (repoRoot: string) {
   const result = yield* spawnAndCollectOutput(
     ChildProcess.make("git", ["rev-parse", "--short=12", "HEAD"], {
@@ -2903,6 +2961,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     buildConfig.productName = CONVENE_DESKTOP_IDENTITY.executableName;
     const path = yield* Path.Path;
     const repoRoot = yield* RepoRoot;
+    buildConfig.afterPack = path.join(repoRoot, "scripts/lib/linux-package-permissions.ts");
     buildConfig.linux = {
       target: target === "AppImage" ? [target, "deb"] : [target],
       executableName: CONVENE_DESKTOP_IDENTITY.executableName,
@@ -4107,6 +4166,16 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   }
 
   const stageEntries = yield* fs.readDirectory(stageDistDir);
+  if (options.platform === "linux") {
+    const debs = stageEntries.filter((entry) => entry.endsWith(".deb"));
+    if (debs.length === 0 && (options.target === "AppImage" || options.target === "deb")) {
+      return yield* new LinuxDebPermissionsError({
+        archive: stageDistDir,
+        problems: ["No DEB artifact produced"],
+      });
+    }
+    for (const deb of debs) yield* validateLinuxDebArtifact(path.join(stageDistDir, deb));
+  }
   yield* fs.makeDirectory(options.outputDir, { recursive: true });
 
   const copiedArtifacts: string[] = [];
