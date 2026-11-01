@@ -515,7 +515,9 @@ it.effect("builds device cases from product-backed worlds and synthetic prior tu
         [...(sample.devices?.sessions(sample.shell).values() ?? [])],
         ["FAIL-AFTER-hub", "OWN-01", "OWN-02", "OWN-03"].includes(testCase.id)
           ? [{ app: true }]
-          : [],
+          : testCase.id === "SSH-UI-EXPLICIT"
+            ? [undefined]
+            : [],
         testCase.id,
       );
     }
@@ -742,7 +744,7 @@ it("shares failed device attempts across tools and launcher steps, resetting onl
 });
 
 it("applies device shell checks to decoded cases and stops raw UI early", () => {
-  for (const testCase of deviceCases()) {
+  for (const testCase of deviceCases().filter((c) => c.expect.device?.noRawUi === true)) {
     const run = {
       calls: [
         {

@@ -214,7 +214,7 @@ const PullRequestIdentity = {
 
 /** A delegated child's report is how its parent learns the PR, so the link result asks for it. */
 export const CHILD_PULL_REQUEST_REPORT_NEXT =
-  "End your reply with: PR <full URL>, head <SHA>, checks and reviews <state>.";
+  "Follow the user's requested report and format; by default, include the PR URL, head SHA and checks/reviews state for the parent.";
 
 export const LinkPullRequestResult = Schema.Struct({
   ...PullRequestIdentity,
