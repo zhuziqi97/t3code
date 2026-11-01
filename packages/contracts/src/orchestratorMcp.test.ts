@@ -48,6 +48,15 @@ describe("orchestrator MCP contracts", () => {
     expect(result.status).toBe("completed");
     expect(result.summary).toBe("Workspace inspected.");
     expect(result.pendingApproval).toBeNull();
+    const running = {
+      ...result,
+      status: "running",
+      workState: "working",
+      summary: null,
+      next: "Completion wakes this thread. Continue independent work; otherwise end your turn. If the user asks for progress, read status once. Do not poll or repeat the task.",
+    };
+    expect(decodeDelegateTaskResult(running)).toEqual(running);
+    expect(() => decodeDelegateTaskResult({ ...running, next: "Poll until done." })).toThrow();
     const pendingApproval = {
       requestId: "request-approval-1",
       kind: "command",

@@ -232,7 +232,7 @@ export function pullRequestWatchMessage(input: {
     "",
     exhausted
       ? `T3 Code stopped watching after ${PULL_REQUEST_WATCH_WAKE_LIMIT} comment-only updates in a row. Call watch_pull_request to watch it again.`
-      : "Look into each item and act on it as your task requires. This PR stays linked and watched, so do not link, watch, or list it again. End your turn when you are done, and T3 Code wakes you on the next change. When you hand the work back to the user, call unwatch_pull_request first so the thread returns to their inbox.",
+      : "Look into each item and act on it as your task requires. This PR stays linked and watched; do not re-link or re-arm it on a wake. Continue independent work or end your turn; T3 Code wakes you on the next change. An ordinary progress reply keeps the watch. Call unwatch_pull_request when monitoring is complete and you hand the work back, or the user asks you to stop.",
   ].join("\n");
   const failed = changes.some(
     (change) => change.kind === "checks-failed" || change.kind === "conflicting",

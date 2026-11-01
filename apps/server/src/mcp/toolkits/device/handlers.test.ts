@@ -26,7 +26,7 @@ describe("device tool helpers", () => {
     expect(text).not.toContain("is on PATH");
   });
 
-  it("shows a bound launcher's commands without flags and keeps device actions off simctl and ssh", () => {
+  it("shows a bound launcher's commands without extra targeting flags", () => {
     const command = "/state/device/targets/t3-a/agent-device";
     const text = agentDeviceQuickStart(device, [], command);
     const examples = text.split("\n").filter((line) => line.trimStart().startsWith(command));
@@ -37,7 +37,9 @@ describe("device tool helpers", () => {
     );
     expect(examples.join("\n")).not.toMatch(/--(?:platform|udid|serial|config|session)\b/);
     expect(text).not.toContain("remain available");
-    expect(text).toContain("Do not use simctl, idb, adb or ssh for those actions.");
+    expect(text).toContain(
+      "For UI actions and captures, use the returned command unless the user explicitly requests a supported alternative such as SSH.",
+    );
     expect(text).toContain("If it is missing, call device_open again.");
   });
 
@@ -46,7 +48,7 @@ describe("device tool helpers", () => {
     const text = agentDeviceQuickStart(device, [], command);
     // device_open starts no agent-device session, and an iOS snapshot needs one with an app.
     expect(text).toContain(
-      "Run open <bundle-or-package-id> (apps lists them) before snapshots, CLI screenshots or input; it starts the session they need. Use device_screenshot just to look.",
+      "With this command, run open <bundle-or-package-id> (apps lists them) before snapshots, CLI screenshots or input; it starts the session they need. Use device_screenshot just to look.",
     );
     // App-scoped recording needs an app opened in the session; device scope does not.
     expect(text).toContain(

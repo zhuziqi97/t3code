@@ -47,7 +47,7 @@ const handlers = {
       return {
         htmlRender: reference,
         message:
-          "Shown to the reader above your reply. Don't mention or describe the page; reply with only what it doesn't already say.",
+          "Shown to the reader above your reply. Add explanation or a text summary when useful for the task, following the user's requested format.",
       };
     }),
   ),

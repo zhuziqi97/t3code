@@ -60,7 +60,7 @@ export function agentDeviceQuickStart(
     // Screenshots and input need the session agent-device's open starts, and an iOS snapshot also
     // needs its app. device_open does not run open itself: on iOS that can start a minutes-long
     // XCTest runner build.
-    "Every app launch, deep link, tap, text entry, alert, setting, screenshot and recording on this device goes through it. Run open <bundle-or-package-id> (apps lists them) before snapshots, CLI screenshots or input; it starts the session they need. Use device_screenshot just to look.",
+    "By default, use it for app launches, deep links, taps, text entry, alerts, settings, screenshots and recordings on this device. With this command, run open <bundle-or-package-id> (apps lists them) before snapshots, CLI screenshots or input; it starts the session they need. Use device_screenshot just to look.",
     `  ${run("open <bundle-or-package-id> --relaunch")}  # restarts the app; Expo dev clients connect to their Metro, --metro-port <port> picks it`,
     `  ${run("open <bundle-or-package-id> <deep-link-url>")}`,
     `  ${run("snapshot -i")}  # accessibility tree with @eN refs`,
@@ -72,7 +72,7 @@ export function agentDeviceQuickStart(
     `  ${run("record start --scope device /tmp/run.mp4")}  # then record stop`,
     `  ${run("install <app> <path-to-.app-or-.apk>")}`,
     `Prefer snapshot refs over coordinates. Run ${executable} help <command> for flags and ${executable} help workflow for guides.`,
-    "Do not use simctl, idb, adb or ssh for those actions. They stay fine for builds, installs, code sync, Metro, port forwards, logs, test runners and what this command cannot do; come back to it for every UI action and screenshot so the user can watch.",
+    "Use simctl, idb, adb or ssh for builds, installs, code sync, Metro, port forwards, logs, test runners and what this command cannot do. For UI actions and captures, use the returned command unless the user explicitly requests a supported alternative such as SSH. An alternate route never bypasses disabled Agent device access or permits reusing or closing another thread's session.",
     "Each device_open returns its own command; opening another device does not retarget this one.",
     ...(target === ""
       ? [

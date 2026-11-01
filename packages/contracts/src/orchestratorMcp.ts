@@ -198,7 +198,7 @@ export type OrchestratorMcpDelegateTaskInput = typeof OrchestratorMcpDelegateTas
 
 // Set only on results for still-running tasks whose completion will wake the parent.
 export const ORCHESTRATOR_MCP_RUNNING_TASK_NEXT =
-  "Completion wakes this thread, so end your turn. Do not wait on it or poll it.";
+  "Completion wakes this thread. Continue independent work; otherwise end your turn. If the user asks for progress, read status once. Do not poll or repeat the task.";
 const OrchestratorMcpRunningTaskNext = Schema.Literal(ORCHESTRATOR_MCP_RUNNING_TASK_NEXT);
 
 export const OrchestratorMcpDelegateTaskResult = Schema.Struct({
