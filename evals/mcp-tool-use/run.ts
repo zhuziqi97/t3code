@@ -919,7 +919,7 @@ const DEFAULT_THREAD = {
   ],
 };
 const HTML_RENDERED =
-  "Shown to the reader above your reply. Don't mention or describe the page; reply with only what it doesn't already say.";
+  "Shown to the reader above your reply. Add explanation or a text summary when useful for the task, following the user's requested format.";
 
 /** Pull request identity from a `url` or `repository` plus `number` input, like T3's results. */
 const pullRequest = (repo: string, input: Readonly<Record<string, unknown>>) => {
