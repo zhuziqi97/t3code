@@ -29,11 +29,11 @@ describe("buildRuntimeInstructions", () => {
     );
     assert.notInclude(instructions, "merge it now");
     assert.include(instructions, "Otherwise act now or hand back.");
-    assert.include(instructions, "then watch and end your turn");
-    assert.include(instructions, "never watch, even if the brief says babysit");
+    assert.include(instructions, "when only checks or reviews remain, watch and end your turn");
+    assert.include(instructions, "cannot watch: the product does not support child watches");
     assert.include(
       instructions,
-      "After PR work, a child's last line is: PR <full URL>, head <SHA>, checks and reviews <state>.",
+      "Follow the user's explicit delivery format instead of a fixed last line.",
     );
     assert.include(instructions, "Never wait with sleep");
     assert.include(instructions, "call unwatch_pull_request");
