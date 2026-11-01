@@ -1242,7 +1242,7 @@ const simulate = Effect.fn("evaluateMcpToolUse.simulate")(function* (
 });
 
 /** The result for one tool call. */
-const answerToolCall = Effect.fn("evaluateMcpToolUse.answerToolCall")(function* (
+export const answerToolCall = Effect.fn("evaluateMcpToolUse.answerToolCall")(function* (
   sample: Sample,
   config: Config,
   call: typeof ToolUse.Type,
