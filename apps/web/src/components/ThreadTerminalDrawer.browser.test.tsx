@@ -56,7 +56,11 @@ vi.mock("../state/server", async () => {
 });
 vi.mock("../state/terminal", () => ({ terminalEnvironment: { write: {}, resize: {} } }));
 vi.mock("../state/preview", () => ({ previewEnvironment: { open: {} } }));
-vi.mock("../editorPreferences", () => ({ useOpenInPreferredEditor: () => () => {} }));
+vi.mock("../editorPreferences", () => ({
+  usePreferredEditor: () => "vscode",
+  readPreferredEditor: () => "vscode",
+  useEditorAction: () => ({ open: () => {}, unavailableReason: () => null }),
+}));
 vi.mock("./preview/openTerminalLinkInPreview", () => ({ openTerminalLinkInPreview: () => {} }));
 vi.mock("~/localApi", () => ({ readLocalApi: () => null }));
 vi.mock("../hooks/useSettings", async () => {

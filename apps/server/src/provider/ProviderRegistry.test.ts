@@ -736,7 +736,12 @@ it.layer(
           Effect.fail(
             new CodexErrors.CodexAppServerSpawnError({
               command: `${binaryPath} app-server`,
-              cause: new Error("spawn ENOENT"),
+              cause: PlatformError.systemError({
+                _tag: "NotFound",
+                module: "ChildProcess",
+                method: "spawn",
+                pathOrDescriptor: binaryPath,
+              }),
             }),
           ),
         );
@@ -2156,9 +2161,11 @@ it.layer(
             events.filter((event) => event === "update"),
             ["update"],
           );
-          assert.strictEqual(events[0], "update");
+          const updateIndex = events.indexOf("update");
+          assert.deepStrictEqual(events.slice(0, updateIndex), ["probe:personal"]);
+          const afterUpdate = events.slice(updateIndex + 1);
           assert.deepStrictEqual(
-            events.filter((event) => event.startsWith("probe:")).toSorted(),
+            afterUpdate.filter((event) => event.startsWith("probe:")).toSorted(),
             [
               "probe:personal",
               "probe:work",
@@ -2166,7 +2173,10 @@ it.layer(
             ].toSorted(),
           );
           for (const id of ["personal", "work"]) {
-            assert.isBelow(events.indexOf(`invalidate:${id}`), events.indexOf(`probe:${id}`));
+            assert.isBelow(
+              afterUpdate.indexOf(`invalidate:${id}`),
+              afterUpdate.indexOf(`probe:${id}`),
+            );
             assert.include(events, `invalidate:${id}`);
             const provider = result.providers.find((p) => p.instanceId === id);
             assert.deepStrictEqual(

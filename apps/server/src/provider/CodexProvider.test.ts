@@ -182,14 +182,14 @@ it.live("retains subprocess diagnostics and exit code in the provider probe fail
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const fs = yield* FileSystem.FileSystem;
     const homePath = yield* fs.makeTempDirectoryScoped();
-    const diagnostic = "Invalid project config: unknown field in config.toml";
+    const diagnostic = "error: Invalid project config: unknown field in config.toml";
     const substitute = ChildProcessSpawner.make(() =>
       spawner.spawn(
         ChildProcess.make(
           process.execPath,
           [
             "-e",
-            `process.stdin.once('data', () => process.stderr.write(${JSON.stringify(`${diagnostic}\nBearer fake-private-value\n`)}, () => process.exit(1)));`,
+            `process.stdin.once('data', () => process.stderr.write(${JSON.stringify(`${diagnostic}; Bearer fake-private-value\n`)}, () => process.exit(1)));`,
           ],
           { env: {}, extendEnv: false },
         ),
@@ -203,7 +203,7 @@ it.live("retains subprocess diagnostics and exit code in the provider probe fail
     assert.equal(provider.auth.status, "unknown");
     assert.equal(
       provider.message,
-      `Codex app-server provider probe failed: Codex App Server process exited with code 1\n${diagnostic}\nBearer [REDACTED].`,
+      `Codex app-server provider probe failed: Codex App Server process exited with code 1: ${diagnostic}; Bearer [REDACTED].`,
     );
     assert.notInclude(JSON.stringify(provider), "fake-private-value");
   }).pipe(Effect.provide(NodeServices.layer)),
