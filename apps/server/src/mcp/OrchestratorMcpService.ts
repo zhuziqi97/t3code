@@ -1303,6 +1303,7 @@ const make = Effect.gen(function* () {
 
   const resolveTarget = Effect.fn("OrchestratorMcpService.resolveTarget")(function* (input: {
     readonly parent: Pick<OrchestrationV2ThreadProjection, "thread">;
+    readonly projectId?: ProjectId;
     readonly target: OrchestratorMcpTarget | undefined;
     readonly providers: ReadonlyArray<ServerProvider>;
     /** Receipt replays bypass current settings because they start no work. Dispatch must reuse the checked command ID. */
@@ -1339,7 +1340,7 @@ const make = Effect.gen(function* () {
         const enabledForProject =
           input.skipProjectEnablementFilter === true ||
           (yield* threadManagement.isProviderInstanceEnabledForProject({
-            projectId: input.parent.thread.projectId,
+            projectId: input.projectId ?? input.parent.thread.projectId,
             instanceId: candidate.instanceId,
           }));
         if (enabledForProject) {
@@ -2247,15 +2248,8 @@ const make = Effect.gen(function* () {
           : readTask(scope, taskId, false, true);
       }
       const { scope, parent } = yield* loadThreadCaller(callerScope, "delegate_task");
-      if (
-        input.target?.projectId !== undefined &&
-        input.target.projectId !== parent.thread.projectId
-      ) {
-        return yield* failure(
-          "invalid_request",
-          "A local task runs in this thread's project. Omit target.projectId, or pass target.environmentId to run it in that environment's project.",
-        );
-      }
+      const projectId = input.target?.projectId ?? parent.thread.projectId;
+      const changesProject = projectId !== parent.thread.projectId;
       const parentRun = parent.runs
         .filter(ThreadManagementService.isActiveRun)
         .toSorted((left, right) => right.ordinal - left.ordinal)[0];
@@ -2269,7 +2263,6 @@ const make = Effect.gen(function* () {
           "Delegated tasks require an active run owned by this MCP provider session.",
         );
       }
-      const providers = yield* loadProviders;
       const key = yield* requestKey(input.clientRequestId);
       const commandId = stableCommandId({
         scope,
@@ -2277,8 +2270,11 @@ const make = Effect.gen(function* () {
         operation: "delegate-task",
       });
       const isRetryOfAcceptedDelegation = yield* threadManagement.hasReceipt(commandId);
+      if (changesProject && !isRetryOfAcceptedDelegation) yield* requireProject(projectId);
+      const providers = yield* loadProviders;
       const target = yield* resolveTargetRechecking({
         parent,
+        projectId,
         target: input.target,
         providers,
         skipProjectEnablementFilter: isRetryOfAcceptedDelegation,
@@ -2292,23 +2288,31 @@ const make = Effect.gen(function* () {
         parent.thread.interactionMode,
         input.interactionMode,
       );
-      let workspaceStrategy: OrchestrationV2ThreadLaunchWorkspaceStrategy | undefined;
+      let workspaceStrategy: OrchestrationV2ThreadLaunchWorkspaceStrategy | undefined =
+        changesProject ? { type: "root" } : undefined;
       if (input.isolation === "worktree" && !isRetryOfAcceptedDelegation) {
-        const project = yield* requireProject(parent.thread.projectId);
+        const project = yield* requireProject(projectId);
         const base = yield* gitDriver
           .resolveCommit({
-            cwd: parent.thread.worktreePath ?? project.workspaceRoot,
+            cwd: changesProject
+              ? project.workspaceRoot
+              : (parent.thread.worktreePath ?? project.workspaceRoot),
             revision: "HEAD",
           })
           .pipe(
             Effect.mapError(() =>
-              failure("invalid_request", "Unable to resolve the parent checkout commit."),
+              failure(
+                "invalid_request",
+                changesProject
+                  ? "Unable to resolve the target project checkout commit."
+                  : "Unable to resolve the parent checkout commit.",
+              ),
             ),
           );
         // Launch preparation creates the worktree from the project root, so a
         // parent checkout in another repository (such as a Git folder inside
         // Scratch) would hand it a commit it cannot find.
-        if (parent.thread.worktreePath !== null) {
+        if (!changesProject && parent.thread.worktreePath !== null) {
           yield* gitDriver
             .resolveCommit({ cwd: project.workspaceRoot, revision: base.commitSha })
             .pipe(
@@ -2334,6 +2338,7 @@ const make = Effect.gen(function* () {
           parentThreadId: scope.thread.threadId,
           parentRunId: parentRun.id,
           parentNodeId: parentRun.rootNodeId,
+          projectId,
           task: taskPrompt(input),
           ...(input.title === undefined ? {} : { title: input.title }),
           modelSelection: target.modelSelection,

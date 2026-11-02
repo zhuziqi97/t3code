@@ -3,6 +3,7 @@ import {
   CommandId,
   EnvironmentId,
   MessageId,
+  NodeId,
   type OrchestrationV2Command,
   type OrchestrationV2Run,
   type OrchestrationV2ProviderThread,
@@ -109,10 +110,14 @@ const layerDispatchChokepointTest =
       Layer.provideMerge(layerReceiptsTest),
     );
 
-it.effect(
-  "the dispatch chokepoint refuses a continuation message.dispatch on a project-disabled instance before reaching the orchestrator",
-  () => {
-    const projectId = ProjectId.make("project:thread-management:chokepoint");
+it.effect.each(["message", "same-project-task", "other-project-task"] as const)(
+  "the dispatch chokepoint refuses %s on its destination project's disabled instance",
+  (kind) => {
+    const projectId = ProjectId.make(
+      kind === "other-project-task"
+        ? "project:thread-management:other"
+        : "project:thread-management:chokepoint",
+    );
     const threadId = ThreadId.make("thread:thread-management:chokepoint");
     const instanceId = ProviderInstanceId.make("codex_work");
     const commandId = CommandId.make("command:thread-management:chokepoint-disabled");
@@ -129,17 +134,34 @@ it.effect(
     return Effect.gen(function* () {
       const threads = yield* ThreadManagementService.ThreadManagementService;
       const error = yield* Effect.flip(
-        threads.dispatch({
-          type: "message.dispatch",
-          commandId,
-          threadId,
-          messageId: MessageId.make("message:thread-management:chokepoint-disabled"),
-          text: "Background task completed.",
-          attachments: [],
-          dispatchMode: { type: "queue_after_active" },
-          createdBy: "agent",
-          creationSource: "server",
-        }),
+        threads.dispatch(
+          kind === "message"
+            ? {
+                type: "message.dispatch",
+                commandId,
+                threadId,
+                messageId: MessageId.make("message:thread-management:chokepoint-disabled"),
+                text: "Background task completed.",
+                attachments: [],
+                dispatchMode: { type: "queue_after_active" },
+                createdBy: "agent",
+                creationSource: "server",
+              }
+            : {
+                type: "delegated_task.request",
+                commandId,
+                parentThreadId: threadId,
+                parentRunId: RunId.make("run:parent"),
+                parentNodeId: NodeId.make("node:parent"),
+                ...(kind === "other-project-task" ? { projectId } : {}),
+                task: "Implement the other project fix.",
+                modelSelection: { instanceId, model: "test" },
+                runtimeMode: "full-access",
+                interactionMode: "default",
+                createdBy: "agent",
+                creationSource: "mcp",
+              },
+        ),
       );
 
       expect(error).toBeInstanceOf(

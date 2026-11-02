@@ -227,9 +227,12 @@ type DelegateTaskInput = {
     providerInstanceId?: string;
     driverKind?: string;
     model?: string;
+    projectId?: string;
+    environmentId?: string;
   };
   title?: string;
   role?: "implementation" | "research" | "review" | "design" | "test" | "general";
+  isolation?: "shared" | "worktree";
   mode?: "async" | "wait";
   timeoutMs?: number;
   clientRequestId?: string;
@@ -244,6 +247,12 @@ when it can run child tasks, and otherwise selects an available instance of
 that driver; an explicit `providerInstanceId` is honored exactly and fails
 when unavailable. Selecting a different provider without a model uses that
 provider's first advertised model.
+
+Local delegation may name another project. Its provider enablement is checked
+against that destination, while task ownership and completion stay with the
+parent. Worktree isolation uses the parent's checkout HEAD in the same project
+and the destination project's root HEAD across projects; shared isolation uses
+the destination root across projects, never the parent's unrelated checkout.
 
 A provider runs a runtime mode it does not offer as `approval-required`, so a
 child would ask for approval on every command. `orchestrator_capabilities`

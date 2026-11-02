@@ -1538,6 +1538,161 @@ describe("OrchestratorMcpService provider resolution", () => {
     }),
   );
 
+  it.effect.each(["same-project", "other-project"] as const)(
+    "prepares a worktree from the correct checkout for %s delegation",
+    (destination) =>
+      Effect.gen(function* () {
+        const otherProjectId = ProjectId.make("project:mcp-other");
+        const targetProjectId = destination === "other-project" ? otherProjectId : projectId;
+        const parent = parentProjection([]);
+        const task: OrchestrationV2ThreadProjection["subagents"][number] = {
+          id: taskId,
+          threadId: parentThreadId,
+          runId: parentRunId,
+          parentNodeId,
+          origin: "app_owned",
+          createdBy: "agent",
+          childThreadId,
+          driver: ProviderDriverKind.make("codex"),
+          providerInstanceId: codexInstanceId,
+          providerThreadId: null,
+          nativeTaskRef: null,
+          prompt: "Implement the relay fix.",
+          title: null,
+          model: "gpt-5.4",
+          status: "running",
+          result: null,
+          startedAt: null,
+          completedAt: null,
+          updatedAt: DateTime.makeUnsafe(0),
+        };
+        const dispatched: Array<OrchestrationV2ServerCommand> = [];
+        const resolved: Array<{ cwd: string; revision: string }> = [];
+        const prepared: Array<ThreadId> = [];
+        const checkedProjects: Array<ProjectId> = [];
+        const layerTest = OrchestratorMcpService.layer.pipe(
+          Layer.provide(
+            Layer.mergeAll(
+              NodeServices.layer,
+              ServerSettings.layerTest(),
+              providerRegistryLayer([
+                providerSnapshot({
+                  instanceId: codexInstanceId,
+                  driver: ProviderDriverKind.make("codex"),
+                  model: "gpt-5.4",
+                }),
+              ]),
+              adapterRegistryLayer([codexInstanceId]),
+              Layer.mock(ThreadManagementService.ThreadManagementService)({
+                hasReceipt: () => Effect.succeed(false),
+                isProviderInstanceEnabledForProject: ({ projectId: id }) =>
+                  Effect.sync(() => {
+                    checkedProjects.push(id);
+                    return true;
+                  }),
+                getThreadRecords: (id) =>
+                  Effect.succeed(
+                    id === parentThreadId
+                      ? {
+                          ...parent,
+                          thread: { ...parent.thread, worktreePath: "/repos/parent-candidate" },
+                          subagents: dispatched.length ? [task] : [],
+                        }
+                      : childProjection,
+                  ),
+                dispatch: (command) =>
+                  Effect.sync(() => {
+                    dispatched.push(command);
+                    return {
+                      sequence: 1,
+                      storedEvents: [
+                        { event: { type: "subagent.updated", payload: task } },
+                        {
+                          event: {
+                            type: "run.created",
+                            threadId: childThreadId,
+                            payload: {
+                              id: RunId.make("run:prepared-child"),
+                              workspacePreparation: {},
+                            },
+                          },
+                        },
+                      ],
+                    } as never;
+                  }),
+              }),
+              Layer.mock(ProjectService.ProjectService)({
+                getById: (id) =>
+                  Effect.succeedSome({
+                    id,
+                    title: id,
+                    workspaceRoot: id === otherProjectId ? "/repos/other" : "/repos/parent",
+                  } as never),
+              }),
+              Layer.mock(GitVcsDriver.GitVcsDriver)({
+                resolveCommit: (input) =>
+                  Effect.sync(() => {
+                    resolved.push(input);
+                    return {
+                      commitSha:
+                        input.cwd === "/repos/other"
+                          ? "2222222222222222222222222222222222222222"
+                          : "1111111111111111111111111111111111111111",
+                    } as never;
+                  }),
+              }),
+              Layer.mock(ThreadLaunchService.ThreadLaunchService)({
+                prepareRun: ({ threadId }) =>
+                  Effect.sync(() => {
+                    prepared.push(threadId);
+                  }),
+              }),
+              Layer.mock(SecretRequests.SecretRequests)({}),
+              Layer.mock(RemoteDelegation.RemoteDelegation)({}),
+              Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),
+            ),
+          ),
+        );
+        yield* Effect.gen(function* () {
+          const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+          const result = yield* service.delegateTask(scope, {
+            task: "Implement the relay fix.",
+            target: {
+              environmentId: scope.environmentId,
+              projectId: targetProjectId,
+              driverKind: ProviderDriverKind.make("codex"),
+            },
+            isolation: "worktree",
+            mode: "async",
+          });
+          assert.equal(result.childThreadId, childThreadId);
+          const command = dispatched[0];
+          assert.equal(command?.type, "delegated_task.request");
+          if (command?.type !== "delegated_task.request") return;
+          assert.deepEqual(command.workspaceStrategy, {
+            type: "worktree",
+            baseRef:
+              destination === "other-project"
+                ? "2222222222222222222222222222222222222222"
+                : "1111111111111111111111111111111111111111",
+            startFromOrigin: false,
+          });
+          assert.deepEqual(command.modelSelection, parent.thread.modelSelection);
+          assert.deepEqual(checkedProjects, [targetProjectId]);
+          assert.deepEqual(
+            resolved,
+            destination === "other-project"
+              ? [{ cwd: "/repos/other", revision: "HEAD" }]
+              : [
+                  { cwd: "/repos/parent-candidate", revision: "HEAD" },
+                  { cwd: "/repos/parent", revision: "1111111111111111111111111111111111111111" },
+                ],
+          );
+          assert.deepEqual(prepared, [childThreadId]);
+        }).pipe(Effect.provide(layerTest));
+      }),
+  );
+
   it.effect("driver-only delegation skips an instance the project turned off", () =>
     Effect.gen(function* () {
       const altInstanceId = ProviderInstanceId.make("codex-alt");

@@ -120,7 +120,7 @@ export const OrchestratorMcpTarget = Schema.Struct({
   projectId: Schema.optional(
     ProjectId.annotate({
       description:
-        "With `environmentId`: its project to run in. Default: the one with this project's repository.",
+        "delegate_task project here (default: parent's) or in environmentId (default: matching repo).",
     }),
   ),
 });
@@ -173,7 +173,7 @@ export const OrchestratorMcpDelegateTaskInput = Schema.Struct({
   isolation: Schema.optional(
     Schema.Literals(["shared", "worktree"]).annotate({
       description:
-        "'shared' (default): parent checkout. 'worktree': new prepared checkout from the parent commit, for a separate checkout or PR per child. Uncommitted edits stay out.",
+        "shared (default): parent checkout; target root across projects. worktree: new checkout from that HEAD. Uncommitted edits stay out.",
     }),
   ),
   mode: Schema.optional(

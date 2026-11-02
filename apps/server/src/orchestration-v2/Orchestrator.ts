@@ -7711,7 +7711,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         }),
         runtimeMode: command.runtimeMode,
         interactionMode: command.interactionMode,
-        ...(command.workspaceStrategy === undefined ? {} : { branch: null, worktreePath: null }),
+        projectId: command.projectId ?? parentProjection.thread.projectId,
+        ...(command.workspaceStrategy !== undefined ||
+        (command.projectId !== undefined && command.projectId !== parentProjection.thread.projectId)
+          ? { branch: null, worktreePath: null }
+          : {}),
       };
       const task: OrchestrationV2Subagent = {
         id: taskNodeId,
