@@ -1312,7 +1312,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                         render={
                           <button
                             type="button"
-                            aria-label="Settle thread"
+                            aria-label={t("thread.settle")}
                             onClick={handleSettleClick}
                             onPointerDown={handleActionPointerDown}
                             className={cn(
@@ -1324,7 +1324,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                       >
                         <CheckIcon className="size-3" />
                       </TooltipTrigger>
-                      <TooltipPopup side="top">Settle thread</TooltipPopup>
+                      <TooltipPopup side="top">{t("thread.settle")}</TooltipPopup>
                     </Tooltip>
                   )}
                 </span>

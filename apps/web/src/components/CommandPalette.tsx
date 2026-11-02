@@ -1,6 +1,7 @@
 import { useEditorAction } from "../editorPreferences";
 import { openConveneProjectConfiguration } from "./convene/ConveneProjectDialog";
 import { useTranslate } from "../i18n";
+import type { TFunction } from "i18next";
 
 import { threadPullRequestLinkMode } from "@t3tools/client-runtime/thread-pull-request-compatibility";
 import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
@@ -265,7 +266,10 @@ const ADD_PROJECT_ENTRY_GROUP = "add-project";
 const NEW_THREAD_IN_GROUP = "projects";
 
 /** The submenu an open intent starts in; its groups resolve while rendering. */
-function openIntentView(intent: CommandPaletteOpenIntent | null): CommandPaletteView | null {
+function openIntentView(
+  intent: CommandPaletteOpenIntent | null,
+  t: TFunction,
+): CommandPaletteView | null {
   switch (intent?.kind) {
     case "add-project":
       return {
@@ -280,7 +284,7 @@ function openIntentView(intent: CommandPaletteOpenIntent | null): CommandPalette
     case "change-theme":
       return {
         addonIcon: <PaletteIcon className={ADDON_ICON_CLASS} />,
-        groups: [{ value: "themes", label: "Change theme", items: [] }],
+        groups: [{ value: "themes", label: t("command.changeTheme"), items: [] }],
       };
     case "search":
     case undefined:
@@ -409,7 +413,7 @@ function OpenCommandPaletteDialog(props: {
   );
   const linkedThreadSearch = initialSearch.linkedThreadSearch;
   const [searchState, dispatchSearch] = useReducer(reduceCommandPaletteSearchState, null, () => {
-    const view = props.initialContext ? null : openIntentView(props.openIntent);
+    const view = props.initialContext ? null : openIntentView(props.openIntent, t);
     return view
       ? { query: "", views: [{ view, parentQuery: "" }] }
       : createCommandPaletteSearchState(initialSearch.query);
