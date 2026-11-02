@@ -1044,7 +1044,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                       className="group w-full cursor-pointer"
                     >
                       <span className="text-sm leading-snug text-muted-foreground group-hover:text-foreground group-data-highlighted:text-foreground">
-                        {legacySection.isExpanded ? "Show less" : "Show more"}
+                        {t(legacySection.isExpanded ? "legacy.showLess" : "legacy.showMore")}
                       </span>
                     </ComboboxItem>
                   );

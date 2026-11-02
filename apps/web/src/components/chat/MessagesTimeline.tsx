@@ -1153,7 +1153,11 @@ const ConversationTimeline = memo(function ConversationTimeline({
       <div className="messages-timeline-row-frame">
         <div className="chat-content-lane pt-1 sm:pt-2">
           <TimelineSystemDivider
-            label={parentThreadLink.sideChat ? "Context from" : t("chat.timeline.subagentOf")}
+            label={
+              parentThreadLink.sideChat
+                ? t("chat.timeline.contextFrom")
+                : t("chat.timeline.subagentOf")
+            }
             detail={
               parentThreadLink.environmentLabel === undefined
                 ? parentThreadLink.title

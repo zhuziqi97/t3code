@@ -8737,6 +8737,7 @@ export const en = {
   "triage.starting": "Starting triage…",
   "triage.prepareFailed": "The server could not prepare it.",
   "triage.draftsFailed": "Drafts could not be loaded.",
+  "chat.timeline.contextFrom": "Context from",
 } as const;
 
 export type MessageKey = keyof typeof en;
