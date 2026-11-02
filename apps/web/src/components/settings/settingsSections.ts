@@ -31,7 +31,7 @@ export type SettingsSearchScope =
   | "checkout"
   | "connections";
 
-const SnapShotIcon = createLucideIcon("snap-shot", [
+export const SnapShotIcon = createLucideIcon("snap-shot", [
   [
     "path",
     {
@@ -66,6 +66,14 @@ interface SettingsSectionDefinition {
 }
 
 export const SETTINGS_SECTIONS = [
+  {
+    path: "/settings/secrets",
+    labelKey: "settings.sections.secrets",
+    label: "Secrets",
+    icon: ShieldCheckIcon,
+    group: "connections",
+    searchScope: "environment",
+  },
   {
     path: "/settings/general",
     labelKey: "settings.sections.general",

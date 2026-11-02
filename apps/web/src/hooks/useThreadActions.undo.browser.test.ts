@@ -19,6 +19,7 @@ const commands = vi.hoisted(() => ({
   unpin: vi.fn(),
   archive: vi.fn(),
   unarchive: vi.fn(),
+  delete: vi.fn(),
   settle: vi.fn(),
   unsettle: vi.fn(),
   snooze: vi.fn(),
@@ -26,7 +27,7 @@ const commands = vi.hoisted(() => ({
 }));
 const router = vi.hoisted(() => ({
   navigate: vi.fn(async () => {}),
-  state: { matches: [{ params: {} as Record<string, string> }] },
+  state: { location: { href: "/" }, matches: [{ params: {} as Record<string, string> }] },
 }));
 vi.mock("../state/use-atom-query-runner", async (original) => ({
   ...(await original<typeof import("../state/use-atom-query-runner")>()),
@@ -73,10 +74,12 @@ const threadShell = vi.hoisted(() => ({
   environmentId: "undo-env",
   session: null,
 }));
+// Archived rows have no loaded shell, so deleting one takes the unresolved path.
+const shellLoaded = vi.hoisted(() => ({ current: true }));
 vi.mock("../state/entities", async (original) => ({
   ...(await original<typeof import("../state/entities")>()),
   readEnvironmentServerConfigLoaded: () => true,
-  readThreadShell: () => threadShell,
+  readThreadShell: () => (shellLoaded.current ? threadShell : null),
 }));
 vi.mock("../state/use-atom-command", async (original) => ({
   ...(await original<typeof import("../state/use-atom-command")>()),
@@ -90,6 +93,8 @@ vi.mock("../state/use-atom-command", async (original) => ({
         return commands.archive;
       case threadEnvironment.unarchive:
         return commands.unarchive;
+      case threadEnvironment.delete:
+        return commands.delete;
       case threadEnvironment.settle:
         return commands.settle;
       case threadEnvironment.unsettle:
@@ -250,6 +255,32 @@ describe("archive Undo", () => {
     commands.archive.mockResolvedValue({ _tag: "Failure", cause: new Error("nope") });
     await (await renderActions()).archiveThread(target);
     expect(useThreadUndoNotice.getState().notice).toBeNull();
+  });
+});
+
+describe("archive navigation", () => {
+  it.each([
+    { destination: "/undo-env/thread", expected: "/draft/project" },
+    { destination: "/undo-env/other-thread", expected: "/undo-env/other-thread" },
+    { destination: "/settings", expected: "/settings" },
+  ])("ends at $expected after opening $destination while archiving", async (route) => {
+    router.state.location.href = "/undo-env/thread";
+    router.state.matches[0]!.params = {
+      environmentId: target.environmentId,
+      threadId: target.threadId,
+    };
+    let finishArchive!: () => void;
+    commands.archive.mockReturnValue(
+      new Promise((resolve) => {
+        finishArchive = () => resolve({ _tag: "Success", value: undefined });
+      }),
+    );
+    const archived = useThreadActions().archiveThread(target);
+    router.state.location.href = route.destination;
+    finishArchive();
+    expect((await archived)._tag).toBe("Success");
+    expect(useThreadUndoNotice.getState().notice).toMatchObject({ action: "Archived" });
+    expect(router.state.location.href).toBe(route.expected);
   });
 });
 

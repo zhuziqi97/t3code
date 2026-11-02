@@ -88,6 +88,7 @@ it("keeps hub credentials and URL drafts across a language switch and writes to 
   const onOpenChange = vi.fn();
   await render(
     <AddUsageLimitSourceDialog
+      sources={{}}
       open
       onOpenChange={onOpenChange}
       environmentId={environmentId}

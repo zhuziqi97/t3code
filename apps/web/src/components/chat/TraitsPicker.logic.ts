@@ -138,7 +138,7 @@ export function getTraitsSectionVisibility(input: {
   models: ReadonlyArray<ServerProviderModel>;
   model: string | null | undefined;
   promptUltrathink?: "none" | "prefix" | "body" | undefined;
-  modelOptions: ProviderOptions | null | undefined;
+  modelOptions?: ProviderOptions | null | undefined;
   allowPromptInjectedEffort?: boolean;
   planModeEnabled: boolean;
 }) {
@@ -180,7 +180,7 @@ export function shouldRenderTraitsControls(input: {
   models: ReadonlyArray<ServerProviderModel>;
   model: string | null | undefined;
   promptUltrathink?: "none" | "prefix" | "body" | undefined;
-  modelOptions: ProviderOptions | null | undefined;
+  modelOptions?: ProviderOptions | null | undefined;
   allowPromptInjectedEffort?: boolean;
   planModeEnabled: boolean;
 }): boolean {

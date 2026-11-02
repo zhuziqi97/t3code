@@ -4,6 +4,11 @@
 import type { Messages } from "./messages.en.ts";
 
 export const zh: Partial<Messages> = {
+  "provider.models.noReasoning": "无思考强度",
+  "settings.sections.secrets": "密钥",
+  "chat.traits.noLevels": "无思考强度选项",
+  "chat.traits.effort": "思考强度",
+
   "chat.workspace.conversation": "会话",
   "chat.workspace.messageInput": "消息输入",
   "chat.banner.fullTitle": "显示完整标题：{{title}}",

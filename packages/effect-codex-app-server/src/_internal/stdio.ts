@@ -1,7 +1,10 @@
+import * as NodeUtil from "node:util";
+
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Queue from "effect/Queue";
+import * as Ref from "effect/Ref";
 import * as Sink from "effect/Sink";
 import * as Stdio from "effect/Stdio";
 import * as Stream from "effect/Stream";
@@ -13,7 +16,7 @@ const encoder = new TextEncoder();
 const MAX_STDERR_CHARS = 4_096;
 const STDERR_TRUNCATED = "[stderr truncated]\n";
 
-function stderrExcerpt(text: string, truncated: boolean): string {
+function redactStderrExcerpt(text: string, truncated: boolean): string {
   // Match provider failure redaction before exposing diagnostics in errors or traces.
   const redacted = text
     .replace(/\bhttps?:\/\/[^\s<>"']+/giu, (value) => {
@@ -49,30 +52,14 @@ function stderrExcerpt(text: string, truncated: boolean): string {
   return `${STDERR_TRUNCATED}${newline === -1 ? "" : tail.slice(newline + 1).trim()}`.trim();
 }
 
-export const collectChildStderr = Effect.fn("CodexAppServerClient.collectChildStderr")(function* (
-  handle: Pick<ChildProcessSpawner.ChildProcessHandle, "stderr">,
-) {
-  let tail = "";
-  let truncated = false;
-  const drain = yield* handle.stderr.pipe(
-    Stream.decodeText(),
-    Stream.runForEach((chunk) =>
-      Effect.sync(() => {
-        const next = tail + chunk;
-        truncated ||= next.length > MAX_STDERR_CHARS;
-        tail = next.slice(-MAX_STDERR_CHARS);
-      }),
-    ),
-    Effect.ignore,
-    Effect.forkScoped,
-  );
-  return Fiber.join(drain).pipe(Effect.map(() => stderrExcerpt(tail, truncated)));
-});
-
-export const makeChildStdio = (handle: ChildProcessSpawner.ChildProcessHandle) =>
+export const makeChildStdio = (
+  handle: Pick<ChildProcessSpawner.ChildProcessHandle, "stdin" | "stdout">,
+  stderrDrained: Effect.Effect<void>,
+) =>
   Stdio.make({
     args: Effect.succeed([]),
-    stdin: handle.stdout,
+    // Finish stderr separately from the protocol's exit-status deadline.
+    stdin: handle.stdout.pipe(Stream.onEnd(stderrDrained)),
     stdout: () =>
       Sink.mapInput(handle.stdin, (chunk: string | Uint8Array) =>
         typeof chunk === "string" ? encoder.encode(chunk) : chunk,
@@ -103,6 +90,47 @@ export const makeInMemoryStdio = Effect.fn("makeInMemoryStdio")(function* () {
   };
 });
 
+const STDERR_TAIL_MAX_CHARS = 8_192;
+const STDERR_EXCERPT_MAX_CHARS = 512;
+// `Error: …`, `TypeError: …`, `Error [ERR_MODULE_NOT_FOUND]: …`, `error: …`, `ERROR: …`, `fatal: …`
+const ERROR_LINE_PATTERN = /^(?:[a-z]*error|fatal)(?: ?\[[^\]]+\])?:\s*\S/i;
+
+export const appendStderrTail = (current: string, chunk: string): string => {
+  const next = `${current}${chunk}`;
+  return next.length <= STDERR_TAIL_MAX_CHARS ? next : next.slice(-STDERR_TAIL_MAX_CHARS);
+};
+
+// Node launchers print the actionable error between a source excerpt and stack frames.
+export const stderrExcerpt = (tail: string): string | undefined => {
+  const lines = redactStderrExcerpt(NodeUtil.stripVTControlCharacters(tail), false)
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/\s+/g, " "))
+    .filter((line) => line.length > 0);
+  const line = lines.findLast((candidate) => ERROR_LINE_PATTERN.test(candidate)) ?? lines.at(-1);
+  if (line === undefined) {
+    return undefined;
+  }
+  return line.length <= STDERR_EXCERPT_MAX_CHARS
+    ? line
+    : `${line.slice(0, STDERR_EXCERPT_MAX_CHARS - 1)}…`;
+};
+
+export const makeStderrTail = Effect.fn("makeStderrTail")(function* (
+  stderr: ChildProcessSpawner.ChildProcessHandle["stderr"],
+) {
+  const tail = yield* Ref.make("");
+  const drain = yield* stderr.pipe(
+    Stream.decodeText(),
+    Stream.runForEach((chunk) => Ref.update(tail, (current) => appendStderrTail(current, chunk))),
+    Effect.ignore,
+    Effect.forkScoped,
+  );
+  return {
+    read: Ref.get(tail),
+    awaitDrained: Fiber.join(drain).pipe(Effect.timeout("250 millis"), Effect.ignore),
+  };
+});
+
 type ChildProcessTerminationHandle = Pick<
   ChildProcessSpawner.ChildProcessHandle,
   "exitCode" | "pid"
@@ -110,7 +138,7 @@ type ChildProcessTerminationHandle = Pick<
 
 export const makeTerminationError = (
   handle: ChildProcessTerminationHandle,
-  stderr: Effect.Effect<string> = Effect.succeed(""),
+  stderrTail: Effect.Effect<string>,
 ): Effect.Effect<CodexError.CodexAppServerError> =>
   Effect.matchEffect(handle.exitCode, {
     onFailure: (cause) =>
@@ -122,13 +150,12 @@ export const makeTerminationError = (
         }),
       ),
     onSuccess: (code) =>
-      Effect.map(
-        stderr,
-        (excerpt) =>
-          new CodexError.CodexAppServerProcessExitedError({
-            code,
-            pid: handle.pid,
-            ...(code !== 0 && excerpt ? { stderr: excerpt } : {}),
-          }),
-      ),
+      Effect.map(stderrTail, (tail) => {
+        const stderr = stderrExcerpt(tail);
+        return new CodexError.CodexAppServerProcessExitedError({
+          code,
+          pid: handle.pid,
+          ...(stderr ? { stderr } : {}),
+        });
+      }),
   });

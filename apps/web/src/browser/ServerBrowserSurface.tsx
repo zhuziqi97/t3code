@@ -22,8 +22,10 @@ import type {
   PreviewViewportSetting,
 } from "@t3tools/contracts";
 import {
+  type ClipboardEvent,
   type FormEvent,
   type KeyboardEvent,
+  type MouseEvent,
   type PointerEvent,
   type Ref,
   useEffect,
@@ -60,6 +62,9 @@ const INPUT_SENTINEL = "\u200b";
 const BACKSPACE = { key: "Backspace", code: "Backspace", keyCode: 8 } as const;
 const DELETE = { key: "Delete", code: "Delete", keyCode: 46 } as const;
 const MAX_CONNECTION_FAILURES = 3;
+const COPY = { key: "c", code: "KeyC", keyCode: 67 } as const;
+const CUT = { key: "x", code: "KeyX", keyCode: 88 } as const;
+const CTRL = 2;
 const TAP_SLOP_PX = 8;
 const MULTI_CLICK_MS = 500;
 const MULTI_CLICK_SLOP_PX = 4;
@@ -96,6 +101,10 @@ const buttonOf = (button: number): PreviewStreamMouseButton =>
 
 const pressedButtonOf = (buttons: number): PreviewStreamMouseButton =>
   buttons & 1 ? "left" : buttons & 2 ? "right" : buttons & 4 ? "middle" : "none";
+
+// Mouse thumb buttons: `button === 3` is Back, `button === 4` is Forward.
+const historyDeltaOf = (button: number): -1 | 1 | null =>
+  button === 3 ? -1 : button === 4 ? 1 : null;
 
 /** Browsers may refuse a write that arrives after the key press; a toast button is a fresh gesture. */
 async function copyPageText(text: string) {
@@ -498,6 +507,8 @@ export function ServerBrowserSurface(props: {
 
   const handlePointer = (event: PointerEvent<HTMLCanvasElement>) => {
     if (controlRef.current?.controller !== "you") return;
+    // Thumb buttons drive this tab's history in handleMouseUp, never the page.
+    if (historyDeltaOf(event.button) !== null) return;
     const { type, pointerId, clientX, clientY } = event;
     const cancelled = type === "pointercancel";
     const touch = touchRef.current;
@@ -634,15 +645,36 @@ export function ServerBrowserSurface(props: {
     }
   };
 
+  // Chromium runs a thumb button's back/forward on mouseup in this document, which
+  // would move the app's router. Cancel it and send the press to the preview, as
+  // the toolbar does.
+  const handleMouseUp = (event: MouseEvent<HTMLDivElement>) => {
+    const delta = historyDeltaOf(event.button);
+    if (delta === null) return;
+    event.preventDefault();
+    send({ type: "history", delta });
+  };
+
   const resetInput = (textarea: HTMLTextAreaElement) => {
     keySentRef.current = false;
     textarea.value = INPUT_SENTINEL;
     textarea.setSelectionRange(INPUT_SENTINEL.length, INPUT_SENTINEL.length);
   };
 
-  const sendKeyPress = (key: typeof BACKSPACE | typeof DELETE) => {
-    send({ type: "key", action: "down", ...key, modifiers: 0 });
-    send({ type: "key", action: "up", ...key, modifiers: 0 });
+  const sendKeyPress = (
+    key: typeof BACKSPACE | typeof DELETE | typeof COPY | typeof CUT,
+    modifiers = 0,
+  ) => {
+    send({ type: "key", action: "down", ...key, modifiers });
+    send({ type: "key", action: "up", ...key, modifiers });
+  };
+
+  // Edit menu Copy and Cut fire no key, so send the shortcut the server copies on.
+  const handleClipboard = (key: typeof COPY | typeof CUT, event: ClipboardEvent) => {
+    // Keep the sentinel off the clipboard.
+    event.preventDefault();
+    if (controlRef.current?.controller !== "you") return;
+    sendKeyPress(key, CTRL);
   };
 
   const handleKey = (action: "down" | "up", event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -687,6 +719,15 @@ export function ServerBrowserSurface(props: {
       action === "down" &&
       !shortcut &&
       (text !== undefined || event.key === "Backspace" || event.key === "Delete");
+    // The key copies or cuts in the page, so stop the browser's own copy or cut repeating it.
+    if (
+      event.ctrlKey !== event.metaKey &&
+      !event.altKey &&
+      !event.shiftKey &&
+      ["c", "x"].includes(event.key.toLowerCase())
+    ) {
+      event.preventDefault();
+    }
     if (shortcut) return;
     event.preventDefault();
     event.stopPropagation();
@@ -711,6 +752,7 @@ export function ServerBrowserSurface(props: {
     <div
       className={cn("relative flex flex-col overflow-hidden", className)}
       data-server-browser-surface={tabId}
+      onMouseUp={handleMouseUp}
     >
       <div
         className={cn(
@@ -780,9 +822,8 @@ export function ServerBrowserSurface(props: {
             if (text) send({ type: "text", text });
             resetInput(event.currentTarget);
           }}
-          // Keep the sentinel off the clipboard.
-          onCopy={(event) => event.preventDefault()}
-          onCut={(event) => event.preventDefault()}
+          onCopy={(event) => handleClipboard(COPY, event)}
+          onCut={(event) => handleClipboard(CUT, event)}
           onPaste={(event) => {
             event.preventDefault();
             const text = event.clipboardData.getData("text/plain");

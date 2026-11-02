@@ -273,13 +273,47 @@ describe("KeybindingsSettings.logic", () => {
       }),
     ).toEqual(["Chat: New Local"]);
   });
+
+  it.each([
+    { platform: "Linux x86_64", ctrl: ["Chat: New"], meta: [] },
+    { platform: "Win32", ctrl: ["Chat: New"], meta: [] },
+    { platform: "MacIntel", ctrl: [], meta: ["Chat: New"] },
+  ])("resolves mod to the $platform modifier when reporting conflicts", (expected) => {
+    const rows = buildKeybindingRows(
+      compileResolvedKeybindingsConfig([
+        { command: "chat.new", key: "mod+k" },
+        { command: "chat.newLocal", key: "ctrl+k" },
+        { command: "thread.copyReference", key: "meta+k" },
+      ]),
+      expected.platform,
+    );
+    const conflictsFor = (key: string) => rows.find((row) => row.key === key)?.conflicts;
+
+    expect(conflictsFor("ctrl+k")).toEqual(expected.ctrl);
+    expect(conflictsFor("meta+k")).toEqual(expected.meta);
+    expect(
+      keybindingConflictLabels(rows, { rowId: "new", key: "ctrl+k", when: "" }, expected.platform),
+    ).toEqual(["Chat: New Local", ...expected.ctrl].toSorted());
+  });
+
+  it("keeps mod and ctrl shortcuts apart when their when contexts differ", () => {
+    const rows = buildKeybindingRows(
+      compileResolvedKeybindingsConfig([
+        { command: "chat.new", key: "mod+k", when: "!terminalFocus" },
+        { command: "chat.newLocal", key: "ctrl+k", when: "terminalFocus" },
+      ]),
+      "Linux x86_64",
+    );
+
+    expect(rows.map((row) => row.conflicts)).toEqual([[], []]);
+  });
 });
 
 it("keeps native command choices and row identities while translating labels and searching both languages", () => {
   const en = i18n.getFixedT("en");
   const zh = i18n.getFixedT("zh");
-  const english = buildKeybindingRows(DEFAULT_RESOLVED_KEYBINDINGS, en);
-  const chinese = buildKeybindingRows(DEFAULT_RESOLVED_KEYBINDINGS, zh);
+  const english = buildKeybindingRows(DEFAULT_RESOLVED_KEYBINDINGS, undefined, en);
+  const chinese = buildKeybindingRows(DEFAULT_RESOLVED_KEYBINDINGS, undefined, zh);
   expect(chinese.map((row) => row.id)).toEqual(english.map((row) => row.id));
   expect(groupKeybindingRows(chinese, zh).map((group) => group.id)).toEqual(
     groupKeybindingRows(english, en).map((group) => group.id),
@@ -289,7 +323,10 @@ it("keeps native command choices and row identities while translating labels and
   for (const t of [en, zh]) {
     for (const query of ["复制链接", "copy link", "thread.copyReference"]) {
       expect(
-        filterKeybindingRows(buildKeybindingRows(DEFAULT_RESOLVED_KEYBINDINGS, t), query),
+        filterKeybindingRows(
+          buildKeybindingRows(DEFAULT_RESOLVED_KEYBINDINGS, undefined, t),
+          query,
+        ),
       ).toContainEqual(
         expect.objectContaining({ command: "thread.copyReference", key: "mod+shift+c" }),
       );

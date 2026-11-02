@@ -1,7 +1,11 @@
 import { useTranslate } from "../../i18n";
 import { type EnvironmentId, sessionGrantsScope } from "@t3tools/contracts";
 import { authScopePresentation } from "./authScopePresentation";
-import { AUTH_SCOPE_OPTIONS } from "@t3tools/shared/authScopeOptions";
+
+import {
+  AUTH_SCOPE_OPTIONS,
+  sessionPermissionsUnavailableMessage,
+} from "@t3tools/shared/authScopeOptions";
 import { useEnvironmentSessionState } from "~/state/session";
 
 export function SessionPermissions({
@@ -36,6 +40,12 @@ export function SessionPermissions({
       </ul>
     </div>
   ) : (
-    <p className="py-3 text-xs text-muted-foreground">{t("permissions.unchecked")}</p>
+    <p className="py-3 text-xs text-muted-foreground">
+      {sessionPermissionsUnavailableMessage({
+        connected,
+        failed: session.hasError,
+        rejected: !session.hasError && !session.isPending && session.data?.authenticated === false,
+      })}
+    </p>
   );
 }

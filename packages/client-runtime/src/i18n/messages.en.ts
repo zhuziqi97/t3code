@@ -1,5 +1,10 @@
 /** English keys define the catalog and fallback. Interpolation uses {{name}}; plurals use _one and _other. Keep provider names and shell commands untranslated. */
 export const en = {
+  "provider.models.noReasoning": "No reasoning",
+  "settings.sections.secrets": "Secrets",
+  "chat.traits.noLevels": "No effort levels",
+  "chat.traits.effort": "Effort",
+
   "chat.workspace.conversation": "Conversation",
   "chat.workspace.messageInput": "Message input",
   "chat.banner.fullTitle": "Show full title: {{title}}",

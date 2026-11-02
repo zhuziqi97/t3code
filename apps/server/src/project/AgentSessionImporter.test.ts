@@ -2,6 +2,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as NodeURL from "node:url";
 import { expect, it } from "@effect/vitest";
 import {
+  type AgentSessionSource,
   EventId,
   ProjectId,
   ProviderDriverKind,
@@ -55,7 +56,7 @@ const persistence = Layer.mergeAll(
 function candidate(
   modelSelection: typeof CODEX_MODEL_SELECTION,
   providerSessionId: string,
-  provider: "codex" | "claudeAgent" = "codex",
+  provider: AgentSessionSource = "codex",
 ) {
   const providerInstanceId = modelSelection.instanceId;
   return {
@@ -87,6 +88,12 @@ function candidate(
   } satisfies AgentSessionScanner.AgentSessionRecentThread;
 }
 
+const PI_MODEL_SELECTION = { instanceId: ProviderInstanceId.make("pi"), model: "default" };
+
+// Pi threads are owned by their session file path, not the session UUID.
+const nativeId = ({ source }: ReturnType<typeof candidate>) =>
+  source.provider === "pi" ? source.filePath : source.providerSessionId;
+
 function importId(source: ReturnType<typeof candidate>) {
   return ThreadId.make(
     `import:${source.source.providerInstanceId}:${source.source.providerSessionId}`,
@@ -100,19 +107,17 @@ const seedOwner = Effect.fn(function* (
   const sink = yield* EventSink.EventSinkV2;
   const ids = yield* IdAllocator.IdAllocatorV2;
   const { providerInstanceId, providerSessionId, provider } = source.source;
+  const nativeThreadId = nativeId(source);
   const threadId = ThreadId.make(`owner:${providerInstanceId}:${providerSessionId}`);
   const driver = ProviderDriverKind.make(provider);
   const providerThread: OrchestrationV2ProviderThread = {
-    id: ids.derive.providerThread({
-      driver,
-      nativeThreadId: providerSessionId,
-    }),
+    id: ids.derive.providerThread({ driver, nativeThreadId }),
     driver,
     providerInstanceId,
     providerSessionId: null,
     appThreadId: threadId,
     ownerNodeId: null,
-    nativeThreadRef: { driver, nativeId: providerSessionId, strength: "strong" },
+    nativeThreadRef: { driver, nativeId: nativeThreadId, strength: "strong" },
     nativeConversationHeadRef: null,
     status: "idle",
     firstRunOrdinal: 1,
@@ -258,10 +263,12 @@ it.effect(
         "claudeAgent",
       );
       const deleted = candidate(CODEX_MODEL_SELECTION, "deleted");
+      const ownedPi = candidate(PI_MODEL_SELECTION, "owned-pi", "pi");
       const owners = [
         yield* seedOwner(active),
         yield* seedOwner(archived, "archived"),
         yield* seedOwner(deleted, "deleted"),
+        yield* seedOwner(ownedPi),
       ];
       const before = yield* Effect.forEach(owners, (id) =>
         projections.getThreadRecords(id, ["providerThreads"]),
@@ -272,10 +279,19 @@ it.effect(
         "claudeAgent",
       );
       const unowned = candidate(CODEX_MODEL_SELECTION, "unowned");
-      const importer = yield* makeImporter([active, archived, deleted, otherInstance, unowned]);
+      const unownedPi = candidate(PI_MODEL_SELECTION, "unowned-pi", "pi");
+      const importer = yield* makeImporter([
+        active,
+        archived,
+        deleted,
+        ownedPi,
+        otherInstance,
+        unowned,
+        unownedPi,
+      ]);
 
-      expect(yield* importer.run).toEqual({ importedCount: 2, skippedCount: 0 });
-      for (const source of [active, archived, deleted]) {
+      expect(yield* importer.run).toEqual({ importedCount: 3, skippedCount: 0 });
+      for (const source of [active, archived, deleted, ownedPi]) {
         const threadId = importId(source);
         expect(yield* Effect.option(projections.getThread(threadId))).toEqual(Option.none());
         expect(yield* events.read({ threadId }).pipe(Stream.runCollect)).toEqual([]);
@@ -292,8 +308,8 @@ it.effect(
             "event" in stored ? [stored.event.threadId] : [],
           ),
         ),
-      ).toEqual(new Set([importId(otherInstance), importId(unowned)]));
-      for (const source of [otherInstance, unowned]) {
+      ).toEqual(new Set([importId(otherInstance), importId(unowned), importId(unownedPi)]));
+      for (const source of [otherInstance, unowned, unownedPi]) {
         const threadId = importId(source);
         const records = yield* projections.getThreadRecords(threadId, [
           "messages",
@@ -302,15 +318,13 @@ it.effect(
         expect(records.messages.map((message) => message.text)).toEqual(["Fix it", "Fixed"]);
         expect(records.thread.historyOrigin).toBe("v1_import");
         expect(records.thread.activeProviderThreadId).toBe(records.providerThreads[0]?.id);
-        expect(records.providerThreads[0]?.nativeThreadRef?.nativeId).toBe(
-          source.source.providerSessionId,
-        );
+        expect(records.providerThreads[0]?.nativeThreadRef?.nativeId).toBe(nativeId(source));
         expect(Option.getOrThrow(yield* runtimes.getByThreadId({ threadId }))).toMatchObject({
           providerInstanceId: source.source.providerInstanceId,
           resumeCursor:
-            source.source.provider === "codex"
-              ? { threadId: source.source.providerSessionId }
-              : { threadId, resume: source.source.providerSessionId },
+            source.source.provider === "claudeAgent"
+              ? { threadId, resume: source.source.providerSessionId }
+              : { threadId: nativeId(source) },
           runtimePayload: { importedTranscripts: [source.source] },
         });
       }

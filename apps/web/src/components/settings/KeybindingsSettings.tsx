@@ -736,6 +736,7 @@ function useKeybindingRowEditor({
       key: keyDraft,
       when: whenDraftExpression,
     },
+    undefined,
     t,
   );
 
@@ -870,8 +871,13 @@ function WhenClauseControl({
   onValidityChange: (valid: boolean) => void;
 }) {
   const t = useTranslate();
+  // Closing unmounts the builder, which drops an unparsed draft and keeps the last valid value.
+  const handleOpenChange = (open: boolean) => {
+    if (!open) onValidityChange(true);
+  };
+
   return (
-    <Popover>
+    <Popover onOpenChange={handleOpenChange}>
       <PopoverTrigger
         render={
           <Button
@@ -1060,6 +1066,7 @@ function useNewKeybindingDraft({
       key: keyDraft,
       when: whenDraftExpression,
     },
+    undefined,
     t,
   );
   const commandLabelText = commandDraft

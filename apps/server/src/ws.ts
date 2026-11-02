@@ -130,7 +130,6 @@ import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
 import * as GuestShareService from "./guest/GuestShareService.ts";
 import {
-  buildActiveShellSnapshot,
   bufferShellLiveStream,
   coalesceShellApplicationEvents,
   composeShellStreamWithEnrichment,
@@ -140,7 +139,7 @@ import {
   shellStreamItemFromEnrichmentRefresh,
   shellStreamItemFromThreadShell,
   shellStreamItemsFromInitialSnapshot,
-  shellSnapshotForSubscriber,
+  loadSubscriberShellSnapshot,
   shellStreamItemsFromResumeSnapshot,
   shouldPublishShellApplicationEvent,
   skipUnchangedThreadShells,
@@ -184,8 +183,10 @@ import * as ProviderMaintenanceRunner from "./provider/providerMaintenanceRunner
 import * as ProviderAuthService from "./provider/ProviderAuthService.ts";
 import { makeProviderInstallation } from "./provider/providerInstallation.ts";
 import * as ServerSelfUpdate from "./cloud/selfUpdate.ts";
+import * as NpmRelease from "./cloud/npmRelease.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
+import * as SecretResolver from "@t3tools/secret-provider-core/server/SecretResolver";
 import * as ServerSettings from "./serverSettings.ts";
 import * as ConveneSettings from "./convene/ConveneSettings.ts";
 import * as ConveneConnection from "./convene/ConveneConnection.ts";
@@ -224,7 +225,7 @@ import * as ProjectService from "./project/ProjectService.ts";
 import { threadWorkspaceRoot } from "./project/threadWorkspaceRoot.ts";
 import * as ManagedProjectFolders from "./project/ManagedProjectFolders.ts";
 import * as ScratchThreadPromotion from "./project/ScratchThreadPromotion.ts";
-import { projectMutationOperation } from "./project/ProjectMutation.ts";
+import { mutateProjectWithClone } from "./project/ProjectMutation.ts";
 import * as ProjectCloneTracker from "./project/ProjectCloneTracker.ts";
 import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
 import * as WorktreeSetupTracker from "./project/WorktreeSetupTracker.ts";
@@ -998,21 +999,23 @@ export const subscribeOrchestrationV2Shell = Effect.fn("ws.orchestrationV2.subsc
       },
     );
     const loadSnapshot = Effect.fn("ws.orchestrationV2.loadShellSnapshot")(function* () {
-      const base = buildActiveShellSnapshot(
-        yield* loadShellSnapshotParts({
-          sql,
-          readThreads: threadManagement.readShellSnapshot({ location: "active" }),
-          listProjects: projects.listShells(),
-          latestSequence: applicationEvents.latestApplicationSequence,
-        }),
-      );
-      const forSubscriber = shellSnapshotForSubscriber(base, {
-        omitIdleSubagents: input.omitIdleSubagents === true,
-        omitOlderSettled: input.omitOlderSettled === true,
-        now: yield* DateTime.now,
+      const forSubscriber = yield* loadSubscriberShellSnapshot({
+        sql,
+        listShellIndex: threadManagement.listActiveShellIndex(),
+        readThreads: (threadIds) =>
+          threadManagement.readShellSnapshot({
+            location: "active",
+            ...(threadIds === undefined ? {} : { threadIds }),
+          }),
+        listProjects: projects.listShells(),
+        latestSequence: applicationEvents.latestApplicationSequence,
+        options: {
+          omitIdleSubagents: input.omitIdleSubagents === true,
+          omitOlderSettled: input.omitOlderSettled === true,
+        },
       });
       subagentThreadIds = forSubscriber.subagentThreadIds;
-      const enriched = yield* enrichProjectShells(base.projects);
+      const enriched = yield* enrichProjectShells(forSubscriber.snapshot.projects);
       return {
         snapshot: {
           ...forSubscriber.snapshot,
@@ -1208,6 +1211,7 @@ const makeWsRpcLayer = (
   currentSession: EnvironmentAuth.AuthenticatedSession,
   clientAnalyticsProps: Readonly<Record<string, unknown>>,
   serverBrowser: ServerBrowser.ServerBrowser["Service"],
+  reportProfiles: ServerBrowser.ProfileReporter,
 ) =>
   Layer.unwrap(
     Effect.gen(function* () {
@@ -1320,6 +1324,7 @@ const makeWsRpcLayer = (
       const providerAuth = yield* ProviderAuthService.ProviderAuthService;
       const providerInstallation = yield* makeProviderInstallation();
       const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
+      const npmRelease = yield* NpmRelease.NpmRelease;
       const config = yield* ServerConfig.ServerConfig;
       const lifecycleEvents = yield* ServerLifecycleEvents.ServerLifecycleEvents;
       const storageCleanup = yield* StorageCleanup.StorageCleanup;
@@ -1782,6 +1787,8 @@ const makeWsRpcLayer = (
           threadSnapshotPagination: true,
           threadFind: true,
           threadFindProgressive: true,
+          secretProviderSettings: true,
+          secretReferences: true,
           ...Option.match(scratchWorkspaceRoot, {
             onNone: () => ({}),
             onSome: (root) => ({ scratchWorkspaceRoot: root }),
@@ -1845,10 +1852,7 @@ const makeWsRpcLayer = (
       );
 
       const mutateProject = Effect.fn("ws.projects.mutate")(function* (mutation: ProjectMutation) {
-        const result = yield* projectMutationOperation(projectService, mutation);
-        if (mutation.type === "project.delete")
-          yield* projectCloneTracker.discard(mutation.projectId);
-        return result;
+        return yield* mutateProjectWithClone(projectService, projectCloneTracker, mutation);
       });
 
       const handlers = {
@@ -1903,6 +1907,8 @@ const makeWsRpcLayer = (
             ),
           ),
         [ORCHESTRATION_V2_WS_METHODS.stopWorkflow]: (input) => threadManagement.stopWorkflow(input),
+        [ORCHESTRATION_V2_WS_METHODS.forceStopThread]: (input) =>
+          threadManagement.forceStopThread(input),
         [ORCHESTRATION_V2_WS_METHODS.getWorkflowScript]: (input) =>
           readWorkflowScript({ scriptPath: input.scriptPath }),
         [ORCHESTRATION_V2_WS_METHODS.getTurnItem]: (input) =>
@@ -2394,6 +2400,7 @@ const makeWsRpcLayer = (
         [WS_METHODS.providerInstallSubscribe]: (input) => providerInstallation.subscribe(input),
         [WS_METHODS.providerInstallRemove]: (input) => providerInstallation.remove(input),
         [WS_METHODS.serverUpdateServer]: (input) => serverSelfUpdate.update(input),
+        [WS_METHODS.serverGetNpmRelease]: (input) => npmRelease.get(input),
         [WS_METHODS.serverUpdateServerWithProgress]: (input) =>
           ServerSelfUpdate.updateProgressStream(serverSelfUpdate, input),
         [WS_METHODS.serverCommitDesktopUpdate]: (input) =>
@@ -2601,6 +2608,7 @@ const makeWsRpcLayer = (
         [WS_METHODS.sourceControlSignInWait]: (input) => sourceControlSignIn.wait(input),
         [WS_METHODS.sourceControlSignInCancel]: (input) => sourceControlSignIn.cancel(input),
         [WS_METHODS.sourceControlAppAccess]: (input) => sourceControlSignIn.access(input),
+        [WS_METHODS.sourceControlStarred]: (input) => sourceControlSignIn.starred(input),
         [WS_METHODS.projectCloneStart]: (input) =>
           projectCloneTracker.start(input, {
             createProject: (project) =>
@@ -2928,6 +2936,7 @@ const makeWsRpcLayer = (
           gitWorkflow.switchRef(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
         [WS_METHODS.vcsInit]: (input) =>
           vcsProvisioning.initRepository(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
+        [WS_METHODS.reviewGetBranchCommits]: (input) => review.getBranchCommits(input),
         [WS_METHODS.reviewGetDiffPreview]: (input) => review.getDiffPreview(input),
         [WS_METHODS.reviewGetDiffFileContents]: (input) => review.getDiffFileContents(input),
         [WS_METHODS.terminalOpen]: (input) => terminalManager.open(input),
@@ -2958,7 +2967,7 @@ const makeWsRpcLayer = (
         [WS_METHODS.previewClose]: (input) => previewManager.close(input),
         [WS_METHODS.previewList]: (input) => previewManager.list(input),
         [WS_METHODS.previewClearProfile]: (input) => serverBrowser.clearProfile(input.profileId),
-        [WS_METHODS.previewReportProfiles]: (input) => serverBrowser.reportProfiles(input),
+        [WS_METHODS.previewReportProfiles]: (input) => reportProfiles(input),
         [WS_METHODS.previewReportStatus]: (input) => previewManager.reportStatus(input),
         [WS_METHODS.subscribePreviewEvents]: (_input) => previewManager.events,
         [WS_METHODS.deviceConfigure]: (input) => deviceService.configure(input),
@@ -3177,6 +3186,7 @@ const makeWsRpcLayer = (
         RpcGroup.Rpcs<typeof CoreServerWsRpcGroup | typeof OrchestrationServerWsRpcGroup>
       >;
       const {
+        [ORCHESTRATION_V2_WS_METHODS.forceStopThread]: forceStopThread,
         [ORCHESTRATION_V2_WS_METHODS.getOlderSettledThreads]: getOlderSettledThreads,
         [ORCHESTRATION_V2_WS_METHODS.getThreadFamily]: getThreadFamily,
         [ORCHESTRATION_V2_WS_METHODS.getWorktreeThreadIds]: getWorktreeThreadIds,
@@ -3198,6 +3208,7 @@ const makeWsRpcLayer = (
         ...core
       } = handlers;
       const orchestration = {
+        [ORCHESTRATION_V2_WS_METHODS.forceStopThread]: forceStopThread,
         [ORCHESTRATION_V2_WS_METHODS.getOlderSettledThreads]: getOlderSettledThreads,
         [ORCHESTRATION_V2_WS_METHODS.getThreadFamily]: getThreadFamily,
         [ORCHESTRATION_V2_WS_METHODS.getWorktreeThreadIds]: getWorktreeThreadIds,
@@ -3243,7 +3254,9 @@ export const WS_RPC_SERVER_OPTIONS = {
 } as const;
 
 const makeWsRoutes = Effect.gen(function* () {
+  const secretResolver = yield* SecretResolver.SecretResolver;
   const serverBrowser = yield* ServerBrowser.ServerBrowser;
+  const npmRelease = yield* NpmRelease.NpmRelease;
   const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
   const pullRequests = yield* PullRequestService.PullRequestService;
   const reviewGuides = yield* PullRequestReviewGuideService.PullRequestReviewGuideService;
@@ -3311,7 +3324,14 @@ const makeWsRoutes = Effect.gen(function* () {
         return httpEffect;
       }).pipe(
         Effect.provide(
-          layerWsRpc(session, clientAnalyticsProps, serverBrowser).pipe(
+          layerWsRpc(
+            session,
+            clientAnalyticsProps,
+            serverBrowser,
+            yield* serverBrowser.profileReporter,
+          ).pipe(
+            Layer.provide(Layer.succeed(NpmRelease.NpmRelease, npmRelease)),
+            Layer.provide(Layer.succeed(SecretResolver.SecretResolver, secretResolver)),
             Layer.provideMerge(RpcSerialization.layerJson),
             // Request fibers run in the handlers' context, so this reporter sees
             // their defects, not the rest of the server's.
@@ -3353,7 +3373,7 @@ const makeWsRoutes = Effect.gen(function* () {
         () =>
           Effect.raceFirst(
             rpcWebSocketHttpEffect,
-            sessions.awaitInvalidation(session.sessionId).pipe(
+            sessions.awaitInvalidation(session.sessionId, session.proofKeyThumbprint).pipe(
               Effect.as(HttpServerResponse.empty()),
               Effect.catchTags({
                 SessionCredentialVerificationError: (error) =>
@@ -3376,6 +3396,10 @@ const makeWsRoutes = Effect.gen(function* () {
 export const layer: Layer.Layer<
   never,
   never,
+  | FileSystem.FileSystem
+  | Path.Path
+  | import("effect/process/ChildProcessSpawner").ChildProcessSpawner
+  | SecretResolver.SecretResolver
   | HttpRouter.HttpRouter
   | ServerBrowser.ServerBrowser
   | PeerLinks.PeerLinks
@@ -3477,4 +3501,4 @@ export const layer: Layer.Layer<
   | HttpRouter.Request<"Requires", ProviderLatestVersions.ProviderLatestVersions>
   | HttpRouter.Request<"Requires", import("./vcs/VcsProcess.ts").VcsProcess>
   | HttpRouter.Request<"Error", import("effect/Config").ConfigError>
-> = Layer.unwrap(makeWsRoutes);
+> = Layer.unwrap(makeWsRoutes).pipe(Layer.provide(NpmRelease.layer));

@@ -1,3 +1,6 @@
+import { idleThreadProjection, liveThreadShell } from "../../McpToolAccess.testkit.ts";
+import type { OrchestrationV2ServerCommand } from "@t3tools/contracts";
+import * as ProjectCloneTracker from "../../../project/ProjectCloneTracker.ts";
 import * as PeerLinks from "../../../peer/PeerLinks.ts";
 import * as PeerLinkRequests from "../../../peer/PeerLinkRequests.ts";
 import * as PeerForwarding from "../../../peer/PeerForwarding.ts";
@@ -55,13 +58,13 @@ const layerStubServices = Layer.mergeAll(
   Layer.mock(ThreadWorkspaceRecovery.ThreadWorkspaceRecovery)({}),
   Layer.mock(ProjectionStore.ProjectionStoreV2)({}),
   Layer.mock(DeviceService.DeviceService)({}),
-  Layer.mock(ThreadManagementService.ThreadManagementService)({}),
   Layer.mock(ProviderRegistry.ProviderRegistry)({}),
   Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({}),
   Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),
   Layer.mock(SecretRequests.SecretRequests)({}),
   Layer.mock(ProjectService.ProjectService)({}),
   Layer.mock(PullRequestReviewGuideService.PullRequestReviewGuideService)({}),
+  Layer.mock(ProjectCloneTracker.ProjectCloneTracker)({}),
   ServerSettings.layerTest({}),
   Layer.mock(GitWorkflowService.GitWorkflowService)({}),
   Layer.mock(ProjectSetupScriptRunner.ProjectSetupScriptRunner)({}),
@@ -100,6 +103,7 @@ const decodeToolsListPayload = Schema.decodeUnknownEffect(ToolsListPayload);
 it.effect("production mcp layer lists worktree tools over http", () =>
   Effect.scoped(
     Effect.gen(function* () {
+      const dispatched: OrchestrationV2ServerCommand[] = [];
       const registryService = yield* McpSessionRegistry.McpSessionRegistry;
       const layerRoutes = McpHttpServer.layer.pipe(
         Layer.provide(Layer.succeed(McpSessionRegistry.McpSessionRegistry, registryService)),
@@ -116,13 +120,25 @@ it.effect("production mcp layer lists worktree tools over http", () =>
         Layer.provide(PreviewAutomationBroker.layer),
         Layer.provide(PreviewBrowser.layer),
         Layer.provide(Layer.mock(EffectOutbox.EffectOutboxV2)({})),
+        Layer.provide(
+          Layer.mock(ThreadManagementService.ThreadManagementService)({
+            getThreadShell: (id) => Effect.succeed(liveThreadShell(id)),
+            getProjectThreadRecords: ({ threadId }) =>
+              Effect.succeed(idleThreadProjection(liveThreadShell(threadId))),
+            dispatch: (command) =>
+              Effect.sync(() => {
+                dispatched.push(command);
+                return { sequence: 1, storedEvents: [] };
+              }),
+          }),
+        ),
         Layer.provide(layerStubServices),
         Layer.build,
       );
 
       const registry = registryService.issue({
         threadId: ThreadId.make("thread-scratch"),
-        providerInstanceId: ProviderInstanceId.make("claudeAgent"),
+        providerInstanceId: ProviderInstanceId.make("codex"),
       });
       const credential = yield* registry;
       expect(credential).toBeDefined();
@@ -172,6 +188,37 @@ it.effect("production mcp layer lists worktree tools over http", () =>
       const status = tools.find((tool) => tool.name === "t3_worktree_status");
       expect(status?.annotations?.readOnlyHint).toBe(true);
       expect(status?.annotations?.destructiveHint).toBe(false);
+
+      const organize = Effect.fn("test.organizeOverHttp")(function* (
+        args: Record<string, unknown>,
+      ) {
+        const response = yield* httpClient.post("/mcp", {
+          headers: {
+            accept: "application/json, text/event-stream",
+            authorization: auth,
+            "mcp-protocol-version": "2025-06-18",
+            ...(sessionId ? { "mcp-session-id": sessionId } : {}),
+          },
+          body: HttpBody.text(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: 3,
+              method: "tools/call",
+              params: { name: "t3_thread_organize", arguments: args },
+            }),
+            "application/json",
+          ),
+        });
+        const text = yield* response.text;
+        return JSON.parse(text.match(/\{.*\}/s)![0]);
+      });
+      expect(yield* organize({ action: "archive", threadIds: ["other-thread"] })).toMatchObject({
+        error: { code: -32602 },
+      });
+      expect(dispatched).toEqual([]);
+      const own = yield* organize({ action: "archive" });
+      expect(own, JSON.stringify(own)).toMatchObject({ result: { isError: false } });
+      expect(dispatched).toMatchObject([{ type: "thread.archive", threadId: "thread-scratch" }]);
 
       // MCP requires every tool input schema to be a top-level object schema.
       // A non-object schema (e.g. the anyOf produced by an empty

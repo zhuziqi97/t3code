@@ -1,5 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { afterEach, beforeEach, expect, it } from "@effect/vitest";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
@@ -143,6 +144,14 @@ it.layer(NodeServices.layer)("DesktopCliCommand", (it) => {
       expect(yield* fs.readLink(path.join(home, "bin", "t3code-convene"))).toBe(
         path.join(home, "gone"),
       );
+
+      const launcher = path.join(home, ".t3", "bin", "t3code-convene");
+      yield* fs.writeFileString(launcher, "npm's t3\n");
+      process.env.PATH = path.dirname(launcher);
+      expect(yield* command.state).toMatchObject({ onPath: false, shadowedBy: launcher });
+      expect((yield* Effect.flip(command.install)).message).toContain("Could not set up");
+      yield* command.uninstall;
+      expect(yield* fs.readFileString(launcher)).toBe("npm's t3\n");
     }).pipe(Effect.scoped),
   );
 
@@ -209,45 +218,70 @@ it.layer(NodeServices.layer)("DesktopCliCommand", (it) => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect.each([true, false])(
-    "installs beside its own DEB alternatives entry with user PATH first: %s",
-    (userDirectoryFirst) =>
+  it.effect.skipIf(HostProcess.Platform.defaultValue() === "win32")(
+    "skips a t3 directory or a file this user cannot execute",
+    () =>
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const home = yield* fs.makeTempDirectoryScoped();
-        const executable = path.join(home, "packaged", "t3code-convene");
-        const systemBin = path.join(home, "usr", "bin");
-        const alternatives = path.join(home, "etc", "alternatives", "t3code-convene");
-        const systemLink = path.join(systemBin, "t3code-convene");
-        const userBin = path.join(home, ".local", "bin");
-        yield* fs.makeDirectory(path.dirname(executable), { recursive: true });
-        yield* fs.makeDirectory(path.dirname(alternatives), { recursive: true });
-        yield* fs.makeDirectory(systemBin, { recursive: true });
-        yield* fs.writeFileString(executable, `\x7fELF${"\0".repeat(32 * 1024)}`);
-        yield* fs.symlink(executable, alternatives);
-        yield* fs.symlink(alternatives, systemLink);
-        process.env.PATH = userDirectoryFirst ? [userBin, systemBin].join(":") : systemBin;
+        const folder = path.join(home, "folder");
+        const plain = path.join(home, "plain");
+        const shadow = path.join(home, "shadow");
+        yield* fs.makeDirectory(path.join(folder, "t3code-convene"), { recursive: true });
+        yield* fs.makeDirectory(plain);
+        yield* fs.writeFileString(path.join(plain, "t3code-convene"), "notes\n");
+        // Root can execute mode 0o601; other users must honor the owner permissions.
+        yield* fs.chmod(
+          path.join(plain, "t3code-convene"),
+          process.getuid?.() === 0 ? 0o600 : 0o601,
+        );
+        yield* fs.makeDirectory(shadow);
+        yield* fs.writeFileString(path.join(shadow, "t3code-convene"), "#!/bin/sh\n", {
+          mode: 0o755,
+        });
+        process.env.PATH = [folder, plain, shadow, path.join(home, ".local", "bin")].join(":");
 
         const command = yield* commandIn({ home });
-        expect(yield* command.state).toEqual({
-          supported: true,
-          installedPath: null,
-          onPath: false,
-          launcherPath: null,
-        });
-        expect(yield* command.install).toEqual({
-          supported: true,
-          installedPath: path.join(userBin, "t3code-convene"),
-          onPath: userDirectoryFirst,
-          launcherPath: path.join(home, ".t3", "bin", "t3code-convene"),
-        });
-        expect(yield* fs.realPath(systemLink)).toBe(executable);
+        expect((yield* command.state).shadowedBy).toBe(path.join(shadow, "t3code-convene"));
 
-        expect((yield* command.uninstall).installedPath).toBeNull();
-        expect(yield* fs.exists(path.join(userBin, "t3code-convene"))).toBe(false);
-        expect(yield* fs.realPath(systemLink)).toBe(executable);
+        const error = yield* Effect.flip(command.install);
+        expect(error.message).toContain(path.join(shadow, "t3code-convene"));
+
+        yield* fs.remove(shadow, { recursive: true });
+        expect(yield* command.install).toMatchObject({
+          onPath: true,
+          installedPath: path.join(home, ".local", "bin", "t3code-convene"),
+        });
       }).pipe(Effect.scoped),
+  );
+
+  it.effect("does not treat its own launcher as another t3 when its folder is first on PATH", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const home = yield* fs.makeTempDirectoryScoped();
+      const launcher = path.join(home, ".t3", "bin", "t3code-convene");
+      process.env.PATH = [path.dirname(launcher), path.join(home, ".local", "bin")].join(":");
+
+      const command = yield* commandIn({ home });
+      const installed = yield* command.install;
+
+      expect(yield* fs.exists(launcher)).toBe(true);
+      expect(installed).toMatchObject({
+        onPath: true,
+        installedPath: path.join(home, ".local", "bin", "t3code-convene"),
+      });
+      expect(installed.shadowedBy).toBeUndefined();
+      expect(yield* command.state).toEqual(installed);
+
+      const removed = yield* command.uninstall;
+      expect(removed.installedPath).toBeNull();
+      expect(removed.onPath).toBe(true);
+      expect(yield* command.state).toEqual(removed);
+      expect(yield* fs.exists(installed.installedPath!)).toBe(false);
+      expect(yield* fs.exists(launcher)).toBe(true);
+    }).pipe(Effect.scoped),
   );
 
   it.effect("leaves the Windows PATH alone when it cannot be read", () =>
@@ -292,5 +326,45 @@ it.layer(NodeServices.layer)("DesktopCliCommand", (it) => {
       yield* command.uninstall;
       expect(registry.path).toBe(userPath);
     }).pipe(Effect.scoped),
+  );
+  it.effect.each([true, false])(
+    "installs beside its own DEB alternatives entry with user PATH first: %s",
+    (userDirectoryFirst) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const home = yield* fs.makeTempDirectoryScoped();
+        const executable = path.join(home, "packaged", "t3code-convene");
+        const systemBin = path.join(home, "usr", "bin");
+        const alternatives = path.join(home, "etc", "alternatives", "t3code-convene");
+        const systemLink = path.join(systemBin, "t3code-convene");
+        const userBin = path.join(home, ".local", "bin");
+        yield* fs.makeDirectory(path.dirname(executable), { recursive: true });
+        yield* fs.makeDirectory(path.dirname(alternatives), { recursive: true });
+        yield* fs.makeDirectory(systemBin, { recursive: true });
+        yield* fs.writeFileString(executable, `\x7fELF${"\0".repeat(32 * 1024)}`);
+        yield* fs.symlink(executable, alternatives);
+        yield* fs.symlink(alternatives, systemLink);
+        process.env.PATH = userDirectoryFirst ? [userBin, systemBin].join(":") : systemBin;
+
+        const command = yield* commandIn({ home });
+        expect(yield* command.state).toEqual({
+          supported: true,
+          installedPath: null,
+          onPath: false,
+          launcherPath: null,
+        });
+        expect(yield* command.install).toEqual({
+          supported: true,
+          installedPath: path.join(userBin, "t3code-convene"),
+          onPath: userDirectoryFirst,
+          launcherPath: path.join(home, ".t3", "bin", "t3code-convene"),
+        });
+        expect(yield* fs.realPath(systemLink)).toBe(executable);
+
+        expect((yield* command.uninstall).installedPath).toBeNull();
+        expect(yield* fs.exists(path.join(userBin, "t3code-convene"))).toBe(false);
+        expect(yield* fs.realPath(systemLink)).toBe(executable);
+      }).pipe(Effect.scoped),
   );
 });

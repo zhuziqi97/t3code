@@ -67,7 +67,7 @@ function skipLeadingCodexContext(text: string): number {
 /** Derive a visible title without mistaking Codex-injected context for the user request. */
 export function deriveImportedThreadTitle(
   text: string,
-  source: "codex" | "claudeAgent",
+  source: "codex" | "claudeAgent" | "pi",
 ): string | null {
   const visibleText =
     source === "codex" ? text.slice(skipLeadingCodexContext(text)) : text.trimStart();

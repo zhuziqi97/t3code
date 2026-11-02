@@ -5,7 +5,7 @@
 Agent 生命周期实施计划：[convene-agent-lifecycle-plan.md](../plan/convene-agent-lifecycle-plan.md)。
 用户明确要求本地 fork 保存计划与合并决定；这些文档随 Convene 分支提交，不提交上游。
 
-当前稳定发行固定上游 `v0.1.3`，不将上游最新 main 当作正式发行基线。
+当前已发行版本 `0.1.5-2` 固定上游 `v0.1.5`；[#103](convene://issues/zzq/software-factory/t3code/103) 的隔离同步目标为 `v0.1.6`（`2359643cffa6ba9ee84d6f2694b935de54a8013e`），源码集成不代表候选发行或正式验收。不将上游最新 main 当作同步目标。
 具体冲突裁决及各适配的上游状态见 [V2 稳定版合入核查](convene-v010-upstream-review.md)；
 实施由 [T3Code Issue #8](convene://issues/zzq/software-factory/t3code/8) 追踪。
 

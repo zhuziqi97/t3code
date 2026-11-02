@@ -62,10 +62,11 @@ export function useThreadActionMenu(input: {
   readonly threadRef: ScopedThreadRef | null;
   readonly projectCwd: string | null;
   readonly onStartRename: () => void;
+  readonly onFind?: ((threadRef: ScopedThreadRef) => void) | undefined;
   readonly canShareWithGuest: boolean;
 }) {
   const t = useTranslate();
-  const { threadRef, projectCwd, onStartRename, canShareWithGuest } = input;
+  const { threadRef, projectCwd, onStartRename, onFind, canShareWithGuest } = input;
   const router = useRouter();
   const projects = useProjects();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
@@ -141,25 +142,23 @@ export function useThreadActionMenu(input: {
       };
       const isRegeneratingTitle = thread.titleRegeneration != null;
       const snoozePresets = resolveSnoozePresets(now, timestampFormat, threadRef.environmentId, t);
-      const items = buildThreadActionMenuItems(
-        {
-          canOperate: readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope),
-          branch: thread.branch ?? null,
-          projectFilter: null,
-          isPinned: thread.pinnedAt != null,
-          isSettled: supports.settlement && thread.settledOverride === "settled",
-          autoSettleEnabled: thread.autoSettleDisabledAt == null,
-          isSnoozed: supports.snooze && effectiveSnoozed(thread, { now: now.toISOString() }),
-          canSnoozeNow: canSnooze(thread, { now: now.toISOString() }),
-          isRegeneratingTitle,
-          isRunning: !threadRuntimeCanArchive(thread.runtime),
-          supports,
-          snoozePresets,
-          canShareWithGuest,
-          canTurnIntoProject: canTurnThreadIntoProject(threadRef),
-        },
-        t,
-      );
+      const items = buildThreadActionMenuItems({
+        canOperate: readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope),
+        canFind: onFind !== undefined,
+        branch: thread.branch ?? null,
+        projectFilter: null,
+        isPinned: thread.pinnedAt != null,
+        isSettled: supports.settlement && thread.settledOverride === "settled",
+        autoSettleEnabled: thread.autoSettleDisabledAt == null,
+        isSnoozed: supports.snooze && effectiveSnoozed(thread, { now: now.toISOString() }),
+        canSnoozeNow: canSnooze(thread, { now: now.toISOString() }),
+        isRegeneratingTitle,
+        isRunning: !threadRuntimeCanArchive(thread.runtime),
+        supports,
+        snoozePresets,
+        canShareWithGuest,
+        canTurnIntoProject: canTurnThreadIntoProject(threadRef),
+      });
       const clicked = await settlePromise(() => api.contextMenu.show(items, position));
       if (clicked._tag === "Failure" || clicked.value === null) return;
       const action: ThreadActionMenuId = clicked.value;
@@ -197,6 +196,9 @@ export function useThreadActionMenu(input: {
         }
       };
       switch (action) {
+        case "find":
+          onFind?.(threadRef);
+          return;
         case "project-settings": {
           const project = projects.find(
             (candidate) =>

@@ -10,6 +10,7 @@ import {
 } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { i18n, useTranslate } from "~/i18n";
+import { normalizeProviderAccentColor } from "@t3tools/client-runtime/state/provider-instance-display";
 import {
   formatDuration,
   formatResetsIn,
@@ -189,17 +190,19 @@ function WindowBar({
 
 export function LimitWindows({
   driver,
+  accentColor,
   windows,
   now,
   compact = false,
 }: {
   readonly driver: ServerProvider["driver"];
+  readonly accentColor?: string | undefined;
   readonly windows: ReadonlyArray<ServerProviderUsageWindow>;
   readonly now: number;
   readonly compact?: boolean;
 }) {
   const t = useTranslate();
-  const color = barColor(driver);
+  const color = normalizeProviderAccentColor(accentColor) ?? barColor(driver);
   return (
     <div
       className={

@@ -15,6 +15,7 @@ import {
   isSettingsSearchScopeAvailable,
   movedSettingsPath,
   searchSettings,
+  SETTINGS_NAV_GROUPS,
   SETTINGS_SEARCH_ITEMS,
   sourceControlHostSearchItems,
   sourceControlHostSettingsSearchId,
@@ -26,6 +27,10 @@ import { changeLanguage } from "../../i18n";
 afterEach(async () => {
   await changeLanguage("en");
 });
+vi.mock("~/env", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/env")>()),
+  isSecretsFeatureEnabled: false,
+}));
 
 const ITEMS: ReadonlyArray<SettingsSearchItem> = [
   {
@@ -109,6 +114,11 @@ describe("searchSettings", () => {
     expect(searchSettings("long lines", ITEMS).map((item) => item.id)).toEqual(["word-wrap"]);
     await changeLanguage("zh");
     expect(searchSettings("诊断").map((item) => item.id)).toContain("telemetry-export");
+  });
+
+  it("hides the Secrets page from nav and search while the secrets feature is disabled", () => {
+    expect(SETTINGS_NAV_GROUPS.flatMap((group) => group.paths)).not.toContain("/settings/secrets");
+    expect(searchSettings("1password").map((item) => item.to)).not.toContain("/settings/secrets");
   });
 
   it("matches normalized title substrings", () => {

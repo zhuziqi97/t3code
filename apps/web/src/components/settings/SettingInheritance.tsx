@@ -38,7 +38,13 @@ const WRITING_STYLE_LABELS: Record<string, string> = {
   custom: "inheritance.customInstructions",
 };
 
-/** Human labels for the values the chain can show; falls back to a type summary. */
+const BACKGROUND_ACTIVITY_PROFILE_LABELS: Record<string, string> = {
+  balanced: "Balanced",
+  performance: "Performance",
+  "battery-saver": "Battery saver",
+  custom: "Advanced",
+};
+
 function formatValue(key: keyof ServerSettings, value: unknown, translate: TFunction): string {
   if (value === null || value === undefined) {
     return key === "pullRequestMergeMethod"
@@ -76,10 +82,17 @@ function formatValue(key: keyof ServerSettings, value: unknown, translate: TFunc
   }
   if (Array.isArray(value)) return translate("inheritance.items", { count: value.length });
   if (typeof value === "object") {
+    if (key === "backgroundActivity" && "profile" in value && typeof value.profile === "string") {
+      return BACKGROUND_ACTIVITY_PROFILE_LABELS[value.profile] ?? value.profile;
+    }
     if ("model" in value && typeof value.model === "string") return value.model;
     if ("mode" in value && typeof value.mode === "string") {
-      const labelKey = WRITING_STYLE_LABELS[value.mode];
-      return labelKey ? translate(labelKey) : value.mode;
+      if (key === "worktreeCleanup") return value.mode === "off" ? "Off" : "Custom";
+      return key === "sourceControlWritingStyle"
+        ? WRITING_STYLE_LABELS[value.mode]
+          ? translate(WRITING_STYLE_LABELS[value.mode]!)
+          : value.mode
+        : value.mode;
     }
   }
   return translate("common.custom");

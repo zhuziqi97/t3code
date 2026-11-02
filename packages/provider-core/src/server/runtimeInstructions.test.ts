@@ -35,7 +35,10 @@ describe("buildRuntimeInstructions", () => {
       instructions,
       "Follow the user's explicit delivery format instead of a fixed last line.",
     );
-    assert.include(instructions, "Never wait with sleep");
+    assert.include(
+      instructions,
+      "For PR waits, no sleep, loops, gh --watch, Monitor or ScheduleWakeup.",
+    );
     assert.include(instructions, "call unwatch_pull_request");
   });
 });

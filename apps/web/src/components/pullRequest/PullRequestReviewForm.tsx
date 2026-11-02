@@ -7,11 +7,13 @@ import { CheckIcon, MessageSquareIcon, XCircleIcon } from "lucide-react";
 import { useState, type ReactNode, type RefObject } from "react";
 
 import { pullRequestEnvironment } from "~/state/pullRequests";
+import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 
 import { Button } from "../ui/button";
 import { Select, SelectItem, SelectPopup, SelectTrigger } from "../ui/select";
 import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
+import { readableFailure } from "./pullRequestDetail.logic";
 import {
   pullRequestReviewKey,
   usePendingReviewComments,
@@ -98,7 +100,14 @@ export function PullRequestReviewForm({
     });
     onPendingChange(false);
     if (result._tag === "Failure") {
-      toastManager.add({ type: "error", title: i18n.t("pullRequest.flow.review.failed") });
+      toastManager.add({
+        type: "error",
+        title: i18n.t("pullRequest.flow.review.failed"),
+        description: readableFailure(
+          squashAtomCommandFailure(result),
+          "The host refused the review. Your draft is still here to try again.",
+        ),
+      });
       return;
     }
     // Preserve comments and summary edits made during submission.

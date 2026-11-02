@@ -297,11 +297,10 @@ function ThemeImportBody({
       }
     }
     if (installed.length > 0) onImportedMany(installed, { updated: false });
-    if (failures.length > 0) {
-      setError(failures);
-    } else if (conflicting.length > 0) {
+    setError(failures.length > 0 ? failures : null);
+    if (conflicting.length > 0) {
       setConflicts(conflicting);
-    } else if (installed.length > 0) {
+    } else if (installed.length > 0 && failures.length === 0) {
       onClose();
     }
   };
@@ -403,8 +402,8 @@ function ThemeImportBody({
     }
     if (resolved.length > 0) onImportedMany(resolved, { updated: mode === "update" });
     setConflicts(null);
-    if (failures.length > 0) setError(failures);
-    else onClose();
+    if (failures.length > 0) setError([...(Array.isArray(error) ? error : []), ...failures]);
+    else if (!error) onClose();
   };
 
   const handleSubmit = () => {

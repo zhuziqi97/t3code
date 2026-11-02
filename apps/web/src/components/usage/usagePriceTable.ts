@@ -87,6 +87,15 @@ export function usagePriceTableChanges(
           draft.id,
           translate?.("usage.prices.mapDifferentModel") ?? "Map to a different model.",
         );
+      if (draft.alias === undefined && Object.keys(draft.values).length > 0) {
+        errors.set(
+          draft.id,
+          `${target.label} maps this model. Remove it from "Apply to" or clear its mapping first.`,
+        );
+        continue;
+      }
+      if (model === "") errors.set(draft.id, "Enter a model ID.");
+      else if (alias === model) errors.set(draft.id, "Map to a different model.");
       else {
         if (alias !== currentAlias) changes.push({ model, alias });
         if (modelPrice(target, model)) changes.push({ model, price: null });
@@ -125,6 +134,26 @@ export function usagePriceTableChanges(
     const next = usagePriceForm(model, parsed.price);
     if (USAGE_PRICE_FIELDS.some((field) => original[field.key] !== next[field.key]))
       changes.push(parsed);
+  }
+  // Check the final batch so clearing a mapping and reversing it in one save stays valid.
+  const aliases = new Map(Object.entries(target.aliases ?? {}));
+  for (const change of changes) {
+    if (!("alias" in change)) continue;
+    if (change.alias === null) aliases.delete(change.model);
+    else aliases.set(change.model, change.alias);
+  }
+  for (const draft of drafts) {
+    if (draft.removed || errors.has(draft.id)) continue;
+    let model = draft.model.trim();
+    const seen = new Set<string>();
+    while (aliases.has(model)) {
+      if (seen.has(model)) {
+        errors.set(draft.id, `Model mappings cannot form a cycle on ${target.label}.`);
+        break;
+      }
+      seen.add(model);
+      model = aliases.get(model)!;
+    }
   }
   return { changes, errors };
 }

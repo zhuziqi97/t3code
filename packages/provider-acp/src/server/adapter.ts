@@ -30,6 +30,7 @@ import {
   type RuntimeRequestId,
   type ThreadTokenUsageSnapshot,
   type ThreadId,
+  type TurnTokenUsage,
 } from "@t3tools/contracts";
 import { AgentScope, AgentScopeThreadId } from "@t3tools/shared/AgentScope";
 import { HTML_RENDER_TOOL_NAME } from "@t3tools/shared/htmlRender";
@@ -44,6 +45,7 @@ import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import type * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Equal from "effect/Equal";
 import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Fiber from "effect/Fiber";
@@ -100,6 +102,7 @@ import {
   acpSessionConfiguration,
   ACP_EMPTY_OPTION_VALUE,
   ACP_SESSION_MODE_OPTION_ID,
+  flattenSelectChoices,
 } from "./sessionConfig.ts";
 import * as AcpSessionRuntime from "./AcpSessionRuntime.ts";
 import {
@@ -146,6 +149,7 @@ export interface AcpAdapterV2RuntimeInput {
   readonly runtimePolicy: ProviderAdapter.ProviderAdapterV2RuntimePolicy;
   readonly mcpServers: ReadonlyArray<EffectAcpSchema.McpServer>;
   readonly acpMcpServers?: ReadonlyArray<EffectAcpSchema.McpServer>;
+  readonly httpMcpServers?: ReadonlyArray<EffectAcpSchema.McpServer>;
   readonly processEnvironment?: NodeJS.ProcessEnv;
   readonly resumeSessionId?: string;
   readonly interruptPromptOnCancel?: boolean;
@@ -233,6 +237,43 @@ class AcpConfigurationError extends Schema.TaggedError<AcpConfigurationError>()(
   }
 }
 
+/**
+ * Maps one per-turn usage sample (flavors with reportsPerTurnPromptUsage)
+ * directly onto TurnTokenUsage: the response's counters already cover exactly
+ * this prompt.
+ */
+export function acpPerTurnPromptUsage(
+  usage: EffectAcpSchema.Usage | null | undefined,
+  hasSubagents: boolean,
+  terminalStatus: OrchestrationV2ProviderTurn["status"],
+): TurnTokenUsage {
+  if (usage == null) {
+    return { usageScope: "main_agent", usageStatus: "unavailable", hasSubagents };
+  }
+  // TurnTokenUsage contract: input includes cache read + write and reasoning
+  // is a subset of output, so clamp counters that exceed their parent and
+  // drop the ones the agent left unset. Cache writes are capped at whatever
+  // cache reads leave of input, so the pair cannot exceed it.
+  const clampSubset = (value: number | null | undefined, parent: number) =>
+    value == null ? undefined : Math.min(value, parent);
+  const cachedInputTokens = clampSubset(usage.cachedReadTokens, usage.inputTokens);
+  const cacheCreationTokens = clampSubset(
+    usage.cachedWriteTokens,
+    usage.inputTokens - (cachedInputTokens ?? 0),
+  );
+  const reasoningTokens = clampSubset(usage.thoughtTokens, usage.outputTokens);
+  return {
+    usageScope: "main_agent",
+    usageStatus: terminalStatus === "completed" ? "complete" : "partial",
+    hasSubagents,
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    ...(cachedInputTokens === undefined ? {} : { cachedInputTokens }),
+    ...(cacheCreationTokens === undefined ? {} : { cacheCreationTokens }),
+    ...(reasoningTokens === undefined ? {} : { reasoningTokens }),
+  };
+}
+
 export interface AcpAdapterV2Flavor {
   readonly buildPrompt?: (input: {
     readonly text: string;
@@ -240,6 +281,7 @@ export interface AcpAdapterV2Flavor {
     readonly promptCapabilities: EffectAcpSchema.AgentCapabilities["promptCapabilities"];
   }) => Effect.Effect<ReadonlyArray<EffectAcpSchema.ContentBlock>, EffectAcpErrors.AcpError>;
   readonly promptFailure?: (cause: unknown) => OrchestrationV2ProviderFailure;
+  readonly requiresSignIn?: (cause: unknown) => boolean;
   /**
    * Runs before attachment paths, T3 instructions and native slash-command detection,
    * so a rewrite can turn the user's text into a native command.
@@ -253,6 +295,7 @@ export interface AcpAdapterV2Flavor {
   readonly clientCapabilitiesMeta?: NonNullable<
     EffectAcpSchema.InitializeRequest["clientCapabilities"]
   >["_meta"];
+  readonly mcpOverHttp?: boolean;
   readonly normalizeSessionUpdate?: (
     notification: EffectAcpSchema.SessionNotification,
   ) => EffectAcpSchema.SessionNotification;
@@ -375,6 +418,11 @@ export interface AcpAdapterV2Flavor {
   readonly assertComplete?: Effect.Effect<void, EffectAcpErrors.AcpError>;
   /** Interrupt the local prompt fiber before `session/cancel` (Grok wedged prompts). */
   readonly interruptPromptOnCancel?: boolean;
+  /**
+   * The agent's PromptResponse.usage counters read per-turn. The ACP spec
+   * leaves usage semantics open, so this stays unset until proven live.
+   */
+  readonly reportsPerTurnPromptUsage?: boolean;
   /** Grok can retain task_already_running until process exit. */
   readonly restartRuntimeAfterInterrupt?: boolean;
   readonly restartRuntimeOnEveryInterrupt?: boolean;
@@ -462,6 +510,7 @@ export interface AcpAdapterV2Options {
   };
   readonly testHooks?: {
     readonly onDeferredFinalizeScheduled?: (debounce: Duration.Input) => Effect.Effect<void>;
+    readonly afterPromptWireSettled?: () => Effect.Effect<void>;
     readonly afterPromptSettledWithBackgroundWork?: () => Effect.Effect<void>;
     readonly onNativeResponseLifecycle?: (event: {
       readonly generation?: number;
@@ -613,18 +662,19 @@ interface AcpMcpContext {
   readonly servers: ReadonlyArray<EffectAcpSchema.McpServer>;
   readonly acpServers: ReadonlyArray<EffectAcpSchema.McpServer>;
   readonly httpServers: Readonly<Record<string, McpProviderSession.McpHttpContribution>>;
+  readonly nativeHttpServers: ReadonlyArray<EffectAcpSchema.McpServer>;
   readonly processEnvironment?: NodeJS.ProcessEnv;
 }
 
 function acpMcpContext(
   session: McpProviderSession.McpProviderSessionConfig | undefined,
   self: SelfInvocation,
+  mcpOverHttp: boolean | undefined,
 ): AcpMcpContext {
   if (session === undefined) {
-    return { servers: [], acpServers: [], httpServers: {} };
+    return { servers: [], acpServers: [], httpServers: {}, nativeHttpServers: [] };
   }
-  // ACP agents can drop injected HTTP servers. Always use the authenticated stdio bridge;
-  // credentials travel through the environment rather than command arguments.
+  // HTTP is opt-in: some ACP agents drop injected HTTP servers.
   const httpServers = {
     "t3-code": {
       endpoint: session.endpoint,
@@ -633,6 +683,15 @@ function acpMcpContext(
     ...session.additionalServers,
   };
   return {
+    nativeHttpServers:
+      mcpOverHttp === true
+        ? Object.entries(httpServers).map(([name, server]) => ({
+            type: "http",
+            name,
+            url: server.endpoint,
+            headers: [{ name: "Authorization", value: server.authorizationHeader }],
+          }))
+        : [],
     // The protocol ID is private to this credential; the agent still sees the
     // configured name. Native forks share a runtime but not project authority.
     httpServers: Object.fromEntries(
@@ -666,7 +725,11 @@ function acpMcpContext(
 }
 
 function acpMcpActivation(context: AcpMcpContext) {
-  return { mcpServers: context.servers, acpMcpServers: context.acpServers };
+  return {
+    mcpServers: context.servers,
+    acpMcpServers: context.acpServers,
+    httpMcpServers: context.nativeHttpServers,
+  };
 }
 
 function nativeThreadId(
@@ -1080,6 +1143,8 @@ interface ActiveAcpTurn {
   readonly startedAt: DateTime.Utc;
   readonly completed: Deferred.Deferred<void, never>;
   readonly itemOrdinals: Map<string, number>;
+  readonly outgoingPrompt?: ReadonlyArray<EffectAcpSchema.ContentBlock> | undefined;
+  consumedPromptMessageId?: string;
   readonly user: ActiveTextStream;
   readonly assistant: ActiveTextStream;
   readonly reasoning: ActiveTextStream;
@@ -1126,6 +1191,7 @@ interface ActiveAcpTurn {
   promptSettledStatus: "completed" | "interrupted" | "failed" | "cancelled" | null;
   workAccepted: boolean;
   readonly promptWireSettled: Deferred.Deferred<void, never>;
+  promptUsage: EffectAcpSchema.Usage | undefined;
   backgroundFinalizeGeneration: number;
 }
 
@@ -1359,7 +1425,12 @@ interface SnapshotMessageState {
   loadingIndex: number;
 }
 
+/** How long a Stop waits for the agent to confirm before the user is offered Force stop. */
+const ACP_STOP_CONFIRM_TIMEOUT_MS = 10_000;
 const TOOL_UPDATE_PERSIST_EVERY = 10;
+
+// CommandOutputHub reads the last 256 KiB; retain more so its display cut stays unchanged.
+const MAX_AGENT_TERMINAL_OUTPUT_CHARS = 320 * 1024;
 
 // Agents can resend whole calls while streaming arguments.
 function shouldPersistToolUpdate(
@@ -1395,8 +1466,10 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
   const { flavor, selfInvocation: self } = options;
   const readMcpContext = (threadId: ThreadId | null) =>
     threadId === null
-      ? Effect.succeed(acpMcpContext(undefined, self))
-      : mcpSessions.read(threadId).pipe(Effect.map((session) => acpMcpContext(session, self)));
+      ? Effect.succeed(acpMcpContext(undefined, self, flavor.mcpOverHttp))
+      : mcpSessions
+          .read(threadId)
+          .pipe(Effect.map((session) => acpMcpContext(session, self, flavor.mcpOverHttp)));
   const driver = flavor.driver;
   const continuationRequests = options.continuationRequests;
   const postSettleContinuationEnabled =
@@ -2033,6 +2106,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
             runtimePolicy: input.runtimePolicy,
             mcpServers: mcpContext.servers,
             acpMcpServers: mcpContext.acpServers,
+            httpMcpServers: mcpContext.nativeHttpServers,
             ...(mcpContext.processEnvironment === undefined
               ? {}
               : { processEnvironment: mcpContext.processEnvironment }),
@@ -4455,6 +4529,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
             embeddedToolCallIds === undefined || embeddedToolCallIds.size === 0
               ? [`acp-agent-terminal:${update.terminalId}`]
               : [...embeddedToolCallIds];
+          const output = next.output.slice(-MAX_AGENT_TERMINAL_OUTPUT_CHARS);
           for (const toolCallId of projectedToolCallIds) {
             const existing = context.tools.get(toolCallId);
             const seeded: AcpToolCallState =
@@ -4475,7 +4550,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                   status,
                   ...(next.command === undefined ? {} : { command: next.command }),
                 },
-                next.output,
+                output,
               ),
             );
           }
@@ -4941,6 +5016,25 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
             acpRootSessionUpdateIngestsOutput(notification)
           ) {
             yield* emitProviderRetry(context, "completed");
+          }
+          if (
+            context.outgoingPrompt !== undefined &&
+            (update.sessionUpdate === "user_message" ||
+              update.sessionUpdate === "user_message_chunk")
+          ) {
+            // ACP v2 prompt acknowledgments lack a messageId; correlate one full echo by content.
+            if (
+              context.consumedPromptMessageId === undefined &&
+              update.sessionUpdate === "user_message" &&
+              Equal.equals(update.content, context.outgoingPrompt)
+            ) {
+              context.consumedPromptMessageId = update.messageId;
+            }
+            if (
+              context.consumedPromptMessageId !== undefined &&
+              context.consumedPromptMessageId === update.messageId
+            )
+              return;
           }
           switch (update.sessionUpdate) {
             case "state_update": {
@@ -6752,6 +6846,36 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
           return activated;
         });
 
+        const validateModelSelection = Effect.fn("AcpAdapterV2.validateModelSelection")(function* (
+          modelSelection: ModelSelection,
+        ) {
+          const model = flavor.resolveModelId?.(modelSelection) ?? modelSelection.model;
+          if (
+            flavor.applyModelSelection !== undefined ||
+            model == null ||
+            model.length === 0 ||
+            model === "default" ||
+            model === "auto" ||
+            flavor.customModels?.includes(model) === true
+          )
+            return;
+          const option = findModelConfigOption(yield* runtime.getConfigOptions);
+          const models = (yield* Ref.get(activeSessionSetup))?.sessionSetupResult.models;
+          const available =
+            option?.type === "select"
+              ? flattenSelectChoices(option.options).some((choice) => choice.value === model)
+              : models?.availableModels.some((choice) => choice.modelId === model);
+          if (available === false) {
+            return yield* new AcpModelSelectionError({
+              model,
+              actualModel: null,
+              cause: EffectAcpErrors.AcpRequestError.invalidParams(
+                "The requested model is not available in this session.",
+              ),
+            });
+          }
+        });
+
         const configureSession = Effect.fnUntraced(
           function* (
             startResult: AcpSessionRuntime.AcpSessionRuntimeStartResult,
@@ -6780,6 +6904,15 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
               currentModelOption?.type === "select"
                 ? currentModelOption.currentValue
                 : (startResult.sessionSetupResult.models?.currentModelId ?? null);
+            const nativeAlias =
+              (requestedModel === "default" || requestedModel === "auto") &&
+              !(currentModelOption?.type === "select"
+                ? flattenSelectChoices(currentModelOption.options).some(
+                    (choice) => choice.value === requestedModel,
+                  )
+                : startResult.sessionSetupResult.models?.availableModels.some(
+                    (model) => model.modelId === requestedModel,
+                  ));
             const rejectedModel = (error: EffectAcpErrors.AcpError) =>
               error._tag === "AcpRequestError" && error.code === -32602
                 ? new AcpModelSelectionError({
@@ -6801,7 +6934,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                   modelSelection,
                 })
                 .pipe(Effect.mapError(rejectedModel));
-            } else if (requestedModel != null && requestedModel.length > 0) {
+            } else if (requestedModel != null && requestedModel.length > 0 && !nativeAlias) {
               // Stored catalog choices can expire; explicitly configured custom IDs
               // are validated by the agent instead.
               const isCustomModel = flavor.customModels?.includes(requestedModel) === true;
@@ -7037,6 +7170,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                 nativeBuildConfigurationBySessionId.delete(startResult.sessionId);
               }
             }
+            yield* validateModelSelection(modelSelection);
           },
           (effect) => effect.pipe(Effect.ensuring(publishSessionConfiguration())),
         );
@@ -7076,6 +7210,17 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
           status,
           startedAt: context.startedAt,
           completedAt,
+          ...(status === "running" || status === "pending"
+            ? {}
+            : {
+                // The prompt tap only captures usage for flavors that declared
+                // per-turn counters, so undeclared agents stay unavailable here.
+                turnTokenUsage: acpPerTurnPromptUsage(
+                  context.promptUsage,
+                  context.subagents.size > 0,
+                  status,
+                ),
+              }),
         });
 
         const terminalizeOpenRunOwnedItems = Effect.fnUntraced(function* (
@@ -7347,7 +7492,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
           const mcpSession = yield* mcpSessions.read(turnInput.threadId);
           const instructionState = {
             interactionMode: turnInput.runtimePolicy.interactionMode,
-            hasT3Mcp: acpMcpContext(mcpSession, self).servers.length > 0,
+            hasT3Mcp: mcpSession !== undefined,
             hasDeviceTools: mcpSession?.capabilities?.has("device") === true,
           } satisfies T3AcpInstructionState;
           const previousInstructionState = (yield* Ref.get(promptInstructionStates)).get(sessionId);
@@ -7538,6 +7683,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                 yield* Ref.set(activeInteractionMode, turnInput.runtimePolicy.interactionMode);
               }
             }
+            yield* validateModelSelection(turnInput.modelSelection);
             yield* Ref.set(lastTurnRoute, {
               threadId: turnInput.threadId,
               providerThreadId: turnInput.providerThread.id,
@@ -7604,6 +7750,10 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
               startedAt,
               completed,
               itemOrdinals: new Map(),
+              outgoingPrompt:
+                (yield* Ref.get(activeSessionSetup))?.initializeResult.protocolVersion === 2
+                  ? promptParts?.prompt
+                  : undefined,
               user: { current: null, nextSegment: 0 },
               assistant: { current: null, nextSegment: 0 },
               reasoning: { current: null, nextSegment: 0 },
@@ -7629,6 +7779,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
               promptSettledStatus: null,
               workAccepted: false,
               promptWireSettled,
+              promptUsage: undefined,
               backgroundFinalizeGeneration: 0,
             };
             const carryover = yield* Ref.getAndSet(carryoverSubagents, null);
@@ -7788,12 +7939,21 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                   return updated;
                 }),
               ),
-              // Wire settlement precedes the completion callback's permit request so
-              // settled-soft classification can observe the native return even when
-              // the completion fiber has not yet set promptSettled under the permit.
-              Effect.tap(() =>
-                Deferred.succeed(context.promptWireSettled, undefined).pipe(Effect.asVoid),
+              // Settle the wire before the completion callback's permit so a settled-soft
+              // Stop sees the native return. Capture usage only before finalize: a late
+              // response must not flip a settled turn.
+              Effect.tap((result) =>
+                Effect.sync(() => {
+                  if (flavor.reportsPerTurnPromptUsage === true && !context.finalized) {
+                    context.promptUsage = result.usage ?? undefined;
+                  }
+                }).pipe(
+                  Effect.andThen(
+                    Deferred.succeed(context.promptWireSettled, undefined).pipe(Effect.asVoid),
+                  ),
+                ),
               ),
+              Effect.tap(() => options.testHooks?.afterPromptWireSettled?.() ?? Effect.void),
               Effect.flatMap((result) =>
                 runRuntimeCallbackAtGeneration(
                   promptGeneration,
@@ -8170,7 +8330,9 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
               return yield* Effect.uninterruptibleMask((restore) =>
                 Effect.gen(function* () {
                   yield* restore(runtimeTransitionPermit.take(1));
-                  return yield* Effect.gen(function* () {
+                  // Stop's caller times out on this call. The transition runs in its own fiber so
+                  // a stalled hard teardown keeps its state and permit without holding the caller.
+                  const transitionFiber = yield* Effect.gen(function* () {
                     const transition = yield* Effect.gen(function* () {
                       const interruptContext = yield* Ref.get(activeTurn);
                       if (
@@ -8181,8 +8343,12 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                       ) {
                         // ACP cancel leaves native children alive; close confirms session-wide Stop.
                         pendingStopCloseTurn = interruptContext;
-                        const closed = yield* runtime.closeSession().pipe(
-                          Effect.timeoutOption("10 seconds"),
+                        // Interruptible, or neither this timeout nor the caller's could end a hung close.
+                        const closed = yield* restore(
+                          runtime
+                            .closeSession()
+                            .pipe(Effect.timeoutOption(ACP_STOP_CONFIRM_TIMEOUT_MS)),
+                        ).pipe(
                           Effect.mapError(
                             (cause) =>
                               new ProviderAdapter.ProviderAdapterProtocolError({
@@ -8194,10 +8360,11 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                           ),
                         );
                         if (Option.isNone(closed)) {
-                          return yield* new ProviderAdapter.ProviderAdapterProtocolError({
+                          return yield* new ProviderAdapter.ProviderAdapterInterruptTimeoutError({
                             driver,
-                            detail:
-                              "The agent did not confirm session close; background work may still run",
+                            providerThreadId: turnInput.providerThread.id,
+                            providerTurnId: turnInput.providerTurnId,
+                            timeoutMs: ACP_STOP_CONFIRM_TIMEOUT_MS,
                           });
                         }
                         yield* runtimeCallbackPermit.withPermit(
@@ -8427,15 +8594,16 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                         }
                       }
                       const stopped = yield* Deferred.await(context.completed).pipe(
-                        Effect.timeoutOption("10 seconds"),
+                        Effect.timeoutOption(ACP_STOP_CONFIRM_TIMEOUT_MS),
                       );
+                      // The turn stays open: the agent may still be working, and the user
+                      // decides whether to Force stop it.
                       if (Option.isNone(stopped)) {
-                        if (!context.finalized) {
-                          yield* finalizeTurn(context, "interrupted");
-                        }
-                        return yield* new ProviderAdapter.ProviderAdapterProtocolError({
+                        return yield* new ProviderAdapter.ProviderAdapterInterruptTimeoutError({
                           driver,
-                          detail: `ACP provider turn ${turnInput.providerTurnId} did not acknowledge cancellation before the interrupt timeout`,
+                          providerThreadId: turnInput.providerThread.id,
+                          providerTurnId: turnInput.providerTurnId,
+                          timeoutMs: ACP_STOP_CONFIRM_TIMEOUT_MS,
                         });
                       }
                     });
@@ -8456,20 +8624,29 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                         }),
                       ),
                     );
-                  }).pipe(Effect.ensuring(runtimeTransitionPermit.release(1)));
+                  }).pipe(
+                    Effect.ensuring(runtimeTransitionPermit.release(1)),
+                    Effect.forkIn(sessionScope, { startImmediately: true, uninterruptible: true }),
+                  );
+                  return yield* restore(Fiber.join(transitionFiber)).pipe(
+                    Effect.onInterrupt(() =>
+                      Fiber.interrupt(transitionFiber).pipe(Effect.forkDetach, Effect.asVoid),
+                    ),
+                  );
                 }),
               );
             },
             (effect, turnInput) =>
               effect.pipe(
-                Effect.mapError(
-                  (cause) =>
-                    new ProviderAdapter.ProviderAdapterInterruptError({
-                      driver,
-                      providerThreadId: turnInput.providerThread.id,
-                      providerTurnId: turnInput.providerTurnId,
-                      cause,
-                    }),
+                Effect.mapError((cause) =>
+                  cause._tag === "ProviderAdapterInterruptTimeoutError"
+                    ? cause
+                    : new ProviderAdapter.ProviderAdapterInterruptError({
+                        driver,
+                        providerThreadId: turnInput.providerThread.id,
+                        providerTurnId: turnInput.providerTurnId,
+                        cause,
+                      }),
                 ),
               ),
           ),
@@ -8749,6 +8926,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
               new ProviderAdapter.ProviderAdapterOpenSessionError({
                 driver,
                 providerSessionId: input.providerSessionId,
+                ...(flavor.requiresSignIn?.(cause) === true ? { requiresSignIn: true } : {}),
                 cause,
               }),
           ),

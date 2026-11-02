@@ -58,6 +58,7 @@ import { resolveOfficialAcpRegistryIconUrl } from "./AcpRegistryIcon";
 import { AddManagedCodexAccountDialog } from "./CodexSetupSection";
 import { MultipleAccountsNote } from "./MultipleAccountsNote";
 import { ProviderEnvironmentSection } from "./ProviderInstanceCard";
+import { useSecretSources } from "./SecretSourceInput";
 
 /** Limit the slug to 48 chars so the composed ProviderInstanceId fits its 64-char cap. */
 function slugifyLabel(value: string): string {
@@ -168,6 +169,7 @@ export function AddProviderInstanceDialog({
 }: AddProviderInstanceDialogProps) {
   const t = useTranslate();
   const settings = useEnvironmentSettings(environmentId);
+  const secretSources = useSecretSources(environmentId);
   const persistProviderInstance = usePersistEnvironmentProviderInstanceMutation(environmentId);
   const canManageProviders = useEnvironmentScope(environmentId, AuthProvidersManageScope);
 
@@ -544,11 +546,13 @@ export function AddProviderInstanceDialog({
                               idPrefix="add-provider-acpRegistry-manual"
                               variant="settings"
                               onChange={setConfigDraft}
+                              environmentId={environmentId}
                             />
                             {isLocalAcp ? (
                               <ProviderEnvironmentSection
                                 environment={localEnvironment}
                                 onChange={setLocalEnvironment}
+                                secretSources={secretSources}
                               />
                             ) : null}
                           </SettingsGroup>
@@ -699,6 +703,7 @@ export function AddProviderInstanceDialog({
                     idPrefix={`add-provider-${driver}`}
                     variant="settings"
                     onChange={setConfigDraft}
+                    environmentId={environmentId}
                   />
                 </SettingsGroup>
               ) : !isAcpRegistry && wizardStep === 2 ? (

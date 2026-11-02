@@ -128,6 +128,7 @@ function setup() {
   discovery.listeners.clear();
   discovery.state = {
     environments: new Map(),
+    listed: true,
     refreshing: false,
     offline: false,
     error: Option.none(),
@@ -135,9 +136,21 @@ function setup() {
   discovery.listEnvironments.mockReset().mockResolvedValue(new Map());
   discovery.register.mockReset().mockResolvedValue(AsyncResult.success(undefined));
   discovery.refresh.mockReset().mockImplementation(async () => {
-    publish({ environments: new Map(), refreshing: true, offline: false, error: Option.none() });
+    publish({
+      environments: new Map(),
+      listed: true,
+      refreshing: true,
+      offline: false,
+      error: Option.none(),
+    });
     const environments = await discovery.listEnvironments();
-    publish({ environments, refreshing: false, offline: false, error: Option.none() });
+    publish({
+      environments,
+      listed: true,
+      refreshing: false,
+      offline: false,
+      error: Option.none(),
+    });
     return AsyncResult.success(undefined);
   });
   return stack.move();
@@ -169,6 +182,7 @@ describe("cloud environment offline reasons", () => {
     await act(async () => {
       publish({
         environments: new Map([[newMachineId, offlineEntry("tunnel_released")]]),
+        listed: true,
         refreshing: false,
         offline: false,
         error: Option.none(),
@@ -439,7 +453,13 @@ it("updates discovery and offline guidance when language changes without adding 
   expect(rowText()).toContain("T3 Connect · 尚未添加 · 中继在线");
   expect(rowText()).toContain("Work laptop");
   await act(async () =>
-    publish({ environments: new Map(), refreshing: false, offline: true, error: Option.none() }),
+    publish({
+      environments: new Map(),
+      listed: true,
+      refreshing: false,
+      offline: true,
+      error: Option.none(),
+    }),
   );
   expect(rowText()).toContain("你似乎已离线。");
   expect(discovery.register).not.toHaveBeenCalled();

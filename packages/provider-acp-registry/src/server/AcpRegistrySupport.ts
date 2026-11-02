@@ -52,6 +52,9 @@ const ACP_REGISTRY_URL = "https://cdn.agentclientprotocol.com/registry/v1/latest
 
 const MAX_REGISTRY_BYTES = 1024 * 1024;
 const MAX_ARCHIVE_BYTES = 1024 * 1024 * 1024;
+const MAX_COMMAND_OUTPUT_BYTES = 1024 * 1024;
+// Archive listings can exceed the output of package-manager commands.
+const MAX_ARCHIVE_LISTING_BYTES = 64 * 1024 * 1024;
 const MAX_PACKAGE_MANIFEST_BYTES = 1024 * 1024;
 // Older clients omit the limit and validate responses against a 20-agent cap.
 const DEFAULT_SEARCH_LIMIT = 20;
@@ -683,7 +686,13 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
   const registrySemaphore = yield* Semaphore.make(1);
   const nextRegistryAttempt = yield* Ref.make(0);
   const registryError = yield* Ref.make<AcpRegistryError | undefined>(undefined);
-  const installSemaphore = yield* Semaphore.make(1);
+  // Long installs must only block operations on the same agent.
+  const installPermits = new Map<string, Semaphore.Semaphore>();
+  const withInstallPermit = (agentId: string) => {
+    const permit = installPermits.get(agentId) ?? Semaphore.makeUnsafe(1);
+    installPermits.set(agentId, permit);
+    return permit.withPermits(1);
+  };
   const preparedBinaryReservations = yield* Ref.make<ReadonlyMap<string, number>>(new Map());
 
   const managerBinDirectory = Effect.fn("AcpRegistryCatalog.managerBinDirectory")(function* (
@@ -890,7 +899,14 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
           Effect.flatMap((fetched) =>
             Effect.gen(function* () {
               if (current !== undefined)
-                yield* installSemaphore.withPermit(preserveInstalledAgents(current));
+                yield* Effect.forEach(
+                  current.agents,
+                  (agent) =>
+                    withInstallPermit(agent.id)(
+                      preserveInstalledAgents({ ...current, agents: [agent] }),
+                    ),
+                  { discard: true },
+                );
               const registry = { ...fetched, checkedAt: yield* Clock.currentTimeMillis };
               yield* writeRegistryCache(encodeRegistryIndex(registry));
               yield* Ref.set(registryError, undefined);
@@ -967,6 +983,7 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
       readonly env?: NodeJS.ProcessEnv;
       readonly timeout?: Duration.Input;
       readonly truncatedOutputReason?: AcpRegistryErrorReason;
+      readonly maxStdoutBytes?: number;
     } = {},
   ) {
     const collect = Effect.gen(function* () {
@@ -985,8 +1002,11 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
       yield* Effect.addFinalizer(() => child.kill().pipe(Effect.ignore));
       const [stdout, stderr, exitCode] = yield* Effect.all(
         [
-          collectUint8StreamText({ stream: child.stdout, maxBytes: 1024 * 1024 }),
-          collectUint8StreamText({ stream: child.stderr, maxBytes: 1024 * 1024 }),
+          collectUint8StreamText({
+            stream: child.stdout,
+            maxBytes: options.maxStdoutBytes ?? MAX_COMMAND_OUTPUT_BYTES,
+          }),
+          collectUint8StreamText({ stream: child.stderr, maxBytes: MAX_COMMAND_OUTPUT_BYTES }),
           child.exitCode,
         ],
         { concurrency: "unbounded" },
@@ -1694,10 +1714,11 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
               : platform === "win32"
                 ? ["-tf", archivePath]
                 : undefined;
+        const listingOptions = { maxStdoutBytes: MAX_ARCHIVE_LISTING_BYTES };
         const entries =
           listArgs === undefined
-            ? yield* runCommand("unzip", ["-Z1", archivePath])
-            : yield* runCommand(tarCommand, listArgs);
+            ? yield* runCommand("unzip", ["-Z1", archivePath], listingOptions)
+            : yield* runCommand(tarCommand, listArgs, listingOptions);
         if (!validateArchiveEntries(entries)) {
           return yield* new AcpRegistryError({
             reason: "archive_invalid",
@@ -1825,14 +1846,14 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
       const distribution = yield* compatibleDistribution(agent, input.distribution ?? "auto");
       if (distribution.kind === "binary") {
         // Only explicit command overrides may use PATH copies with different ACP capabilities.
-        yield* installSemaphore.withPermits(1)(
+        yield* withInstallPermit(agent.id)(
           installBinary(agent, distribution.binaryTarget!).pipe(
             Effect.tap(() => reservePreparedBinary(agent.id)),
             Effect.tap(() => rememberInstalledAgent(agent, distribution.kind)),
           ),
         );
       } else {
-        yield* installSemaphore.withPermits(1)(
+        yield* withInstallPermit(agent.id)(
           ensureGlobalPackage(
             agent,
             distribution.kind,
@@ -1884,7 +1905,7 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
       const effectiveEnvironment = environment ?? hostEnvironment;
       const installed = commandOverride
         ? undefined
-        : yield* installSemaphore.withPermits(1)(
+        : yield* withInstallPermit(agentId)(
             findInstallation(agentId, settings.distribution, effectiveEnvironment, agent),
           );
       const distribution =
@@ -1999,7 +2020,7 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
       const commandOverride = settings.commandPath.trim();
       const installed = commandOverride
         ? undefined
-        : yield* installSemaphore.withPermits(1)(
+        : yield* withInstallPermit(agentId)(
             findInstallation(
               agentId,
               settings.distribution,
@@ -2026,7 +2047,7 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
         command = installed.command;
         commandBinDirectory = installed.binDirectory;
       } else {
-        const prepared = yield* installSemaphore.withPermits(1)(
+        const prepared = yield* withInstallPermit(agentId)(
           Effect.gen(function* () {
             if (distribution.kind === "npx" || distribution.kind === "uvx") {
               const receipt = yield* ensureGlobalPackage(
@@ -2073,7 +2094,7 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
   const uninstallManagedBinary: AcpRegistryCatalog["Service"]["uninstallManagedBinary"] = (input) =>
     hostSettings
       .withSnapshot((settings) =>
-        installSemaphore.withPermits(1)(
+        withInstallPermit(input.agentId)(
           Effect.gen(function* () {
             const safeAgentId = yield* decodeBoundedAgentId(input.agentId).pipe(
               Effect.mapError(
