@@ -626,7 +626,7 @@ export function ThreadRelationshipsPanel(props: {
           : GitForkIcon;
     const relationship =
       node?.thread?.lineage.sideChat === true && !isParent
-        ? "Side chat"
+        ? t("chat.side.title")
         : relationshipLabel(edge, props.threadId);
     const projectedAgent = isSubagent && !isParent ? subagentsByThreadId.get(threadId) : undefined;
     const workflowGroup =
@@ -927,7 +927,11 @@ export function ThreadRelationshipsPanel(props: {
       {sideChatsVisible ? (
         <ThreadDetailsSection
           headingId="thread-details-side-chats-heading"
-          title={runningSideChats > 0 ? `Side chats · ${runningSideChats} running` : "Side chats"}
+          title={
+            runningSideChats > 0
+              ? t("chat.side.running", { count: runningSideChats })
+              : t("chat.side.plural")
+          }
           data-thread-side-chats-panel
         >
           <ThreadLineageGroup

@@ -81,8 +81,8 @@ const CHAT_WIDTH_LABELS: Record<ChatWidth, string> = {
 };
 
 const EFFORT_DISPLAY_LABELS: Record<EffortDisplay, string> = {
-  label: "Word",
-  bars: "Bars",
+  label: "appearance.effort.word",
+  bars: "appearance.effort.bars",
 };
 
 export function AppearanceSettingsPanel() {
@@ -290,12 +290,12 @@ export function AppearanceSettingsPanel() {
         />
         <ThreadDetailsItemsRow />
         <SettingsRow
-          {...searchableSetting("effort-display")}
-          description="Show reasoning effort in the composer as its name, such as High, or as bars."
+          {...searchableSetting("effort-display", t)}
+          description={t("appearance.effort.description")}
           resetAction={
             settings.effortDisplay !== DEFAULT_UNIFIED_SETTINGS.effortDisplay ? (
               <SettingResetButton
-                label="effort display"
+                label={t("appearance.effort.reset")}
                 onClick={() =>
                   updateSettings({ effortDisplay: DEFAULT_UNIFIED_SETTINGS.effortDisplay })
                 }
@@ -311,12 +311,16 @@ export function AppearanceSettingsPanel() {
                     updateSettings({ effortDisplay: value });
                 }}
               >
-                <SelectTrigger size="sm" className="w-full min-w-0" aria-label="Effort display">
-                  <SelectValue>{EFFORT_DISPLAY_LABELS[settings.effortDisplay]}</SelectValue>
+                <SelectTrigger
+                  size="sm"
+                  className="w-full min-w-0"
+                  aria-label={t("settings.search.effort-display.title")}
+                >
+                  <SelectValue>{t(EFFORT_DISPLAY_LABELS[settings.effortDisplay])}</SelectValue>
                 </SelectTrigger>
                 <SelectPopup align="end" alignItemWithTrigger={false}>
-                  <SelectItem value="label">Word (default)</SelectItem>
-                  <SelectItem value="bars">Bars</SelectItem>
+                  <SelectItem value="label">{t("appearance.effort.defaultWord")}</SelectItem>
+                  <SelectItem value="bars">{t("appearance.effort.bars")}</SelectItem>
                 </SelectPopup>
               </Select>
             </div>
@@ -413,8 +417,8 @@ export function AppearanceSettingsPanel() {
             {...searchableSetting("environment-identification")}
             description={
               environmentStageVariant
-                ? "Choose how Dev and Nightly environments are identified."
-                : "Show Dev or Nightly artwork in the sidebar header."
+                ? t("appearance.environmentDescription")
+                : t("appearance.environment.description")
             }
             resetAction={
               settings.environmentIdentificationMode !== DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE ? (

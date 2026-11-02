@@ -575,9 +575,9 @@ export function LiveWorkEntryTimelineRow({
         label={
           thoughtIsStatus ? (
             row.active ? (
-              "Thinking"
+              t("chat.timeline.thinking")
             ) : (
-              "Thought"
+              t("chat.timeline.thought")
             )
           ) : row.entry.itemType === "reasoning" ? (
             <ChatMarkdown

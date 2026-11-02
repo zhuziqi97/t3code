@@ -131,8 +131,10 @@ export function describeComposerEffort(
         ) : glyph ? (
           <EffortGlyph count={glyph.count} filled={glyph.filled} size={size} />
         ) : null}
-        {glyph && (display.speedLabel === "Fast" || display.speedLabel === "Ultrafast") ? (
-          <FastBolt ultra={display.speedLabel === "Ultrafast"} />
+        {glyph &&
+        (display.speedLabel === i18n.t("chat.traits.choice.fast") ||
+          display.speedLabel === i18n.t("chat.traits.choice.ultrafast")) ? (
+          <FastBolt ultra={display.speedLabel === i18n.t("chat.traits.choice.ultrafast")} />
         ) : null}
         {glyph && display.otherLabels.length > 0 ? (
           <span
@@ -365,6 +367,7 @@ function SpeedSegment(props: {
   description?: string | undefined;
   onPick: () => void;
 }) {
+  const t = useTranslate();
   const buttonProps = {
     type: "button",
     role: "radio",
@@ -375,8 +378,9 @@ function SpeedSegment(props: {
   } as const;
   const content = (
     <>
-      {props.label === "Fast" || props.label === "Ultrafast" ? (
-        <FastBolt ultra={props.label === "Ultrafast"} />
+      {props.label === t("chat.traits.choice.fast") ||
+      props.label === t("chat.traits.choice.ultrafast") ? (
+        <FastBolt ultra={props.label === t("chat.traits.choice.ultrafast")} />
       ) : null}
       {props.label}
     </>
@@ -398,11 +402,12 @@ function SpeedControl(props: { traits: TraitsSelectionInput }) {
     traits.selectDescriptors,
     traits.booleanDescriptors,
   );
-  if (traits.modelIsUnavailable || (!speedSelect && !fastToggle)) return null;
+  const descriptor = speedSelect ?? fastToggle;
+  if (traits.modelIsUnavailable || !descriptor) return null;
   return (
     <div
       role="radiogroup"
-      aria-label={speedSelect?.label ?? fastToggle?.label}
+      aria-label={formatProviderOptionName(descriptor, t)}
       className="flex rounded-lg bg-input/40 p-0.5"
     >
       {speedSelect

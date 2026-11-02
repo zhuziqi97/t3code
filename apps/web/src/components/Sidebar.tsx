@@ -1223,11 +1223,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               ...(canPinProject(group)
                 ? [
                     group.pinned
-                      ? { id: "unpin", label: "Unpin project", icon: "pin-off" }
-                      : { id: "pin", label: "Pin project", icon: "pin" },
+                      ? { id: "unpin", label: t("project.unpin"), icon: "pin-off" }
+                      : { id: "pin", label: t("project.pin"), icon: "pin" },
                   ]
                 : []),
-              { id: "project-settings", label: "Project settings", icon: "settings" },
+              { id: "project-settings", label: t("project.settings"), icon: "settings" },
             ],
             position,
           ),

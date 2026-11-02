@@ -491,17 +491,17 @@ function ProjectDetail({
             </p>
           ) : null}
           <SettingsRow
-            title="Name"
-            description="The shared name for this project group in the sidebar and thread lists."
+            title={t("common.name")}
+            description={t("project.settings.nameDescription")}
             resetAction={
               canResetScratchTitle ? (
                 <SettingResetButton
-                  label="project name"
+                  label={t("project.name")}
                   disabled={!canEditGroup}
                   onClick={() =>
                     void updateAllMembers(
                       { title: SCRATCH_PROJECT_TITLE },
-                      "Failed to rename project",
+                      t("project.settings.renameFailed"),
                     )
                   }
                 />
@@ -578,8 +578,8 @@ function ProjectDetail({
           {canOrganize ? (
             <>
               <SettingsRow
-                title="Pin"
-                description="Pinned projects come first in project pickers."
+                title={t("project.pin.title")}
+                description={t("project.pin.description")}
                 control={
                   <Switch
                     checked={group.pinned}
@@ -587,19 +587,17 @@ function ProjectDetail({
                     onCheckedChange={(checked) =>
                       void organize(
                         { pinned: Boolean(checked) },
-                        checked ? "Failed to pin project" : "Failed to unpin project",
+                        checked ? t("project.pin.failed") : t("project.unpin.failed"),
                       )
                     }
-                    aria-label="Pin project"
+                    aria-label={t("project.pin")}
                   />
                 }
               />
               <SettingsRow
-                title="Archive"
+                title={t("project.archive.title")}
                 description={
-                  group.archived
-                    ? "Hidden from project pickers. Threads and files are kept."
-                    : "Hides the project from project pickers. Threads and files are kept."
+                  group.archived ? t("project.archive.hidden") : t("project.archive.description")
                 }
                 control={
                   <Button
@@ -610,12 +608,12 @@ function ProjectDetail({
                       void organize(
                         { archived: !group.archived },
                         group.archived
-                          ? "Failed to unarchive project"
-                          : "Failed to archive project",
+                          ? t("project.unarchive.failed")
+                          : t("project.archive.failed"),
                       )
                     }
                   >
-                    {group.archived ? "Unarchive" : "Archive"}
+                    {group.archived ? t("project.unarchive.title") : t("project.archive.title")}
                   </Button>
                 }
               />

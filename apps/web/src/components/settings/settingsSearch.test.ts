@@ -147,7 +147,20 @@ describe("searchSettings", () => {
     ).toEqual(["network-access", "connections-environment"]);
   });
 
-  it("finds settings that used to be reachable only through their section", () => {
+  it("finds settings that used to be reachable only through their section", async () => {
+    for (const [language, query, title] of [
+      ["zh", "备用模型", "备用模型"],
+      ["en", "Fallback model", "Fallback model"],
+    ] as const) {
+      await changeLanguage(language);
+      expect(searchSettings(query)[0]).toMatchObject({
+        id: "fallback-model",
+        title,
+        to: "/settings/threads",
+        scope: "environment-defaults",
+      });
+    }
+
     expect(searchSettings("pull request template")[0]?.id).toBe("follow-change-request-templates");
     expect(searchSettings("git security keys")[0]?.id).toBe("git-fetch-interval");
     expect(searchSettings("push notifications")[0]?.id).toBe("publish-agent-activity");

@@ -287,6 +287,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["Default model 默认模型", "new thread project provider reasoning effort"],
   },
   {
+    id: "fallback-model",
+    title: "Fallback model",
+    to: "/settings/threads",
+    scope: "environment-defaults",
+    searchTerms: ["备用模型 fallback model provider usage limit new threads"],
+  },
+  {
     id: "default-permissions",
     get title() {
       return i18n.t("settings.search.default-permissions.title");

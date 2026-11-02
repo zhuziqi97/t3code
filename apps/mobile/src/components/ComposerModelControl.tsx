@@ -49,7 +49,7 @@ export function ComposerModelControl(props: {
   return (
     <ComposerInlineControl
       accessibilityLabel={[
-        "Model and reasoning settings",
+        t("chat.model.reasoningSettings"),
         label,
         badge?.showBadge ? badge.displayName : null,
         summary,

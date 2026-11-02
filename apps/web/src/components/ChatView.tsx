@@ -886,7 +886,7 @@ export default function ChatView(props: ChatViewProps) {
   const parentThreadLink = (() => {
     if (sideChatParentRef !== null) {
       return {
-        title: sideChatParent?.title ?? "Parent thread",
+        title: sideChatParent?.title ?? t("thread.parent"),
         sideChat: true,
         // Embedded, the parent is the view around it.
         ...(embedded
@@ -903,7 +903,7 @@ export default function ChatView(props: ChatViewProps) {
     }
     if (parentSubagentThreadRef !== null) {
       return {
-        title: parentSubagentThread?.title ?? "Parent thread",
+        title: parentSubagentThread?.title ?? t("thread.parent"),
         open: (): void => {
           void navigate({
             to: "/$environmentId/$threadId",
@@ -936,7 +936,7 @@ export default function ChatView(props: ChatViewProps) {
       ? null
       : {
           threadId: parentSubagentThreadRef.threadId,
-          title: parentSubagentThread?.title ?? "Parent thread",
+          title: parentSubagentThread?.title ?? t("thread.parent"),
         };
   const threadError = isServerThread
     ? (localServerError ?? serverRuntime?.lastError ?? null)
@@ -2808,21 +2808,21 @@ export default function ChatView(props: ChatViewProps) {
   // Main-thread surfaces show this reason; `/side` sent anyway gets it as a toast.
   const sideChatDisabledReason =
     activeThread?.lineage.sideChat === true
-      ? "Side chats cannot start side chats."
+      ? t("chat.side.noNesting")
       : isSubagentThread
-        ? "Subagent threads cannot start side chats."
+        ? t("chat.side.noSubagents")
         : serverConfig === null
-          ? "Side chats are not ready yet. Try again in a moment."
+          ? t("chat.side.notReady")
           : serverConfig.environment.capabilities.sideChats !== true
-            ? "Update this environment's T3 Code server to use side chats."
+            ? t("chat.side.updateServer")
             : sideChatsOffered && !isServerThread
-              ? "Side chats start after the first message."
+              ? t("chat.side.afterMessage")
               : sideChat.available &&
                   orchestrationV2WorktreePending(
                     activeThread?.worktreePath ?? null,
                     serverProjection?.runs ?? [],
                   )
-                ? "Available once the thread's worktree is set up."
+                ? t("chat.side.worktreePending")
                 : null;
   const openSideChatStable = useStableCallback(() => void sideChat.open());
   const sendSideChatStable = useStableCallback((prompt: string) => sideChat.open(prompt));
@@ -3128,7 +3128,10 @@ export default function ChatView(props: ChatViewProps) {
         !serverProjection?.messages.some((committed) => committed.id === message.id),
     );
   const scrollToEndSummary =
-    [childInputNow?.waitingLabel ?? null, queuedRunCount === 0 ? null : `${queuedRunCount} queued`]
+    [
+      childInputNow?.waitingLabel ?? null,
+      queuedRunCount === 0 ? null : t("chat.queuedCount", { count: queuedRunCount }),
+    ]
       .filter((part) => part !== null)
       .join(" · ") || null;
   // The end of the timeline holds the thread's present and next turns: what it is doing now,

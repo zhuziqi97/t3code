@@ -123,7 +123,7 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
               !mixedModel &&
               modelSource !== "project" &&
               settings.defaultModelSelection === null
-            ? "Default model for new threads, selected automatically. Projects can override it."
+            ? t("defaults.model.automaticDescription")
             : t("defaults.model.description")
       }
       resetAction={
@@ -230,12 +230,12 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
       settingKeys={["fallbackModelSelection"]}
       mixed={mixedFallback}
       id="fallback-model"
-      title="Fallback model"
-      description="Used for new threads when the default model's provider is out of usage."
+      title={t("defaults.fallback.title")}
+      description={t("defaults.fallback.description")}
       resetAction={
         mixedFallback || settings.fallbackModelSelection !== null ? (
           <SettingResetButton
-            label="fallback model"
+            label={t("defaults.fallback.reset")}
             onClick={() => updateSettings({ fallbackModelSelection: null })}
           />
         ) : null
@@ -250,11 +250,11 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
             instanceEntries={entries}
             modelOptionsByInstance={fallbackModelOptions}
             triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
-            triggerAriaLabel="Fallback model"
+            triggerAriaLabel={t("defaults.fallback.title")}
             {...(mixedFallback
-              ? { triggerLabel: "Mixed" }
+              ? { triggerLabel: t("common.mixed") }
               : settings.fallbackModelSelection === null
-                ? { triggerLabel: "None" }
+                ? { triggerLabel: t("defaults.fallback.none") }
                 : {})}
             getModelDisabledReason={modelDisabledReason}
             onInstanceModelChange={(instanceId, model) => {
@@ -262,7 +262,7 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
               if (reason) {
                 toastManager.add({
                   type: "error",
-                  title: "Fallback model not saved",
+                  title: t("defaults.fallback.notSaved"),
                   description: reason,
                 });
                 return;
@@ -271,7 +271,7 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
             }}
           />
         ) : (
-          <span className="text-sm text-muted-foreground">No providers available</span>
+          <span className="text-sm text-muted-foreground">{t("defaults.model.empty")}</span>
         )
       }
     />
@@ -399,7 +399,7 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
             settingKeys={["removeAgentCreditsOnMerge"]}
             mixed={mixedAgentCredits}
             {...searchableSetting("remove-agent-credits-on-merge", t)}
-            description="Remove recognized agent credit lines from merge and squash messages on hosts that support it, keeping human co-authors. Includes auto-merge. Excludes merge queues, stack merges, and existing commits."
+            description={t("defaults.credits.description")}
             resetAction={
               settings.removeAgentCreditsOnMerge ? (
                 <SettingResetButton

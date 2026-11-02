@@ -1,3 +1,4 @@
+import { i18n, useTranslate } from "../../i18n";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { deriveThreadTitleSeed } from "@t3tools/client-runtime/operations";
@@ -25,6 +26,7 @@ export function useSideChat(input: {
   readonly threadRef: ScopedThreadRef | null;
   readonly onError: (message: string) => void;
 }) {
+  const t = useTranslate();
   const pendingRef = useRef(false);
   const forkSideChat = useAtomCommand(threadEnvironment.forkSideChat, { reportFailure: false });
   const deleteThread = useAtomCommand(threadEnvironment.delete, { reportFailure: false });
@@ -43,10 +45,10 @@ export function useSideChat(input: {
     const targetThreadId = newThreadId();
     const fork = await forkSideChat({
       environmentId: threadRef.environmentId,
-      input: { sourceThreadId: threadRef.threadId, targetThreadId, title: "Side chat" },
+      input: { sourceThreadId: threadRef.threadId, targetThreadId, title: t("chat.side.title") },
     });
     if (fork._tag === "Failure") {
-      reportFailure(fork, "Could not start a side chat.");
+      reportFailure(fork, i18n.t("chat.side.startFailed"));
       return false;
     }
     // Drops the empty side chat a failed start leaves behind; one that got its message stays.
@@ -56,7 +58,7 @@ export function useSideChat(input: {
         input: { threadId: targetThreadId, onlyIfUnused: true },
       });
     if (!(await waitForThreadShell(scopeThreadRef(threadRef.environmentId, targetThreadId)))) {
-      input.onError("The side chat was created, but it did not reach this client.");
+      input.onError(i18n.t("chat.side.notReceived"));
       discard();
       return false;
     }
@@ -76,7 +78,7 @@ export function useSideChat(input: {
         },
       });
       if (turn._tag === "Failure") {
-        reportFailure(turn, "Could not send the side chat message.");
+        reportFailure(turn, i18n.t("chat.side.sendFailed"));
         discard();
         return false;
       }

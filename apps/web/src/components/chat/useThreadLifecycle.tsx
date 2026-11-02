@@ -463,13 +463,16 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
   };
   const onOpenRelatedThreadStable = useStableCallback(onOpenRelatedThread);
   const childThreadInputs = useChildThreadInputs(activeThreadRef);
-  const childInputNow = childInputNowItem({
-    childThreadInputs,
-    parentAwaitingUser: Boolean(
-      activePendingApproval || activePendingUserInput || activeThreadShell?.hasPendingUserInput,
-    ),
-    onOpenThread: onOpenRelatedThreadStable,
-  });
+  const childInputNow = childInputNowItem(
+    {
+      childThreadInputs,
+      parentAwaitingUser: Boolean(
+        activePendingApproval || activePendingUserInput || activeThreadShell?.hasPendingUserInput,
+      ),
+      onOpenThread: onOpenRelatedThreadStable,
+    },
+    t,
+  );
 
   const sendStandaloneCommand = async (text: string, failureMessage: string) => {
     if (!activeThread || !clientSettingsHydrated || sendInFlightRef.current) return;

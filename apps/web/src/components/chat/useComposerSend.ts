@@ -495,7 +495,7 @@ export function useComposerSend(input: ComposerSendInput) {
       toastManager.add(
         stackedThreadToast({
           type: "warning",
-          title: "Side chat not started",
+          title: t("chat.side.notStarted"),
           description: sideChatDisabledReason,
         }),
       );
@@ -514,8 +514,8 @@ export function useComposerSend(input: ComposerSendInput) {
         toastManager.add(
           stackedThreadToast({
             type: "warning",
-            title: "Side chats take text only",
-            description: "Remove the attachments and context, then send it again.",
+            title: t("chat.side.textOnly"),
+            description: t("chat.side.removeContext"),
           }),
         );
         return;
@@ -1021,8 +1021,7 @@ export function useComposerSend(input: ComposerSendInput) {
       sendInFlightRef.current = false;
       setThreadError(
         threadIdForSend,
-        attachmentCapabilitiesBeforeDispatch.fileBlockReason ??
-          "This connection cannot change threads.",
+        attachmentCapabilitiesBeforeDispatch.fileBlockReason ?? t("thread.action.denied"),
       );
       setDockedDraftHeroThreadKey((currentThreadKey) =>
         currentThreadKey === activeThreadKey ? null : currentThreadKey,

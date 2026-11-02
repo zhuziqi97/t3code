@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { AppText as Text, AppTextInput } from "../../components/ui/AppText";
 import { Button } from "../../components/ui/Button";
@@ -141,6 +142,7 @@ function ProjectOverviewContent(props: {
   readonly projectKey: string | null;
   readonly onProjectRemoved: (projectKey: string | null) => void;
 }) {
+  const t = useTranslate();
   const { isRemoving, setIsRemoving, startRemoval, finishRemoval } = props;
   const representative = props.members[0]!;
   const displayName = deriveProjectGroupLabel({ representative, members: props.members });
@@ -350,26 +352,20 @@ function ProjectOverviewContent(props: {
       </SettingsSection>
 
       {canOrganize ? (
-        <SettingsSection title="Organize">
+        <SettingsSection title={t("project.organize")}>
           <SettingsSwitchRow
             icon="pin"
-            label="Pin"
-            subtitle={
-              offline
-                ? "Connect every machine with this project to change this."
-                : "Pinned projects come first in project pickers."
-            }
+            label={t("project.pin.title")}
+            subtitle={offline ? t("project.connectAll") : t("project.pin.description")}
             value={props.group.pinned}
             disabled={isOrganizing || offline}
             onValueChange={(pinned) => void organize({ pinned })}
           />
           <SettingsActionRow
             icon="archivebox"
-            label={props.group.archived ? "Unarchive project" : "Archive project"}
+            label={props.group.archived ? t("project.unarchive") : t("project.archive")}
             description={
-              props.group.archived
-                ? "Hidden from project pickers. Threads and files are kept."
-                : "Hides the project from project pickers. Threads and files are kept."
+              props.group.archived ? t("project.archive.hidden") : t("project.archive.description")
             }
             disabled={isOrganizing || offline}
             onPress={() => void organize({ archived: !props.group.archived })}

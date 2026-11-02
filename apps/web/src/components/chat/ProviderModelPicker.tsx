@@ -269,7 +269,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
       {...(props.onOpenProviderSetup ? { onOpenProviderSetup: props.onOpenProviderSetup } : {})}
       getModelDisabledReason={(instanceId, model) =>
         props.disabled
-          ? "Model picker is disabled"
+          ? t("chat.model.disabled")
           : (props.getModelDisabledReason?.(instanceId, model) ?? null)
       }
       onInstanceModelChange={handleInstanceModelChange}

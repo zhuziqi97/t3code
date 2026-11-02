@@ -404,8 +404,8 @@ function RightPanelEmptyState(props: {
     ...(props.onAddSideChat
       ? [
           {
-            label: "Side chat",
-            description: "Ask a side question while this thread keeps working.",
+            label: t("chat.side.title"),
+            description: t("chat.side.description"),
             icon: MessagesSquare,
             shortcut: "S",
             available: props.sideChatAvailable && !props.sideChatDisabledReason,
@@ -606,7 +606,7 @@ function surfaceTitle(
     case "device":
       return surface.title ?? surface.target?.name ?? t("panels.device");
     case "side-chat":
-      return "Side chat";
+      return t("chat.side.title");
     case "preview": {
       const snapshot = surface.resourceId ? sessions[surface.resourceId] : null;
       if (!snapshot || snapshot.navStatus._tag === "Idle") return t("panels.browser");
@@ -923,7 +923,10 @@ function RightPanelTab(
   const sideChatState = sideChatTabState(sideChatShell);
   const content = (
     <>
-      <PanelTabCloseButton label={`Close ${title}`} onClick={() => onClose(surface)}>
+      <PanelTabCloseButton
+        label={t("panels.closeTitle", { title })}
+        onClick={() => onClose(surface)}
+      >
         <SurfaceIcon
           surface={surface}
           previewUrl={props.previewUrl}
@@ -990,7 +993,17 @@ function RightPanelTab(
                   if (surface.kind === "device" && props.canRename) onStartRename(surface.id);
                 }}
                 className="cursor-pointer flex min-w-0 items-center"
-                aria-label={sideChatState === null ? undefined : `${title}, ${sideChatState}`}
+                aria-label={
+                  sideChatState === null
+                    ? undefined
+                    : `${title}, ${t(
+                        sideChatState === "needs approval"
+                          ? "chat.side.needsApproval"
+                          : sideChatState === "needs input"
+                            ? "chat.side.needsInput"
+                            : "chat.side.isRunning",
+                      )}`
+                }
                 onClick={() => onActivate(surface)}
               >
                 <span className="truncate">{title}</span>
@@ -1165,7 +1178,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
     ...(props.onAddSideChat
       ? [
           {
-            label: "Side chat",
+            label: t("chat.side.title"),
             icon: MessagesSquare,
             shortcut: "S",
             available: props.sideChatAvailable === true && !props.sideChatDisabledReason,
