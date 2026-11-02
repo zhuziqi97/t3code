@@ -4402,6 +4402,8 @@ export const en = {
   "filePreview.openBrowserFailed": "Unable to open file in browser",
   "filePreview.hideExplorer": "Hide file explorer",
   "filePreview.showExplorer": "Show file explorer",
+  "filePreview.explorer": "File explorer",
+  "filePreview.resizeExplorer": "Resize file explorer",
   "filePreview.checkingAccess": "Checking file access...",
   "filePreview.readOnly":
     "Read-only connection. Unsaved edits are kept until write access returns.",

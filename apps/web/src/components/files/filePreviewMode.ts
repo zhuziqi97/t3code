@@ -4,6 +4,14 @@ import { isHostPath, workspaceRelativeFilePath } from "@t3tools/shared/path";
 import type { TFunction } from "i18next";
 import { i18n } from "~/i18n";
 
+export const FILE_EXPLORER_MIN_WIDTH = 160;
+export const FILE_EXPLORER_MAX_WIDTH = 560;
+
+export function fileExplorerMaxWidth(rowWidth: number): number {
+  // The 260px find widget needs room for its overlapping close button and inset.
+  return Math.max(FILE_EXPLORER_MIN_WIDTH, Math.min(FILE_EXPLORER_MAX_WIDTH, rowWidth - 288));
+}
+
 export function resolveFilePreviewPath(path: string | null, cwd: string): string | null {
   if (path === null) return null;
   return path === "." || workspaceRelativeFilePath(path, cwd) === "." ? null : path;

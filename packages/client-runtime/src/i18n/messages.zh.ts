@@ -4178,6 +4178,8 @@ export const zh: Partial<Messages> = {
   "filePreview.openBrowserFailed": "无法在浏览器中打开文件",
   "filePreview.hideExplorer": "隐藏文件浏览器",
   "filePreview.showExplorer": "显示文件浏览器",
+  "filePreview.explorer": "文件浏览器",
+  "filePreview.resizeExplorer": "调节文件浏览器宽度",
   "filePreview.checkingAccess": "正在检查文件访问权限…",
   "filePreview.readOnly": "只读连接。未保存的编辑会保留，直到恢复写入权限。",
   "filePreview.limit": "仅预览此文件的前 1 MB，文件总大小为 {{bytes}} 字节。",

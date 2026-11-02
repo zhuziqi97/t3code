@@ -8,6 +8,7 @@ import { createI18n } from "@t3tools/client-runtime/i18n";
 
 import { remapFileCommentAnnotations } from "./fileCommentAnnotations";
 import {
+  fileExplorerMaxWidth,
   filePreviewReadErrorMessage,
   formatFilePreviewErrorMessage,
   isMarkdownPreviewFile,
@@ -18,6 +19,13 @@ import {
 } from "./filePreviewMode";
 
 const decodeReadError = Schema.decodeSync(ProjectReadFileError);
+
+it("keeps room for code search controls at the explorer width cap", () => {
+  expect(fileExplorerMaxWidth(644)).toBe(356);
+  expect(fileExplorerMaxWidth(544)).toBe(256);
+  expect(fileExplorerMaxWidth(1184)).toBe(560);
+  expect(fileExplorerMaxWidth(390)).toBe(160);
+});
 
 describe("file preview read errors", () => {
   // regression: #15628 read errors from servers without attempted paths keep their own message
