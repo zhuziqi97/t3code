@@ -1636,7 +1636,8 @@ export const zh: Partial<Messages> = {
   "server.update.updating": "正在更新 {{server}}",
   "server.update.server": "服务端",
   "server.update.preparedNotInstalled": "桌面应用已恢复运行，但未安装准备好的更新。",
-  "server.update.resumeFailed": "服务端未能以 t3@{{version}} 恢复运行。",
+  "server.update.resumeFailed":
+    "无法确认服务端是否已使用 t3@{{version}} 恢复运行。请重新连接以确认更新结果。",
   "server.update.incomplete": "服务端接受重启前，t3@{{version}} 更新已结束。",
   "server.update.terminal.committed": "t3@{{version}} 更新已确认。",
   "server.update.terminal.rolled-back": "t3@{{version}} 更新已回退。",

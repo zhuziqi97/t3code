@@ -24,10 +24,16 @@ vi.mock("../../hooks/useSettings", async (original) => ({
     selector: (settings: UnifiedSettings) => unknown,
   ) => selector(state.settings!),
 }));
-vi.mock("../../state/server", async (original) => ({
-  ...(await original<typeof import("../../state/server")>()),
-  serverEnvironment: { updateSettings: {} },
-}));
+vi.mock("../../state/server", async (original) => {
+  const { Atom } = await import("effect/reactivity");
+  return {
+    ...(await original<typeof import("../../state/server")>()),
+    serverEnvironment: {
+      updateSettings: {},
+      configValueAtom: () => Atom.make({ secretReferences: false }),
+    },
+  };
+});
 vi.mock("../../state/use-atom-command", async (original) => ({
   ...(await original<typeof import("../../state/use-atom-command")>()),
   useAtomCommand: () => state.save,

@@ -1721,7 +1721,8 @@ export const en = {
   "server.update.server": "server",
   "server.update.preparedNotInstalled":
     "The desktop app resumed without installing the prepared update.",
-  "server.update.resumeFailed": "The server did not resume on t3@{{version}}.",
+  "server.update.resumeFailed":
+    "Could not confirm that the server resumed on t3@{{version}}. Reconnect to check the update outcome.",
   "server.update.incomplete":
     "The t3@{{version}} update ended before the server accepted the restart.",
   "server.update.terminal.committed": "The t3@{{version}} update committed.",

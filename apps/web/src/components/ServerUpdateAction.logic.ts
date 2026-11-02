@@ -12,7 +12,10 @@ export function formatServerUpdateMessage(message: string, t: TFunction): string
   if (message === "Server update failed.") return t("server.update.failedMessage");
   if (message === "The desktop app resumed without installing the prepared update.")
     return t("server.update.preparedNotInstalled");
-  const resume = /^The server did not resume on t3@(.+)\.$/.exec(message);
+  const resume =
+    /^Could not confirm that the server resumed on t3@(.+)\. Reconnect to check the update outcome\.$/.exec(
+      message,
+    );
   if (resume) return t("server.update.resumeFailed", { version: resume[1] });
   const incomplete = /^The t3@(.+) update ended before the server accepted the restart\.$/.exec(
     message,

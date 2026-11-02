@@ -26,7 +26,7 @@ describe("server update presentation", () => {
           .message,
         t,
       ),
-    ).toBe(`服务端未能以 t3@${version} 恢复运行。`);
+    ).toBe(`无法确认服务端是否已使用 t3@${version} 恢复运行。请重新连接以确认更新结果。`);
     expect(
       formatServerUpdateMessage(
         new ServerUpdateProgressIncompleteError({ targetVersion: version }).message,

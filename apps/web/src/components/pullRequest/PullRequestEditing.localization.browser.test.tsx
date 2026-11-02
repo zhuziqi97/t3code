@@ -415,7 +415,11 @@ it("keeps a failed required review and its verdict after a language change", asy
     environmentId,
     input: { ...reference, verdict: "request-changes", body: "Needs changes 原文", comments: [] },
   });
-  expect(fixture.toast).toHaveBeenCalledExactlyOnceWith({ type: "error", title: "无法提交审阅" });
+  expect(fixture.toast).toHaveBeenCalledExactlyOnceWith({
+    type: "error",
+    title: "无法提交审阅",
+    description: "Raw host failure",
+  });
   expect(screen.container.querySelector("textarea")!.value).toBe("Needs changes 原文");
   expect(button("提交审阅").disabled).toBe(false);
 });
