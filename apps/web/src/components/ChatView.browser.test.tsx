@@ -1,3 +1,6 @@
+import "~/index.css";
+// Load the lazy chat dependency before this behavior test, outside its Vite compilation budget.
+import "~/components/ChatView";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { ThreadId } from "@t3tools/contracts";
@@ -34,6 +37,7 @@ vi.mock(import("~/rpc/requestLatencyState"), async (original) => ({
 }));
 
 it("a new draft does not load its reserved thread before the server lists it", async () => {
+  await page.viewport(1400, 900);
   using _environment = installFakeEnvironment([]);
   using fetchSpy = vi.spyOn(globalThis, "fetch");
   __setClientSettingsForTests({
