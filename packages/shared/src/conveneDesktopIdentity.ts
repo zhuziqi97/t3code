@@ -18,3 +18,6 @@ export function resolveConveneVersion(upstreamVersion: string): string {
   if (upstreamVersion.includes("-")) return upstreamVersion;
   return `${upstreamVersion}-1`;
 }
+
+export const CONVENE_SOURCE_REPOSITORY_URL = "https://github.com/zhuziqi97/t3code";
+export const CONVENE_FEEDBACK_MODULE_PATH = "zzq/software-factory/t3code";

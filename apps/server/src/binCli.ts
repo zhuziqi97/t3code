@@ -1,4 +1,4 @@
-import { resolveConveneVersion } from "@t3tools/shared/conveneDesktopIdentity";
+import { CONVENE_BUILD_INFO } from "./conveneBuildInfo.ts";
 import { doctorCommand } from "./cli/doctor.ts";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -8,7 +8,6 @@ import { Argument, Command } from "effect/cli";
 import * as CliError from "effect/cli/CliError";
 
 import * as NetService from "@t3tools/shared/Net";
-import packageJson from "../package.json" with { type: "json" };
 import { acpMcpBridgeCommand, acpMcpCallCommand } from "./cli/acpMcpBridge.ts";
 import { authCommand } from "./cli/auth.ts";
 import { environmentCommand } from "./cli/environment.ts";
@@ -105,16 +104,10 @@ export const makeCli = ({ cloudEnabled = hasCloudPublicConfig } = {}) =>
 
 export const cli = makeCli();
 
-declare const __T3CODE_CONVENE_VERSION__: string | undefined;
-
 export function runCli() {
   extendConnectionAttemptTimeout();
   keepOutboundFetchOnHttp1();
-  const version =
-    typeof __T3CODE_CONVENE_VERSION__ === "string"
-      ? __T3CODE_CONVENE_VERSION__
-      : resolveConveneVersion(packageJson.version);
-  Command.run(cli, { version }).pipe(
+  Command.run(cli, { version: CONVENE_BUILD_INFO.version }).pipe(
     Effect.scoped,
     Effect.provide(layerCliRuntime),
     NodeRuntime.runMain,

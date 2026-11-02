@@ -17,23 +17,35 @@ import { pickSourceRef } from "./TriageService.ts";
 
 const MAIN = "a1dc856ee61278d0199c36d4bcdef5fdea4d21fe\trefs/heads/main";
 
-it("clones the server's release tag, peeling annotated tags to their commit", () => {
-  assert.deepEqual(pickSourceRef(`${MAIN}\n7027b1f\trefs/tags/v0.1.1\n`, "0.1.1"), {
-    ref: "v0.1.1",
-    commit: "7027b1f",
-  });
+it("clones each distribution's release tag, peeling annotated tags to their commit", () => {
   assert.deepEqual(
-    pickSourceRef(`${MAIN}\n1111111\trefs/tags/v0.1.1\n2222222\trefs/tags/v0.1.1^{}\n`, "0.1.1"),
-    { ref: "v0.1.1", commit: "2222222" },
+    pickSourceRef(`${MAIN}\n3333333\trefs/tags/v0.1.5-2\n4444444\trefs/tags/v0.1.5-2^{}\n`, {
+      repositoryUrl: "https://github.com/zhuziqi97/t3code",
+      version: "0.1.5-2",
+    }),
+    { repositoryUrl: "https://github.com/zhuziqi97/t3code", ref: "v0.1.5-2", commit: "4444444" },
+  );
+  assert.deepEqual(
+    pickSourceRef(`${MAIN}\n7027b1f\trefs/tags/v0.1.6\n`, {
+      repositoryUrl: "https://github.com/pingdotgg/t3code",
+      version: "0.1.6",
+    }),
+    { repositoryUrl: "https://github.com/pingdotgg/t3code", ref: "v0.1.6", commit: "7027b1f" },
   );
 });
 
-it("falls back to main when the server's version has no tag", () => {
-  assert.deepEqual(pickSourceRef(`${MAIN}\n`, "0.1.2-dev"), {
-    ref: "main",
-    commit: "a1dc856ee61278d0199c36d4bcdef5fdea4d21fe",
-  });
-  assert.isUndefined(pickSourceRef("", "0.1.1"));
+it("does not substitute main when the build has no matching tag or packaged commit", () => {
+  const build = { repositoryUrl: "https://github.com/zhuziqi97/t3code", version: "0.1.6-1" };
+  assert.isUndefined(pickSourceRef(`${MAIN}\n`, build));
+  assert.isUndefined(pickSourceRef("", build));
+  assert.deepEqual(
+    pickSourceRef(`${MAIN}\n1111111\trefs/tags/v0.1.6-1\n`, { ...build, sourceCommit: "5555555" }),
+    {
+      repositoryUrl: build.repositoryUrl,
+      ref: "5555555",
+      commit: "5555555",
+    },
+  );
 });
 
 const TestLayer = GitVcsDriver.layer.pipe(
@@ -58,6 +70,7 @@ const makeTriage = (
   Effect.gen(function* () {
     const git = yield* GitVcsDriver.GitVcsDriver;
     const commands: string[] = [];
+    const requests: ReadonlyArray<string>[] = [];
     const triage = yield* Layer.build(TriageService.layer).pipe(
       Effect.map(Context.get(TriageService.TriageService)),
       Effect.provideService(GitVcsDriver.GitVcsDriver, {
@@ -65,6 +78,7 @@ const makeTriage = (
         execute: (input) => {
           const command = input.args[0] ?? "";
           commands.push(command);
+          requests.push(input.args);
           return answer(command).pipe(
             Effect.map((stdout) => ({
               exitCode: ChildProcessSpawner.ExitCode(0),
@@ -77,7 +91,7 @@ const makeTriage = (
         },
       }),
     );
-    return { triage, commands };
+    return { triage, commands, requests };
   });
 
 const readContext = Effect.gen(function* () {
@@ -117,10 +131,17 @@ it.effect("reuses a finished clone without fetching", () =>
     yield* fs.makeDirectory(`${config.baseDir}/source/${RELEASE_COMMIT}/.git`, {
       recursive: true,
     });
-    const { triage, commands } = yield* makeTriage();
+    const { triage, commands, requests } = yield* makeTriage();
 
     yield* triage.prepare({ client: {} });
 
+    assert.deepEqual(requests[0], [
+      "ls-remote",
+      "https://github.com/zhuziqi97/t3code",
+      `refs/tags/v${packageJson.version}`,
+      `refs/tags/v${packageJson.version}^{}`,
+    ]);
+    assert.include(yield* readContext, "convene://issues/zzq/software-factory/t3code");
     assert.deepEqual(commands, ["ls-remote", "rev-parse"]);
     assert.include(yield* readContext, "The server cloned the source for its own version");
   }).pipe(Effect.provide(TestLayer)),
@@ -139,7 +160,12 @@ it.effect("still starts triage when the source lookup fails", () =>
       ),
     );
 
-    const { prompt } = yield* triage.prepare({ client: {} });
+    const { prompt } = yield* triage.prepare({ client: {}, feedbackTarget: "upstream" });
+    assert.include(
+      yield* readContext,
+      "https://github.com/pingdotgg/t3code (explicit upstream choice)",
+    );
+    assert.include(yield* readContext, "Source repository: https://github.com/zhuziqi97/t3code");
 
     assert.include(prompt, "triage-playbook.md");
     assert.include(yield* readContext, "Could not resolve host: github.com");
@@ -158,5 +184,14 @@ it.effect("does not trust a folder without its own .git, even inside a repo at t
 
     assert.notInclude(commands, "rev-parse");
     assert.include(yield* readContext, "is not a complete checkout");
+  }).pipe(Effect.provide(TestLayer)),
+);
+
+it.effect("keeps preparing with unknown source when only main is available", () =>
+  Effect.gen(function* () {
+    const { triage, commands } = yield* makeTriage(() => Effect.succeed(MAIN));
+    yield* triage.prepare({ client: {} });
+    assert.deepEqual(commands, ["ls-remote"]);
+    assert.include(yield* readContext, "source is unknown, not main");
   }).pipe(Effect.provide(TestLayer)),
 );

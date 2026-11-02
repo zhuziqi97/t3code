@@ -30,6 +30,7 @@ import * as Socket from "effect/socket/Socket";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import * as EventStore from "../persistence/OrchestrationEventStore.ts";
 import packageJson from "../../package.json" with { type: "json" };
+import { CONVENE_BUILD_INFO } from "../conveneBuildInfo.ts";
 import * as ConvenePlatform from "./ConvenePlatform.ts";
 import * as ConveneMcp from "./ConveneMcp.ts";
 import * as ConveneDataChannel from "./ConveneDataChannel.ts";
@@ -76,8 +77,6 @@ export class ConveneConnection extends Context.Service<
 >()("t3/convene/ConveneConnection") {}
 type ConnectionState = Omit<ConveneStatus, "platformUrls">;
 type ReportWaiter = Deferred.Deferred<void, ConveneIntegrationError>;
-
-declare const __CONVENE_BUILD_ID__: string | null;
 
 /** One module owns the outward connection; native commands remain in T3 services. */
 const start = Effect.fn("ConveneConnection.start")(function* (
@@ -227,9 +226,7 @@ const start = Effect.fn("ConveneConnection.start")(function* (
       yield* sendMessage("HELLO", {
         CLIENT_TYPE: "t3",
         CLIENT_VERSION: packageJson.version,
-        RUNNER_BUILD_ID:
-          (typeof __CONVENE_BUILD_ID__ !== "undefined" && __CONVENE_BUILD_ID__) ||
-          `convene-t3-${packageJson.version}`,
+        RUNNER_BUILD_ID: CONVENE_BUILD_INFO.buildId || `convene-t3-${packageJson.version}`,
         SUPPORTED_PROTOCOLS: CONVENE_SUPPORTED_PROTOCOLS,
       });
       const configurations = new Map<string, ConvenePlatform.Configuration>();

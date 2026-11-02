@@ -52,6 +52,7 @@ it("in-app context warns the agent off its own server and points at the clone in
       ref: "v0.1.1",
       commit: "abc123",
       serverVersion: "0.1.1",
+      repositoryUrl: "https://github.com/pingdotgg/t3code",
     },
   });
   assert.notInclude(context, "Triage CLI version");

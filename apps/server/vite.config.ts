@@ -19,8 +19,11 @@ import {
 export { shouldBundleCliDependency };
 
 const buildInfoUrl = new URL("../../.generated/convene-build.json", import.meta.url);
-const conveneBuildId = NodeFS.existsSync(buildInfoUrl)
-  ? (JSON.parse(NodeFS.readFileSync(buildInfoUrl, "utf8")) as { build_id: string }).build_id
+const conveneBuildInfo = NodeFS.existsSync(buildInfoUrl)
+  ? (JSON.parse(NodeFS.readFileSync(buildInfoUrl, "utf8")) as {
+      build_id: string;
+      source_commit: string;
+    })
   : null;
 const repoEnv = loadRepoEnv();
 const cliBuildChannel = /^[^-+]+-(?:nightly|preview)\./.test(packageJson.version)
@@ -120,7 +123,8 @@ export default mergeConfig(
         js: "#!/usr/bin/env node\n",
       },
       define: {
-        __CONVENE_BUILD_ID__: JSON.stringify(conveneBuildId),
+        __CONVENE_BUILD_ID__: JSON.stringify(conveneBuildInfo?.build_id ?? null),
+        __CONVENE_SOURCE_COMMIT__: JSON.stringify(conveneBuildInfo?.source_commit ?? null),
         __T3CODE_CONVENE_VERSION__: JSON.stringify(
           process.env.APP_VERSION?.trim() || resolveConveneVersion(packageJson.version),
         ),

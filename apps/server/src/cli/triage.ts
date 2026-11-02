@@ -10,7 +10,7 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { Command, Flag } from "effect/cli";
 
-import packageJson from "../../package.json" with { type: "json" };
+import { CONVENE_BUILD_INFO } from "../conveneBuildInfo.ts";
 import * as ServerConfig from "../config.ts";
 import { resolveBaseDir } from "../os-jank.ts";
 import { buildTriageLaunchPrompt } from "../triage/triagePrompt.ts";
@@ -133,7 +133,7 @@ export const triageCommand = Command.make("triage", {
         paths,
         entry: {
           kind: "cli",
-          cliVersion: packageJson.version,
+          cliVersion: CONVENE_BUILD_INFO.version,
           launchedAs: yield* resolveCliCommand("triage"),
         },
         server: yield* describeServerProcess(paths.serverRuntimeStatePath),

@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeOS from "node:os";
 
-import { TRIAGE_PROMPT_FILE_NAME } from "@t3tools/contracts";
+import { type ServerPrepareTriageInput, TRIAGE_PROMPT_FILE_NAME } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -9,6 +9,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 
+import { CONVENE_BUILD_INFO } from "../conveneBuildInfo.ts";
 import * as BootService from "../cloud/bootService.ts";
 import type * as ServerConfig from "../config.ts";
 import { isProcessAlive, readPersistedServerRuntimeState } from "../serverRuntimeState.ts";
@@ -50,6 +51,7 @@ export const writeTriageSession = Effect.fn("triage.writeTriageSession")(functio
   readonly entry: TriageEntry;
   readonly server: string;
   readonly sourceClone?: TriageSourceClone | undefined;
+  readonly feedbackTarget?: ServerPrepareTriageInput["feedbackTarget"];
 }) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -73,6 +75,8 @@ export const writeTriageSession = Effect.fn("triage.writeTriageSession")(functio
       nodeVersion: process.version,
       server: input.server,
       sourceClone: input.sourceClone,
+      build: CONVENE_BUILD_INFO,
+      feedbackTarget: input.feedbackTarget,
       paths: {
         stateDir: paths.stateDir,
         dbPath: paths.dbPath,

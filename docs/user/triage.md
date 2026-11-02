@@ -2,8 +2,10 @@
 
 Triage lets your own coding agent investigate a T3 Code problem. The agent
 reads the logs and state of the machine, checks the T3 Code source for that
-version, finds known issues, and can help you write a good GitHub issue. It asks
-before it applies a fix or posts anything.
+version, finds known issues, and helps draft feedback for the Convene T3 Code
+module. You can explicitly choose upstream GitHub feedback instead. It asks
+before applying a fix or posting anything. If the exact build source cannot be
+matched, the diagnosis says so.
 
 ## In the app
 
@@ -23,7 +25,7 @@ Code server, so it gives you any restart steps and does not do them itself.
 If the app does not start, or triage does not work in the app, run:
 
 ```sh
-npx t3 triage
+t3code-convene triage
 ```
 
 It starts Claude Code or Codex in your terminal with the same instructions.

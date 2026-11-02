@@ -349,6 +349,7 @@ export type OtlpEndpointCheckResult = typeof OtlpEndpointCheckResult.Type;
 /** The client tells the server what it is, so the triage context can name it. */
 export const ServerPrepareTriageInput = Schema.Struct({
   client: AuthClientPresentationMetadata,
+  feedbackTarget: Schema.optional(Schema.Literals(["convene", "upstream"])),
 });
 export type ServerPrepareTriageInput = typeof ServerPrepareTriageInput.Type;
 

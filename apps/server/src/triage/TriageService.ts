@@ -10,13 +10,12 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 
-import packageJson from "../../package.json" with { type: "json" };
+import { CONVENE_SOURCE_REPOSITORY_URL } from "@t3tools/shared/conveneDesktopIdentity";
+import { CONVENE_BUILD_INFO } from "../conveneBuildInfo.ts";
 import * as ServerConfig from "../config.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import { buildTriageAppPrompt, type TriageSourceClone } from "./triagePrompt.ts";
 import { triageSourceCacheDir, writeTriageSession } from "./triageSession.ts";
-
-const T3CODE_REPOSITORY_URL = "https://github.com/pingdotgg/t3code";
 
 // No tty: a credential prompt would hang until the timeout, so git must fail
 // instead. An empty GIT_ASKPASS also skips core.askPass and SSH_ASKPASS helpers.
@@ -47,8 +46,21 @@ const describeClient = (client: AuthClientPresentationMetadata) =>
     .filter((part) => part !== undefined)
     .join(" ");
 
-/** Picks the release tag for `version`, or `main` when the build has no tag. */
-export const pickSourceRef = (lsRemoteOutput: string, version: string) => {
+/** Build metadata pins the actual packaged source; otherwise require its release tag. */
+export const pickSourceRef = (
+  lsRemoteOutput: string,
+  build: {
+    readonly repositoryUrl: string;
+    readonly version: string;
+    readonly sourceCommit?: string | undefined;
+  },
+) => {
+  if (build.sourceCommit !== undefined)
+    return {
+      repositoryUrl: build.repositoryUrl,
+      ref: build.sourceCommit,
+      commit: build.sourceCommit,
+    };
   const commits = new Map(
     lsRemoteOutput
       .split("\n")
@@ -56,12 +68,12 @@ export const pickSourceRef = (lsRemoteOutput: string, version: string) => {
       .filter((fields): fields is [string, string] => fields.length === 2)
       .map(([commit, ref]) => [ref, commit]),
   );
-  const tag = `v${version}`;
+  const tag = `v${build.version}`;
   // Annotated tags list the tag object first and the commit as `^{}`.
   const tagCommit = commits.get(`refs/tags/${tag}^{}`) ?? commits.get(`refs/tags/${tag}`);
-  if (tagCommit !== undefined) return { ref: tag, commit: tagCommit };
-  const mainCommit = commits.get("refs/heads/main");
-  return mainCommit === undefined ? undefined : { ref: "main", commit: mainCommit };
+  if (tagCommit !== undefined)
+    return { repositoryUrl: build.repositoryUrl, ref: tag, commit: tagCommit };
+  return undefined;
 };
 
 const make = Effect.gen(function* () {
@@ -74,7 +86,9 @@ const make = Effect.gen(function* () {
   // clone in progress must not look like a stale entry. Same filesystem, so the
   // finished clone moves in with a rename.
   const stagingDir = `${sourceDir}-staging`;
-  const serverVersion = packageJson.version;
+  const build = { repositoryUrl: CONVENE_SOURCE_REPOSITORY_URL, ...CONVENE_BUILD_INFO };
+  const serverVersion = build.version;
+  const repositoryUrl = build.repositoryUrl;
 
   const runGit = (operation: string, cwd: string, args: ReadonlyArray<string>, timeoutMs: number) =>
     git.execute({ operation: `TriageService.${operation}`, cwd, args, timeoutMs, env: GIT_ENV });
@@ -85,9 +99,11 @@ const make = Effect.gen(function* () {
   // Clones a previous server process left half done.
   yield* fs.remove(stagingDir, { recursive: true }).pipe(Effect.ignore);
 
-  // Fetches the exact commit `ls-remote` resolved, so the folder the session
-  // names is the one that appears even when main moves meanwhile.
-  const cloneSource = Effect.fn("TriageService.cloneSource")(function* (commit: string) {
+  // Fetch the recorded commit so the folder and the session name the same source.
+  const cloneSource = Effect.fn("TriageService.cloneSource")(function* (
+    source: NonNullable<ReturnType<typeof pickSourceRef>>,
+  ) {
+    const { commit } = source;
     yield* fs.makeDirectory(stagingDir, { recursive: true });
     const staging = yield* fs.makeTempDirectory({ directory: stagingDir, prefix: "clone-" });
     const directory = path.join(sourceDir, commit);
@@ -96,7 +112,7 @@ const make = Effect.gen(function* () {
       yield* runGit(
         "addSourceRemote",
         staging,
-        ["remote", "add", "origin", T3CODE_REPOSITORY_URL],
+        ["remote", "add", "origin", source.repositoryUrl],
         10_000,
       );
       yield* runGit(
@@ -120,21 +136,24 @@ const make = Effect.gen(function* () {
     );
   });
 
-  // Release tags never move, so one lookup serves every later session. Builds
-  // with no tag track main, which does move, so they look it up each time.
-  let releaseSource: { readonly ref: string; readonly commit: string } | undefined;
+  // Both packaged commits and release tags are immutable.
+  let releaseSource: ReturnType<typeof pickSourceRef>;
   const resolveSource = Effect.fn("TriageService.resolveSource")(function* () {
     if (releaseSource !== undefined) return releaseSource;
+    if (build.sourceCommit !== undefined) {
+      releaseSource = pickSourceRef("", build);
+      return releaseSource;
+    }
     const tag = `refs/tags/v${serverVersion}`;
     const listed = yield* runGit(
       "resolveSourceRef",
       sourceDir,
-      ["ls-remote", T3CODE_REPOSITORY_URL, tag, `${tag}^{}`, "refs/heads/main"],
+      ["ls-remote", repositoryUrl, tag, `${tag}^{}`],
       // Triage still starts without source; a dead network should not stall it.
       5_000,
     );
-    const source = pickSourceRef(listed.stdout, serverVersion);
-    if (source?.ref !== "main") releaseSource = source;
+    const source = pickSourceRef(listed.stdout, build);
+    releaseSource = source;
     return source;
   });
 
@@ -151,7 +170,8 @@ const make = Effect.gen(function* () {
       return {
         _tag: "failed",
         serverVersion,
-        reason: "the repository listed neither the release tag nor main.",
+        repositoryUrl,
+        reason: `no matching release tag v${serverVersion} or packaged source commit is available; source is unknown, not main.`,
       } satisfies TriageSourceClone;
     }
     const directory = path.join(sourceDir, source.commit);
@@ -170,12 +190,13 @@ const make = Effect.gen(function* () {
         : ({
             _tag: "failed",
             serverVersion,
+            repositoryUrl,
             reason: `${directory} exists but is not a complete checkout of ${source.commit}. Remove it first.`,
           } satisfies TriageSourceClone);
     }
     if (!cloning.has(source.commit)) {
       cloning.add(source.commit);
-      yield* cloneSource(source.commit).pipe(
+      yield* cloneSource(source).pipe(
         Effect.ignoreCause({ log: true }),
         Effect.ensuring(Effect.sync(() => cloning.delete(source.commit))),
         Effect.forkIn(serviceScope),
@@ -191,11 +212,13 @@ const make = Effect.gen(function* () {
           Effect.succeed<TriageSourceClone>({
             _tag: "failed",
             serverVersion,
+            repositoryUrl,
             reason: error.message,
           }),
         ),
       );
       const session = yield* writeTriageSession({
+        feedbackTarget: input.feedbackTarget,
         baseDir: config.baseDir,
         paths: config,
         entry: { kind: "app", client: describeClient(input.client) },
