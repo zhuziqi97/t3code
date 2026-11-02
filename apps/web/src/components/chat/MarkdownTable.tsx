@@ -22,7 +22,7 @@ export function MarkdownTable({ children, ...props }: ComponentProps<"table">) {
     onError: (cause, format) =>
       reportMarkdownActionFailure({ operation: "copy-table", format }, cause),
   });
-  const copyLabel = copied ? "Copied" : "Copy table";
+  const copyLabel = t(copied ? "chat.markdown.copied" : "chat.markdown.copyTable");
 
   const handleCopy = (format: "markdown" | "csv") => {
     const table = containerRef.current?.querySelector("table");

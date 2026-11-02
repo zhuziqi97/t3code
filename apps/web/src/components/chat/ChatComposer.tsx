@@ -3285,7 +3285,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   aria-label={t("chat.composer.expand")}
                 >
                   {prompt.trim() ||
-                    (showProviderUnavailable ? "Enable a provider in Settings" : "Ask anything...")}
+                    t(showProviderUnavailable ? "chat.provider.enable" : "chat.prompt.placeholder")}
                 </button>
                 {collapsedComposerImagePreviews}
                 <div
