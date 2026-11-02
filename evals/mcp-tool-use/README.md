@@ -32,7 +32,7 @@ Check that the case builds with `--dry-run --case <id>`. Then run it on the text
 
 ## Triage source cases
 
-`cases/triage.ndjson` covers Convene #104: fork release source, unmatched source, explicit upstream feedback, and an original upstream control. `setup.triagePlaybook` loads the current bundled playbook directly from source; machine facts are authored fixtures. Dry runs only validate case construction. They do not establish model behavior, and no fresh model samples are recorded for this text yet.
+`cases/triage.ndjson` covers Convene #104: fork release source, unmatched source, explicit upstream feedback, and an original upstream control. `setup.triagePlaybook` loads the current bundled playbook directly from source; machine facts are authored fixtures. Dry runs only validate case construction. They do not establish model behavior. Keep native-harness results separate from this API replay, and report any tool restrictions when interpreting permission checks.
 
 ## Device manager cases
 

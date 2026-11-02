@@ -425,6 +425,32 @@ it("stops a sample only once a must-not check has failed", () => {
 });
 
 const decodeDeviceCase = Schema.decodeSync(Schema.fromJsonString(McpToolUseCase));
+it("grades triage source criteria with case-insensitive text and rejects wrong sources", () => {
+  const cases = NodeFS.readFileSync(new URL("./cases/triage.ndjson", import.meta.url), "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => decodeDeviceCase(line));
+  const answers = [
+    "zhuziqi97/t3code v0.1.5-2 zzq/software-factory/t3code",
+    "UNKNOWN source; zzq/software-factory/t3code",
+    "zhuziqi97/t3code pingdotgg/t3code REVIEW and TRIAGE permission",
+    "pingdotgg/t3code v0.1.6",
+  ];
+  for (const [index, testCase] of cases.entries()) {
+    assert.isTrue(
+      gradeSample(testCase.expect, {
+        calls: [],
+        text: answers[index]!,
+        stopReason: "end_turn",
+      }).every((check) => check.pass),
+    );
+    assert.isFalse(
+      gradeSample(testCase.expect, { calls: [], text: "Use main", stopReason: "end_turn" }).every(
+        (check) => check.pass,
+      ),
+    );
+  }
+});
 it("grades fixed-reviewer routing without confusing it with independent delegation", () => {
   const cases = NodeFS.readFileSync(
     new URL("./cases/orchestration.ndjson", import.meta.url),
