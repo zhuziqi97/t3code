@@ -175,16 +175,4 @@ export function getTraitsSectionVisibility(input: {
   };
 }
 
-export function shouldRenderTraitsControls(input: {
-  provider: ProviderDriverKind;
-  models: ReadonlyArray<ServerProviderModel>;
-  model: string | null | undefined;
-  promptUltrathink?: "none" | "prefix" | "body" | undefined;
-  modelOptions?: ProviderOptions | null | undefined;
-  allowPromptInjectedEffort?: boolean;
-  planModeEnabled: boolean;
-}): boolean {
-  return getTraitsSectionVisibility(input).hasAnyControls;
-}
-
 export { buildTraitsTriggerDisplay } from "@t3tools/client-runtime/model-traits";

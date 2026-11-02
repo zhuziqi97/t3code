@@ -340,7 +340,7 @@ it.each(["hasPendingApprovals", "hasPendingUserInput"] as const)(
     expect(TestNotification.sent.map(({ title }) => title)).toEqual([
       "Approval needed",
       flag === "hasPendingApprovals" ? "Approval needed" : "Input needed",
-      "Thread completed",
+      "Turn ended",
     ]);
   },
 );
@@ -361,7 +361,7 @@ it.each([false, true])(
     state.shells.set("one", continued ? shell() : completed);
     await vi.advanceTimersByTimeAsync(WORKING_EXIT_GRACE_MS);
     expect(TestNotification.sent.map(({ title }) => title)).toEqual(
-      continued ? [] : ["Thread completed"],
+      continued ? [] : ["Turn ended"],
     );
   },
 );

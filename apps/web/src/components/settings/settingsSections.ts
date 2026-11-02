@@ -31,7 +31,7 @@ export type SettingsSearchScope =
   | "checkout"
   | "connections";
 
-export const SnapShotIcon = createLucideIcon("snap-shot", [
+const SnapShotIcon = createLucideIcon("snap-shot", [
   [
     "path",
     {

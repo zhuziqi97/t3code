@@ -892,14 +892,18 @@ describe("makeManagedServerProvider", () => {
     Effect.scoped(
       Effect.gen(function* () {
         const settingsChanges = yield* PubSub.unbounded<TestSettings>();
+        const settingsSubscription = yield* PubSub.subscribe(settingsChanges);
         const checkCalls = yield* Ref.make(0);
         const releaseInitialCheck = yield* Deferred.make<void>();
+        const failedCheckStarted = yield* Deferred.make<void>();
+        const initialPublished = yield* Deferred.make<void>();
+        const failurePublished = yield* Deferred.make<void>();
         const thirdCheckStarted = yield* Deferred.make<void>();
         const releaseRecoveredCheck = yield* Deferred.make<void>();
         const provider = yield* makeManagedServerProvider<TestSettings>({
           resolveMaintenance: () => Effect.succeed(maintenanceCapabilities),
           getSettings: Effect.succeed({ enabled: true }),
-          streamSettings: Stream.fromPubSub(settingsChanges),
+          streamSettings: Stream.fromSubscription(settingsSubscription),
           haveSettingsChanged: (previous, next) => previous.enabled !== next.enabled,
           initialSnapshot: () => Effect.succeed(initialSnapshot),
           checkProvider: Ref.updateAndGet(checkCalls, (count) => count + 1).pipe(
@@ -907,11 +911,15 @@ describe("makeManagedServerProvider", () => {
               count === 1
                 ? Deferred.await(releaseInitialCheck).pipe(Effect.as(refreshedSnapshot))
                 : count === 2
-                  ? Effect.fail(
-                      new ServerSettingsError({
-                        settingsPath: "/t3/userdata/settings.json",
-                        operation: "read-file",
-                      }),
+                  ? Deferred.succeed(failedCheckStarted, undefined).pipe(
+                      Effect.andThen(
+                        Effect.fail(
+                          new ServerSettingsError({
+                            settingsPath: "/t3/userdata/settings.json",
+                            operation: "read-file",
+                          }),
+                        ),
+                      ),
                     )
                   : Deferred.succeed(thirdCheckStarted, undefined).pipe(
                       Effect.andThen(Deferred.await(releaseRecoveredCheck)),
@@ -922,17 +930,27 @@ describe("makeManagedServerProvider", () => {
           refreshInterval: "1 hour",
         });
 
-        const updatesFiber = yield* Stream.take(provider.streamChanges, 2).pipe(
+        const updatesFiber = yield* snapshotChanges(provider).pipe(
+          Stream.filter((snapshot) => snapshot.status !== "checking"),
+          Stream.tap((snapshot) =>
+            snapshot.status === "error"
+              ? Deferred.succeed(failurePublished, undefined)
+              : snapshot.checkedAt === refreshedSnapshot.checkedAt
+                ? Deferred.succeed(initialPublished, undefined)
+                : Effect.void,
+          ),
+          Stream.take(3),
           Stream.runCollect,
-          Effect.forkChild,
+          Effect.forkChild({ startImmediately: true }),
         );
-        yield* Effect.yieldNow;
         yield* Deferred.succeed(releaseInitialCheck, undefined);
+        yield* Deferred.await(initialPublished);
 
         // The first change fails its provider check; the failed application never
         // advances the stored settings, so the same change still differs next time.
         yield* PubSub.publish(settingsChanges, { enabled: false });
-        yield* Effect.yieldNow;
+        yield* Deferred.await(failedCheckStarted);
+        yield* Deferred.await(failurePublished);
         assert.strictEqual(yield* Ref.get(checkCalls), 2);
 
         // The subscription must survive that failure and retry on the next change;
@@ -943,8 +961,12 @@ describe("makeManagedServerProvider", () => {
         yield* Deferred.succeed(releaseRecoveredCheck, undefined);
 
         const updates = Array.from(yield* Fiber.join(updatesFiber));
-        assert.deepStrictEqual(updates, [refreshedSnapshot, refreshedSnapshotSecond]);
-        assert.deepStrictEqual(yield* provider.getSnapshot, refreshedSnapshotSecond);
+        assert.deepStrictEqual(updates, [
+          refreshedSnapshot,
+          { ...refreshedSnapshot, status: "error" },
+          refreshedSnapshotSecond,
+        ]);
+        assert.deepStrictEqual(yield* snapshotContentsEffect(provider), refreshedSnapshotSecond);
       }),
     ).pipe(Effect.provide(layerAlwaysRunTest)),
   );

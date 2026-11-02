@@ -18,6 +18,7 @@ An older client without update reminders needs one manual download from
 **Convene → Help → Desktop client** before it can check for future releases.
 
 ## Linux menu entries after an Alpha or Beta upgrade
+
 Each server checks that it can install the release before it restarts. If the
 release is not available to a server yet, its update fails, the server keeps
 running, and you can retry. The confirmation lists each machine it skips and

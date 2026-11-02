@@ -2429,10 +2429,10 @@ describe("deriveMessagesTimelineRows", () => {
     const settled = rows({ resume: "completed", working: false });
     expect(shape(settled)).toEqual([
       "user:launch",
-      "fold:worked:8.0s",
+      "fold:worked:8s",
       "assistant:launch-answer",
       "user:resume",
-      "fold:worked:8.0s",
+      "fold:worked:8s",
       "assistant:resume-answer",
     ]);
 
@@ -2445,17 +2445,17 @@ describe("deriveMessagesTimelineRows", () => {
     });
     expect(shape(expanded)).toEqual([
       "user:launch",
-      "fold:worked:8.0s",
+      "fold:worked:8s",
       "work-toggle",
       "assistant:launch-answer",
       "user:resume",
-      "fold:worked:8.0s",
+      "fold:worked:8s",
       "assistant:resume-answer",
     ]);
 
     expect(shape(rows({ resume: "running", working: true }))).toEqual([
       "user:launch",
-      "fold:worked:8.0s",
+      "fold:worked:8s",
       "assistant:launch-answer",
       "user:resume",
       "working",
@@ -2464,7 +2464,7 @@ describe("deriveMessagesTimelineRows", () => {
 
     expect(shape(rows({ resume: "failed", working: false }))).toEqual([
       "user:launch",
-      "fold:worked:8.0s",
+      "fold:worked:8s",
       "assistant:launch-answer",
       "user:resume",
       "work",

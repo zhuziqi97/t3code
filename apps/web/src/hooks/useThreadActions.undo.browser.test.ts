@@ -47,7 +47,9 @@ vi.mock("./useSettings", async (original) => ({
 }));
 vi.mock("./useHandleNewThread", async (original) => ({
   ...(await original<typeof import("./useHandleNewThread")>()),
-  useNewThreadHandler: () => vi.fn(),
+  useNewThreadHandler: () => async () => {
+    router.state.location.href = "/draft/project";
+  },
 }));
 vi.mock("../composerDraftStore", async (original) => ({
   ...(await original<typeof import("../composerDraftStore")>()),
@@ -264,6 +266,7 @@ describe("archive navigation", () => {
     { destination: "/undo-env/other-thread", expected: "/undo-env/other-thread" },
     { destination: "/settings", expected: "/settings" },
   ])("ends at $expected after opening $destination while archiving", async (route) => {
+    await using _lifecycle = await setupLifecycle();
     router.state.location.href = "/undo-env/thread";
     router.state.matches[0]!.params = {
       environmentId: target.environmentId,
@@ -275,7 +278,8 @@ describe("archive navigation", () => {
         finishArchive = () => resolve({ _tag: "Success", value: undefined });
       }),
     );
-    const archived = useThreadActions().archiveThread(target);
+    const actions = await renderActions();
+    const archived = actions.archiveThread(target);
     router.state.location.href = route.destination;
     finishArchive();
     expect((await archived)._tag).toBe("Success");

@@ -27,6 +27,7 @@ const reasoning: ProviderOptionDescriptor = {
   label: "Reasoning",
   type: "select",
   currentValue: "medium",
+  promptInjectedValues: ["ultrathink"],
   options: [
     { id: "medium", label: "Medium", isDefault: true },
     { id: "high", label: "High" },
@@ -137,23 +138,32 @@ it("preserves the native Ultrathink prefix and removes it only when the user cha
     options: [...reasoning.options, { id: "ultrathink", label: "Ultrathink" }],
   };
   await using screen = await render(
-    <Harness {...{ provider: "claudeAgent", models: [model([effort])] }} />,
+    <Harness
+      {...{
+        provider: "claudeAgent",
+        models: [model([effort])],
+        initialPrompt: "Ultrathink:\n请保留 raw prompt content",
+      }}
+    />,
   );
   await language("zh");
-  await click(trigger("Medium"));
-  await click(radio("Ultrathink"));
   expect(screen.container.querySelector("textarea")?.value).toBe(
     "Ultrathink:\n请保留 raw prompt content",
   );
   expect(trigger("Ultrathink")).toBeDefined();
   await language("en");
   await language("zh");
-  expect(state.prompt).toHaveBeenCalledTimes(1);
+  expect(state.prompt).not.toHaveBeenCalled();
   expect(state.save).not.toHaveBeenCalled();
   await click(trigger("Ultrathink"));
+  expect(
+    [...document.querySelectorAll('[role="menuitemradio"]')].some(
+      (choice) => choice.textContent?.trim() === "Ultrathink",
+    ),
+  ).toBe(false);
   await click(radio("High"));
   expect(screen.container.querySelector("textarea")?.value).toBe("请保留 raw prompt content");
-  expect(state.prompt).toHaveBeenCalledTimes(2);
+  expect(state.prompt).toHaveBeenCalledTimes(1);
   expect(state.save).toHaveBeenCalledExactlyOnceWith([{ id: "effort", value: "high" }]);
 });
 

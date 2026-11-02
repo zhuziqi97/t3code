@@ -719,13 +719,15 @@ describe("ChatMarkdown math", () => {
     },
   );
 
-  it("keeps message formulas reachable by keyboard", async () => {
+  it("keeps overflowing message formulas reachable by keyboard", async () => {
     setup();
     settingsOverrides.mathRenderingEnabled = true;
     await using screen = await render(
       <>
         <button type="button">Before equation</button>
-        <ChatMarkdown text="$x$" cwd={undefined} />
+        <div style={{ width: 64 }}>
+          <ChatMarkdown text="$x+x+x+x+x+x+x+x+x+x$" cwd={undefined} />
+        </div>
       </>,
     );
     const { container } = screen;

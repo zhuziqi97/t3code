@@ -44,7 +44,7 @@ const state = vi.hoisted(() => ({
 
 vi.mock("@tanstack/react-router", async (original) => ({
   ...(await original<typeof import("@tanstack/react-router")>()),
-  useRouter: () => ({ state: { matches: [] }, navigate: async () => {} }),
+  useRouter: () => ({ state: { matches: [], location: { href: "/" } }, navigate: async () => {} }),
 }));
 vi.mock("../state/session", async (original) => ({
   ...(await original<typeof import("../state/session")>()),

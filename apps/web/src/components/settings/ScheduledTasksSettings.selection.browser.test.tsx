@@ -58,7 +58,7 @@ vi.mock(import("../../hooks/useSettings"), async (original) => ({
 vi.mock(import("../../state/query"), async (original) => ({
   ...(await original()),
   useEnvironmentQuery: (() => ({
-    data: { tasks: [state.task!] },
+    data: { tasks: [state.task!], threads: [] },
     error: null,
     isPending: false,
   })) as never,

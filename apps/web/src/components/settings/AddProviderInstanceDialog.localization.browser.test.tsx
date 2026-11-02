@@ -33,6 +33,7 @@ vi.mock("../../state/server", async (original) => {
     EMPTY_SERVER_PROVIDERS: [],
     serverEnvironment: {
       providersValueAtom: () => providers,
+      configValueAtom: () => Atom.make({ secretReferences: false }),
       searchAcpRegistry: () => "controlled-search",
       prepareAcpRegistryAgent: state.prepare,
     },

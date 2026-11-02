@@ -481,7 +481,11 @@ describe("project settings permissions", () => {
 describe("project identity reset", () => {
   const scratchIcon = { kind: "lucide", name: "message-square-dashed", color: "gray" } as const;
   const resetButton = (screen: Screen, label: string) =>
-    screen.container.querySelector<HTMLButtonElement>(`[aria-label="Reset ${label} to default"]`);
+    [...screen.container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) =>
+        button.getAttribute("aria-label")?.toLowerCase() ===
+        `Reset ${label} to default`.toLowerCase(),
+    ) ?? null;
   const asScratch = (project: Project): Project => ({
     ...project,
     isScratch: true,

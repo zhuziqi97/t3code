@@ -27,7 +27,7 @@ vi.mock(import("@t3tools/client-runtime/preview/server-browser-stream"), async (
 
 vi.mock(import("~/state/previewStream"), async (original) => ({
   ...(await original()),
-  usePreviewStreamAccess: () => mocks.access as never,
+  usePreviewStreamAccess: () => ({ access: mocks.access }) as never,
 }));
 
 import { ServerBrowserSurface } from "./ServerBrowserSurface";

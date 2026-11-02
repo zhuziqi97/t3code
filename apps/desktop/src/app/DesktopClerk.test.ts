@@ -10,7 +10,7 @@ import * as HostProcess from "@t3tools/shared/HostProcess";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { afterAll, beforeEach, vi } from "vite-plus/test";
+import { afterAll, beforeEach, expect, vi } from "vite-plus/test";
 
 const clerkStateDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-desktop-clerk-"));
 afterAll(() => {
@@ -129,16 +129,23 @@ describe("DesktopClerk", () => {
     return Effect.gen(function* () {
       yield* Effect.scoped(Layer.build(layerDesktopClerk(true, events)));
 
-      assert.deepEqual(createClerkBridgeMock.mock.calls, [
+      expect(createClerkBridgeMock.mock.calls).toEqual([
         [
           {
-            storage: storageAdapter,
+            storage: expect.objectContaining({
+              getItem: expect.any(Function),
+              setItem: expect.any(Function),
+              removeItem: expect.any(Function),
+            }),
             manageSingleInstanceLock: false,
             passkeys: true,
             renderer: { scheme: "t3code-convene-dev", host: "app" },
           },
         ],
       ]);
+      const bridgeStorage = createClerkBridgeMock.mock.calls[0]![0].storage;
+      bridgeStorage.getItem("session");
+      assert.deepEqual(storageAdapter.getItem.mock.calls.at(-1), ["session"]);
       assert.equal(cleanup.mock.calls.length, 1);
       assert.deepEqual(events, [
         "setPath:userData:/tmp/app-data/t3code-convene-dev",

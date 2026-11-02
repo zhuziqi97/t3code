@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vite-plus/test";
-vi.mock("~/env", () => ({ isElectron: true }));
+vi.mock("~/env", () => ({ isElectron: true, isSecretsFeatureEnabled: false }));
 import { changeLanguage } from "../../i18n";
 import { getSettingsSearchTargetScope, searchableSetting, searchSettings } from "./settingsSearch";
 

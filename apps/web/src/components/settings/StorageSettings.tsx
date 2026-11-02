@@ -764,7 +764,7 @@ export function StorageCleanupSections() {
             serverScoped
             control={
               <RetentionControl
-                label="Delete old browser artifacts"
+                label={t("storage.browserArtifacts")}
                 value={settings.browserArtifactsAfterDays}
                 onChange={(browserArtifactsAfterDays) => update({ browserArtifactsAfterDays })}
               />
@@ -779,7 +779,7 @@ export function StorageCleanupSections() {
             serverScoped
             control={
               <RetentionControl
-                label="Delete old rotated logs"
+                label={t("storage.logs")}
                 value={settings.logsAfterDays}
                 onChange={(logsAfterDays) => update({ logsAfterDays })}
               />

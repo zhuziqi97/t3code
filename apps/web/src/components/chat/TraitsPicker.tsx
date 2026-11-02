@@ -78,7 +78,7 @@ function DefaultBadge() {
   );
 }
 
-export { shouldRenderTraitsControls, getTraitsSectionVisibility } from "./TraitsPicker.logic";
+export { getTraitsSectionVisibility } from "./TraitsPicker.logic";
 
 /**
  * `modelOptions` must already carry the composer's implicit defaults (see
@@ -233,9 +233,6 @@ export function useTraitsSelection({
   };
 }
 
-export const ULTRATHINK_IN_BODY_NOTE =
-  'Your prompt contains "ultrathink" in the text. Remove it to change this option.';
-
 const TraitsMenuContent = memo(function TraitsMenuContentImpl(props: TraitsSelectionInput) {
   const t = useTranslate();
   const traits = useTraitsSelection(props);
@@ -356,22 +353,26 @@ export const TraitsPicker = memo(function TraitsPicker({
   hidden?: boolean;
   disabled?: boolean;
 }) {
+  const t = useTranslate();
   const [isMenuOpen, setIsMenuOpen] = useComposerMenuState(hidden || disabled);
   const traits = useTraitsSelection(props);
   if (!traits.hasAnyControls) {
     return null;
   }
-  const { label: triggerLabel } = buildTraitsTriggerDisplay({
-    provider: props.provider,
-    descriptors: traits.descriptors,
-    primarySelectDescriptorId: traits.primarySelectDescriptor?.id ?? null,
-    ultrathinkPromptControlled: traits.ultrathinkPromptControlled,
-    modelSelection:
-      props.instanceId && props.model
-        ? { instanceId: props.instanceId, model: props.model, options: props.modelOptions ?? [] }
-        : null,
-    reportedModelSelection: props.reportedModelSelection,
-  });
+  const { label: triggerLabel } = buildTraitsTriggerDisplay(
+    {
+      provider: props.provider,
+      descriptors: traits.descriptors,
+      primarySelectDescriptorId: traits.primarySelectDescriptor?.id ?? null,
+      ultrathinkPromptControlled: traits.ultrathinkPromptControlled,
+      modelSelection:
+        props.instanceId && props.model
+          ? { instanceId: props.instanceId, model: props.model, options: props.modelOptions ?? [] }
+          : null,
+      reportedModelSelection: props.reportedModelSelection,
+    },
+    t,
+  );
   const isCodexStyle = props.provider === "codex";
 
   return (

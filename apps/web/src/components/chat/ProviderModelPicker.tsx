@@ -140,11 +140,13 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
       ? (selectedInstanceOptions.find((option) => option.slug === reportedModel.model)?.name ??
         reportedModel.model)
       : undefined;
-  const triggerTitle = selectedModel
-    ? getTriggerDisplayModelName(selectedModel, activeEntry?.driverKind)
-    : props.model === ANTIGRAVITY_DEFAULT_MODEL
-      ? t("chat.model.choose")
-      : props.model || t("convene.model.default");
+  const triggerTitle =
+    reportedName ??
+    (selectedModel
+      ? getTriggerDisplayModelName(selectedModel, activeEntry?.driverKind)
+      : props.model === ANTIGRAVITY_DEFAULT_MODEL
+        ? t("chat.model.choose")
+        : props.model || t("convene.model.default"));
   const triggerLabel = reportedName
     ? t("convene.model.reported", { model: reportedName })
     : selectedModel

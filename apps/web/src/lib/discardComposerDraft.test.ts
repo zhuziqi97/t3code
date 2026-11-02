@@ -1,4 +1,5 @@
-import { toastManager } from "../components/ui/toast";
+import { AsyncResult } from "effect/reactivity";
+import * as Cause from "effect/Cause";
 import { releaseDraftAttachments } from "./attachmentUploadQueue";
 import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
@@ -129,19 +130,19 @@ describe("discardComposerDraft", () => {
       discardComposerDraft(threadRef);
       await changeLanguage(language);
       useComposerDraftStore.getState().setPrompt(threadRef, "new reply");
-      const addToast = vi.spyOn(toastManager, "add").mockReturnValue("error-toast");
 
-      await undoNotice().undo();
+      const result = await undoNotice().undo();
+      expect(AsyncResult.isFailure(result)).toBe(true);
+      expect(undoNotice().failureTitle()).toBe(
+        language === "zh" ? "恢复草稿失败" : "Failed to restore draft",
+      );
+      expect(AsyncResult.isFailure(result) ? Cause.pretty(result.cause) : "").toContain(
+        language === "zh" ? "草稿已有新内容。" : "The draft has new content.",
+      );
       expect(useComposerDraftStore.getState().getComposerDraft(threadRef)?.prompt).toBe(
         "new reply",
       );
       expect(releaseDraftAttachments).toHaveBeenCalledOnce();
-      expect(addToast).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: language === "zh" ? "恢复草稿失败" : "Failed to restore draft",
-          description: language === "zh" ? "草稿已有新内容。" : "The draft has new content.",
-        }),
-      );
     },
   );
 });
