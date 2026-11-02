@@ -7,6 +7,8 @@ import type { EnvironmentId } from "@t3tools/contracts";
 import { useNavigation } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
 import Constants from "expo-constants";
+import { CONVENE_DESKTOP_IDENTITY } from "@t3tools/shared/conveneDesktopIdentity";
+import { i18n } from "../../i18n";
 
 import * as Dialog from "../../components/ui/Dialog";
 import { authClientMetadata } from "../../lib/authClientMetadata";
@@ -20,7 +22,7 @@ import {
 } from "../../state/use-composer-drafts";
 import { useSelectWorkspaceDetail } from "../workspace/useSelectWorkspaceDetail";
 
-const CLI_COMMAND = "npx t3 triage";
+const CLI_COMMAND = `${CONVENE_DESKTOP_IDENTITY.executableName} triage`;
 
 /**
  * In-app `t3 triage`, as on web: the server writes the session files and
@@ -34,14 +36,14 @@ export function useStartTriage() {
 
   const fail = (message: string) =>
     Dialog.alert(
-      "Could not start triage",
-      `${message} Run ${CLI_COMMAND} in a terminal on that machine instead.`,
+      i18n.t("triage.startFailed"),
+      `${message} ${i18n.t("triage.cliFallback", { command: CLI_COMMAND })}`,
       [
         {
-          text: "Copy command",
+          text: i18n.t("triage.copyCommand"),
           onPress: () =>
             void Clipboard.setStringAsync(CLI_COMMAND).catch(() =>
-              Dialog.alert("Could not copy", `Type ${CLI_COMMAND} instead.`),
+              Dialog.alert(i18n.t("triage.copyFailed", { command: CLI_COMMAND })),
             ),
         },
         { text: "OK", style: "cancel" },
@@ -70,8 +72,7 @@ export function useStartTriage() {
       if (!isAtomCommandInterrupted(scratch)) {
         pipe(
           squashAtomCommandFailure(scratch),
-          (failure) =>
-            errorMessage(failure, "This machine cannot start threads without a project."),
+          (failure) => errorMessage(failure, i18n.t("triage.scratchUnavailable")),
           fail,
         );
       }
@@ -85,7 +86,7 @@ export function useStartTriage() {
       if (!isAtomCommandInterrupted(prepared)) {
         pipe(
           squashAtomCommandFailure(prepared),
-          (failure) => errorMessage(failure, "The server could not prepare it."),
+          (failure) => errorMessage(failure, i18n.t("triage.prepareFailed")),
           fail,
         );
       }
@@ -94,7 +95,7 @@ export function useStartTriage() {
     try {
       await waitForComposerDraftsLoaded();
     } catch {
-      fail("Drafts could not be loaded.");
+      fail(i18n.t("triage.draftsFailed"));
       return;
     }
     if (routeChanged()) return;
@@ -105,7 +106,14 @@ export function useStartTriage() {
     setComposerDraftText(draftId, prepared.value.prompt);
     selectDetail({
       name: "Thread",
-      params: { draft: { environmentId, projectId: scratch.value.id, title: "Triage", draftId } },
+      params: {
+        draft: {
+          environmentId,
+          projectId: scratch.value.id,
+          title: i18n.t("command.triage.title"),
+          draftId,
+        },
+      },
     });
   };
 }

@@ -8439,7 +8439,8 @@ export const en = {
   "chat.copy.thread": "Copy thread",
   "chat.share.guest": "Share with guest",
   "command.triage.title": "Triage an issue",
-  "command.triage.description": "An agent investigates a T3 Code problem and helps file an issue",
+  "command.triage.description":
+    "Review evidence for T3 Code for Convene and prepare feedback with an agent",
   "command.settingsSection": "Settings · {{section}}",
   "command.focusNextArea": "Focus Next Workspace Area",
   "command.focusPreviousArea": "Focus Previous Workspace Area",
@@ -8720,6 +8721,22 @@ export const en = {
   "chat.childInputs.multiple.thread.you": "{{count}} threads need you",
   "chat.child.openApprovalFrom": "Open approval from {{title}}",
   "chat.child.openQuestionFrom": "Open question from {{title}}",
+  "triage.whatWentWrong": "What went wrong?",
+  "triage.thisMachine": "This machine",
+  "triage.description":
+    "The agent reviews T3 Code for Convene logs and source to draft feedback, and asks before applying a fix or posting anything.",
+  "triage.orRun": "or run",
+  "triage.copyHint": "Copy command, for a terminal",
+  "triage.copyCommand": "Copy command",
+  "triage.copyFailed": "Could not copy. Type {{command}} instead.",
+  "triage.startFailed": "Could not start triage",
+  "triage.cliFallback": "Run {{command}} in a terminal on that machine instead.",
+  "triage.error": "An error occurred.",
+  "triage.openFailed": "T3 Code for Convene could not open a new thread.",
+  "triage.scratchUnavailable": "This machine cannot start threads without a project.",
+  "triage.starting": "Starting triage…",
+  "triage.prepareFailed": "The server could not prepare it.",
+  "triage.draftsFailed": "Drafts could not be loaded.",
 } as const;
 
 export type MessageKey = keyof typeof en;

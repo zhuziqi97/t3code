@@ -144,6 +144,8 @@ const make = Effect.gen(function* () {
       releaseSource = pickSourceRef("", build);
       return releaseSource;
     }
+    // A dev checkout can retain a release version while its source has changed.
+    if (config.devUrl !== undefined) return undefined;
     const tag = `refs/tags/v${serverVersion}`;
     const listed = yield* runGit(
       "resolveSourceRef",
@@ -171,7 +173,10 @@ const make = Effect.gen(function* () {
         _tag: "failed",
         serverVersion,
         repositoryUrl,
-        reason: `no matching release tag v${serverVersion} or packaged source commit is available; source is unknown, not main.`,
+        reason:
+          config.devUrl !== undefined
+            ? "the development server has no packaged source commit; source is unknown, not main."
+            : `no matching release tag v${serverVersion} or packaged source commit is available; source is unknown, not main.`,
       } satisfies TriageSourceClone;
     }
     const directory = path.join(sourceDir, source.commit);

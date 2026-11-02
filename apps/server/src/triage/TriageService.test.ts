@@ -193,5 +193,16 @@ it.effect("keeps preparing with unknown source when only main is available", () 
     yield* triage.prepare({ client: {} });
     assert.deepEqual(commands, ["ls-remote"]);
     assert.include(yield* readContext, "source is unknown, not main");
+
+    const config = yield* ServerConfig.ServerConfig;
+    const dev = yield* makeTriage().pipe(
+      Effect.provideService(ServerConfig.ServerConfig, {
+        ...config,
+        devUrl: new URL("http://localhost:5173"),
+      }),
+    );
+    yield* dev.triage.prepare({ client: {} });
+    assert.deepEqual(dev.commands, []);
+    assert.include(yield* readContext, "development server has no packaged source commit");
   }).pipe(Effect.provide(TestLayer)),
 );
