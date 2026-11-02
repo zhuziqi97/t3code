@@ -23,6 +23,7 @@ import { ComposerPermissionsSection, type RuntimeModeOption } from "./ComposerFo
 import { composerFloatingLayerProps, focusCheckedPermission } from "./composerEventScope";
 import { EffortGlyph, FastBolt, resolveEffortGlyph } from "./EffortGlyph";
 import { DockedPickerContext } from "./ProviderModelPicker";
+import { runtimeModePresentation } from "./runtimeModeConfig";
 import {
   getTraitsSectionVisibility,
   type TraitsSelectionInput,
@@ -440,9 +441,11 @@ function PermissionsMenu(props: {
   options: ReadonlyArray<RuntimeModeOption>;
   onChange: (mode: RuntimeMode) => void;
 }) {
+  const t = useTranslate();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const current = props.options.find((option) => option.mode === props.runtimeMode);
   if (!current) return null;
+  const presentation = runtimeModePresentation(current.mode, t);
   const CurrentIcon = current.icon;
   return (
     <Menu
@@ -456,13 +459,13 @@ function PermissionsMenu(props: {
             ref={triggerRef}
             type="button"
             data-composer-permissions-trigger
-            aria-label={`Permissions: ${current.label}`}
+            aria-label={t("chat.permissions.current", { mode: presentation.label })}
             className="ms-auto flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2 text-muted-foreground text-xs outline-none hover:bg-foreground/[0.09] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset data-popup-open:bg-foreground/[0.09] data-popup-open:text-foreground"
           />
         }
       >
         <CurrentIcon aria-hidden="true" className="size-3.5" />
-        {current.label}
+        {presentation.label}
         <ChevronUpIcon aria-hidden="true" className="size-3" />
       </MenuTrigger>
       <MenuPopup side="top" align="end" {...composerFloatingLayerProps}>
