@@ -8705,6 +8705,21 @@ export const en = {
   "chat.child.openApproval": "Open approval",
   "chat.child.openQuestion": "Open question",
   "chat.queuedCount": "{{count}} queued",
+  "chat.childInputs.single.sideChat.input": "Side chat needs input",
+  "chat.childInputs.single.sideChat.approval": "Side chat needs approval",
+  "chat.childInputs.single.subagent.input": "Subagent needs input",
+  "chat.childInputs.single.subagent.approval": "Subagent needs approval",
+  "chat.childInputs.multiple.sideChat.input": "{{count}} side chats need input",
+  "chat.childInputs.multiple.sideChat.approval": "{{count}} side chats need approval",
+  "chat.childInputs.multiple.sideChat.you": "{{count}} side chats need you",
+  "chat.childInputs.multiple.subagent.input": "{{count}} subagents need input",
+  "chat.childInputs.multiple.subagent.approval": "{{count}} subagents need approval",
+  "chat.childInputs.multiple.subagent.you": "{{count}} subagents need you",
+  "chat.childInputs.multiple.thread.input": "{{count}} threads need input",
+  "chat.childInputs.multiple.thread.approval": "{{count}} threads need approval",
+  "chat.childInputs.multiple.thread.you": "{{count}} threads need you",
+  "chat.child.openApprovalFrom": "Open approval from {{title}}",
+  "chat.child.openQuestionFrom": "Open question from {{title}}",
 } as const;
 
 export type MessageKey = keyof typeof en;

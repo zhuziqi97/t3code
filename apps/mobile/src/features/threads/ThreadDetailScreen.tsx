@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import { applyThreadProviderConfiguration } from "@t3tools/client-runtime/state/thread-execution";
 import { useThreadProviderConfiguration } from "../../state/entities";
 import { useOpenThreadInspector } from "./thread-inspector-navigation";
@@ -364,6 +365,7 @@ export function ThreadDetailScreen(props: ThreadDetailScreenProps) {
 }
 
 function ThreadDetailBody(props: ThreadDetailScreenProps) {
+  const t = useTranslate();
   const usesNativeWorkspaceColumns = useNativeWorkspaceColumnsSupported();
   const { layout } = useAdaptiveWorkspaceLayout();
   const deviceType = useDeviceType();
@@ -737,8 +739,13 @@ function ThreadDetailBody(props: ThreadDetailScreenProps) {
     if (childInput && contentPresentationKind === "ready") {
       return {
         kind: "child-input",
-        label: childThreadInputsTitle(childThreadInputs),
-        accessibilityLabel: `Open ${childInput.hasPendingApprovals ? "approval" : "question"} from ${childInput.title}`,
+        label: childThreadInputsTitle(childThreadInputs, t),
+        accessibilityLabel: t(
+          childInput.hasPendingApprovals
+            ? "chat.child.openApprovalFrom"
+            : "chat.child.openQuestionFrom",
+          { title: childInput.title },
+        ),
         onPress: () => {
           Keyboard.dismiss();
           openLinkedThread({ environmentId: props.environmentId, threadId: childInput.id });

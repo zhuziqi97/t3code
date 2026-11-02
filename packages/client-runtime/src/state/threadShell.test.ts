@@ -11,6 +11,7 @@ import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 import { Atom, AtomRegistry } from "effect/reactivity";
 import { describe, expect, it } from "vite-plus/test";
+import { createI18n } from "../i18n/index.ts";
 
 import { PrimaryConnectionTarget } from "../connection/model.ts";
 import { v2Now, v2ShellSnapshot, v2ThreadShell } from "./orchestrationV2TestFixtures.ts";
@@ -156,7 +157,8 @@ describe("v2 thread shell lists", () => {
     registry.dispose();
   });
 
-  it("rolls a side chat's questions and approvals up to its parent row", () => {
+  it("rolls a side chat's questions and approvals up to its parent row", async () => {
+    const locale = createI18n({ lng: "en" });
     const { registry, threads, snapshotAtom } = makeHarness();
     const root = v2ThreadShell;
     const sideChat = {
@@ -201,7 +203,12 @@ describe("v2 thread shell lists", () => {
 
     withRequest("user_input");
     expect(registry.get(parent)?.pendingSubagentRequest).toBe("user_input");
-    expect(childThreadInputsTitle(registry.get(inputs))).toBe("Side chat needs input");
+    const waiting = registry.get(inputs);
+    expect(childThreadInputsTitle(waiting, locale.t)).toBe("Side chat needs input");
+    await locale.changeLanguage("zh");
+    expect(childThreadInputsTitle(waiting, locale.t)).toBe("侧聊等待输入");
+    expect(registry.get(inputs)).toBe(waiting);
+    await locale.changeLanguage("en");
     expect(registry.get(threads.navigationThreadShellsAtom).map((thread) => thread.id)).toEqual([
       root.id,
     ]);
@@ -215,7 +222,7 @@ describe("v2 thread shell lists", () => {
 
     withRequest("command");
     expect(registry.get(parent)?.pendingSubagentRequest).toBe("approval");
-    expect(childThreadInputsTitle(registry.get(inputs))).toBe("Side chat needs approval");
+    expect(childThreadInputsTitle(registry.get(inputs), locale.t)).toBe("Side chat needs approval");
 
     const helper = {
       ...sideChat,
@@ -229,6 +236,14 @@ describe("v2 thread shell lists", () => {
       },
       pendingRuntimeRequest: { ...request, kind: "command" as const },
     };
+    await locale.changeLanguage("zh");
+    expect(childThreadInputsTitle(registry.get(inputs), locale.t)).toBe("侧聊等待审批");
+    expect(
+      childThreadInputsTitle(
+        [...waiting, { hasPendingApprovals: true, lineage: helper.lineage }],
+        locale.t,
+      ),
+    ).toBe("2 个会话需要处理");
     const sideChats = threads.sideChatsAtom(parentRef);
     const disposeSideChats = registry.mount(sideChats);
     registry.set(snapshotAtom(environmentId), {
@@ -301,7 +316,9 @@ describe("v2 thread shell lists", () => {
     expect(isThreadWorking(registry.get(parent)!)).toBe(false);
     const asking = registry.get(inputs);
     expect(asking.map((thread) => thread.id)).toEqual([grandchild.id]);
-    expect(childThreadInputsTitle(asking)).toBe("Subagent needs approval");
+    expect(childThreadInputsTitle(asking, createI18n({ lng: "en" }).t)).toBe(
+      "Subagent needs approval",
+    );
 
     registry.set(snapshotAtom(environmentId), {
       ...v2ShellSnapshot,

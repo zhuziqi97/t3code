@@ -52,7 +52,7 @@ export function childInputNowItem(
     ) : (
       <MessageCircleIcon className="text-info-foreground" />
     ),
-    title: childThreadInputsTitle(childThreadInputs),
+    title: childThreadInputsTitle(childThreadInputs, t),
     waitingLabel: childThreadInputs.every((child) => child.lineage.sideChat === true)
       ? t("chat.side.waiting")
       : t("chat.subagent.waiting"),
