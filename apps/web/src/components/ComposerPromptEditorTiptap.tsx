@@ -1850,7 +1850,7 @@ function ComposerPromptEditorTiptapInner(
               <div
                 aria-hidden="true"
                 data-composer-prediction-text="true"
-                className="pointer-events-none col-start-1 row-start-1 line-clamp-3 min-w-0 whitespace-pre-wrap leading-relaxed text-placeholder wrap-anywhere"
+                className="pointer-events-none col-start-1 row-start-1 line-clamp-3 min-w-0 whitespace-pre-wrap leading-relaxed text-foreground/50 wrap-anywhere"
               >
                 {predictionText}
               </div>
