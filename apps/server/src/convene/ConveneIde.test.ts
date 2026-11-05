@@ -579,6 +579,20 @@ it.effect(
           ["openFile", "vscode-remote://remote/workspace/project/src/target%20file.ts:1:2"],
           ["gotoLineMode", "true"],
         ]);
+        const literalPercent = yield* ide.handle({
+          ...QUERY,
+          file: { relativePath: "literal%3Acolon.md", line: 1 },
+        });
+        const literalUri = new URL(literalPercent.entryPath!, "http://entry/session/");
+        const literalPayload = JSON.parse(literalUri.searchParams.get("payload")!);
+        assert.deepEqual(literalPayload, [
+          ["openFile", "vscode-remote://remote/workspace/project/literal%253Acolon.md:1:1"],
+          ["gotoLineMode", "true"],
+        ]);
+        assert.equal(
+          decodeURIComponent(new URL(literalPayload[0][1]).pathname),
+          "/workspace/project/literal%3Acolon.md:1:1",
+        );
       }).pipe(Effect.provide(fixture.layer));
     }),
 );

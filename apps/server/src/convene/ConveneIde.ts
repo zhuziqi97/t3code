@@ -312,7 +312,9 @@ const make = Effect.gen(function* () {
     if (file) {
       const line = input.file?.line ?? (input.file?.column ? 1 : undefined);
       const uri = new URL("vscode-remote://remote");
-      uri.pathname = file.absolutePath + (line ? `:${line}:${input.file?.column ?? 1}` : "");
+      uri.pathname =
+        file.absolutePath.replaceAll("%", "%25") +
+        (line ? `:${line}:${input.file?.column ?? 1}` : "");
       const payload: Array<readonly [string, string]> = [["openFile", uri.toString()]];
       if (line) payload.push(["gotoLineMode", "true"]);
       search.set("payload", encodePayload(payload));
