@@ -28,12 +28,14 @@ import { PullRequestStackLayers } from "./PullRequestStackLayers";
 import { PullRequestStackHeader } from "./PullRequestStackHeader";
 import { PullRequestStackLayerContent } from "./PullRequestStackLayerContent";
 import { PullRequestGlyph } from "./pullRequestIcons";
+import { readableFailure } from "./pullRequestDetail.logic";
 
 export function PullRequestStackMenu({
   hostLabel,
   stack,
   reference,
   environmentId,
+  stale,
   canMerge,
   canRebase,
   mergeMethod,
@@ -49,6 +51,7 @@ export function PullRequestStackMenu({
   stack: PullRequestStack;
   reference: PullRequestRef;
   environmentId: EnvironmentId;
+  stale: boolean;
   canMerge: boolean;
   canRebase: boolean;
   mergeMethod: PullRequestMergeMethod;
@@ -73,12 +76,13 @@ export function PullRequestStackMenu({
   const hasUnknownHead = expectedStackHeads.length !== unmerged.length;
   const mergeDisabled =
     pending ||
+    stale ||
     selectedLayer?.state !== "open" ||
     mergeLayers.some((layer) => !layer.headSha) ||
     mergeHasClosed ||
     mergeLayers.length === 0 ||
     mergeLayers.some((layer) => layer.isDraft);
-  const rebaseDisabled = pending || hasUnknownHead || hasClosed || unmerged.length === 0;
+  const rebaseDisabled = pending || stale || hasUnknownHead || hasClosed || unmerged.length === 0;
   const run = async () => {
     if (
       pending ||
@@ -121,7 +125,12 @@ export function PullRequestStackMenu({
           action === "merge"
             ? i18n.t("pullRequest.flow.stack.mergeFailed")
             : i18n.t("pullRequest.flow.stack.rebaseFailed"),
-        description: String(squashAtomCommandFailure(result)),
+        description: readableFailure(
+          squashAtomCommandFailure(result),
+          action === "merge"
+            ? "The host refused the merge. Check that you have write access, that the checks it requires have passed, and that the branch is not conflicting."
+            : "The host refused the rebase. A rebase stops at the first commit that does not apply cleanly.",
+        ),
       });
     } else {
       toastManager.update(toastId, {
@@ -223,8 +232,10 @@ export function PullRequestStackMenu({
                 <Button
                   variant="default"
                   size="xs"
-                  disabled={mergeDisabled}
-                  onClick={() => setConfirmation("merge")}
+                  disabled={mergeDisabled && !stale}
+                  aria-disabled={mergeDisabled || undefined}
+                  aria-description={stale ? (notice ?? undefined) : undefined}
+                  onClick={mergeDisabled ? undefined : () => setConfirmation("merge")}
                 >
                   <PullRequestGlyph.merged aria-hidden className="size-3.5" />
                   {t("pullRequest.flow.stack.merge")}
@@ -233,11 +244,13 @@ export function PullRequestStackMenu({
             }
           />
           <TooltipPopup>
-            {t("pullRequest.flow.stack.through", {
-              number: reference.number,
-              base: stack.base,
-              count: mergeLayers.length,
-            })}
+            {stale
+              ? notice
+              : t("pullRequest.flow.stack.through", {
+                  number: reference.number,
+                  base: stack.base,
+                  count: mergeLayers.length,
+                })}
           </TooltipPopup>
         </Tooltip>
       ) : null}

@@ -77,6 +77,7 @@ const timestampFormatterCache = new Map<string, Intl.DateTimeFormat>();
 function getTimestampFormatter(
   timestampFormat: TimestampFormat,
   includeSeconds: boolean,
+  timeZone?: string,
 ): Intl.DateTimeFormat {
   const locale = i18n.resolvedLanguage === "zh" ? "zh-CN" : timestampLocale;
   const cacheKey = `${locale}:${timestampFormat}:${includeSeconds ? "seconds" : "minutes"}`;
@@ -135,6 +136,7 @@ function ordinalSuffix(day: number): string {
 export function formatChatTimestampTooltip(
   isoDate: string,
   timestampFormat: TimestampFormat,
+  timeZone?: string,
   t: TFunction = i18n.t,
 ): string {
   const date = parseTimestampDate(isoDate);
@@ -158,73 +160,107 @@ export function formatShortTimestamp(
   return getTimestampFormatter(timestampFormat, false).format(date);
 }
 
-const numericDateFormatter = new Intl.DateTimeFormat(timestampLocale, {
-  month: "numeric",
-  day: "numeric",
-});
-const numericDateWithYearFormatter = new Intl.DateTimeFormat(timestampLocale, {
-  month: "numeric",
-  day: "numeric",
+const numericDateOptions: Intl.DateTimeFormatOptions = { month: "numeric", day: "numeric" };
+const numericDateWithYearOptions: Intl.DateTimeFormatOptions = {
+  ...numericDateOptions,
   year: "numeric",
-});
+};
+const numericDateFormatter = new Intl.DateTimeFormat(timestampLocale, numericDateOptions);
+const numericDateWithYearFormatter = new Intl.DateTimeFormat(
+  timestampLocale,
+  numericDateWithYearOptions,
+);
+
+interface CalendarDay {
+  year: number;
+  /** Days since the epoch, so differences are whole days across DST shifts. */
+  index: number;
+}
+
+function calendarDay(date: Date, timeZone: string | undefined): CalendarDay {
+  if (!timeZone) {
+    const year = date.getFullYear();
+    return { year, index: Date.UTC(year, date.getMonth(), date.getDate()) / 86_400_000 };
+  }
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((entry) => entry.type === type)?.value);
+  const year = part("year");
+  return { year, index: Date.UTC(year, part("month") - 1, part("day")) / 86_400_000 };
+}
+
+function formatNumericDate(date: Date, sameYear: boolean, timeZone: string | undefined): string {
+  if (!timeZone) {
+    return (sameYear ? numericDateFormatter : numericDateWithYearFormatter).format(date);
+  }
+  return new Intl.DateTimeFormat(timestampLocale, {
+    ...(sameYear ? numericDateOptions : numericDateWithYearOptions),
+    timeZone,
+  }).format(date);
+}
 
 export function formatDayAwareTimestamp(
   isoDate: string,
   timestampFormat: TimestampFormat,
   nowMs: number = Date.now(),
+  timeZone?: string,
   t: TFunction = i18n.t,
 ): string {
   const date = parseTimestampDate(isoDate);
   if (!date) return "";
-  const time = getTimestampFormatter(timestampFormat, false).format(date);
+  const time = getTimestampFormatter(timestampFormat, false, timeZone).format(date);
 
-  const now = new Date(nowMs);
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const startOfMessageDay = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-  // Round so DST-shifted 23/25 hour days still count as whole days.
-  const dayDiff = Math.round((startOfToday - startOfMessageDay) / 86_400_000);
+  const today = calendarDay(new Date(nowMs), timeZone);
+  const messageDay = calendarDay(date, timeZone);
+  const dayDiff = today.index - messageDay.index;
 
   if (dayDiff <= 0) return time;
   if (dayDiff === 1) return t("time.yesterday", { time });
-  const dateFormatter =
-    date.getFullYear() === now.getFullYear() ? numericDateFormatter : numericDateWithYearFormatter;
+  const sameYear = date.getFullYear() === new Date(nowMs).getFullYear();
+  const dateFormatter = sameYear ? numericDateFormatter : numericDateWithYearFormatter;
   const dateLabel =
     i18n.resolvedLanguage === "zh"
       ? date.toLocaleDateString("zh-CN", {
           month: "numeric",
           day: "numeric",
-          ...(date.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
+          ...(sameYear ? {} : { year: "numeric" }),
         })
       : dateFormatter.format(date);
   return `${dateLabel} ${time}`;
 }
 
+/** `timeZone` overrides the zone the formatters cached when they were built. */
 export function formatUpcomingTimestamp(
   isoDate: string,
   timestampFormat: TimestampFormat,
   nowMs: number = Date.now(),
+  timeZone?: string,
   t: TFunction = i18n.t,
 ): string {
   const date = parseTimestampDate(isoDate);
   if (!date) return "";
-  const time = getTimestampFormatter(timestampFormat, false).format(date);
+  const time = getTimestampFormatter(timestampFormat, false, timeZone).format(date);
 
-  const now = new Date(nowMs);
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const startOfTargetDay = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-  const dayDiff = Math.round((startOfTargetDay - startOfToday) / 86_400_000);
+  const today = calendarDay(new Date(nowMs), timeZone);
+  const targetDay = calendarDay(date, timeZone);
+  const dayDiff = targetDay.index - today.index;
 
-  if (dayDiff < 0) return formatDayAwareTimestamp(isoDate, timestampFormat, nowMs, t);
+  if (dayDiff < 0) return formatDayAwareTimestamp(isoDate, timestampFormat, nowMs, timeZone, t);
   if (dayDiff === 0) return time;
   if (dayDiff === 1) return t("time.tomorrow", { time });
-  const dateFormatter =
-    date.getFullYear() === now.getFullYear() ? numericDateFormatter : numericDateWithYearFormatter;
+  const sameYear = date.getFullYear() === new Date(nowMs).getFullYear();
+  const dateFormatter = sameYear ? numericDateFormatter : numericDateWithYearFormatter;
   const dateLabel =
     i18n.resolvedLanguage === "zh"
       ? date.toLocaleDateString("zh-CN", {
           month: "numeric",
           day: "numeric",
-          ...(date.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
+          ...(sameYear ? {} : { year: "numeric" }),
         })
       : dateFormatter.format(date);
   return `${dateLabel} ${time}`;
@@ -309,6 +345,7 @@ export function formatRelativeTimeLabel(
 export function formatElapsedDurationLabel(
   isoDate: string,
   nowMs: number = Date.now(),
+  timeZone?: string,
   t: TFunction = i18n.t,
 ): string {
   const date = parseTimestampDate(isoDate);
@@ -369,6 +406,7 @@ export function formatRelativeTimeUntilLabel(isoDate: string, t: TFunction = i18
 export function formatExpiresInLabel(
   isoDate: string,
   nowMs: number = Date.now(),
+  timeZone?: string,
   t: TFunction = i18n.t,
 ): string {
   const date = parseTimestampDate(isoDate);

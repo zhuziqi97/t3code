@@ -1,6 +1,6 @@
+import * as NodeWS from "@effect/platform-node/NodeWS";
 // @effect-diagnostics nodeBuiltinImport:off - Real HTTP and WS peers exercise the adapter's streaming boundary.
 import * as NodeHttp from "node:http";
-import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import { assert, it } from "@effect/vitest";
 import {
@@ -81,7 +81,7 @@ const fixture = Effect.gen(function* () {
       response.end("<html><body>native untouched</body></html>");
     }
   });
-  const ws = new NodeSocket.NodeWS.WebSocketServer({ noServer: true });
+  const ws = new NodeWS.WebSocketServer({ noServer: true });
   server.on("upgrade", (request, socket, head) => {
     received.push({
       path: request.url!,
@@ -403,7 +403,7 @@ it.live("bridges real WebSocket frames to the managed runtime without forwarding
     const echo = yield* Effect.acquireRelease(
       Effect.sync(
         () =>
-          new NodeSocket.NodeWS.WebSocket(
+          new NodeWS.WebSocket(
             test.origin.replace(/^http/, "ws") +
               "/api/convene/ide/code-server/runtime/socket?wsTicket=one-use",
             { headers: { authorization: "Bearer full", cookie: "platform=fake" } },

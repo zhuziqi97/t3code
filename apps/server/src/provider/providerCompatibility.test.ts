@@ -134,9 +134,14 @@ describe("provider compatibility", () => {
     }
   });
 
-  it("supports the managed Antigravity runtime in the bundled manifest", () => {
+  it.each([
+    ["darwin", "arm64"],
+    ["win32", "x64"],
+  ] as const)(
+    "supports the managed Antigravity runtime for %s-%s in the bundled manifest",
+    (platform, arch) => {
     const policies = decodeCompatibilityPolicies(bundledManifest.compatibility);
-    const release = resolveAntigravityReleaseAsset("darwin", "arm64");
+      const release = resolveAntigravityReleaseAsset(platform, arch);
     assert.strictEqual(
       resolveProviderCompatibility(
         policies,
@@ -145,7 +150,8 @@ describe("provider compatibility", () => {
       )?.status,
       "supported",
     );
-  });
+    },
+  );
 
   it("classifies boundaries and treats unlisted versions and release tags as unknown", () => {
     for (const [version, expected] of [

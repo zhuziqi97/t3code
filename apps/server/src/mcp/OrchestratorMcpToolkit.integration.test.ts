@@ -1,4 +1,5 @@
 import * as NodeURL from "node:url";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
 import {
@@ -95,9 +96,8 @@ const delegatedTaskStatusTranscriptFile = new URL(
   import.meta.url,
 );
 
-const readDelegatedTaskStatusTranscript = Effect.fn("readDelegatedTaskStatusTranscript")(function* (
-  followupResult: string,
-) {
+const readDelegatedTaskStatusTranscript = Effect.fn("readDelegatedTaskStatusTranscript")(
+  function* (followupResult: string) {
   const fs = yield* FileSystem.FileSystem;
   const text = yield* fs.readFileString(NodeURL.fileURLToPath(delegatedTaskStatusTranscriptFile));
   const transcript = yield* decodeProviderReplayNdjson(
@@ -110,7 +110,9 @@ const readDelegatedTaskStatusTranscript = Effect.fn("readDelegatedTaskStatusTran
     ...transcript,
     entries: transcript.entries.filter((entry) => entry.type !== "runtime_exit"),
   };
-}, Effect.provide(NodeServices.layer));
+  },
+  Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+);
 
 function makeProviderSnapshot(input: {
   readonly instanceId: ProviderInstanceId;
@@ -196,6 +198,7 @@ describe("orchestrator MCP toolkit", () => {
   it.live.each([
     { label: "distinct", result: queuedFollowupResult, latestSummary: queuedFollowupResult },
     { label: "identical", result: delegatedResult, latestSummary: null },
+    { label: "emoji", result: "😀", latestSummary: "😀" },
   ])("reports $label child results", ({ result, latestSummary }) =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -231,7 +234,7 @@ describe("orchestrator MCP toolkit", () => {
           }),
         ]);
         const layerTest = layerOrchestratorToolkit.pipe(
-          Layer.provideMerge(McpServer.McpServer.layer),
+          Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
           Layer.provideMerge(layerOrchestration),
           Layer.provide(
             CodexOrchestratorReplayHarness.makeProviderAdapterRegistryLayer(transcript).pipe(
@@ -252,7 +255,7 @@ describe("orchestrator MCP toolkit", () => {
             ),
           ),
           Layer.provide(Layer.mock(RemoteDelegation.RemoteDelegation)({})),
-          Layer.provide(NodeServices.layer),
+          Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
         );
 
         yield* Effect.gen(function* () {
@@ -627,6 +630,7 @@ describe("orchestrator MCP toolkit", () => {
             delegated.resultContextTransferId,
           );
           const transferReads: Array<string> = [];
+          const messageReads: Array<string> = [];
           const tracer = Tracer.make({
             span(options) {
               const span = new Tracer.NativeSpan(options);
@@ -634,19 +638,65 @@ describe("orchestrator MCP toolkit", () => {
               span.end = (endTime, exit) => {
                 end(endTime, exit);
                 const query = span.attributes.get("db.query.text");
+                if (typeof query !== "string") return;
                 if (
-                  typeof query === "string" &&
                   /SELECT[\s\S]*FROM orchestration_v2_projection_context_transfers/i.test(query)
                 ) {
                   transferReads.push(query);
+                }
+                if (
+                  /SELECT\s+payload_json\s+FROM orchestration_v2_projection_messages/i.test(query)
+                ) {
+                  messageReads.push(query);
                 }
               };
               return span;
             },
           });
+          const wait = yield* invoke(
+            "t3_thread_wait",
+            { threadId: delegated.childThreadId, runId: queuedFollowup.runId },
+            { ...invocation, thread: undefined },
+          ).pipe(Effect.withTracer(tracer));
+          expect(wait.isError).not.toBe(true);
+          const expectedWait = {
+            threadId: delegated.childThreadId,
+            runId: queuedFollowup.runId,
+            status: "completed",
+            timedOut: false,
+          };
+          expect(wait.structuredContent).toEqual(expectedWait);
+          expect(messageReads).toEqual([]);
+          expect(transferReads).toHaveLength(0);
+          const settledWait = yield* invoke(
+            "t3_thread_wait",
+            {
+              threadId: delegated.childThreadId,
+              runId: queuedFollowup.runId,
+              untilDelegatedWorkSettled: true,
+            },
+            { ...invocation, thread: undefined },
+          ).pipe(Effect.withTracer(tracer));
+          expect(settledWait.isError).not.toBe(true);
+          expect(settledWait.structuredContent).toMatchObject({
+            ...expectedWait,
+            resultRun: { runId: queuedFollowup.runId, status: "completed" },
+          });
+          expect(messageReads.length).toBeGreaterThan(0);
+          expect(
+            messageReads.filter((query) => query.includes("$.notification.source.kind")),
+          ).toHaveLength(1);
+          // The orchestrator's restart-continuation guard still reads its own records.
+          expect(
+            messageReads.filter((query) => !query.includes("$.notification.source.kind")),
+          ).toHaveLength(1);
           const parentlessRead = yield* invoke(
             "t3_thread_read",
-            { threadId: delegated.childThreadId, limit: 100 },
+            {
+              threadId: delegated.childThreadId,
+              limit: 100,
+              maxCharsPerItem: result === "😀" ? 1 : 20_000,
+            },
             { ...invocation, thread: undefined },
           ).pipe(Effect.withTracer(tracer));
           expect(parentlessRead.isError).not.toBe(true);
@@ -660,6 +710,7 @@ describe("orchestrator MCP toolkit", () => {
           const read = yield* invoke("t3_thread_read", {
             threadId: delegated.childThreadId,
             limit: 100,
+            maxCharsPerItem: result === "😀" ? 1 : 20_000,
           }).pipe(Effect.withTracer(tracer));
           expect(read.isError).not.toBe(true);
           expect(transferReads.length).toBeGreaterThan(0);
@@ -669,6 +720,13 @@ describe("orchestrator MCP toolkit", () => {
             afterRead.subagents.find((task) => task.id === queuedFollowup.taskId)
               ?.completionDelivery?.state,
           ).toBe("acknowledged");
+
+          const messageReadsBeforeCapabilities = messageReads.length;
+          const capabilities = yield* invoke("orchestrator_capabilities", {}).pipe(
+            Effect.withTracer(tracer),
+          );
+          expect(capabilities.isError).not.toBe(true);
+          expect(messageReads).toHaveLength(messageReadsBeforeCapabilities);
         }).pipe(Effect.provide(layerTest));
       }),
     ),

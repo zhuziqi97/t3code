@@ -1,12 +1,14 @@
 import { i18n } from "~/i18n";
 import type { TFunction } from "i18next";
 import type { ServerUpdateState } from "@t3tools/client-runtime/state/server";
-import type {
-  DesktopUpdateState,
-  DesktopUpdateChannel,
-  EnvironmentId,
-  ServerConfig,
-  ServerSelfUpdateCapability,
+import {
+  type DesktopUpdateState,
+  type DesktopUpdateChannel,
+  type EnvironmentId,
+  managedNightlyDeniedMessage,
+  managedUpdatesDenial,
+  type ServerConfig,
+  type ServerSelfUpdateCapability,
 } from "@t3tools/contracts";
 import { cliReleaseChannelOf, desktopUpdateChannelOf } from "@t3tools/shared/cliRelease";
 import { compareSemverVersions } from "@t3tools/shared/semver";
@@ -102,6 +104,7 @@ export interface UpdateEverythingMachine {
   readonly serverConfig: {
     readonly environment: ServerConfig["environment"];
     readonly settings: Pick<ServerConfig["settings"], "continueThreadsAfterServerUpdate">;
+    readonly managedPolicy?: ServerConfig["managedPolicy"];
   } | null;
   readonly connected: boolean;
   readonly hostedByThisApp: boolean;
@@ -175,6 +178,14 @@ export function collectServerUpdateTargets(
       continue;
     }
     const selfUpdate = resolveServerSelfUpdateCapability(config);
+    const managedDenial = managedMachineUpdateDenial(
+      config,
+      selfUpdate === "desktop-managed" ? undefined : targetVersion,
+    );
+    if (managedDenial !== undefined) {
+      skip(managedDenial);
+      continue;
+    }
     const desktopAppUpdate = supportsDesktopAppUpdate(config);
     if (selfUpdate === null) {
       skip(t ? t("update.skip.manual") : "needs a manual update");
@@ -295,6 +306,26 @@ export function localSwitchBlockReason(
   );
 }
 
+/**
+ * The server refuses these with the same message; say so before the run instead of after.
+ * `targetVersion` is undefined when the server picks its own version, as desktop apps do.
+ */
+function managedMachineUpdateDenial(
+  config: NonNullable<UpdateEverythingMachine["serverConfig"]>,
+  targetVersion: string | undefined,
+): string | undefined {
+  const policy = config.managedPolicy;
+  return (
+    managedUpdatesDenial(policy) ??
+    (policy !== undefined &&
+    policy.limits?.updates?.allowNightly === false &&
+    targetVersion !== undefined &&
+    cliReleaseChannelOf(targetVersion) !== "stable"
+      ? managedNightlyDeniedMessage(policy.organization)
+      : undefined)
+  );
+}
+
 /** Servers move to the release; desktop-managed hosts reinstall their app on its track. A desktop
  * host already current gets a track-only request, since its saved track may still differ. */
 export function collectChannelSwitchTargets(
@@ -335,7 +366,8 @@ export function collectChannelSwitchTargets(
       if (
         !("skip" in move) &&
         move.selfUpdate === "desktop-managed" &&
-        unavailableReason(machine, t) === null
+        unavailableReason(machine, t) === null &&
+        managedMachineUpdateDenial(config, release.version) === undefined
       ) {
         targets.push({ ...target(move.selfUpdate, serverVersion), trackOnly: true });
       }
@@ -344,6 +376,11 @@ export function collectChannelSwitchTargets(
     const unavailable = unavailableReason(machine, t);
     if (config === null || serverVersion === undefined || unavailable !== null) {
       skip(unavailable ?? (t ? t("update.skip.notConnected") : "not connected"));
+      continue;
+    }
+    const managedDenial = managedMachineUpdateDenial(config, release.version);
+    if (managedDenial !== undefined) {
+      skip(managedDenial);
       continue;
     }
     const move = trackSwitchMove(config, sameTrack, t);

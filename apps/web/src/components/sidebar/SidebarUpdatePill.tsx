@@ -1,4 +1,8 @@
-import type { DesktopBridge, DesktopUpdateState } from "@t3tools/contracts";
+import {
+  type DesktopBridge,
+  type DesktopUpdateState,
+  managedUpdatesDenial,
+} from "@t3tools/contracts";
 import { TriangleAlertIcon } from "lucide-react";
 import { type ComponentProps, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
@@ -9,6 +13,7 @@ import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { cn } from "../../lib/utils";
 import { ensureLocalApi } from "../../localApi";
 import { useDesktopUpdateState } from "../../state/desktopUpdate";
+import { usePrimaryManagedPolicy } from "../../state/managedPolicy";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import {
   getArm64IntelBuildWarningDescription,
@@ -164,6 +169,8 @@ export function SidebarUpdatePill() {
 function SidebarUpdateControl() {
   const t = useTranslate();
   const state = useDesktopUpdateState();
+  // The desktop updates this machine, whose policy the primary environment reports.
+  const updatesDenial = managedUpdatesDenial(usePrimaryManagedPolicy());
   const [isActionPending, setIsActionPending] = useState(false);
   const [isClientDownloadPending, setIsClientDownloadPending] = useState(false);
   const [isConfirmingEverything, setIsConfirmingEverything] = useState(false);
@@ -222,7 +229,9 @@ function SidebarUpdateControl() {
     isClientDownloadPending,
   });
   const idleTooltip =
-    !showUpdateDetails && !showCheckIcon ? getDesktopUpdateIdleTooltip(state, t) : null;
+    !showUpdateDetails && !showCheckIcon
+      ? getDesktopUpdateIdleTooltip(state, t, updatesDenial)
+      : null;
   const clientLabel =
     showClientDownload && state
       ? t(
@@ -309,7 +318,7 @@ function SidebarUpdateControl() {
         if (result.checked) return;
         showDesktopUpdateErrorToast(
           "about.updateCheck.error",
-          result.state.message,
+          updatesDenial ?? result.state.message,
           "about.updateUnsupported",
         );
       })

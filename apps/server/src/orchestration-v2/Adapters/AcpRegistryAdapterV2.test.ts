@@ -1,9 +1,9 @@
-const registryUrl = "https://registry.test/registry.json";
-import * as Deferred from "effect/Deferred";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 
-import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+
 import { assert, describe, it } from "@effect/vitest";
+
 import {
   EnvironmentId,
   MessageId,
@@ -12,53 +12,86 @@ import {
   RunAttemptId,
   RunId,
   type ModelSelection,
-  type OrchestrationV2ProviderThreadNativeMetadata,
   ProviderInstanceId,
   ProviderSessionId,
   ThreadId,
+  type OrchestrationV2ProviderThreadNativeMetadata,
 } from "@t3tools/contracts";
+
 import { pendingBackgroundTurnItems } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
+
 import { resolveSelfInvocation, selfInvocationArgs } from "@t3tools/shared/nodeRuntime";
+
 import * as Exit from "effect/Exit";
+
 import * as Fiber from "effect/Fiber";
+
 import * as DateTime from "effect/DateTime";
+
 import * as Queue from "effect/Queue";
+
 import * as Stream from "effect/Stream";
+
 import * as Effect from "effect/Effect";
+
 import * as FileSystem from "effect/FileSystem";
+
 import * as Layer from "effect/Layer";
+
 import * as Path from "effect/Path";
+
 import * as Schema from "effect/Schema";
+
 import * as HttpClient from "effect/http/HttpClient";
+
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
+
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
+
 import * as EffectAcpErrors from "effect-acp/errors";
 
 import { makeProviderFailure } from "@t3tools/provider-core/server/failure";
+
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
+
 import * as TestProviderHost from "@t3tools/provider-testing/TestProviderHost";
+
 import {
   makeProviderReplayGate,
   type ProviderReplayGate,
 } from "@t3tools/provider-testing/replayGate";
+
 import type { ProviderContinuationRequest } from "@t3tools/provider-core/server/ProviderContinuationRequests";
+
 import * as ServerSettings from "../../serverSettings.ts";
-import type { AcpRegistryAvailableCommands } from "@t3tools/provider-acp-registry/testing";
+
+import type { AcpRegistryLiveConfiguration } from "@t3tools/provider-acp-registry/testing";
+
 import * as AcpRegistrySupport from "@t3tools/provider-acp-registry/server/AcpRegistrySupport";
+
 import * as AcpRegistryRuntimeCoordinator from "@t3tools/provider-acp-registry/server/AcpRegistryRuntimeCoordinator";
+
 import { ACP_SESSION_MODE_OPTION_ID } from "@t3tools/provider-acp/server/sessionConfig";
+
 import * as AcpSessionRuntime from "@t3tools/provider-acp/server/AcpSessionRuntime";
+
 import { t3AcpPromptWithInstructions } from "@t3tools/provider-core/server/orchestrationInstructions";
+
 import { buildRuntimeInstructions } from "@t3tools/provider-core/server/runtimeInstructions";
+
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
+
 import {
   decodeAcpReplayTranscript,
   makeAcpReplayCompletenessAssertion,
   makeAcpReplayRuntime,
   makeTurnInput,
 } from "./AcpAdapterV2.testkit.ts";
+
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
+
 import { AcpRegistryAdapterV2Driver } from "@t3tools/provider-acp-registry/server";
+
 import {
   ACP_REGISTRY_PROVIDER,
   makeAcpRegistryAdapterV2,
@@ -70,7 +103,11 @@ const decodeAcpRegistryAdapterSettings = Schema.decodeUnknownEffect(
   AcpRegistryAdapterV2Driver.configSchema,
 );
 
-const layerHost = TestProviderHost.layer().pipe(Layer.provide(NodeServices.layer));
+const layerHost = TestProviderHost.layer().pipe(
+  Layer.provide(
+    Layer.mergeAll(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer), NodeCrypto.layer),
+  ),
+);
 
 const layerRegistry = Layer.succeed(
   HttpClient.HttpClient,
@@ -113,7 +150,8 @@ const layerInjectedRuntimeCatalog = Layer.mock(AcpRegistrySupport.AcpRegistryCat
 });
 
 const layerTest = Layer.mergeAll(
-  NodeServices.layer,
+  Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),
+  NodeCrypto.layer,
   IdAllocator.layer,
   McpProviderSessions.layer,
   layerHost,
@@ -123,7 +161,6 @@ const layerTest = Layer.mergeAll(
 
 const CLAUDE_ROOT_SESSION = "claude-session";
 
-/** Replay frames of Claude Agent (claude-agent-acp 0.90.0) on ACP v2. */
 const claudeFrames = {
   open: [
     { type: "expect_outbound", frame: { kind: "request", method: "initialize", params: "<any>" } },
@@ -379,6 +416,7 @@ const claudeMarker = (title: string) =>
     sessionUpdate: "session_info_update",
     title,
   });
+
 const claudeChild = [
   claudeFrames.update(CLAUDE_ROOT_SESSION, {
     sessionUpdate: "tool_call_update",
@@ -451,14 +489,17 @@ describe("AcpRegistryAdapterV2", () => {
 
   describe("the agent's own pickers", () => {
     type Frame = Record<string, unknown>;
+
     const outbound = (method: string, params: unknown = "<any>"): Frame => ({
       type: "expect_outbound",
       frame: { kind: "request", method, params },
     });
+
     const answer = (method: string, result: unknown): Frame => ({
       type: "emit_inbound",
       frame: { kind: "response", method, result },
     });
+
     const permissionModeOption = (currentValue: string) => ({
       id: "permission-mode",
       name: "Permission mode",
@@ -667,6 +708,7 @@ describe("AcpRegistryAdapterV2", () => {
         ? [{ group: "models", name: "Models", options: [{ value: "default", name: "Default" }] }]
         : [{ value: "auto", name: "Auto" }],
     });
+
     const configOptionUpdate = (configOptions: ReadonlyArray<unknown>): Frame => ({
       type: "emit_inbound",
       frame: {
@@ -678,11 +720,13 @@ describe("AcpRegistryAdapterV2", () => {
         },
       },
     });
+
     const prompt = (...updates: ReadonlyArray<Frame>): ReadonlyArray<Frame> => [
       outbound("session/prompt"),
       ...updates,
       answer("session/prompt", { stopReason: "end_turn" }),
     ];
+
     const setModel = (modelId: string): ReadonlyArray<Frame> => [
       outbound("session/set_model", { sessionId: "agent-session", modelId }),
       answer("session/set_model", {}),
@@ -784,254 +828,6 @@ describe("AcpRegistryAdapterV2", () => {
         }).pipe(Effect.provide(layerTest), Effect.scoped),
     );
 
-    it.effect("rejects an unadvertised model instead of recording the request as applied", () =>
-      openWithStoredPicks({
-        setup: {
-          configOptions: [
-            {
-              id: "model",
-              category: "model",
-              type: "select",
-              name: "Model",
-              currentValue: "other",
-              options: [{ value: "other", name: "Other" }],
-            },
-          ],
-        },
-        storedModel: "removed-model",
-        pickFrames: [],
-      }).pipe(
-        Effect.flip,
-        Effect.tap((error) =>
-          Effect.sync(() => {
-            assert.include(String(error.cause), "removed-model");
-          }),
-        ),
-        Effect.asVoid,
-        Effect.provide(layerTest),
-        Effect.scoped,
-      ),
-    );
-    const depth = (currentValue = "high") => ({
-      id: "vendor/depth",
-      name: "Reasoning",
-      category: "thought_level",
-      type: "select",
-      currentValue,
-      options: ["low", "high"].map((value) => ({ value, name: value })),
-    });
-    const modelConfig = (currentValue: string) => ({
-      id: "choose-model",
-      category: "model",
-      type: "select",
-      name: "Model",
-      currentValue,
-      options: ["plain", "graded", "boolean"].map((value) => ({ value, name: value })),
-    });
-    it.effect(
-      "keeps two sessions on one instance isolated and restores the native current value",
-      () =>
-        Effect.gen(function* () {
-          const a = yield* openWithStoredPicks({
-            setup: { configOptions: [modelConfig("graded"), depth()] },
-            storedModel: "graded",
-            sessionId: "session-A",
-            pickFrames: [],
-          });
-          const b = yield* openWithStoredPicks({
-            setup: {
-              configOptions: [
-                modelConfig("boolean"),
-                {
-                  id: "vendor/depth",
-                  name: "Thinking",
-                  category: "thought_level",
-                  type: "boolean",
-                  currentValue: true,
-                },
-              ],
-            },
-            storedModel: "boolean",
-            sessionId: "session-B",
-            pickFrames: [],
-          });
-          const stillA = yield* a.runtime.ensureThread({
-            threadId: ThreadId.make("thread-A"),
-            modelSelection: {
-              instanceId: ProviderInstanceId.make("acp-registry-stored-picks"),
-              model: "graded",
-            },
-            runtimePolicy: ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
-              runtimeMode: "approval-required",
-              interactionMode: "default",
-              cwd: "/tmp",
-            }),
-          });
-          assert.equal(stillA.nativeMetadata?.optionDescriptors?.[0]?.currentValue, "high");
-          const restored = yield* openWithStoredPicks({
-            setup: { configOptions: [modelConfig("graded"), depth("low")] },
-            storedModel: "graded",
-            sessionId: "session-A",
-            load: true,
-            pickFrames: [],
-          });
-          assert.equal(a.configurations[0]?.modelSelection?.model, "graded");
-          assert.equal(a.configurations[0]?.optionDescriptors?.[0]?.currentValue, "high");
-          assert.equal(b.configurations[0]?.optionDescriptors?.[0]?.currentValue, true);
-          assert.equal(restored.configurations[0]?.optionDescriptors?.[0]?.currentValue, "low");
-          assert.equal(a.configurations[0]?.optionDescriptors?.[0]?.currentValue, "high");
-        }).pipe(Effect.provide(layerTest), Effect.scoped),
-    );
-    it.effect(
-      "replaces options when switching graded, boolean and plain models and ignores another session's late config",
-      () =>
-        Effect.gen(function* () {
-          const boolean = {
-            id: "vendor/depth",
-            name: "Thinking",
-            category: "thought_level",
-            type: "boolean",
-            currentValue: false,
-          };
-          const { configurations } = yield* openWithStoredPicks({
-            setup: { configOptions: [modelConfig("graded"), depth()] },
-            storedModel: "graded",
-            turnModels: ["boolean", "plain", "graded"],
-            pickFrames: [
-              outbound("session/set_config_option", {
-                sessionId: "agent-session",
-                configId: "choose-model",
-                value: "boolean",
-              }),
-              answer("session/set_config_option", {
-                configOptions: [modelConfig("boolean"), boolean],
-              }),
-              ...prompt(),
-              outbound("session/set_config_option", {
-                sessionId: "agent-session",
-                configId: "choose-model",
-                value: "plain",
-              }),
-              answer("session/set_config_option", { configOptions: [modelConfig("plain")] }),
-              ...prompt(),
-              outbound("session/set_config_option", {
-                sessionId: "agent-session",
-                configId: "choose-model",
-                value: "graded",
-              }),
-              answer("session/set_config_option", {
-                configOptions: [modelConfig("graded"), depth("low")],
-              }),
-              ...prompt({
-                type: "emit_inbound",
-                frame: {
-                  kind: "notification",
-                  method: "session/update",
-                  params: {
-                    sessionId: "old-session",
-                    update: {
-                      sessionUpdate: "config_option_update",
-                      configOptions: [modelConfig("boolean"), boolean],
-                    },
-                  },
-                },
-              }),
-            ],
-          });
-          assert.deepEqual(
-            configurations.map((c) =>
-              c?.optionDescriptors?.map((d) => [d.id, d.type, d.currentValue]),
-            ),
-            [
-              [["vendor/depth", "select", "high"]],
-              [["vendor/depth", "boolean", false]],
-              [],
-              [["vendor/depth", "select", "low"]],
-            ],
-          );
-        }).pipe(Effect.provide(layerTest), Effect.scoped),
-    );
-    it.effect("reports an unsupported option and its unavailable actual value", () =>
-      openWithStoredPicks({
-        setup: { configOptions: [modelConfig("plain")] },
-        storedModel: "plain",
-        storedOptions: [{ id: "vendor/depth", value: "high" }],
-        pickFrames: [],
-      }).pipe(
-        Effect.flip,
-        Effect.tap((error) =>
-          Effect.sync(() => {
-            assert.include(String(error.cause), "does not expose");
-            assert.include(String(error.cause), "actual value is unavailable");
-          }),
-        ),
-        Effect.asVoid,
-        Effect.provide(layerTest),
-        Effect.scoped,
-      ),
-    );
-    it.effect("reports a provider refusal with its reason and actual value", () =>
-      openWithStoredPicks({
-        setup: { configOptions: [modelConfig("graded"), depth("low")] },
-        storedModel: "graded",
-        storedOptions: [{ id: "vendor/depth", value: "high" }],
-        pickFrames: [
-          outbound("session/set_config_option", {
-            sessionId: "agent-session",
-            configId: "vendor/depth",
-            value: "high",
-          }),
-          {
-            type: "emit_inbound",
-            frame: {
-              kind: "response",
-              method: "session/set_config_option",
-              error: { code: -32602, message: "High is unavailable for this account" },
-            },
-          },
-        ],
-      }).pipe(
-        Effect.flip,
-        Effect.tap((error) =>
-          Effect.sync(() => {
-            assert.include(String(error.cause), "High is unavailable for this account");
-            assert.include(String(error.cause), "actual value is 'low'");
-          }),
-        ),
-        Effect.asVoid,
-        Effect.provide(layerTest),
-        Effect.scoped,
-      ),
-    );
-    it.effect("rejects a successful response that kept a different actual value", () =>
-      openWithStoredPicks({
-        setup: { configOptions: [modelConfig("graded"), depth("low")] },
-        storedModel: "graded",
-        storedOptions: [{ id: "vendor/depth", value: "high" }],
-        pickFrames: [
-          outbound("session/set_config_option", {
-            sessionId: "agent-session",
-            configId: "vendor/depth",
-            value: "high",
-          }),
-          answer("session/set_config_option", {
-            configOptions: [modelConfig("graded"), depth("low")],
-          }),
-        ],
-      }).pipe(
-        Effect.flip,
-        Effect.tap((error) =>
-          Effect.sync(() => {
-            assert.include(String(error.cause), "did not apply");
-            assert.include(String(error.cause), "actual value is 'low'");
-          }),
-        ),
-        Effect.asVoid,
-        Effect.provide(layerTest),
-        Effect.scoped,
-      ),
-    );
-
     it.effect.each([
       "config",
       "legacy",
@@ -1106,7 +902,6 @@ describe("AcpRegistryAdapterV2", () => {
       },
     );
 
-    // regression: #19519 models come from session model state, not a hardcoded list
     it.effect("keeps unadvertised default and auto selections agent-controlled", () =>
       Effect.gen(function* () {
         const { configurations } = yield* openWithStoredPicks({
@@ -1155,6 +950,7 @@ describe("AcpRegistryAdapterV2", () => {
         );
       }).pipe(Effect.provide(layerTest), Effect.scoped),
     );
+
     const modelOptions = [
       { id: "fast", name: "Fast", category: "model", type: "boolean", currentValue: false },
       {
@@ -1195,6 +991,7 @@ describe("AcpRegistryAdapterV2", () => {
     it.effect("opens a model from the catalog by writing the first usable model select", () =>
       Effect.gen(function* () {
         const setup = { sessionId: "agent-session", configOptions: modelOptions };
+
         const catalog = acpRegistryProbeResult(ProviderInstanceId.make("acp-registry-mode-pick"), {
           sessionId: setup.sessionId,
           initializeResult: { protocolVersion: 1 },
@@ -1212,13 +1009,18 @@ describe("AcpRegistryAdapterV2", () => {
           },
           modelConfigId: "provider",
         });
+
         assert.deepEqual(catalog.models, [
           { id: "gateway", name: "Gateway", description: null },
           { id: "codex", name: "Codex", description: null },
         ]);
+
         assert.equal(catalog.currentModelId, "gateway");
+
         const model = catalog.models[1]?.id;
+
         assert.isDefined(model);
+
         const opened = yield* openWithStoredPicks({
           setup,
           pickFrames: [
@@ -1235,8 +1037,264 @@ describe("AcpRegistryAdapterV2", () => {
           ],
           storedModel: model,
         });
+
         assert.equal(opened.configurations.at(-1)?.modelSelection?.model, "codex");
       }).pipe(Effect.provide(layerTest), Effect.scoped),
+    );
+
+    it.effect("rejects an unadvertised model instead of recording the request as applied", () =>
+      openWithStoredPicks({
+        setup: {
+          configOptions: [
+            {
+              id: "model",
+              category: "model",
+              type: "select",
+              name: "Model",
+              currentValue: "other",
+              options: [{ value: "other", name: "Other" }],
+            },
+          ],
+        },
+        storedModel: "removed-model",
+        pickFrames: [],
+      }).pipe(
+        Effect.flip,
+        Effect.tap((error) =>
+          Effect.sync(() => {
+            assert.include(String(error.cause), "removed-model");
+          }),
+        ),
+        Effect.asVoid,
+        Effect.provide(layerTest),
+        Effect.scoped,
+      ),
+    );
+
+    const depth = (currentValue = "high") => ({
+      id: "vendor/depth",
+      name: "Reasoning",
+      category: "thought_level",
+      type: "select",
+      currentValue,
+      options: ["low", "high"].map((value) => ({ value, name: value })),
+    });
+
+    const modelConfig = (currentValue: string) => ({
+      id: "choose-model",
+      category: "model",
+      type: "select",
+      name: "Model",
+      currentValue,
+      options: ["plain", "graded", "boolean"].map((value) => ({ value, name: value })),
+    });
+
+    it.effect(
+      "keeps two sessions on one instance isolated and restores the native current value",
+      () =>
+        Effect.gen(function* () {
+          const a = yield* openWithStoredPicks({
+            setup: { configOptions: [modelConfig("graded"), depth()] },
+            storedModel: "graded",
+            sessionId: "session-A",
+            pickFrames: [],
+          });
+          const b = yield* openWithStoredPicks({
+            setup: {
+              configOptions: [
+                modelConfig("boolean"),
+                {
+                  id: "vendor/depth",
+                  name: "Thinking",
+                  category: "thought_level",
+                  type: "boolean",
+                  currentValue: true,
+                },
+              ],
+            },
+            storedModel: "boolean",
+            sessionId: "session-B",
+            pickFrames: [],
+          });
+          const stillA = yield* a.runtime.ensureThread({
+            threadId: ThreadId.make("thread-A"),
+            modelSelection: {
+              instanceId: ProviderInstanceId.make("acp-registry-stored-picks"),
+              model: "graded",
+            },
+            runtimePolicy: ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
+              runtimeMode: "approval-required",
+              interactionMode: "default",
+              cwd: "/tmp",
+            }),
+          });
+          assert.equal(stillA.nativeMetadata?.optionDescriptors?.[0]?.currentValue, "high");
+          const restored = yield* openWithStoredPicks({
+            setup: { configOptions: [modelConfig("graded"), depth("low")] },
+            storedModel: "graded",
+            sessionId: "session-A",
+            load: true,
+            pickFrames: [],
+          });
+          assert.equal(a.configurations[0]?.modelSelection?.model, "graded");
+          assert.equal(a.configurations[0]?.optionDescriptors?.[0]?.currentValue, "high");
+          assert.equal(b.configurations[0]?.optionDescriptors?.[0]?.currentValue, true);
+          assert.equal(restored.configurations[0]?.optionDescriptors?.[0]?.currentValue, "low");
+          assert.equal(a.configurations[0]?.optionDescriptors?.[0]?.currentValue, "high");
+        }).pipe(Effect.provide(layerTest), Effect.scoped),
+    );
+
+    it.effect(
+      "replaces options when switching graded, boolean and plain models and ignores another session's late config",
+      () =>
+        Effect.gen(function* () {
+          const boolean = {
+            id: "vendor/depth",
+            name: "Thinking",
+            category: "thought_level",
+            type: "boolean",
+            currentValue: false,
+          };
+          const { configurations } = yield* openWithStoredPicks({
+            setup: { configOptions: [modelConfig("graded"), depth()] },
+            storedModel: "graded",
+            turnModels: ["boolean", "plain", "graded"],
+            pickFrames: [
+              outbound("session/set_config_option", {
+                sessionId: "agent-session",
+                configId: "choose-model",
+                value: "boolean",
+              }),
+              answer("session/set_config_option", {
+                configOptions: [modelConfig("boolean"), boolean],
+              }),
+              ...prompt(),
+              outbound("session/set_config_option", {
+                sessionId: "agent-session",
+                configId: "choose-model",
+                value: "plain",
+              }),
+              answer("session/set_config_option", { configOptions: [modelConfig("plain")] }),
+              ...prompt(),
+              outbound("session/set_config_option", {
+                sessionId: "agent-session",
+                configId: "choose-model",
+                value: "graded",
+              }),
+              answer("session/set_config_option", {
+                configOptions: [modelConfig("graded"), depth("low")],
+              }),
+              ...prompt({
+                type: "emit_inbound",
+                frame: {
+                  kind: "notification",
+                  method: "session/update",
+                  params: {
+                    sessionId: "old-session",
+                    update: {
+                      sessionUpdate: "config_option_update",
+                      configOptions: [modelConfig("boolean"), boolean],
+                    },
+                  },
+                },
+              }),
+            ],
+          });
+          assert.deepEqual(
+            configurations.map((c) =>
+              c?.optionDescriptors?.map((d) => [d.id, d.type, d.currentValue]),
+            ),
+            [
+              [["vendor/depth", "select", "high"]],
+              [["vendor/depth", "boolean", false]],
+              [],
+              [["vendor/depth", "select", "low"]],
+            ],
+          );
+        }).pipe(Effect.provide(layerTest), Effect.scoped),
+    );
+
+    it.effect("reports an unsupported option and its unavailable actual value", () =>
+      openWithStoredPicks({
+        setup: { configOptions: [modelConfig("plain")] },
+        storedModel: "plain",
+        storedOptions: [{ id: "vendor/depth", value: "high" }],
+        pickFrames: [],
+      }).pipe(
+        Effect.flip,
+        Effect.tap((error) =>
+          Effect.sync(() => {
+            assert.include(String(error.cause), "does not expose");
+            assert.include(String(error.cause), "actual value is unavailable");
+          }),
+        ),
+        Effect.asVoid,
+        Effect.provide(layerTest),
+        Effect.scoped,
+      ),
+    );
+
+    it.effect("reports a provider refusal with its reason and actual value", () =>
+      openWithStoredPicks({
+        setup: { configOptions: [modelConfig("graded"), depth("low")] },
+        storedModel: "graded",
+        storedOptions: [{ id: "vendor/depth", value: "high" }],
+        pickFrames: [
+          outbound("session/set_config_option", {
+            sessionId: "agent-session",
+            configId: "vendor/depth",
+            value: "high",
+          }),
+          {
+            type: "emit_inbound",
+            frame: {
+              kind: "response",
+              method: "session/set_config_option",
+              error: { code: -32602, message: "High is unavailable for this account" },
+            },
+          },
+        ],
+      }).pipe(
+        Effect.flip,
+        Effect.tap((error) =>
+          Effect.sync(() => {
+            assert.include(String(error.cause), "High is unavailable for this account");
+            assert.include(String(error.cause), "actual value is 'low'");
+          }),
+        ),
+        Effect.asVoid,
+        Effect.provide(layerTest),
+        Effect.scoped,
+      ),
+    );
+
+    it.effect("rejects a successful response that kept a different actual value", () =>
+      openWithStoredPicks({
+        setup: { configOptions: [modelConfig("graded"), depth("low")] },
+        storedModel: "graded",
+        storedOptions: [{ id: "vendor/depth", value: "high" }],
+        pickFrames: [
+          outbound("session/set_config_option", {
+            sessionId: "agent-session",
+            configId: "vendor/depth",
+            value: "high",
+          }),
+          answer("session/set_config_option", {
+            configOptions: [modelConfig("graded"), depth("low")],
+          }),
+        ],
+      }).pipe(
+        Effect.flip,
+        Effect.tap((error) =>
+          Effect.sync(() => {
+            assert.include(String(error.cause), "did not apply");
+            assert.include(String(error.cause), "actual value is 'low'");
+          }),
+        ),
+        Effect.asVoid,
+        Effect.provide(layerTest),
+        Effect.scoped,
+      ),
     );
 
     it.effect("rejects a later-option model with the actual current model", () =>
@@ -1259,7 +1317,6 @@ describe("AcpRegistryAdapterV2", () => {
     );
   });
 
-  // regression: #21618 Claude Agent needs ACP v2 for native background lifecycle
   it.effect("launches Claude Agent on ACP v2 unless its instance environment decides", () =>
     Effect.gen(function* () {
       const launchSwitch = Effect.fn("launchSwitch")(function* (
@@ -1354,7 +1411,6 @@ describe("AcpRegistryAdapterV2", () => {
     }).pipe(Effect.provide(layerTest), Effect.scoped),
   );
 
-  // regression: #26695 cancelling a Copilot prompt kills its background agents
   it.effect("never steers Copilot by cancelling its prompt", () =>
     Effect.gen(function* () {
       const steering = Effect.fn("steering")(function* (config: Record<string, unknown>) {
@@ -1759,7 +1815,6 @@ describe("AcpRegistryAdapterV2", () => {
         [
           { usedTokens: 2_500, maxTokens: 10_000, cost: { amount: 0.42, currency: "USD" } },
           { usedTokens: 2_500, maxTokens: 10_000, cost: { amount: 0.42, currency: "USD" } },
-          { usedTokens: 3_000 },
         ],
       );
       assert.deepEqual(childThreads.at(-1)?.nativeMetadata, {
@@ -2453,6 +2508,175 @@ describe("AcpRegistryAdapterV2", () => {
     }).pipe(Effect.provide(layerTest), Effect.scoped),
   );
 
+  it.effect.each([
+    {
+      failure: "a lost session",
+      error: {
+        code: -32603,
+        message: "Internal error",
+        data: {
+          details:
+            "Request session.send failed with message: session event delivery failed: session not found: copilot-session",
+        },
+      },
+      restarts: true,
+    },
+    {
+      failure: "a lost session reported in the message",
+      error: {
+        code: -32603,
+        message:
+          "Request session.send failed with message: session event delivery failed: session not found: copilot-session",
+      },
+      restarts: true,
+    },
+    {
+      failure: "a session-lock timeout",
+      error: {
+        code: -32603,
+        message: "Internal error",
+        data: {
+          details:
+            "session lock unavailable during is_session_generation_current: acquisition timed out",
+        },
+      },
+      restarts: true,
+    },
+    {
+      failure: "a session-lock timeout reported in the message",
+      error: {
+        code: -32603,
+        message:
+          "Request session.send failed with message: session lock unavailable during is_session_generation_current: acquisition timed out",
+      },
+      restarts: true,
+    },
+    {
+      failure: "an unrelated internal error",
+      error: {
+        code: -32603,
+        message: "Request session.send failed with message: Session directory no longer exists",
+      },
+      restarts: false,
+    },
+  ] as const)("runs Copilot's next message after $failure", ({ error, restarts }) =>
+    Effect.gen(function* () {
+      const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const replayDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-copilot-lost-" });
+      const scriptPath = yield* path.fromFileUrl(
+        new URL("../../../scripts/acp-replay-agent.ts", import.meta.url),
+      );
+      const request = (method: string, params: unknown = "<any>") => ({
+        type: "expect_outbound",
+        frame: { kind: "request", method, params },
+      });
+      const respond = (method: string, response: object) => ({
+        type: "emit_inbound",
+        frame: { kind: "response", method, ...response },
+      });
+      const start = (sessionId: string) => [
+        request("initialize"),
+        respond("initialize", {
+          result: { protocolVersion: 1, agentCapabilities: { loadSession: true } },
+        }),
+        request("session/new"),
+        respond("session/new", { result: { sessionId } }),
+      ];
+      const failedPrompt = [
+        ...start("copilot-session"),
+        request("session/prompt"),
+        respond("session/prompt", { error }),
+      ];
+      const completedPrompt = [
+        request("session/prompt"),
+        respond("session/prompt", { result: { stopReason: "end_turn" } }),
+      ];
+      const processes = restarts
+        ? [
+            failedPrompt,
+            [
+              ...start("replacement-session"),
+              request("session/load", {
+                sessionId: "copilot-session",
+                cwd: "<workspace>",
+                mcpServers: "<any>",
+              }),
+              respond("session/load", { result: {} }),
+              ...completedPrompt,
+            ],
+          ]
+        : [[...failedPrompt, ...completedPrompt]];
+      let spawned = 0;
+      const instanceId = ProviderInstanceId.make("copilot-lost-session");
+      const adapter = yield* makeAcpRegistryAdapterV2({
+        selfInvocation: yield* resolveSelfInvocation(),
+        instanceId,
+        settings: yield* decodeAcpRegistryAdapterSettings({ agentId: "github-copilot-cli" }),
+        environment: {},
+        makeRuntime: (runtimeInput) =>
+          Effect.gen(function* () {
+            const index = spawned++;
+            const transcript = yield* decodeAcpReplayTranscript(
+              {
+                provider: ACP_REGISTRY_PROVIDER,
+                protocol: "acp.ndjson-jsonrpc",
+                version: "1",
+                scenario: `copilot-lost-session-${index}`,
+                entries: processes[index] as never,
+              },
+              ACP_REGISTRY_PROVIDER,
+            ).pipe(Effect.orDie);
+            return yield* makeAcpReplayRuntime({
+              transcript,
+              statusPath: path.join(replayDir, `status-${index}.json`),
+              scriptPath,
+              childProcessSpawner,
+              fileSystem,
+            })(runtimeInput);
+          }),
+      }).pipe(Effect.provide(layerInjectedRuntimeCatalog));
+      const threadId = ThreadId.make("thread-copilot-lost-session");
+      const modelSelection = { instanceId, model: "default" } as const;
+      const runtimePolicy = ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
+        runtimeMode: "approval-required",
+        interactionMode: "default",
+        cwd: replayDir,
+      });
+      const runtime = yield* adapter.openSession({
+        threadId,
+        providerSessionId: ProviderSessionId.make("session-copilot-lost-session"),
+        modelSelection,
+        runtimePolicy,
+      });
+      const providerThread = yield* runtime.ensureThread({
+        threadId,
+        modelSelection,
+        runtimePolicy,
+      });
+      const now = yield* DateTime.now;
+      const runTurn = (ordinal: number) =>
+        runtime
+          .startTurn(
+            makeTurnInput({ threadId, providerThread, instanceId, runtimePolicy, now, ordinal }),
+          )
+          .pipe(
+            Effect.andThen(
+              runtime.events.pipe(
+                Stream.filter((event) => event.type === "turn.terminal"),
+                Stream.take(1),
+                Stream.runCollect,
+              ),
+            ),
+            Effect.map(([terminal]) => terminal?.status),
+          );
+      assert.equal(yield* runTurn(1), "failed");
+      assert.equal(yield* runTurn(2), "completed");
+      assert.equal(spawned, restarts ? 2 : 1);
+    }).pipe(Effect.provide(layerTest), Effect.scoped),
+  );
+
   it.live("opens a real ACP child process resolved from registry configuration", () =>
     Effect.gen(function* () {
       const path = yield* Path.Path;
@@ -2586,3 +2810,9 @@ describe("AcpRegistryAdapterV2", () => {
     }).pipe(Effect.provide(layerTest), Effect.scoped),
   );
 });
+
+const registryUrl = "https://registry.test/registry.json";
+
+import * as Deferred from "effect/Deferred";
+
+import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";

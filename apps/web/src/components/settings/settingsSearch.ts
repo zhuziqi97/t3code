@@ -207,6 +207,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [
       "disk storage delete deleted archived threads old inactive merged unchanged worktrees retention days project inherit off custom",
       "Git 工作树清理 删除会话 闲置 已合并 无新提交 保留天数 继承 自定义 闲置工作树 合并工作树",
+      "disk storage automatic delete deleted archived threads old inactive merged settled unchanged worktrees retention days project inherit off custom",
     ],
   },
   {
@@ -231,6 +232,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [
       "disk storage browser screenshots captures rotated logs cleanup retention",
       "产物 日志 浏览器采集 浏览器产物 截图 录屏 轮转日志 清理 保留天数",
+      "disk storage delete old browser artifacts screenshots captures rotated logs cleanup retention",
     ],
   },
   {
@@ -266,6 +268,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/threads",
     scope: "environment-defaults",
     searchTerms: ["备用模型 fallback model provider usage limit new threads"],
+  },
+  {
+    id: "fallback-model",
+    title: "Fallback model",
+    to: "/settings/threads",
+    scope: "environment-defaults",
+    searchTerms: ["fallback agent provider out of usage new threads"],
+    environmentOnly: true,
   },
   {
     id: "default-permissions",
@@ -755,6 +765,7 @@ export const SETTINGS_SEARCH_ITEMS = [
       "Provider update checks 智能体提供方版本检查",
       "installed cli versions newer available codex claude cursor grok opencode",
       "installed cli versions newer available codex claude cursor grok fx opencode",
+      "installed cli versions newer available codex claude cursor grok fx kiro opencode",
     ],
     scope: "environment-defaults",
   },
@@ -1052,6 +1063,7 @@ export const SETTINGS_SEARCH_ITEMS = [
       "智能体 提供方 安装 更新 登录 退出 身份验证 实例 模型 环境变量 配置",
       "ACP 注册表 本地命令 实例 ID 强调色 颜色 参数 可执行文件 原生会话 导入",
       "agents cli codex claude cursor grok fx opencode antigravity google sign in sign out install subscription instances authentication api key models configuration binary path config directory endpoint arguments environment variables display name accent color custom favorite hidden auto compact",
+      "agents cli codex claude cursor grok fx kiro opencode antigravity google sign in sign out install subscription instances authentication api key models configuration binary path config directory codex_home shadow home endpoint arguments environment variables display name accent color custom favorite hidden auto compact native sessions import resume",
     ],
   },
   {
@@ -1257,7 +1269,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "browser-search-engine",
     title: "Search engine",
     to: "/settings/browser",
-    searchTerms: ["address bar duckduckgo google bing brave kagi ecosia custom"],
+    searchTerms: ["address bar duckduckgo google bing brave kagi ecosia custom url"],
   },
   {
     id: "pull-request-links-open-in-app",
@@ -1469,6 +1481,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [
       "windows subsystem linux distro second server projects stop windows backend restart",
       "发行版 子系统 后端 重启",
+      "windows subsystem linux distro second server projects stop windows backend restart wsl only",
     ],
     desktopOnly: true,
     windowsOnly: true,

@@ -1,7 +1,7 @@
 import { ProjectId, type ConveneIntegrationError, type ThreadId } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as Crypto from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as NetAddress from "effect/net/NetAddress";
@@ -57,7 +57,7 @@ const make = Effect.gen(function* () {
   const platform = yield* ConvenePlatform.ConvenePlatform;
   const workspaces = yield* ConveneWorkspaces.ConveneWorkspaces;
   const projections = yield* ProjectionStore.ProjectionStoreV2;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* Crypto.SecureRandom;
   const http = yield* HttpClient.HttpClient;
   const server = yield* HttpServer.HttpServer;
   const endpoint = NetAddress.isInetAddress(server.address)

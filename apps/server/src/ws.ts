@@ -3,8 +3,8 @@ import * as ProjectSetupScriptRunner from "./project/ProjectSetupScriptRunner.ts
 import * as ThreadWorkspaceRecovery from "./orchestration-v2/ThreadWorkspaceRecovery.ts";
 import type * as Rpc from "effect/rpc/Rpc";
 import { OrchestrationDispatchCommandError } from "@t3tools/contracts";
-
-import * as Crypto from "effect/Crypto";
+import * as Context from "effect/Context";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
 import * as PeerLinkRequests from "./peer/PeerLinkRequests.ts";
 import * as PeerLinks from "./peer/PeerLinks.ts";
@@ -13,6 +13,7 @@ import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Base64 from "effect/encoding/Base64";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -58,6 +59,8 @@ import {
   OrchestrationGetTurnDiffError,
   ORCHESTRATION_V2_WS_METHODS,
   ORCHESTRATION_PROTOCOL_QUERY_PARAM,
+  CLIENT_CAPABILITIES_QUERY_PARAM,
+  SETTINGS_SECRET_REFERENCES_CAPABILITY,
   ORCHESTRATION_PROTOCOL_VERSION,
   OrchestrationV2DispatchCommandError,
   OrchestrationV2GetShellSnapshotError,
@@ -114,6 +117,7 @@ import {
 import { RpcGroup, RpcSerialization, RpcServer } from "effect/rpc";
 
 import * as CheckpointDiffQuery from "./checkpointing/CheckpointDiffQuery.ts";
+import * as NativeChildWorkQuery from "./orchestration-v2/NativeChildWorkQuery.ts";
 import * as ServerConfig from "./config.ts";
 import * as EnvironmentTheme from "./environmentTheme.ts";
 import * as Keybindings from "./keybindings.ts";
@@ -276,6 +280,7 @@ import {
 import * as AgentSessionScanner from "./project/AgentSessionScanner.ts";
 import * as AgentSessionImporter from "./project/AgentSessionImporter.ts";
 import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
+import { requestUrl } from "./requestUrl.ts";
 
 const CONFIG_DISCOVERY_TIMEOUT = Duration.seconds(5);
 const isProviderUploadFeedbackError = Schema.is(ProviderUploadFeedbackError);
@@ -320,10 +325,12 @@ const resolveEditorConfig = Effect.fn("ws.resolveEditorConfig")(function* <E, R>
   };
 });
 
-export const withLateEditorConfig = <E, R>(
+export const withLateConfigDiscovery = <E, R>(
   config: ClientServerConfig,
   liveUpdates: Stream.Stream<ServerConfigStreamEvent, E, R>,
   launcher: EditorDiscovery,
+  remoteOpenTargets: RemoteOpenTargets.RemoteOpenTargets["Service"],
+  directEndpoints: Pick<DirectEndpoints.DirectEndpoints["Service"], "resolve">,
 ) => {
   const lateEditorConfig = Stream.fromEffect(launcher.resolveAvailableEditors()).pipe(
     Stream.filter(
@@ -331,7 +338,8 @@ export const withLateEditorConfig = <E, R>(
         editors.join() !== config.availableEditors.join() ||
         (editors.includes("file-manager") && config.shellRevealInFileManagerKind === undefined),
     ),
-    // Leave the unshared reveal probe unbounded so timeouts cannot cancel every attempt on slow hosts.
+    // Unbounded, unlike the snapshot: this exists to deliver a probe that
+    // outlasts the snapshot's timeout.
     Stream.mapEffect((editors) =>
       resolveEditorConfig(editors, launcher.resolveFileManagerRevealKind()),
     ),
@@ -343,7 +351,22 @@ export const withLateEditorConfig = <E, R>(
     Stream.map((editorConfig) => ({ type: "editorsResolved" as const, editorConfig })),
   );
 
-  return Stream.merge(liveUpdates, lateEditorConfig).pipe(
+  const lateRemoteOpenTargets = Stream.fromEffect(remoteOpenTargets.resolveTargets()).pipe(
+    Stream.filter(
+      (targets) => JSON.stringify(targets) !== JSON.stringify(config.remoteOpenTargets ?? []),
+    ),
+    Stream.map((targets) => ({ type: "remoteOpenTargetsResolved" as const, targets })),
+  );
+
+  const lateDirectEndpoints = Stream.fromEffect(directEndpoints.resolve()).pipe(
+    Stream.catchCause(() => Stream.empty),
+    Stream.map((endpoints) => ({ type: "directEndpointsResolved" as const, endpoints })),
+  );
+
+  return Stream.merge(
+    liveUpdates,
+    Stream.merge(lateEditorConfig, Stream.merge(lateRemoteOpenTargets, lateDirectEndpoints)),
+  ).pipe(
     Stream.mapAccum(
       (): ClientServerConfig => config,
       (current, event): readonly [ClientServerConfig, ReadonlyArray<ServerConfigStreamEvent>] => {
@@ -356,6 +379,17 @@ export const withLateEditorConfig = <E, R>(
               ...rest
             } = current;
             const next = { ...rest, ...event.editorConfig };
+            return [next, [{ version: 1, type: "snapshot", config: next }]];
+          }
+          case "remoteOpenTargetsResolved": {
+            const next = { ...current, remoteOpenTargets: event.targets };
+            return [next, [{ version: 1, type: "snapshot", config: next }]];
+          }
+          case "directEndpointsResolved": {
+            if (JSON.stringify(current.directEndpoints ?? []) === JSON.stringify(event.endpoints)) {
+              return [current, []];
+            }
+            const next = { ...current, directEndpoints: event.endpoints };
             return [next, [{ version: 1, type: "snapshot", config: next }]];
           }
           case "keybindingsUpdated":
@@ -373,6 +407,31 @@ export const withLateEditorConfig = <E, R>(
   );
 };
 
+// Discoveries run side by side so the slowest one, not their sum, bounds the
+// server config snapshot. Each degrades on timeout rather than failing it.
+export const resolveOpenDiscoveryForConfig = <T, D, E1, R1, E2, R2, E3, R3, E4, R4>(discovery: {
+  readonly editors: Effect.Effect<ReadonlyArray<EditorId>, E1, R1>;
+  readonly fileManagerRevealKind: Effect.Effect<FileManagerRevealKind | undefined, E2, R2>;
+  readonly remoteOpenTargets: Effect.Effect<ReadonlyArray<T>, E3, R3>;
+  readonly directEndpoints: Effect.Effect<ReadonlyArray<D>, E4, R4>;
+}) =>
+  Effect.all(
+    {
+      editorConfig: resolveAvailableEditorsForConfig(discovery.editors).pipe(
+        Effect.flatMap((availableEditors) =>
+          resolveEditorConfig(
+            availableEditors,
+            resolveFileManagerRevealKindForConfig(discovery.fileManagerRevealKind),
+          ),
+        ),
+      ),
+      // Same discovery-with-timeout treatment as editors: a slow probe must
+      // not stall server.getConfig, so it degrades to an empty list.
+      remoteOpenTargets: resolveAvailableEditorsForConfig(discovery.remoteOpenTargets),
+      directEndpoints: resolveAvailableEditorsForConfig(discovery.directEndpoints),
+    },
+    { concurrency: "unbounded" },
+  ).pipe(Effect.map(({ editorConfig, ...endpoints }) => ({ ...editorConfig, ...endpoints })));
 function withoutWorkspaceSnapshots(providers: ReadonlyArray<ServerProvider>): ServerProvider[] {
   return providers.map(({ workspaceSnapshots: _workspaceSnapshots, ...provider }) => provider);
 }
@@ -650,6 +709,11 @@ function hasCompatibleOrchestrationProtocol(url: URL): boolean {
   );
 }
 
+function readSettingsClient(url: URL) {
+  const capabilities = url.searchParams.get(CLIENT_CAPABILITIES_QUERY_PARAM)?.split(",") ?? [];
+  return { secretReferences: capabilities.includes(SETTINGS_SECRET_REFERENCES_CAPABILITY) };
+}
+
 function shouldUseBoundedThreadSnapshot(input: {
   readonly acceptBoundedSnapshot?: boolean;
   readonly acceptDeferredWork?: boolean;
@@ -659,7 +723,7 @@ function shouldUseBoundedThreadSnapshot(input: {
 
 // Keep telemetry per socket; several client types can connect simultaneously.
 function readClientAnalyticsProps(request: HttpServerRequest.HttpServerRequest) {
-  const url = HttpServerRequest.toURL(request);
+  const url = requestUrl(request);
   if (Option.isNone(url)) {
     return {};
   }
@@ -713,6 +777,7 @@ const canReplayPersistedRange = Effect.fnUntraced(function* (
   if (replayGap < 0 || replayGap > maxGap) {
     return false;
   }
+  if (afterSequence < (yield* applicationEvents.prunedThroughSequence)) return false;
   const stats = yield* applicationEvents.getReplayStats({
     afterSequence,
     throughSequence: headSequence,
@@ -800,7 +865,7 @@ export const subscribeOrchestrationV2Thread = Effect.fn("ws.orchestrationV2.subs
           Stream.map((stored) => ({
             kind: "event" as const,
             sequence: stored.sequence,
-            event: projectDomainEventForWire(stored.event),
+            event: stored.event,
           })),
           coalesceThreadLiveStream,
           Stream.mapError(
@@ -901,7 +966,21 @@ export const subscribeOrchestrationV2Thread = Effect.fn("ws.orchestrationV2.subs
             }),
         ),
       );
-      if (input.afterSequence > highWater) {
+      const prunedThrough = yield* applicationEvents.prunedThroughSequence.pipe(
+        Effect.mapError(
+          (cause) =>
+            new OrchestrationV2GetThreadProjectionError({
+              threadId: input.threadId,
+              message: `Failed to prepare orchestration V2 thread ${input.threadId} replay`,
+              cause,
+            }),
+        ),
+      );
+      // An idle thread's cursor sits at its own high-water: nothing was missed, so replay nothing.
+      if (
+        input.afterSequence > highWater ||
+        (input.afterSequence < highWater && input.afterSequence < prunedThrough)
+      ) {
         return yield* snapshotThenLive();
       }
       const stats = yield* applicationEvents
@@ -942,9 +1021,25 @@ export const subscribeOrchestrationV2Thread = Effect.fn("ws.orchestrationV2.subs
         // Retained creation events may describe deleted threads; replace replay only if a snapshot exists.
         if (shell !== null) return yield* snapshotThenLive();
       }
-      const replay = coalesceLiveUpdatedEvents(
-        yield* loadReplayThrough(input.afterSequence, highWater),
-      );
+      const replayed = yield* loadReplayThrough(input.afterSequence, highWater);
+      // Pruning publishes its boundary before deleting, so a pass during the read shows up here.
+      if (
+        input.afterSequence < highWater &&
+        input.afterSequence <
+          (yield* applicationEvents.prunedThroughSequence.pipe(
+            Effect.mapError(
+              (cause) =>
+                new OrchestrationV2GetThreadProjectionError({
+                  threadId: input.threadId,
+                  message: `Failed to prepare orchestration V2 thread ${input.threadId} replay`,
+                  cause,
+                }),
+            ),
+          ))
+      ) {
+        return yield* snapshotThenLive();
+      }
+      const replay = coalesceLiveUpdatedEvents(replayed);
       const plan = decideThreadResume({
         afterSequence: input.afterSequence,
         highWater,
@@ -1052,13 +1147,36 @@ export const subscribeOrchestrationV2Shell = Effect.fn("ws.orchestrationV2.subsc
     const projectShellItems = Effect.fn("ws.orchestrationV2.projectShellItems")(function* (
       events: ReadonlyArray<ShellApplicationEvent>,
     ) {
+      const coalesced = coalesceShellApplicationEvents(events);
+      const threadIds = coalesced.flatMap((stored) =>
+        "aggregateKind" in stored ? [] : [stored.event.threadId],
+      );
+      // A failed batch can't name its thread, so the scalar reads below report which one is bad.
+      const batch =
+        threadIds.length > 1
+          ? yield* threadManagement
+              .getShellSnapshot({ threadIds })
+              .pipe(Effect.orElseSucceed(() => null))
+          : null;
+      const batchedShells =
+        batch === null
+          ? null
+          : new Map(
+              [...batch.threads, ...batch.archivedThreads].map(
+                (shell) => [shell.id, shell] as const,
+              ),
+            );
       return yield* Effect.forEach(
-        coalesceShellApplicationEvents(events),
+        coalesced,
         Effect.fn("ws.refreshWork")(function* (stored) {
           if ("aggregateKind" in stored) {
             return yield* projectItem(stored);
           }
-          const shell = yield* threadManagement.getThreadShell(stored.event.threadId);
+          const threadId = stored.event.threadId;
+          const shell =
+            batchedShells === null
+              ? yield* threadManagement.getThreadShell(threadId)
+              : (batchedShells.get(threadId) ?? null);
           return shellStreamItemFromThreadShell({ stored, shell });
         }),
         { concurrency: 8 },
@@ -1154,31 +1272,38 @@ export const subscribeOrchestrationV2Shell = Effect.fn("ws.orchestrationV2.subsc
         });
       }
 
-      const highWater = yield* applicationEvents.latestApplicationSequence;
-      if (!(yield* canReplayPersistedRange(input.afterSequence, highWater, SHELL_RESUME_MAX_GAP))) {
+      const fromSnapshot = Effect.gen(function* () {
         const loaded = yield* loadSnapshot();
         return composeShellStreamWithEnrichment({
           initial: initialSnapshotItems(loaded),
           tail: completionThenLive(loaded.snapshot.snapshotSequence),
           enrichment: enrichmentRefreshes,
         });
+      });
+      const highWater = yield* applicationEvents.latestApplicationSequence;
+      if (!(yield* canReplayPersistedRange(input.afterSequence, highWater, SHELL_RESUME_MAX_GAP))) {
+        return yield* fromSnapshot;
       }
 
       subagentThreadIds = new Set(yield* threadManagement.listActiveSubagentThreadIds());
 
       const loaded = yield* loadProjectMetadataSnapshot(highWater);
-      const replay = toShellStream(
-        applicationEvents
-          .readApplicationEvents({
-            afterSequence: input.afterSequence,
-            throughSequence: highWater,
-            // A row a newer build wrote (e.g. after a downgrade) must not fail
-            // every shell resubscribe. The live tail below resumes from
-            // highWater, so a dropped row never hides later events.
-            skipUnknownEventTypes: true,
-          })
-          .pipe(Stream.filter(filterSubagentTranscript)),
-      );
+      // Read before replying: the range is budgeted above, and a prune pass during the read
+      // publishes its boundary first, so the recheck below catches deleted rows.
+      const replayed = yield* applicationEvents
+        .readApplicationEvents({
+          afterSequence: input.afterSequence,
+          throughSequence: highWater,
+          // A row a newer build wrote (e.g. after a downgrade) must not fail
+          // every shell resubscribe. The live tail below resumes from
+          // highWater, so a dropped row never hides later events.
+          skipUnknownEventTypes: true,
+        })
+        .pipe(Stream.filter(filterSubagentTranscript), Stream.runCollect);
+      if (input.afterSequence < (yield* applicationEvents.prunedThroughSequence)) {
+        return yield* fromSnapshot;
+      }
+      const replay = toShellStream(Stream.fromIterable(replayed));
       return composeShellStreamWithEnrichment({
         initial: initialEnrichmentItems(loaded),
         tail: Stream.concat(Stream.concat(replay, completionMarker), liveFrom(highWater)),
@@ -1212,6 +1337,7 @@ const makeWsRpcLayer = (
   clientAnalyticsProps: Readonly<Record<string, unknown>>,
   serverBrowser: ServerBrowser.ServerBrowser["Service"],
   reportProfiles: ServerBrowser.ProfileReporter,
+  settingsClient: { readonly secretReferences: boolean },
 ) =>
   Layer.unwrap(
     Effect.gen(function* () {
@@ -1274,13 +1400,13 @@ const makeWsRpcLayer = (
       const deviceHostContext =
         yield* Effect.context<Effect.Services<ReturnType<typeof remoteSshDeviceHosts>>>();
       const orchestrationEngine = yield* Orchestrator.OrchestratorV2;
-      const crypto = yield* Crypto.Crypto;
+      const random = yield* SecureRandom.SecureRandom;
       // RPC client ids are only unique within one socket; terminals share viewers across sockets.
-      const terminalViewerPrefix = yield* crypto.randomUUIDv4().pipe(Effect.orDie);
+      const terminalViewerPrefix = yield* random.uuidV4();
       const terminalViewerId = (metadata: { readonly client: { readonly id: number } }) =>
         `${terminalViewerPrefix}:${metadata.client.id}`;
       const serverCommandId = (tag: string) =>
-        crypto.randomUUIDv4().pipe(
+        random.uuidV4().pipe(
           Effect.orDie,
           Effect.map((id) => CommandId.make(`server:${tag}:${id}`)),
         );
@@ -1303,6 +1429,7 @@ const makeWsRpcLayer = (
       const agentSessionScanner = yield* AgentSessionScanner.AgentSessionScanner;
       const agentSessionImporter = yield* AgentSessionImporter.AgentSessionImporter;
       const checkpointDiffQuery = yield* CheckpointDiffQuery.CheckpointDiffQuery;
+      const nativeChildWork = yield* NativeChildWorkQuery.NativeChildWorkQuery;
       const keybindings = yield* Keybindings.Keybindings;
       const environmentTheme = yield* EnvironmentTheme.EnvironmentThemeService;
       const externalLauncher = yield* ExternalLauncher.ExternalLauncher;
@@ -1513,7 +1640,7 @@ const makeWsRpcLayer = (
               provider?.models.find((candidate) => candidate.isDefault)?.slug ??
               provider?.models[0]?.slug ??
               "default";
-            const commandId = CommandId.make(yield* crypto.randomUUIDv4().pipe(Effect.orDie));
+            const commandId = CommandId.make(yield* random.uuidV4());
             const launched = yield* Effect.result(
               startup.enqueueCommand(
                 threadLaunch.launch({
@@ -1717,6 +1844,7 @@ const makeWsRpcLayer = (
       const loadServerConfig = Effect.fn("ws.loadServerConfig")(function* (options: {
         readonly usageLimitsCommand: boolean;
         readonly workspaceSnapshotsOnDemand: boolean;
+        readonly deferNetworkDiscovery: boolean;
       }) {
         const keybindingsConfig = yield* keybindings.loadConfigState;
         const currentProviders = yield* providerRegistry.getProviders;
@@ -1728,15 +1856,22 @@ const makeWsRpcLayer = (
           : commandProviders;
         const settings = ServerSettings.redactServerSettingsForClient(
           yield* serverSettings.getSettings,
+          settingsClient,
         );
         const environment = yield* serverEnvironment.getDescriptor;
         const auth = yield* serverAuth.getDescriptor();
         const scratchWorkspaceRoot = yield* managedFolders.scratchRoot;
         const lastEventLoopStall = yield* eventLoopMonitor.latestNoticeableStall;
-        const editorConfig = yield* resolveEditorConfig(
-          yield* resolveAvailableEditorsForConfig(externalLauncher.resolveAvailableEditors()),
-          resolveFileManagerRevealKindForConfig(externalLauncher.resolveFileManagerRevealKind()),
-        );
+        const discovery = yield* resolveOpenDiscoveryForConfig({
+          editors: externalLauncher.resolveAvailableEditors(),
+          fileManagerRevealKind: externalLauncher.resolveFileManagerRevealKind(),
+          remoteOpenTargets: options.deferNetworkDiscovery
+            ? Effect.succeed([])
+            : remoteOpenTargets.resolveTargets(),
+          directEndpoints: options.deferNetworkDiscovery
+            ? directEndpoints.resolveAvailable()
+            : directEndpoints.resolve(),
+        });
 
         return {
           environment,
@@ -1746,11 +1881,7 @@ const makeWsRpcLayer = (
           keybindings: keybindingsConfig.keybindings,
           issues: keybindingsConfig.issues,
           providers,
-          ...editorConfig,
-          remoteOpenTargets: yield* resolveAvailableEditorsForConfig(
-            remoteOpenTargets.resolveTargets(),
-          ),
-          directEndpoints: yield* resolveAvailableEditorsForConfig(directEndpoints.resolve()),
+          ...discovery,
           observability: {
             logsDirectoryPath: config.logsDir,
             localTracingEnabled: true,
@@ -1780,6 +1911,9 @@ const makeWsRpcLayer = (
             otlpLogsEnabled: config.otlpLogsUrl !== undefined,
           },
           settings,
+          ...(serverSettings.managedPolicy === undefined
+            ? {}
+            : { managedPolicy: serverSettings.managedPolicy }),
           shellResumeCompletionMarker: true,
           shellThreadFamilies: true,
           shellOlderSettled: true,
@@ -1911,6 +2045,8 @@ const makeWsRpcLayer = (
           threadManagement.forceStopThread(input),
         [ORCHESTRATION_V2_WS_METHODS.getWorkflowScript]: (input) =>
           readWorkflowScript({ scriptPath: input.scriptPath }),
+        [ORCHESTRATION_V2_WS_METHODS.getNativeChildWork]: (input) =>
+          nativeChildWork.getNativeChildWork(input),
         [ORCHESTRATION_V2_WS_METHODS.getTurnItem]: (input) =>
           threadManagement.getTurnItem(input).pipe(
             Effect.mapError(
@@ -2168,7 +2304,11 @@ const makeWsRpcLayer = (
           ),
         [WS_METHODS.serverProbe]: (_input) => Effect.succeed({}),
         [WS_METHODS.serverGetConfig]: (_input) =>
-          loadServerConfig({ usageLimitsCommand: false, workspaceSnapshotsOnDemand: false }),
+          loadServerConfig({
+            usageLimitsCommand: false,
+            workspaceSnapshotsOnDemand: false,
+            deferNetworkDiscovery: false,
+          }),
         [WS_METHODS.serverSearchAcpRegistry]: (input) =>
           acpRegistryCatalog
             .search(input)
@@ -2268,10 +2408,64 @@ const makeWsRpcLayer = (
               }),
             ),
           ),
-        [WS_METHODS.serverRefreshProviders]: Effect.fn("ws.serverRefreshProviders")(
-          function* (input) {
-            if (input.instanceId === undefined) yield* usageLimitSources.requestRefresh;
-            const providers = yield* providerRegistry.startRefresh(input);
+        [WS_METHODS.serverRefreshProviders]:
+          /* Request instrumentation already owns the span; keep this helper in that context. */
+          Effect.fnUntraced(function* (input) {
+            if (input.refreshModels) {
+              yield* providerRegistry.invalidateModelCaches({
+                instanceId: input.instanceId,
+                cwd: input.cwd,
+                fresh: input.fresh,
+              });
+            }
+            if (input.reloadSecrets === true && input.instanceId === undefined) {
+              yield* invalidateSettingsSecrets(
+                yield* SecretResolver.SecretResolver,
+                serverSettings.getSettings,
+              );
+            }
+            // Await refresh; RPC scope closure would interrupt a fork before the hub answered.
+            if (input.instanceId === undefined) {
+              yield* usageLimitSources.refresh;
+            }
+            let providers = yield* input.cwd !== undefined && input.instanceId !== undefined
+              ? providerRegistry.refreshWorkspaceSnapshot({
+                  instanceId: input.instanceId,
+                  cwd: input.cwd,
+                  fresh: input.fresh === true,
+                })
+              : input.reloadSecrets === true
+                ? providerRegistry.reloadSecretsAndRefresh(input.instanceId)
+                : input.instanceId !== undefined
+                  ? providerRegistry.refreshInstance(input.instanceId)
+                  : providerRegistry.refresh();
+            if (input.refreshModels) {
+              const instances = yield* providerInstances.listInstances;
+              for (const instance of instances) {
+                if (
+                  !instance.refreshModels ||
+                  (input.instanceId !== undefined && input.instanceId !== instance.instanceId) ||
+                  !providers.some(
+                    (provider) =>
+                      provider.instanceId === instance.instanceId &&
+                      provider.enabled &&
+                      provider.installed,
+                  )
+                )
+                  continue;
+                yield* instance.refreshModels().pipe(
+                  Effect.mapError(
+                    (error) =>
+                      new ProviderSetupError({
+                        instanceId: instance.instanceId,
+                        operation: "refresh-models",
+                        detail: error.detail,
+                      }),
+                  ),
+                );
+                providers = yield* providerRegistry.refreshInstance(instance.instanceId);
+              }
+            }
             if (input.workspaceSnapshotsOnDemand !== true) return { providers };
             return {
               providers: providers.map(({ workspaceSnapshots, ...provider }) =>
@@ -2286,8 +2480,7 @@ const makeWsRpcLayer = (
                   : provider,
               ),
             };
-          },
-        ),
+          }),
         [WS_METHODS.serverCancelProviderRefresh]: (input) =>
           providerRegistry
             .cancelRefresh(input.instanceId, input.operationId)
@@ -2408,14 +2601,12 @@ const makeWsRpcLayer = (
         [WS_METHODS.serverUpsertKeybinding]:
           /* Request instrumentation already owns the span; keep this helper in that context. */
           Effect.fnUntraced(function* (rule) {
-            const keybindingsConfig = yield* keybindings.upsertKeybindingRule(rule);
-            return { keybindings: keybindingsConfig, issues: [] };
+            return yield* keybindings.upsertKeybindingRule(rule);
           }),
         [WS_METHODS.serverRemoveKeybinding]:
           /* Request instrumentation already owns the span; keep this helper in that context. */
           Effect.fnUntraced(function* (rule) {
-            const keybindingsConfig = yield* keybindings.removeKeybindingRule(rule);
-            return { keybindings: keybindingsConfig, issues: [] };
+            return yield* keybindings.removeKeybindingRule(rule);
           }),
         [WS_METHODS.conveneStatus]: () => conveneConnection.status,
         [WS_METHODS.conveneSubscribeStatus]: () => conveneConnection.changes,
@@ -2451,7 +2642,7 @@ const makeWsRpcLayer = (
             const settings = yield* providerInstanceMutation === undefined
               ? serverSettings.updateSettings(nextPatch)
               : serverSettings.updateProviderInstance(providerInstanceMutation, nextPatch);
-            return ServerSettings.redactServerSettingsForClient(settings);
+            return ServerSettings.redactServerSettingsForClient(settings, settingsClient);
           }),
         [WS_METHODS.serverDiscoverSourceControl]: (_input) => sourceControlDiscovery.discover,
         [WS_METHODS.serverGetTraceDiagnostics]: (_input) =>
@@ -2609,6 +2800,7 @@ const makeWsRpcLayer = (
         [WS_METHODS.sourceControlSignInCancel]: (input) => sourceControlSignIn.cancel(input),
         [WS_METHODS.sourceControlAppAccess]: (input) => sourceControlSignIn.access(input),
         [WS_METHODS.sourceControlStarred]: (input) => sourceControlSignIn.starred(input),
+        [WS_METHODS.sourceControlStar]: (input) => sourceControlSignIn.star(input),
         [WS_METHODS.projectCloneStart]: (input) =>
           projectCloneTracker.start(input, {
             createProject: (project) =>
@@ -3029,9 +3221,19 @@ const makeWsRpcLayer = (
               // Buffer changes through discovery and the initial snapshot's RPC ACK wait.
               const keybindingsChanges = yield* keybindings.subscribeChanges;
               const settingsChanges = yield* serverSettings.subscribeChanges;
+              const remoteTargets = yield* Effect.forkScoped(remoteOpenTargets.resolveTargets(), {
+                startImmediately: true,
+              });
+              const directResult = yield* Effect.forkScoped(
+                directEndpoints
+                  .resolve()
+                  .pipe(Effect.catchCause(() => directEndpoints.resolveAvailable())),
+                { startImmediately: true },
+              );
               const config = yield* loadServerConfig({
                 usageLimitsCommand,
                 workspaceSnapshotsOnDemand,
+                deferNetworkDiscovery: true,
               });
               const keybindingsUpdates = keybindingsChanges.pipe(
                 Stream.map((event) => ({
@@ -3099,7 +3301,9 @@ const makeWsRpcLayer = (
                     )
                   : Stream.empty;
               const settingsUpdates = settingsChanges.pipe(
-                Stream.map((settings) => ServerSettings.redactServerSettingsForClient(settings)),
+                Stream.map((settings) =>
+                  ServerSettings.redactServerSettingsForClient(settings, settingsClient),
+                ),
                 Stream.map((settings) => ({
                   version: 1 as const,
                   type: "settingsUpdated" as const,
@@ -3118,9 +3322,24 @@ const makeWsRpcLayer = (
                 ),
               );
 
+              const remoteResult = yield* Effect.sync(() => remoteTargets.pollUnsafe());
+              const initialConfig =
+                remoteResult?._tag === "Success"
+                  ? { ...config, remoteOpenTargets: remoteResult.value }
+                  : config;
               return Stream.concat(
-                rpcInitialItems([{ version: 1 as const, type: "snapshot" as const, config }]),
-                withLateEditorConfig(config, liveUpdates, externalLauncher),
+                rpcInitialItems([
+                  { version: 1 as const, type: "snapshot" as const, config: initialConfig },
+                ]),
+                withLateConfigDiscovery(
+                  initialConfig,
+                  liveUpdates,
+                  externalLauncher,
+                  {
+                    resolveTargets: () => Fiber.join(remoteTargets),
+                  },
+                  { resolve: () => Fiber.join(directResult) },
+                ),
               );
             }),
           ),
@@ -3268,8 +3487,8 @@ const makeWsRoutes = Effect.gen(function* () {
     "/ws",
     Effect.gen(function* () {
       const request = yield* HttpServerRequest.HttpServerRequest;
-      const requestUrl = HttpServerRequest.toURL(request);
-      if (Option.isNone(requestUrl) || !hasCompatibleOrchestrationProtocol(requestUrl.value)) {
+      const url = requestUrl(request);
+      if (Option.isNone(url) || !hasCompatibleOrchestrationProtocol(url.value)) {
         return HttpServerResponse.jsonUnsafe(
           {
             code: "orchestration_protocol_incompatible",
@@ -3329,6 +3548,7 @@ const makeWsRoutes = Effect.gen(function* () {
             clientAnalyticsProps,
             serverBrowser,
             yield* serverBrowser.profileReporter,
+            readSettingsClient(url.value),
           ).pipe(
             Layer.provide(Layer.succeed(NpmRelease.NpmRelease, npmRelease)),
             Layer.provide(Layer.succeed(SecretResolver.SecretResolver, secretResolver)),
@@ -3445,7 +3665,7 @@ export const layer: Layer.Layer<
   | HttpRouter.Request<"Requires", AcpRegistrySupport.AcpRegistryCatalog>
   | HttpRouter.Request<"Requires", AcpRegistryRuntimeCoordinator.AcpRegistryRuntimeCoordinator>
   | HttpRouter.Request<"Requires", ProviderInstanceRegistry.ProviderInstanceRegistry>
-  | HttpRouter.Request<"Requires", Crypto.Crypto>
+  | HttpRouter.Request<"Requires", SecureRandom.SecureRandom>
   | HttpRouter.Request<"Requires", ProviderSessionManager.ProviderSessionManagerV2>
   | HttpRouter.Request<"Requires", ProviderAuthService.ProviderAuthService>
   | HttpRouter.Request<"Requires", McpAppRequests.McpAppRequests>

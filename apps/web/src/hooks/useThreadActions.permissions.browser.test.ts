@@ -1,8 +1,4 @@
 import { EnvironmentAuthorizationError } from "@t3tools/contracts";
-import "~/index.css";
-import { act, render as renderTestUi, type Screen } from "../../test/render";
-import { createElement, useLayoutEffect } from "react";
-
 import {
   AuthOrchestrationOperateScope,
   AuthSourceControlWriteScope,
@@ -11,8 +7,17 @@ import {
   ThreadId,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
+
+import "~/index.css";
+
+import { act, render as renderTestUi, type Screen } from "../../test/render";
+
+import { createElement, useLayoutEffect } from "react";
+
 import * as Cause from "effect/Cause";
+
 import { AsyncResult } from "effect/reactivity";
+
 import { describe, expect, it, vi } from "vite-plus/test";
 
 function deferred<T>() {
@@ -46,12 +51,14 @@ vi.mock("@tanstack/react-router", async (original) => ({
   ...(await original<typeof import("@tanstack/react-router")>()),
   useRouter: () => ({ state: { matches: [], location: { href: "/" } }, navigate: async () => {} }),
 }));
+
 vi.mock("../state/session", async (original) => ({
   ...(await original<typeof import("../state/session")>()),
   environmentSession: { sessionStateAtom: "session" },
   readEnvironmentScope: (environmentId: string, scope: string) =>
     state.scopes.get(environmentId)?.has(scope) === true,
 }));
+
 vi.mock("../state/use-atom-command", async (original) => ({
   ...(await original<typeof import("../state/use-atom-command")>()),
   useAtomCommand:
@@ -67,6 +74,7 @@ vi.mock("../state/use-atom-command", async (original) => ({
       return AsyncResult.success(undefined);
     },
 }));
+
 vi.mock("../state/use-atom-query-runner", async (original) => ({
   ...(await original<typeof import("../state/use-atom-query-runner")>()),
   useAtomQueryRunner: () => async (environmentId: string) =>
@@ -78,6 +86,7 @@ vi.mock("../state/use-atom-query-runner", async (original) => ({
           auth: { serverUpdateScope: "environment:maintain" },
         }),
 }));
+
 vi.mock("../state/threads", async (original) => ({
   ...(await original<typeof import("../state/threads")>()),
   threadEnvironment: Object.fromEntries(
@@ -96,10 +105,12 @@ vi.mock("../state/threads", async (original) => ({
     ].map((action) => [action, action]),
   ),
 }));
+
 vi.mock("../state/vcs", async (original) => ({
   ...(await original<typeof import("../state/vcs")>()),
   vcsEnvironment: { removeWorktree: "removeWorktree", refreshStatus: "refreshStatus" },
 }));
+
 vi.mock("../state/entities", async (original) => ({
   ...(await original<typeof import("../state/entities")>()),
   readEnvironmentServerConfigLoaded: () => true,
@@ -114,11 +125,13 @@ vi.mock("../state/entities", async (original) => ({
       .map((thread) => ({ environmentId, threadId: thread.id })),
   readProject: () => ({ workspaceRoot: "/project" }),
 }));
+
 vi.mock("../components/Sidebar.logic", async (original) => ({
   ...(await original<typeof import("../components/Sidebar.logic")>()),
   getFallbackThreadIdAfterDelete: () => null,
   pinOrderKeyBetween: () => "a",
 }));
+
 vi.mock("../composerDraftStore", async (original) => ({
   ...(await original<typeof import("../composerDraftStore")>()),
   useComposerDraftStore: (select: (store: unknown) => unknown) =>
@@ -127,6 +140,7 @@ vi.mock("../composerDraftStore", async (original) => ({
       clearProjectDraftThreadById: () => state.localEffects.push("clear-project-draft"),
     }),
 }));
+
 vi.mock("../terminalUiStateStore", async (original) => ({
   ...(await original<typeof import("../terminalUiStateStore")>()),
   useTerminalUiStateStore: (select: (store: unknown) => unknown) =>
@@ -134,6 +148,7 @@ vi.mock("../terminalUiStateStore", async (original) => ({
       clearTerminalUiState: () => state.localEffects.push("clear-terminal-ui"),
     }),
 }));
+
 vi.mock("../uiStateStore", async (original) => ({
   ...(await original<typeof import("../uiStateStore")>()),
   useUiStateStore: (select: (store: unknown) => unknown) =>
@@ -141,23 +156,28 @@ vi.mock("../uiStateStore", async (original) => ({
       markThreadVisited: () => state.localEffects.push("mark-visited"),
     }),
 }));
+
 vi.mock("../lib/archivedThreadsState", async (original) => ({
   ...(await original<typeof import("../lib/archivedThreadsState")>()),
   refreshArchivedThreadsForEnvironment: () => state.localEffects.push("refresh-archive"),
 }));
+
 vi.mock("../lib/composerDraftUploads", async (original) => ({
   ...(await original<typeof import("../lib/composerDraftUploads")>()),
   releaseComposerDraftUploads: () => state.localEffects.push("release-uploads"),
 }));
+
 vi.mock("../localApi", async (original) => ({
   ...(await original<typeof import("../localApi")>()),
   readLocalApi: () => ({ dialogs: { confirm: state.confirm } }),
 }));
+
 vi.mock("../threadRoutes", async (original) => ({
   ...(await original<typeof import("../threadRoutes")>()),
   resolveThreadRouteRef: () => null,
   buildThreadRouteParams: (ref: ScopedThreadRef) => ref,
 }));
+
 vi.mock("../components/ui/toast", async (original) => ({
   ...(await original<typeof import("../components/ui/toast")>()),
   stackedThreadToast: (toast: unknown) => toast,
@@ -167,10 +187,12 @@ vi.mock("../components/ui/toast", async (original) => ({
     },
   },
 }));
+
 vi.mock("./useHandleNewThread", async (original) => ({
   ...(await original<typeof import("./useHandleNewThread")>()),
   useNewThreadHandler: () => async () => {},
 }));
+
 vi.mock("./useSettings", async (original) => ({
   ...(await original<typeof import("./useSettings")>()),
   useClientSettings: (select: (settings: unknown) => unknown) =>
@@ -184,9 +206,13 @@ vi.mock("./useSettings", async (original) => ({
 import { useThreadActions } from "./useThreadActions";
 
 const primary = EnvironmentId.make("primary");
+
 const secondary = EnvironmentId.make("secondary");
+
 const target = { environmentId: secondary, threadId: ThreadId.make("thread") };
+
 type ThreadActions = ReturnType<typeof useThreadActions>;
+
 const operations = [
   {
     name: "archive",
@@ -225,6 +251,7 @@ const operations = [
 ] as const;
 
 const hookRenderers: Screen[] = [];
+
 async function renderActions() {
   let result!: ReturnType<typeof useThreadActions>;
   function Harness() {
@@ -387,6 +414,7 @@ describe("thread action permissions", () => {
 });
 
 let renderStack: AsyncDisposableStack;
+
 async function setupLifecycle() {
   await using stack = new AsyncDisposableStack();
   renderStack = stack;

@@ -1,47 +1,75 @@
-import type { RuntimeMode } from "@t3tools/contracts";
+import type { EnvironmentId, RuntimeMode } from "@t3tools/contracts";
 import { useTranslate } from "../i18n";
 import { useAtomValue } from "@effect/atom-react";
 
 import { shortcutLabelForCommand } from "../keybindings";
+import { useManagedPolicy } from "../state/managedPolicy";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import { ComposerControl } from "./chat/ComposerControl";
-import { runtimeModeConfig, runtimeModePresentation } from "./chat/runtimeModeConfig";
+import { ComposerPermissionsSection } from "./chat/ComposerFooterControls";
+import { useComposerMenuProps } from "./chat/composerEventScope";
+import {
+  resolveCompatibleRuntimeMode,
+  resolveRuntimeModeOptions,
+  runtimeModeConfig,
+  runtimeModePresentation,
+} from "./chat/runtimeModeConfig";
 import { ComposerContextLabel } from "./ComposerContextLabel";
+import { Menu, MenuPopup, MenuTrigger } from "./ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 
-/** The new-thread strip names the permissions the first send will use; clicking opens them. */
 export function ComposerContextPermissions(props: {
+  environmentId: EnvironmentId | null;
   runtimeMode: RuntimeMode;
-  onOpen: () => void;
+  supportedRuntimeModes: ReadonlyArray<RuntimeMode> | undefined;
+  onRuntimeModeChange: (mode: RuntimeMode) => void;
 }) {
   const t = useTranslate();
   const shortcutLabel = shortcutLabelForCommand(
     useAtomValue(primaryServerKeybindingsAtom),
     "composer.mode",
   );
-  const { icon: Icon } = runtimeModeConfig[props.runtimeMode];
-  const { label } = runtimeModePresentation(props.runtimeMode, t);
+  const { mode, modes } = resolveCompatibleRuntimeMode(
+    props.runtimeMode,
+    props.supportedRuntimeModes,
+  );
+  const options = resolveRuntimeModeOptions(modes, useManagedPolicy(props.environmentId));
+  const composerMenuProps = useComposerMenuProps();
+  const { icon: Icon } = runtimeModeConfig[mode];
+  const { label } = runtimeModePresentation(mode, t);
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <ComposerControl
-            size="xs"
-            className="ms-auto min-w-0 shrink-0"
-            aria-label={t("chat.permissions.current", { mode: label })}
-            aria-haspopup="menu"
-            data-composer-context-control
-            onClick={props.onOpen}
-          />
-        }
-      >
-        <Icon aria-hidden="true" className="size-3" />
-        <ComposerContextLabel>{label}</ComposerContextLabel>
-      </TooltipTrigger>
-      <TooltipPopup>
-        {t("chat.permissions.title")}
-        {shortcutLabel ? ` · ${shortcutLabel}` : null}
-      </TooltipPopup>
-    </Tooltip>
+    <Menu>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <MenuTrigger
+              render={
+                <ComposerControl
+                  size="xs"
+                  className="ms-auto min-w-0 shrink-0"
+                  aria-label={t("chat.permissions.current", { mode: label })}
+                  aria-haspopup="menu"
+                  data-composer-context-control
+                />
+              }
+            />
+          }
+        >
+          <Icon aria-hidden="true" className="size-3" />
+          <ComposerContextLabel>{label}</ComposerContextLabel>
+        </TooltipTrigger>
+        <TooltipPopup>
+          {t("chat.permissions.title")}
+          {shortcutLabel ? ` · ${shortcutLabel}` : null}
+        </TooltipPopup>
+      </Tooltip>
+      <MenuPopup side="top" align="end" {...composerMenuProps}>
+        <ComposerPermissionsSection
+          runtimeMode={mode}
+          runtimeModeOptions={options}
+          onRuntimeModeChange={props.onRuntimeModeChange}
+        />
+      </MenuPopup>
+    </Menu>
   );
 }

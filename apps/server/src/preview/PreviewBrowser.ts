@@ -27,8 +27,6 @@ import { HttpClient } from "effect/http";
 import * as ServerConfig from "../config.ts";
 import { openZipArchive } from "../zipArchive.ts";
 
-const megabytes = (bytes: number) => Math.round(bytes / 1_000_000);
-
 export class PreviewBrowserInstallingError extends Schema.TaggedError<PreviewBrowserInstallingError>()(
   "PreviewBrowserInstallingError",
   { downloadedBytes: Schema.Number, totalBytes: Schema.Number, unpacking: Schema.Boolean },

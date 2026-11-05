@@ -51,6 +51,7 @@ describe("acpProviderOptionDescriptors", () => {
           { id: "medium", label: "Medium", description: "Balanced" },
         ],
         currentValue: "medium",
+        role: "reasoning",
       },
     ]);
   });

@@ -1,3 +1,4 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as CommandReceiptStore from "../orchestration-v2/CommandReceiptStore.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { materializeReplayTranscriptRuntimeInstructions } from "../orchestration-v2/testkit/ReplayRuntimeInstructions.ts";
@@ -156,7 +157,7 @@ it.live.each(["codex", "claudeAgent"] as const)(
             Layer.provide(
               ServerConfig.layerTest(process.cwd(), { prefix: "t3-convene-native-workspaces-" }),
             ),
-            Layer.provide(NodeServices.layer),
+            Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
           ),
         ),
         Layer.provideMerge(
@@ -169,7 +170,7 @@ it.live.each(["codex", "claudeAgent"] as const)(
         Layer.provideMerge(ProjectStore.layer.pipe(Layer.provide(database))),
         Layer.provideMerge(EventStore.layer.pipe(Layer.provide(database))),
         Layer.provide(ProviderRegistryMock.layer([provider])),
-        Layer.provide(NodeServices.layer),
+        Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
         Layer.provide(Logger.layer([logger], { mergeWithExisting: false })),
       );
       yield* Effect.gen(function* () {
@@ -308,7 +309,7 @@ it.live.each(["codex", "claudeAgent"] as const)(
         Effect.provide(
           Layer.mergeAll(
             nativeLayer,
-            NodeServices.layer,
+            Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),
             Logger.layer([logger], { mergeWithExisting: false }),
           ),
         ),
@@ -316,7 +317,7 @@ it.live.each(["codex", "claudeAgent"] as const)(
     }).pipe(
       Effect.provide(
         Layer.merge(
-          NodeServices.layer,
+          Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),
           GitVcsDriver.layer.pipe(
             Layer.provide(VcsProcess.layer),
             Layer.provide(
@@ -324,7 +325,7 @@ it.live.each(["codex", "claudeAgent"] as const)(
                 prefix: "t3-convene-worktree-runtime-setup-",
               }),
             ),
-            Layer.provide(NodeServices.layer),
+            Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
           ),
         ),
       ),
@@ -381,7 +382,7 @@ it.live.each([
           Layer.provide(
             ServerConfig.layerTest(process.cwd(), { prefix: "t3-convene-native-workspaces-" }),
           ),
-          Layer.provide(NodeServices.layer),
+          Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
         ),
       ),
       Layer.provideMerge(
@@ -394,7 +395,7 @@ it.live.each([
       Layer.provideMerge(ProjectStore.layer.pipe(Layer.provide(database))),
       Layer.provideMerge(EventStore.layer.pipe(Layer.provide(database))),
       Layer.provide(ProviderRegistryMock.layer([provider])),
-      Layer.provide(NodeServices.layer),
+      Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
     );
     yield* Effect.gen(function* () {
       const projectId = ProjectId.make(`convene:${fixture}-project`),
@@ -513,6 +514,10 @@ it.live.each([
           result.items.filter((entry) => entry.item.type === "assistant_message").length,
           2,
         );
-    }).pipe(Effect.provide(Layer.merge(nativeLayer, NodeServices.layer)));
-  }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+    }).pipe(
+      Effect.provide(
+        Layer.merge(nativeLayer, Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+      ),
+    );
+  }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)), Effect.scoped),
 );

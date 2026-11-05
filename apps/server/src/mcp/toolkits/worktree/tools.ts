@@ -1,3 +1,4 @@
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import {
   WorktreeMcpFailure,
   OrchestratorMcpEnvironmentTarget,
@@ -13,11 +14,10 @@ import {
   RecoverThreadWorkspaceInput,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-import * as GitWorkflowService from "../../../git/GitWorkflowService.ts";
 import * as ProjectService from "../../../project/ProjectService.ts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as ThreadWorkspaceRecovery from "../../../orchestration-v2/ThreadWorkspaceRecovery.ts";
-import * as Crypto from "effect/Crypto";
+import * as Crypto from "effect/crypto/Digest";
 import { Tool, Toolkit } from "effect/ai";
 
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
@@ -83,7 +83,7 @@ const WorktreeListTool = Tool.make("t3_worktree_list", {
     McpInvocationContext.McpInvocationContext,
     ThreadManagementService.ThreadManagementService,
     ProjectService.ProjectService,
-    GitWorkflowService.GitWorkflowService,
+    WorktreeMcpService.WorktreeMcpService,
   ],
 })
   .annotate(Tool.Readonly, true)
@@ -119,7 +119,8 @@ const RecoverWorkspaceTool = Tool.make("t3_worktree_recover", {
     McpInvocationContext.McpInvocationContext,
     ThreadManagementService.ThreadManagementService,
     ThreadWorkspaceRecovery.ThreadWorkspaceRecovery,
-    Crypto.Crypto,
+    Crypto.Digest,
+    SecureRandom.SecureRandom,
   ],
 })
   .annotate(Tool.Readonly, false)

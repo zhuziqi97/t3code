@@ -3,8 +3,13 @@ import { useTranslate } from "../../i18n";
 import { AuthSettingsWriteScope } from "@t3tools/contracts";
 import { usePrimaryEnvironmentId, usePrimaryEnvironment } from "../../state/environments";
 import { useEnvironmentScope, useEnvironmentsWithScope } from "../../state/session";
+import { useServerConfigs } from "../../state/entities";
 import { InfoIcon, Undo2Icon } from "lucide-react";
-import { DEFAULT_SERVER_SETTINGS, type ServerSettings } from "@t3tools/contracts";
+import {
+  DEFAULT_SERVER_SETTINGS,
+  isManagedSettingPath,
+  type ServerSettings,
+} from "@t3tools/contracts";
 import * as Equal from "effect/Equal";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { createContext, type ComponentPropsWithoutRef, type ReactNode, useContext } from "react";
@@ -31,6 +36,7 @@ import {
 } from "./SettingInheritance";
 
 const EMPTY_SETTING_KEYS: readonly (keyof ServerSettings)[] = [];
+const EMPTY_MANAGED_PATHS: readonly string[] = [];
 
 declare module "@tanstack/react-router" {
   interface HistoryState {
@@ -306,7 +312,9 @@ export function SettingsRow({
   control,
   serverScoped = false,
   settingKeys = EMPTY_SETTING_KEYS,
+  managedPaths = EMPTY_MANAGED_PATHS,
   mixed: mixedOverride,
+  managed,
   children,
   className,
   ...rowProps
@@ -319,7 +327,11 @@ export function SettingsRow({
   control?: ReactNode;
   serverScoped?: boolean;
   settingKeys?: readonly (keyof ServerSettings)[];
+  /** Dot paths inside a setting, such as `storageCleanup.logsAfterDays`, an administrator can lock. */
+  managedPaths?: readonly string[];
   mixed?: boolean;
+  /** Why an administrator's policy turns this row's control off, from the contract's denial helpers. */
+  managed?: string | undefined;
   children?: ReactNode;
 }) {
   const t = useTranslate();
@@ -337,6 +349,22 @@ export function SettingsRow({
     ? context.connectedEnvironments.length > 0 &&
       context.connectedEnvironments.every((target) => writableIds.has(target.environmentId))
     : primaryCanWrite;
+  const serverConfigs = useServerConfigs();
+  // An administrator's lock on any target wins over every other reason a control is inert.
+  const lockablePaths = [...settingKeys, ...managedPaths];
+  const managedBy =
+    lockablePaths.length === 0
+      ? undefined
+      : (context
+          ? context.connectedEnvironments.map((environment) => environment.serverConfig)
+          : [primaryEnvironmentId === null ? undefined : serverConfigs.get(primaryEnvironmentId)]
+        )
+          .map((config) => config?.managedPolicy)
+          .find(
+            (policy) =>
+              policy !== undefined &&
+              lockablePaths.some((path) => isManagedSettingPath(policy, path)),
+          )?.organization;
   const clearOverrides = useClearScopedSettings();
   const clearProjectOverrides = useClearProjectOverrides();
   const isProjectScope =
@@ -365,7 +393,9 @@ export function SettingsRow({
     ),
   );
   const overridingProjects = isProjectScope ? [] : projectOverrides(context, scopedKeys);
-  const renderedReset = unavailable ? null : isProjectScope && scopedKeys.length > 0 ? (
+  const renderedReset =
+    unavailable || managedBy !== undefined || managed !== undefined ? null : isProjectScope &&
+      scopedKeys.length > 0 ? (
     source === "project" || source === "mixed" ? (
       <SettingResetButton
         label={typeof title === "string" ? title : t("settings.override")}
@@ -400,7 +430,11 @@ export function SettingsRow({
     </Tooltip>
   );
   const renderedControl =
-    unavailable && control
+    managed !== undefined && control
+      ? inertControl(managed)
+      : managedBy !== undefined && control
+        ? inertControl(`Managed by ${managedBy}.`)
+        : unavailable && control
       ? inertControl(
           !canWriteSettings
             ? t("settings.permissionDenied", {

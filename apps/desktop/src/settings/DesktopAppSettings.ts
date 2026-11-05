@@ -7,7 +7,7 @@ import {
 import { fromLenientJson } from "@t3tools/shared/schemaJson";
 import { resolveSymlinkTarget } from "@t3tools/shared/symlink";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -452,6 +452,7 @@ const writeSettings = Effect.fn("desktop.settings.writeSettings")(function* (inp
         }),
     ),
   );
+  yield* Effect.gen(function* () {
   yield* input.fileSystem.writeFileString(tempPath, `${encoded}\n`).pipe(
     Effect.mapError(
       (cause) =>
@@ -472,6 +473,7 @@ const writeSettings = Effect.fn("desktop.settings.writeSettings")(function* (inp
         }),
     ),
   );
+  }).pipe(Effect.ensuring(input.fileSystem.remove(tempPath, { force: true }).pipe(Effect.ignore)));
 });
 
 /** @public */
@@ -479,7 +481,7 @@ export const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const crypto = yield* Crypto.Crypto;
+  const random = yield* SecureRandom.SecureRandom;
   const settingsRef = yield* SynchronizedRef.make(environment.defaultDesktopSettings);
 
   const updateInMemory = (update: (settings: DesktopSettings) => DesktopSettings) =>
@@ -497,16 +499,8 @@ export const make = Effect.gen(function* () {
         return Effect.succeed([settingsChange(settings, false), settings] as const);
       }
 
-      return crypto.randomUUIDv4().pipe(
+      return random.uuidV4().pipe(
         Effect.map((uuid) => uuid.replace(/-/g, "")),
-        Effect.mapError(
-          (cause) =>
-            new DesktopSettingsWriteError({
-              operation: "create-temporary-file-name",
-              path: environment.desktopSettingsPath,
-              cause,
-            }),
-        ),
         Effect.flatMap((suffix) =>
           writeSettings({
             fileSystem,

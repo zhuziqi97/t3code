@@ -20,7 +20,7 @@ import {
  */
 function describeUnavailableInstance(entry: ProviderInstanceEntry, t: TFunction = i18n.t): string {
   const label = entry.displayName;
-  if (!entry.enabled || entry.status === "disabled") {
+  if ((!entry.enabled && entry.isAvailable) || entry.status === "disabled") {
     return t("chat.model.disabled", { provider: label });
   }
   if (isProviderInstancePickerReady(entry)) {

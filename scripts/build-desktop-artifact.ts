@@ -2836,6 +2836,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
 ) {
   const presetsFile = yield* Config.String("CONVENE_PLATFORM_PRESETS_FILE").pipe(Config.option);
   const buildConfig: Record<string, unknown> = {
+    afterPack: (yield* Path.Path).join(yield* RepoRoot, "scripts/prepare-server-compile-cache.cjs"),
     appId: DESKTOP_APP_ID,
     productName: resolveDesktopProductName(version),
     artifactName: "T3-Code-for-Convene-${version}-${arch}.${ext}",

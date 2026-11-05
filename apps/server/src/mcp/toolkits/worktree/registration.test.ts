@@ -1,3 +1,4 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { idleThreadProjection, liveThreadShell } from "../../McpToolAccess.testkit.ts";
 import type { OrchestrationV2ServerCommand } from "@t3tools/contracts";
 import * as ProjectCloneTracker from "../../../project/ProjectCloneTracker.ts";
@@ -242,9 +243,9 @@ it.effect("production mcp layer lists worktree tools over http", () =>
       Layer.mergeAll(
         NodeHttpServer.layerTest,
         ServerConfig.layerTest(process.cwd(), { prefix: "t3-worktree-mcp-" }).pipe(
-          Layer.provide(NodeServices.layer),
+          Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
         ),
-        NodeServices.layer,
+        Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),
       ),
     ),
   ),

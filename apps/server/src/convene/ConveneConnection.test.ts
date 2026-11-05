@@ -1,3 +1,4 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { assert, it } from "@effect/vitest";
 import {
   EventId,
@@ -302,7 +303,7 @@ it.live("gates a prepared worktree's first MCP lease on its matching control ACK
   }).pipe(
     Effect.provide(
       ServerConfig.layerTest(process.cwd(), { prefix: "t3-first-mcp-" }).pipe(
-        Layer.provideMerge(NodeServices.layer),
+        Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
       ),
     ),
     Effect.scoped,
@@ -665,7 +666,7 @@ it.live("keeps heartbeat, changed directories, refresh ACKs, and reconnection in
   }).pipe(
     Effect.provide(
       ServerConfig.layerTest(process.cwd(), { prefix: "t3-control-" }).pipe(
-        Layer.provideMerge(NodeServices.layer),
+        Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
       ),
     ),
     Effect.scoped,

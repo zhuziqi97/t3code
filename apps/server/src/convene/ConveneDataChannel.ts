@@ -1,4 +1,4 @@
-import * as NodeSocket from "@effect/platform-node/NodeSocket";
+import * as NodeWS from "@effect/platform-node/NodeWS";
 import {
   ConveneNativeRequest,
   ConveneNativeResult,
@@ -35,7 +35,7 @@ export const open = Effect.fn("ConveneDataChannel.open")(function* (
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   const token = yield* platform.accessToken;
   const rawSocket = yield* Effect.acquireRelease(
-    Effect.sync(() => new NodeSocket.NodeWS.WebSocket(url)),
+    Effect.sync(() => new NodeWS.WebSocket(url)),
     (socket) => Effect.sync(() => ConveneSocket.close(socket)),
   );
   const socket = yield* ConveneSocket.make(rawSocket);
@@ -51,7 +51,7 @@ export const open = Effect.fn("ConveneDataChannel.open")(function* (
   const finishHttp = send({ TYPE: "HTTP_DONE" }).pipe(
     Effect.andThen(
       Effect.callback<void>((resume) => {
-        if (rawSocket.readyState >= NodeSocket.NodeWS.WebSocket.CLOSING) {
+        if (rawSocket.readyState >= NodeWS.WebSocket.CLOSING) {
           resume(Effect.void);
           return;
         }

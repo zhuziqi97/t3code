@@ -317,9 +317,7 @@ export const make = Effect.gen(function* () {
     if (tab.relay) return tab.relay;
     const { webContents, debugger: debuggee } = tab.debuggee;
     const send = (method: string, params: Record<string, unknown>, sessionId?: string) =>
-      sessionId === undefined
-        ? sendPageCommand(webContents, debuggee, method, params)
-        : debuggee.sendCommand(method, params, sessionId);
+      sendPageCommand(webContents, debuggee, method, params, sessionId);
     const detachedOwners = new Set<string>();
     /** Viewers and recordings stream; the agent's own sessions never do. */
     const streamingOwners = new Set<string>();
@@ -459,7 +457,7 @@ export const make = Effect.gen(function* () {
       focusReleasing: false,
       screencasts: new Set(),
       onMessage: (_event, method, params, sessionId) => {
-        if (method === "Browser.downloadWillBegin") {
+        if (method === "Page.downloadWillBegin") {
           const guid = (params as { guid?: unknown } | undefined)?.guid;
           tab.pendingDownloadGuid = typeof guid === "string" ? guid : null;
         }

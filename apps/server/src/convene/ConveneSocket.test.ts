@@ -1,7 +1,7 @@
+import * as NodeWS from "@effect/platform-node/NodeWS";
 // A held Node upgrade is needed to exercise ws's pre-open close error.
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import * as NodeHttp from "node:http";
-import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import { assert, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -33,7 +33,7 @@ it.effect.each(["cancel", "timeout", "reject"] as const)(
       const running = yield* Effect.gen(function* () {
         const raw = yield* Effect.acquireRelease(
           Effect.sync(() => {
-            const socket = new NodeSocket.NodeWS.WebSocket(`ws://127.0.0.1:${address.port}`);
+            const socket = new NodeWS.WebSocket(`ws://127.0.0.1:${address.port}`);
             socket.once("close", () => Deferred.doneUnsafe(closed, Effect.void));
             return socket;
           }),

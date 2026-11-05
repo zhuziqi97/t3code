@@ -2,9 +2,11 @@ import {
   DEFAULT_TEXT_GENERATION_MODEL,
   ANTIGRAVITY_DEFAULT_MODEL,
   type ModelSelection,
+  type ProjectId,
   ProviderDriverKind,
   ProviderInstanceId,
   type ServerProvider,
+  type ServerSettings,
 } from "@t3tools/contracts";
 import {
   type CustomModelDefinition,
@@ -14,11 +16,20 @@ import {
   resolveSelectableModel,
   resolveNativeDefaultModelSelection,
 } from "@t3tools/shared/model";
-
-import { UnifiedSettings } from "@t3tools/contracts/settings";
-
+import { getComposerProviderState } from "./components/chat/composerProviderState";
+import { type ClientSettings, UnifiedSettings } from "@t3tools/contracts/settings";
+import { resolveModelPreferences } from "@t3tools/shared/serverSettings";
+import * as Arr from "effect/Array";
+import * as Equal from "effect/Equal";
+import * as Result from "effect/Result";
 import { ModelEsque } from "./components/chat/providerIconUtils";
-import { type ProviderInstanceEntry, deriveProviderInstanceEntries } from "./providerInstances";
+import {
+  type ProviderInstanceEntry,
+  deriveProviderInstanceEntries,
+  NO_PROVIDER_MODEL_SELECTION,
+  resolveDefaultProviderModelSelection,
+  resolveProjectDefaultProviderModelSelection,
+} from "./providerInstances";
 import { sortModelsForProviderInstance } from "./modelOrdering";
 import { resolveModelShortName } from "@t3tools/client-runtime/provider-clients";
 
@@ -26,7 +37,7 @@ export const MAX_CUSTOM_MODEL_LENGTH = 256;
 const DEFAULT_TEXT_GENERATION_INSTANCE_ID = ProviderInstanceId.make("codex");
 
 // Legacy per-driver buckets would leak custom-instance models into stock instances.
-function readInstanceCustomModels(
+export function readInstanceCustomModels(
   settings: UnifiedSettings,
   instanceId: ProviderInstanceId,
 ): ReadonlyArray<CustomModelDefinition> {
@@ -178,6 +189,38 @@ export function resolveEffectiveDefaultModelSelection(
     selection,
     providers.find((provider) => provider.instanceId === selection.instanceId)?.models ?? [],
   );
+}
+
+export function defaultModelSelectionsAreMixed(
+  clientSettings: ClientSettings,
+  targets: ReadonlyArray<{
+    projectId: ProjectId | null;
+    settings: ServerSettings;
+    providers: ReadonlyArray<ServerProvider>;
+  }>,
+): boolean {
+  const selections = targets.map(({ projectId, settings, providers }) => {
+    const stored = settings.defaultModelSelection;
+    const selection =
+      stored === null
+        ? resolveProjectDefaultProviderModelSelection(providers, settings, projectId)
+        : resolveDefaultProviderModelSelection(providers, stored);
+    return {
+      stored,
+      effective: selection
+        ? resolveEffectiveDefaultModelSelection(
+            {
+              ...clientSettings,
+              ...settings,
+              ...resolveModelPreferences(settings, clientSettings),
+            },
+            providers,
+            selection,
+          )
+        : null,
+    };
+  });
+  return selections.some((selection) => !Equal.equals(selection, selections[0]));
 }
 
 export function getCustomModelOptionsByInstance(

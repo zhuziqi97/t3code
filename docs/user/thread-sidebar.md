@@ -266,9 +266,11 @@ palette.
 
 Use **Settings → Keybindings** to find or customize shortcuts for searching files
 and copying a thread reference. A copied reference uses the thread's pull request
-link when available, otherwise the thread itself, which pastes into a composer as
-a thread chip. To copy the thread even when it has a PR, choose **Copy → Thread**
-from its context menu, or **Copy thread** from its long-press menu on mobile.
+link when available, otherwise a link to the thread, which opens it from anywhere
+you paste it and pastes into a composer as a thread chip (see
+[sharing a thread](./prompt-links.md#share-a-thread)). To copy the thread even
+when it has a PR, choose **Copy → Thread** from its context menu, or **Copy
+thread** from its long-press menu on mobile.
 **Thread ID** copies the bare ID for scripts and the `t3` CLI. See
 [keybindings](./keybindings.md) for custom configuration.
 
@@ -277,8 +279,9 @@ from its context menu, or **Copy thread** from its long-press menu on mobile.
 **Limited** means the provider stopped on a usage or rate limit. The conversation
 keeps the provider's explanation. Retry after the limit resets, or switch to
 another provider instance.
-On web and desktop, press **Resume** in an empty composer to continue a limited
-or interrupted turn manually.
+Press **Resume** in an empty composer to continue a limited or interrupted turn
+manually. Do this when the provider reports no reset time, because nothing
+continues the turn on its own.
 Queued messages stay saved while the limit blocks the thread. They run after
 the continuation finishes. If the queue was held by a restart, resume it then.
 

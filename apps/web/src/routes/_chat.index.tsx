@@ -17,7 +17,12 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "../components/
 import { SidebarInset } from "../components/ui/sidebar";
 import { WorkspacePageHeader } from "../components/WorkspacePageHeader";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
-import { readProject, useAllEnvironmentShellsBootstrapped, useProjects } from "../state/entities";
+import {
+  readProject,
+  useAllEnvironmentShellsBootstrapped,
+  useProjects,
+  useVisibleThreadShells,
+} from "../state/entities";
 import { useEnvironments } from "../state/environments";
 
 function ChatIndexRouteView() {
@@ -35,6 +40,7 @@ function ChatIndexRouteView() {
 function IndexDraftLanding() {
   const t = useTranslate();
   const projects = useProjects();
+  const threads = useVisibleThreadShells();
   const bootstrapped = useAllEnvironmentShellsBootstrapped();
   const handleNewThread = useNewThreadHandler();
   const { target } = useSidebarNewThread();

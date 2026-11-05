@@ -130,6 +130,7 @@ export function getArm64IntelBuildWarningDescription(
 export function getDesktopUpdateButtonTooltip(
   state: DesktopUpdateState,
   translate: TFunction = i18n.t,
+  managedDenial?: string,
 ): string {
   if (state.convene) {
     if (state.status === "checking") return translate("update.checking");
@@ -206,10 +207,13 @@ export function canCheckForUpdate(state: DesktopUpdateState | null): boolean {
   );
 }
 
+/** `managedDenial` is this machine's policy refusing updates (`managedUpdatesDenial`); it wins. */
 export function getDesktopUpdateDisabledReason(
   state: Pick<DesktopUpdateState, "enabled" | "status" | "message"> | null,
   translate: TFunction = i18n.t,
+  managedDenial?: string,
 ): string | null {
+  if (managedDenial !== undefined) return managedDenial;
   if (!state || (state.enabled && state.status !== "disabled")) return null;
   const message = state.message?.trim();
   return message
@@ -220,8 +224,9 @@ export function getDesktopUpdateDisabledReason(
 export function getDesktopUpdateIdleTooltip(
   state: Pick<DesktopUpdateState, "enabled" | "status" | "message"> | null,
   translate: TFunction = i18n.t,
+  managedDenial?: string,
 ) {
-  const disabledReason = getDesktopUpdateDisabledReason(state, translate);
+  const disabledReason = getDesktopUpdateDisabledReason(state, translate, managedDenial);
   return disabledReason
     ? { title: translate("update.unavailable"), detail: disabledReason }
     : { title: translate("update.check"), detail: null };

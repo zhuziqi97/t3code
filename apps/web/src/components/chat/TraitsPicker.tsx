@@ -6,6 +6,7 @@ import {
   getTraitSelectChange,
   replaceDescriptorCurrentValue,
   selectableProviderOptionChoices,
+  isReasoningSelect,
 } from "@t3tools/client-runtime/model-traits";
 import {
   formatProviderOptionName,
@@ -106,15 +107,9 @@ export function getReasoningTraitStep(input: {
     input.planModeEnabled,
   );
   if (selected.modelIsUnavailable || selected.ultrathinkInBodyText) return null;
-  const descriptor = selected.descriptors.find(isReasoningOption);
-  if (!descriptor) return null;
-  if (descriptor.type === "boolean") {
-    const modelOptions = buildProviderOptionSelectionsFromDescriptors(
-      replaceDescriptorCurrentValue(selected.descriptors, descriptor.id, !descriptor.currentValue),
-    );
-    return modelOptions ? { prompt: input.prompt, modelOptions } : null;
-  }
-  if (descriptor.options.length < 2) return null;
+  const descriptor = selected.selectDescriptors.find(isReasoningSelect);
+  const choices = descriptor ? selectableProviderOptionChoices(descriptor) : [];
+  if (!descriptor || choices.length < 2) return null;
   const isPrimary = descriptor.id === selected.primarySelectDescriptor?.id;
   const current =
     isPrimary && selected.ultrathinkPromptControlled

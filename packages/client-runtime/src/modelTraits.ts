@@ -18,10 +18,24 @@ import {
   isReasoningOption,
 } from "@t3tools/shared/model";
 
-export const REASONING_SELECT_DESCRIPTOR_IDS: ReadonlySet<string> = new Set([
+const REASONING_DESCRIPTOR_IDS: ReadonlySet<string> = new Set([
   ...REASONING_EFFORT_OPTION_IDS,
   "thinking",
 ]);
+
+/** The model's reasoning control: a known effort id, or a select its agent marked as reasoning. */
+export function isReasoningControl(descriptor: ProviderOptionDescriptor): boolean {
+  return (
+    (descriptor.type === "select" && descriptor.role === "reasoning") ||
+    REASONING_DESCRIPTOR_IDS.has(descriptor.id)
+  );
+}
+
+export function isReasoningSelect(
+  descriptor: ProviderOptionDescriptor,
+): descriptor is Extract<ProviderOptionDescriptor, { type: "select" }> {
+  return descriptor.type === "select" && isReasoningControl(descriptor);
+}
 
 export function replaceDescriptorCurrentValue(
   descriptors: ReadonlyArray<ProviderOptionDescriptor>,
@@ -112,7 +126,7 @@ export function buildTraitsTriggerDisplay(
     reportedModelSelection?: ModelSelection | null | undefined;
   },
   t?: TFunction,
-): { label: string; speedLabel: string | null; otherLabels: ReadonlyArray<string> } {
+): { label: string; speedLabel: string | null } {
   let fastModeFallbackLabel: string | null = null;
   let speedLabel: string | null = null;
   let reasoningLabelIndex = -1;
@@ -176,20 +190,15 @@ export function buildTraitsTriggerDisplay(
                 input.reportedModelSelection,
               );
     if (typeof label === "string" && label.length > 0) {
-      if (
-        reasoningLabelIndex === -1 &&
-        descriptor.type === "select" &&
-        isReasoningOption(descriptor)
-      ) {
+      if (reasoningLabelIndex === -1 && isReasoningSelect(descriptor)) {
         reasoningLabelIndex = labels.length;
       }
       labels.push(label);
     }
   }
 
-  const otherLabels = labels.filter((_, index) => index !== reasoningLabelIndex);
   if (labels.length === 0 && fastModeFallbackLabel !== null) {
-    return { label: fastModeFallbackLabel, speedLabel, otherLabels };
+    return { label: fastModeFallbackLabel, speedLabel };
   }
   if (speedLabel) {
     if (reasoningLabelIndex >= 0) {
@@ -198,5 +207,5 @@ export function buildTraitsTriggerDisplay(
       labels.push(speedLabel);
     }
   }
-  return { label: labels.join(" · "), speedLabel, otherLabels };
+  return { label: labels.join(" · "), speedLabel };
 }

@@ -1,6 +1,6 @@
 import { type ProjectId } from "@t3tools/contracts";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as Crypto from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -72,7 +72,7 @@ export class ConveneWorkspaces extends Context.Service<
 const make = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* Crypto.SecureRandom;
   const config = yield* ServerConfig.ServerConfig;
   const projects = yield* ProjectStore.ProjectStoreV2;
   const git = yield* Git.GitVcsDriver;
@@ -167,9 +167,7 @@ const make = Effect.gen(function* () {
                 const marker = path.join(admin, "t3-convene-workspace-id");
                 const key = (yield* fs.exists(marker))
                   ? (yield* fs.readFileString(marker)).trim()
-                  : yield* crypto
-                      .randomUUIDv4()
-                      .pipe(Effect.tap((id) => fs.writeFileString(marker, id)));
+                  : yield* crypto.uuidV4().pipe(Effect.tap((id) => fs.writeFileString(marker, id)));
                 const branch = (yield* command(checkout, [
                   "rev-parse",
                   "--abbrev-ref",

@@ -1,10 +1,10 @@
-import * as NodeSocket from "@effect/platform-node/NodeSocket";
+import * as NodeWS from "@effect/platform-node/NodeWS";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Socket from "effect/socket/Socket";
 
-export const close = (socket: NodeSocket.NodeWS.WebSocket) => {
-  if (socket.readyState === NodeSocket.NodeWS.WebSocket.CLOSED) return;
+export const close = (socket: NodeWS.WebSocket) => {
+  if (socket.readyState === NodeWS.WebSocket.CLOSED) return;
   // The Effect reader detaches before the owning scope closes the socket.
   // Node ws emits an error when a pending handshake is closed, so retain a
   // listener through the close event after the reader has reported its failure.
@@ -15,9 +15,7 @@ export const close = (socket: NodeSocket.NodeWS.WebSocket) => {
 };
 
 /** Reverse data streams wait for each Node send to flush before pulling more. */
-export const make = Effect.fn("ConveneSocket.make")(function* (
-  socket: NodeSocket.NodeWS.WebSocket,
-) {
+export const make = Effect.fn("ConveneSocket.make")(function* (socket: NodeWS.WebSocket) {
   const native = yield* Socket.fromWebSocket(Effect.succeed(socket));
   const opened = yield* Deferred.make<void>();
   const writer = yield* native.writer;

@@ -1,7 +1,7 @@
 import { ConveneIdeRequest, type ConveneIdeResult } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as Crypto from "effect/crypto/SecureRandom";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -68,7 +68,7 @@ const make = Effect.gen(function* () {
   const workspacePaths = yield* WorkspacePaths.WorkspacePaths;
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* Crypto.SecureRandom;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const environment = yield* HostProcess.Environment;
   const lock = yield* Semaphore.make(1);
@@ -224,7 +224,7 @@ const make = Effect.gen(function* () {
     const current = yield* SubscriptionRef.get(state);
     if (current.phase !== "stopped") return current;
     const id = yield* crypto
-      .randomUUIDv4()
+      .uuidV4()
       .pipe(Effect.mapError((cause) => new ConveneIdeError({ code: "internal_error", cause })));
     const scope = yield* Scope.make();
     attempt = { id, scope, origin: null };

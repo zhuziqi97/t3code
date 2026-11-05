@@ -1,3 +1,4 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeVM from "node:vm";
 import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -136,7 +137,7 @@ const setup = Effect.gen(function* () {
     Layer.provide(Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner)),
     Layer.provideMerge(
       ServerConfig.layerTest(process.cwd(), { prefix: "t3-managed-ide-" }).pipe(
-        Layer.provideMerge(NodeServices.layer),
+        Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
       ),
     ),
   );
@@ -784,7 +785,7 @@ it.live.each(["fresh", "existing marker", "bundled fresh"] as const)(
       Effect.provide(
         Layer.mergeAll(
           ServerConfig.layerTest(process.cwd(), { prefix: "t3-managed-ide-runtime-" }).pipe(
-            Layer.provideMerge(NodeServices.layer),
+            Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
           ),
           FetchHttpClient.layer,
         ),

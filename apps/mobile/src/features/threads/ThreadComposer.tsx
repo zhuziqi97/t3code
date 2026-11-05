@@ -68,7 +68,7 @@ import {
 } from "../../state/use-composer-drafts";
 import { appAtomRegistry } from "../../state/atom-registry";
 import type { ComposerDocumentAttachment } from "../../lib/composerContext";
-import { useProject, useThreadShells } from "../../state/entities";
+import { useProject, useVisibleThreadShells } from "../../state/entities";
 import { useMentionableEnvironments } from "../../state/environments";
 import { useLinkedEnvironments } from "../../state/peerLinks";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
@@ -110,6 +110,7 @@ import { offersLinkedEnvironments } from "@t3tools/client-runtime/link-request";
 import {
   ComposerDictationCancelAction,
   ComposerDictationDraftContent,
+  ComposerDictationError,
   ComposerDictationPrimaryAction,
   ComposerDictationStartAction,
   ComposerDictationStatus,
@@ -543,7 +544,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     draftMessage: draftMessage,
     ownerKey: composerDraftKey,
     environmentId: props.environmentId,
-    threadShells: useThreadShells(),
+    threadShells: useVisibleThreadShells(),
     environments: offersLinkedEnvironments(props.serverConfig)
       ? mentionableEnvironments
       : NO_MACHINES,
@@ -581,7 +582,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     voiceInput.state,
     voiceInput.elapsedSeconds,
   );
-  const isVoiceInputPresented = voicePresentation.statusLabel !== null;
+  const isVoiceInputPresented = voicePresentation.statusKind === "active";
   const isExpanded = isFocused || settingsSheetPresentation.keepsComposerExpanded;
   const { layout, setComposerEditing } = useAdaptiveWorkspaceLayout();
   const floatingSidebarComposer = useAndroidFloatingTabs() && layout.usesSplitView;
@@ -907,6 +908,10 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
             paddingVertical: surfacePaddingVertical,
           }}
         >
+          <ComposerDictationError
+            error={voiceInput.state.phase === "error" ? voiceInput.state.error : null}
+            onDismiss={voiceInput.cancel}
+          />
           {isExpanded ? editingAttachments : null}
           <View
             onLayout={(event) => {
@@ -940,72 +945,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                   compactEditor.isExpanded ? { flex: 0, width: 0 } : undefined,
                 ]}
               ></Animated.View>
-              {!isExpanded && stripAttachments.length > 0 ? (
-                <View className="h-[44px] shrink-0 flex-row items-center gap-1 pl-1">
-                  {stripAttachments.slice(0, compactAttachmentLimit).map((attachment) => (
-                    <ComposerAttachmentThumbnail
-                      environmentId={props.environmentId}
-                      key={attachment.id}
-                      attachment={attachment}
-                      size={30}
-                      borderRadius={8}
-                      compact
-                      onPressPreview={isSubmissionLocked ? undefined : onPressPreview}
-                      onPressVideo={isSubmissionLocked ? undefined : onPressVideo}
-                    />
-                  ))}
-                  {stripAttachments.length > compactAttachmentLimit ? (
-                    <View className="size-[30px] items-center justify-center rounded-lg bg-subtle-strong">
-                      <Text className="text-foreground-muted text-2xs font-t3-bold">
-                        +{stripAttachments.length - compactAttachmentLimit}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-              ) : null}
-              <View
-                className="min-w-0 shrink flex-row items-center"
-                style={
-                  compactEditor.isExpanded ? { flex: 1, justifyContent: "flex-end" } : undefined
-                }
-              >
-                {modelControl}
-                <ComposerDictationStartAction
-                  size={usesLargeControls ? "large" : "regular"}
-                  state={voiceInput.state}
-                  isAvailable={voiceInput.isAvailable}
-                  disabled={isSubmissionLocked}
-                  onStart={voiceInput.start}
-                  onCancel={voiceInput.cancel}
-                />
-                {showStopAction ? (
-                  <ComposerActionButton
-                    size={usesLargeControls ? "large" : "regular"}
-                    accessibilityLabel="Stop agent"
-                    icon="stop.fill"
-                    variant="danger"
-                    disabled={!props.canOperateThread}
-                    onPress={props.onStopThread}
-                  />
-                ) : showResumeAction ? (
-                  <ComposerActionButton
-                    size={usesLargeControls ? "large" : "regular"}
-                    accessibilityLabel="Resume queue"
-                    icon="play"
-                    disabled={!props.canOperateThread || resumingQueue}
-                    onPress={() => void handleResumeQueue()}
-                  />
-                ) : (
-                  <SendActionButton
-                    size={usesLargeControls ? "large" : "regular"}
-                    accessibilityLabel={sendBlockedReason ?? sendLabel}
-                    presentation={sendPresentation}
-                    disabled={!canSend}
-                    onSend={handleSend}
-                  />
-                )}
-              </View>
-            </ComposerDictationDraftContent>
+              {/* TalkBack orders siblings by position; outside this row the editor reads after Send. */}
             <Animated.View
               style={[
                 compactEditor.editorStyle,
@@ -1104,7 +1044,9 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                           pendingPastedTextAttachmentCountRef.current,
                         );
                       };
-                      void props.onNativePasteText(paste).then(finishAttachment, finishAttachment);
+                        void props
+                          .onNativePasteText(paste)
+                          .then(finishAttachment, finishAttachment);
                     } else if (!wouldExceedInputLimit) {
                       insertPaste();
                     } else {
@@ -1140,6 +1082,72 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                 }}
               />
             </Animated.View>
+              {!isExpanded && stripAttachments.length > 0 ? (
+                <View className="h-[44px] shrink-0 flex-row items-center gap-1 pl-1">
+                  {stripAttachments.slice(0, compactAttachmentLimit).map((attachment) => (
+                    <ComposerAttachmentThumbnail
+                      environmentId={props.environmentId}
+                      key={attachment.id}
+                      attachment={attachment}
+                      size={30}
+                      borderRadius={8}
+                      compact
+                      onPressPreview={isSubmissionLocked ? undefined : onPressPreview}
+                      onPressVideo={isSubmissionLocked ? undefined : onPressVideo}
+                    />
+                  ))}
+                  {stripAttachments.length > compactAttachmentLimit ? (
+                    <View className="size-[30px] items-center justify-center rounded-lg bg-subtle-strong">
+                      <Text className="text-foreground-muted text-2xs font-t3-bold">
+                        +{stripAttachments.length - compactAttachmentLimit}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+              <View
+                className="min-w-0 shrink flex-row items-center"
+                style={
+                  compactEditor.isExpanded ? { flex: 1, justifyContent: "flex-end" } : undefined
+                }
+              >
+                {modelControl}
+                <ComposerDictationStartAction
+                  size={usesLargeControls ? "large" : "regular"}
+                  state={voiceInput.state}
+                  isAvailable={voiceInput.isAvailable}
+                  disabled={isSubmissionLocked}
+                  onStart={voiceInput.start}
+                  onCancel={voiceInput.cancel}
+                />
+                {showStopAction ? (
+                  <ComposerActionButton
+                    size={usesLargeControls ? "large" : "regular"}
+                    accessibilityLabel="Stop agent"
+                    icon="stop.fill"
+                    variant="danger"
+                    disabled={!props.canOperateThread}
+                    onPress={props.onStopThread}
+                  />
+                ) : showResumeAction ? (
+                  <ComposerActionButton
+                    size={usesLargeControls ? "large" : "regular"}
+                    accessibilityLabel="Resume thread"
+                    icon="play"
+                    disabled={!props.canOperateThread || resumingQueue}
+                    onPress={() => void handleResumeQueue()}
+                  />
+                ) : (
+                  <SendActionButton
+                    size={usesLargeControls ? "large" : "regular"}
+                    accessibilityLabel={sendBlockedReason ?? sendLabel}
+                    presentation={sendPresentation}
+                    disabled={!canSend}
+                    onSend={handleSend}
+                  />
+                )}
+              </View>
+            </ComposerDictationDraftContent>
           </View>
           <Animated.View
             accessibilityElementsHidden={!isToolbarVisible}
@@ -1168,7 +1176,6 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                   elapsedSeconds={voiceInput.elapsedSeconds}
                   phase={voiceInput.state.phase}
                   presentation={voicePresentation}
-                  onDismissError={voiceInput.cancel}
                 />
                 <View className="shrink-0 flex-row items-center">
                   <ComposerDictationPrimaryAction
@@ -1193,7 +1200,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                   ) : showResumeAction && voicePresentation.showsSend ? (
                     <ComposerActionButton
                       size={usesLargeControls ? "large" : "regular"}
-                      accessibilityLabel="Resume queue"
+                      accessibilityLabel="Resume thread"
                       icon="play"
                       disabled={!props.canOperateThread || resumingQueue}
                       onPress={() => void handleResumeQueue()}

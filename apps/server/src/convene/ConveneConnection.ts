@@ -9,7 +9,7 @@ import {
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
-import * as Crypto from "effect/Crypto";
+import * as Crypto from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as FileSystem from "effect/FileSystem";
 import * as Fiber from "effect/Fiber";
@@ -88,7 +88,7 @@ const start = Effect.fn("ConveneConnection.start")(function* (
   const projects = yield* ProjectStore.ProjectStoreV2;
   const events = yield* EventStore.OrchestrationEventStore;
   const fs = yield* FileSystem.FileSystem;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* Crypto.SecureRandom;
   const workspaces = yield* ConveneWorkspaces.ConveneWorkspaces;
   const configurationCache = yield* ConveneConfiguration.ConveneConfiguration;
   const connection = yield* platform.readConnection;
@@ -129,7 +129,7 @@ const start = Effect.fn("ConveneConnection.start")(function* (
         yield* send({
           PROTOCOL_VERSION: 1,
           TYPE: type,
-          MESSAGE_ID: id ?? (yield* crypto.randomUUIDv4()),
+          MESSAGE_ID: id ?? (yield* crypto.uuidV4()),
           OCCURRED_AT: DateTime.formatIso(yield* DateTime.now),
           RUNNER_ID: paired.runnerId,
           PAYLOAD: payload,
@@ -342,7 +342,7 @@ const start = Effect.fn("ConveneConnection.start")(function* (
               yield* Stream.fromQueue(requests).pipe(
                 Stream.runForEach((waiter) =>
                   Effect.gen(function* () {
-                    const id = yield* crypto.randomUUIDv4();
+                    const id = yield* crypto.uuidV4();
                     pendingReports.set(id, waiter);
                     yield* report(id).pipe(
                       Effect.catch((cause) =>

@@ -44,6 +44,7 @@ import {
   draftModelPickMatchesThread,
   normalizeCustomModelSlug,
   resolveNativeDefaultModelSelection,
+  normalizeModelSlug,
 } from "@t3tools/shared/model";
 import { AsyncResult, Atom, type AtomRegistry } from "effect/reactivity";
 import * as Option from "effect/Option";
@@ -54,6 +55,7 @@ import type {
 import { waitForDraftHeroTransition } from "./components/chat/draftHeroTransition";
 import { getLocalStorageItem } from "./hooks/useLocalStorage";
 import { readThreadPreviewState } from "./previewStateStore";
+import { readInstanceCustomModels, resolveAppModelSelectionForInstance } from "./modelSelection";
 import {
   DEFAULT_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
@@ -1117,6 +1119,7 @@ export function deriveEffectiveComposerModelState(input: {
   const instanceSelection = input.selectedInstanceId
     ? input.draft?.modelSelectionByProvider?.[input.selectedInstanceId]
     : undefined;
+  // Legacy driver-keyed drafts belong to the default instance.
   const legacySelection =
     input.selectedInstanceId &&
     input.selectedInstanceId !== defaultInstanceIdForDriver(input.selectedProvider)
@@ -1176,6 +1179,7 @@ function withFallbackInstanceOptions(input: {
   readonly selectedProvider: ProviderDriverKind;
   readonly selectedInstanceId?: ProviderInstanceId | null | undefined;
   readonly requestedInstanceId?: ProviderInstanceId | null | undefined;
+  readonly settings: UnifiedSettings;
 }): ProviderOptionSelectionsByProvider | null {
   const { modelOptions, selectedInstanceId, requestedInstanceId } = input;
   if (
@@ -1188,16 +1192,24 @@ function withFallbackInstanceOptions(input: {
     return modelOptions;
   }
   const requestedOptions = modelOptions[requestedInstanceId];
-  const requestedDriver = input.providers.find(
+  const requestedProvider = input.providers.find(
     (provider) => provider.instanceId === requestedInstanceId,
-  )?.driver;
-  // The model of the selection the options came from, which can differ from the shown model's source.
+  );
   const requestedModel = input.optionSelections?.[requestedInstanceId]?.model;
-  if (
-    !requestedOptions ||
-    requestedDriver !== input.selectedProvider ||
-    requestedModel !== input.selectedModel
-  ) {
+  // Static aliases are shared across instances; exact custom slugs and catalog aliases are not.
+  const modelIdentity = (instanceId: ProviderInstanceId, model: string | null | undefined) => {
+    const isCustom =
+      input.providers
+        .find((provider) => provider.instanceId === instanceId)
+        ?.models.some((entry) => entry.slug === model && entry.isCustom) ||
+      readInstanceCustomModels(input.settings, instanceId).some((entry) => entry.slug === model);
+    return isCustom ? model : normalizeModelSlug(model, input.selectedProvider);
+  };
+  const sameModel =
+    requestedModel === input.selectedModel ||
+    modelIdentity(requestedInstanceId, requestedModel) ===
+      modelIdentity(selectedInstanceId, input.selectedModel);
+  if (!requestedOptions || requestedProvider?.driver !== input.selectedProvider || !sameModel) {
     return modelOptions;
   }
   return { ...modelOptions, [selectedInstanceId]: requestedOptions };
@@ -1759,6 +1771,22 @@ function normalizePersistedDraftThreads(
   return { draftThreadsByThreadKey, logicalProjectDraftThreadKeyByLogicalProjectKey };
 }
 
+const decodePersistedModelSelection = Schema.decodeUnknownOption(ModelSelection);
+
+/** Storage v3-v5 wrote `provider` and object-shaped options; the schema upgrades both. */
+function normalizePersistedModelSelectionByProvider(
+  value: object,
+): Partial<Record<ProviderInstanceId, ModelSelection>> {
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([instanceId, selection]) =>
+      Option.match(decodePersistedModelSelection(selection), {
+        onNone: () => [],
+        onSome: (decoded) => [[instanceId, decoded] as const],
+      }),
+    ),
+  );
+}
+
 function normalizePersistedDraftsByThreadId(
   rawDraftMap: unknown,
   draftThreadsByThreadKey: PersistedComposerDraftStoreState["draftThreadsByThreadKey"],
@@ -1886,9 +1914,9 @@ function normalizePersistedDraftsByThreadId(
       draftCandidate.modelSelectionByProvider &&
       typeof draftCandidate.modelSelectionByProvider === "object"
     ) {
-      modelSelectionByProvider = draftCandidate.modelSelectionByProvider as Partial<
-        Record<ProviderInstanceId, ModelSelection>
-      >;
+      modelSelectionByProvider = normalizePersistedModelSelectionByProvider(
+        draftCandidate.modelSelectionByProvider,
+      );
       activeProvider = normalizeProviderInstanceId(draftCandidate.activeProvider);
       modelSelectionExplicit = draftCandidate.modelSelectionExplicit === true ? true : undefined;
     } else {
@@ -2183,10 +2211,9 @@ function normalizeCurrentPersistedComposerDraftStoreState(
     normalizedPersistedState.stickyModelSelectionByProvider &&
     typeof normalizedPersistedState.stickyModelSelectionByProvider === "object"
   ) {
-    stickyModelSelectionByProvider =
-      normalizedPersistedState.stickyModelSelectionByProvider as Partial<
-        Record<ProviderInstanceId, ModelSelection>
-      >;
+    stickyModelSelectionByProvider = normalizePersistedModelSelectionByProvider(
+      normalizedPersistedState.stickyModelSelectionByProvider,
+    );
     stickyActiveProvider = normalizeProviderInstanceId(
       normalizedPersistedState.stickyActiveProvider,
     );

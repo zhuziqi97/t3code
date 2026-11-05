@@ -1,5 +1,5 @@
+import * as NodeWS from "@effect/platform-node/NodeWS";
 import { AuthStandardClientScopes } from "@t3tools/contracts";
-import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -118,7 +118,7 @@ const make = Effect.gen(function* () {
       const socket = yield* Effect.acquireRelease(
         Effect.sync(
           () =>
-            new NodeSocket.NodeWS.WebSocket(url, protocol ?? [], {
+            new NodeWS.WebSocket(url, protocol ?? [], {
               headers: { authorization: `Bearer ${token}` },
             }),
         ),

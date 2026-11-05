@@ -1,7 +1,7 @@
+import * as NodeWS from "@effect/platform-node/NodeWS";
 import { assert, it } from "@effect/vitest";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -109,7 +109,7 @@ it.live("relays native WebSocket text, binary and close reason", () =>
         http: () => Effect.die("unused"),
         websocket: (path) =>
           Socket.makeWebSocket(base.replace("http:", "ws:") + path).pipe(
-            Effect.provide(NodeSocket.layerWebSocketConstructorWS),
+            Effect.provide(NodeWS.layerWebSocketConstructor),
           ),
       }),
     );

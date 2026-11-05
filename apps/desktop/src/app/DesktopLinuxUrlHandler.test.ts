@@ -35,7 +35,6 @@ const makeEnvironment = (path: Path.Path, overrides: Record<string, unknown> = {
     isDevelopment: false,
     displayName: "T3 Code (Alpha)",
     linuxDesktopEntryName: "com.t3tools.T3Code.desktop",
-    linuxWmClass: "t3code",
     linuxApplicationsDir: "/home/alice/.local/share/applications",
     desktopLauncherPath: Option.none(),
     appImagePath: Option.some("/home/alice/Applications/T3-Code.AppImage"),
@@ -400,8 +399,9 @@ describe("DesktopLinuxUrlHandler", () => {
     });
   });
 
+  for (const stalledHelper of ["update-desktop-database", "xdg-mime"] as const) {
   it.effect.skipIf(HostProcess.Platform.defaultValue() !== "linux")(
-    "continues registration after a timed-out cache helper ignores SIGTERM",
+      `finishes registration after a timed-out ${stalledHelper} ignores SIGTERM`,
     () =>
       Effect.gen(function* () {
         const realSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -414,8 +414,8 @@ describe("DesktopLinuxUrlHandler", () => {
             if (!ChildProcess.isStandardCommand(command)) {
               return yield* Effect.die("expected a single registration command");
             }
-            recorded.commands.push({ command: command.command, args: command.args });
-            if (command.command !== "update-desktop-database") return mockProcess(0);
+              recorded.commands.push({ command: command.command, args: command.args.map(String) });
+              if (command.command !== stalledHelper) return mockProcess(0);
             const child = yield* realSpawner.spawn(
               ChildProcess.make(
                 nodeExecutable,
@@ -454,7 +454,7 @@ describe("DesktopLinuxUrlHandler", () => {
         if (Exit.isFailure(exit)) {
           assert.include(Cause.pretty(exit.cause), "SIGKILL");
         } else {
-          assert.fail(`cache helper exited with ${exit.value} instead of being force-killed`);
+            assert.fail(`${stalledHelper} exited with ${exit.value} instead of being force-killed`);
         }
         assert.deepEqual(
           recorded.commands.map(({ command }) => command),
@@ -462,6 +462,7 @@ describe("DesktopLinuxUrlHandler", () => {
         );
       }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
+  }
 });
 
 interface ThemeIconRun {

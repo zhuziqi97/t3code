@@ -18,6 +18,7 @@ import {
   type DesktopServerExposureState,
   type DesktopWslState,
   type EnvironmentId,
+  managedCapabilityDenial,
   resolveEnvironmentMachineKind,
 } from "@t3tools/contracts";
 import {
@@ -36,6 +37,7 @@ import {
   resolveTailscaleServeBaseUrl,
 } from "./ConnectionsSettings.logic";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
+import { ManagedByOrganization } from "../ManagedPolicy";
 import { LocalEnvironmentSetting } from "./LocalEnvironmentSetting";
 import { searchableSetting } from "./settingsSearch";
 import { EnvironmentIconMenu } from "./EnvironmentIconPicker";
@@ -228,8 +230,10 @@ export function ConnectionsSettings({ view }: { readonly view: "environments" | 
   const [createdPairingCredentials, setCreatedPairingCredentials] = useState<
     ReadonlyMap<string, string>
   >(() => new Map());
+  const [newestPairingLinkId, setNewestPairingLinkId] = useState<string | null>(null);
   const handlePairingLinkCreated = (created: AuthPairingCredentialResult) => {
     setCreatedPairingCredentials((current) => new Map(current).set(created.id, created.credential));
+    setNewestPairingLinkId(created.id);
   };
   const [revokingDesktopPairingLinkId, setRevokingDesktopPairingLinkId] = useState<string | null>(
     null,
@@ -272,6 +276,9 @@ export function ConnectionsSettings({ view }: { readonly view: "environments" | 
     DesktopServerExposureState["mode"] | null
   >(null);
   const primaryServerConfig = primaryEnvironment?.serverConfig ?? null;
+  const primaryManagedPolicy = primaryServerConfig?.managedPolicy;
+  // Turning remote access off stays possible; only the way in is managed.
+  const remoteClientsDenial = managedCapabilityDenial(primaryManagedPolicy, "remoteClients");
   const primaryVersionMismatch = resolveServerConfigVersionMismatch(primaryServerConfig);
   const primaryServerUpdateState = useAtomValue(
     serverEnvironment.updateStateAtom(primaryEnvironmentId),
@@ -925,6 +932,30 @@ export function ConnectionsSettings({ view }: { readonly view: "environments" | 
           />
         ) : null
       }
+      managed={tailscaleHttpsEndpoint?.status === "available" ? undefined : remoteClientsDenial}
+    />
+  );
+  const newestPairingLink = visibleDesktopPairingLinks.find(
+    (pairingLink) => pairingLink.id === newestPairingLinkId,
+  );
+  const renderPairingClientsList = (
+    pairingLinks: typeof visibleDesktopPairingLinks,
+    clientSessions: typeof desktopClientSessions,
+  ) => (
+    <PairingClientsList
+      endpointUrl={desktopServerExposureState?.endpointUrl}
+      endpoints={visibleDesktopAdvertisedEndpoints}
+      defaultEndpointKey={defaultDesktopAdvertisedEndpointKey}
+      isLoading={isLoadingDesktopAccessManagement}
+      pairingLinks={pairingLinks}
+      createdPairingCredentials={createdPairingCredentials}
+      sharedPairingLinkId={newestPairingLinkId}
+      clientSessions={clientSessions}
+      revokingPairingLinkId={revokingDesktopPairingLinkId}
+      revokingClientSessionId={revokingDesktopClientSessionId}
+      onRevokePairingLink={handleRevokeDesktopPairingLink}
+      onRevokeClientSession={handleRevokeDesktopClientSession}
+      canRevoke={canWriteAccess}
     />
   );
   const renderAuthorizedClients = () => (
@@ -936,20 +967,7 @@ export function ConnectionsSettings({ view }: { readonly view: "environments" | 
           </p>
         </div>
       ) : null}
-      <PairingClientsList
-        endpointUrl={desktopServerExposureState?.endpointUrl}
-        endpoints={visibleDesktopAdvertisedEndpoints}
-        defaultEndpointKey={defaultDesktopAdvertisedEndpointKey}
-        isLoading={isLoadingDesktopAccessManagement}
-        pairingLinks={visibleDesktopPairingLinks}
-        createdPairingCredentials={createdPairingCredentials}
-        clientSessions={desktopClientSessions}
-        revokingPairingLinkId={revokingDesktopPairingLinkId}
-        revokingClientSessionId={revokingDesktopClientSessionId}
-        onRevokePairingLink={handleRevokeDesktopPairingLink}
-        onRevokeClientSession={handleRevokeDesktopClientSession}
-        canRevoke={canWriteAccess}
-      />
+      {renderPairingClientsList(visibleDesktopPairingLinks, desktopClientSessions)}
     </>
   );
   const renderNetworkAccessRow = () => (
@@ -986,6 +1004,7 @@ export function ConnectionsSettings({ view }: { readonly view: "environments" | 
         ) : null
       }
       control={renderNetworkAccessToggle()}
+      managed={isLocalBackendNetworkAccessible ? undefined : remoteClientsDenial}
     />
   );
   const renderDisabledNetworkAccessRow = () => (
@@ -1068,6 +1087,11 @@ export function ConnectionsSettings({ view }: { readonly view: "environments" | 
               ) : null
             }
           >
+            {primaryManagedPolicy ? (
+              <div className="px-3 py-2 sm:px-4">
+                <ManagedByOrganization policy={primaryManagedPolicy} />
+              </div>
+            ) : null}
             {canManageLocalBackend ? (
               <SettingsRow
                 title={t("connections.version")}
@@ -1154,6 +1178,11 @@ export function ConnectionsSettings({ view }: { readonly view: "environments" | 
             <FoldedSettingsSection
               id="authorized-clients"
               title={t("connections.authorizedClients")}
+              collapsedContent={
+                canReadAccess && newestPairingLink
+                  ? renderPairingClientsList([newestPairingLink], [])
+                  : undefined
+              }
               summary={summarizeAuthorizedClients(
                 desktopClientSessions,
                 visibleDesktopPairingLinks,

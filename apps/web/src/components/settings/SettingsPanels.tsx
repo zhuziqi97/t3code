@@ -16,6 +16,8 @@ import {
   type DesktopUpdateChannel,
   IDLE_COMPACTION_MODES,
   globalIdleCompaction,
+  managedUpdatesDenial,
+  managedUpdatesMessage,
   ProviderDriverKind,
   type ProviderInstanceId,
   type SidebarProjectGroupingMode,
@@ -31,6 +33,7 @@ import {
 } from "@t3tools/contracts/settings";
 import { desktopUpdateChannelOf } from "@t3tools/shared/cliRelease";
 import { createModelSelection } from "@t3tools/shared/model";
+import { resolvePastedPath } from "@t3tools/shared/path";
 import * as Equal from "effect/Equal";
 import * as Schema from "effect/Schema";
 import { APP_VERSION, HOSTED_APP_CHANNEL } from "../../branding";
@@ -67,6 +70,7 @@ import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
 import { ThreadTitleInstructionsSettings } from "./ThreadTitleInstructionsSettings";
 import { SnoozePresetsRow } from "./SnoozePresetsSettings";
 import { useDesktopUpdateState } from "../../state/desktopUpdate";
+import { managedTelemetryOffMessage, usePrimaryManagedPolicy } from "../../state/managedPolicy";
 import {
   getCustomModelOptionsByInstance,
   resolveAppModelSelectionState,
@@ -165,6 +169,13 @@ function AboutVersionSection() {
 
   const hasDesktopBridge = typeof window !== "undefined" && Boolean(window.desktopBridge);
   const selectedUpdateChannel = updateState?.channel ?? "latest";
+  // The desktop updates this machine, whose policy the primary environment reports.
+  const primaryPolicy = usePrimaryManagedPolicy();
+  const updatesDenial = hasDesktopBridge ? managedUpdatesDenial(primaryPolicy) : undefined;
+  const nightlyDeniedBy =
+    hasDesktopBridge && primaryPolicy?.limits?.updates?.allowNightly === false
+      ? primaryPolicy.organization
+      : undefined;
   const selectedHostedAppChannel = hasDesktopBridge ? null : HOSTED_APP_CHANNEL;
   // A switch that failed part way leaves this app or a server on the other track.
   // With its updater off, a switch cannot move this app, so it is not counted.
@@ -257,7 +268,7 @@ function AboutVersionSection() {
         if (!result.checked) {
           showDesktopUpdateErrorToast(
             "about.updateCheck.error",
-            result.state.message,
+            updatesDenial ?? result.state.message,
             "about.updateUnsupported",
           );
         }
@@ -292,10 +303,11 @@ function AboutVersionSection() {
     actionLabel[action] ?? statusLabel[updateState?.status ?? ""] ?? t("about.updateCheck");
   const platformDownloadsUrl = updateState?.convene?.downloadsUrl;
   const description = updateState?.convene
-    ? getDesktopUpdateButtonTooltip(updateState, t)
+    ? getDesktopUpdateButtonTooltip(updateState, t, updatesDenial)
     : action === "download" || action === "install"
       ? t("about.updateAvailable")
-      : (getDesktopUpdateDisabledReason(updateState, t) ?? t("about.version.description"));
+      : (getDesktopUpdateDisabledReason(updateState, t, updatesDenial) ??
+        t("about.version.description"));
 
   return (
     <>
@@ -303,6 +315,7 @@ function AboutVersionSection() {
         id={searchableSetting("app-version", t).id}
         title={<AboutVersionTitle />}
         description={description}
+        managed={updatesDenial}
         control={
           <Tooltip>
             <TooltipTrigger
@@ -361,7 +374,13 @@ function AboutVersionSection() {
         <SettingsRow
           {...searchableSetting("update-track", t)}
           description={
-            unswitchedMachines > 0 ? (
+            nightlyDeniedBy !== undefined ? (
+              `${managedUpdatesMessage(nightlyDeniedBy)} Nightly builds are not available${
+                selectedUpdateChannel === "nightly"
+                  ? "; switch to Stable to keep getting updates."
+                  : "."
+              }`
+            ) : unswitchedMachines > 0 ? (
               <>
                 {t("about.updateTrack.stillRuns", {
                   count: unswitchedMachines,
@@ -384,6 +403,7 @@ function AboutVersionSection() {
             )
           }
           title={t("about.updateTrack")}
+          managed={updatesDenial}
           control={
             <Select
               value={selectedUpdateChannel}
@@ -407,7 +427,11 @@ function AboutVersionSection() {
                 <SelectItem hideIndicator value="latest">
                   {t("about.stable")}
                 </SelectItem>
-                <SelectItem hideIndicator value="nightly">
+                <SelectItem
+                  hideIndicator
+                  value="nightly"
+                  disabled={nightlyDeniedBy !== undefined && selectedUpdateChannel !== "nightly"}
+                >
                   {t("about.nightly")}
                 </SelectItem>
               </SelectPopup>
@@ -1758,6 +1782,7 @@ export function ThreadsSettingsPanel() {
               className="w-full sm:w-72"
               value={mixedAddProjectBaseDirectory ? "" : settings.addProjectBaseDirectory}
               onCommit={(next) => updateSettings({ addProjectBaseDirectory: next })}
+              normalizeDraft={resolvePastedPath}
               placeholder={mixedAddProjectBaseDirectory ? t("common.mixed") : "~/"}
               spellCheck={false}
               aria-label={t("general.baseDirectory.label")}
@@ -2178,10 +2203,30 @@ export function MaintenanceSettingsPanel() {
 }
 
 export function AboutSettingsPanel() {
+  const primaryPolicy = usePrimaryManagedPolicy();
   const t = useTranslate();
   return (
     <SettingsPageContainer>
       <SettingsSection id="about" title={t("section.app")}>
+        {primaryPolicy ? (
+          <SettingsRow
+            title="Organization"
+            description={`This environment is managed by ${primaryPolicy.organization}. Some settings and features follow its policy.`}
+            control={
+              primaryPolicy.supportUrl ? (
+                <Button
+                  render={
+                    <a href={primaryPolicy.supportUrl} target="_blank" rel="noreferrer noopener" />
+                  }
+                  size="sm"
+                  variant="outline"
+                >
+                  Get help
+                </Button>
+              ) : null
+            }
+          />
+        ) : null}
         {isElectron || HOSTED_APP_CHANNEL ? (
           <AboutVersionSection />
         ) : (

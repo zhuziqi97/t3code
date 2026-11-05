@@ -766,12 +766,12 @@ export class PreviewAutomationTimeoutError extends Schema.TaggedError<PreviewAut
   {
     ...PreviewAutomationRequestErrorFields,
     ...PreviewAutomationOptionalRemoteDiagnosticFields,
+    reason: Schema.optional(Schema.String),
   },
 ) {
   override get message(): string {
-    return this.remoteTag === "PreviewAutomationTimeoutError"
-      ? `Preview automation host timed out while executing ${this.operation}.`
-      : `Preview automation timed out waiting for the host response to ${this.operation} after ${this.timeoutMs}ms.`;
+    const summary = `Preview automation ${this.operation} timed out after ${this.timeoutMs}ms.`;
+    return this.reason === undefined ? summary : `${summary} ${this.reason}`;
   }
 }
 
@@ -841,7 +841,11 @@ export class PreviewAutomationInvalidSelectorError extends Schema.TaggedError<Pr
     if (this.staleRef)
       return "This element ref is stale. Navigation, dialogs, and new snapshots replace refs; take a fresh snapshot and use its refs.";
     if (this.selectorKind !== undefined && this.selectorLength !== undefined) {
-      return `Preview automation ${this.operation} received an invalid ${this.selectorKind} (${this.selectorLength} characters).`;
+      const guidance =
+        this.selectorKind === "locator"
+          ? "Use aria-ref=<ref> from the latest snapshot or a Playwright role/text selector; put CSS in selector."
+          : "selector takes CSS; use locator for aria-ref=<ref>, role, or text targets.";
+      return `Preview automation ${this.operation} received an invalid ${this.selectorKind} (${this.selectorLength} characters). ${guidance}`;
     }
     return `Preview automation ${this.operation} received an invalid selector.`;
   }

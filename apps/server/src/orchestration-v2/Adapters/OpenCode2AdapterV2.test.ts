@@ -1,7 +1,11 @@
 import * as NodeURL from "node:url";
+
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+
 import * as NodeServices from "@effect/platform-node/NodeServices";
+
 import { assert, it } from "@effect/vitest";
+
 import {
   ChatAttachmentId,
   ChatFileAttachment,
@@ -24,70 +28,107 @@ import {
   type OrchestrationV2ProviderTurn,
   type ProviderReplayEntry,
 } from "@t3tools/contracts";
+
 import * as Cause from "effect/Cause";
+
 import * as DateTime from "effect/DateTime";
+
 import * as Deferred from "effect/Deferred";
+
 import * as Effect from "effect/Effect";
+
 import * as Fiber from "effect/Fiber";
+
 import * as FileSystem from "effect/FileSystem";
+
 import * as Layer from "effect/Layer";
+
 import * as Option from "effect/Option";
+
 import * as Scope from "effect/Scope";
+
 import * as Stream from "effect/Stream";
+
 import * as Exit from "effect/Exit";
+
 import { TestClock } from "effect/testing";
 
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
+
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 
+import { buildRuntimeInstructions } from "@t3tools/provider-core/server/runtimeInstructions";
+
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
+
 import * as ProviderContinuationRequests from "@t3tools/provider-core/server/ProviderContinuationRequests";
+
 import {
   OPENCODE_2_STILL_STOPPING,
   OPENCODE_PROVIDER,
   t3McpServerName,
 } from "@t3tools/provider-opencode/testing";
+
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
+
 import { openCode2ReplayRuntime } from "./OpenCode2AdapterV2.testkit.ts";
+
 import {
   makeProviderReplayGate,
   type ProviderReplayGate,
 } from "@t3tools/provider-testing/replayGate";
 
 const SESSION = "ses_f148ca2deffeJcwCnRQtb0YFNX";
+
 const WORK = "/work/opencode2";
+
 const instanceId = ProviderInstanceId.make("opencode");
+
 const threadId = ThreadId.make("thread:opencode2-adapter");
 
 const out = (type: string, input?: unknown): ProviderReplayEntry => ({
   type: "expect_outbound",
   frame: input === undefined ? { type } : { type, input },
 });
+
 const reply = (operation: string, data: unknown): ProviderReplayEntry => ({
   type: "emit_inbound",
   frame: { type: "sdk.response", operation, data },
 });
+
 const replyData = (operation: string, data: unknown) => reply(operation, { data });
+
 const event = (
   type: string,
   data: Record<string, unknown>,
   label?: string,
+  version = 1,
 ): ProviderReplayEntry => ({
   type: "emit_inbound",
   frame: {
     type: "sdk.event",
-    event: { id: `evt_${type.replaceAll(".", "")}0000`, created: 1, type, data, ...durable },
+    event: {
+      id: `evt_${type.replaceAll(".", "")}0000`,
+      created: 1,
+      type,
+      data,
+      durable: { ...durable.durable, version },
+    },
   },
   ...(label === undefined ? {} : { label }),
 });
+
 const durable = { durable: { aggregateID: SESSION, seq: 1, version: 1 } };
 
 const mcpRules = [
   { action: "t3-code-*", resource: "*", effect: "deny" },
   { action: "t3-code-thread_opencode2-adapter_*", resource: "*", effect: "allow" },
 ];
+
 const t3Rules = [{ action: "*", resource: "*", effect: "allow" }, ...mcpRules];
+
 const TITLE = "Prime check";
+
 const sessionInfo = (overrides: Record<string, unknown> = {}) => ({
   id: SESSION,
   title: TITLE,
@@ -100,6 +141,7 @@ const sessionInfo = (overrides: Record<string, unknown> = {}) => ({
   location: { directory: WORK },
   ...overrides,
 });
+
 const modelCatalog = {
   location: { directory: WORK },
   data: [
@@ -124,6 +166,7 @@ const modelCatalog = {
 };
 
 const PROMPT_ID = "msg_0eb735d41001NJee1EvVePJAK5";
+
 const promptAccepted = replyData("session.prompt", {
   id: PROMPT_ID,
   sessionID: SESSION,
@@ -192,12 +235,14 @@ const opening: ReadonlyArray<ProviderReplayEntry> = [
   out("model.list", "<any>"),
   reply("model.list", modelCatalog),
 ];
+
 const directoryModels = (directory: string): ReadonlyArray<ProviderReplayEntry> => [
   out("model.list", { "location[directory]": directory }),
   reply("model.list", { ...modelCatalog, location: { directory } }),
 ];
 
 const bigPickle: ModelSelection = { instanceId, model: "opencode/big-pickle" };
+
 const policy = (runtimeMode: "full-access" | "approval-required" = "full-access") => ({
   runtimeMode,
   interactionMode: "default" as const,
@@ -255,6 +300,7 @@ const buildPaths = [
     effect: "allow",
   },
 ];
+
 const agentList = {
   location: { directory: WORK },
   data: [
@@ -269,6 +315,7 @@ const agentList = {
     },
   ],
 };
+
 const supervisedRules = [
   { action: "shell", resource: "*", effect: "ask" },
   { action: "edit", resource: "*", effect: "ask" },
@@ -287,7 +334,9 @@ const shellAsk = {
     source: { type: "tool", messageID: "msg_0eb7c4330001dYFQKuTpfD780v", id: "call_1" },
   },
 };
+
 const shellAskEvent = event("permission.asked", shellAsk.data);
+
 const colorForm = {
   id: "frm_0eb79ab35001fkvFECSh3wYNVD",
   sessionID: SESSION,
@@ -497,7 +546,6 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
     }).pipe(Effect.scoped),
   );
 
-  // regression: #18315 OpenCode Go quota stops were not shown as usage limits
   it.effect.each([
     ["provider.quota", "usage_limit"],
     ["provider.rate-limit", "usage_limit"],
@@ -525,8 +573,6 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
     }).pipe(Effect.scoped),
   );
 
-  // OpenCode types an empty balance as provider.quota too, but answers it with
-  // HTTP 402 and it never resets. Usage windows and budgets arrive as 429.
   it.effect.each([
     {
       name: "an out-of-funds provider.quota (402)",
@@ -570,6 +616,22 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
         status: 429,
       },
     },
+    {
+      name: "a Claude limit without a reset timestamp",
+      failureClass: "usage_limit",
+      error: {
+        type: "provider.unknown",
+        message: "You've hit your session limit · resets 5:20pm (Europe/Berlin)",
+      },
+    },
+    {
+      name: "an unrelated provider.unknown failure",
+      failureClass: "provider_error",
+      error: {
+        type: "provider.unknown",
+        message: "Request failed. Resets at 2026-11-02T20:00:00Z.",
+      },
+    },
   ] as const)("classifies $name as $failureClass", ({ error, failureClass }) =>
     Effect.gen(function* () {
       const { runtime, thread } = yield* resumed([
@@ -588,6 +650,34 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
         retryable: null,
       });
     }).pipe(Effect.scoped),
+  );
+
+  it.effect(
+    "classifies a Claude weekly limit as a usage limit that resets at its reported time",
+    () =>
+      Effect.gen(function* () {
+        const message =
+          "You've hit your weekly limit · resets 9pm (Europe/Paris) Resets at 2026-11-02T20:00:00.000Z.";
+        const { runtime, thread } = yield* resumed([
+          out("session.prompt", { sessionID: SESSION, text: "<any>" }),
+          promptAccepted,
+          event("session.execution.failed", {
+            sessionID: SESSION,
+            error: { type: "provider.unknown", message },
+          }),
+        ]);
+        const terminal = yield* terminalOf(runtime).pipe(Effect.forkScoped);
+        yield* runtime.startTurn(turnInput(thread));
+        const ended = yield* Fiber.join(terminal);
+        assert.equal(ended?.status, "failed");
+        assert.deepEqual(ended?.failure, {
+          class: "usage_limit",
+          code: "provider.unknown",
+          message,
+          retryable: null,
+          resetAt: "2026-11-02T20:00:00.000Z",
+        });
+      }).pipe(Effect.scoped),
   );
 
   it.effect("ends the turn when its terminal event is one this build cannot decode", () =>
@@ -745,6 +835,7 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
     agent: "general",
     model: { id: "big-pickle", providerID: "opencode", variant: "default" },
   });
+
   const backgroundLaunch = (child: string): ReadonlyArray<ProviderReplayEntry> => {
     const call = "call-background";
     const tool = { sessionID: SESSION, assistantMessageID: "msg_assistant", id: call };
@@ -766,6 +857,7 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
       }),
     ];
   };
+
   const withLineage = (thread: OrchestrationV2ProviderThread) => ({
     ...turnInput(thread),
     appThread: {
@@ -774,6 +866,7 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
       lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
     } as OrchestrationV2AppThread,
   });
+
   const continuationTurn = (
     thread: OrchestrationV2ProviderThread,
     offer: ProviderContinuationRequests.ProviderContinuationRequest,
@@ -792,7 +885,9 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
       creationSource: "provider" as const,
     },
   });
+
   const CHILD = "ses_f1485c529ffea4URrYruwEg0Ja";
+
   const watchBackgroundTurn = (runtime: ProviderAdapter.ProviderAdapterV2SessionRuntime) =>
     Effect.gen(function* () {
       const attached = yield* Deferred.make<void>();
@@ -814,6 +909,7 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
       );
       return { attached: Deferred.await(attached), terminal: Fiber.join(terminal) };
     });
+
   it.effect("keeps background subagents running when a turn is interrupted to restart it", () =>
     Effect.gen(function* () {
       const { runtime, thread } = yield* resumed([
@@ -905,47 +1001,85 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect("keeps a finished background subagent's queued report as pending work", () =>
-    Effect.gen(function* () {
-      const { runtime, thread } = yield* resumed([
-        ...backgroundLaunch(CHILD),
-        event("session.execution.succeeded", { sessionID: SESSION }),
-        event("session.execution.succeeded", { sessionID: CHILD }),
-        event("session.inbox.enqueued", {
-          inboxID: "msg_report",
-          sessionID: SESSION,
-          item: {
-            type: "synthetic",
-            payload: {
-              text: `<subagent sessionID="${CHILD}" state="completed" description="Sleep">\nCHILD_OK\n</subagent>`,
-              description: "Sleep",
-              metadata: {
-                source: "subagent",
-                childID: CHILD,
-                agent: "General",
-                state: "completed",
-              },
-            },
-            delivery: "steer",
-          },
-        }),
-        event("session.usage.updated", { sessionID: SESSION }),
-      ]);
-      const reported = yield* Deferred.make<void>();
-      yield* runtime.events.pipe(
-        Stream.tap((event) =>
-          event.type === "subagent.updated" && event.subagent.status === "completed"
-            ? Deferred.succeed(reported, undefined)
-            : Effect.void,
-        ),
-        Stream.runDrain,
-        Effect.forkScoped,
-      );
-      yield* runtime.startTurn(withLineage(thread));
-      yield* Deferred.await(reported);
-      assert.isTrue(yield* runtime.hasPendingBackgroundWork!);
-      assert.isTrue(yield* runtime.hasPendingBackgroundWorkForThread!(thread));
-    }).pipe(Effect.scoped),
+  it.effect(
+    "keeps a finished background subagent's queued report pending until its native continuation ends",
+    () =>
+      Effect.gen(function* () {
+        const gate = makeProviderReplayGate(["continue"]);
+        const { runtime, thread } = yield* resumed(
+          [
+            ...nestedLaunch,
+            event("session.execution.succeeded", { sessionID: DEEP }),
+            deepReport("completed"),
+            event("session.model.selected", {
+              sessionID: SESSION,
+              model: { providerID: "opencode", id: "big-pickle", variant: "thinking" },
+            }),
+            event("session.execution.started", { sessionID: MIDDLE }, "continue"),
+            event("session.inbox.delivered", { sessionID: MIDDLE, inboxID: "msg_deep_report" }),
+            event("session.text.ended", {
+              sessionID: MIDDLE,
+              assistantMessageID: "msg_native_continuation",
+              ordinal: 0,
+              text: "GRANDCHILD_OK",
+            }),
+            event("session.execution.succeeded", { sessionID: MIDDLE }),
+            event("session.model.selected", {
+              sessionID: SESSION,
+              model: { providerID: "opencode", id: "big-pickle", variant: "none" },
+            }),
+          ],
+          { replayGate: gate },
+        );
+        const queued = yield* Deferred.make<void>();
+        const drained = yield* Deferred.make<void>();
+        const timeline: Array<boolean | string> = [];
+        yield* runtime.events.pipe(
+          Stream.runForEach((event) =>
+            Effect.gen(function* () {
+              if (event.type === "provider_thread.updated") {
+                if (
+                  event.providerThread.nativeThreadRef?.nativeId === MIDDLE &&
+                  event.pendingBackgroundWork !== undefined
+                ) {
+                  timeline.push(event.pendingBackgroundWork);
+                }
+                if (event.providerThread.id === thread.id) {
+                  const variant =
+                    event.providerThread.nativeMetadata?.modelSelection?.options?.[0]?.value;
+                  if (variant === "thinking") yield* Deferred.succeed(queued, undefined);
+                  if (variant === "none") yield* Deferred.succeed(drained, undefined);
+                }
+              }
+              if (
+                event.type === "provider_turn.updated" &&
+                event.providerTurn.nativeTurnRef?.nativeId === `${MIDDLE}:turn:2`
+              ) {
+                timeline.push(event.providerTurn.status);
+              }
+              if (event.type === "message.updated" && event.message.text === "GRANDCHILD_OK") {
+                timeline.push(event.message.text);
+              }
+            }),
+          ),
+          Effect.forkScoped,
+        );
+        yield* runtime.startTurn(withLineage(thread));
+        yield* Deferred.await(queued);
+        assert.isTrue(yield* runtime.hasPendingBackgroundWork!);
+        assert.isTrue(yield* runtime.hasPendingBackgroundWorkForThread!(thread));
+        assert.strictEqual(timeline.at(-1), true);
+        timeline.length = 0;
+        gate.release("continue");
+        yield* Deferred.await(drained);
+        assert.deepEqual(
+          timeline.filter((entry) => typeof entry === "string"),
+          ["running", "GRANDCHILD_OK", "completed"],
+        );
+        assert.isAbove(timeline.indexOf(false), timeline.indexOf("completed"));
+        assert.strictEqual(timeline.at(-1), false);
+        assert.isFalse(yield* runtime.hasPendingBackgroundWorkForThread!(thread));
+      }).pipe(Effect.scoped),
   );
 
   const returnedRunning = (id: string): ProviderReplayEntry => ({
@@ -968,6 +1102,7 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
       },
     },
   });
+
   const callAgain = (input: Record<string, unknown>): ReadonlyArray<ProviderReplayEntry> => {
     const tool = { sessionID: SESSION, assistantMessageID: "msg_assistant", id: "call-again" };
     return [
@@ -987,6 +1122,7 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
       returnedRunning(tool.id),
     ];
   };
+
   const childReport = (inboxID: string, text: string) =>
     event("session.inbox.enqueued", {
       inboxID,
@@ -1001,6 +1137,7 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
         delivery: "steer",
       },
     });
+
   const watchCalls = (
     runtime: ProviderAdapter.ProviderAdapterV2SessionRuntime,
     thread: OrchestrationV2ProviderThread,
@@ -1057,6 +1194,7 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
         });
       return { calls, callsAtChildTurnStart, childTurns, state, until };
     });
+
   const launchedAndRunning = [
     ...backgroundLaunch(CHILD),
     returnedRunning("call-background"),
@@ -1085,7 +1223,6 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
     }).pipe(Effect.scoped),
   );
 
-  // regression: #21979 a failed background subagent pinned its thread as busy
   it.effect("settles the background call a foreground call joined to a failed child", () =>
     Effect.gen(function* () {
       const again = { sessionID: SESSION, assistantMessageID: "msg_assistant", id: "call-again" };
@@ -1176,12 +1313,15 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
   );
 
   const MIDDLE = "ses_middle0000000000000000000";
+
   const DEEP = "ses_grandchild00000000000000";
+
   const toolOf = (session: string, id: string) => ({
     sessionID: session,
     assistantMessageID: `msg_assistant_${id}`,
     id,
   });
+
   const deepReport = (state: "completed" | "cancelled") =>
     event("session.inbox.enqueued", {
       inboxID: "msg_deep_report",
@@ -1196,6 +1336,7 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
         delivery: "steer",
       },
     });
+
   const nestedLaunch: ReadonlyArray<ProviderReplayEntry> = [
     out("session.prompt", { sessionID: SESSION, text: "<any>" }),
     promptAccepted,
@@ -1241,10 +1382,14 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
     }),
     event("session.execution.succeeded", { sessionID: SESSION }),
   ];
+
   const watchNested = (runtime: ProviderAdapter.ProviderAdapterV2SessionRuntime) =>
     Effect.gen(function* () {
       const deep: Array<string> = [];
       const middleTurns = new Map<string, string>();
+      const pendingSnapshots = new Map<string, boolean>();
+      const variants = new Map<string, unknown>();
+      let rootVariant: unknown;
       const terminals: Array<string> = [];
       const changed = yield* Deferred.make<void>();
       let wake = changed;
@@ -1252,6 +1397,16 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
         Stream.tap((event) =>
           Effect.gen(function* () {
             if (event.type === "turn.terminal") terminals.push(event.status);
+            if (event.type === "provider_thread.updated") {
+              const nativeId = event.providerThread.nativeThreadRef?.nativeId;
+              if (nativeId != null && event.pendingBackgroundWork !== undefined) {
+                pendingSnapshots.set(nativeId, event.pendingBackgroundWork);
+              }
+              const variant =
+                event.providerThread.nativeMetadata?.modelSelection?.options?.[0]?.value;
+              if (nativeId != null) variants.set(nativeId, variant);
+              if (nativeId === SESSION) rootVariant = variant;
+            }
             if (event.type === "subagent.updated" && event.subagent.title === "Deep") {
               deep.push(event.subagent.status);
             }
@@ -1276,8 +1431,163 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
             yield* until(check);
           });
         });
-      return { deep, middleTurns, terminals, until };
+      return {
+        deep,
+        middleTurns,
+        terminals,
+        pendingSnapshots,
+        variants,
+        get rootVariant() {
+          return rootVariant;
+        },
+        until,
+      };
     });
+
+  it.effect("clears a nested report cancelled during a held wake", () =>
+    Effect.gen(function* () {
+      const offers: Array<ProviderContinuationRequests.ProviderContinuationRequest> = [];
+      const gate = makeProviderReplayGate(["drained"]);
+      const { runtime, thread } = yield* resumed(
+        [
+          ...backgroundLaunch(CHILD),
+          event("session.execution.succeeded", { sessionID: SESSION }),
+          event("session.execution.succeeded", { sessionID: CHILD }),
+          childReport("msg_report", "CHILD_OK"),
+          event("session.execution.started", { sessionID: SESSION }),
+          ...nestedLaunch.slice(3, -2),
+          event(
+            "session.tool.success",
+            {
+              ...toolOf(SESSION, "call-middle"),
+              content: [{ type: "text", text: "MIDDLE_OK" }],
+              metadata: { sessionID: MIDDLE, status: "completed", truncated: false },
+              executed: false,
+            },
+            undefined,
+            2,
+          ),
+          event("session.execution.succeeded", { sessionID: DEEP }),
+          deepReport("completed"),
+          event("session.inbox.cancelled", { sessionID: MIDDLE, inboxID: "msg_deep_report" }),
+          event("session.execution.succeeded", { sessionID: SESSION }),
+          event("session.model.selected", {
+            sessionID: SESSION,
+            model: { providerID: "opencode", id: "big-pickle", variant: "thinking" },
+          }),
+          event(
+            "session.model.selected",
+            {
+              sessionID: SESSION,
+              model: { providerID: "opencode", id: "big-pickle", variant: "none" },
+            },
+            "drained",
+          ),
+        ],
+        { replayGate: gate },
+      ).pipe(
+        Effect.provideService(ProviderContinuationRequests.ProviderContinuationRequests, {
+          offer: (request) =>
+            Effect.sync(() => {
+              offers.push(request);
+            }),
+          take: Effect.never,
+        }),
+      );
+      const watch = yield* watchNested(runtime);
+      yield* runtime.startTurn(withLineage(thread));
+      assert.isTrue(yield* Effect.promise(() => gate.waitForReached("drained")));
+      yield* watch.until(() => watch.rootVariant === "thinking");
+      assert.lengthOf(offers, 1);
+      yield* runtime.startTurn(continuationTurn(thread, offers[0]!));
+      gate.release("drained");
+      yield* watch.until(() => watch.rootVariant === "none");
+      assert.isFalse(yield* runtime.hasPendingBackgroundWork!);
+      assert.strictEqual(watch.pendingSnapshots.get(MIDDLE), false);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("clears the caller's pending work when a called session's held wake runs", () =>
+    Effect.gen(function* () {
+      const OTHER = "ses_other00000000000000000000";
+      const offers: Array<ProviderContinuationRequests.ProviderContinuationRequest> = [];
+      const gate = makeProviderReplayGate(["drained"]);
+      const { runtime, thread } = yield* resumed(
+        [
+          out("session.get", { sessionID: OTHER }),
+          replyData("session.get", sessionInfo({ id: OTHER })),
+          out("permission.list", { sessionID: OTHER }),
+          replyData("permission.list", []),
+          out("session.form.list", { sessionID: OTHER }),
+          replyData("session.form.list", []),
+          event("session.execution.started", { sessionID: OTHER }),
+          event("session.execution.succeeded", { sessionID: OTHER }),
+          out("session.prompt", { sessionID: SESSION, text: "<any>" }),
+          promptAccepted,
+          event("session.execution.started", { sessionID: SESSION }),
+          event("session.tool.input.started", {
+            ...toolOf(SESSION, "call-other"),
+            name: "subagent",
+          }),
+          event("session.tool.called", {
+            ...toolOf(SESSION, "call-other"),
+            name: "subagent",
+            input: { description: "Other", prompt: "again" },
+            executed: false,
+          }),
+          event("session.tool.progress", {
+            ...toolOf(SESSION, "call-other"),
+            metadata: { sessionID: OTHER, status: "running" },
+          }),
+          event("session.tool.success", {
+            ...toolOf(SESSION, "call-other"),
+            content: [{ type: "text", text: "OTHER_OK" }],
+            metadata: { sessionID: OTHER, status: "completed", truncated: false },
+            executed: false,
+          }),
+          event("session.execution.succeeded", { sessionID: SESSION }),
+          event(
+            "session.model.selected",
+            {
+              sessionID: OTHER,
+              model: { providerID: "opencode", id: "big-pickle", variant: "none" },
+            },
+            "drained",
+          ),
+        ],
+        { replayGate: gate },
+      ).pipe(
+        Effect.provideService(ProviderContinuationRequests.ProviderContinuationRequests, {
+          offer: (request) =>
+            Effect.sync(() => {
+              offers.push(request);
+            }),
+          take: Effect.never,
+        }),
+      );
+      const other = yield* runtime.resumeThread({
+        providerThread: {
+          ...thread,
+          id: ProviderThreadId.make("provider-thread:opencode2-adapter:other"),
+          nativeThreadRef: { driver: OPENCODE_PROVIDER, nativeId: OTHER, strength: "strong" },
+        },
+        threadId,
+        modelSelection: bigPickle,
+        runtimePolicy: policy(),
+      });
+      const watch = yield* watchNested(runtime);
+      yield* watch.until(() => offers.length === 1);
+      yield* runtime.startTurn(withLineage(thread));
+      assert.isTrue(yield* Effect.promise(() => gate.waitForReached("drained")));
+      // The called session's held wake is its caller's pending work too.
+      yield* watch.until(() => watch.pendingSnapshots.get(SESSION) === true);
+      yield* runtime.startTurn(continuationTurn(other, offers[0]!));
+      gate.release("drained");
+      yield* watch.until(() => watch.variants.get(OTHER) === "none");
+      assert.isFalse(watch.pendingSnapshots.get(OTHER));
+      assert.isFalse(watch.pendingSnapshots.get(SESSION));
+    }).pipe(Effect.scoped),
+  );
 
   it.effect("stops a foreground subagent's background subagent after the turn ended", () =>
     Effect.gen(function* () {
@@ -1354,6 +1664,7 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
     out("session.interrupt", { sessionID: SESSION }),
     reply("session.interrupt", "<hang>"),
   ];
+
   const secondTurn = (thread: OrchestrationV2ProviderThread) => ({
     ...turnInput(thread),
     runId: RunId.make("run:opencode2-adapter:2"),
@@ -1361,6 +1672,7 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
     providerTurnOrdinal: 2,
     attemptId: RunAttemptId.make("attempt:opencode2-adapter:2"),
   });
+
   const stopFirstTurn = (
     runtime: ProviderAdapter.ProviderAdapterV2SessionRuntime,
     thread: OrchestrationV2ProviderThread,
@@ -1373,6 +1685,7 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
       yield* TestClock.adjust("11 seconds");
       yield* Fiber.join(interrupt);
     });
+
   const terminals = (runtime: ProviderAdapter.ProviderAdapterV2SessionRuntime, count: number) =>
     runtime.events.pipe(
       Stream.filter(
@@ -1433,7 +1746,6 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
     }).pipe(Effect.scoped, Effect.provide(TestClock.layer())),
   );
 
-  // regression: #14744 continuations hung after a reconnect took a Stop's end
   it.effect("still checks the server when a failed prompt's execution starts late", () =>
     Effect.gen(function* () {
       const offered = yield* Deferred.make<void>();
@@ -1681,7 +1993,6 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
       );
     }).pipe(Effect.scoped, Effect.provide(TestClock.layer()));
 
-  // regression: #14744 continuations hung after a reconnect took a Stop's end
   it.effect("ends a background reply's continuation after a prompt failed unclearly", () =>
     replyAfterUnclearFailure(false),
   );
@@ -2041,6 +2352,7 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
       assert.equal((yield* Fiber.join(created)).nativeThreadRef?.nativeId, SESSION);
     }).pipe(Effect.scoped),
   );
+
   const reconnected = (
     active: Record<string, unknown>,
     ended?: "succeeded",
@@ -2091,6 +2403,7 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
       cursor: {},
     }),
   ];
+
   const openRequests = (
     permissions: ReadonlyArray<unknown>,
     forms: ReadonlyArray<unknown> = [],
@@ -2157,6 +2470,20 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
       const { runtime, thread } = yield* resumed([
         out("session.prompt", { sessionID: SESSION, id: PROMPT_ID, text: "<any>" }),
         promptAccepted,
+        event("session.step.started", {
+          sessionID: SESSION,
+          assistantMessageID: "msg_before_gap",
+          agent: "build",
+          model: { id: "big-pickle", providerID: "opencode", variant: "default" },
+          started: 1,
+        }),
+        event("session.step.ended", {
+          sessionID: SESSION,
+          assistantMessageID: "msg_before_gap",
+          finish: "tool-calls",
+          cost: 0,
+          tokens: { input: 100, output: 10, reasoning: 0, cache: { read: 0, write: 0 } },
+        }),
         ...reconnected({}, "succeeded"),
       ]);
       const events = yield* runtime.events.pipe(
@@ -2171,6 +2498,15 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
         "command_execution:completed",
       ]);
       assert.deepInclude(collected.at(-1), { type: "turn.terminal", status: "completed" });
+      // Steps that ended during the gap sent no tokens or models, so both stay incomplete.
+      const settled = collected.findLast(
+        (event) =>
+          event.type === "provider_turn.updated" && event.providerTurn.completedAt !== null,
+      );
+      const usage =
+        settled?.type === "provider_turn.updated" ? settled.providerTurn.turnTokenUsage : undefined;
+      assert.deepInclude(usage, { usageStatus: "partial", inputTokens: 100, outputTokens: 10 });
+      assert.notProperty(usage, "models");
     }).pipe(Effect.scoped),
   );
 
@@ -2179,7 +2515,7 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
       // session.command returns 204 without an inbox id; the stream drops before session.inbox.enqueued provides it.
       const { runtime, thread } = yield* resumed([
         out("command.list", "<any>"),
-        reply("command.list", { location: { directory: WORK }, data: [{ name: "hello" }] }),
+        reply("command.list", { location: { directory: WORK }, data: [{ name: "git/hello" }] }),
         out("message.list", { sessionID: SESSION, order: "desc", limit: "1" }),
         reply("message.list", {
           data: [
@@ -2187,7 +2523,7 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
           ],
           cursor: {},
         }),
-        out("session.command", { sessionID: SESSION, name: "hello", text: "WORLD" }),
+        out("session.command", { sessionID: SESSION, name: "git/hello", text: "WORLD" }),
         reply("session.command", null),
         { type: "runtime_exit", status: "success" } as const,
         out("event.subscribe"),
@@ -2224,7 +2560,7 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
       );
       yield* runtime.startTurn({
         ...turnInput(thread),
-        message: { ...turnInput(thread).message, text: "/hello WORLD" },
+        message: { ...turnInput(thread).message, text: "/git/hello WORLD" },
       });
       const collected = yield* Fiber.join(events);
       const texts = collected.flatMap((event) =>
@@ -2235,6 +2571,76 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
       assert.include(texts, "HELLO WORLD");
       assert.deepInclude(collected.at(-1), { type: "turn.terminal", status: "completed" });
     }).pipe(Effect.scoped),
+  );
+
+  it.effect("sends a $skill that appears once OpenCode finishes scanning the directory", () =>
+    Effect.gen(function* () {
+      const prompts: Array<unknown> = [];
+      const greet = {
+        id: "greet",
+        name: "greet",
+        path: `${WORK}/.opencode/skills/greet/SKILL.md`,
+        content: "Say hello.",
+      };
+      const { runtime, thread } = yield* resumed(
+        [
+          out("skill.list", { "location[directory]": WORK }),
+          reply("skill.list", { location: { directory: WORK }, data: [] }),
+          // OpenCode answers the model list only once the directory scan has ended.
+          ...directoryModels(WORK),
+          out("skill.list", { "location[directory]": WORK }),
+          reply("skill.list", { location: { directory: WORK }, data: [greet] }),
+          out("session.prompt", { sessionID: SESSION, text: "<any>" }),
+          promptAccepted,
+          event("session.execution.succeeded", { sessionID: SESSION }),
+        ],
+        { onPrompt: (input) => prompts.push(input) },
+      );
+      const terminal = yield* terminalOf(runtime).pipe(Effect.forkScoped);
+      const started = yield* runtime
+        .startTurn({
+          ...turnInput(thread),
+          message: { ...turnInput(thread).message, text: "$greet again please" },
+        })
+        .pipe(Effect.exit);
+      assert.deepInclude(prompts[0], { skills: [{ id: "greet" }] });
+      assert.isTrue(Exit.isSuccess(started));
+      assert.equal((yield* Fiber.join(terminal))?.status, "completed");
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect(
+    "keeps a $skill found on the first read when the reread after the scan comes back empty",
+    () =>
+      Effect.gen(function* () {
+        const prompts: Array<unknown> = [];
+        const greet = {
+          id: "greet",
+          name: "greet",
+          path: `${WORK}/.opencode/skills/greet/SKILL.md`,
+          content: "Say hello.",
+        };
+        const { runtime, thread } = yield* resumed(
+          [
+            out("skill.list", { "location[directory]": WORK }),
+            reply("skill.list", { location: { directory: WORK }, data: [greet] }),
+            ...directoryModels(WORK),
+            out("skill.list", { "location[directory]": WORK }),
+            reply("skill.list", { location: { directory: WORK }, data: [] }),
+            out("session.prompt", { sessionID: SESSION, text: "<any>" }),
+            promptAccepted,
+            event("session.execution.succeeded", { sessionID: SESSION }),
+          ],
+          { onPrompt: (input) => prompts.push(input) },
+        );
+        const terminal = yield* terminalOf(runtime).pipe(Effect.forkScoped);
+        yield* runtime.startTurn({
+          ...turnInput(thread),
+          message: { ...turnInput(thread).message, text: "$greet then echo $HOME" },
+        });
+        assert.equal((yield* Fiber.join(terminal))?.status, "completed");
+        assert.deepInclude(prompts[0], { skills: [{ id: "greet" }] });
+      }).pipe(Effect.scoped),
   );
 
   it.effect("keeps a turn still running after a reconnect open for its next events", () =>
@@ -2415,205 +2821,108 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect(
-    "registers T3's MCP server for the thread alone and removes it when the thread unloads",
-    () =>
-      Effect.gen(function* () {
-        const mcpSessions = yield* McpProviderSessions.McpProviderSessions;
-        yield* mcpSessions.set({
-          environmentId: EnvironmentId.make("environment:opencode2-adapter"),
-          threadId,
-          providerSessionId: "mcp:opencode2-adapter",
-          providerInstanceId: instanceId,
-          endpoint: "http://127.0.0.1:3773/mcp",
-          authorizationHeader: "Bearer thread-credential",
-          browserToolsAvailable: false,
-        });
-        yield* Effect.addFinalizer(() => mcpSessions.clear(threadId));
-        const server = "t3-code-thread_opencode2-adapter";
-        const { runtime, thread } = yield* resumed([
-          out("mcp.add", {
-            server,
-            "location[directory]": WORK,
-            config: {
-              type: "remote",
-              url: "http://127.0.0.1:3773/mcp",
-              headers: { Authorization: "Bearer thread-credential" },
-              oauth: false,
-            },
-          }),
-          reply("mcp.add", null),
-          out("session.prompt", { sessionID: SESSION, text: "<any>" }),
-          promptAccepted,
-          event("session.execution.succeeded", { sessionID: SESSION }),
-          out("mcp.remove", { server, "location[directory]": WORK }),
-          reply("mcp.remove", null),
-        ]);
-        const terminal = yield* terminalOf(runtime).pipe(Effect.forkScoped);
-        yield* runtime.startTurn(turnInput(thread));
-        assert.equal((yield* Fiber.join(terminal))?.status, "completed");
-        yield* runtime.unloadThread!({ providerThread: thread });
-      }).pipe(Effect.scoped),
-  );
-
-  it.effect(
-    "refreshes every project registration each turn and releases rotated or removed grants",
-    () =>
-      Effect.gen(function* () {
-        const sessions = yield* McpProviderSessions.McpProviderSessions;
-        const setGrant = (token: string | undefined) =>
-          sessions.set({
-            environmentId: EnvironmentId.make("opencode2-project-env"),
-            threadId,
-            providerSessionId: "opencode2-mcp",
-            providerInstanceId: instanceId,
-            endpoint: "http://builtin.invalid/mcp",
-            authorizationHeader: "Bearer builtin",
-            browserToolsAvailable: false,
-            ...(token === undefined
-              ? {}
-              : {
-                  additionalServers: {
-                    convene: {
-                      endpoint: "http://project.invalid/mcp",
-                      authorizationHeader: `Bearer ${token}`,
-                    },
-                  },
-                }),
-          });
-        yield* setGrant("first");
-        yield* Effect.addFinalizer(() => sessions.clear(threadId));
-        const builtin = "t3-code-thread_opencode2-adapter";
-        const project = "t3-code-convene_thread_opencode2-adapter";
-        const permissions = [
-          ...t3Rules,
-          { action: `${project}_*`, resource: "*", effect: "allow" },
-        ];
-        const add = (server: string, endpoint: string, token: string) => [
-          out("mcp.add", {
-            server,
-            "location[directory]": WORK,
-            config: {
-              type: "remote",
-              url: endpoint,
-              headers: { Authorization: `Bearer ${token}` },
-              oauth: false,
-            },
-          }),
-          reply("mcp.add", null),
-        ];
-        const remove = (server: string) => [
-          out("mcp.remove", { server, "location[directory]": WORK }),
-          reply("mcp.remove", null),
-        ];
-        const prompt = [
-          out("session.prompt", { sessionID: SESSION, text: "<any>" }),
-          promptAccepted,
-          event("session.execution.succeeded", { sessionID: SESSION }),
-        ];
-        const { runtime, thread } = yield* resumed(
-          [
-            ...add(builtin, "http://builtin.invalid/mcp", "builtin"),
-            ...add(project, "http://project.invalid/mcp", "first"),
-            ...prompt,
-            // OpenCode may have evicted the idle directory; success last turn is no cache.
-            ...add(builtin, "http://builtin.invalid/mcp", "builtin"),
-            ...add(project, "http://project.invalid/mcp", "first"),
-            ...prompt,
-            ...remove(project),
-            ...add(builtin, "http://builtin.invalid/mcp", "builtin"),
-            ...add(project, "http://project.invalid/mcp", "replacement"),
-            ...prompt,
-            out("session.update", { sessionID: SESSION, permissions: t3Rules }),
-            reply("session.update", null),
-            ...remove(project),
-            ...add(builtin, "http://builtin.invalid/mcp", "builtin"),
-            ...prompt,
-            ...remove(builtin),
-          ],
-          { permissions },
-        );
-        for (const [index, token] of ["first", "first", "replacement", undefined].entries()) {
-          yield* setGrant(token);
-          const terminal = yield* terminalOf(runtime).pipe(Effect.forkScoped);
-          yield* runtime.startTurn({
-            ...turnInput(thread),
-            runId: RunId.make(`mcp-refresh-${index}`),
-            runOrdinal: index + 1,
-            providerTurnOrdinal: index + 1,
-          });
-          assert.equal((yield* Fiber.join(terminal))?.status, "completed");
-        }
-        yield* runtime.unloadThread!({ providerThread: thread });
-      }).pipe(Effect.scoped),
-  );
-
-  it.effect(
-    "continues the turn and cleans attempted project MCP registrations after an add error",
-    () =>
-      Effect.gen(function* () {
-        const sessions = yield* McpProviderSessions.McpProviderSessions;
-        yield* sessions.set({
-          environmentId: EnvironmentId.make("opencode2-failed-project"),
-          threadId,
-          providerSessionId: "opencode2-project-failure",
-          providerInstanceId: instanceId,
-          endpoint: "http://builtin.invalid/mcp",
-          authorizationHeader: "Bearer builtin",
-          browserToolsAvailable: false,
-          additionalServers: {
-            convene: {
-              endpoint: "http://project.invalid/mcp",
-              authorizationHeader: "Bearer project",
+  it.effect("stores a shell command that exits non-zero as failed", () =>
+    Effect.gen(function* () {
+      const tool = { sessionID: SESSION, assistantMessageID: "msg_assistant", id: "call-exit" };
+      const { runtime, thread } = yield* resumed([
+        out("session.prompt", { sessionID: SESSION, text: "<any>" }),
+        promptAccepted,
+        event("session.tool.input.started", { ...tool, name: "shell" }),
+        event("session.tool.called", { ...tool, input: { command: "vp test" }, executed: false }),
+        {
+          type: "emit_inbound",
+          frame: {
+            type: "sdk.event",
+            event: {
+              id: "evt_toolsuccess_call-exit",
+              created: 1,
+              type: "session.tool.success",
+              data: {
+                ...tool,
+                content: [{ type: "text", text: "1 failed\n" }],
+                metadata: { status: "completed", truncated: false, exit: 1 },
+                executed: false,
+              },
+              durable: { aggregateID: SESSION, seq: 1, version: 2 },
             },
           },
-        });
-        yield* Effect.addFinalizer(() => sessions.clear(threadId));
-        const builtin = "t3-code-thread_opencode2-adapter";
-        const project = "t3-code-convene_thread_opencode2-adapter";
-        const { runtime, thread } = yield* resumed(
-          [
-            out("mcp.add", {
-              server: builtin,
-              "location[directory]": WORK,
-              config: {
-                type: "remote",
-                url: "http://builtin.invalid/mcp",
-                headers: { Authorization: "Bearer builtin" },
-                oauth: false,
-              },
-            }),
-            reply("mcp.add", null),
-            out("mcp.add", {
-              server: project,
-              "location[directory]": WORK,
-              config: {
-                type: "remote",
-                url: "http://project.invalid/mcp",
-                headers: { Authorization: "Bearer project" },
-                oauth: false,
-              },
-            }),
-            // The server may have installed the config before its response failed.
-            reply("mcp.add", {
-              status: 500,
-              body: { message: "Connection failed after registration" },
-            }),
-            out("session.prompt", { sessionID: SESSION, text: "<any>" }),
-            promptAccepted,
-            event("session.execution.succeeded", { sessionID: SESSION }),
-            out("mcp.remove", { server: builtin, "location[directory]": WORK }),
-            reply("mcp.remove", null),
-            out("mcp.remove", { server: project, "location[directory]": WORK }),
-            reply("mcp.remove", null),
-          ],
-          { permissions: [...t3Rules, { action: `${project}_*`, resource: "*", effect: "allow" }] },
-        );
+        },
+        event("session.execution.succeeded", { sessionID: SESSION }),
+      ]);
+      const events = yield* runtime.events.pipe(
+        Stream.takeUntil((event) => event.type === "turn.terminal"),
+        Stream.runCollect,
+        Effect.forkScoped,
+      );
+      yield* runtime.startTurn(turnInput(thread));
+      const collected = yield* Fiber.join(events);
+      const item = collected
+        .flatMap((event) => (event.type === "turn_item.updated" ? [event.turnItem] : []))
+        .findLast((item) => item.nativeItemRef?.nativeId?.endsWith(tool.id));
+      assert.equal(item?.type, "command_execution");
+      assert.equal(item?.status, "failed");
+      assert.equal(item?.type === "command_execution" ? item.exitCode : null, 1);
+      assert.equal(
+        collected
+          .flatMap((event) => (event.type === "node.updated" ? [event.node] : []))
+          .findLast((node) => node.id === item?.nodeId)?.status,
+        "failed",
+      );
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("re-registers T3 MCP each turn and drops its instructions when adding fails", () =>
+    Effect.gen(function* () {
+      const mcpSessions = yield* McpProviderSessions.McpProviderSessions;
+      yield* mcpSessions.set({
+        environmentId: EnvironmentId.make("environment:opencode2-adapter"),
+        threadId,
+        providerSessionId: "mcp:opencode2-adapter",
+        providerInstanceId: instanceId,
+        endpoint: "http://127.0.0.1:3773/mcp",
+        authorizationHeader: "Bearer thread-credential",
+        browserToolsAvailable: false,
+      });
+      yield* Effect.addFinalizer(() => mcpSessions.clear(threadId));
+      const server = "t3-code-thread_opencode2-adapter";
+      const add = out("mcp.add", {
+        server,
+        "location[directory]": WORK,
+        config: {
+          type: "remote",
+          url: "http://127.0.0.1:3773/mcp",
+          headers: { Authorization: "Bearer thread-credential" },
+          oauth: false,
+        },
+      });
+      const turn = [
+        out("session.prompt", { sessionID: SESSION, text: "<any>" }),
+        promptAccepted,
+        event("session.execution.succeeded", { sessionID: SESSION }),
+      ];
+      // Idle Location eviction drops OpenCode's runtime MCP servers without a reconnect.
+      const { runtime, thread } = yield* resumed([
+        add,
+        reply("mcp.add", null),
+        ...turn,
+        add,
+        reply("mcp.add", { status: 500, body: { message: "MCP unavailable" } }),
+        out("session.instructions.entry.put", {
+          sessionID: SESSION,
+          key: "t3-code",
+          value: buildRuntimeInstructions({ harness: "OpenCode", model: bigPickle.model }),
+        }),
+        reply("session.instructions.entry.put", null),
+        ...turn,
+        out("mcp.remove", { server, "location[directory]": WORK }),
+        reply("mcp.remove", null),
+      ]);
+      for (let index = 0; index < 2; index++) {
         const terminal = yield* terminalOf(runtime).pipe(Effect.forkScoped);
         yield* runtime.startTurn(turnInput(thread));
         assert.equal((yield* Fiber.join(terminal))?.status, "completed");
-        yield* runtime.unloadThread!({ providerThread: thread });
-      }).pipe(Effect.scoped),
+      }
+    }).pipe(Effect.scoped),
   );
 
   it.effect("registers a long thread id's MCP server under a name OpenCode accepts", () =>
@@ -2677,7 +2986,6 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
     }).pipe(Effect.scoped),
   );
 
-  // regression: #16142 OpenCode 2 threads were missing T3 Code's MCP tools
   it.effect("names each thread's MCP server within OpenCode's limits, one name per thread", () =>
     Effect.gen(function* () {
       const project = "thread:project:ce04e4e2-6c29-4ff0-a1d7-b089dd63e258";
@@ -3033,6 +3341,40 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
     }).pipe(Effect.scoped),
   );
 
+  it.effect("leaves models unknown when a step ends without a seen start", () =>
+    Effect.gen(function* () {
+      const tokens = { input: 10, output: 1, reasoning: 0, cache: { read: 0, write: 0 } };
+      const step = (id: string) => ({ sessionID: SESSION, assistantMessageID: id });
+      const { runtime, thread } = yield* resumed([
+        out("session.prompt", { sessionID: SESSION, text: "<any>" }),
+        promptAccepted,
+        event("session.step.started", {
+          ...step("msg_seen"),
+          agent: "build",
+          model: { id: "big-pickle", providerID: "opencode", variant: "default" },
+          started: 1,
+        }),
+        event("session.step.ended", { ...step("msg_seen"), finish: "tool-calls", cost: 0, tokens }),
+        event("session.step.ended", { ...step("msg_unseen"), finish: "stop", cost: 0, tokens }),
+        event("session.execution.succeeded", { sessionID: SESSION }),
+      ]);
+      const turn = yield* runtime.events.pipe(
+        Stream.filter(
+          (event) =>
+            event.type === "provider_turn.updated" && event.providerTurn.completedAt !== null,
+        ),
+        Stream.runHead,
+        Effect.forkScoped,
+      );
+      yield* runtime.startTurn(turnInput(thread));
+      const settled = Option.getOrUndefined(yield* Fiber.join(turn));
+      const usage =
+        settled?.type === "provider_turn.updated" ? settled.providerTurn.turnTokenUsage : undefined;
+      assert.deepInclude(usage, { usageStatus: "complete", inputTokens: 20, outputTokens: 2 });
+      assert.notProperty(usage, "models");
+    }).pipe(Effect.scoped),
+  );
+
   it.effect("reports cache writes as cache creation, not only as input", () =>
     Effect.gen(function* () {
       const { runtime, thread } = yield* resumed([
@@ -3070,15 +3412,13 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
   );
 
   const ASSISTANT = "msg_0eb735d5b001oAFVeY5jz3WD4Z";
+
   const rateLimited = {
     type: "provider.rate-limit",
     message: "Rate limit exceeded: free-models-per-min.",
     status: 429,
   };
-  /**
-   * OpenCode numbers the request it retries with, so its first retry is
-   * attempt 2, and stamps `at` from the clock behind the event's `created` (1 here).
-   */
+
   const retryScheduled = (attempt: number, delayMs: number) =>
     event("session.retry.scheduled", {
       sessionID: SESSION,
@@ -3087,17 +3427,21 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
       at: 1 + delayMs,
       error: rateLimited,
     });
+
   const retrying = {
     class: "provider_error",
     message: rateLimited.message,
     code: rateLimited.type,
     retryable: true,
   } satisfies OrchestrationV2ProviderFailure;
+
   const firstRetry = { attempt: 1, maxAttempts: null, retryDelayMs: 2_000 };
+
   const errorRows = (collected: ReadonlyArray<ProviderAdapter.ProviderAdapterV2Event>) =>
     collected.flatMap((event) =>
       event.type === "turn_item.updated" && event.turnItem.type === "error" ? [event.turnItem] : [],
     );
+
   const runRetryTurn = (entries: ReadonlyArray<ProviderReplayEntry>, gate?: ProviderReplayGate) =>
     Effect.gen(function* () {
       const { runtime, thread } = yield* resumed(
@@ -3173,7 +3517,6 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
     }).pipe(Effect.scoped),
   );
 
-  // regression: #15672 OpenCode 2 provider retries ran silently instead of showing
   it.effect.each([
     { name: "restores retry pending at reconnect", pending: true, streamed: false },
     { name: "settles retry recovered during drop", pending: false, streamed: false },
@@ -3382,6 +3725,56 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
         turn?.type === "provider_turn.updated" ? turn.providerTurn.tokenUsage?.maxTokens : null,
         48000,
       );
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("rejects unreadable rollback history before cutting the native session", () =>
+    Effect.gen(function* () {
+      const { runtime, thread } = yield* resumed([
+        out("message.list", { sessionID: SESSION, limit: "100", type: undefined }),
+        reply("message.list", {
+          data: [
+            { id: "msg_kept", time: { created: 1 }, text: "first", type: "user" },
+            {
+              id: "msg_compaction",
+              time: { created: 2 },
+              type: "compaction",
+              status: "completed",
+              reason: "auto",
+              summary: "First turn summary",
+              recent: 42,
+            },
+            { id: "msg_dropped", time: { created: 3 }, text: "second", type: "user" },
+          ],
+          cursor: {},
+        }),
+      ]);
+      const now = yield* DateTime.now;
+      const turns = ["msg_kept", "msg_dropped"].map((nativeId, index) => ({
+        id: ProviderTurnId.make(`provider-turn:rollback-history:${index}`),
+        providerThreadId: thread.id,
+        nodeId: NodeId.make(`node:rollback-history:${index}`),
+        runAttemptId: RunAttemptId.make(`attempt:rollback-history:${index}`),
+        nativeTurnRef: { driver: OPENCODE_PROVIDER, nativeId, strength: "weak" as const },
+        ordinal: index + 1,
+        status: "completed" as const,
+        startedAt: now,
+        completedAt: now,
+      }));
+      const failure = yield* runtime
+        .rollbackThread({
+          providerThread: thread,
+          target: {
+            type: "provider_turn",
+            checkpointId: CheckpointId.make("checkpoint:rollback-history"),
+            appRunOrdinal: 1,
+            providerTurn: turns[0]!,
+          },
+          providerThreadTurns: turns,
+        })
+        .pipe(Effect.flip);
+      assert.equal(failure._tag, "ProviderAdapterRollbackThreadError");
+      assert.include(Cause.pretty(Cause.fail(failure)), '["recent"]');
     }).pipe(Effect.scoped),
   );
 
@@ -3613,7 +4006,6 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
     }).pipe(Effect.scoped, Effect.provide(IdAllocator.layer)),
   );
 
-  // regression: #16775 unchanged session status updates were rewritten on every event
   it.effect("reports the shared session's status only when it changes", () =>
     Effect.gen(function* () {
       const OTHER = "ses_f148ca2deffeOtherSession000";
@@ -4158,8 +4550,11 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
       const [first, second] = turns;
       return { runtime, thread, first: first!, second: second! };
     });
+
   const CONTINUED_PROMPT = `msg_t3_turn_${SESSION}:attempt:attempt:opencode2-adapter`;
+
   const CONTINUED_REPORT = `<subagent sessionID="${CHILD}" state="completed" description="Sleep">\nCHILD_OK\n</subagent>`;
+
   const continuedHistory = {
     data: [
       { id: "msg_report", time: { created: 2 }, text: CONTINUED_REPORT, type: "synthetic" },
@@ -4172,8 +4567,22 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
     Effect.gen(function* () {
       const FORK = "ses_f1484db83ffeLGtrRCFimo1H0e";
       const { runtime, thread, first, second } = yield* continued([
-        out("message.list", "<any>"),
-        reply("message.list", continuedHistory),
+        out("message.list", { sessionID: SESSION, limit: "100", type: "user" }),
+        reply("message.list", { data: [continuedHistory.data[1]], cursor: {} }),
+        out("message.list", { sessionID: SESSION, limit: "100", type: "synthetic" }),
+        reply("message.list", {
+          data: [
+            { id: "msg_later_report", time: { created: 3 }, text: "later", type: "synthetic" },
+          ],
+          cursor: { next: "synthetic-page-2" },
+        }),
+        out("message.list", {
+          sessionID: SESSION,
+          limit: "100",
+          type: "synthetic",
+          cursor: "synthetic-page-2",
+        }),
+        reply("message.list", { data: [continuedHistory.data[0]], cursor: {} }),
         out("session.fork", { sessionID: SESSION, before: "msg_report" }),
         replyData("session.fork", sessionInfo({ id: FORK })),
         out("session.update", { sessionID: FORK, permissions: "<any>" }),
@@ -4376,7 +4785,6 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
     }).pipe(Effect.scoped),
   );
 
-  // regression: #14752 continuations replayed background replies that were not theirs
   it.effect("ends a continuation while a skipped reply's subagent does not answer its Stop", () =>
     Effect.gen(function* () {
       const CHILD_B = "ses_f1485c529ffeBBBBBBBBBBBBBB";
@@ -4665,6 +5073,207 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
       assert.deepEqual(terminals, ["completed", "completed"]);
       assert.lengthOf(offers, 1);
     }).pipe(Effect.scoped, Effect.provide(IdAllocator.layer)),
+  );
+
+  it.effect(
+    "registers T3's MCP server for the thread alone and removes it when the thread unloads",
+    () =>
+      Effect.gen(function* () {
+        const mcpSessions = yield* McpProviderSessions.McpProviderSessions;
+        yield* mcpSessions.set({
+          environmentId: EnvironmentId.make("environment:opencode2-adapter"),
+          threadId,
+          providerSessionId: "mcp:opencode2-adapter",
+          providerInstanceId: instanceId,
+          endpoint: "http://127.0.0.1:3773/mcp",
+          authorizationHeader: "Bearer thread-credential",
+          browserToolsAvailable: false,
+        });
+        yield* Effect.addFinalizer(() => mcpSessions.clear(threadId));
+        const server = "t3-code-thread_opencode2-adapter";
+        const { runtime, thread } = yield* resumed([
+          out("mcp.add", {
+            server,
+            "location[directory]": WORK,
+            config: {
+              type: "remote",
+              url: "http://127.0.0.1:3773/mcp",
+              headers: { Authorization: "Bearer thread-credential" },
+              oauth: false,
+            },
+          }),
+          reply("mcp.add", null),
+          out("session.prompt", { sessionID: SESSION, text: "<any>" }),
+          promptAccepted,
+          event("session.execution.succeeded", { sessionID: SESSION }),
+          out("mcp.remove", { server, "location[directory]": WORK }),
+          reply("mcp.remove", null),
+        ]);
+        const terminal = yield* terminalOf(runtime).pipe(Effect.forkScoped);
+        yield* runtime.startTurn(turnInput(thread));
+        assert.equal((yield* Fiber.join(terminal))?.status, "completed");
+        yield* runtime.unloadThread!({ providerThread: thread });
+      }).pipe(Effect.scoped),
+  );
+
+  it.effect(
+    "refreshes every project registration each turn and releases rotated or removed grants",
+    () =>
+      Effect.gen(function* () {
+        const sessions = yield* McpProviderSessions.McpProviderSessions;
+        const setGrant = (token: string | undefined) =>
+          sessions.set({
+            environmentId: EnvironmentId.make("opencode2-project-env"),
+            threadId,
+            providerSessionId: "opencode2-mcp",
+            providerInstanceId: instanceId,
+            endpoint: "http://builtin.invalid/mcp",
+            authorizationHeader: "Bearer builtin",
+            browserToolsAvailable: false,
+            ...(token === undefined
+              ? {}
+              : {
+                  additionalServers: {
+                    convene: {
+                      endpoint: "http://project.invalid/mcp",
+                      authorizationHeader: `Bearer ${token}`,
+                    },
+                  },
+                }),
+          });
+        yield* setGrant("first");
+        yield* Effect.addFinalizer(() => sessions.clear(threadId));
+        const builtin = "t3-code-thread_opencode2-adapter";
+        const project = "t3-code-convene_thread_opencode2-adapter";
+        const permissions = [
+          ...t3Rules,
+          { action: `${project}_*`, resource: "*", effect: "allow" },
+        ];
+        const add = (server: string, endpoint: string, token: string) => [
+          out("mcp.add", {
+            server,
+            "location[directory]": WORK,
+            config: {
+              type: "remote",
+              url: endpoint,
+              headers: { Authorization: `Bearer ${token}` },
+              oauth: false,
+            },
+          }),
+          reply("mcp.add", null),
+        ];
+        const remove = (server: string) => [
+          out("mcp.remove", { server, "location[directory]": WORK }),
+          reply("mcp.remove", null),
+        ];
+        const prompt = [
+          out("session.prompt", { sessionID: SESSION, text: "<any>" }),
+          promptAccepted,
+          event("session.execution.succeeded", { sessionID: SESSION }),
+        ];
+        const { runtime, thread } = yield* resumed(
+          [
+            ...add(builtin, "http://builtin.invalid/mcp", "builtin"),
+            ...add(project, "http://project.invalid/mcp", "first"),
+            ...prompt,
+            // OpenCode may have evicted the idle directory; success last turn is no cache.
+            ...add(builtin, "http://builtin.invalid/mcp", "builtin"),
+            ...add(project, "http://project.invalid/mcp", "first"),
+            ...prompt,
+            ...remove(project),
+            ...add(builtin, "http://builtin.invalid/mcp", "builtin"),
+            ...add(project, "http://project.invalid/mcp", "replacement"),
+            ...prompt,
+            out("session.update", { sessionID: SESSION, permissions: t3Rules }),
+            reply("session.update", null),
+            ...remove(project),
+            ...add(builtin, "http://builtin.invalid/mcp", "builtin"),
+            ...prompt,
+            ...remove(builtin),
+          ],
+          { permissions },
+        );
+        for (const [index, token] of ["first", "first", "replacement", undefined].entries()) {
+          yield* setGrant(token);
+          const terminal = yield* terminalOf(runtime).pipe(Effect.forkScoped);
+          yield* runtime.startTurn({
+            ...turnInput(thread),
+            runId: RunId.make(`mcp-refresh-${index}`),
+            runOrdinal: index + 1,
+            providerTurnOrdinal: index + 1,
+          });
+          assert.equal((yield* Fiber.join(terminal))?.status, "completed");
+        }
+        yield* runtime.unloadThread!({ providerThread: thread });
+      }).pipe(Effect.scoped),
+  );
+
+  it.effect(
+    "continues the turn and cleans attempted project MCP registrations after an add error",
+    () =>
+      Effect.gen(function* () {
+        const sessions = yield* McpProviderSessions.McpProviderSessions;
+        yield* sessions.set({
+          environmentId: EnvironmentId.make("opencode2-failed-project"),
+          threadId,
+          providerSessionId: "opencode2-project-failure",
+          providerInstanceId: instanceId,
+          endpoint: "http://builtin.invalid/mcp",
+          authorizationHeader: "Bearer builtin",
+          browserToolsAvailable: false,
+          additionalServers: {
+            convene: {
+              endpoint: "http://project.invalid/mcp",
+              authorizationHeader: "Bearer project",
+            },
+          },
+        });
+        yield* Effect.addFinalizer(() => sessions.clear(threadId));
+        const builtin = "t3-code-thread_opencode2-adapter";
+        const project = "t3-code-convene_thread_opencode2-adapter";
+        const { runtime, thread } = yield* resumed(
+          [
+            out("mcp.add", {
+              server: builtin,
+              "location[directory]": WORK,
+              config: {
+                type: "remote",
+                url: "http://builtin.invalid/mcp",
+                headers: { Authorization: "Bearer builtin" },
+                oauth: false,
+              },
+            }),
+            reply("mcp.add", null),
+            out("mcp.add", {
+              server: project,
+              "location[directory]": WORK,
+              config: {
+                type: "remote",
+                url: "http://project.invalid/mcp",
+                headers: { Authorization: "Bearer project" },
+                oauth: false,
+              },
+            }),
+            // The server may have installed the config before its response failed.
+            reply("mcp.add", {
+              status: 500,
+              body: { message: "Connection failed after registration" },
+            }),
+            out("session.prompt", { sessionID: SESSION, text: "<any>" }),
+            promptAccepted,
+            event("session.execution.succeeded", { sessionID: SESSION }),
+            out("mcp.remove", { server: builtin, "location[directory]": WORK }),
+            reply("mcp.remove", null),
+            out("mcp.remove", { server: project, "location[directory]": WORK }),
+            reply("mcp.remove", null),
+          ],
+          { permissions: [...t3Rules, { action: `${project}_*`, resource: "*", effect: "allow" }] },
+        );
+        const terminal = yield* terminalOf(runtime).pipe(Effect.forkScoped);
+        yield* runtime.startTurn(turnInput(thread));
+        assert.equal((yield* Fiber.join(terminal))?.status, "completed");
+        yield* runtime.unloadThread!({ providerThread: thread });
+      }).pipe(Effect.scoped),
   );
 });
 

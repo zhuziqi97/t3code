@@ -1,3 +1,4 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as CommandReceiptStore from "../orchestration-v2/CommandReceiptStore.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { assert, it } from "@effect/vitest";
@@ -72,7 +73,7 @@ const layer = ConveneNative.layer.pipe(
       Layer.provide(
         ServerConfig.layerTest(process.cwd(), { prefix: "t3-convene-native-workspaces-" }),
       ),
-      Layer.provide(NodeServices.layer),
+      Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
     ),
   ),
   Layer.provideMerge(
@@ -84,7 +85,7 @@ const layer = ConveneNative.layer.pipe(
   ),
   Layer.provideMerge(ProjectStore.layer.pipe(Layer.provide(database))),
   Layer.provide(ProviderRegistryMock.layer([provider])),
-  Layer.provide(NodeServices.layer),
+  Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
 );
 const create: ConveneNativeRequest = {
   operation: "CREATE",
@@ -173,7 +174,10 @@ it.effect.each(["controlled-codex", null])(
         assert.equal(encoded.thread.modelSelection.model, selectedModel);
       const listed = yield* service.handle({ operation: "LIST", projectId, workspaceKey: "root" });
       assert.isTrue(listed.type === "threads" && listed.threads.length === 1);
-    }).pipe(Effect.provide(Layer.merge(layer, NodeServices.layer)), Effect.scoped),
+    }).pipe(
+      Effect.provide(Layer.merge(layer, Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+      Effect.scoped,
+    ),
 );
 
 it.effect(
@@ -242,7 +246,10 @@ it.effect(
         })
         .pipe(Effect.flip);
       assert.equal(expired.category, "invalid_request");
-    }).pipe(Effect.provide(Layer.merge(layer, NodeServices.layer)), Effect.scoped),
+    }).pipe(
+      Effect.provide(Layer.merge(layer, Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+      Effect.scoped,
+    ),
 );
 
 it.effect(
@@ -342,5 +349,8 @@ it.effect(
         commandId: CommandId.make("replacement:create"),
       });
       assert.isTrue(created.type === "receipt" && created.accepted);
-    }).pipe(Effect.provide(Layer.merge(layer, NodeServices.layer)), Effect.scoped),
+    }).pipe(
+      Effect.provide(Layer.merge(layer, Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+      Effect.scoped,
+    ),
 );

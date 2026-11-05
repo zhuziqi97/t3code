@@ -1,3 +1,4 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { EventId, ProjectId } from "@t3tools/contracts";
@@ -15,7 +16,7 @@ const layer = ConveneWorkspaces.layer.pipe(
   Layer.provideMerge(ProjectStore.layer.pipe(Layer.provide(SqlitePersistence.layerMemory))),
   Layer.provideMerge(Git.layer.pipe(Layer.provide(VcsProcess.layer))),
   Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "t3-convene-workspaces-" })),
-  Layer.provideMerge(NodeServices.layer),
+  Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
 );
 
 it.effect(

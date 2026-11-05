@@ -1,3 +1,4 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { assert, it } from "@effect/vitest";
 import {
   ConveneIntegrationError,
@@ -117,7 +118,7 @@ it.effect.each([
         HttpClient.HttpClient,
         HttpClient.make(() => Effect.die("unused")),
       ),
-      NodeServices.layer,
+      Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),
     );
     yield* Effect.gen(function* () {
       const broker = yield* ConveneMcp.ConveneMcp;
@@ -296,7 +297,7 @@ it.effect(
             ]),
         }),
         NodeHttpServer.layerTest,
-        NodeServices.layer,
+        Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),
         Layer.mock(ProjectionStore.ProjectionStoreV2)({
           getThread: (id) => Effect.succeed(thread(id)),
         }),

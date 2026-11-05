@@ -1,10 +1,3 @@
-import { presentProviderGoal } from "./threadExecution.ts";
-import {
-  presentPendingBackgroundWork,
-  formatModelSelectionEffort,
-  formatProviderSubagentStatus,
-} from "./threadExecution.ts";
-import { threadRuntimeCanArchive, type ThreadRuntimeSummary } from "./models.ts";
 import {
   TurnItemId,
   NodeId,
@@ -17,30 +10,36 @@ import {
   RunAttemptId,
   RunId,
   ThreadId,
-  type ServerProvider,
-  type ProviderOptionDescriptor,
   type OrchestrationV2ExecutionNode,
   type OrchestrationV2RunStatus,
+  type ServerProvider,
+  type ProviderOptionDescriptor,
   type OrchestrationV2TurnItem,
 } from "@t3tools/contracts";
+
 import * as DateTime from "effect/DateTime";
+
 import { usageLimitBlockedRun } from "@t3tools/shared/orchestrationV2ThreadError";
+
 import { describe, expect, it } from "vite-plus/test";
-import { createI18n } from "../i18n/index.ts";
 
 import { v2Projection } from "./orchestrationV2TestFixtures.ts";
-import { runEndState } from "../runEndState.ts";
+
 import {
   deriveReportedModelSelection,
-  applyThreadProviderConfiguration,
-  deriveThreadProviderConfiguration,
   deriveLatestThreadRun,
   deriveProviderSubagentStatus,
+  deriveResumableRunId,
   deriveRunlessWorkStartedAt,
   deriveThreadActivityRun,
   deriveThreadRuntime,
+  isBackgroundWorkStopPending,
+  presentPendingBackgroundWork,
+  presentProviderGoal,
   presentRunStop,
   threadRuntimeHasInterruptibleRun,
+  applyThreadProviderConfiguration,
+  deriveThreadProviderConfiguration,
 } from "./threadExecution.ts";
 
 const now = DateTime.makeUnsafe("2026-07-28T10:00:00.000Z");
@@ -66,6 +65,218 @@ function run(id: string, ordinal: number, status: OrchestrationV2RunStatus) {
 }
 
 describe("thread execution presentation", () => {
+  it("derives the current root failure without inheriting errors from children or previous runs", () => {
+    const failed = { ...run("limited", 1, "failed"), rootNodeId: NodeId.make("root") };
+    const item = {
+      id: TurnItemId.make("limit-error"),
+      threadId: v2Projection.thread.id,
+      runId: failed.id,
+      nodeId: failed.rootNodeId,
+      providerThreadId: null,
+      providerTurnId: null,
+      nativeItemRef: null,
+      parentItemId: null,
+      ordinal: 1,
+      type: "error" as const,
+      status: "failed" as const,
+      title: "Usage limit reached",
+      startedAt: now,
+      completedAt: now,
+      updatedAt: now,
+      failure: {
+        class: "usage_limit" as const,
+        message: "Plan limit reached",
+        code: "usageLimitExceeded",
+        retryable: null,
+      },
+    };
+    const projection = { ...v2Projection, runs: [failed], turnItems: [item] };
+    expect(deriveThreadRuntime(projection)).toMatchObject({
+      lastError: "Plan limit reached",
+      lastErrorClass: "usage_limit",
+    });
+    expect(deriveResumableRunId(projection, deriveThreadRuntime(projection))).toBe(failed.id);
+    expect(
+      deriveThreadRuntime({
+        ...projection,
+        turnItems: [{ ...item, nodeId: NodeId.make("child") }],
+      }),
+    ).toMatchObject({ lastError: null, lastErrorClass: null });
+    expect(
+      deriveThreadRuntime({
+        ...projection,
+        runs: [{ ...failed, rootNodeId: NodeId.make("new-root") }],
+      }),
+    ).toMatchObject({ lastError: null, lastErrorClass: null });
+    expect(
+      deriveThreadRuntime({ ...projection, runs: [failed, run("new", 2, "running")] }),
+    ).toMatchObject({ status: "running", lastError: null, lastErrorClass: null });
+  });
+
+  it("counts a wake run's activity from the start of the work it continues", () => {
+    const workStartedAt = DateTime.makeUnsafe("2026-07-28T09:20:00.000Z");
+    const wake = { ...run("wake", 2, "running"), workStartedAt };
+    expect(
+      deriveThreadRuntime({ ...v2Projection, runs: [run("prompt", 1, "completed"), wake] })
+        ?.activityStartedAt,
+    ).toBe("2026-07-28T09:20:00.000Z");
+    expect(
+      deriveThreadRuntime({ ...v2Projection, runs: [run("prompt", 1, "running")] })
+        ?.activityStartedAt,
+    ).toBe("2026-07-28T10:00:00.000Z");
+  });
+
+  it("keeps a subscription limit visible while later messages stay queued", () => {
+    const failed = {
+      ...run("limited", 1, "failed"),
+      rootNodeId: NodeId.make("root"),
+      completedAt: now,
+    };
+    const queued = run("queued", 2, "queued");
+    const item = {
+      id: TurnItemId.make("limit-error"),
+      threadId: v2Projection.thread.id,
+      runId: failed.id,
+      nodeId: failed.rootNodeId,
+      providerThreadId: null,
+      providerTurnId: null,
+      nativeItemRef: null,
+      parentItemId: null,
+      ordinal: 1,
+      type: "error" as const,
+      status: "failed" as const,
+      title: "Usage limit reached",
+      startedAt: now,
+      completedAt: now,
+      updatedAt: now,
+      failure: {
+        class: "usage_limit" as const,
+        message: "Plan limit reached",
+        code: "usageLimitExceeded",
+        retryable: null,
+      },
+    };
+    const projection = { ...v2Projection, runs: [failed, queued], turnItems: [item] };
+
+    expect(deriveLatestThreadRun(projection)?.runId).toBe(failed.id);
+    expect(deriveThreadActivityRun(projection)?.runId).toBe(failed.id);
+    expect(deriveThreadRuntime(projection)).toMatchObject({
+      status: "failed",
+      lastError: "Plan limit reached",
+      lastErrorClass: "usage_limit",
+    });
+    expect(deriveResumableRunId(projection, deriveThreadRuntime(projection))).toBe(failed.id);
+    const cancelledQueued = {
+      ...run("cancelled-queued", 3, "cancelled"),
+      startedAt: null,
+      completedAt: now,
+    };
+    expect(
+      usageLimitBlockedRun([failed, queued, cancelledQueued], projection.turnItems, null)?.id,
+    ).toBe(failed.id);
+    expect(
+      deriveThreadRuntime({ ...projection, runs: [failed, queued, cancelledQueued] }),
+    ).toMatchObject({ status: "failed", lastErrorClass: "usage_limit" });
+    const providerError = {
+      ...projection,
+      turnItems: [{ ...item, failure: { ...item.failure, class: "provider_error" as const } }],
+    };
+    expect(deriveThreadRuntime(providerError)).toMatchObject({
+      status: "queued",
+      lastErrorClass: null,
+    });
+    expect(deriveResumableRunId(providerError, deriveThreadRuntime(providerError))).toBeNull();
+  });
+
+  it("keeps live activity attached to an executing run when a newer run is queued", () => {
+    const runningRun = run("run-running", 1, "running");
+    const queuedRun = run("run-queued", 2, "queued");
+    const projection = { ...v2Projection, runs: [queuedRun, runningRun], updatedAt: now };
+
+    expect(deriveLatestThreadRun(projection)?.runId).toBe(queuedRun.id);
+    expect(deriveThreadActivityRun(projection)).toMatchObject({
+      runId: runningRun.id,
+      status: "running",
+    });
+
+    const runtime = deriveThreadRuntime(projection);
+    expect(runtime).toMatchObject({
+      status: "running",
+      activeRunId: runningRun.id,
+    });
+    expect(threadRuntimeHasInterruptibleRun(runtime)).toBe(true);
+  });
+
+  it("marks an open run whose provider turn already ended", () => {
+    const attemptId = RunAttemptId.make("attempt-open");
+    const openRun = { ...run("run-open", 1, "running"), activeAttemptId: attemptId };
+    const providerTurn = (status: "running" | "failed") => ({
+      id: ProviderTurnId.make("provider-turn-open"),
+      providerThreadId: ProviderThreadId.make("provider-thread-open"),
+      nodeId: NodeId.make("node-open"),
+      runAttemptId: attemptId,
+      nativeTurnRef: null,
+      ordinal: 1,
+      status,
+      startedAt: now,
+      completedAt: status === "running" ? null : now,
+    });
+    const projection = (status: "running" | "failed") => ({
+      ...v2Projection,
+      runs: [openRun],
+      providerTurns: [providerTurn(status)],
+      updatedAt: now,
+    });
+
+    expect(deriveThreadActivityRun(projection("running"))?.turnEnded).toBeUndefined();
+    expect(deriveThreadActivityRun(projection("failed"))).toMatchObject({
+      status: "running",
+      turnEnded: true,
+    });
+  });
+
+  it("presents a held queue as the stopped run instead of queued work", () => {
+    const interrupted = { ...run("run-interrupted", 1, "interrupted"), completedAt: now };
+    const held = { ...run("run-held", 2, "queued"), queueHeld: true };
+    const projection = { ...v2Projection, runs: [interrupted, held], updatedAt: now };
+
+    expect(deriveLatestThreadRun(projection)?.runId).toBe(interrupted.id);
+    expect(deriveThreadActivityRun(projection)?.runId).toBe(interrupted.id);
+    expect(deriveThreadRuntime(projection)).toMatchObject({
+      status: "interrupted",
+      activeRunId: null,
+    });
+    expect(deriveResumableRunId(projection, deriveThreadRuntime(projection))).toBe(interrupted.id);
+
+    const resumed = { ...projection, runs: [interrupted, { ...held, queueHeld: false }] };
+    expect(deriveThreadRuntime(resumed)).toMatchObject({ status: "queued" });
+
+    const onlyHeld = {
+      ...projection,
+      runs: [held],
+      thread: { ...projection.thread, activeProviderThreadId: null },
+    };
+    expect(deriveLatestThreadRun(onlyHeld)).toBeNull();
+    expect(deriveThreadRuntime(onlyHeld)).toBeNull();
+  });
+
+  it("does not expose a queued-only run as interruptible", () => {
+    const queuedRun = run("run-queued", 1, "queued");
+    const projection = { ...v2Projection, runs: [queuedRun], updatedAt: now };
+
+    expect(deriveThreadActivityRun(projection)).toMatchObject({
+      runId: queuedRun.id,
+      status: "queued",
+    });
+
+    const runtime = deriveThreadRuntime(projection);
+    expect(runtime).toMatchObject({
+      status: "queued",
+      activeRunId: null,
+    });
+    expect(threadRuntimeHasInterruptibleRun(runtime)).toBe(false);
+  });
+
   function promotedQueueProjection() {
     const completedAt = DateTime.makeUnsafe("2026-10-26T03:05:36.145Z");
     const promotedAt = DateTime.makeUnsafe("2026-10-26T03:04:44.236Z");
@@ -273,213 +484,6 @@ describe("thread execution presentation", () => {
       }),
     ).toMatchObject({ status: "failed", activeRunId: null });
   });
-
-  it("derives the current root failure without inheriting errors from children or previous runs", () => {
-    const failed = { ...run("limited", 1, "failed"), rootNodeId: NodeId.make("root") };
-    const item = {
-      id: TurnItemId.make("limit-error"),
-      threadId: v2Projection.thread.id,
-      runId: failed.id,
-      nodeId: failed.rootNodeId,
-      providerThreadId: null,
-      providerTurnId: null,
-      nativeItemRef: null,
-      parentItemId: null,
-      ordinal: 1,
-      type: "error" as const,
-      status: "failed" as const,
-      title: "Usage limit reached",
-      startedAt: now,
-      completedAt: now,
-      updatedAt: now,
-      failure: {
-        class: "usage_limit" as const,
-        message: "Plan limit reached",
-        code: "usageLimitExceeded",
-        retryable: null,
-      },
-    };
-    const projection = { ...v2Projection, runs: [failed], turnItems: [item] };
-    expect(deriveThreadRuntime(projection)).toMatchObject({
-      lastError: "Plan limit reached",
-      lastErrorClass: "usage_limit",
-    });
-    expect(
-      deriveThreadRuntime({
-        ...projection,
-        turnItems: [{ ...item, nodeId: NodeId.make("child") }],
-      }),
-    ).toMatchObject({ lastError: null, lastErrorClass: null });
-    expect(
-      deriveThreadRuntime({
-        ...projection,
-        runs: [{ ...failed, rootNodeId: NodeId.make("new-root") }],
-      }),
-    ).toMatchObject({ lastError: null, lastErrorClass: null });
-    expect(
-      deriveThreadRuntime({ ...projection, runs: [failed, run("new", 2, "running")] }),
-    ).toMatchObject({ status: "running", lastError: null, lastErrorClass: null });
-  });
-
-  // regression: #15029 working timers no longer reset on every background wake
-  it("counts a wake run's activity from the start of the work it continues", () => {
-    const workStartedAt = DateTime.makeUnsafe("2026-07-28T09:20:00.000Z");
-    const wake = { ...run("wake", 2, "running"), workStartedAt };
-    expect(
-      deriveThreadRuntime({ ...v2Projection, runs: [run("prompt", 1, "completed"), wake] })
-        ?.activityStartedAt,
-    ).toBe("2026-07-28T09:20:00.000Z");
-    expect(
-      deriveThreadRuntime({ ...v2Projection, runs: [run("prompt", 1, "running")] })
-        ?.activityStartedAt,
-    ).toBe("2026-07-28T10:00:00.000Z");
-  });
-
-  it("keeps a subscription limit visible while later messages stay queued", () => {
-    const failed = {
-      ...run("limited", 1, "failed"),
-      rootNodeId: NodeId.make("root"),
-      completedAt: now,
-    };
-    const queued = run("queued", 2, "queued");
-    const item = {
-      id: TurnItemId.make("limit-error"),
-      threadId: v2Projection.thread.id,
-      runId: failed.id,
-      nodeId: failed.rootNodeId,
-      providerThreadId: null,
-      providerTurnId: null,
-      nativeItemRef: null,
-      parentItemId: null,
-      ordinal: 1,
-      type: "error" as const,
-      status: "failed" as const,
-      title: "Usage limit reached",
-      startedAt: now,
-      completedAt: now,
-      updatedAt: now,
-      failure: {
-        class: "usage_limit" as const,
-        message: "Plan limit reached",
-        code: "usageLimitExceeded",
-        retryable: null,
-      },
-    };
-    const projection = { ...v2Projection, runs: [failed, queued], turnItems: [item] };
-
-    expect(deriveLatestThreadRun(projection)?.runId).toBe(failed.id);
-    expect(deriveThreadActivityRun(projection)?.runId).toBe(failed.id);
-    expect(deriveThreadRuntime(projection)).toMatchObject({
-      status: "failed",
-      lastError: "Plan limit reached",
-      lastErrorClass: "usage_limit",
-    });
-    const cancelledQueued = {
-      ...run("cancelled-queued", 3, "cancelled"),
-      startedAt: null,
-      completedAt: now,
-    };
-    expect(
-      usageLimitBlockedRun([failed, queued, cancelledQueued], projection.turnItems, null)?.id,
-    ).toBe(failed.id);
-    expect(
-      deriveThreadRuntime({ ...projection, runs: [failed, queued, cancelledQueued] }),
-    ).toMatchObject({ status: "failed", lastErrorClass: "usage_limit" });
-    expect(
-      deriveThreadRuntime({
-        ...projection,
-        turnItems: [{ ...item, failure: { ...item.failure, class: "provider_error" as const } }],
-      }),
-    ).toMatchObject({ status: "queued", lastErrorClass: null });
-  });
-
-  it("keeps live activity attached to an executing run when a newer run is queued", () => {
-    const runningRun = run("run-running", 1, "running");
-    const queuedRun = run("run-queued", 2, "queued");
-    const projection = { ...v2Projection, runs: [queuedRun, runningRun], updatedAt: now };
-
-    expect(deriveLatestThreadRun(projection)?.runId).toBe(queuedRun.id);
-    expect(deriveThreadActivityRun(projection)).toMatchObject({
-      runId: runningRun.id,
-      status: "running",
-    });
-
-    const runtime = deriveThreadRuntime(projection);
-    expect(runtime).toMatchObject({
-      status: "running",
-      activeRunId: runningRun.id,
-    });
-    expect(threadRuntimeHasInterruptibleRun(runtime)).toBe(true);
-  });
-
-  it("marks an open run whose provider turn already ended", () => {
-    const attemptId = RunAttemptId.make("attempt-open");
-    const openRun = { ...run("run-open", 1, "running"), activeAttemptId: attemptId };
-    const providerTurn = (status: "running" | "failed") => ({
-      id: ProviderTurnId.make("provider-turn-open"),
-      providerThreadId: ProviderThreadId.make("provider-thread-open"),
-      nodeId: NodeId.make("node-open"),
-      runAttemptId: attemptId,
-      nativeTurnRef: null,
-      ordinal: 1,
-      status,
-      startedAt: now,
-      completedAt: status === "running" ? null : now,
-    });
-    const projection = (status: "running" | "failed") => ({
-      ...v2Projection,
-      runs: [openRun],
-      providerTurns: [providerTurn(status)],
-      updatedAt: now,
-    });
-
-    expect(deriveThreadActivityRun(projection("running"))?.turnEnded).toBeUndefined();
-    expect(deriveThreadActivityRun(projection("failed"))).toMatchObject({
-      status: "running",
-      turnEnded: true,
-    });
-  });
-
-  it("presents a held queue as the stopped run instead of queued work", () => {
-    const interrupted = { ...run("run-interrupted", 1, "interrupted"), completedAt: now };
-    const held = { ...run("run-held", 2, "queued"), queueHeld: true };
-    const projection = { ...v2Projection, runs: [interrupted, held], updatedAt: now };
-
-    expect(deriveLatestThreadRun(projection)?.runId).toBe(interrupted.id);
-    expect(deriveThreadActivityRun(projection)?.runId).toBe(interrupted.id);
-    expect(deriveThreadRuntime(projection)).toMatchObject({
-      status: "interrupted",
-      activeRunId: null,
-    });
-
-    const resumed = { ...projection, runs: [interrupted, { ...held, queueHeld: false }] };
-    expect(deriveThreadRuntime(resumed)).toMatchObject({ status: "queued" });
-
-    const onlyHeld = {
-      ...projection,
-      runs: [held],
-      thread: { ...projection.thread, activeProviderThreadId: null },
-    };
-    expect(deriveLatestThreadRun(onlyHeld)).toBeNull();
-    expect(deriveThreadRuntime(onlyHeld)).toBeNull();
-  });
-
-  it("does not expose a queued-only run as interruptible", () => {
-    const queuedRun = run("run-queued", 1, "queued");
-    const projection = { ...v2Projection, runs: [queuedRun], updatedAt: now };
-
-    expect(deriveThreadActivityRun(projection)).toMatchObject({
-      runId: queuedRun.id,
-      status: "queued",
-    });
-
-    const runtime = deriveThreadRuntime(projection);
-    expect(runtime).toMatchObject({
-      status: "queued",
-      activeRunId: null,
-    });
-    expect(threadRuntimeHasInterruptibleRun(runtime)).toBe(false);
-  });
 });
 
 describe("presentRunStop", () => {
@@ -639,120 +643,106 @@ describe("deriveProviderSubagentStatus", () => {
   });
 });
 
-describe("formatModelSelectionEffort", () => {
-  const instanceId = ProviderInstanceId.make("claudeAgent");
-  const selection = (options?: ReadonlyArray<{ id: string; value: string }>) => ({
-    instanceId,
-    model: "claude-sonnet-5",
-    ...(options === undefined ? {} : { options }),
-  });
-  const catalog = (descriptor: { id?: string; currentValue?: string }) => [
-    {
-      slug: "claude-sonnet-5",
-      name: "Claude Sonnet 5",
-      isCustom: false,
-      capabilities: {
-        optionDescriptors: [
-          {
-            id: "effort",
-            label: "Reasoning",
-            type: "select" as const,
-            options: [
-              { id: "medium", label: "Medium" },
-              { id: "high", label: "High", isDefault: true },
-              { id: "xhigh", label: "Extra High" },
-            ],
-            ...descriptor,
-          },
+describe("provider-reported model selection", () => {
+  const selected = { ...v2Projection.thread.modelSelection, model: "fixture-model" };
+
+  const reported = { ...selected, options: [{ id: "reasoningEffort", value: "default" }] };
+
+  const providerThread = {
+    id: ProviderThreadId.make("active"),
+    driver: ProviderDriverKind.make("codex"),
+    providerInstanceId: selected.instanceId,
+    providerSessionId: ProviderSessionId.make("session"),
+    appThreadId: v2Projection.thread.id,
+    ownerNodeId: null,
+    nativeThreadRef: null,
+    nativeConversationHeadRef: null,
+    status: "idle" as const,
+    firstRunOrdinal: null,
+    lastRunOrdinal: null,
+    handoffIds: [],
+    forkedFrom: null,
+    createdAt: now,
+    updatedAt: now,
+    nativeMetadata: { modelSelection: reported },
+  };
+
+  const projection = {
+    ...v2Projection,
+    thread: { ...v2Projection.thread, activeProviderThreadId: providerThread.id },
+    providerThreads: [providerThread],
+  };
+
+  it("reads only the active provider thread's reported selection", () => {
+    expect(deriveReportedModelSelection(projection)).toBe(reported);
+    expect(
+      deriveReportedModelSelection({
+        ...projection,
+        thread: { ...projection.thread, activeProviderThreadId: null },
+      }),
+    ).toBeNull();
+    expect(
+      deriveReportedModelSelection({
+        ...projection,
+        providerThreads: [
+          { ...providerThread, providerInstanceId: ProviderInstanceId.make("other") },
         ],
-      },
-    },
-  ];
-
-  it.each(["effort", "reasoning_effort"])(
-    "names stored and matching reported %s, preferring the stored choice",
-    (id) => {
-      expect(formatModelSelectionEffort(selection([{ id, value: "xhigh" }]), catalog({ id }))).toBe(
-        "Extra High",
-      );
-      const reported = selection([{ id, value: "xhigh" }]);
-      expect(formatModelSelectionEffort(selection(), catalog({ id }), reported)).toBe("Extra High");
-      expect(
-        formatModelSelectionEffort(selection([{ id, value: "medium" }]), catalog({ id }), reported),
-      ).toBe("Medium");
-      expect(
-        formatModelSelectionEffort(
-          selection([{ id, value: "retired-effort" }]),
-          catalog({ id, currentValue: "medium" }),
-          reported,
-        ),
-      ).toBeNull();
-    },
-  );
-
-  it("shows nothing when neither the selection nor the provider states an effort", () => {
-    expect(formatModelSelectionEffort(selection(), catalog({}))).toBeNull();
-    expect(formatModelSelectionEffort(selection(), catalog({ currentValue: "medium" }))).toBeNull();
-    expect(
-      formatModelSelectionEffort(selection(), catalog({}), {
-        ...selection([{ id: "effort", value: "xhigh" }]),
-        model: "claude-opus-5-5",
       }),
-    ).toBeNull();
-    expect(
-      formatModelSelectionEffort(selection(), catalog({}), {
-        ...selection([{ id: "effort", value: "xhigh" }]),
-        instanceId: ProviderInstanceId.make("claudeAgent-other"),
-      }),
-    ).toBeNull();
-  });
-
-  it("localizes the subagent effort display without changing its selected native value", () => {
-    const selected = selection([{ id: "effort", value: "xhigh" }]);
-    const t = createI18n().getFixedT("zh");
-    expect(formatModelSelectionEffort(selected, catalog({}), null, t)).toBe("Extra High");
-    expect(selected.options).toEqual([{ id: "effort", value: "xhigh" }]);
-  });
-
-  it("shows nothing for a model the catalog does not describe", () => {
-    expect(formatModelSelectionEffort(selection([{ id: "effort", value: "high" }]))).toBeNull();
-    expect(
-      formatModelSelectionEffort(
-        { ...selection(), model: "claude-haiku-4-5" },
-        catalog({ currentValue: "medium" }),
-      ),
     ).toBeNull();
   });
 });
 
-describe("threadRuntimeCanArchive", () => {
-  const runtime = (
-    status: ThreadRuntimeSummary["status"],
-    activeRunId: ThreadRuntimeSummary["activeRunId"],
-  ): ThreadRuntimeSummary => ({
-    status,
-    activeRunId,
-    providerInstanceId: v2Projection.thread.providerInstanceId,
-    providerName: null,
-    lastError: null,
-    updatedAt: DateTime.formatIso(now),
+describe("isBackgroundWorkStopPending", () => {
+  const tasks = [{ taskId: "dev-server" }];
+  const sent = { threadKey: "env:thread", taskIds: ["dev-server"], retryAt: null };
+  const accepted = { ...sent, retryAt: 10_000 };
+
+  it("stays pending after acceptance while a stopped task is still listed", () => {
+    expect(isBackgroundWorkStopPending(sent, "env:thread", tasks, false)).toBe(true);
+    expect(isBackgroundWorkStopPending(accepted, "env:thread", tasks, false)).toBe(true);
   });
 
-  it.each(["preparing", "starting", "running"] as const)(
-    "blocks archive while a provider is %s",
-    (status) => {
-      expect(threadRuntimeCanArchive(runtime(status, RunId.make(`run-${status}`)))).toBe(false);
-    },
-  );
-
-  it("only blocks a queued runtime when a provider run remains attached", () => {
-    expect(threadRuntimeCanArchive(runtime("queued", RunId.make("run-queued")))).toBe(false);
-    expect(threadRuntimeCanArchive(runtime("queued", null))).toBe(true);
+  it("ends once the stopped tasks leave, even if new work starts", () => {
+    expect(isBackgroundWorkStopPending(accepted, "env:thread", [], false)).toBe(false);
+    expect(isBackgroundWorkStopPending(accepted, "env:thread", [{ taskId: "next" }], false)).toBe(
+      false,
+    );
   });
 
-  it("allows waiting and idle threads", () => {
-    expect(threadRuntimeCanArchive(runtime("waiting", RunId.make("run-finished")))).toBe(true);
-    expect(threadRuntimeCanArchive(runtime("idle", null))).toBe(true);
+  it("allows retry at the deadline even if a stopped task remains", () => {
+    const request = { ...accepted, retryAt: 10_000 };
+    expect(isBackgroundWorkStopPending(request, "env:thread", tasks, false)).toBe(true);
+    expect(isBackgroundWorkStopPending(request, "env:thread", tasks, true)).toBe(false);
+  });
+
+  it("only applies to the thread that sent the Stop", () => {
+    expect(isBackgroundWorkStopPending(null, "env:thread", tasks, false)).toBe(false);
+    expect(isBackgroundWorkStopPending(sent, "env:other", tasks, false)).toBe(false);
+  });
+});
+
+describe("presentProviderGoal", () => {
+  it("rolls token counts that round to 1000k over to 1m", () => {
+    const usage = (tokensUsed: number) =>
+      presentProviderGoal(
+        { objective: "Ship the feature", status: "active", tokensUsed, tokenBudget: 2_000_000 },
+        true,
+      ).usage;
+    expect(usage(999_499)).toBe("999k / 2m tokens");
+    expect(usage(999_500)).toBe("1m / 2m tokens");
+    expect(usage(999_999)).toBe("1m / 2m tokens");
+    expect(usage(1_000_000)).toBe("1m / 2m tokens");
+    expect(
+      presentProviderGoal(
+        {
+          objective: "Ship the feature",
+          status: "paused",
+          tokensUsed: 999_500,
+          tokenBudget: 999_500,
+        },
+        false,
+      ).usage,
+    ).toBe("1m / 1m tokens");
   });
 });
 
@@ -892,49 +882,126 @@ describe("presentPendingBackgroundWork", () => {
   });
 });
 
-describe("provider-reported model selection", () => {
-  const selected = { ...v2Projection.thread.modelSelection, model: "fixture-model" };
-  const reported = { ...selected, options: [{ id: "reasoningEffort", value: "default" }] };
-  const providerThread = {
-    id: ProviderThreadId.make("active"),
-    driver: ProviderDriverKind.make("codex"),
-    providerInstanceId: selected.instanceId,
-    providerSessionId: ProviderSessionId.make("session"),
-    appThreadId: v2Projection.thread.id,
-    ownerNodeId: null,
-    nativeThreadRef: null,
-    nativeConversationHeadRef: null,
-    status: "idle" as const,
-    firstRunOrdinal: null,
-    lastRunOrdinal: null,
-    handoffIds: [],
-    forkedFrom: null,
-    createdAt: now,
-    updatedAt: now,
-    nativeMetadata: { modelSelection: reported },
-  };
-  const projection = {
-    ...v2Projection,
-    thread: { ...v2Projection.thread, activeProviderThreadId: providerThread.id },
-    providerThreads: [providerThread],
-  };
+import { threadRuntimeCanArchive, type ThreadRuntimeSummary } from "./models.ts";
 
-  it("reads only the active provider thread's reported selection", () => {
-    expect(deriveReportedModelSelection(projection)).toBe(reported);
-    expect(
-      deriveReportedModelSelection({
-        ...projection,
-        thread: { ...projection.thread, activeProviderThreadId: null },
-      }),
-    ).toBeNull();
-    expect(
-      deriveReportedModelSelection({
-        ...projection,
-        providerThreads: [
-          { ...providerThread, providerInstanceId: ProviderInstanceId.make("other") },
+import { createI18n } from "../i18n/index.ts";
+
+import { runEndState } from "../runEndState.ts";
+
+describe("formatModelSelectionEffort", () => {
+  const instanceId = ProviderInstanceId.make("claudeAgent");
+  const selection = (options?: ReadonlyArray<{ id: string; value: string }>) => ({
+    instanceId,
+    model: "claude-sonnet-5",
+    ...(options === undefined ? {} : { options }),
+  });
+  const catalog = (descriptor: { id?: string; currentValue?: string }) => [
+    {
+      slug: "claude-sonnet-5",
+      name: "Claude Sonnet 5",
+      isCustom: false,
+      capabilities: {
+        optionDescriptors: [
+          {
+            id: "effort",
+            label: "Reasoning",
+            type: "select" as const,
+            options: [
+              { id: "medium", label: "Medium" },
+              { id: "high", label: "High", isDefault: true },
+              { id: "xhigh", label: "Extra High" },
+            ],
+            ...descriptor,
+          },
         ],
+      },
+    },
+  ];
+
+  it.each(["effort", "reasoning_effort"])(
+    "names stored and matching reported %s, preferring the stored choice",
+    (id) => {
+      expect(formatModelSelectionEffort(selection([{ id, value: "xhigh" }]), catalog({ id }))).toBe(
+        "Extra High",
+      );
+      const reported = selection([{ id, value: "xhigh" }]);
+      expect(formatModelSelectionEffort(selection(), catalog({ id }), reported)).toBe("Extra High");
+      expect(
+        formatModelSelectionEffort(selection([{ id, value: "medium" }]), catalog({ id }), reported),
+      ).toBe("Medium");
+      expect(
+        formatModelSelectionEffort(
+          selection([{ id, value: "retired-effort" }]),
+          catalog({ id, currentValue: "medium" }),
+          reported,
+        ),
+      ).toBeNull();
+    },
+  );
+
+  it("shows nothing when neither the selection nor the provider states an effort", () => {
+    expect(formatModelSelectionEffort(selection(), catalog({}))).toBeNull();
+    expect(formatModelSelectionEffort(selection(), catalog({ currentValue: "medium" }))).toBeNull();
+    expect(
+      formatModelSelectionEffort(selection(), catalog({}), {
+        ...selection([{ id: "effort", value: "xhigh" }]),
+        model: "claude-opus-5-5",
       }),
     ).toBeNull();
+    expect(
+      formatModelSelectionEffort(selection(), catalog({}), {
+        ...selection([{ id: "effort", value: "xhigh" }]),
+        instanceId: ProviderInstanceId.make("claudeAgent-other"),
+      }),
+    ).toBeNull();
+  });
+
+  it("localizes the subagent effort display without changing its selected native value", () => {
+    const selected = selection([{ id: "effort", value: "xhigh" }]);
+    const t = createI18n().getFixedT("zh");
+    expect(formatModelSelectionEffort(selected, catalog({}), null, t)).toBe("Extra High");
+    expect(selected.options).toEqual([{ id: "effort", value: "xhigh" }]);
+  });
+
+  it("shows nothing for a model the catalog does not describe", () => {
+    expect(formatModelSelectionEffort(selection([{ id: "effort", value: "high" }]))).toBeNull();
+    expect(
+      formatModelSelectionEffort(
+        { ...selection(), model: "claude-haiku-4-5" },
+        catalog({ currentValue: "medium" }),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("threadRuntimeCanArchive", () => {
+  const runtime = (
+    status: ThreadRuntimeSummary["status"],
+    activeRunId: ThreadRuntimeSummary["activeRunId"],
+  ): ThreadRuntimeSummary => ({
+    status,
+    activeRunId,
+    providerInstanceId: v2Projection.thread.providerInstanceId,
+    providerName: null,
+    lastError: null,
+    updatedAt: DateTime.formatIso(now),
+  });
+
+  it.each(["preparing", "starting", "running"] as const)(
+    "blocks archive while a provider is %s",
+    (status) => {
+      expect(threadRuntimeCanArchive(runtime(status, RunId.make(`run-${status}`)))).toBe(false);
+    },
+  );
+
+  it("only blocks a queued runtime when a provider run remains attached", () => {
+    expect(threadRuntimeCanArchive(runtime("queued", RunId.make("run-queued")))).toBe(false);
+    expect(threadRuntimeCanArchive(runtime("queued", null))).toBe(true);
+  });
+
+  it("allows waiting and idle threads", () => {
+    expect(threadRuntimeCanArchive(runtime("waiting", RunId.make("run-finished")))).toBe(true);
+    expect(threadRuntimeCanArchive(runtime("idle", null))).toBe(true);
   });
 });
 
@@ -1071,30 +1138,5 @@ describe("session-scoped ACP configuration", () => {
   });
   it("reads configuration only from the active thread with the matching instance", () => {
     expect(deriveThreadProviderConfiguration(v2Projection)).toBeNull();
-  });
-});
-
-describe("presentProviderGoal", () => {
-  it("rolls token counts that round to 1000k over to 1m", () => {
-    const usage = (tokensUsed: number) =>
-      presentProviderGoal(
-        { objective: "Ship the feature", status: "active", tokensUsed, tokenBudget: 2_000_000 },
-        true,
-      ).usage;
-    expect(usage(999_499)).toBe("999k / 2m tokens");
-    expect(usage(999_500)).toBe("1m / 2m tokens");
-    expect(usage(999_999)).toBe("1m / 2m tokens");
-    expect(usage(1_000_000)).toBe("1m / 2m tokens");
-    expect(
-      presentProviderGoal(
-        {
-          objective: "Ship the feature",
-          status: "paused",
-          tokensUsed: 999_500,
-          tokenBudget: 999_500,
-        },
-        false,
-      ).usage,
-    ).toBe("1m / 1m tokens");
   });
 });

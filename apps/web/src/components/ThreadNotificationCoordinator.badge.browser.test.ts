@@ -1,12 +1,16 @@
-import { WORKING_EXIT_GRACE_MS } from "@t3tools/client-runtime/state/thread-inbox";
 import type { AnyRouter } from "@tanstack/react-router";
+
 import { EnvironmentId } from "@t3tools/contracts";
+
 import * as DateTime from "effect/DateTime";
+
 import * as Option from "effect/Option";
+
 import { Atom, AtomRegistry } from "effect/reactivity";
+
 import { expect, it, vi } from "vite-plus/test";
 
-import { fakeTimers, stubGlobal } from "../../test/render";
+import { stubGlobal } from "../../test/render";
 
 const state = vi.hoisted(() => ({
   mode: "notifications",
@@ -18,10 +22,12 @@ const state = vi.hoisted(() => ({
   badge: vi.fn(),
   settingsListeners: new Set<() => void>(),
 }));
+
 vi.mock(import("./ui/toast"), async (original) => {
   const actual = await original();
   return { ...actual, toastManager: { ...actual.toastManager, add: state.toast as never } };
 });
+
 vi.mock(import("../state/shell"), async (original) => {
   const actual = await original();
   return {
@@ -32,6 +38,7 @@ vi.mock(import("../state/shell"), async (original) => {
     },
   };
 });
+
 vi.mock(import("../state/presentation"), async (original) => {
   const actual = await original();
   return {
@@ -45,6 +52,7 @@ vi.mock(import("../state/presentation"), async (original) => {
     },
   };
 });
+
 vi.mock(import("../state/threads"), async (original) => {
   const actual = await original();
   return {
@@ -58,6 +66,7 @@ vi.mock(import("../state/threads"), async (original) => {
     },
   };
 });
+
 vi.mock(import("../hooks/useSettings"), async (original) => ({
   ...(await original()),
   subscribeClientSettings: ((listener: () => void) => {
@@ -69,6 +78,7 @@ vi.mock(import("../hooks/useSettings"), async (original) => ({
     inAppNotificationsEnabled: state.inApp,
   })) as never,
 }));
+
 vi.mock(import("../threadNotifications"), async (original) => ({
   ...(await original()),
   playNotificationSound: state.sound,
@@ -79,10 +89,15 @@ vi.mock(import("../threadNotifications"), async (original) => ({
 import { startThreadNotifications } from "./ThreadNotificationCoordinator";
 
 let registry: AtomRegistry.AtomRegistry;
+
 const shellAtom = Atom.family((_id: string) => Atom.make<unknown>(null));
+
 const environmentIdsAtom = Atom.make<ReadonlyArray<string>>([]);
+
 const noRequestsAtom = Atom.make(new Map());
+
 const noDelegatedAtom = Atom.make<ReadonlySet<string>>(new Set<string>());
+
 state.shells = { set: (id, value) => registry.set(shellAtom(id), value) };
 
 class TestNotification extends EventTarget {
@@ -110,7 +125,9 @@ const thread = {
   session: null as { status: string } | null,
   latestTurn: { turnId: "turn", state: "running", completedAt: null as string | null },
 };
+
 let focused = false;
+
 let visibility = "visible";
 
 const SHELL_NOW = DateTime.makeUnsafe("2026-09-13T07:00:00.000Z");
@@ -179,8 +196,7 @@ function shell(overrides: Partial<typeof thread> = {}, ...others: Partial<typeof
     }),
   };
 }
-// The mocked modules read `state` and the focus flags, so every test resets them before
-// starting the service.
+
 function setup() {
   vi.clearAllMocks();
   const stack = new AsyncDisposableStack();
@@ -242,6 +258,95 @@ it.each(["hasPendingApprovals", "hasPendingUserInput"] as const)(
   },
 );
 
+it("presents completion notifications and sound as soon as the shell completes", async () => {
+  await using app = setup();
+  state.mode = "notifications-and-sound";
+  app.start();
+  state.shells.set(
+    "one",
+    shell({
+      latestTurn: { turnId: "turn", state: "completed", completedAt: "2026-09-13T07:00:01.000Z" },
+    }),
+  );
+  expect(TestNotification.sent.map((sent) => sent.title)).toEqual(["Thread completed"]);
+  expect(state.sound).toHaveBeenCalledWith("completion", expect.any(Function));
+});
+
+it.each(["hasPendingApprovals", "hasPendingUserInput"] as const)(
+  "notifies for offline completion and %s once across reconnects",
+  async (flag) => {
+    await using app = setup();
+
+    const asking = { id: "asking", hasPendingApprovals: true };
+
+    const offline = { id: "offline", [flag]: true };
+
+    const done = {
+      id: "done",
+      latestTurn: {
+        turnId: "done-turn",
+        state: "completed",
+        completedAt: "2026-09-13T07:00:00.000Z",
+      },
+    };
+
+    state.shells.set("one", shell({ id: "working" }, { id: "asking" }, { id: "offline" }, done));
+
+    app.start();
+
+    state.shells.set("one", shell({ id: "working" }, asking, { id: "offline" }, done));
+
+    state.shells.set("one", {
+      ...shell({ id: "working" }, asking, { id: "offline" }, done),
+      status: "cached",
+    });
+
+    const completed = {
+      id: "working",
+      latestTurn: { turnId: "turn", state: "completed", completedAt: "2026-09-13T07:05:00.000Z" },
+    };
+
+    state.shells.set("one", {
+      ...shell(completed, asking, offline, done),
+      status: "synchronizing",
+    });
+
+    state.shells.set("one", shell(completed, asking, offline, done));
+
+    expect(TestNotification.sent.map(({ title }) => title)).toEqual([
+      "Approval needed",
+      "Thread completed",
+      flag === "hasPendingApprovals" ? "Approval needed" : "Input needed",
+    ]);
+
+    state.shells.set("one", { ...shell(completed, asking, offline, done), status: "cached" });
+
+    state.shells.set("one", shell(completed, asking, offline, done));
+
+    expect(TestNotification.sent.map(({ title }) => title)).toEqual([
+      "Approval needed",
+      "Thread completed",
+      flag === "hasPendingApprovals" ? "Approval needed" : "Input needed",
+    ]);
+  },
+);
+
+it.each([false, true])(
+  "does not replay a notified completion after reconnect (continued: %s)",
+  async (continued) => {
+    await using app = setup();
+    app.start();
+    const completed = shell({
+      latestTurn: { turnId: "turn", state: "completed", completedAt: "2026-09-13T07:05:00.000Z" },
+    });
+    state.shells.set("one", completed);
+    state.shells.set("one", { ...completed, status: "cached" });
+    expect(TestNotification.sent.map(({ title }) => title)).toEqual(["Thread completed"]);
+    state.shells.set("one", continued ? shell() : completed);
+    expect(TestNotification.sent.map(({ title }) => title)).toEqual(["Thread completed"]);
+  },
+);
+
 it("shows in-app alerts without adding a badge while focused", async () => {
   await using app = setup();
   using _timers = fakeTimers();
@@ -275,93 +380,3 @@ it("badges background failures with in-app notifications enabled", async () => {
   expect(state.badge).toHaveBeenLastCalledWith(1);
   expect(state.toast).not.toHaveBeenCalled();
 });
-
-it("holds a completion through a continuation gap and notifies once it settles", async () => {
-  await using app = setup();
-  app.start();
-  using _timers = fakeTimers();
-  const finished = (turnId: string, completedAt: string) => ({
-    latestTurn: { turnId, state: "completed", completedAt },
-  });
-  state.shells.set("one", shell(finished("turn-1", "2026-09-13T07:00:01.000Z")));
-  state.shells.set(
-    "one",
-    shell({ latestTurn: { turnId: "turn-2", state: "running", completedAt: null } }),
-  );
-  state.shells.set("one", shell(finished("turn-2", "2026-09-13T07:00:02.000Z")));
-  expect(TestNotification.sent).toEqual([]);
-  await vi.advanceTimersByTimeAsync(WORKING_EXIT_GRACE_MS - 1);
-  expect(TestNotification.sent).toEqual([]);
-  await vi.advanceTimersByTimeAsync(1);
-  expect(TestNotification.sent.map((sent) => sent.title)).toEqual(["Turn ended"]);
-});
-
-it.each(["hasPendingApprovals", "hasPendingUserInput"] as const)(
-  "notifies for offline completion and %s once across reconnects",
-  async (flag) => {
-    await using app = setup();
-    const asking = { id: "asking", hasPendingApprovals: true };
-    const offline = { id: "offline", [flag]: true };
-    const done = {
-      id: "done",
-      latestTurn: {
-        turnId: "done-turn",
-        state: "completed",
-        completedAt: "2026-09-13T07:00:00.000Z",
-      },
-    };
-    state.shells.set("one", shell({ id: "working" }, { id: "asking" }, { id: "offline" }, done));
-    app.start();
-    using _timers = fakeTimers();
-    state.shells.set("one", shell({ id: "working" }, asking, { id: "offline" }, done));
-    state.shells.set("one", {
-      ...shell({ id: "working" }, asking, { id: "offline" }, done),
-      status: "cached",
-    });
-
-    const completed = {
-      id: "working",
-      latestTurn: { turnId: "turn", state: "completed", completedAt: "2026-09-13T07:05:00.000Z" },
-    };
-    state.shells.set("one", {
-      ...shell(completed, asking, offline, done),
-      status: "synchronizing",
-    });
-    state.shells.set("one", shell(completed, asking, offline, done));
-
-    expect(TestNotification.sent.map(({ title }) => title)).toEqual([
-      "Approval needed",
-      flag === "hasPendingApprovals" ? "Approval needed" : "Input needed",
-    ]);
-    await vi.advanceTimersByTimeAsync(WORKING_EXIT_GRACE_MS);
-    state.shells.set("one", { ...shell(completed, asking, offline, done), status: "cached" });
-    state.shells.set("one", shell(completed, asking, offline, done));
-    await vi.advanceTimersByTimeAsync(WORKING_EXIT_GRACE_MS);
-    expect(TestNotification.sent.map(({ title }) => title)).toEqual([
-      "Approval needed",
-      flag === "hasPendingApprovals" ? "Approval needed" : "Input needed",
-      "Turn ended",
-    ]);
-  },
-);
-
-it.each([false, true])(
-  "rechecks a pending completion after reconnect (continued: %s)",
-  async (continued) => {
-    await using app = setup();
-    app.start();
-    using _timers = fakeTimers();
-    const completed = shell({
-      latestTurn: { turnId: "turn", state: "completed", completedAt: "2026-09-13T07:05:00.000Z" },
-    });
-    state.shells.set("one", completed);
-    state.shells.set("one", { ...completed, status: "cached" });
-    await vi.advanceTimersByTimeAsync(WORKING_EXIT_GRACE_MS);
-    expect(TestNotification.sent).toEqual([]);
-    state.shells.set("one", continued ? shell() : completed);
-    await vi.advanceTimersByTimeAsync(WORKING_EXIT_GRACE_MS);
-    expect(TestNotification.sent.map(({ title }) => title)).toEqual(
-      continued ? [] : ["Turn ended"],
-    );
-  },
-);
