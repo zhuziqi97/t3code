@@ -141,15 +141,18 @@ export function useComposerPrediction(props: {
     controller.setContextReader(read);
     controller.update();
   });
-  const context = read();
-  return {
-    view: prediction,
-    hint:
-      permitted &&
+  const hint = useSyncExternalStore(controller.subscribe, () => {
+    const context = read();
+    return (
       context?.mode !== "off" &&
       context?.draftEmpty === true &&
       context?.idle === true &&
-      context?.available === true,
+      context?.available === true
+    );
+  });
+  return {
+    view: prediction,
+    hint: permitted && hint,
     isDraftEmpty,
     request: controller.requestManual,
     accept: controller.accept,

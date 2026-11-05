@@ -327,7 +327,7 @@ export class ComposerPredictionController {
         context.idle !== previous.idle ||
         context.available !== previous.available)
     )
-      this.publish(IDLE);
+      this.publish({ status: "idle", text: null });
     if (
       !eligible(context) ||
       context.mode !== "auto" ||
