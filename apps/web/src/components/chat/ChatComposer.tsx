@@ -1,3 +1,4 @@
+import { predictionShortcutAction } from "@t3tools/client-runtime/composer-prediction";
 import { ComposerPrediction, useComposerPrediction } from "./ComposerPrediction";
 import { useTranslate } from "../../i18n";
 
@@ -138,7 +139,7 @@ import {
 } from "../../lib/attachmentUploadQueue";
 import { attachmentUploadBlockReason } from "../../lib/attachmentUploadState";
 import type { AssistantCitationSourceAnchor } from "~/lib/assistantTextSelection";
-import { shortcutLabelForCommand } from "../../keybindings";
+import { resolveShortcutCommand, shortcutLabelForCommand } from "../../keybindings";
 import {
   type TerminalContextDraft,
   type TerminalContextSelection,
@@ -3209,11 +3210,78 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     else composerEditorRef.current?.focusAtEnd();
     return true;
   };
+  const predictionShortcutContext = {
+    composerFocus: true,
+    editableFocus: true,
+    draftThreadRoute: routeKind === "draft",
+    turnRunning: phase === "running",
+    composerRequiresModifier: composerRequiresModifier(settings.sendShortcut, prompt),
+    modelPickerOpen: isComposerModelPickerOpen,
+    terminalFocus: false,
+    terminalOpen,
+  };
+  const onPredictionKeyDown = (
+    event: KeyboardEvent,
+    state: { focused: boolean; editorEmpty: boolean },
+  ) => {
+    if (
+      routeKind !== "server" ||
+      activePendingProgress ||
+      isComposerApprovalState ||
+      isEditingQueuedMessage ||
+      !prediction.isDraftEmpty()
+    )
+      return false;
+    const dismissing =
+      event.key === "Escape" &&
+      !event.altKey &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.shiftKey &&
+      prediction.view.status !== "idle";
+    const acceptsTab =
+      event.key === "Tab" &&
+      !event.altKey &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.shiftKey &&
+      prediction.view.status === "suggestion";
+    if (acceptsTab) return false;
+    const action = predictionShortcutAction({
+      matched:
+        dismissing ||
+        resolveShortcutCommand(event, keybindings, {
+          context: predictionShortcutContext,
+        }) === "chat.requestPrediction",
+      repeat: event.repeat,
+      isComposing: event.isComposing,
+      keyCode: event.keyCode,
+      defaultPrevented: event.defaultPrevented,
+      focused: state.focused,
+      editorEmpty: state.editorEmpty,
+      menuActive:
+        composerMenuOpen ||
+        composerSuggestionsVisible ||
+        isStashMenuOpen ||
+        isComposerModelPickerOpen,
+    });
+    if (action === "pass") return false;
+    if (action === "ignore") return true;
+    if (dismissing) {
+      prediction.dismiss();
+      return true;
+    }
+    return prediction.request();
+  };
   const predictionControls = (
     <ComposerPrediction
       view={prediction.view}
       accept={acceptPrediction}
       dismiss={prediction.dismiss}
+      hint={routeKind === "server" && prediction.hint}
+      shortcut={shortcutLabelForCommand(keybindings, "chat.requestPrediction", {
+        context: predictionShortcutContext,
+      })}
     />
   );
   return (
@@ -3486,6 +3554,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       composerMenuOpen || composerSuggestionsVisible || isStashMenuOpen
                     }
                     onAcceptPrediction={acceptPrediction}
+                    onPredictionKeyDown={onPredictionKeyDown}
                     onPageScrollKeyDown={onPageScrollKeyDown}
                     onPageScrollKeyUp={onPageScrollKeyUp}
                     onPageScrollRelease={onPageScrollRelease}

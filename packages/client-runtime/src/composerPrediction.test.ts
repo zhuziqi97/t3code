@@ -8,10 +8,11 @@ import {
   ProviderThreadId,
   ThreadId,
 } from "@t3tools/contracts";
-import type { ComposerPredictionResult } from "@t3tools/contracts";
+import type { ComposerPredictionInput, ComposerPredictionResult } from "@t3tools/contracts";
 import {
   ComposerPredictionController,
   predictionAcceptsTab,
+  predictionShortcutAction,
   threadPredictionContext,
   type PredictionContext,
 } from "./composerPrediction.ts";
@@ -24,24 +25,34 @@ function setup() {
     providerThreadId: "native-root",
     connectionGeneration: 1,
     sourceRunId: RunId.make("completed-run"),
-    enabled: true,
+    mode: "auto" as const,
     available: true,
     idle: true,
     sourceActive: false,
     draftRevision: 0,
     draftEmpty: true,
   };
-  let resolve!: (result: ComposerPredictionResult | null) => void;
-  const response = new Promise<ComposerPredictionResult | null>((done) => {
-    resolve = done;
-  });
-  const request = vi.fn(() => response);
+  const pending: Array<{
+    response: Promise<ComposerPredictionResult | null>;
+    resolve: (value: ComposerPredictionResult | null) => void;
+  }> = [];
+  const request = vi.fn(
+    (_target: { environmentId: EnvironmentId; input: ComposerPredictionInput }) => {
+      let resolve!: (result: ComposerPredictionResult | null) => void;
+      const response = new Promise<ComposerPredictionResult | null>((done) => {
+        resolve = done;
+      });
+      pending.push({ response, resolve });
+      return response;
+    },
+  );
+  let requestNumber = 0;
   const cancel = vi.fn(async () => {});
   const controller = new ComposerPredictionController({
     read: () => context,
     request,
     cancel,
-    requestId: () => "request-1",
+    requestId: () => `request-${++requestNumber}`,
   });
   return {
     controller,
@@ -50,19 +61,20 @@ function setup() {
     change(patch: Partial<PredictionContext>) {
       context = { ...context, ...patch };
     },
-    async finish(patch: Partial<ComposerPredictionResult> | null = {}) {
-      resolve(
+    async finish(patch: Partial<ComposerPredictionResult> | null = {}, index = pending.length - 1) {
+      const item = pending[index]!;
+      item.resolve(
         patch === null
           ? null
           : {
-              requestId: "request-1",
+              requestId: `request-${index + 1}`,
               sourceRunId: RunId.make("completed-run"),
               status: "suggestion",
               text: "Add focused tests",
               ...patch,
             },
       );
-      await response;
+      await item.response;
     },
   };
 }
@@ -79,11 +91,19 @@ describe("composer predictions", () => {
           sourceRunId: "completed-run",
           requestId: "request-1",
           trigger: "catch_up",
+          intent: "auto",
         },
       }),
     );
+    s.controller.requestManual();
+    expect(s.request).toHaveBeenCalledTimes(1);
     await s.finish();
     expect(s.controller.getSnapshot()).toEqual({ status: "suggestion", text: "Add focused tests" });
+    s.controller.dismiss();
+    expect(s.controller.getSnapshot().status).toBe("idle");
+    expect(s.controller.requestManual()).toBe(true);
+    expect(s.request).toHaveBeenCalledTimes(1);
+    expect(s.controller.getSnapshot().status).toBe("suggestion");
     expect(s.controller.accept()).toBe("Add focused tests");
     expect(s.controller.accept()).toBeNull();
     s.controller.update();
@@ -102,7 +122,8 @@ describe("composer predictions", () => {
   });
 
   it.each([
-    { enabled: false },
+    { mode: "off" as const },
+    { mode: "manual" as const },
     { available: false },
     { idle: false },
     { draftEmpty: false },
@@ -122,7 +143,7 @@ describe("composer predictions", () => {
     { providerThreadId: "other-native-root" },
     { connectionGeneration: 2 },
     { sourceRunId: RunId.make("new-run") },
-    { enabled: false },
+    { mode: "off" as const },
     { available: false },
     { idle: false },
     { draftRevision: 2 },
@@ -234,7 +255,7 @@ it("observes a completed Codex shell on the destination and rejects a child sess
     activeProviderThreadId: ProviderThreadId.make("root-provider-thread"),
   });
   const options = {
-    enabled: true,
+    mode: "auto" as const,
     connected: true,
     connectionGeneration: 1,
     permitted: true,
@@ -272,7 +293,13 @@ it("observes a completed Codex shell on the destination and rejects a child sess
   controller.update();
   expect(request).toHaveBeenCalledWith({
     environmentId,
-    input: { threadId: completed.id, sourceRunId, requestId: "shell-request", trigger: "live" },
+    input: {
+      threadId: completed.id,
+      sourceRunId,
+      requestId: "shell-request",
+      trigger: "live",
+      intent: "auto",
+    },
   });
   controller.dismiss();
   context = threadPredictionContext(
@@ -304,7 +331,7 @@ it("keeps a newer source's candidate when a cancelled source finishes late", asy
     providerThreadId: "native-root",
     connectionGeneration: 1,
     sourceRunId: RunId.make("old"),
-    enabled: true,
+    mode: "auto" as const,
     available: true,
     idle: true,
     sourceActive: false,
@@ -384,4 +411,134 @@ it.each([
       ...patch,
     }),
   ).toBe(expected);
+});
+
+it("requests only on manual intent in manual mode and never in off mode", async () => {
+  const s = setup();
+  s.change({ mode: "manual" });
+  s.controller.update();
+  expect(s.request).not.toHaveBeenCalled();
+  expect(s.controller.requestManual()).toBe(true);
+  expect(s.request).toHaveBeenCalledWith(
+    expect.objectContaining({ input: expect.objectContaining({ intent: "manual" }) }),
+  );
+  s.controller.requestManual();
+  expect(s.request).toHaveBeenCalledTimes(1);
+  await s.finish();
+  s.change({ mode: "off" });
+  s.controller.update();
+  s.controller.requestManual();
+  expect(s.controller.getSnapshot().status).toBe("off");
+  expect(s.request).toHaveBeenCalledTimes(1);
+});
+it.each(["empty", "error", "cancelled"] as const)(
+  "only explicit manual intent retries %s with a fresh request id",
+  async (status) => {
+    const s = setup();
+    s.controller.update();
+    await s.finish({ status });
+    s.controller.update();
+    expect(s.request).toHaveBeenCalledTimes(1);
+    s.controller.dismiss();
+    s.controller.requestManual();
+    expect(s.request).toHaveBeenCalledTimes(2);
+    expect(s.request.mock.calls[1]?.[0].input).toMatchObject({
+      requestId: "request-2",
+      intent: "manual",
+    });
+    s.controller.requestManual();
+    expect(s.request).toHaveBeenCalledTimes(2);
+    await s.finish();
+    expect(s.controller.accept()).toBe("Add focused tests");
+  },
+);
+it.each(["disabled", "unsupported", "not_selected", "not_idle", "stale"] as const)(
+  "repeats the reason without re-requesting %s",
+  async (status) => {
+    const s = setup();
+    s.controller.update();
+    await s.finish({ status });
+    s.controller.dismiss();
+    s.controller.requestManual();
+    expect(s.controller.getSnapshot().status).toBe(status);
+    expect(s.request).toHaveBeenCalledTimes(1);
+  },
+);
+it("cancels pending work and rejects its late result after a manual retry", async () => {
+  const s = setup();
+  s.controller.update();
+  s.controller.dismiss();
+  s.controller.requestManual();
+  expect(s.request).toHaveBeenCalledTimes(2);
+  await s.finish({ text: "Current" }, 1);
+  await s.finish({ text: "Late" }, 0);
+  expect(s.controller.accept()).toBe("Current");
+  expect(s.cancel).toHaveBeenCalledTimes(1);
+});
+it.each([{ draftRevision: 1 }, { connectionGeneration: 2 }, { sourceRunId: RunId.make("new") }])(
+  "invalidates an Esc-hidden candidate when ownership changes: %j",
+  async (patch) => {
+    const s = setup();
+    s.change({ mode: "manual" });
+    s.controller.requestManual();
+    await s.finish();
+    s.controller.dismiss();
+    s.change(patch);
+    s.controller.update();
+    s.controller.requestManual();
+    expect(s.controller.getSnapshot().status).toBe("pending");
+    expect(s.request).toHaveBeenCalledTimes(2);
+  },
+);
+it.each([
+  { isComposing: true },
+  { keyCode: 229 },
+  { menuActive: true },
+  { focused: false },
+  { editorEmpty: false },
+  { defaultPrevented: true },
+  { matched: false },
+])("does not consume a prediction shortcut during editing: %j", (patch) => {
+  expect(
+    predictionShortcutAction({
+      matched: true,
+      repeat: false,
+      isComposing: false,
+      keyCode: 13,
+      menuActive: false,
+      focused: true,
+      editorEmpty: true,
+      defaultPrevented: false,
+      ...patch,
+    }),
+  ).toBe("pass");
+});
+
+it("consumes repeated request keys without starting another action", () => {
+  const input = {
+    matched: true,
+    repeat: false,
+    isComposing: false,
+    keyCode: 13,
+    menuActive: false,
+    focused: true,
+    editorEmpty: true,
+    defaultPrevented: false,
+  };
+  expect(predictionShortcutAction(input)).toBe("request");
+  expect(predictionShortcutAction({ ...input, repeat: true })).toBe("ignore");
+});
+
+it.each([
+  [{ mode: "off" as const }, "off"],
+  [{ available: false }, "unsupported"],
+  [{ idle: false }, "not_idle"],
+] as const)("keeps a local explanation visible without requesting: %j", (patch, status) => {
+  const s = setup();
+  s.change(patch);
+  s.controller.update();
+  expect(s.controller.requestManual()).toBe(true);
+  s.controller.update();
+  expect(s.controller.getSnapshot().status).toBe(status);
+  expect(s.request).not.toHaveBeenCalled();
 });

@@ -57,8 +57,10 @@ export function ComposerPrediction(props: {
     const connection = appAtomRegistry.get(environmentCatalog.stateAtom(input.environmentId));
     const config = appAtomRegistry.get(serverEnvironment.configValueAtom(input.environmentId));
     return threadPredictionContext(thread, {
-      enabled:
-        AsyncResult.isSuccess(preferences) && preferences.value.codexNativePredictions === true,
+      mode:
+        AsyncResult.isSuccess(preferences) && preferences.value.codexNativePredictions === "auto"
+          ? "auto"
+          : "off",
       connectionGeneration: AsyncResult.isSuccess(connection) ? connection.value.generation : 0,
       connected:
         appAtomRegistry.get(environmentPresentations.presentationAtom(input.environmentId))
@@ -134,7 +136,7 @@ export function ComposerPrediction(props: {
     controller.update();
     return () => {
       for (const unsubscribe of unsubscribers) unsubscribe();
-      controller.dismiss();
+      controller.invalidate();
     };
   }, [controller, commands, props.environmentId, props.threadId]);
   if (prediction.status === "idle" || !permitted || props.blocked || !focused) return null;

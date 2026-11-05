@@ -54,6 +54,10 @@ export function useComposerPrediction(props: {
     commands.requestPrediction.permissionAtom(props.threadRef.environmentId),
   );
   const draftKey = composerTargetKey(props.draftTarget);
+  const isDraftEmpty = () => {
+    const draft = useComposerDraftStore.getState().getComposerDraft(props.draftTarget);
+    return !composerDraftHasUserContent(draft) && (draft?.prompt.length ?? 0) === 0;
+  };
   const read = () => {
     const store = useComposerDraftStore.getState();
     const draft = store.getComposerDraft(props.draftTarget);
@@ -61,7 +65,7 @@ export function useComposerPrediction(props: {
       environmentCatalog.stateAtom(props.threadRef.environmentId),
     );
     return threadPredictionContext(readThreadShell(props.threadRef), {
-      enabled: isClientSettingsHydrated() && getClientSettings().codexNativePredictions,
+      mode: isClientSettingsHydrated() ? getClientSettings().codexNativePredictions : "off",
       connectionGeneration: AsyncResult.isSuccess(connection) ? connection.value.generation : 0,
       connected:
         appAtomRegistry.get(
@@ -76,7 +80,7 @@ export function useComposerPrediction(props: {
         props.blocked ||
         pendingDraftWork.has(draftKey) ||
         countPreparingComposerImages(draftKey) > 0,
-      draftEmpty: !composerDraftHasUserContent(draft) && (draft?.prompt.length ?? 0) === 0,
+      draftEmpty: isDraftEmpty(),
       draftRevision:
         store.getComposerDraftRevision(props.draftTarget) + pendingDraftWork.revision(draftKey),
     });
@@ -128,7 +132,7 @@ export function useComposerPrediction(props: {
     controller.update();
     return () => {
       for (const unsubscribe of unsubscribers) unsubscribe();
-      controller.dismiss();
+      controller.invalidate();
     };
   }, [controller, commands, environmentId, threadId]);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Keep the native request reader on the committed composer state.
@@ -136,8 +140,17 @@ export function useComposerPrediction(props: {
     controller.setContextReader(read);
     controller.update();
   });
+  const context = read();
   return {
-    view: !permitted || props.blocked ? ({ status: "idle", text: null } as const) : prediction,
+    view: prediction,
+    hint:
+      permitted &&
+      context?.mode !== "off" &&
+      context?.draftEmpty === true &&
+      context?.idle === true &&
+      context?.available === true,
+    isDraftEmpty,
+    request: controller.requestManual,
     accept: controller.accept,
     dismiss: controller.dismiss,
   };
@@ -147,10 +160,17 @@ export function ComposerPrediction(props: {
   readonly view: PredictionView;
   readonly accept: () => boolean;
   readonly dismiss: () => void;
+  readonly shortcut: string | null;
+  readonly hint: boolean;
 }) {
   const t = useTranslate();
   const prediction = props.view;
-  if (prediction.status === "idle") return null;
+  if (prediction.status === "idle")
+    return props.hint && props.shortcut ? (
+      <span className="block pt-1 text-xs text-muted-foreground">
+        {t("prediction.requestHint", { shortcut: props.shortcut })}
+      </span>
+    ) : null;
   return (
     <div
       className="flex flex-wrap items-center gap-1 pt-1 text-xs text-muted-foreground"

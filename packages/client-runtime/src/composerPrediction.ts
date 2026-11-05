@@ -1,3 +1,4 @@
+import type { CodexNativePredictionMode } from "@t3tools/contracts/settings";
 import type {
   ComposerPredictionInput,
   ComposerPredictionCancelInput,
@@ -16,7 +17,7 @@ export interface PredictionContext {
   readonly providerThreadId: string | null;
   readonly connectionGeneration: number;
   readonly sourceRunId: RunId | null;
-  readonly enabled: boolean;
+  readonly mode: CodexNativePredictionMode;
   readonly available: boolean;
   readonly idle: boolean;
   readonly sourceActive: boolean;
@@ -27,7 +28,7 @@ export interface PredictionContext {
 export function threadPredictionContext(
   thread: EnvironmentThreadShell | null,
   options: {
-    readonly enabled: boolean;
+    readonly mode: CodexNativePredictionMode;
     readonly connected: boolean;
     readonly connectionGeneration: number;
     readonly permitted: boolean;
@@ -46,7 +47,7 @@ export function threadPredictionContext(
     providerThreadId: thread.activeProviderThreadId,
     connectionGeneration: options.connectionGeneration,
     sourceRunId: thread.latestRun?.runId ?? null,
-    enabled: options.enabled,
+    mode: options.mode,
     available:
       options.connected &&
       options.permitted &&
@@ -71,6 +72,7 @@ export type PredictionView =
       readonly status:
         | "idle"
         | "pending"
+        | "off"
         | Exclude<ComposerPredictionResult["status"], "suggestion">;
       readonly text: null;
     }
@@ -105,12 +107,35 @@ export function predictionAcceptsTab(input: {
   );
 }
 
+export function predictionShortcutAction(input: {
+  readonly matched: boolean;
+  readonly repeat: boolean;
+  readonly isComposing: boolean;
+  readonly keyCode: number;
+  readonly defaultPrevented: boolean;
+  readonly focused: boolean;
+  readonly menuActive: boolean;
+  readonly editorEmpty: boolean;
+}): "pass" | "ignore" | "request" {
+  if (
+    !input.matched ||
+    input.isComposing ||
+    input.keyCode === 229 ||
+    input.defaultPrevented ||
+    !input.focused ||
+    input.menuActive ||
+    !input.editorEmpty
+  )
+    return "pass";
+  return input.repeat ? "ignore" : "request";
+}
+
 function eligible(
   context: PredictionContext | null,
 ): context is PredictionContext & { sourceRunId: RunId } {
   return (
     context !== null &&
-    context.enabled &&
+    context.mode !== "off" &&
     context.available &&
     context.idle &&
     context.draftEmpty &&
@@ -132,6 +157,7 @@ function sameSource(a: PredictionContext, b: PredictionContext): boolean {
 interface PredictionTicket {
   readonly context: PredictionContext;
   readonly requestId: string;
+  outcome: PredictionView;
 }
 
 interface PredictionPorts {
@@ -191,45 +217,127 @@ export class ComposerPredictionController {
     );
   }
 
-  readonly dismiss = () => {
+  readonly invalidate = () => {
     const ticket = this.ticket;
     this.ticket = null;
     this.publish(IDLE);
-    if (ticket) {
-      void this.ports.cancel({
-        environmentId: ticket.context.environmentId,
-        input: { threadId: ticket.context.threadId, requestId: ticket.requestId },
-      });
+    if (ticket?.outcome.status === "pending") this.cancel(ticket);
+  };
+
+  private cancel(ticket: PredictionTicket) {
+    void this.ports.cancel({
+      environmentId: ticket.context.environmentId,
+      input: { threadId: ticket.context.threadId, requestId: ticket.requestId },
+    });
+  }
+
+  readonly dismiss = () => {
+    const ticket = this.ticket;
+    if (ticket && !this.matches(ticket)) {
+      this.invalidate();
+      return;
     }
+    if (ticket?.outcome.status === "pending") {
+      this.ticket = { ...ticket, outcome: { status: "cancelled", text: null } };
+      this.cancel(ticket);
+    }
+    this.publish(IDLE);
   };
 
   readonly accept = (): string | null => {
     const ticket = this.ticket;
+    if (ticket && !this.matches(ticket)) this.invalidate();
     const text =
       ticket && this.matches(ticket) && this.view.status === "suggestion" ? this.view.text : null;
-    this.dismiss();
+    if (text !== null) this.invalidate();
     return text;
+  };
+
+  readonly requestManual = (): boolean => {
+    const context = this.readContext();
+    if (context && !context.draftEmpty) return false;
+    if (!eligible(context)) {
+      this.invalidate();
+      this.publish({
+        status:
+          context?.mode === "off" ? "off" : context && !context.idle ? "not_idle" : "unsupported",
+        text: null,
+      });
+      return true;
+    }
+    if (this.ticket && !this.matches(this.ticket)) this.invalidate();
+    const outcome = this.ticket?.outcome;
+    if (
+      outcome &&
+      outcome.status !== "empty" &&
+      outcome.status !== "error" &&
+      outcome.status !== "cancelled"
+    ) {
+      this.publish(outcome);
+      return true;
+    }
+    this.start(context, "manual", "catch_up");
+    return true;
   };
 
   readonly update = () => {
     const context = this.readContext();
     const previous = this.previous;
     this.previous = context;
-    if (this.ticket && !this.matches(this.ticket)) this.dismiss();
+    if (this.ticket && !this.matches(this.ticket)) this.invalidate();
+    if (
+      !this.ticket &&
+      previous &&
+      (!context ||
+        !sameSource(context, previous) ||
+        context.connectionGeneration !== previous.connectionGeneration ||
+        context.draftRevision !== previous.draftRevision ||
+        context.mode !== previous.mode ||
+        context.draftEmpty !== previous.draftEmpty ||
+        context.idle !== previous.idle ||
+        context.available !== previous.available)
+    )
+      this.publish(IDLE);
     if (
       !eligible(context) ||
+      context.mode !== "auto" ||
       this.ticket ||
       (this.attempted && sameSource(context, this.attempted))
     )
       return;
-    this.attempted = context;
     const trigger =
       previous && sameSource(previous, context) && previous.sourceActive && !context.sourceActive
         ? "live"
         : "catch_up";
-    const ticket = { context, requestId: this.ports.requestId() };
+    this.start(context, "auto", trigger);
+  };
+
+  private start(
+    context: PredictionContext & { sourceRunId: RunId },
+    intent: "auto" | "manual",
+    trigger: ComposerPredictionInput["trigger"],
+  ) {
+    this.attempted = context;
+    const ticket: PredictionTicket = {
+      context,
+      requestId: this.ports.requestId(),
+      outcome: { status: "pending", text: null },
+    };
     this.ticket = ticket;
-    this.publish({ status: "pending", text: null });
+    this.publish(ticket.outcome);
+    const settle = (result: ComposerPredictionResult | null) => {
+      if (!this.matches(ticket)) {
+        if (this.ticket === ticket) this.invalidate();
+        return;
+      }
+      if (result?.requestId === ticket.requestId && result.sourceRunId === context.sourceRunId) {
+        ticket.outcome =
+          result.status === "suggestion" && result.text?.trim()
+            ? { status: "suggestion", text: result.text }
+            : { status: result.status === "suggestion" ? "empty" : result.status, text: null };
+      } else ticket.outcome = { status: "error", text: null };
+      this.publish(ticket.outcome);
+    };
     void this.ports
       .request({
         environmentId: context.environmentId,
@@ -238,31 +346,9 @@ export class ComposerPredictionController {
           sourceRunId: context.sourceRunId,
           requestId: ticket.requestId,
           trigger,
+          intent,
         },
       })
-      .then((result) => {
-        if (!this.matches(ticket)) {
-          if (this.ticket === ticket) this.dismiss();
-          return;
-        }
-        if (
-          result?.requestId === ticket.requestId &&
-          result.sourceRunId === context.sourceRunId &&
-          result.status === "suggestion" &&
-          result.text?.trim()
-        ) {
-          this.publish({ status: "suggestion", text: result.text });
-        } else if (
-          result?.requestId === ticket.requestId &&
-          result.sourceRunId === context.sourceRunId
-        ) {
-          this.publish({
-            status: result.status === "suggestion" ? "empty" : result.status,
-            text: null,
-          });
-        } else {
-          this.publish({ status: "error", text: null });
-        }
-      });
-  };
+      .then(settle, () => settle(null));
+  }
 }

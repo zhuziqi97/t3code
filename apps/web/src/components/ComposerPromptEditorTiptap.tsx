@@ -162,6 +162,10 @@ export interface ComposerPromptEditorProps {
   predictionText?: string | undefined;
   predictionMenuActive?: boolean;
   onAcceptPrediction?: () => boolean;
+  onPredictionKeyDown?: (
+    event: KeyboardEvent,
+    state: { focused: boolean; editorEmpty: boolean },
+  ) => boolean;
   ariaLabel?: string | undefined;
   suggestionListId?: string | undefined;
   activeSuggestionId?: string | undefined;
@@ -946,6 +950,7 @@ function ComposerPromptEditorTiptapInner(
     predictionText,
     predictionMenuActive,
     onAcceptPrediction,
+    onPredictionKeyDown,
     ariaLabel,
     suggestionListId,
     activeSuggestionId,
@@ -984,6 +989,7 @@ function ComposerPromptEditorTiptapInner(
     onCommandKeyDown,
     predictionMenuActive,
     onAcceptPrediction,
+    onPredictionKeyDown,
     isPathQueryActive,
     importContextFragment,
   }));
@@ -1250,6 +1256,20 @@ function ComposerPromptEditorTiptapInner(
           }
           if (event.key === "Enter" && event.target instanceof HTMLInputElement) {
             event.preventDefault();
+            return true;
+          }
+          if (
+            !view.composing &&
+            readCallbacks().onPredictionKeyDown?.(event, {
+              focused: view.hasFocus(),
+              editorEmpty:
+                view.state.doc.childCount === 1 &&
+                view.state.doc.firstChild?.type.name === "paragraph" &&
+                view.state.doc.firstChild.content.size === 0,
+            })
+          ) {
+            event.preventDefault();
+            event.stopPropagation();
             return true;
           }
           if (
