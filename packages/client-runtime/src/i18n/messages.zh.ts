@@ -2560,6 +2560,10 @@ export const zh: Partial<Messages> = {
   "project.remove.otherEntries": "此项目分组中的其他记录会保留。",
   "common.cannotUndo": "此操作无法撤销。",
   "project.settings.checkouts": "检出",
+  "project.grouping.ruleLabel": "{{environment}} 中 {{path}} 的分组规则",
+  "project.grouping.description":
+    "分组规则决定每个检出目录如何加入侧栏的项目分组。更改规则可能会将其移至另一个项目。",
+  "project.grouping.saveFailed": "无法保存分组规则",
   "project.settings.more": "找不到某项设置？保持上方选中此项目，再前往其他设置页面。",
   "project.settings.sharedPermission": "修改共享设置需要拥有此分组中每个检出的修改权限。",
   "project.settings.permission": "此连接没有修改该项目的权限。",

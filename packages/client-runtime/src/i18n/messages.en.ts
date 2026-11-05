@@ -2717,6 +2717,10 @@ export const en = {
   "project.remove.otherEntries": "Other entries in this grouped project are unaffected.",
   "common.cannotUndo": "This action cannot be undone.",
   "project.settings.checkouts": "Checkouts",
+  "project.grouping.ruleLabel": "Grouping rule for {{path}} on {{environment}}",
+  "project.grouping.description":
+    "Grouping rule decides how each checkout joins project groups in the sidebar. Changing it can move a checkout to a different project.",
+  "project.grouping.saveFailed": "Could not save grouping rule",
   "project.settings.more":
     "Can't find a setting? Keep this project picked above and hop to any other settings page.",
   "project.settings.sharedPermission":
