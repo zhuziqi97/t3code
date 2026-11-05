@@ -243,7 +243,7 @@ export function buildThreadActionMenuItems(
         ...(state.branch
           ? [{ id: "copy-branch" as const, label: t("common.branch"), icon: "git-branch" }]
           : []),
-        { id: "copy-thread", label: t("thread.copy"), icon: "message-square" },
+        { id: "copy-thread", label: t("chat.copy.thread"), icon: "message-square" },
         { id: "copy-thread-id", label: t("thread.id"), icon: "hash" },
       ],
     },
