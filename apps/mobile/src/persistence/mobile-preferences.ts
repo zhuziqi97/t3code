@@ -6,6 +6,8 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import {
+  CodexNativePredictionModeSetting,
+  type CodexNativePredictionMode,
   EnvironmentId,
   PullRequestInvolvement,
   PullRequestListFilters,
@@ -26,6 +28,7 @@ import { MobileStorageDecodeError, MobileStorageEncodeError } from "./mobile-sto
 
 const PREFERENCES_KEY = "t3code.preferences";
 const PREFERENCES_FALLBACK_KEY = "t3code.preferences.fallback";
+const decodePredictionMode = Schema.decodeUnknownOption(CodexNativePredictionModeSetting);
 
 export const PullRequestListControls = Schema.Struct({
   state: PullRequestListState,
@@ -111,7 +114,7 @@ export interface Preferences {
   /** Hardware Return behavior is iOS-only. */
   readonly composerEnterBehavior?: ComposerEnterBehavior;
   readonly followUpBehavior?: FollowUpBehavior;
-  readonly codexNativePredictions?: boolean;
+  readonly codexNativePredictions?: CodexNativePredictionMode;
   /** Device-local interface language; mirrors the web `languagePreference`. */
   readonly languagePreference?: LanguagePreference;
   /** Microphone kinds and remembered devices, most preferred first. iOS only. */
@@ -195,7 +198,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     dismissedDatabaseStorageNotices?: readonly string[];
     composerEnterBehavior?: ComposerEnterBehavior;
     followUpBehavior?: FollowUpBehavior;
-    codexNativePredictions?: boolean;
+    codexNativePredictions?: CodexNativePredictionMode;
     languagePreference?: LanguagePreference;
     microphones?: ReadonlyArray<MicrophoneEntry>;
     projectGroupingEnabled?: boolean;
@@ -300,8 +303,9 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   if (parsed.composerEnterBehavior === "send" || parsed.composerEnterBehavior === "newline") {
     preferences.composerEnterBehavior = parsed.composerEnterBehavior;
   }
-  if (typeof parsed.codexNativePredictions === "boolean") {
-    preferences.codexNativePredictions = parsed.codexNativePredictions;
+  const predictionMode = decodePredictionMode(parsed.codexNativePredictions);
+  if (Option.isSome(predictionMode)) {
+    preferences.codexNativePredictions = predictionMode.value;
   }
   if (parsed.followUpBehavior === "queue" || parsed.followUpBehavior === "steer") {
     preferences.followUpBehavior = parsed.followUpBehavior;

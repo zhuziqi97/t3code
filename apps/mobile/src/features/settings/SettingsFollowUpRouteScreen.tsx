@@ -1,5 +1,4 @@
 import { useTranslate } from "../../i18n";
-import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
@@ -39,6 +38,9 @@ export function SettingsFollowUpRouteScreen() {
   const selectedBehavior = AsyncResult.isSuccess(preferencesResult)
     ? (preferencesResult.value.followUpBehavior ?? DEFAULT_FOLLOW_UP_BEHAVIOR)
     : null;
+  const predictionMode = AsyncResult.isSuccess(preferencesResult)
+    ? (preferencesResult.value.codexNativePredictions ?? "off")
+    : null;
 
   const content = (
     <ScrollView
@@ -49,17 +51,24 @@ export function SettingsFollowUpRouteScreen() {
       contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
     >
       <SettingsSection title={t("prediction.setting.label")}>
-        <SettingsSwitchRow
-          icon="sparkles"
-          label={t("prediction.setting.label")}
-          subtitle={t("prediction.setting.description")}
-          value={
-            AsyncResult.isSuccess(preferencesResult) &&
-            preferencesResult.value.codexNativePredictions === true
-          }
-          disabled={!preferencesReady}
-          onValueChange={(value) => savePreferences({ codexNativePredictions: value })}
-        />
+        {predictionMode === "manual" ? (
+          <Text className="px-2 text-sm text-foreground-muted">
+            {t("prediction.mobile.manual")}
+          </Text>
+        ) : null}
+        {(["off", "auto"] as const).map((mode, index) => (
+          <SettingsChoiceRow
+            key={mode}
+            label={t(`prediction.mode.${mode}`)}
+            selected={predictionMode === mode}
+            separated={index > 0}
+            disabled={!preferencesReady}
+            onPress={() => savePreferences({ codexNativePredictions: mode })}
+          />
+        ))}
+        <Text className="px-2 text-sm text-foreground-muted">
+          {t("prediction.mobile.description")}
+        </Text>
       </SettingsSection>
       <SettingsSection title="While the agent is running">
         {FOLLOW_UP_OPTIONS.map((option, index) => (

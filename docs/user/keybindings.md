@@ -5,6 +5,12 @@ also lists the command IDs and defaults available in your version.
 
 ## Composer controls
 
+With Codex predictions in Manual or Automatic mode, `Alt+Enter` (`Option+Return`
+on Mac) requests or redisplays a prediction in the focused empty composer.
+Rebind **Chat: Request Prediction** (`chat.requestPrediction`) in Keybindings.
+`Tab` fills the draft without sending; `Esc` cancels waiting or hides the candidate,
+after input methods and menus. See [prediction modes and retry rules](./composer.md#codex-predictions-experimental).
+
 In **Settings → Chat → Send shortcut**, choose whether Enter sends, requires
 `mod+Enter` for multiline prompts, or always requires `mod+Enter`. `Shift+Enter`
 inserts a new line. This applies to the web and desktop composer at desktop widths.

@@ -118,21 +118,34 @@ describe("mobile connection storage", () => {
     });
   });
 
-  it("ignores invalid tab-order entries without dropping other saved preferences", async () => {
-    mocks.setPreferencesJson(
-      JSON.stringify({
-        navigationTabOrder: ["usage", null, 4, "threads"],
-        hiddenNavigationTabs: ["home", null],
+  it.each([
+    [true, "auto"],
+    [false, "off"],
+    ["off", "off"],
+    ["manual", "manual"],
+    ["auto", "auto"],
+  ])(
+    "preserves saved prediction mode %s while ignoring invalid tab-order entries",
+    async (input, mode) => {
+      mocks.setPreferencesJson(
+        JSON.stringify({
+          navigationTabOrder: ["usage", null, 4, "threads"],
+          codexNativePredictions: input,
+          hiddenNavigationTabs: ["home", null],
+          baseFontSize: 18,
+        }),
+        1,
+      );
+      await expect(loadPreferences()).resolves.toEqual({
+        navigationTabOrder: ["usage", "threads"],
+        codexNativePredictions: mode,
+        hiddenNavigationTabs: ["home"],
         baseFontSize: 18,
-      }),
-      1,
-    );
-    await expect(loadPreferences()).resolves.toEqual({
-      navigationTabOrder: ["usage", "threads"],
-      hiddenNavigationTabs: ["home"],
-      baseFontSize: 18,
-    });
-  });
+      });
+      await savePreferencesPatch({ baseFontSize: 19 });
+      expect(JSON.parse(mocks.getPreferencesJson() ?? "").codexNativePredictions).toBe(mode);
+    },
+  );
 
   it("loads legacy preferences when SQLite is unavailable", async () => {
     mocks.setDatabaseFailures(true, true);

@@ -14,18 +14,37 @@ to keep a large paste editable in the composer instead.
 
 ## Codex predictions (experimental)
 
-Enable **Settings → Chat → Codex native predictions** on each client to get
-optional follow-up suggestions after a Codex turn finishes or when returning to
-a completed thread. This is off by default and requires a system Codex CLI with
-native sampling support (stable 0.165 or newer). Predictions may consume your
-subscription allowance or incur charges; enabling them does not guarantee a suggestion.
+Choose a mode in **Settings → Chat → Codex native predictions** on each client.
+**Off** is the default. **Manual** requests a suggestion only through a shortcut;
+**Automatic** also requests one after an eligible Codex turn finishes or when
+returning to a completed thread. Existing enabled settings remain Automatic.
+This requires a system Codex CLI with native sampling support (stable 0.165 or
+newer). Free access through third-party clients is unconfirmed. Predictions may
+consume subscription allowance or incur charges, and a request does not guarantee
+a suggestion.
 
-On web and desktop, press **Tab** in the focused empty input to use the faint
-suggestion as an editable draft. You can also choose **Use as draft** on any
-client, then review and send it yourself. **View full suggestion** shows longer
-suggestions before accepting.
-Suggestions leave existing text and attachments alone. You can cancel a pending
-suggestion or dismiss it without sending anything.
+On web and desktop, focus an empty composer after a Codex turn completes and press
+**Alt+Enter** (**Option+Return** on Mac) to request or redisplay a suggestion in
+Manual or Automatic mode. Rebind `chat.requestPrediction` in **Settings → Keybindings**.
+Text, attachments, composition input and open completion menus keep their normal
+editing behavior; the shortcut does not clear them to make room for a prediction.
+**Tab** fills the editable draft without sending. **Esc** cancels a pending request
+or hides the suggestion, after input methods and menus have handled it.
+
+Pressing the request shortcut while waiting shares the pending request. An existing
+valid suggestion, including one hidden with Esc, is redisplayed without generating
+another. After no suggestion, an error or cancellation, an explicit request may
+retry and incur a new native request. Automatic prediction still tries once per
+source turn. An official restriction, unsupported model or a turn that was not
+selected cannot be bypassed by repeatedly pressing the shortcut.
+
+Mobile keeps Automatic and Off settings, touch acceptance and **View full suggestion**.
+It has no touch gesture for a manual request in this version. If its saved mode is
+Manual, it preserves that mode without automatic requests and explains how to use
+web or desktop; you can explicitly choose Automatic or Off instead.
+**Use as draft** fills an editable draft for you to review and send yourself.
+Starting to type, adding context, switching threads or changing the source turn
+invalidates the old request; a late result cannot replace your draft.
 
 ## Formatting
 

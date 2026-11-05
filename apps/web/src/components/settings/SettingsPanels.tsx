@@ -70,7 +70,7 @@ import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
 import { ThreadTitleInstructionsSettings } from "./ThreadTitleInstructionsSettings";
 import { SnoozePresetsRow } from "./SnoozePresetsSettings";
 import { useDesktopUpdateState } from "../../state/desktopUpdate";
-import { managedTelemetryOffMessage, usePrimaryManagedPolicy } from "../../state/managedPolicy";
+import { usePrimaryManagedPolicy } from "../../state/managedPolicy";
 import {
   getCustomModelOptionsByInstance,
   resolveAppModelSelectionState,
@@ -1249,11 +1249,29 @@ export function ChatSettingsPanel() {
           {...searchableSetting("codex-native-predictions", t)}
           description={t("prediction.setting.description")}
           control={
-            <Switch
-              checked={settings.codexNativePredictions}
-              onCheckedChange={(checked) => updateSettings({ codexNativePredictions: checked })}
-              aria-label={t("prediction.setting.label")}
-            />
+            <Select
+              value={settings.codexNativePredictions}
+              onValueChange={(value) => {
+                if (value === "off" || value === "manual" || value === "auto") {
+                  updateSettings({ codexNativePredictions: value });
+                }
+              }}
+            >
+              <SelectTrigger
+                size="sm"
+                className="w-full sm:w-40"
+                aria-label={t("prediction.setting.label")}
+              >
+                <SelectValue>{t(`prediction.mode.${settings.codexNativePredictions}`)}</SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                {(["off", "manual", "auto"] as const).map((mode) => (
+                  <SelectItem hideIndicator key={mode} value={mode}>
+                    {t(`prediction.mode.${mode}`)}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
           }
         />
         <SettingsRow

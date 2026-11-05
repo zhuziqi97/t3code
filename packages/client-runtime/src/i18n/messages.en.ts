@@ -18,7 +18,17 @@ export const en = {
   "server.update.crossTrack": "Switch tracks in About → Update track",
   "prediction.setting.label": "Codex native predictions (experimental)",
   "prediction.setting.description":
-    "Suggest a follow-up after Codex finishes. Requires a system Codex CLI with native sampling support (stable 0.165 or newer). May use subscription allowance or incur charges. Accepting adds an editable draft; it does not send it.",
+    "Off by default. Manual requests suggestions through the shortcut; Auto also requests them after eligible Codex turns. Requires a system Codex CLI with native sampling support (stable 0.165 or newer). Free access through third-party clients is unconfirmed; predictions may use subscription allowance or incur charges. Accepting only fills an editable draft.",
+  "prediction.mode.off": "Off",
+  "prediction.mode.manual": "Manual",
+  "prediction.mode.auto": "Automatic",
+  "prediction.mobile.manual":
+    "Manual mode is selected. Request predictions using a desktop or web shortcut.",
+  "prediction.mobile.description":
+    "Automatic mode suggests a follow-up after an eligible Codex turn. Requires a system Codex CLI with native sampling support (stable 0.165 or newer). Free access through third-party clients is unconfirmed; predictions may use subscription allowance or incur charges. Accepting only fills an editable draft.",
+  "prediction.requestHint": "{{shortcut}} to request a prediction",
+  "prediction.off": "Predictions are off. Change the mode in Settings → Chat.",
+  "keybindings.command.chat.requestPrediction": "Chat: Request Prediction",
   "prediction.ready": "Suggestion ready · Tab to use as draft",
   "prediction.view": "View full suggestion",
   "prediction.collapse": "Close full suggestion",
@@ -30,7 +40,7 @@ export const en = {
   "prediction.stale": "The session changed; the suggestion was discarded.",
   "prediction.cancelled": "Suggestion cancelled.",
   "prediction.error": "Could not prepare a suggestion.",
-  "prediction.pending": "Preparing a suggestion…",
+  "prediction.pending": "Requesting a prediction…",
   "prediction.accept": "Use as draft",
   "prediction.dismiss": "Dismiss suggestion",
   "prediction.cancel": "Cancel suggestion",

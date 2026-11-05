@@ -726,7 +726,9 @@ export const SETTINGS_SEARCH_ITEMS = [
       return i18n.t("prediction.setting.label");
     },
     to: "/settings/chat",
-    searchTerms: ["codex prediction suggestion native experimental 预测 建议 原生 实验"],
+    searchTerms: [
+      "codex prediction suggestion native experimental off manual auto shortcut 预测 建议 原生 实验 关闭 手动 自动 快捷键",
+    ],
   },
   {
     id: "composer-rich-text",
