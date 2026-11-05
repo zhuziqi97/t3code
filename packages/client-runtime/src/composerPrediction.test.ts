@@ -464,17 +464,37 @@ it.each(["disabled", "unsupported", "not_selected", "not_idle", "stale"] as cons
     expect(s.request).toHaveBeenCalledTimes(1);
   },
 );
-it("cancels pending work and rejects its late result after a manual retry", async () => {
+it.each([
+  null,
+  { draftRevision: 1, draftEmpty: false },
+  { sourceRunId: RunId.make("replacement-source") },
+  { connectionGeneration: 2 },
+])("orders explicit retry after cancel ACK and checks ownership again: %j", async (change) => {
   const s = setup();
-  s.controller.update();
+  let acknowledge!: () => void;
+  const cancelAck = new Promise<void>((resolve) => {
+    acknowledge = resolve;
+  });
+  s.cancel.mockReturnValue(cancelAck);
+  s.change({ mode: "manual" });
+  s.controller.requestManual();
   s.controller.dismiss();
   s.controller.requestManual();
-  expect(s.request).toHaveBeenCalledTimes(2);
-  await s.finish({ text: "Current" }, 1);
+  s.controller.requestManual();
+  expect(s.request).toHaveBeenCalledTimes(1);
+  if (change) {
+    s.change(change);
+    s.controller.update();
+  }
+  acknowledge();
+  await cancelAck;
+  expect(s.request).toHaveBeenCalledTimes(change ? 1 : 2);
+  if (!change) await s.finish({ text: "Current" }, 1);
   await s.finish({ text: "Late" }, 0);
-  expect(s.controller.accept()).toBe("Current");
+  expect(s.controller.accept()).toBe(change ? null : "Current");
   expect(s.cancel).toHaveBeenCalledTimes(1);
 });
+
 it.each([{ draftRevision: 1 }, { connectionGeneration: 2 }, { sourceRunId: RunId.make("new") }])(
   "invalidates an Esc-hidden candidate when ownership changes: %j",
   async (patch) => {
@@ -541,4 +561,27 @@ it.each([
   s.controller.update();
   expect(s.controller.getSnapshot().status).toBe(status);
   expect(s.request).not.toHaveBeenCalled();
+});
+
+it("does not dispatch after a failed cancel until an explicit retry gets an ACK", async () => {
+  const s = setup();
+  let fail!: (error: Error) => void;
+  const cancelAck = new Promise<void>((_resolve, reject) => {
+    fail = reject;
+  });
+  s.cancel.mockReturnValueOnce(cancelAck);
+  s.change({ mode: "manual" });
+  s.controller.requestManual();
+  s.controller.dismiss();
+  s.controller.requestManual();
+  fail(new Error("Cancel did not reach the server"));
+  await cancelAck.catch(() => {});
+  expect(s.controller.getSnapshot().status).toBe("error");
+  expect(s.request).toHaveBeenCalledTimes(1);
+  s.controller.requestManual();
+  expect(s.cancel).toHaveBeenCalledTimes(2);
+  await s.cancel.mock.results[1]!.value;
+  expect(s.request).toHaveBeenCalledTimes(2);
+  await s.finish();
+  expect(s.controller.accept()).toBe("Add focused tests");
 });

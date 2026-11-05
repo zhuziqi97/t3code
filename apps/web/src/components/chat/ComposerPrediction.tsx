@@ -96,9 +96,10 @@ export function useComposerPrediction(props: {
         return result._tag === "Success" ? result.value : null;
       },
       cancel: async (target) => {
-        await runAtomCommand(appAtomRegistry, commands.cancelPrediction, target, {
+        const result = await runAtomCommand(appAtomRegistry, commands.cancelPrediction, target, {
           reportFailure: false,
         });
+        if (result._tag !== "Success") throw new Error("Prediction cancellation failed");
       },
     });
   const [state, setState] = useState(() => ({ key: draftKey, controller: createController() }));

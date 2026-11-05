@@ -158,6 +158,7 @@ interface PredictionTicket {
   readonly context: PredictionContext;
   readonly requestId: string;
   outcome: PredictionView;
+  readonly cancellation?: Promise<void>;
 }
 
 interface PredictionPorts {
@@ -221,11 +222,12 @@ export class ComposerPredictionController {
     const ticket = this.ticket;
     this.ticket = null;
     this.publish(IDLE);
-    if (ticket?.outcome.status === "pending") this.cancel(ticket);
+    if (ticket?.outcome.status === "pending" && !ticket.cancellation)
+      void this.cancel(ticket).catch(() => {});
   };
 
   private cancel(ticket: PredictionTicket) {
-    void this.ports.cancel({
+    return this.ports.cancel({
       environmentId: ticket.context.environmentId,
       input: { threadId: ticket.context.threadId, requestId: ticket.requestId },
     });
@@ -238,8 +240,9 @@ export class ComposerPredictionController {
       return;
     }
     if (ticket?.outcome.status === "pending") {
-      this.ticket = { ...ticket, outcome: { status: "cancelled", text: null } };
-      this.cancel(ticket);
+      const cancellation = ticket.cancellation ?? this.cancel(ticket);
+      void cancellation.catch(() => {});
+      this.ticket = { ...ticket, outcome: { status: "cancelled", text: null }, cancellation };
     }
     this.publish(IDLE);
   };
@@ -274,6 +277,33 @@ export class ComposerPredictionController {
       outcome.status !== "cancelled"
     ) {
       this.publish(outcome);
+      return true;
+    }
+    const cancelled = this.ticket;
+    if (cancelled?.cancellation) {
+      const cancellation =
+        outcome?.status === "error" ? this.cancel(cancelled) : cancelled.cancellation;
+      const waiting: PredictionTicket = {
+        ...cancelled,
+        outcome: { status: "pending", text: null },
+        cancellation,
+      };
+      this.ticket = waiting;
+      this.publish(waiting.outcome);
+      void cancellation.then(
+        () => {
+          if (this.matches(waiting)) this.start(context, "manual", "catch_up");
+          else if (this.ticket === waiting) this.invalidate();
+        },
+        () => {
+          if (!this.matches(waiting)) {
+            if (this.ticket === waiting) this.invalidate();
+            return;
+          }
+          waiting.outcome = { status: "error", text: null };
+          this.publish(waiting.outcome);
+        },
+      );
       return true;
     }
     this.start(context, "manual", "catch_up");
