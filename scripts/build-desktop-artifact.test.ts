@@ -305,9 +305,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         rejected.problems.filter((problem) => problem.startsWith("Group/other writable:")).length,
         3,
       );
-      const { default: hook } = yield* Effect.promise(
-        () => import("./lib/linux-package-permissions.ts"),
-      );
+      const { default: hook } = yield* Effect.promise(() => import("./linux-after-pack.ts"));
       yield* Effect.promise(() => hook({ appOutDir, electronPlatformName: "linux" }));
       yield* pack();
       yield* validateLinuxDebArtifact(archive);

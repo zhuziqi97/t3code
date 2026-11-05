@@ -7,6 +7,7 @@ const prepareServerCompileCache: (context: AfterPackContext) => Promise<void> =
   NodeModule.createRequire(import.meta.url)("./prepare-server-compile-cache.cjs");
 
 interface AfterPackContext {
+  readonly electronPlatformName: string;
   readonly appOutDir: string;
 }
 

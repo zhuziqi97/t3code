@@ -2962,7 +2962,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     buildConfig.productName = CONVENE_DESKTOP_IDENTITY.executableName;
     const path = yield* Path.Path;
     const repoRoot = yield* RepoRoot;
-    buildConfig.afterPack = path.join(repoRoot, "scripts/lib/linux-package-permissions.ts");
+    buildConfig.afterPack = path.join(repoRoot, "scripts/linux-after-pack.ts");
     buildConfig.linux = {
       target: target === "AppImage" ? [target, "deb"] : [target],
       executableName: CONVENE_DESKTOP_IDENTITY.executableName,
