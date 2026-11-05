@@ -1444,6 +1444,13 @@ export const answerToolCall = Effect.fn("evaluateMcpToolUse.answerToolCall")(fun
     if (found.length === 0) return toolResult(call.id, "No matching deferred tools found");
     return loadTools(tools, call.id, found);
   }
+  const decode = t3InputDecoders.get(name);
+  if (decode !== undefined) {
+    const decoded = decode(input);
+    if (Option.isNone(decoded))
+      return failed(`InputValidationError: invalid arguments for ${name}.`);
+    input = decoded.value as Record<string, unknown>;
+  }
   const mock = testCase.setup.mocks?.[name];
   // T3 answers device calls from the world. A mock that is a T3 device error fails inside T3.
   const failure = deviceFailure(mock);

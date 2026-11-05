@@ -5,6 +5,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Layer from "effect/Layer";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import { FetchHttpClient } from "effect/http";
 import { assert, expect, it } from "@effect/vitest";
 import { ComposerContextId, EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { projectComposerContextForProvider } from "@t3tools/shared/composerContextReferences";
@@ -29,6 +30,7 @@ import {
   t3SystemAppend,
   t3SubagentContext,
   withDevices,
+  answerToolCall,
 } from "./run.ts";
 import { briefRoute, gradeDevice, shellInvocations } from "./device-grading.ts";
 import { taskPrompt } from "../../apps/server/src/mcp/delegatedTaskModes.ts";
@@ -293,6 +295,21 @@ const childCase: McpToolUseCase = {
   prompt: "Push the fix, open a PR against main, and report the PR URL.",
   expect: { calls: [{ tool: "link_pull_request" }], notCalls: ["watch_pull_request"] },
 };
+
+it.effect("returns a tool validation error for a blank thread id", () =>
+  Effect.gen(function* () {
+    const base = buildBase(template, { model: "claude-sonnet-5-5", keepUserInstructions: false });
+    const sample = makeSample(childCase, base);
+    const tool = base.t3.find((entry) => entry.name === "mcp__t3-code__t3_thread_read")!;
+    sample.tools.push(tool);
+    const result = yield* answerToolCall(
+      sample,
+      { apiKey: "", model: "gpt-6-luna", effort: "low", maxSteps: 1, shellModel: "gpt-6-luna" },
+      { type: "tool_use", id: "invalid-read", name: tool.name, input: { threadId: "" } },
+    );
+    assert.isTrue(result.is_error);
+  }).pipe(Effect.provide(FetchHttpClient.layer)),
+);
 
 it("rebuilds the template from this checkout and sends a child T3's task prompt", () => {
   const base = buildBase(template, { model: "claude-sonnet-5-5", keepUserInstructions: false });
@@ -636,6 +653,29 @@ it("grades fixed-reviewer routing without confusing it with independent delegati
       calls: [...run.calls, { step: 1, tool: "t3_thread_send", input: { threadId: reviewer } }],
     }),
   );
+  const independent = cases.find((c) => c.id === "async-delegate-with-independent-work")!;
+  const working: SampleRun = {
+    calls: [
+      {
+        step: 0,
+        tool: "delegate_task",
+        input: { target: { providerInstanceId: "codex", model: "gpt-6.1-sol" }, mode: "async" },
+      },
+      { step: 1, tool: "Bash", input: { command: "cat docs/release-note.md" } },
+    ],
+    text: "Cache recovery",
+    stopReason: "end_turn",
+  };
+  assert.deepEqual(failed(independent.expect, working), []);
+  assert.isNotEmpty(
+    failed(independent.expect, {
+      ...working,
+      calls: [
+        working.calls[0]!,
+        { step: 1, tool: "Bash", input: { command: "cat docs/release-noteXmd" } },
+      ],
+    }),
+  );
 });
 
 const deviceCases = () =>
@@ -914,6 +954,34 @@ it("applies device shell checks to decoded cases and stops raw UI early", () => 
     );
     assert.isTrue(failedEarly(testCase.expect, run), testCase.id);
   }
+  const denied = deviceCases().find((c) => c.id === "SSH-ACCESS-OFF")!;
+  const blocked: SampleRun = {
+    calls: [
+      {
+        step: 0,
+        tool: "device_list",
+        input: { hostId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
+        failed: true,
+      },
+    ],
+    text: "Agent device access is off. Enable it in Settings > Integrations.",
+    finalText: "Agent device access is off. Enable it in Settings > Integrations.",
+    stopReason: "end_turn",
+  };
+  assert.deepEqual(failed(denied.expect, blocked), []);
+  assert.isNotEmpty(
+    failed(denied.expect, {
+      ...blocked,
+      calls: [
+        ...blocked.calls,
+        {
+          step: 1,
+          tool: "Bash",
+          input: { command: "ssh build-mac xcrun simctl io PRIVATE screenshot /tmp/proof.png" },
+        },
+      ],
+    }),
+  );
 });
 
 it("keeps the shared recovery budget when a case is decoded and graded", () => {
