@@ -286,6 +286,22 @@ export const NotificationMode = Schema.Literals([
 ]);
 export type NotificationMode = typeof NotificationMode.Type;
 
+export const CodexNativePredictionMode = Schema.Literals(["off", "manual", "auto"]);
+export type CodexNativePredictionMode = typeof CodexNativePredictionMode.Type;
+export const CodexNativePredictionModeSetting = Schema.Union([
+  CodexNativePredictionMode,
+  Schema.Boolean,
+]).pipe(
+  Schema.decodeTo(
+    CodexNativePredictionMode,
+    SchemaTransformation.transform({
+      decode: (value): CodexNativePredictionMode =>
+        typeof value === "boolean" ? (value ? "auto" : "off") : value,
+      encode: (mode) => mode,
+    }),
+  ),
+);
+
 export const QuitConfirmationMode = Schema.Literals(["direct", "hold", "double-click"]);
 export type QuitConfirmationMode = typeof QuitConfirmationMode.Type;
 const DEFAULT_QUIT_CONFIRMATION_MODE: QuitConfirmationMode = "hold";
@@ -489,7 +505,9 @@ export const ClientSettingsSchema = Schema.Struct({
   planModeEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   contextWindowMeterEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   composerCollapseOnScroll: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-  codexNativePredictions: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  codexNativePredictions: CodexNativePredictionModeSetting.pipe(
+    Schema.withDecodingDefault(Effect.succeed("off")),
+  ),
   composerRichTextEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   sendShortcut: Schema.Literals(["enter", "mod-enter-multiline", "mod-enter"]).pipe(
     Schema.withDecodingDefault(Effect.succeed("enter")),
@@ -1851,7 +1869,7 @@ export const ClientSettingsPatch = Schema.Struct({
   planModeEnabled: Schema.optionalKey(Schema.Boolean),
   contextWindowMeterEnabled: Schema.optionalKey(Schema.Boolean),
   composerCollapseOnScroll: Schema.optionalKey(Schema.Boolean),
-  codexNativePredictions: Schema.optionalKey(Schema.Boolean),
+  codexNativePredictions: Schema.optionalKey(CodexNativePredictionModeSetting),
   composerRichTextEnabled: Schema.optionalKey(Schema.Boolean),
   sendShortcut: Schema.optionalKey(Schema.Literals(["enter", "mod-enter-multiline", "mod-enter"])),
   followUpBehavior: Schema.optionalKey(Schema.Literals(["queue", "steer"])),

@@ -309,6 +309,28 @@ describe("resolveIdleCompaction", () => {
   });
 });
 
+describe("ClientSettings native prediction mode", () => {
+  it("defaults to off without adding a mode to an empty patch", () => {
+    expect(decodeClientSettings({}).codexNativePredictions).toBe("off");
+    expect(decodeClientSettingsPatch({})).not.toHaveProperty("codexNativePredictions");
+  });
+
+  it.each([
+    [true, "auto"],
+    [false, "off"],
+    ["off", "off"],
+    ["manual", "manual"],
+    ["auto", "auto"],
+  ])("decodes %s and persists the normalized mode %s", (input, mode) => {
+    const settings = decodeClientSettings({ codexNativePredictions: input });
+    expect(settings.codexNativePredictions).toBe(mode);
+    expect(encodeClientSettings(settings).codexNativePredictions).toBe(mode);
+    expect(decodeClientSettingsPatch({ codexNativePredictions: input })).toEqual({
+      codexNativePredictions: mode,
+    });
+  });
+});
+
 describe("ClientSettings notifications", () => {
   it("requires opt-in when existing settings omit notification preferences", () => {
     expect(decodeClientSettings({}).notificationMode).toBe("off");
