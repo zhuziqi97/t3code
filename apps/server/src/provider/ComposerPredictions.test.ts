@@ -14,6 +14,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Random from "effect/Random";
 import type * as Schema from "effect/Schema";
 import { CodexPredictionConfig } from "./CodexPredictionPolicy.ts";
 import { HttpClient, HttpClientResponse } from "effect/http";
@@ -103,13 +104,24 @@ const setup = (policy: Schema.Codec.Encoded<typeof CodexPredictionConfig> = conf
   Effect.gen(function* () {
     let projection = projectionFixture();
     let currentToken = token("account-a");
+    let currentModel = "native-model";
+    let contextAvailable = true;
     const arrived = yield* Deferred.make<void>();
     const release = yield* Deferred.make<void>();
+    const retryArrived = yield* Deferred.make<void>();
+    const retryRelease = yield* Deferred.make<void>();
+    const configArrived = yield* Deferred.make<void>();
+    const configRelease = yield* Deferred.make<void>();
+    let heldRetry = false;
+    let heldConfig = false;
     let held = false;
     let interrupted = false;
     let sampleText: string | null = '{"suggestion":"Editable suggestion"}';
     let sampleSource: string | null = null;
     let failSample = false;
+    let failConfig = false;
+    let draws = 0;
+    let randomValue = 0.25;
     const samples: Array<
       Parameters<
         NonNullable<ProviderAdapter.ProviderAdapterV2SessionRuntime["nativePrediction"]>["sample"]
@@ -119,10 +131,15 @@ const setup = (policy: Schema.Codec.Encoded<typeof CodexPredictionConfig> = conf
     const nativePrediction: NonNullable<
       ProviderAdapter.ProviderAdapterV2SessionRuntime["nativePrediction"]
     > = {
-      context: () => Effect.sync(() => ({ token: currentToken, model: "native-model" })),
+      context: () =>
+        Effect.sync(() => (contextAvailable ? { token: currentToken, model: currentModel } : null)),
       sample: (value) =>
         Effect.gen(function* () {
           samples.push(value);
+          if (samples.length === 2) {
+            yield* Deferred.succeed(retryArrived, undefined);
+            if (heldRetry) yield* Deferred.await(retryRelease);
+          }
           yield* Deferred.succeed(arrived, undefined);
           if (held) yield* Deferred.await(release);
           if (failSample)
@@ -140,7 +157,7 @@ const setup = (policy: Schema.Codec.Encoded<typeof CodexPredictionConfig> = conf
           ),
         ),
     };
-    const runtime = {
+    let runtime = {
       nativePrediction,
       providerSessionId: "session-a",
     } as unknown as ProviderAdapter.ProviderAdapterV2SessionRuntime;
@@ -157,9 +174,14 @@ const setup = (policy: Schema.Codec.Encoded<typeof CodexPredictionConfig> = conf
             Layer.succeed(
               HttpClient.HttpClient,
               HttpClient.make((request) =>
-                Effect.sync(() => {
+                Effect.gen(function* () {
                   requests.push({ url: request.url, headers: request.headers });
-                  return HttpClientResponse.fromWeb(request, Response.json(policy));
+                  yield* Deferred.succeed(configArrived, undefined);
+                  if (heldConfig) yield* Deferred.await(configRelease);
+                  return HttpClientResponse.fromWeb(
+                    request,
+                    Response.json(policy, { status: failConfig ? 503 : 200 }),
+                  );
                 }),
               ),
             ),
@@ -169,11 +191,43 @@ const setup = (policy: Schema.Codec.Encoded<typeof CodexPredictionConfig> = conf
     );
     const service = yield* ComposerPredictions.ComposerPredictions.pipe(Effect.provide(context));
     return {
-      service,
+      service: {
+        ...service,
+        request: (value: Parameters<typeof service.request>[0]) =>
+          service.request(value).pipe(
+            Effect.provideService(Random.Random, {
+              nextIntUnsafe: () => 0,
+              nextDoubleUnsafe: () => {
+                draws++;
+                return randomValue;
+              },
+            }),
+          ),
+      },
+      draws: () => draws,
+      setContextAvailable: (value: boolean) => {
+        contextAvailable = value;
+      },
+      setRandom: (value: number) => {
+        randomValue = value;
+      },
+      failConfig: (value: boolean) => {
+        failConfig = value;
+      },
       samples,
       requests,
       arrived,
       release,
+      retryArrived,
+      retryRelease,
+      configArrived,
+      configRelease,
+      holdConfig: () => {
+        heldConfig = true;
+      },
+      holdRetry: () => {
+        heldRetry = true;
+      },
       hold: () => {
         held = true;
       },
@@ -184,8 +238,8 @@ const setup = (policy: Schema.Codec.Encoded<typeof CodexPredictionConfig> = conf
       wrongSource: () => {
         sampleSource = "older-native-turn";
       },
-      fail: () => {
-        failSample = true;
+      fail: (value = true) => {
+        failSample = value;
       },
       changeSession: () => {
         projection = {
@@ -210,6 +264,21 @@ const setup = (policy: Schema.Codec.Encoded<typeof CodexPredictionConfig> = conf
             },
           },
         };
+      },
+      changeModel: () => {
+        projection = {
+          ...projection,
+          thread: {
+            ...projection.thread,
+            modelSelection: { ...projection.thread.modelSelection, model: "other-model" },
+          },
+        };
+      },
+      changeNativeModel: () => {
+        currentModel = "other-native-model";
+      },
+      changeRuntime: () => {
+        runtime = { ...runtime, nativePrediction: { ...nativePrediction } };
       },
       changeAccount: () => {
         currentToken = token("account-b");
@@ -269,7 +338,9 @@ it.effect(
       assert.equal(h.requests[0]?.url, "https://chatgpt.com/backend-api/wham/predictions/config");
       assert.equal(h.requests[0]?.headers["chatgpt-account-id"], "account-a");
       assert.isUndefined(h.requests[0]?.headers.originator);
-      yield* h.service.request({ ...input, requestId: "same-account" });
+      yield* h.service.request({ ...input, requestId: "same-account", intent: "manual" });
+      yield* h.service.request({ ...input, requestId: "reopen-suggestion", intent: "manual" });
+      assert.equal(h.draws(), 1);
       assert.equal(h.requests.length, 1);
       assert.equal(h.samples.length, 1);
       h.changeAccount();
@@ -283,10 +354,27 @@ it.effect.each([
   ["disabled", { ...config, is_enabled: false }, "disabled"],
   ["model exclusion", { ...config, unsupported_models: ["native-model"] }, "unsupported"],
   ["zero live rate", { ...config, live_sample_rate: 0 }, "not_selected"],
+  ["not selected", { ...config, live_sample_rate: 0.1 }, "not_selected"],
 ] as const)("does not sample for %s", ([_name, policy, expected]) =>
   Effect.gen(function* () {
     const h = yield* setup(policy);
     assert.equal((yield* h.service.request(input)).status, expected);
+    h.setContextAvailable(false);
+    assert.equal(
+      (yield* h.service.request({ ...input, intent: "manual", requestId: "no-context" })).status,
+      "unsupported",
+    );
+    h.setContextAvailable(true);
+    h.setRandom(0);
+    yield* h.service.request({
+      ...input,
+      requestId: "manual",
+      trigger: "catch_up",
+      intent: "manual",
+    });
+    yield* h.service.request({ ...input, requestId: "manual-again", intent: "manual" });
+    assert.equal(h.draws(), 1);
+    assert.equal(h.requests.length, 1);
     assert.equal(h.samples.length, 0);
   }).pipe(Effect.scoped),
 );
@@ -302,7 +390,7 @@ it.effect(
         .pipe(Effect.forkChild({ startImmediately: true }));
       yield* Deferred.await(h.arrived);
       const second = yield* h.service
-        .request({ ...input, requestId: "second-client", trigger: "catch_up" })
+        .request({ ...input, requestId: "second-client", trigger: "catch_up", intent: "manual" })
         .pipe(Effect.forkChild({ startImmediately: true }));
       assert.equal(h.samples.length, 1);
       yield* h.service.cancel(input);
@@ -321,6 +409,71 @@ it.effect(
       );
       assert.equal(h.samples.length, 1);
     }).pipe(Effect.scoped),
+);
+
+it.effect("keeps a replacement manual attempt independent of the previous callers' cleanup", () =>
+  Effect.gen(function* () {
+    const h = yield* setup({ ...config, live_sample_rate: 0.5 });
+    h.setText(null);
+    h.hold();
+    h.holdRetry();
+    const retryOwner = yield* h.service.request(input).pipe(
+      Effect.flatMap((result) => {
+        assert.equal(result.status, "empty");
+        h.setText('{"suggestion":"Manual retry"}');
+        h.setRandom(0.99);
+        return h.service.request({ ...input, requestId: "retry-owner", intent: "manual" });
+      }),
+      Effect.forkChild({ startImmediately: true }),
+    );
+    yield* Deferred.await(h.arrived);
+    const oldCaller = yield* h.service
+      .request({ ...input, requestId: "old-client", intent: "manual" })
+      .pipe(Effect.forkChild({ startImmediately: true }));
+    yield* Deferred.succeed(h.release, undefined);
+    yield* Deferred.await(h.retryArrived);
+    assert.equal((yield* Fiber.join(oldCaller)).status, "empty");
+    const joined = yield* h.service
+      .request({ ...input, requestId: "retry-joined", intent: "manual" })
+      .pipe(Effect.forkChild({ startImmediately: true }));
+    yield* h.service.cancel({ ...input, requestId: "retry-owner" });
+    assert.equal((yield* Fiber.join(retryOwner)).status, "cancelled");
+    assert.isFalse(h.interrupted());
+    assert.equal(h.samples.length, 2);
+    assert.equal(h.draws(), 1);
+    yield* Deferred.succeed(h.retryRelease, undefined);
+    assert.equal((yield* Fiber.join(joined)).text, "Manual retry");
+  }).pipe(Effect.scoped),
+);
+
+it.effect("cancels preparation before the gate and lets only manual intent restart it", () =>
+  Effect.gen(function* () {
+    const h = yield* setup({ ...config, live_sample_rate: 0.5, catch_up_sample_rate: 0 });
+    h.holdConfig();
+    const pending = yield* h.service.request(input).pipe(Effect.forkChild);
+    yield* Deferred.await(h.configArrived);
+    yield* h.service.cancel(input);
+    assert.equal((yield* Fiber.join(pending)).status, "cancelled");
+    assert.equal(h.draws(), 0);
+    assert.equal(h.samples.length, 0);
+    assert.equal(
+      (yield* h.service.request({ ...input, requestId: "auto-after-preparation" })).status,
+      "cancelled",
+    );
+    yield* Deferred.succeed(h.configRelease, undefined);
+    assert.equal(
+      (yield* h.service.request({
+        ...input,
+        requestId: "retry-preparation",
+        intent: "manual",
+        trigger: "catch_up",
+      })).status,
+      "suggestion",
+    );
+    assert.equal(h.draws(), 1);
+    assert.equal(h.requests.length, 2);
+    assert.equal(h.samples.length, 1);
+  }).pipe(Effect.scoped),
 );
 
 it.effect("does not let a stale client cancel another client's current source", () =>
@@ -364,7 +517,7 @@ it.effect.each([null, "invalid JSON", '{"suggestion":null}'])(
   "closes an empty or tool-suppressed native sample: %s",
   (text) =>
     Effect.gen(function* () {
-      const h = yield* setup();
+      const h = yield* setup({ ...config, live_sample_rate: 0.5 });
       h.setText(text);
       assert.deepEqual(yield* h.service.request(input), {
         requestId: input.requestId,
@@ -374,12 +527,28 @@ it.effect.each([null, "invalid JSON", '{"suggestion":null}'])(
       });
       yield* h.service.request({ ...input, requestId: "reopen-empty" });
       assert.equal(h.samples.length, 1);
+      h.setRandom(0.99);
+      assert.equal(
+        (yield* h.service.request({ ...input, requestId: "retry-empty", intent: "manual" })).status,
+        "empty",
+      );
+      assert.equal(h.samples.length, 2);
+      assert.equal(h.draws(), 1);
+      h.setText('{"suggestion":"Retry suggestion"}');
+      assert.equal(
+        (yield* h.service.request({ ...input, requestId: "retry-empty-success", intent: "manual" }))
+          .status,
+        "suggestion",
+      );
+      yield* h.service.request({ ...input, requestId: "cached-success", intent: "manual" });
+      assert.equal(h.samples.length, 3);
+      assert.equal(h.draws(), 1);
     }).pipe(Effect.scoped),
 );
 
-it.effect("closes a native error without repeating a potentially charged sample", () =>
+it.effect("retries a native error only with manual intent and reuses the gate", () =>
   Effect.gen(function* () {
-    const h = yield* setup();
+    const h = yield* setup({ ...config, live_sample_rate: 0.5 });
     h.fail();
     assert.equal((yield* h.service.request(input)).status, "error");
     assert.equal(
@@ -387,7 +556,42 @@ it.effect("closes a native error without repeating a potentially charged sample"
       "error",
     );
     assert.equal(h.samples.length, 1);
+    h.fail(false);
+    h.setRandom(0.99);
+    assert.equal(
+      (yield* h.service.request({ ...input, requestId: "retry-error", intent: "manual" })).status,
+      "suggestion",
+    );
+    assert.equal(h.samples.length, 2);
+    assert.equal(h.draws(), 1);
+    assert.equal(h.requests.length, 1);
   }).pipe(Effect.scoped),
+);
+
+it.effect(
+  "retries configuration failure manually before making the source's first gate decision",
+  () =>
+    Effect.gen(function* () {
+      const h = yield* setup({ ...config, live_sample_rate: 0.5, catch_up_sample_rate: 0 });
+      h.failConfig(true);
+      assert.equal((yield* h.service.request(input)).status, "error");
+      yield* h.service.request({ ...input, requestId: "auto-error", intent: "auto" });
+      assert.equal(h.requests.length, 1);
+      assert.equal(h.draws(), 0);
+      h.failConfig(false);
+      assert.equal(
+        (yield* h.service.request({
+          ...input,
+          requestId: "manual-config",
+          trigger: "catch_up",
+          intent: "manual",
+        })).status,
+        "suggestion",
+      );
+      assert.equal(h.requests.length, 2);
+      assert.equal(h.draws(), 1);
+      assert.equal(h.samples.length, 1);
+    }).pipe(Effect.scoped),
 );
 
 it.effect("rejects a native response belonging to another source turn", () =>
@@ -395,21 +599,32 @@ it.effect("rejects a native response belonging to another source turn", () =>
     const h = yield* setup();
     h.wrongSource();
     assert.equal((yield* h.service.request(input)).status, "stale");
+    assert.equal(
+      (yield* h.service.request({ ...input, intent: "manual", requestId: "wrong-source-retry" }))
+        .status,
+      "stale",
+    );
+    assert.equal(h.samples.length, 1);
   }).pipe(Effect.scoped),
 );
 
-it.effect.each(["changeSession", "changeProvider"] as const)(
-  "invalidates an in-flight prediction on %s",
-  (change) =>
-    Effect.gen(function* () {
-      const h = yield* setup();
-      h.hold();
-      const pending = yield* h.service.request(input).pipe(Effect.forkChild);
-      yield* Deferred.await(h.arrived);
-      h[change]();
-      yield* Deferred.succeed(h.release, undefined);
-      assert.equal((yield* Fiber.join(pending)).status, "stale");
-    }).pipe(Effect.scoped),
+it.effect.each([
+  "changeSession",
+  "changeProvider",
+  "changeModel",
+  "changeNativeModel",
+  "changeAccount",
+  "changeRuntime",
+] as const)("invalidates an in-flight prediction on %s", (change) =>
+  Effect.gen(function* () {
+    const h = yield* setup();
+    h.hold();
+    const pending = yield* h.service.request(input).pipe(Effect.forkChild);
+    yield* Deferred.await(h.arrived);
+    h[change]();
+    yield* Deferred.succeed(h.release, undefined);
+    assert.equal((yield* Fiber.join(pending)).status, "stale");
+  }).pipe(Effect.scoped),
 );
 
 it.effect("drops a late native result after the parent completes another run", () =>
@@ -437,9 +652,20 @@ it.effect("releases native work when its only RPC caller disconnects", () =>
     yield* Deferred.succeed(h.release, undefined);
     assert.equal(
       (yield* h.service.request({ ...input, requestId: "after-disconnect" })).status,
+      "cancelled",
+    );
+    assert.equal(h.samples.length, 1);
+    h.setRandom(0.99);
+    assert.equal(
+      (yield* h.service.request({
+        ...input,
+        intent: "manual",
+        requestId: "manual-after-disconnect",
+      })).status,
       "suggestion",
     );
     assert.equal(h.samples.length, 2);
+    assert.equal(h.draws(), 1);
   }).pipe(Effect.scoped),
 );
 
@@ -456,6 +682,20 @@ it.effect("cancels only the matching app request and interrupts native sampling"
     assert.equal(result.status, "cancelled");
     assert.isNull(result.text);
     assert.isTrue(h.interrupted());
+    yield* Deferred.succeed(h.release, undefined);
+    assert.equal(
+      (yield* h.service.request({ ...input, requestId: "auto-after-cancel" })).status,
+      "cancelled",
+    );
+    assert.equal(h.samples.length, 1);
+    h.setRandom(0.99);
+    assert.equal(
+      (yield* h.service.request({ ...input, requestId: "manual-after-cancel", intent: "manual" }))
+        .status,
+      "suggestion",
+    );
+    assert.equal(h.samples.length, 2);
+    assert.equal(h.draws(), 1);
   }).pipe(Effect.scoped),
 );
 

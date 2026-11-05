@@ -89,14 +89,20 @@ const make = Effect.gen(function* () {
   const http = yield* HttpClient.HttpClient;
   const scope = yield* Scope.Scope;
   type Outcome = Pick<ComposerPredictionResult, "status" | "text">;
+  type Attempt = {
+    result: Deferred.Deferred<Outcome>;
+    cancel: Deferred.Deferred<void>;
+    callers: Map<Deferred.Deferred<void>, string>;
+    outcome?: Outcome;
+  };
   type Source = {
     key: string;
     runtime: object;
     token: string;
     model: string;
-    result: Deferred.Deferred<Outcome>;
-    cancel: Deferred.Deferred<void>;
-    callers: Map<Deferred.Deferred<void>, string>;
+    trigger: ComposerPredictionInput["trigger"];
+    gate?: { config: CodexPredictionConfig; status: ReturnType<typeof predictionGate> };
+    attempt?: Attempt;
   };
   const sources = new Map<ThreadId, Source>();
   const discard = Effect.fn("ComposerPredictions.discard")(function* (
@@ -105,7 +111,7 @@ const make = Effect.gen(function* () {
   ) {
     if (entry && sources.get(threadId) === entry) {
       sources.delete(threadId);
-      yield* Deferred.succeed(entry.cancel, undefined);
+      if (entry.attempt) yield* Deferred.succeed(entry.attempt.cancel, undefined);
     }
   });
   const configs = new WeakMap<
@@ -144,7 +150,11 @@ const make = Effect.gen(function* () {
         ? yield* native.context(before.thread).pipe(Effect.orElseSucceed(() => null))
         : null;
       if (!native || !context) {
-        yield* discard(input.threadId, observed);
+        if (observed?.key === before.key && observed.runtime === native) {
+          if (observed.attempt) yield* Deferred.succeed(observed.attempt.cancel, undefined);
+        } else {
+          yield* discard(input.threadId, observed);
+        }
         return result("unsupported");
       }
       if (
@@ -171,98 +181,144 @@ const make = Effect.gen(function* () {
           runtime: native,
           token: context.token,
           model: context.model,
-          result: Deferred.makeUnsafe<Outcome>(),
-          cancel: Deferred.makeUnsafe<void>(),
-          callers: new Map(),
+          trigger: input.trigger,
         };
         sources.set(input.threadId, entry);
-        const started = entry;
-        const work = Effect.gen(function* () {
-          const now = yield* Clock.currentTimeMillis;
-          const cached = configs.get(native);
-          let config: CodexPredictionConfig;
-          if (cached?.token === context.token && now - cached.at < 300_000) {
-            config = cached.config;
-          } else {
-            const claims = yield* Effect.try(() => decodeJwt(context.token)).pipe(
-              Effect.flatMap(accountClaims),
-            );
-            const auth = claims["https://api.openai.com/auth"];
-            const accountId = auth.chatgpt_account_id ?? auth.account_id;
-            if (!accountId) return result("unsupported");
-            const response = yield* http.execute(
-              HttpClientRequest.get("https://chatgpt.com/backend-api/wham/predictions/config").pipe(
-                HttpClientRequest.bearerToken(context.token),
-                HttpClientRequest.setHeaders({
-                  "ChatGPT-Account-Id": accountId,
-                  "User-Agent": "T3-Code-native-predictions/1.0",
-                  Accept: "application/json",
+      }
+      const source = entry;
+      const isCurrent = Effect.gen(function* () {
+        const runtime = Option.getOrNull(yield* sessions.get(before.thread.providerSessionId!));
+        if (runtime?.nativePrediction !== native) return false;
+        const latestContext = yield* native
+          .context(before.thread)
+          .pipe(Effect.orElseSucceed(() => null));
+        return (
+          sources.get(input.threadId) === source &&
+          latestContext?.token === source.token &&
+          latestContext.model === source.model &&
+          predictionSource(
+            yield* projections.getThreadProjection(input.threadId),
+            input.sourceRunId,
+          )?.key === source.key
+        );
+      });
+      return yield* Effect.uninterruptibleMask((restore) =>
+        Effect.gen(function* () {
+          let attempt = source.attempt;
+          const retry =
+            input.intent === "manual" &&
+            (attempt?.outcome?.status === "empty" ||
+              attempt?.outcome?.status === "error" ||
+              attempt?.outcome?.status === "cancelled");
+          const start = !attempt || retry;
+          if (start) {
+            attempt = {
+              result: Deferred.makeUnsafe<Outcome>(),
+              cancel: Deferred.makeUnsafe<void>(),
+              callers: new Map(),
+            };
+            source.attempt = attempt;
+          }
+          const current = attempt!;
+          const caller = Deferred.makeUnsafe<void>();
+          current.callers.set(caller, input.requestId);
+          if (start) {
+            const started = current;
+
+            const work = Effect.gen(function* () {
+              if (!source.gate) {
+                const now = yield* Clock.currentTimeMillis;
+                const cached = configs.get(native);
+                let config: CodexPredictionConfig;
+                if (cached?.token === context.token && now - cached.at < 300_000) {
+                  config = cached.config;
+                } else {
+                  const claims = yield* Effect.try(() => decodeJwt(context.token)).pipe(
+                    Effect.flatMap(accountClaims),
+                  );
+                  const auth = claims["https://api.openai.com/auth"];
+                  const accountId = auth.chatgpt_account_id ?? auth.account_id;
+                  if (!accountId) return result("unsupported");
+                  const response = yield* http.execute(
+                    HttpClientRequest.get(
+                      "https://chatgpt.com/backend-api/wham/predictions/config",
+                    ).pipe(
+                      HttpClientRequest.bearerToken(context.token),
+                      HttpClientRequest.setHeaders({
+                        "ChatGPT-Account-Id": accountId,
+                        "User-Agent": "T3-Code-native-predictions/1.0",
+                        Accept: "application/json",
+                      }),
+                    ),
+                  );
+                  if (response.status !== 200) return result("error");
+                  config = yield* response.json.pipe(Effect.flatMap(decodeConfig));
+                  configs.set(native, { token: context.token, at: now, config });
+                }
+                const random = yield* Random.Random;
+                // Store the official decision with its draw; cancellation only retires the attempt.
+                yield* Effect.sync(() => {
+                  source.gate = {
+                    config,
+                    status: predictionGate(
+                      config,
+                      context.model,
+                      source.trigger,
+                      random.nextDoubleUnsafe(),
+                    ),
+                  };
+                });
+              }
+              const { config, status } = source.gate!;
+              if (status) return result(status);
+              if (!(yield* isCurrent)) return result("stale");
+              const sample = yield* native.sample({
+                providerThread: before.thread,
+                sourceTurnId: before.turn.nativeTurnRef!.nativeId!,
+                prompt: formatPredictionPrompt(config.prompt),
+                effort: config.prediction_reasoning_effort,
+              });
+              if (
+                !(yield* isCurrent) ||
+                (sample && sample.sourceTurnId !== before.turn.nativeTurnRef!.nativeId)
+              )
+                return result("stale");
+              const text = parsePrediction(sample?.text ?? null);
+              return result(text ? "suggestion" : "empty", text);
+            });
+            yield* work.pipe(
+              Effect.raceFirst(Deferred.await(started.cancel).pipe(Effect.as(result("cancelled")))),
+              Effect.orElseSucceed(() => result("error")),
+              Effect.flatMap((outcome) =>
+                Effect.gen(function* () {
+                  started.outcome = { status: outcome.status, text: outcome.text };
+                  yield* Deferred.succeed(started.result, {
+                    status: outcome.status,
+                    text: outcome.text,
+                  });
                 }),
               ),
+              Effect.interruptible,
+              Effect.forkIn(scope),
             );
-            if (response.status !== 200) return result("error");
-            config = yield* response.json.pipe(Effect.flatMap(decodeConfig));
-            configs.set(native, { token: context.token, at: now, config });
           }
-          const gate = predictionGate(config, context.model, input.trigger, yield* Random.next);
-          if (gate) return result(gate);
-          const current = predictionSource(
-            yield* projections.getThreadProjection(input.threadId),
-            input.sourceRunId,
+          return yield* restore(
+            Deferred.await(current.result).pipe(
+              Effect.map((outcome) => result(outcome.status, outcome.text)),
+              Effect.raceFirst(Deferred.await(caller).pipe(Effect.as(result("cancelled")))),
+            ),
+          ).pipe(
+            Effect.ensuring(
+              Effect.gen(function* () {
+                current.callers.delete(caller);
+                if (current.callers.size === 0 && !(yield* Deferred.isDone(current.result))) {
+                  yield* Deferred.succeed(current.cancel, undefined);
+                  yield* Deferred.await(current.result);
+                }
+              }),
+            ),
           );
-          if (current?.key !== before.key) return result("stale");
-          const sample = yield* native.sample({
-            providerThread: before.thread,
-            sourceTurnId: before.turn.nativeTurnRef!.nativeId!,
-            prompt: formatPredictionPrompt(config.prompt),
-            effort: config.prediction_reasoning_effort,
-          });
-          const after = predictionSource(
-            yield* projections.getThreadProjection(input.threadId),
-            input.sourceRunId,
-          );
-          if (
-            after?.key !== before.key ||
-            (sample && sample.sourceTurnId !== before.turn.nativeTurnRef!.nativeId)
-          )
-            return result("stale");
-          const text = parsePrediction(sample?.text ?? null);
-          return result(text ? "suggestion" : "empty", text);
-        });
-        yield* work.pipe(
-          Effect.raceFirst(Deferred.await(started.cancel).pipe(Effect.as(result("cancelled")))),
-          Effect.orElseSucceed(() => result("error")),
-          Effect.flatMap((outcome) =>
-            Effect.gen(function* () {
-              if (
-                (outcome.status === "stale" || outcome.status === "cancelled") &&
-                sources.get(input.threadId) === started
-              )
-                sources.delete(input.threadId);
-              yield* Deferred.succeed(started.result, {
-                status: outcome.status,
-                text: outcome.text,
-              });
-            }),
-          ),
-          Effect.forkIn(scope),
-        );
-      }
-      const current = entry;
-      const caller = yield* Deferred.make<void>();
-      current.callers.set(caller, input.requestId);
-      return yield* Deferred.await(current.result).pipe(
-        Effect.map((outcome) => result(outcome.status, outcome.text)),
-        Effect.raceFirst(Deferred.await(caller).pipe(Effect.as(result("cancelled")))),
-        Effect.ensuring(
-          Effect.gen(function* () {
-            current.callers.delete(caller);
-            if (current.callers.size === 0 && !(yield* Deferred.isDone(current.result))) {
-              yield* Deferred.succeed(current.cancel, undefined);
-              yield* Deferred.await(current.result);
-            }
-          }),
-        ),
+        }),
       );
     },
     (effect, input) =>
@@ -281,7 +337,7 @@ const make = Effect.gen(function* () {
   }) {
     const entry = sources.get(input.threadId);
     if (entry) {
-      for (const [caller, requestId] of entry.callers) {
+      for (const [caller, requestId] of entry.attempt?.callers ?? []) {
         if (requestId === input.requestId) yield* Deferred.succeed(caller, undefined);
       }
     }
