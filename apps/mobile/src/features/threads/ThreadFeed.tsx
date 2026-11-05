@@ -66,7 +66,7 @@ import {
 } from "@t3tools/contracts";
 import { renderAssistantCitationsAsText } from "@t3tools/shared/assistantCitations";
 import { encodeComposerContextFragment } from "@t3tools/shared/composerContextClipboard";
-import { hostedThreadLink, parseThreadLinkHref } from "@t3tools/shared/threadLinks";
+import { parseThreadLinkHref } from "@t3tools/shared/threadLinks";
 import { PROMPT_LINK_MAX_PROMPT_LENGTH } from "@t3tools/shared/promptLinks";
 import {
   parseComposerContextHref,
@@ -1258,27 +1258,27 @@ function AssistantMarkdownBlocks(props: {
     }
     return block.segments.map((segment) => {
       const offset = block.sourceOffset + segment.sourceOffset;
-    if (segment.kind === "artifact-template") {
-      return (
-        <ArtifactTemplateCard
+      if (segment.kind === "artifact-template") {
+        return (
+          <ArtifactTemplateCard
             key={`artifact-template:${offset}`}
-          template={segment.template}
-          onUse={props.onUseArtifactTemplate}
-        />
-      );
-    }
-    if (segment.markdown.trim().length === 0) return null;
-    return (
-      <SelectableMarkdownText
+            template={segment.template}
+            onUse={props.onUseArtifactTemplate}
+          />
+        );
+      }
+      if (segment.markdown.trim().length === 0) return null;
+      return (
+        <SelectableMarkdownText
           key={`markdown:${offset}`}
           markdown={renderCodexInlineDirectivesAsMarkdown(segment.markdown)}
-        skills={props.skills}
-        textStyle={props.markdownStyles.nativeTextStyle}
+          skills={props.skills}
+          textStyle={props.markdownStyles.nativeTextStyle}
           {...props.linkHandlers}
-        renderImage={props.renderImage}
-      />
-    );
-  });
+          renderImage={props.renderImage}
+        />
+      );
+    });
   });
 }
 
@@ -3087,10 +3087,9 @@ export const ThreadFeed = memo(function ThreadFeed({
         else if (actionId === "copy-skill") copyTextWithHaptic(`$${skill.name}`);
         return;
       }
-      const thread = resolveLinkedThread(href);
-      if (thread) {
+      if (resolveLinkedThread(href)) {
         if (actionId === "open-thread") onMarkdownLinkPress(href);
-        else if (actionId === "copy-thread-link") copyTextWithHaptic(hostedThreadLink(thread));
+        else if (actionId === "copy-thread-link") copyTextWithHaptic(href);
         return;
       }
       const target = resolveFileChipTarget(href, props.workspaceRoot);

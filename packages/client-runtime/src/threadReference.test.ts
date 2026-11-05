@@ -3,7 +3,7 @@ import {
   decodeComposerContextFragment,
   encodeComposerContextFragment,
 } from "@t3tools/shared/composerContextClipboard";
-import { threadLinkContextReferences } from "@t3tools/shared/composerContextReferences";
+import { collectComposerContextReferences } from "@t3tools/shared/composerContextReferences";
 import { describe, expect, it } from "vite-plus/test";
 
 import { resolveThreadReferenceCopyTarget } from "./threadReference.ts";
@@ -77,39 +77,60 @@ describe("resolveThreadReferenceCopyTarget", () => {
     ).toMatchObject({ kind: "pull-request", value: "https://github.com/t3/pr/12" });
   });
 
-  it("copies a thread chip that pastes back as the same thread on its machine", () => {
-    const target = resolveThreadReferenceCopyTarget({ ...thread, linkedPullRequestUrl: null });
+  it.each(["thread-1", "thread:delegated-task:mcp%3A1"])(
+    "copies %s as a thread chip that pastes back as the same thread on its machine",
+    (threadId) => {
+      const target = resolveThreadReferenceCopyTarget({
+        ...thread,
+        threadRef: { ...thread.threadRef, threadId: ThreadId.make(threadId) },
+        linkedPullRequestUrl: null,
+      });
 
-    expect(target).toMatchObject({
-      kind: "thread",
-      description: "Fix the login flow",
-      successTitle: "Thread copied",
-    });
-    const pasted = decodeComposerContextFragment(encodeComposerContextFragment(target!.fragment!));
-    expect(pasted).toEqual({
-      version: 1,
-      source: { environmentId: "env-1" },
-      records: [
+      expect(target).toMatchObject({
+        kind: "thread",
+        description: "Fix the login flow",
+        successTitle: "Thread copied",
+      });
+      const pasted = decodeComposerContextFragment(
+        encodeComposerContextFragment(target!.fragment!),
+      );
+      expect(pasted).toEqual({
+        version: 1,
+        source: { environmentId: "env-1" },
+        records: [
+          expect.objectContaining({
+            kind: "thread",
+            environmentId: "env-1",
+            threadId,
+            title: "Fix the login flow",
+          }),
+        ],
+      });
+      expect(target!.value).toBe(
+        `[Fix the login flow](t3-context://v1/thread/${pasted!.records[0]!.contextId})`,
+      );
+      expect(collectComposerContextReferences(target!.value)).toEqual([
         expect.objectContaining({
           kind: "thread",
-          environmentId: "env-1",
-          threadId: "thread-1",
-          title: "Fix the login flow",
+          contextId: pasted!.records[0]!.contextId,
+          label: "Fix the login flow",
         }),
-      ],
-    });
-    // The plain text opens the thread anywhere and pastes back as the copied record's chip.
-    expect(target!.value).toBe("https://app.t3.codes/threads/env-1/thread-1");
-    expect(threadLinkContextReferences(target!.value, pasted!.records, () => undefined)).toEqual({
-      text: `[Fix the login flow](t3-context://v1/thread/${pasted!.records[0]!.contextId})`,
-      records: pasted!.records,
-    });
-  });
+      ]);
+    },
+  );
 
-  it("links through the build's hosted app", () => {
-    expect(
-      resolveThreadReferenceCopyTarget({ ...thread, hostedAppUrl: "https://preview.t3.codes" })
-        ?.value,
-    ).toBe("https://preview.t3.codes/threads/env-1/thread-1");
+  it("keeps the target environment in the copied reference", () => {
+    const target = resolveThreadReferenceCopyTarget({
+      ...thread,
+      threadRef: {
+        environmentId: EnvironmentId.make("another-machine"),
+        threadId: thread.threadRef.threadId,
+      },
+    });
+    expect(target?.fragment).toMatchObject({
+      source: { environmentId: "another-machine" },
+      records: [{ environmentId: "another-machine", threadId: "thread-1" }],
+    });
+    expect(target?.value).toBe("[Fix the login flow](t3-context://v1/thread/thread_thread-1)");
   });
 });
