@@ -335,10 +335,17 @@ const make = Effect.gen(function* () {
     readonly threadId: ThreadId;
     readonly requestId: string;
   }) {
-    const entry = sources.get(input.threadId);
-    if (entry) {
-      for (const [caller, requestId] of entry.attempt?.callers ?? []) {
-        if (requestId === input.requestId) yield* Deferred.succeed(caller, undefined);
+    const attempt = sources.get(input.threadId)?.attempt;
+    if (attempt) {
+      for (const [caller, requestId] of attempt.callers) {
+        if (requestId === input.requestId) {
+          attempt.callers.delete(caller);
+          yield* Deferred.succeed(caller, undefined);
+        }
+      }
+      if (attempt.callers.size === 0 && !(yield* Deferred.isDone(attempt.result))) {
+        yield* Deferred.succeed(attempt.cancel, undefined);
+        yield* Deferred.await(attempt.result);
       }
     }
   });

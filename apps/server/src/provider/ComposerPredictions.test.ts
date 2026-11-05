@@ -677,23 +677,18 @@ it.effect("cancels only the matching app request and interrupts native sampling"
     yield* Deferred.await(h.arrived);
     yield* h.service.cancel({ threadId: input.threadId, requestId: "older-request" });
     assert.isFalse(h.interrupted());
+    h.setRandom(0.99);
     yield* h.service.cancel(input);
+    assert.equal(h.samples.length, 1);
+    const manual = yield* h.service
+      .request({ ...input, requestId: "manual-after-cancel", intent: "manual" })
+      .pipe(Effect.forkChild({ startImmediately: true }));
     const result = yield* Fiber.join(pending);
     assert.equal(result.status, "cancelled");
     assert.isNull(result.text);
     assert.isTrue(h.interrupted());
     yield* Deferred.succeed(h.release, undefined);
-    assert.equal(
-      (yield* h.service.request({ ...input, requestId: "auto-after-cancel" })).status,
-      "cancelled",
-    );
-    assert.equal(h.samples.length, 1);
-    h.setRandom(0.99);
-    assert.equal(
-      (yield* h.service.request({ ...input, requestId: "manual-after-cancel", intent: "manual" }))
-        .status,
-      "suggestion",
-    );
+    assert.equal((yield* Fiber.join(manual)).status, "suggestion");
     assert.equal(h.samples.length, 2);
     assert.equal(h.draws(), 1);
   }).pipe(Effect.scoped),
