@@ -3,22 +3,14 @@ import {
   AssetWorkspaceAssetInspectionError,
   AssetWorkspaceContextNotFoundError,
   EnvironmentAuthorizationError,
-  ThreadId,
-  WS_METHODS,
-} from "@t3tools/contracts";
-import * as Result from "effect/Result";
-import * as Effect from "effect/Effect";
-import * as Stream from "effect/Stream";
-import * as SubscriptionRef from "effect/SubscriptionRef";
-import * as Layer from "effect/Layer";
-import { describe, expect, it } from "@effect/vitest";
-import {
   type AssetCreateUrlResult,
   type AssetResource,
   EnvironmentId,
   ThreadId,
   WS_METHODS,
 } from "@t3tools/contracts";
+import * as Result from "effect/Result";
+import { describe, expect, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -40,9 +32,11 @@ import type { RpcSession } from "../rpc/session.ts";
 import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
 
 import {
+  ASSET_URL_MAX_IN_FLIGHT,
   createAssetEnvironmentAtoms,
   createProjectFaviconUrlAtomFamily,
   InvalidAssetCollectionKeyError,
+  makeRevisionedAssetUrlFamily,
   parseAssetCollectionKey,
   resolveAssetUrl,
 } from "./assets.ts";
@@ -358,7 +352,7 @@ const makeAssetUrlHarness = Effect.fn("TestAssetUrl.makeHarness")(function* (
   >();
   const sessions = new Map<
     EnvironmentId,
-    SubscriptionRef.SubscriptionRef<Option.Option<RpcSession.RpcSession>>
+    SubscriptionRef.SubscriptionRef<Option.Option<RpcSession>>
   >();
   const makeSession = (environmentId: EnvironmentId) =>
     ({
@@ -379,7 +373,7 @@ const makeAssetUrlHarness = Effect.fn("TestAssetUrl.makeHarness")(function* (
             ),
           ),
       },
-    }) as unknown as RpcSession.RpcSession;
+    }) as unknown as RpcSession;
   for (const environmentId of environmentIds) {
     releases.set(environmentId, yield* Queue.unbounded<void>());
     const session = yield* SubscriptionRef.make(Option.some(makeSession(environmentId)));

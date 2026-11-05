@@ -33,6 +33,8 @@ import {
   deriveRunlessWorkStartedAt,
   deriveThreadActivityRun,
   deriveThreadRuntime,
+  formatModelSelectionEffort,
+  formatProviderSubagentStatus,
   isBackgroundWorkStopPending,
   presentPendingBackgroundWork,
   presentProviderGoal,
