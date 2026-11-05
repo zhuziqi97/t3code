@@ -1,6 +1,13 @@
 /** English keys define the catalog and fallback. Interpolation uses {{name}}; plurals use _one and _other. Keep provider names and shell commands untranslated. */
 export const en = {
   "files.copyRelativePath": "Copy relative path",
+  "files.copyRelativeFailed": "Failed to copy relative path",
+  "files.copyFullFailed": "Failed to copy full path",
+  "files.relativeCopied": "Relative path copied",
+  "files.fullCopied": "Full path copied",
+  "files.previewMedia": "Preview media",
+  "files.optionsFor": "File options for {{file}}",
+  "chat.editor.opened": "Opened in {{editor}}",
   "common.advanced": "Advanced",
   "chat.timeline.handoffPending": "Context handoff pending",
   "project.scripts.none": "No project scripts",

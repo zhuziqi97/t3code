@@ -348,7 +348,7 @@ export const OpenInPicker = memo(function OpenInPicker({
               ? t("chat.editor.browser")
               : editorLabelForPlatform(preferredEditor, navigator.platform);
           void openInEditor(preferredEditor).then((opened) => {
-            if (opened) announce(`Opened in ${label}`);
+            if (opened) announce(t("chat.editor.opened", { editor: label }));
           });
         }}
       >

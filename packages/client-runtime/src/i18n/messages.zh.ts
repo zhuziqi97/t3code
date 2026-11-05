@@ -5,6 +5,13 @@ import type { Messages } from "./messages.en.ts";
 
 export const zh: Partial<Messages> = {
   "files.copyRelativePath": "复制相对路径",
+  "files.copyRelativeFailed": "无法复制相对路径",
+  "files.copyFullFailed": "无法复制完整路径",
+  "files.relativeCopied": "已复制相对路径",
+  "files.fullCopied": "已复制完整路径",
+  "files.previewMedia": "预览媒体",
+  "files.optionsFor": "{{file}} 的文件选项",
+  "chat.editor.opened": "已在{{editor}}中打开",
   "common.advanced": "高级",
   "chat.timeline.handoffPending": "等待移交上下文",
   "project.scripts.none": "暂无项目脚本",

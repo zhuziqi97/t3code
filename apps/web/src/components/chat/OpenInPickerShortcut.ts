@@ -86,7 +86,7 @@ export function useOpenFavoriteEditorShortcut({
             title: t("chat.editor.open"),
             description: String(squashAtomCommandFailure(result)),
           });
-        if (result._tag === "Success") announce(`Opened in ${label}`);
+        if (result._tag === "Success") announce(t("chat.editor.opened", { editor: label }));
       });
     };
     // File pickers run before the chat fallback and claim the shortcut once.
