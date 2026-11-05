@@ -83,6 +83,7 @@ const MODELS = {
   "claude-opus-5-5": "Opus 5.5",
   "gpt-6.1-sol": "GPT-6.1 Sol",
   "gpt-6-astra": "GPT-6 Astra",
+  "gpt-6-luna": "GPT-6 Luna",
 } as const;
 type Model = keyof typeof MODELS;
 /** GPT models replay a Codex capture through CLIProxyAPI, the rest a Claude Code capture. */
@@ -96,6 +97,8 @@ const PRICES = {
   "claude-opus-5-5": { input: 4, output: 20, cacheWrite: 5, cacheRead: 0.2 },
 };
 type PricedModel = keyof typeof PRICES;
+const SHELL_MODELS = [...Object.keys(PRICES), "gpt-6-luna"] as Array<PricedModel | "gpt-6-luna">;
+type ShellModel = (typeof SHELL_MODELS)[number];
 const T3_PREFIX = "mcp__t3-code__";
 const RUNTIME_MARKER = "<runtime_info>";
 const TOOL_LOADED = "Tool loaded.";
@@ -775,15 +778,15 @@ export const makeSample = (testCase: McpToolUseCase, base: Base): Sample => {
       ({ number }) => pullRequest(repo, { number }).url,
     ),
     ...priorCalls.flatMap((call) =>
-    ["link_pull_request", "watch_pull_request"].includes(call.tool) && isRecord(call.input)
-      ? [pullRequest(repo, call.input).url]
+      ["link_pull_request", "watch_pull_request"].includes(call.tool) && isRecord(call.input)
+        ? [pullRequest(repo, call.input).url]
         : call.tool === "link_pull_requests" &&
             isRecord(call.input) &&
             Array.isArray(call.input.urls)
           ? call.input.urls
               .filter((url) => PULL_REQUEST_URL.test(valueText(url)))
               .map((url) => pullRequest(repo, { url }).url)
-      : [],
+          : [],
     ),
   ];
   const taskNumbers = [...valueText(prior).matchAll(/task-(\d+)/g)].map((match) =>
@@ -949,7 +952,7 @@ export const buildMessages = (sample: Sample) => {
     sideChatContext === undefined ? userText : withInlineContext(sideChatContext, userText);
   const childPrompt = () => taskPrompt({ task: prompt, role: delegateRole });
   if (testCase.prompt !== "")
-  push("user", text(role === "delegated-child" ? childPrompt() : prompt));
+    push("user", text(role === "delegated-child" ? childPrompt() : prompt));
   // Claude Code gives a subagent its SubagentStart hooks' context as a reminder after the task.
   if (native && base.subagentContext) {
     push("user", reminder(`SubagentStart hook additional context: ${base.subagentContext}`));
@@ -1374,7 +1377,7 @@ type Config = {
   readonly proxy?: { readonly url: string; readonly headers: Readonly<Record<string, string>> };
   readonly effort: string;
   readonly maxSteps: number;
-  readonly shellModel: PricedModel;
+  readonly shellModel: ShellModel;
 };
 
 /**
@@ -1983,7 +1986,7 @@ const spend = (usages: ReadonlyArray<Usage>, model: PricedModel | undefined) => 
 /** Markdown report. With a baseline, each case shows its earlier pass rate and the change. */
 export const summarize = (
   rows: Array<ResultRow>,
-  options: { readonly header: string; readonly shellModel: PricedModel; readonly model: Model },
+  options: { readonly header: string; readonly shellModel: ShellModel; readonly model: Model },
   before?: Map<string, number>,
 ) => {
   const codex = isCodex(options.model);
@@ -1991,9 +1994,10 @@ export const summarize = (
     rows.map((row) => row.usage),
     codex ? undefined : options.model,
   );
+  const shellPrice = options.shellModel === "gpt-6-luna" ? undefined : options.shellModel;
   const shell = spend(
     rows.map((row) => row.shellUsage),
-    options.shellModel,
+    shellPrice,
   );
   const cost = agent.cost + shell.cost;
   const table = (title: string, key: (row: ResultRow) => string, compare = false) => [
@@ -2027,11 +2031,11 @@ export const summarize = (
     `- ${options.header}`,
     `- Pass: ${percent(passRate(rows))} of ${finished} samples.`,
     ...(errors.length > 0 ? [errorNote] : []),
-    codex
-      ? "- Cost: the agent is not priced. `vibeproxy` in `~/.codex/config.toml` may use a subscription or bill an API key per token; agent tokens are below."
+    codex || shellPrice === undefined
+      ? "- Cost: proxy price unknown. The configured proxy may use a subscription or bill an API key per token; tokens are below."
       : `- Estimated cost $${cost.toFixed(2)}, $${(cost / rows.length).toFixed(3)} per sample.`,
     `- Agent tokens: ${agent.tokens}${codex ? "." : ` ($${agent.cost.toFixed(2)}).`}`,
-    `- Shell simulator (${options.shellModel}) tokens: ${shell.tokens} (API-price estimate $${shell.cost.toFixed(2)}).`,
+    `- Shell simulator (${options.shellModel}) tokens: ${shell.tokens}${shellPrice === undefined ? " (proxy price unknown)." : ` (API-price estimate $${shell.cost.toFixed(2)}).`}`,
     ...(codex
       ? [
           "- Code-mode tools use case mocks and a simulated machine. Native subagent prompts and asynchronous notifications are approximate.",
@@ -2061,7 +2065,7 @@ const Flags = Schema.Struct({
   concurrency: PositiveInt,
   "max-steps": Schema.optional(PositiveInt),
   effort: Schema.optional(Schema.Literals(EFFORTS)),
-  "shell-model": Schema.Literals(Object.keys(PRICES) as Array<PricedModel>),
+  "shell-model": Schema.Literals(SHELL_MODELS),
   "user-instructions": Schema.Literals(["keep", "drop"]),
   "dry-run": Schema.Boolean,
   "stop-on-regression": Schema.Boolean,

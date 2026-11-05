@@ -2022,6 +2022,14 @@ it("leaves errored samples out of pass rates and lists them in the summary", () 
   assert.include(summary, "| B | - of 0, 1 errored | new | |");
   // Errored samples' tokens still count: 3 rows of 10 input tokens each.
   assert.include(summary, "input 30");
+  const proxySummary = summarize([row("A", true)], {
+    header: "proxy run",
+    shellModel: "gpt-6-luna",
+    model: "gpt-6-luna",
+  });
+  assert.include(proxySummary, "Shell simulator (gpt-6-luna) tokens:");
+  assert.include(proxySummary, "proxy price unknown");
+  assert.notInclude(proxySummary, "$0.00");
 });
 
 it.each(["couldn't", "couldn’t", "can’t"])(
