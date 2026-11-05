@@ -6,6 +6,8 @@ export const ComposerPredictionInput = Schema.Struct({
   sourceRunId: RunId,
   requestId: Schema.NonEmptyString,
   trigger: Schema.Literals(["live", "catch_up"]),
+  // Intent permits explicit retries without changing the official trigger's sampling rate.
+  intent: Schema.optionalKey(Schema.Literals(["auto", "manual"])),
 });
 export type ComposerPredictionInput = typeof ComposerPredictionInput.Type;
 export const ComposerPredictionCancelInput = Schema.Struct({
