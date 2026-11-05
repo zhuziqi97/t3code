@@ -30,7 +30,7 @@ export function ProjectThreadPageControls(props: {
           {props.loading
             ? t("common.loading")
             : props.failed
-              ? "Could not load older threads. Retry"
+              ? t("thread.more.failed")
               : t("convene.sidebar.moreRemaining", {
                   count: Math.min(props.pageSize, remaining),
                   remaining,
