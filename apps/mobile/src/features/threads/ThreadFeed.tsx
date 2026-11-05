@@ -4015,7 +4015,7 @@ export const ThreadFeed = memo(function ThreadFeed({
                     endpoints={props.pendingHandoff}
                     iconColor={iconSubtleColor}
                     surfaceColor={screenColor}
-                    label="Context handoff pending"
+                    label={t("chat.timeline.handoffPending")}
                   />
                 ) : null}
                 {endFeedback && endFeedback.messageId === null ? (

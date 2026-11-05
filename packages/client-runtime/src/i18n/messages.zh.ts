@@ -4,6 +4,10 @@
 import type { Messages } from "./messages.en.ts";
 
 export const zh: Partial<Messages> = {
+  "common.advanced": "高级",
+  "chat.timeline.handoffPending": "等待移交上下文",
+  "project.scripts.none": "暂无项目脚本",
+  "project.scripts.noneDescription": "此项目尚未保存任何脚本",
   "provider.models.noReasoning": "无思考强度",
   "settings.sections.secrets": "密钥",
   "chat.traits.noLevels": "无思考强度选项",

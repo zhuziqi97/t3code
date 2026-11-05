@@ -1,4 +1,5 @@
 import { Toolbar } from "../../components/ui/Toolbar";
+import { useTranslate } from "../../i18n";
 import * as Dialog from "../../components/ui/Dialog";
 import { useOpenPullRequest } from "../../native/useOpenPullRequest";
 import { createNativeHeaderMenu } from "../../components/ui/nativeHeaderMenu.ios";
@@ -439,6 +440,7 @@ export function useThreadGitCenterHeaderItems(props: ThreadGitControlsProps): He
 }
 
 export function ThreadGitControls(props: ThreadGitControlsProps) {
+  const t = useTranslate();
   const model = useThreadGitControlModel(props);
   const showActionControls = props.showActionControls ?? true;
 
@@ -480,9 +482,9 @@ export function ThreadGitControls(props: ThreadGitControlsProps) {
               icon="play"
               disabled
               onPress={() => {}}
-              subtitle="This project has no saved scripts yet"
+              subtitle={t("project.scripts.noneDescription")}
             >
-              <Toolbar.Label>No project scripts</Toolbar.Label>
+              <Toolbar.Label>{t("project.scripts.none")}</Toolbar.Label>
             </Toolbar.MenuAction>
           )}
           {props.terminalSessions.map((session) => (

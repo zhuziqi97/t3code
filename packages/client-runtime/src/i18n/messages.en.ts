@@ -1,5 +1,9 @@
 /** English keys define the catalog and fallback. Interpolation uses {{name}}; plurals use _one and _other. Keep provider names and shell commands untranslated. */
 export const en = {
+  "common.advanced": "Advanced",
+  "chat.timeline.handoffPending": "Context handoff pending",
+  "project.scripts.none": "No project scripts",
+  "project.scripts.noneDescription": "This project has no saved scripts yet",
   "provider.models.noReasoning": "No reasoning",
   "settings.sections.secrets": "Secrets",
   "chat.traits.noLevels": "No effort levels",

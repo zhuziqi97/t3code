@@ -39,10 +39,10 @@ const WRITING_STYLE_LABELS: Record<string, string> = {
 };
 
 const BACKGROUND_ACTIVITY_PROFILE_LABELS: Record<string, string> = {
-  balanced: "Balanced",
-  performance: "Performance",
-  "battery-saver": "Battery saver",
-  custom: "Advanced",
+  balanced: "options.background.balanced",
+  performance: "options.background.performance",
+  "battery-saver": "options.background.battery-saver",
+  custom: "options.background.advanced",
 };
 
 function formatValue(key: keyof ServerSettings, value: unknown, translate: TFunction): string {
@@ -83,11 +83,13 @@ function formatValue(key: keyof ServerSettings, value: unknown, translate: TFunc
   if (Array.isArray(value)) return translate("inheritance.items", { count: value.length });
   if (typeof value === "object") {
     if (key === "backgroundActivity" && "profile" in value && typeof value.profile === "string") {
-      return BACKGROUND_ACTIVITY_PROFILE_LABELS[value.profile] ?? value.profile;
+      const label = BACKGROUND_ACTIVITY_PROFILE_LABELS[value.profile];
+      return label ? translate(label) : value.profile;
     }
     if ("model" in value && typeof value.model === "string") return value.model;
     if ("mode" in value && typeof value.mode === "string") {
-      if (key === "worktreeCleanup") return value.mode === "off" ? "Off" : "Custom";
+      if (key === "worktreeCleanup")
+        return translate(value.mode === "off" ? "common.off" : "common.custom");
       return key === "sourceControlWritingStyle"
         ? WRITING_STYLE_LABELS[value.mode]
           ? translate(WRITING_STYLE_LABELS[value.mode]!)
