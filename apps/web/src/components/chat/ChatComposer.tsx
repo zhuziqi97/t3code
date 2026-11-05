@@ -1,4 +1,4 @@
-import { ComposerPrediction } from "./ComposerPrediction";
+import { ComposerPrediction, useComposerPrediction } from "./ComposerPrediction";
 import { useTranslate } from "../../i18n";
 
 import { useComposerTypingGuard } from "./useComposerTypingGuard";
@@ -3182,6 +3182,42 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     keepFullHistory: props.keepFullHistory,
     onToggleKeepFullHistory: props.onToggleKeepFullHistory,
   };
+  const prediction = useComposerPrediction({
+    threadRef: routeThreadRef,
+    draftTarget: composerDraftTarget,
+    selectedInstanceId,
+    codex: selectedProvider === "codex",
+    blocked:
+      routeKind !== "server" ||
+      isEditingQueuedMessage ||
+      isSendBusy ||
+      isPreparingWorktree ||
+      isCompacting ||
+      pendingApprovals.length > 0 ||
+      incomingPendingUserInputs.length > 0 ||
+      multipleModelSelections !== null ||
+      preparingComposerImages.length > 0 ||
+      questionAttachmentTarget !== null,
+  });
+  const acceptPrediction = () => {
+    if (composerEditorRef.current?.readSnapshot().value !== "") return false;
+    const text = prediction.accept();
+    if (text === null) return false;
+    flushSync(() => {
+      setComposerDraftPrompt(composerDraftTarget, text);
+      setComposerCursor(collapseExpandedComposerCursor(text, text.length));
+    });
+    if (isComposerCollapsedMobile) expandMobileComposer();
+    else composerEditorRef.current?.focusAtEnd();
+    return true;
+  };
+  const predictionControls = (
+    <ComposerPrediction
+      view={prediction.view}
+      accept={acceptPrediction}
+      dismiss={prediction.dismiss}
+    />
+  );
   return (
     <form
       ref={composerFormRef}
@@ -3238,30 +3274,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       <ComposerBanner.Dock>
         <ComposerBanner.Column>
           <ComposerBannerStack items={shelfItems} />
-          {routeKind === "server" ? (
-            <ComposerPrediction
-              key={composerDraftTargetKey}
-              threadRef={routeThreadRef}
-              draftTarget={composerDraftTarget}
-              selectedInstanceId={selectedInstanceId}
-              codex={selectedProvider === "codex"}
-              blocked={
-                isEditingQueuedMessage ||
-                isSendBusy ||
-                isPreparingWorktree ||
-                isCompacting ||
-                pendingApprovals.length > 0 ||
-                incomingPendingUserInputs.length > 0 ||
-                multipleModelSelections !== null ||
-                preparingComposerImages.length > 0 ||
-                questionAttachmentTarget !== null
-              }
-              focus={() => {
-                if (isComposerCollapsedMobile) expandMobileComposer();
-                else focusComposer();
-              }}
-            />
-          ) : null}
           {showComposerTopDrawer ? (
             <ComposerBanner.Attachment>
               <ComposerBanner.Root data-chat-composer-top-drawer="true" variant="info">
@@ -3331,7 +3343,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   aria-label={t("chat.composer.expand")}
                 >
                   {prompt.trim() ||
-                    t(showProviderUnavailable ? "chat.provider.enable" : "chat.prompt.placeholder")}
+                    (prediction.view.status === "suggestion"
+                      ? prediction.view.text
+                      : t(
+                          showProviderUnavailable
+                            ? "chat.provider.enable"
+                            : "chat.prompt.placeholder",
+                        ))}
                 </button>
                 {collapsedComposerImagePreviews}
                 <div
@@ -3345,6 +3363,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   />
                 </div>
               </div>
+            ) : null}
+
+            {isComposerCollapsedMobile ? (
+              <div className="px-3 pb-2">{predictionControls}</div>
             ) : null}
 
             <div
@@ -3459,6 +3481,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     className={cn(showMobilePendingAnswerActions && "max-sm:pb-12")}
                     onChange={onPromptChangeStable}
                     onCommandKeyDown={onComposerCommandKeyStable}
+                    predictionText={
+                      prediction.view.status === "suggestion" ? prediction.view.text : undefined
+                    }
+                    predictionMenuActive={
+                      composerMenuOpen || composerSuggestionsVisible || isStashMenuOpen
+                    }
+                    onAcceptPrediction={acceptPrediction}
                     onPageScrollKeyDown={onPageScrollKeyDown}
                     onPageScrollKeyUp={onPageScrollKeyUp}
                     onPageScrollRelease={onPageScrollRelease}
@@ -3489,6 +3518,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     }
                   />
                 </ComposerContextActionsContext>
+                {predictionControls}
                 {showMobilePendingAnswerActions ? (
                   <div
                     data-chat-composer-mobile-pending-actions="true"

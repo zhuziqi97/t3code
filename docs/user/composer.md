@@ -20,7 +20,10 @@ a completed thread. This is off by default and requires a system Codex CLI with
 native sampling support (stable 0.165 or newer). Predictions may consume your
 subscription allowance or incur charges; enabling them does not guarantee a suggestion.
 
-Accept a suggestion to add an editable draft, then review and send it yourself.
+On web and desktop, press **Tab** in the focused empty input to use the faint
+suggestion as an editable draft. You can also choose **Use as draft** on any
+client, then review and send it yourself. **View full suggestion** shows longer
+suggestions before accepting.
 Suggestions leave existing text and attachments alone. You can cancel a pending
 suggestion or dismiss it without sending anything.
 

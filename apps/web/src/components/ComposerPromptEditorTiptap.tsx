@@ -1,3 +1,4 @@
+import { predictionAcceptsTab } from "@t3tools/client-runtime/composer-prediction";
 import { documentChipKindForFileName } from "~/pierre-icons";
 import { isProviderSkillUserInvocable } from "@t3tools/client-runtime/providerSkills";
 import { formatProviderSkillDisplayName } from "@t3tools/shared/inlineSkills";
@@ -158,6 +159,9 @@ export interface ComposerPromptEditorProps {
   skills: ReadonlyArray<ServerProviderSkill>;
   disabled: boolean;
   placeholder: string;
+  predictionText?: string | undefined;
+  predictionMenuActive?: boolean;
+  onAcceptPrediction?: () => boolean;
   ariaLabel?: string | undefined;
   suggestionListId?: string | undefined;
   activeSuggestionId?: string | undefined;
@@ -939,6 +943,9 @@ function ComposerPromptEditorTiptapInner(
     skills,
     disabled,
     placeholder,
+    predictionText,
+    predictionMenuActive,
+    onAcceptPrediction,
     ariaLabel,
     suggestionListId,
     activeSuggestionId,
@@ -975,6 +982,8 @@ function ComposerPromptEditorTiptapInner(
     onChange,
     onVisibleSelectionChange,
     onCommandKeyDown,
+    predictionMenuActive,
+    onAcceptPrediction,
     isPathQueryActive,
     importContextFragment,
   }));
@@ -1307,8 +1316,26 @@ function ComposerPromptEditorTiptapInner(
               view.dispatch(tr.scrollIntoView());
             });
           }
-          if (!handler) return false;
-          const handled = handler(event.key, event);
+          const callbacks = readCallbacks();
+          const handled =
+            (handler?.(event.key, event) ?? false) ||
+            (predictionAcceptsTab({
+              key: event.key,
+              shiftKey: event.shiftKey,
+              altKey: event.altKey,
+              ctrlKey: event.ctrlKey,
+              metaKey: event.metaKey,
+              isComposing: event.isComposing || view.composing,
+              keyCode: event.keyCode,
+              defaultPrevented: event.defaultPrevented,
+              focused: view.hasFocus(),
+              menuActive: callbacks.predictionMenuActive === true,
+              editorEmpty:
+                view.state.doc.childCount === 1 &&
+                view.state.doc.firstChild?.type.name === "paragraph" &&
+                view.state.doc.firstChild.content.size === 0,
+            }) &&
+              (callbacks.onAcceptPrediction?.() ?? false));
           if (handled) {
             event.preventDefault();
             event.stopPropagation();
@@ -1771,11 +1798,12 @@ function ComposerPromptEditorTiptapInner(
         <ComposerCitationCommentContext value={citationCommentActions}>
           <div
             className={cn(
-              "relative flow-root font-(family-name:--font-composer,var(--font-sans)) text-(length:--font-size-prompt,var(--text-sm)) max-sm:pointer-coarse:text-(length:--font-size-prompt-touch)",
+              "relative grid font-(family-name:--font-composer,var(--font-sans)) text-(length:--font-size-prompt,var(--text-sm)) max-sm:pointer-coarse:text-(length:--font-size-prompt-touch)",
               containerClassName,
             )}
           >
             <EditorContent
+              className="col-start-1 row-start-1 min-w-0"
               editor={editor}
               onKeyDown={(event) => {
                 if (
@@ -1818,7 +1846,16 @@ function ComposerPromptEditorTiptapInner(
               onCopyCapture={(event) => handleCopyCut(event, false)}
               onCutCapture={(event) => handleCopyCut(event, true)}
             />
-            {isEmpty && contextRecords.size === 0 && placeholder ? (
+            {isEmpty && contextRecords.size === 0 && predictionText ? (
+              <div
+                aria-hidden="true"
+                data-composer-prediction-text="true"
+                className="pointer-events-none col-start-1 row-start-1 line-clamp-3 min-w-0 whitespace-pre-wrap leading-relaxed text-placeholder wrap-anywhere"
+              >
+                {predictionText}
+              </div>
+            ) : null}
+            {isEmpty && contextRecords.size === 0 && !predictionText && placeholder ? (
               <div
                 className={cn(
                   "pointer-events-none absolute inset-0 leading-relaxed text-placeholder",

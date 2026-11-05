@@ -14,7 +14,7 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
 import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from "react";
-import { View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { AppText as Text } from "../../components/ui/AppText";
 import { Button } from "../../components/ui/Button";
 import { useTranslate } from "../../i18n";
@@ -44,7 +44,7 @@ export function ComposerPrediction(props: {
   const focused = useIsFocused();
   const commands = serverEnvironment.composer;
   const permitted = useAtomValue(commands.requestPrediction.permissionAtom(props.environmentId));
-  const canCancel = useAtomValue(commands.cancelPrediction.permissionAtom(props.environmentId));
+  const [expandedText, setExpandedText] = useState<string | null>(null);
   const read = () => {
     const input = { ...props, focused };
     const draft = getComposerDraftSnapshot(input.draftKey);
@@ -146,21 +146,41 @@ export function ComposerPrediction(props: {
   }
   return (
     <View className="gap-2 rounded-2xl bg-composer-surface p-3">
-      <Text
-        numberOfLines={4}
-        className="text-sm text-foreground"
-        accessibilityLabel={t("prediction.suggestion")}
-      >
-        {prediction.status === "suggestion" ? prediction.text : t("prediction.pending")}
-      </Text>
+      {prediction.status === "suggestion" ? (
+        expandedText === prediction.text ? (
+          <ScrollView style={{ maxHeight: 240 }} keyboardShouldPersistTaps="handled">
+            <Text selectable className="text-sm text-foreground-muted">
+              {prediction.text}
+            </Text>
+          </ScrollView>
+        ) : (
+          <Text numberOfLines={4} className="text-sm text-foreground-muted">
+            {prediction.text}
+          </Text>
+        )
+      ) : (
+        <Text accessibilityLiveRegion="polite" className="text-sm text-foreground-muted">
+          {t(`prediction.${prediction.status}`)}
+        </Text>
+      )}
       <View className="flex-row flex-wrap gap-2">
         {prediction.status === "suggestion" ? (
-          <Button label={t("prediction.accept")} tone="text" onPress={accept} />
+          <>
+            <Button label={t("prediction.accept")} tone="text" onPress={accept} />
+            <Button
+              label={t(
+                expandedText === prediction.text ? "prediction.collapse" : "prediction.view",
+              )}
+              tone="text"
+              onPress={() =>
+                setExpandedText(expandedText === prediction.text ? null : prediction.text)
+              }
+            />
+          </>
         ) : null}
         <Button
           label={t(prediction.status === "pending" ? "prediction.cancel" : "prediction.dismiss")}
           tone="text"
-          disabled={!canCancel}
           onPress={controller.dismiss}
         />
       </View>
