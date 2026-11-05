@@ -1,5 +1,6 @@
 /** English keys define the catalog and fallback. Interpolation uses {{name}}; plurals use _one and _other. Keep provider names and shell commands untranslated. */
 export const en = {
+  "files.copyRelativePath": "Copy relative path",
   "common.advanced": "Advanced",
   "chat.timeline.handoffPending": "Context handoff pending",
   "project.scripts.none": "No project scripts",

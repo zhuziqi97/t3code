@@ -8,6 +8,7 @@ import type { EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
 import { memo, type MouseEvent as ReactMouseEvent } from "react";
 
 import { readLocalApi } from "../../localApi";
+import { useTranslate } from "../../i18n";
 import { cn } from "../../lib/utils";
 import { shouldOpenMarkdownFileLinkInEditor } from "../../markdown-links";
 import type { markdownFileCopyPaths } from "../../markdownFileHostPath";
@@ -69,6 +70,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
   revealLabel,
   resolveCopyPaths,
 }: MarkdownFileLinkProps) {
+  const t = useTranslate();
   const handleOpenInEditor = () => {
     if (!onOpen) {
       return;
@@ -255,7 +257,10 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
             ? ([{ id: "open-in-browser", label: "Open in integrated browser" }] as const)
             : []),
           ...(onReveal && revealLabel ? ([{ id: "reveal", label: revealLabel }] as const) : []),
-          ...copyItems.map(({ id, label }) => ({ id, label })),
+          ...copyItems.map(({ id }) => ({
+            id,
+            label: id === "copy-relative" ? t("files.copyRelativePath") : t("chat.branch.copyPath"),
+          })),
         ] as const,
         position,
       );

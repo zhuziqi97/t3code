@@ -4,6 +4,7 @@
 import type { Messages } from "./messages.en.ts";
 
 export const zh: Partial<Messages> = {
+  "files.copyRelativePath": "复制相对路径",
   "common.advanced": "高级",
   "chat.timeline.handoffPending": "等待移交上下文",
   "project.scripts.none": "暂无项目脚本",
