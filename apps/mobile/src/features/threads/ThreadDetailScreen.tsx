@@ -819,7 +819,7 @@ function ThreadDetailBody(
           });
         },
         action: {
-          label: statusPending ? "Stopping..." : "Stop",
+          label: statusPending ? t("common.stopping") : t("common.stop"),
           accessibilityLabel: "Stop background work",
           disabled: !props.canOperateThread || statusPending,
           onPress: () => void runStatusAction("stop"),
@@ -832,9 +832,13 @@ function ThreadDetailBody(
         snoozed && snoozedUntil !== null
           ? `Snoozed, wakes in ${snoozeWakeLabel(snoozedUntil, { now: lifecycleNow })}`
           : settled
-            ? "Settled"
-            : "Woke from snooze";
-      const actionLabel = snoozed ? "Wake now" : settled ? "Un-settle" : "Dismiss";
+            ? t("thread.settled")
+            : t("thread.wokeFromSnooze");
+      const actionLabel = snoozed
+        ? t("thread.wake.nowShort")
+        : settled
+          ? t("thread.settle.undo")
+          : t("common.dismiss");
       return {
         kind: "lifecycle",
         state,
@@ -842,10 +846,10 @@ function ThreadDetailBody(
         action: {
           label: statusPending
             ? snoozed
-              ? "Waking..."
+              ? t("thread.snooze.waking")
               : settled
-                ? "Un-settling..."
-                : "Dismissing..."
+                ? t("thread.unsettling")
+                : t("common.dismissing")
             : actionLabel,
           accessibilityLabel: actionLabel,
           disabled: !props.canOperateThread || statusPending,

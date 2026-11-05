@@ -8193,4 +8193,8 @@ export const zh: Partial<Messages> = {
   "triage.prepareFailed": "服务端无法准备问题排查。",
   "triage.draftsFailed": "无法加载草稿。",
   "chat.timeline.contextFrom": "上下文来自",
+  "chat.details.choose": "选择显示内容",
+  "project.startTaskWithout": "不关联项目，开始新任务",
+  "project.picker.open": "打开项目选择器",
+  "common.dismissing": "正在关闭…",
 };

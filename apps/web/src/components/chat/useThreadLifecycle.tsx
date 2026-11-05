@@ -622,16 +622,20 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
         snoozeWake && snoozeWake !== "now" ? `Snoozed, ${snoozeWake} left` : t("thread.snoozed")
       }
       clockMinute={nowMinute}
-      actionLabel={isUnsnoozing ? "Waking..." : "Wake now"}
+      actionLabel={isUnsnoozing ? t("thread.snooze.waking") : t("thread.wake.nowShort")}
       actionDisabled={!canOperateThread || isUnsnoozing}
       onAction={() => void handleUnsnoozeActiveThreadStable()}
     />
   ) : activeThreadSettled ? (
     <ThreadStatusLine
       icon={<CheckCircle2Icon />}
-      label={settledAt ? `Settled ${formatRelativeTimeLabel(settledAt)}` : t("thread.settled")}
+      label={
+        settledAt
+          ? t("thread.settle.time", { time: formatRelativeTimeLabel(settledAt, t) })
+          : t("thread.settled")
+      }
       clockMinute={nowMinute}
-      actionLabel={isUnsettling ? "Un-settling..." : "Un-settle"}
+      actionLabel={isUnsettling ? t("thread.unsettling") : t("thread.settle.undo")}
       actionDisabled={!canOperateThread || isUnsettling}
       onAction={() => void handleUnsettleActiveThreadStable()}
     />
@@ -639,7 +643,7 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
     <ThreadStatusLine
       icon={<AlarmClockIcon />}
       label={t("thread.wokeFromSnooze")}
-      actionLabel="Dismiss"
+      actionLabel={t("common.dismiss")}
       onAction={acknowledgeActiveThreadWokeStable}
     />
   ) : null;

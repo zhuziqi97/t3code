@@ -915,8 +915,8 @@ function OpenCommandPaletteDialog(props: {
         {
           kind: "action" as const,
           value: NEW_THREAD_NO_PROJECT_VALUE,
-          searchTerms: ["no project", "without project", "none"],
-          title: "No project",
+          searchTerms: ["no project", "without project", "none", t("project.none")],
+          title: t("project.none"),
           icon: <MessageSquareDashedIcon className={ITEM_ICON_CLASS} />,
           shortcutCommand: "chat.newWithoutProject" as const,
           run: () => startScratchThread(scratchTargetEnvironmentId),

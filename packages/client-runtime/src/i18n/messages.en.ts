@@ -8742,6 +8742,10 @@ export const en = {
   "triage.prepareFailed": "The server could not prepare it.",
   "triage.draftsFailed": "Drafts could not be loaded.",
   "chat.timeline.contextFrom": "Context from",
+  "chat.details.choose": "Choose what to show",
+  "project.startTaskWithout": "Start a task without a project",
+  "project.picker.open": "Opens the project picker",
+  "common.dismissing": "Dismissing...",
 } as const;
 
 export type MessageKey = keyof typeof en;
