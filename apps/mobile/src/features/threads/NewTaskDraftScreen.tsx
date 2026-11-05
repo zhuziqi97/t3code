@@ -728,7 +728,7 @@ export function NewTaskDraftScreen(props: {
   );
   const shareUnavailableNotice = isIncomingShareUnavailable ? (
     <Text textRole="footnote" className="text-center text-foreground-muted">
-      The shared content is no longer in the inbox. You can continue editing this task draft.
+      {t("mobile.newTask.shareUnavailable")}
     </Text>
   ) : null;
   const hero = flow.isScratchDraft ? (
@@ -754,10 +754,9 @@ export function NewTaskDraftScreen(props: {
     <View className="items-center gap-6 px-6" testID="new-task-hero">
       <View className="w-full items-center gap-1.5">
         <Text className="text-center text-2xl font-t3-medium tracking-tight text-foreground">
-          What should we build
+          {t("chat.hero.projectPrefix")}
         </Text>
         <View className="max-w-full flex-row items-center justify-center">
-          <Text className="text-2xl font-t3-medium tracking-tight text-foreground">in </Text>
           <Pressable
             accessibilityHint={t("project.picker.open")}
             accessibilityLabel={selectedProjectLabel ?? selectedProject.title}
@@ -773,7 +772,9 @@ export function NewTaskDraftScreen(props: {
               {selectedProjectLabel ?? selectedProject.title}
             </Text>
           </Pressable>
-          <Text className="text-2xl font-t3-medium tracking-tight text-foreground">?</Text>
+          <Text className="text-2xl font-t3-medium tracking-tight text-foreground">
+            {t("chat.hero.projectSuffix")}
+          </Text>
         </View>
       </View>
 

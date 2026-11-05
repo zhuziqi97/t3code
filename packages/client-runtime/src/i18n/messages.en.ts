@@ -8746,6 +8746,38 @@ export const en = {
   "project.startTaskWithout": "Start a task without a project",
   "project.picker.open": "Opens the project picker",
   "common.dismissing": "Dismissing...",
+  "mobile.newTask.loadingEnvironments": "Loading environments",
+  "mobile.newTask.checkingEnvironments": "Checking saved environments on this device.",
+  "mobile.newTask.noEnvironments": "No environments connected",
+  "mobile.newTask.addEnvironmentFirst": "Add an environment before creating a task.",
+  "mobile.newTask.environmentOffline":
+    "The saved environment is offline. Check the URL or start the environment, then retry.",
+  "mobile.newTask.connectingEnvironment": "Connecting to environment",
+  "mobile.newTask.loadingProjects": "Loading projects from the saved environment.",
+  "mobile.newTask.noProjects": "No projects found",
+  "mobile.newTask.noProjectsDescription": "The connected environment did not report any projects.",
+  "mobile.newTask.chooseSharedProject": "Choose a project for what you shared",
+  "mobile.newTask.chooseSharedImage": "Choose a project for the image you shared",
+  "mobile.newTask.chooseSharedFile": "Choose a project for the file you shared",
+  "mobile.newTask.chooseSharedImages": "Choose a project for the {{count}} images you shared",
+  "mobile.newTask.chooseSharedFiles": "Choose a project for the {{count}} files you shared",
+  "mobile.newTask.start": "Start a task",
+  "mobile.newTask.changeProjectFailed": "Could not change project",
+  "mobile.newTask.shareReservationFailed": "The shared content reservation could not be updated.",
+  "mobile.newTask.scratchFolderFailed":
+    "The folder for threads without a project could not be created.",
+  "mobile.newTask.noMatchingProjects": "No matching projects",
+  "mobile.newTask.tryDifferentProject": "Try a different project name or workspace path.",
+  "mobile.newTask.workspaces": "{{count}} workspaces",
+  "mobile.newTask.shareUnavailable":
+    "The shared content is no longer in the inbox. You can continue editing this task draft.",
+  "settings.beta": "Beta",
+  "settings.search.boring-sidebar.title": "Boring sidebar (group by project)",
+  "settings.search.boring-sidebar-multiline.title": "Two-line folder rows",
+  "settings.boringSidebar.description":
+    "Group sidebar threads into project folders. Pinned threads stay on top, and Snoozed and Settled stay below the folders.",
+  "settings.boringSidebar.multilineDescription":
+    "In the boring sidebar, show folder threads on two lines: the title, then the branch, pull request, and agent.",
 } as const;
 
 export type MessageKey = keyof typeof en;

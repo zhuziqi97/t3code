@@ -533,15 +533,21 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "boring-sidebar",
-    title: "Boring sidebar (group by project)",
+    get title() {
+      return i18n.t("settings.search.boring-sidebar.title");
+    },
     to: "/settings/labs",
-    searchTerms: ["beta folders project tree legacy old classic sidebar"],
+    searchTerms: ["beta folders project tree legacy old classic sidebar 简洁侧栏 按项目分组"],
   },
   {
     id: "boring-sidebar-multiline",
-    title: "Two-line folder rows",
+    get title() {
+      return i18n.t("settings.search.boring-sidebar-multiline.title");
+    },
     to: "/settings/labs",
-    searchTerms: ["beta boring sidebar folder rows multiline branch pull request details"],
+    searchTerms: [
+      "beta boring sidebar folder rows multiline branch pull request details 双行 文件夹",
+    ],
   },
   {
     id: "guest-links",
