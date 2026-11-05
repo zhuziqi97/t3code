@@ -156,7 +156,7 @@ export function ComposerPrediction(props: {
       className="flex flex-wrap items-center gap-1 pt-1 text-xs text-muted-foreground"
       data-composer-prediction={prediction.status}
     >
-      <span role="status" className="min-w-0 flex-1">
+      <span role="status" className="min-w-0 basis-full sm:flex-1 sm:basis-auto">
         {prediction.status === "suggestion"
           ? t("prediction.ready")
           : t(`prediction.${prediction.status}`)}
