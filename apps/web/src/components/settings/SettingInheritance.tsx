@@ -56,7 +56,7 @@ function formatValue(key: keyof ServerSettings, value: unknown, translate: TFunc
           : key === "sourceControlWriterModelSelection"
             ? translate("settings.search.text-generation-model.title")
             : key === "reviewGuideModelSelection"
-              ? "Source control writer model"
+                ? translate("settings.search.source-control-writer-model.title")
               : key === "defaultThreadEnvMode" || key === "worktreeSubmodules"
                 ? translate("common.inherit")
                 : translate("common.notSet");
