@@ -31,6 +31,7 @@ import {
   t3SubagentContext,
   withDevices,
   answerToolCall,
+  codexRequest,
 } from "./run.ts";
 import { briefRoute, gradeDevice, shellInvocations } from "./device-grading.ts";
 import { taskPrompt } from "../../apps/server/src/mcp/delegatedTaskModes.ts";
@@ -296,6 +297,23 @@ const childCase: McpToolUseCase = {
   expect: { calls: [{ tool: "link_pull_request" }], notCalls: ["watch_pull_request"] },
 };
 
+it("isolates Codex samples while retaining a sample's cache identity across steps", () => {
+  const base = buildBase(template, { model: "gpt-6-luna", keepUserInstructions: false });
+  const first = makeSample(childCase, base);
+  const second = makeSample(childCase, base);
+  const start = codexRequest(base, [], first.promptCacheKey);
+  const nextStep = codexRequest(
+    base,
+    [{ type: "message", role: "user", content: [] }],
+    first.promptCacheKey,
+  );
+  const independent = codexRequest(base, [], second.promptCacheKey);
+  assert.isString(start.prompt_cache_key);
+  assert.isNotEmpty(start.prompt_cache_key);
+  assert.equal(nextStep.prompt_cache_key, start.prompt_cache_key);
+  assert.notEqual(independent.prompt_cache_key, start.prompt_cache_key);
+});
+
 it.effect("returns a tool validation error for a blank thread id", () =>
   Effect.gen(function* () {
     const base = buildBase(template, { model: "claude-sonnet-5-5", keepUserInstructions: false });
@@ -308,6 +326,46 @@ it.effect("returns a tool validation error for a blank thread id", () =>
       { type: "tool_use", id: "invalid-read", name: tool.name, input: { threadId: "" } },
     );
     assert.isTrue(result.is_error);
+    const statusTool = base.t3.find((entry) => entry.name === "mcp__t3-code__task_status")!;
+    sample.tools.push(statusTool);
+    const absent = yield* answerToolCall(
+      sample,
+      { apiKey: "", model: "gpt-6-luna", effort: "low", maxSteps: 1, shellModel: "gpt-6-luna" },
+      { type: "tool_use", id: "unknown-task", name: statusTool.name, input: { taskId: "task-4" } },
+    );
+    assert.isTrue(absent.is_error);
+    const priorTask = { taskId: "task-1", status: "completed", summary: "Lane A completed." };
+    const seeded = makeSample(
+      {
+        ...childCase,
+        setup: {
+          ...childCase.setup,
+          priorTurns: [
+            {
+              role: "assistant",
+              toolCalls: [{ tool: "delegate_task", input: {}, result: priorTask }],
+            },
+          ],
+        },
+      },
+      base,
+    );
+    assert.deepEqual(t3Default(seeded, "task_status", { taskId: "task-1" }), priorTask);
+    const dispatched = t3Default(sample, "delegate_task", { task: "Lane D" });
+    assert.deepEqual(t3Default(sample, "task_status", { taskId: "task-1" }), dispatched);
+    const mockTask = { taskId: "task-9", status: "running" };
+    const mocked = makeSample(
+      { ...childCase, setup: { role: "top", mocks: { delegate_task: mockTask } } },
+      base,
+    );
+    const delegateTool = base.t3.find((entry) => entry.name === "mcp__t3-code__delegate_task")!;
+    mocked.tools.push(delegateTool);
+    yield* answerToolCall(
+      mocked,
+      { apiKey: "", model: "gpt-6-luna", effort: "low", maxSteps: 1, shellModel: "gpt-6-luna" },
+      { type: "tool_use", id: "mock-task", name: delegateTool.name, input: { task: "Lane E" } },
+    );
+    assert.deepEqual(t3Default(mocked, "task_status", { taskId: "task-9" }), mockTask);
   }).pipe(Effect.provide(FetchHttpClient.layer)),
 );
 
@@ -964,8 +1022,8 @@ it("applies device shell checks to decoded cases and stops raw UI early", () => 
         failed: true,
       },
     ],
-    text: "Agent device access is off. Enable it in Settings > Integrations.",
-    finalText: "Agent device access is off. Enable it in Settings > Integrations.",
+    text: "Agent device access is off. Enable it in Settings > Devices.",
+    finalText: "Agent device access is off. Enable it in Settings > Devices.",
     stopReason: "end_turn",
   };
   assert.deepEqual(failed(denied.expect, blocked), []);

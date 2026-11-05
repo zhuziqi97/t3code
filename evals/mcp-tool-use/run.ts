@@ -28,6 +28,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Semaphore from "effect/Semaphore";
 import { Tool } from "effect/ai";
 import * as McpSchema from "effect/ai/McpSchema";
@@ -758,9 +759,11 @@ type Sample = {
   readonly shellUsage: Usage;
   readonly linked: Set<string>;
   readonly codeStore: Record<string, unknown>;
+  readonly promptCacheKey: string;
   nextTask: number;
   /** Threads the agent launched in this sample, by id, so reading one shows its own brief. */
   readonly threads: Map<string, { readonly title: string; readonly brief: string }>;
+  readonly tasks: Map<string, Readonly<Record<string, unknown>>>;
   /** T3's device tools, once `withDevices` builds them for a world with devices. */
   devices?: DeviceTools;
   /** T3's results for prior device calls whose case result is "default". */
@@ -804,8 +807,18 @@ export const makeSample = (testCase: McpToolUseCase, base: Base): Sample => {
     shellUsage: emptyUsage(),
     linked: new Set([...urls, ...shell.flatMap(createdPullRequests)]),
     codeStore: {},
+    promptCacheKey: SecureRandom.uuidV4Unsafe(),
     nextTask: Math.max(0, ...taskNumbers) + 1,
     threads: new Map(),
+    tasks: new Map(
+      priorCalls.flatMap(({ tool, result }) =>
+        ["delegate_task", "task_status"].includes(tool) &&
+        isRecord(result) &&
+        typeof result.taskId === "string"
+          ? [[result.taskId, result] as const]
+          : [],
+      ),
+    ),
     priorResults: new Map(),
   };
 };
@@ -1068,7 +1081,7 @@ export const t3Default = (
     case "delegate_task": {
       const n = sample.nextTask++;
       const target = isRecord(input.target) ? input.target : {};
-      return {
+      const task = {
         taskId: `task-${n}`,
         childThreadId: uuid(n),
         childRunId: `run-${n}`,
@@ -1082,15 +1095,11 @@ export const t3Default = (
         hasPendingQuestion: false,
         pendingApproval: null,
       };
+      sample.tasks.set(task.taskId, task);
+      return task;
     }
     case "task_status":
-      return {
-        taskId: input.taskId,
-        status: "running",
-        workState: "working",
-        hasPendingChildRuns: false,
-        summary: null,
-      };
+      return sample.tasks.get(valueText(input.taskId));
     case "task_cancel":
       return { taskId: input.taskId, status: "cancel_requested" };
     case "link_pull_request": {
@@ -1452,6 +1461,9 @@ export const answerToolCall = Effect.fn("evaluateMcpToolUse.answerToolCall")(fun
     input = decoded.value as Record<string, unknown>;
   }
   const mock = testCase.setup.mocks?.[name];
+  if (name === "delegate_task" && isRecord(mock) && typeof mock.taskId === "string") {
+    sample.tasks.set(mock.taskId, mock);
+  }
   // T3 answers device calls from the world. A mock that is a T3 device error fails inside T3.
   const failure = deviceFailure(mock);
   const fromWorld = mock === undefined || mock === "default" || failure !== undefined;
@@ -1470,6 +1482,11 @@ export const answerToolCall = Effect.fn("evaluateMcpToolUse.answerToolCall")(fun
     // T3 refuses a watch from a delegated child.
     if (name === "watch_pull_request" && testCase.setup.role === "delegated-child") {
       return failed(SUBAGENT_WATCH_ERROR);
+    }
+    if (name === "task_status" && !sample.tasks.has(valueText(input.taskId))) {
+      return failed(
+        `task_not_found: Delegated task ${valueText(input.taskId)} does not belong to this thread.`,
+      );
     }
     const value = t3Default(sample, name, input);
     return toolResult(
@@ -1631,10 +1648,11 @@ const requestBody = ({ base, tools }: Sample, effort: string, messages: unknown)
   messages,
 });
 
-const codexRequest = (base: Base, input: ReadonlyArray<Block>) => ({
+export const codexRequest = (base: Base, input: ReadonlyArray<Block>, promptCacheKey: string) => ({
   model: base.model,
   stream: true,
   store: false,
+  prompt_cache_key: promptCacheKey,
   parallel_tool_calls: true,
   reasoning: base.codex?.reasoning,
   instructions: base.codex?.instructions,
@@ -1838,13 +1856,14 @@ export const ranCalls = (
  */
 const runSample = Effect.fn("evaluateMcpToolUse.runSample")(function* (
   testCase: McpToolUseCase,
-  config: Config,
+  config: Config & { readonly requestLog: string },
   base: Base,
   spent: { readonly usage: Usage; readonly shellUsage: Usage },
 ) {
   const sample = { ...makeSample(testCase, base), shellUsage: spent.shellUsage };
   yield* withDevices(sample);
   const runPromise = Effect.runPromiseWith(yield* Effect.context<HttpClient.HttpClient>());
+  const fs = yield* FileSystem.FileSystem;
   const messages = buildMessages(sample);
   const input = base.codex ? codexMessages(messages) : undefined;
   const transcript: Array<unknown> = [];
@@ -1858,8 +1877,18 @@ const runSample = Effect.fn("evaluateMcpToolUse.runSample")(function* (
   const extra = isCodex(config.model) ? 4 : 0;
   const maxSteps = testCase.maxSteps === undefined ? config.maxSteps : testCase.maxSteps + extra;
   for (let step = 0; step < maxSteps; step++) {
-    const response = input
-      ? yield* callCodex(config, codexRequest(base, input))
+    const request = input ? codexRequest(base, input, sample.promptCacheKey) : undefined;
+    if (request !== undefined) {
+      const line = yield* encodeJson({
+        id: testCase.id,
+        step,
+        promptCacheKey: sample.promptCacheKey,
+        request,
+      });
+      yield* fs.writeFileString(config.requestLog, `${line}\n`, { flag: "a" });
+    }
+    const response = request
+      ? yield* callCodex(config, request)
       : yield* callModel(config.apiKey, requestBody(sample, config.effort, messages));
     addUsage(usage, response.usage);
     if ("raw" in response) {
@@ -1949,6 +1978,7 @@ const runSample = Effect.fn("evaluateMcpToolUse.runSample")(function* (
   }
   // The transcript (model turns and tool results) shows what the agent saw when a case fails.
   return {
+    promptCacheKey: sample.promptCacheKey,
     calls,
     text: said.join("\n\n"),
     stopReason,
@@ -2245,7 +2275,7 @@ const main = Effect.gen(function* () {
       yield* Effect.scoped(withDevices(sample));
       const messages = buildMessages(sample);
       const body = sample.base.codex
-        ? codexRequest(sample.base, codexMessages(messages))
+        ? codexRequest(sample.base, codexMessages(messages), sample.promptCacheKey)
         : requestBody(sample, effort, messages);
       process.stdout.write(`${yield* encodeJson(body)}\n`);
     }
@@ -2266,6 +2296,8 @@ const main = Effect.gen(function* () {
     maxSteps: flags["max-steps"] ?? (codex ? 10 : 6),
     shellModel: flags["shell-model"],
   };
+  yield* fs.makeDirectory(out, { recursive: true });
+  const requestLog = path.join(out, "requests.jsonl");
   const previous =
     flags.baseline === undefined ? [] : yield* readNdjson(flags.baseline, decodeBaselineRow);
   const baseline = new Map(
@@ -2289,7 +2321,7 @@ const main = Effect.gen(function* () {
     const privateValues = [config.apiKey, ...Object.values(config.proxy?.headers ?? {})]
       .flatMap((value) => [value, value.replace(/^Bearer /i, "")])
       .filter(Boolean);
-    return runSample(testCase, config, baseFor(testCase), usage).pipe(
+    return runSample(testCase, { ...config, requestLog }, baseFor(testCase), usage).pipe(
       inFlight.withPermits(1),
       Effect.matchCause({
         // Not graded: a sample that errors is left out of pass rates, with its tokens so far.
