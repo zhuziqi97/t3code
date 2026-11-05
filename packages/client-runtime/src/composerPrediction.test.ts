@@ -11,6 +11,7 @@ import {
 import type { ComposerPredictionResult } from "@t3tools/contracts";
 import {
   ComposerPredictionController,
+  predictionAcceptsTab,
   threadPredictionContext,
   type PredictionContext,
 } from "./composerPrediction.ts";
@@ -167,10 +168,16 @@ describe("composer predictions", () => {
     "stale",
     "cancelled",
     "error",
-  ] as const)("does not present or retry %s", async (status) => {
+  ] as const)("retains the outcome without accepting or retrying %s", async (status) => {
     const s = setup();
     s.controller.update();
     await s.finish({ status });
+    expect(s.controller.getSnapshot()).toEqual({ status, text: null });
+    s.controller.update();
+    expect(s.request).toHaveBeenCalledTimes(1);
+    s.change({ draftRevision: 1 });
+    s.controller.update();
+    expect(s.controller.getSnapshot().status).toBe("idle");
     expect(s.controller.accept()).toBeNull();
     s.controller.update();
     expect(s.request).toHaveBeenCalledTimes(1);
@@ -212,7 +219,7 @@ it("settles a permission or transport failure without presenting or retrying", a
   const s = setup();
   s.controller.update();
   await s.finish(null);
-  expect(s.controller.getSnapshot().status).toBe("idle");
+  expect(s.controller.getSnapshot().status).toBe("error");
   expect(s.controller.accept()).toBeNull();
   s.controller.update();
   expect(s.request).toHaveBeenCalledTimes(1);
@@ -345,4 +352,36 @@ it("keeps a newer source's candidate when a cancelled source finishes late", asy
     environmentId: "remote",
     input: { threadId: "thread", requestId: "request-1" },
   });
+});
+
+it.each([
+  [{}, true],
+  [{ key: "Enter" }, false],
+  [{ shiftKey: true }, false],
+  [{ altKey: true }, false],
+  [{ ctrlKey: true }, false],
+  [{ metaKey: true }, false],
+  [{ isComposing: true }, false],
+  [{ keyCode: 229 }, false],
+  [{ defaultPrevented: true }, false],
+  [{ focused: false }, false],
+  [{ menuActive: true }, false],
+  [{ editorEmpty: false }, false],
+] as const)("only accepts an unmodified Tab in the focused empty editor: %j", (patch, expected) => {
+  expect(
+    predictionAcceptsTab({
+      key: "Tab",
+      shiftKey: false,
+      altKey: false,
+      ctrlKey: false,
+      metaKey: false,
+      isComposing: false,
+      keyCode: 9,
+      defaultPrevented: false,
+      focused: true,
+      menuActive: false,
+      editorEmpty: true,
+      ...patch,
+    }),
+  ).toBe(expected);
 });

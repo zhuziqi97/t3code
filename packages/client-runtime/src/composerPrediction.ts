@@ -66,10 +66,44 @@ export function threadPredictionContext(
   };
 }
 
-type PredictionView =
-  | { readonly status: "idle" | "pending"; readonly text: null }
+export type PredictionView =
+  | {
+      readonly status:
+        | "idle"
+        | "pending"
+        | Exclude<ComposerPredictionResult["status"], "suggestion">;
+      readonly text: null;
+    }
   | { readonly status: "suggestion"; readonly text: string };
 const IDLE: PredictionView = { status: "idle", text: null };
+
+export function predictionAcceptsTab(input: {
+  readonly key: string;
+  readonly shiftKey: boolean;
+  readonly altKey: boolean;
+  readonly ctrlKey: boolean;
+  readonly metaKey: boolean;
+  readonly isComposing: boolean;
+  readonly keyCode: number;
+  readonly defaultPrevented: boolean;
+  readonly focused: boolean;
+  readonly menuActive: boolean;
+  readonly editorEmpty: boolean;
+}): boolean {
+  return (
+    input.key === "Tab" &&
+    !input.shiftKey &&
+    !input.altKey &&
+    !input.ctrlKey &&
+    !input.metaKey &&
+    !input.isComposing &&
+    input.keyCode !== 229 &&
+    !input.defaultPrevented &&
+    input.focused &&
+    !input.menuActive &&
+    input.editorEmpty
+  );
+}
 
 function eligible(
   context: PredictionContext | null,
@@ -218,9 +252,16 @@ export class ComposerPredictionController {
           result.text?.trim()
         ) {
           this.publish({ status: "suggestion", text: result.text });
+        } else if (
+          result?.requestId === ticket.requestId &&
+          result.sourceRunId === context.sourceRunId
+        ) {
+          this.publish({
+            status: result.status === "suggestion" ? "empty" : result.status,
+            text: null,
+          });
         } else {
-          this.ticket = null;
-          this.publish(IDLE);
+          this.publish({ status: "error", text: null });
         }
       });
   };
