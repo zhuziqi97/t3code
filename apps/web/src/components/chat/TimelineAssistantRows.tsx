@@ -208,7 +208,7 @@ function AssistantMessageMeta({
               <time dateTime={timestamp} className="text-muted-foreground text-xs tabular-nums" />
             }
           >
-            {formatDayAwareTimestamp(timestamp, ctx.timestampFormat, undefined, t)}
+            {formatDayAwareTimestamp(timestamp, ctx.timestampFormat, undefined, undefined, t)}
           </TooltipTrigger>
           <TooltipPopup>
             {formatChatTimestampTooltip(timestamp, ctx.timestampFormat, t)}

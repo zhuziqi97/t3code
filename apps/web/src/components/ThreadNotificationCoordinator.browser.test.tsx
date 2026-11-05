@@ -2,8 +2,6 @@ import type { OrchestrationV2ShellSnapshot } from "@t3tools/contracts";
 import type { EnvironmentCatalogState } from "@t3tools/client-runtime/state/connections";
 import { AtomRegistry } from "effect/reactivity";
 import type { AnyRouter } from "@tanstack/react-router";
-import { fakeTimers } from "../../test/render";
-import { WORKING_EXIT_GRACE_MS } from "@t3tools/client-runtime/state/thread-inbox";
 import type { ClientSettings } from "@t3tools/contracts/settings";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
@@ -181,6 +179,7 @@ const { notificationEnvironmentIds, notificationShell, notificationThreadShells 
     const notificationThreadShells = createEnvironmentThreadShellAtoms({
       catalogValueAtom: Atom.make<EnvironmentCatalogState>({ isReady: true, entries: new Map() }),
       snapshotAtom: () => notificationSnapshot,
+      hiddenThreadTagsAtom: () => Atom.make(null),
     });
     return { notificationEnvironmentIds, notificationShell, notificationThreadShells };
   });
@@ -245,7 +244,6 @@ function setup() {
   );
   const registry = AtomRegistry.make();
   stack.defer(() => registry.dispose());
-  stack.use(fakeTimers());
   let started = false;
   const renderCoordinator = async () => {
     registry.set(notificationEnvironmentIds, ["env-1"]);
@@ -265,7 +263,6 @@ function setup() {
         } as unknown as AnyRouter),
       );
     }
-    await vi.advanceTimersByTimeAsync(WORKING_EXIT_GRACE_MS);
   };
   return {
     render: renderCoordinator,

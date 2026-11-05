@@ -35,7 +35,7 @@ export function RunEndStateFeedback({
       {!inline && end.completedAt ? (
         <Tooltip>
           <TooltipTrigger render={<time dateTime={end.completedAt} className="tabular-nums" />}>
-            {formatDayAwareTimestamp(end.completedAt, timestampFormat, undefined, t)}
+            {formatDayAwareTimestamp(end.completedAt, timestampFormat, undefined, undefined, t)}
           </TooltipTrigger>
           <TooltipPopup>
             {formatChatTimestampTooltip(end.completedAt, timestampFormat, t)}

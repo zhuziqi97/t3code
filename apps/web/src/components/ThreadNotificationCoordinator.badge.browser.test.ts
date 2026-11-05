@@ -349,7 +349,6 @@ it.each([false, true])(
 
 it("shows in-app alerts without adding a badge while focused", async () => {
   await using app = setup();
-  using _timers = fakeTimers();
   state.inApp = true;
   focused = true;
   app.start();
@@ -364,7 +363,6 @@ it("shows in-app alerts without adding a badge while focused", async () => {
     }),
   );
   await app.render();
-  await vi.advanceTimersByTimeAsync(WORKING_EXIT_GRACE_MS);
   expect(state.toast).toHaveBeenCalledOnce();
   expect(TestNotification.sent).toHaveLength(0);
   expect(state.badge.mock.calls.every(([count]) => count === 0)).toBe(true);

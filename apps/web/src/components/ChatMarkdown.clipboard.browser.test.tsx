@@ -23,7 +23,7 @@ import {
   type OrchestrationV2Command,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
@@ -127,11 +127,8 @@ function mockSender(messageContext?: () => OrchestrationMessageContext | undefin
         ),
         Layer.succeed(RpcPermissionGuard, { authorize: () => Effect.void }),
         Layer.succeed(
-          Crypto.Crypto,
-          Crypto.make({
-            randomBytes: (size) => new Uint8Array(size),
-            digest: () => Effect.die("No digest is needed for a clipboard dispatch"),
-          }),
+          SecureRandom.SecureRandom,
+          SecureRandom.make((size) => new Uint8Array(size)),
         ),
       ),
     ),

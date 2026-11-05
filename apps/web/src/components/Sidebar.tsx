@@ -998,7 +998,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const [optimisticDrop, setOptimisticDrop] = useState<SidebarOptimisticDrop | null>(null);
   const threadSearchInputRef = useRef<HTMLInputElement>(null);
   const [threadSearchQuery, setThreadSearchQuery] = useState("");
-  const headerSearchRef = useRef<HTMLDivElement | null>(null);
   const suppressNextScopeChangeRef = useRef(false);
   const highlightedProjectScopeKeyRef = useRef<string | null>(null);
   const [searchHighlightKey, setSearchHighlightKey] = useState<string | null>(null);
@@ -3317,6 +3316,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               onNewThread={handleNewThreadClick}
               newThreadDisabled={false}
               newThreadShortcutLabel={newThreadShortcutLabel}
+              newThreadInProjectShortcutLabel={newThreadInProjectShortcutLabel}
               newThreadTargetLabel={
                 newThreadTarget.kind === "project"
                   ? `${newThreadTarget.label} · ${projectByKey.get(`${newThreadTarget.projectRef.environmentId}:${newThreadTarget.projectRef.projectId}`)?.workspaceRoot ?? ""}`

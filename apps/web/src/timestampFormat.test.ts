@@ -241,6 +241,51 @@ describe("formatUpcomingTimestamp", () => {
     expect(formatUpcomingTimestamp(resetAt, "12-hour", now)).toBe(
       formatDayAwareTimestamp(resetAt, "12-hour", now),
     );
+    const zonedNow = Date.parse("2026-07-01T23:00:00.000Z");
+    const zone = "America/New_York";
+    const reset = "2026-07-02T00:30:00.000Z";
+    const time = new Intl.DateTimeFormat(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: zone,
+    }).format(new Date(reset));
+    expect(formatUpcomingTimestamp(reset, "12-hour", zonedNow, zone)).toBe(time);
+    const yearBoundary = "2027-01-01T01:30:00.000Z";
+    const beforeBoundary = Date.parse("2027-01-03T23:00:00.000Z");
+    const label = new Intl.DateTimeFormat(undefined, {
+      month: "numeric",
+      day: "numeric",
+      year: "numeric",
+      timeZone: zone,
+    }).format(new Date(yearBoundary));
+    const boundaryTime = new Intl.DateTimeFormat(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: zone,
+    }).format(new Date(yearBoundary));
+    expect(formatDayAwareTimestamp(yearBoundary, "12-hour", beforeBoundary, zone)).toBe(
+      `${label} ${boundaryTime}`,
+    );
+    expect(formatUpcomingTimestamp(yearBoundary, "12-hour", beforeBoundary, zone)).toBe(
+      `${label} ${boundaryTime}`,
+    );
+    const later = "2027-01-06T01:30:00.000Z";
+    const laterLabel = new Intl.DateTimeFormat(undefined, {
+      month: "numeric",
+      day: "numeric",
+      timeZone: zone,
+    }).format(new Date(later));
+    const laterTime = new Intl.DateTimeFormat(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: zone,
+    }).format(new Date(later));
+    expect(formatUpcomingTimestamp(later, "12-hour", beforeBoundary, zone)).toBe(
+      `${laterLabel} ${laterTime}`,
+    );
   });
 });
 
