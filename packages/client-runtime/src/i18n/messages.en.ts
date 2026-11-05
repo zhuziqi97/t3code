@@ -5226,6 +5226,7 @@ export const en = {
   "settings.search.connections-environment.title": "This machine",
   "settings.search.remote-environments.title": "Environments",
   "settings.search.load-balancing.title": "Load balancing",
+  "settings.search.pull-request-routing.title": "Pull request sharing",
   "settings.search.github-routing.title": "GitHub sharing",
 
   "connections.reconnectingTitle": "Failed to connect. Reconnecting...",

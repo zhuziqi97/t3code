@@ -4945,6 +4945,7 @@ export const zh: Partial<Messages> = {
   "settings.search.connections-environment.title": "此设备",
   "settings.search.remote-environments.title": "执行环境",
   "settings.search.load-balancing.title": "负载均衡",
+  "settings.search.pull-request-routing.title": "Pull Request 权限共享",
   "settings.search.github-routing.title": "GitHub 权限共享",
   "connections.reconnectingTitle": "连接失败，正在重新连接…",
   "connections.githubSummaryRead": "读取 PR",
