@@ -307,7 +307,8 @@ const ONCE_FORMATTER = new Intl.DateTimeFormat(undefined, {
 
 export function scheduleLabel(schedule: ScheduledTaskSchedule, t = i18n.t): string {
   if (schedule.type === "webhook") return t("scheduled.onWebhook");
-  if (schedule.type === "once") return `Once, ${ONCE_FORMATTER.format(new Date(schedule.runAt))}`;
+  if (schedule.type === "once")
+    return t("scheduled.onceAt", { time: ONCE_FORMATTER.format(new Date(schedule.runAt)) });
   if (schedule.type === "interval") {
     const minutes = schedule.everyMs / 60_000;
     return Number.isInteger(minutes)
@@ -1357,10 +1358,7 @@ function ScheduledTaskEditorForm({
       return;
     }
     if (schedule.type === "once" && !offersOnce) {
-      reportFailure(
-        "Once is not available here",
-        "This environment runs an older T3 Code. Update it to schedule a one-time task, or pick another schedule.",
-      );
+      reportFailure(t("scheduled.onceUnavailable"), t("scheduled.onceRequiresUpdate"));
       return;
     }
     if (draft.workspaceMode === "existing_worktree" && !draft.existingWorktreePath.trim()) {
@@ -1422,8 +1420,7 @@ function ScheduledTaskEditorForm({
           {draft.editingId ? t("scheduled.editTask") : t("scheduled.newTask")}
         </DialogTitle>
         <DialogDescription>
-          Run a prompt automatically on an interval, at a fixed time, once at a set date, or when a
-          webhook is called.
+          {t("scheduled.runAPromptAutomaticallyOnAnIntervalAt")}
         </DialogDescription>
       </DialogHeader>
 
@@ -1693,16 +1690,16 @@ function ScheduledTaskEditorForm({
                     });
                 }}
               >
-                <Toggle value="fixed">At a time</Toggle>
+                <Toggle value="fixed">{t("scheduled.atATime")}</Toggle>
                 {offersOnce || draft.scheduleMode === "once" ? (
-                  <Toggle value="once">Once</Toggle>
+                  <Toggle value="once">{t("scheduled.once")}</Toggle>
                 ) : null}
-                <Toggle value="interval">Every interval</Toggle>
+                <Toggle value="interval">{t("scheduled.everyInterval")}</Toggle>
                 <Toggle
                   value="webhook"
                   disabled={webhookDenial !== undefined && draft.scheduleMode !== "webhook"}
                 >
-                  On webhook
+                  {t("scheduled.onWebhook")}
                 </Toggle>
               </ToggleGroup>
             </div>
@@ -1710,7 +1707,7 @@ function ScheduledTaskEditorForm({
             {webhookDenial !== undefined ? (
               <ManagedNotice>
                 {draft.scheduleMode === "webhook"
-                  ? `${webhookDenial} Switch this task to a time or an interval, or turn it off, to save it.`
+                  ? `${webhookDenial} ${t("managed.changeTaskScheduleToSave")}`
                   : webhookDenial}
               </ManagedNotice>
             ) : null}
@@ -1900,7 +1897,7 @@ function ScheduledTaskEditorForm({
               </div>
             ) : draft.scheduleMode === "once" ? (
               <div className="flex items-center gap-2">
-                <Label htmlFor="scheduled-task-run-at">Run on</Label>
+                <Label htmlFor="scheduled-task-run-at">{t("scheduled.runOn")}</Label>
                 <Input
                   type="datetime-local"
                   id="scheduled-task-run-at"

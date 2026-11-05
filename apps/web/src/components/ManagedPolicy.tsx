@@ -1,3 +1,4 @@
+import { useTranslate } from "../i18n";
 import type { ManagedPolicySummary } from "@t3tools/contracts";
 import { BuildingIcon } from "lucide-react";
 import type { ReactNode } from "react";
@@ -50,9 +51,10 @@ export function ManagedNotice({ children }: { children: ReactNode }) {
 
 /** "This environment is managed by <organization>", linking the support page when there is one. */
 export function ManagedByOrganization({ policy }: { policy: ManagedPolicySummary }) {
+  const t = useTranslate();
   return (
     <ManagedNotice>
-      This environment is managed by {policy.organization}.
+      {t("managed.byOrganization", { organization: policy.organization })}
       {policy.supportUrl ? (
         <>
           {" "}
@@ -62,7 +64,7 @@ export function ManagedByOrganization({ policy }: { policy: ManagedPolicySummary
             rel="noreferrer"
             className="text-foreground underline underline-offset-2"
           >
-            Get help
+            {t("managed.getHelp")}
           </a>
         </>
       ) : null}

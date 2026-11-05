@@ -111,11 +111,21 @@ export function scheduleDraftErrors(draft: DraftState, translate?: TFunction) {
   if (draft.scheduleMode === "once") {
     const runAt = new Date(draft.runAt);
     if (Number.isNaN(runAt.getTime()))
-      return [{ title: "Invalid run time", description: "Pick a date and time." }];
+      return [
+        {
+          title: translate?.("scheduled.invalidRunTime") ?? "Invalid run time",
+          description: translate?.("scheduled.pickDateTime") ?? "Pick a date and time.",
+        },
+      ];
     // A time skipped by a daylight saving change parses to a different clock time.
     if (toDateTimeLocalValue(runAt) !== draft.runAt)
       return [
-        { title: "Invalid run time", description: "That time does not exist in your time zone." },
+        {
+          title: translate?.("scheduled.invalidRunTime") ?? "Invalid run time",
+          description:
+            translate?.("scheduled.timeDoesNotExist") ??
+            "That time does not exist in your time zone.",
+        },
       ];
     return [];
   }

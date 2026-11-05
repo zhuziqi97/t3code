@@ -392,7 +392,7 @@ export const en = {
   "scheduled.webhookUrl": "Webhook URL",
   "scheduled.changeInConnections": "Change in Connections",
   "scheduled.runAPromptAutomaticallyOnAnIntervalAt":
-    "Run a prompt automatically: on an interval, at a fixed time, or when a webhook is called.",
+    "Run a prompt automatically on an interval, at a fixed time, once at a set date, or when a webhook is called.",
   "scheduled.reconnectThisEnvironmentBeforeSaving": "Reconnect this environment before saving.",
   "scheduled.runsOn": "Runs on",
   "scheduled.thisScheduledTaskNoLongerExists": "This scheduled task no longer exists.",
@@ -8778,6 +8778,49 @@ export const en = {
     "Group sidebar threads into project folders. Pinned threads stay on top, and Snoozed and Settled stay below the folders.",
   "settings.boringSidebar.multilineDescription":
     "In the boring sidebar, show folder threads on two lines: the title, then the branch, pull request, and agent.",
+  "promptLink.openPrompt": "Open this prompt",
+  "promptLink.draftDescription": "It opens as a draft. Nothing runs until you press Send.",
+  "promptLink.openThread": "Open this thread",
+  "promptLink.threadDescription":
+    "It opens in T3 Code if you're connected to the machine it runs on.",
+  "promptLink.existingThread": "Opens one of your threads.",
+  "promptLink.pullRequest": "Pull request {{pullRequest}}",
+  "promptLink.repository": "Repository {{repository}}",
+  "promptLink.model": "Model {{model}}",
+  "promptLink.openFailed": "Could not open the link",
+  "promptLink.hiddenCharactersWarning": "This prompt had hidden characters, it may be malicious",
+  "promptLink.hiddenCharactersRemoved_one":
+    "T3 Code removed {{count}} hidden character. Read the prompt before you send it.",
+  "promptLink.hiddenCharactersRemoved_other":
+    "T3 Code removed {{count}} hidden characters. Read the prompt before you send it.",
+  "promptLink.openApp": "Open in app",
+  "promptLink.openDesktop": "Open in desktop app",
+  "promptLink.continueHere": "Continue here",
+  "promptLink.getApp": "Get T3 Code",
+  "promptLink.rememberChoice": "Remember my choice",
+  "approval.fromThread": "Approval from {{title}}",
+  "approval.neededFromThread": "Approval needed from {{title}}",
+  "approval.childNotResumable":
+    "Provider process is gone. Interrupt or restart the child thread to respond.",
+  "approval.submitFailed": "Failed to submit approval decision.",
+  "approval.needed": "Approval needed",
+  "managed.byOrganization": "This environment is managed by {{organization}}.",
+  "managed.getHelp": "Get help",
+  "managed.getHelpFrom": "Get help from {{organization}}",
+  "managed.switchModeToContinue": "Switch this thread's mode to continue.",
+  "managed.switchTo": "Switch to {{mode}}",
+  "managed.changeTaskScheduleToSave":
+    "Switch this task to a time or an interval, or turn it off, to save it.",
+  "scheduled.once": "Once",
+  "scheduled.onceAt": "Once, {{time}}",
+  "scheduled.onceAtDateTime": "Once, {{date}} at {{time}}",
+  "scheduled.onceUnavailable": "Once is not available here",
+  "scheduled.onceRequiresUpdate":
+    "This environment runs an older T3 Code. Update it to schedule a one-time task, or pick another schedule.",
+  "scheduled.runOn": "Run on",
+  "scheduled.invalidRunTime": "Invalid run time",
+  "scheduled.pickDateTime": "Pick a date and time.",
+  "scheduled.timeDoesNotExist": "That time does not exist in your time zone.",
 } as const;
 
 export type MessageKey = keyof typeof en;

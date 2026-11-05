@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import {
   clampManagedRuntimeMode,
   managedRuntimeModeDenial,
@@ -24,6 +25,7 @@ export function ManagedRuntimeModeNotice(props: {
   readonly supportedRuntimeModes: ReadonlyArray<RuntimeMode> | undefined;
   readonly policy: ManagedPolicySummary | undefined;
 }) {
+  const t = useTranslate();
   const draftSettings = useComposerDraftSettings(props.threadKey);
   const runtimeMode = draftSettings.runtimeMode ?? props.threadRuntimeMode;
   const denial = managedRuntimeModeDenial(props.policy, runtimeMode);
@@ -38,11 +40,11 @@ export function ManagedRuntimeModeNotice(props: {
   return (
     <View className="gap-2 px-4 pb-3">
       <AppText textRole="footnote" className="text-foreground-muted">
-        {`${denial} Switch this thread's mode to continue.`}
+        {denial} {t("managed.switchModeToContinue")}
       </AppText>
       {target === undefined || targetLabel === undefined ? null : (
         <Button
-          label={`Switch to ${targetLabel}`}
+          label={t("managed.switchTo", { mode: t(`chat.runtime.${target}.label`) })}
           onPress={() => updateComposerDraftSettings(props.threadKey, { runtimeMode: target })}
         />
       )}

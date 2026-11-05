@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import { managedAcpRegistryUpdateTarget } from "@t3tools/client-runtime/acp-registry-update";
 import { AcpRegistryUpdateRow } from "./AcpRegistryUpdateRow";
 import * as Dialog from "../../components/ui/Dialog";
@@ -55,6 +56,7 @@ export function SettingsEnvironmentDetailRouteScreen({
 }
 
 function EnvironmentDetail({ environmentId }: { readonly environmentId: EnvironmentId }) {
+  const t = useTranslate();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const connections = useRemoteConnections();
@@ -240,7 +242,7 @@ function EnvironmentDetail({ environmentId }: { readonly environmentId: Environm
                     <Text className="text-base text-foreground">Version {version}</Text>
                     {managedPolicy ? (
                       <Text className="text-sm text-foreground-muted">
-                        Managed by {managedPolicy.organization}
+                        {t("managed.byOrganization", { organization: managedPolicy.organization })}
                       </Text>
                     ) : null}
                     {updatesDenial ? (
@@ -277,26 +279,26 @@ function EnvironmentDetail({ environmentId }: { readonly environmentId: Environm
                   {supportUrl ? (
                     <SettingsActionRow
                       icon="questionmark.bubble"
-                      label={`Get help from ${managedPolicy.organization}`}
+                      label={t("managed.getHelpFrom", { organization: managedPolicy.organization })}
                       onPress={() => void Linking.openURL(supportUrl).catch(() => undefined)}
                     />
                   ) : null}
                   {updatesDenial ? null : (
-                  <SettingsActionRow
-                    icon="arrow.clockwise"
-                    label="Check for updates"
-                    disabled={disabled}
-                    loading={pending === "check"}
-                    onPress={() => {
-                      if (disabled) return;
-                      const fromVersion = config.environment.serverVersion;
-                      void run("check", async () => {
-                        const exit = await checkRelease(async () => fromVersion);
-                        // `run` owns the error message, so a failed lookup rethrows to it.
-                        if (Exit.isFailure(exit)) throw Cause.squash(exit.cause);
-                      });
-                    }}
-                  />
+                    <SettingsActionRow
+                      icon="arrow.clockwise"
+                      label="Check for updates"
+                      disabled={disabled}
+                      loading={pending === "check"}
+                      onPress={() => {
+                        if (disabled) return;
+                        const fromVersion = config.environment.serverVersion;
+                        void run("check", async () => {
+                          const exit = await checkRelease(async () => fromVersion);
+                          // `run` owns the error message, so a failed lookup rethrows to it.
+                          if (Exit.isFailure(exit)) throw Cause.squash(exit.cause);
+                        });
+                      }}
+                    />
                   )}
                   {checkedRelease?.targetVersion &&
                   !updatesDenial &&
