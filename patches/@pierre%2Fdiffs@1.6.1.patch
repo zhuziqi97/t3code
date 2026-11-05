@@ -966,7 +966,18 @@ index bf17cea32f..02c4582264 100644
  	setOptions(options) {
  		const previousRenderCaret = this.#options.renderCaret;
  		const previousEditPrediction = this.#options.editPrediction;
-@@ -1903,7 +1906,11 @@ var Editor = class {
+@@ -436,7 +436,9 @@ var Editor = class {
+ 		this.#canMountSelectionAction = false;
+ 		this.#updateSelections(resolvedSelections);
+ 		const primarySelection = resolvedSelections.at(-1);
+-		if (primarySelection !== void 0) this.#revealLineIfCollapsed(getCaretPosition(primarySelection).line);
++		// Clearing keeps the selection while search matches or markers exist; scrolling to it steals focus.
++		if (primarySelection === void 0) return;
++		this.#revealLineIfCollapsed(getCaretPosition(primarySelection).line);
+ 		this.#scrollToPrimaryCaret();
+ 	}
+ 	setMarkers(markers) {
+@@ -1903,7 +1905,11 @@ var Editor = class {
  			changedDocumentLines: this.#isDiff && !didLineCountChange ? getChangedDocumentLines(textDocument, change) : void 0,
  			documentLineCount: textDocument.lineCount
  		});
