@@ -25,19 +25,6 @@ export interface ThreadLink {
   readonly threadId: ThreadId;
 }
 
-// Escapes even URL-safe punctuation, so a sentence's closing period never reads as part of an id.
-const hostedSegment = (id: string) =>
-  encodeURIComponent(id).replace(
-    /[.!~*'()]/g,
-    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
-  );
-
-/** Opens the thread from anywhere: the hosted app offers the desktop app, the mobile app, or itself. */
-export function hostedThreadLink(ref: ScopedThreadRef, origin = DEFAULT_HOSTED_APP_URL): string {
-  const path = `/threads/${hostedSegment(ref.environmentId)}/${hostedSegment(ref.threadId)}`;
-  return new URL(path, origin).toString();
-}
-
 const HOSTED_PATH = new RegExp(`^(${HOSTED_SEGMENT})/(${HOSTED_SEGMENT})$`);
 
 function parseHostedThreadLink(href: string): ThreadLink | null {
@@ -126,17 +113,6 @@ const linkLabel = (label: string | undefined) =>
 export function formatThreadLink(ref: ThreadLink, label?: string): string {
   const cleaned = linkLabel(label);
   return cleaned ? `[${cleaned}](${threadLinkHref(ref)})` : `<${threadLinkHref(ref)}>`;
-}
-
-/** What a person copies out of T3 Code: a Markdown link that opens the thread anywhere. */
-export function formatHostedThreadLink(
-  ref: ScopedThreadRef,
-  label: string,
-  origin?: string,
-): string {
-  const href = hostedThreadLink(ref, origin);
-  const cleaned = linkLabel(label);
-  return cleaned ? `[${cleaned}](${href})` : href;
 }
 
 export function hasThreadLinks(markdown: string): boolean {

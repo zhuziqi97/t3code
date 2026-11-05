@@ -75,6 +75,11 @@ The most common defect in this repo is a change that works on the path you teste
 - **Connection modes.** Local, remote/relay, and tunnel behave differently. Multi-device and multi-environment cases are real.
 - **Docs.** Check whether the change makes existing guidance inaccurate. Apply the [documentation rules](#documentation) before adding anything.
 
+For the Convene fork, keep thread references in the existing T3 schemes: Copy thread uses
+`t3-context://`; MCP results and message thread links use `t3-thread://`. Do not generate
+hosted HTTP thread links such as `https://app.t3.codes/threads/...` when syncing upstream.
+Preserve PR-first copying and raw environment/thread IDs; received web links remain readable.
+
 ## Dev servers
 
 - `vp i` installs. Worktrees get this from the t3.json setup script; if module resolution looks broken, it probably did not run.

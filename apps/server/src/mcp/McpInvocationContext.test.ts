@@ -10,6 +10,27 @@ import * as Effect from "effect/Effect";
 
 import * as McpInvocationContext from "./McpInvocationContext.ts";
 
+it.each([undefined, "https://app.t3.codes", "https://t3.example.com"])(
+  "keeps thread results as T3 links with hosted app %s",
+  (hostedAppUrl) => {
+    const scope = {
+      environmentId: EnvironmentId.make("environment-1"),
+      client:
+        hostedAppUrl === undefined
+          ? undefined
+          : {
+              sessionId: "session-1",
+              label: "OAuth client",
+              access: "auto" as const,
+              hostedAppUrl,
+            },
+    };
+    expect(
+      McpInvocationContext.threadLinkFor(scope, ThreadId.make("thread:delegated/mcp%3A1")),
+    ).toBe("<t3-thread://v2/environment-1/thread:delegated/mcp%3A1>");
+  },
+);
+
 it.effect("reports other missing capabilities with the neutral error", () => {
   const invocation: McpInvocationContext.McpInvocationScope = {
     environmentId: EnvironmentId.make("environment-1"),
