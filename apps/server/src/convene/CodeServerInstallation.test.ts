@@ -324,35 +324,93 @@ it.live.each(["known", "unknown", "encoded", "invalid"] as const)(
     ),
 );
 
-it.live("reports extraction failure and removes staging without caching a broken runtime", () =>
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const config = yield* ServerConfig.ServerConfig;
-    const client = HttpClient.make((request) =>
-      Effect.succeed(HttpClientResponse.fromWeb(request, new Response("not a tar archive"))),
-    );
-    const services = yield* Layer.build(
-      CodeServerInstallation.layer.pipe(
-        Layer.provide(Layer.succeed(HttpClient.HttpClient, client)),
-      ),
-    );
-    const installation = Context.get(services, CodeServerInstallation.CodeServerInstallation);
-    const progress: Array<NonNullable<ConveneIdeResult["progress"]>> = [];
-    const error = yield* installation
-      .ensure((value) => Effect.sync(() => progress.push(value)))
-      .pipe(Effect.flip);
-    assert.equal(error.code, "install_failed");
-    assert.deepEqual(progress.at(-1), { stage: "extracting" });
-    assert.deepEqual(
-      yield* fs.readDirectory(path.join(config.baseDir, "tools", "code-server")),
-      [],
-    );
-  }).pipe(
-    Effect.provide(base),
-    Effect.provideService(HostProcess.Platform, "linux"),
-    Effect.provideService(HostProcess.Architecture, "x64"),
-  ),
+it.live.each(["extraction", "stream"] as const)(
+  "reports %s failure, cleans staging and only downloads again on explicit retry",
+  (failure) =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const config = yield* ServerConfig.ServerConfig;
+      const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+      const fixture = yield* fs.makeTempDirectoryScoped();
+      yield* fs.makeDirectory(path.join(fixture, "release", "bin"), { recursive: true });
+      yield* fs.writeFileString(
+        path.join(fixture, "release", "bin", "code-server"),
+        "#!/bin/sh\nexit 0\n",
+      );
+      const archive = path.join(fixture, "release.tar.gz");
+      assert.equal(
+        yield* spawner.exitCode(
+          ChildProcess.make("tar", ["-czf", archive, "-C", fixture, "release"]),
+        ),
+        0,
+      );
+      const bytes = yield* fs.readFile(archive);
+      const data = path.join(config.baseDir, "tools", "code-server", "data");
+      yield* fs.makeDirectory(data, { recursive: true });
+      yield* fs.writeFileString(path.join(data, "keep.txt"), "existing user state");
+      let downloads = 0;
+      let interrupted: ReadableStreamDefaultController<Uint8Array> | undefined;
+      const client = HttpClient.make((request) =>
+        Effect.sync(() => {
+          downloads++;
+          const body =
+            downloads > 1
+              ? bytes
+              : failure === "extraction"
+                ? "not a tar archive"
+                : new ReadableStream<Uint8Array>({
+                    start(controller) {
+                      interrupted = controller;
+                      controller.enqueue(bytes.subarray(0, 7));
+                    },
+                  });
+          return HttpClientResponse.fromWeb(request, new Response(body));
+        }),
+      );
+      const services = yield* Layer.build(
+        CodeServerInstallation.layer.pipe(
+          Layer.provide(Layer.succeed(HttpClient.HttpClient, client)),
+        ),
+      );
+      const installation = Context.get(services, CodeServerInstallation.CodeServerInstallation);
+      const progress: Array<NonNullable<ConveneIdeResult["progress"]>> = [];
+      const report = (value: NonNullable<ConveneIdeResult["progress"]>) =>
+        Effect.sync(() => {
+          progress.push(value);
+          if (downloads === 1 && value.stage === "downloading" && value.receivedBytes === 7) {
+            interrupted?.error(new Error("connection closed during download"));
+          }
+        });
+      const error = yield* installation.ensure(report).pipe(Effect.flip);
+      assert.equal(error.code, "install_failed");
+      assert.equal(downloads, 1);
+      assert.deepEqual(
+        progress.at(-1),
+        failure === "extraction"
+          ? { stage: "extracting" }
+          : { stage: "downloading", receivedBytes: 7 },
+      );
+      assert.deepEqual(yield* fs.readDirectory(path.dirname(data)), ["data"]);
+      assert.equal(yield* fs.readFileString(path.join(data, "keep.txt")), "existing user state");
+      progress.length = 0;
+      const executable = yield* installation.ensure(report);
+      assert.equal(yield* fs.readFileString(executable), "#!/bin/sh\nexit 0\n");
+      assert.equal(downloads, 2);
+      assert.deepEqual(progress.at(-1), { stage: "extracting" });
+      assert.ok(
+        !(yield* fs.readDirectory(path.dirname(data))).some((entry) =>
+          entry.startsWith(".install-"),
+        ),
+      );
+      assert.equal(yield* fs.readFileString(path.join(data, "keep.txt")), "existing user state");
+      assert.equal(yield* installation.ensure(report), executable);
+      assert.equal(downloads, 2);
+    }).pipe(
+      Effect.provide(base),
+      Effect.provideService(HostProcess.Platform, "linux"),
+      Effect.provideService(HostProcess.Architecture, "x64"),
+    ),
 );
 
 it.effect("does not download or create a runtime on unsupported Windows hosts", () =>
