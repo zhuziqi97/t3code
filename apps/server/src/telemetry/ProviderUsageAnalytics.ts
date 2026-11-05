@@ -147,7 +147,7 @@ function selectionProperties(
 ) {
   const selection = context?.modelSelection;
   return defined({
-    model: selection === undefined ? undefined : label(selection.model),
+    model: selection?.model == null ? undefined : label(selection.model),
     effort: selection === undefined ? undefined : selectedEffort(selection),
     serviceTier: selection === undefined ? undefined : selectedServiceTier(selection),
     runtimeMode: context?.runtimeMode,

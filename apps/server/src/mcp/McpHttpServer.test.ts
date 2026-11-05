@@ -1486,7 +1486,7 @@ it.effect(
             dependencies: [McpInvocationContext.McpInvocationContext],
           }),
         );
-        const serverLayer = McpHttpServer.toolkitRegistration(
+        const registrations = McpHttpServer.toolkitRegistration(
           ProbeToolkit,
           McpToolAccess.toLayer(ProbeToolkit, {
             probe: McpToolAccess.reads(() =>
@@ -1496,8 +1496,8 @@ it.effect(
               ),
             ),
           }),
-        ).pipe(
-          Layer.provideMerge(McpHttpServer.layerMcpTransport),
+        );
+        const serverLayer = McpHttpServer.layerMcpTransport(registrations).pipe(
           Layer.provide(
             Layer.succeed(McpSessionRegistry.McpSessionRegistry, {
               ...registry,

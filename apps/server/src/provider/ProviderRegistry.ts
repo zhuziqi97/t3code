@@ -643,7 +643,7 @@ export const layer = Layer.effect(
       }
       const nextProvider = yield* probe;
       return yield* correlateSnapshotWithSource(providerSource, nextProvider).pipe(
-            Effect.flatMap(syncProvider),
+        Effect.flatMap(syncProvider),
       );
     });
 
@@ -1162,7 +1162,7 @@ export const layer = Layer.effect(
         instanceRegistry.listInstances.pipe(
           Effect.flatMap((sources) => {
             const source = sources.find((candidate) => candidate.instanceId === instanceId);
-            return source ? source.cancelRefresh(operationId) : Effect.void;
+            return source ? source.snapshot.cancelRefresh(operationId) : Effect.void;
           }),
           Effect.andThen(Ref.get(providersRef)),
         ),

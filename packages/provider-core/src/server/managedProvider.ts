@@ -611,7 +611,9 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
                     shouldRefresh
                       ? Ref.get(initialPreparationCancelled).pipe(
                           Effect.flatMap((cancelled) =>
-                            cancelled ? Effect.void : refreshSnapshot().pipe(Effect.asVoid),
+                            cancelled
+                              ? Effect.void
+                              : refreshSemaphore.withPermits(1)(refreshOnInterval()),
                           ),
                         )
                       : Effect.void,

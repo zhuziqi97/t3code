@@ -280,7 +280,12 @@ it.effect("returns an HTML render reference that Codex and Claude tool rows both
         Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-mcp-html-render-" })),
         Layer.provide(
           DocumentText.layer.pipe(
-            Layer.provideMerge(Layer.mergeAll(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer), NodeCrypto.layer)),
+            Layer.provideMerge(
+              Layer.mergeAll(
+                Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),
+                NodeCrypto.layer,
+              ),
+            ),
           ),
         ),
         Layer.provide(FetchHttpClient.layer),
@@ -510,7 +515,7 @@ it.effect("records the calling agent and the agent a tool acted on", () => {
   }).pipe(
     Effect.provide(
       layerThreadToolkit.pipe(
-        Layer.provideMerge(McpServer.McpServer.layer),
+        Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
         Layer.provide(NodeCrypto.layer),
         Layer.provide(
           Layer.mock(ThreadManagement.ThreadManagementService)({
@@ -1152,7 +1157,12 @@ it.effect("only the caller that prepared a pending upload can discard it", () =>
         Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-mcp-attachment-" })),
         Layer.provide(
           DocumentText.layer.pipe(
-            Layer.provideMerge(Layer.mergeAll(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer), NodeCrypto.layer)),
+            Layer.provideMerge(
+              Layer.mergeAll(
+                Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),
+                NodeCrypto.layer,
+              ),
+            ),
           ),
         ),
         Layer.provide(NodeCrypto.layer),

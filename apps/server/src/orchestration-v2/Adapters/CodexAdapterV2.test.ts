@@ -1,4 +1,3 @@
-import * as SecureRandom from "effect/crypto/SecureRandom";
 import { historyResponseItems } from "@t3tools/provider-core/server/handoffBudget";
 
 import { makeProviderFailure } from "@t3tools/provider-core/server/failure";
@@ -1386,7 +1385,7 @@ describe("CodexAdapterV2 session initialize", () => {
               ),
             ),
         },
-        crypto: yield* SecureRandom.SecureRandom,
+        digest: yield* Digest.Digest,
         fileSystem: yield* FileSystem.FileSystem,
         idAllocator: yield* IdAllocator.IdAllocatorV2,
         serverConfig: yield* ProviderReplayHarness.makeReplayServerConfig(transcript.scenario).pipe(
@@ -1886,7 +1885,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         settings: DEFAULT_CODEX_SETTINGS,
         environment: {},
         clientFactory,
-        crypto: yield* SecureRandom.SecureRandom,
+        digest: yield* Digest.Digest,
         fileSystem,
         idAllocator,
         serverConfig,
@@ -11509,13 +11508,17 @@ describe("CodexAdapterV2 process spawning", () => {
     Effect.gen(function* () {
       const spawnedArgs: Array<ReadonlyArray<string>> = [];
       const spawner = ChildProcessSpawner.make((command) => {
-        if (ChildProcess.isStandardCommand(command)) spawnedArgs.push(command.args);
+        if (ChildProcess.isStandardCommand(command)) spawnedArgs.push(command.args.map(String));
         return Effect.fail(
           PlatformError.systemError({ _tag: "NotFound", module: "ChildProcess", method: "spawn" }),
         );
       });
       const factory = yield* CodexAdapterV2.CodexAppServerClientFactory.pipe(
-        Effect.provide(CodexAdapterV2.layerAppServerClientFactory),
+        Effect.provide(
+          CodexAdapterV2.layerAppServerClientFactory.pipe(
+            Layer.provide(Layer.mock(PortScanner.PortDiscovery)({ trackAgent: () => () => {} })),
+          ),
+        ),
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
         Effect.provideService(
           ProviderEventLoggers.ProviderEventLoggers,
@@ -11570,7 +11573,9 @@ describe("CodexAdapterV2 process spawning", () => {
       }).pipe(
         Effect.provide(
           Layer.mergeAll(
-            CodexAdapterV2.layerAppServerClientFactory,
+            CodexAdapterV2.layerAppServerClientFactory.pipe(
+              Layer.provide(Layer.mock(PortScanner.PortDiscovery)({ trackAgent: () => () => {} })),
+            ),
             ServerConfig.layerTest(process.cwd(), { prefix: "t3-codex-binary-home-" }),
           ),
         ),

@@ -1,3 +1,4 @@
+import * as HttpMethod from "effect/http/HttpMethod";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import {
   AuthFilesystemWriteScope,
@@ -121,7 +122,9 @@ const proxyHttp = Effect.fn("ConveneIdeHttp.http")(function* (
     ),
   );
   if (request.headers.origin !== undefined) headers.origin = upstreamUrl.origin;
-  let outbound = HttpClientRequest.make(request.method)(upstreamUrl.toString()).pipe(
+  let outbound = HttpClientRequest.make(request.method as HttpMethod.HttpMethod)(
+    upstreamUrl.toString(),
+  ).pipe(
     HttpClientRequest.setHeaders(headers),
     HttpClientRequest.setHeader("accept-encoding", "identity"),
   );

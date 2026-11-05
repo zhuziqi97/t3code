@@ -3,7 +3,6 @@ import { expect, it } from "@effect/vitest";
 
 import {
   type AgentSessionSource,
-  type ServerSettingsError,
   EventId,
   ProjectId,
   ProviderDriverKind,
@@ -198,6 +197,7 @@ const seedOwner = Effect.fn(function* (
 const makeImporter = Effect.fn(function* (
   candidates: ReadonlyArray<ReturnType<typeof candidate>>,
   beforeTransaction: Effect.Effect<void> = Effect.void,
+  settingsLayer: ReturnType<typeof ServerSettings.layerTest> = ServerSettings.layerTest(),
 ) {
   const sql = yield* SqlClient.SqlClient;
   const events = yield* EventStore.EventStoreV2;
@@ -230,6 +230,7 @@ const makeImporter = Effect.fn(function* (
   );
   const context = yield* Layer.build(
     AgentSessionImporter.layer.pipe(
+      Layer.provide(settingsLayer),
       Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
       Layer.provide(
         Layer.mergeAll(
@@ -536,12 +537,14 @@ it.effect.each([
             providerSessionId,
             title: canonicalTitle ?? "Actual request",
             model: null,
+            omittedMessageCount: 0,
             createdAt: "2026-10-01T00:00:00.000Z",
             updatedAt: "2026-10-01T00:00:00.000Z",
             messages: [],
           },
         };
   const testLayer = AgentSessionImporter.layer.pipe(
+    Layer.provide(ServerSettings.layerTest()),
     Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
     Layer.provide(
       Layer.mergeAll(
@@ -616,6 +619,7 @@ it.effect.each([true, false])(
       inode: 1,
     };
     const layerTest = AgentSessionImporter.layer.pipe(
+      Layer.provide(ServerSettings.layerTest()),
       Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
       Layer.provide(
         Layer.mergeAll(

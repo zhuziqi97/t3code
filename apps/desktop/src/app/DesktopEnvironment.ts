@@ -232,9 +232,6 @@ const make = Effect.fn("desktop.environment.make")(function* (
       isDevelopment ? `${CONVENE_DESKTOP_IDENTITY.appId}.dev` : CONVENE_DESKTOP_IDENTITY.appId,
     ),
     linuxDesktopEntryName: resolveLinuxDesktopEntryName(isDevelopment),
-    linuxWmClass: isDevelopment
-      ? CONVENE_DESKTOP_IDENTITY.developmentUserDataName
-      : CONVENE_DESKTOP_IDENTITY.executableName,
     linuxApplicationsDir,
     desktopLauncherPath: config.desktopLauncherPath,
     appImagePath: config.appImagePath,

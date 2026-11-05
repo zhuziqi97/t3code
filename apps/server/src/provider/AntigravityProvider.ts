@@ -14,7 +14,6 @@ import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FiberHandle from "effect/FiberHandle";
-import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
 import * as Result from "effect/Result";
 import * as Stream from "effect/Stream";
@@ -321,8 +320,6 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
         auth: core.draft.auth,
       });
     }
-    const usageLimits =
-      initialized !== undefined && options.probeUsage ? yield* options.probeUsage : undefined;
     const updatedAt = DateTime.formatIso(yield* DateTime.now);
     const next = yield* SubscriptionRef.updateAndGet(metadata, (state) => {
       if (state.authRevision !== before.authRevision) return state;
@@ -388,7 +385,23 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
         ),
       ),
   });
-  yield* Deferred.succeed(republish, managed.refresh);
+  yield* Deferred.succeed(
+    republish,
+    Effect.scoped(
+      Effect.gen(function* () {
+        const completed = yield* Stream.toPull(
+          managed.streamChanges.pipe(
+            Stream.filter((snapshot) => snapshot.operation?.state !== "running"),
+            Stream.take(1),
+          ),
+        );
+        // Refresh joins an active check; quota publication needs a check after that one ends.
+        if ((yield* managed.getSnapshot).operation?.state === "running")
+          yield* completed.pipe(Effect.orDie);
+        return yield* managed.refresh;
+      }),
+    ),
+  );
 
   const onSessionStarted = Effect.fn("AntigravityProvider.onSessionStarted")(function* (
     started: AcpSessionRuntime.AcpSessionRuntimeStartResult,
@@ -425,13 +438,12 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
           checkedAt: updatedAt,
           usageLimits: resolveUsageLimitsAfterProbe({
             published: draft.usageLimits,
-            probed: usageLimits ?? draft.usageLimits,
+            probed: draft.usageLimits,
           }),
           models: mergeCustomModels(
             buildAntigravityModelsFromSession(started.sessionSetupResult, thinkingLevels),
             settings.customModels,
           ),
-          models: buildAntigravityModelsFromSession(started.sessionSetupResult, thinkingLevels),
           supportsTextGeneration,
           ...(cwd
             ? {

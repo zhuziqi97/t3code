@@ -35,7 +35,6 @@ import * as TestProviderHost from "@t3tools/provider-testing/TestProviderHost";
 import type * as AcpSessionRuntime from "@t3tools/provider-acp/server/AcpSessionRuntime";
 import { makeAntigravityAcpRuntime } from "../../provider/acp/AntigravityAcpSupport.ts";
 import { readAntigravityUserMcpServers } from "../../provider/antigravityMcpSupport.ts";
-import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { normalizeAntigravitySessionUpdate } from "../../provider/acp/AntigravityProtocol.ts";
 import { ANTIGRAVITY_SIGN_IN_REQUIRED_MESSAGE } from "../../provider/antigravityAuthSupport.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
@@ -1336,6 +1335,7 @@ describe("AntigravityAdapterV2 runtime mode ceiling", () => {
       const adapter = yield* makeAntigravityAdapterV2({
         instanceId,
         selfInvocation: yield* resolveSelfInvocation(),
+        userMcpServers: () => Effect.succeed([]),
         makeRuntime: (input) =>
           makeAntigravityAcpRuntime({
             ...input,
@@ -1408,6 +1408,7 @@ describe("AntigravityAdapterV2 session system prompt", () => {
         const adapter = yield* makeAntigravityAdapterV2({
           instanceId,
           selfInvocation: yield* resolveSelfInvocation(),
+          userMcpServers: () => Effect.succeed([]),
           makeRuntime: (input) =>
             makeAntigravityAcpRuntime({
               ...input,

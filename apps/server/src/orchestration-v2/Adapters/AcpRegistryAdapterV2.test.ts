@@ -1,3 +1,4 @@
+import type { AcpRegistryAvailableCommands } from "@t3tools/provider-acp-registry/testing";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -64,8 +65,6 @@ import {
 import type { ProviderContinuationRequest } from "@t3tools/provider-core/server/ProviderContinuationRequests";
 
 import * as ServerSettings from "../../serverSettings.ts";
-
-import type { AcpRegistryLiveConfiguration } from "@t3tools/provider-acp-registry/testing";
 
 import * as AcpRegistrySupport from "@t3tools/provider-acp-registry/server/AcpRegistrySupport";
 

@@ -860,17 +860,24 @@ it.layer(layerTest)("Antigravity provider snapshots", (it) => {
           };
           const usage = yield* Ref.make(limits);
           const harness = yield* makeHarness({ probeUsage: Ref.get(usage) });
-          const published = yield* harness.nextPublish((snapshot) => !!snapshot.usageLimits);
+          const published = yield* harness.nextPublish(
+            (snapshot) => !!snapshot.usageLimits && snapshot.operation?.state === "completed",
+          );
           yield* harness.initialize;
           expect((yield* published)?.usageLimits).toEqual(limits);
           // The second health check is the one the failed background read triggers.
           const checks = yield* Ref.make(0);
           const failedReadApplied = yield* Deferred.make<void>();
+          const releaseFailedRead = yield* Deferred.make<void>();
           yield* Ref.set(
             harness.probe,
             Ref.updateAndGet(checks, (count) => count + 1).pipe(
               Effect.tap((count) =>
-                count === 2 ? Deferred.succeed(failedReadApplied, undefined) : Effect.void,
+                count === 2
+                  ? Deferred.succeed(failedReadApplied, undefined).pipe(
+                      Effect.andThen(Deferred.await(releaseFailedRead)),
+                    )
+                  : Effect.void,
               ),
               Effect.as(initializeResult),
             ),
@@ -882,6 +889,11 @@ it.layer(layerTest)("Antigravity provider snapshots", (it) => {
           });
           yield* harness.provider.snapshot.refresh;
           yield* Deferred.await(failedReadApplied);
+          const completed = yield* harness.nextPublish(
+            (snapshot) => snapshot.operation?.state === "completed",
+          );
+          yield* Deferred.succeed(releaseFailedRead, undefined);
+          yield* completed;
           expect((yield* harness.provider.snapshot.getSnapshot).usageLimits).toEqual(limits);
           yield* harness.provider.onSignedOut;
           expect((yield* harness.provider.snapshot.getSnapshot).usageLimits).toBeUndefined();

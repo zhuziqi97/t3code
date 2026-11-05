@@ -81,6 +81,15 @@ import { CodexProviderCapabilitiesV2 } from "../orchestration-v2/Adapters/CodexA
 
 import { mergeProviderInstanceEnvironment } from "@t3tools/provider-core/server/instanceEnvironment";
 import { makeManualOnlyProviderMaintenanceCapabilities } from "@t3tools/provider-core/server/maintenanceResolver";
+
+function snapshotState(initial: ServerProvider, refresh: Effect.Effect<ServerProvider>) {
+  const current = Ref.makeUnsafe(initial);
+  return {
+    getSnapshot: Ref.get(current),
+    refresh: refresh.pipe(Effect.tap((next) => Ref.set(current, next))),
+  };
+}
+
 const capabilitiesAdapter = (supportsMcpTools = true) =>
   ({
     getCapabilities: () =>
@@ -1345,6 +1354,11 @@ it.layer(
                 refresh: Ref.get(nextProvider).pipe(
                   Effect.tap((provider) => Ref.set(currentProvider, provider)),
                 ),
+                startRefresh: () =>
+                  Ref.get(nextProvider).pipe(
+                    Effect.tap((provider) => Ref.set(currentProvider, provider)),
+                  ),
+                cancelRefresh: () => Effect.void,
                 streamChanges: Stream.empty,
                 applyUsageLimits: () => Effect.void,
               },
@@ -1493,6 +1507,11 @@ it.layer(
               refresh: Ref.get(nextProvider).pipe(
                 Effect.tap((provider) => Ref.set(currentProvider, provider)),
               ),
+              startRefresh: () =>
+                Ref.get(nextProvider).pipe(
+                  Effect.tap((provider) => Ref.set(currentProvider, provider)),
+                ),
+              cancelRefresh: () => Effect.void,
               streamChanges: Stream.empty,
               applyUsageLimits: () => Effect.void,
             },
@@ -1801,13 +1820,15 @@ it.layer(
                       }),
                     ),
                   ),
-                getSnapshot: Effect.succeed(provider),
-                refresh: Effect.succeed(provider),
+                ...snapshotState(provider, Effect.succeed(provider)),
+
+                startRefresh: () => Effect.succeed(provider),
+                cancelRefresh: () => Effect.void,
                 streamChanges: Stream.empty,
                 applyUsageLimits: () => Effect.void,
               },
               invalidateCaches: Ref.update(invalidations, (count) => count + 1),
-              orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
+              orchestrationAdapter: capabilitiesAdapter(),
               textGeneration: {} as ProviderInstance["textGeneration"],
             } satisfies ProviderInstance;
             const takeMaintenanceReads = Ref.getAndSet(maintenanceReads, []);
@@ -1819,6 +1840,7 @@ it.layer(
         const layerInstanceRegistry = Layer.succeed(
           ProviderInstanceRegistry.ProviderInstanceRegistry,
           {
+            beforeInstanceClose: () => Effect.void,
             getInstance: (instanceId) =>
               Effect.succeed(instances.find((instance) => instance.instanceId === instanceId)),
             listInstances: Effect.succeed(instances),
@@ -1933,8 +1955,8 @@ it.layer(
                     packageName: null,
                   }),
                 ),
-              getSnapshot: Effect.succeed(provider),
-              refresh: Effect.succeed(provider),
+              ...snapshotState(provider, Effect.succeed(provider)),
+
               startRefresh: () => Effect.succeed(provider),
               cancelRefresh: () => Effect.void,
               streamChanges: Stream.empty,
@@ -2034,13 +2056,13 @@ it.layer(
                   packageName: null,
                 }),
               ),
-            getSnapshot: Effect.succeed(initialProvider),
+            ...snapshotState(
+              initialProvider,
+              Ref.update(refreshCalls, (count) => count + 1).pipe(Effect.andThen(Effect.never)),
+            ),
             startRefresh: () =>
               Ref.update(refreshCalls, (count) => count + 1).pipe(Effect.andThen(Effect.never)),
             cancelRefresh: () => Effect.void,
-            refresh: Ref.update(refreshCalls, (count) => count + 1).pipe(
-              Effect.andThen(Effect.never),
-            ),
 
             streamChanges: Stream.empty,
             applyUsageLimits: () => Effect.void,
@@ -2152,30 +2174,33 @@ it.layer(
                     latestVersion: scenario === "selected defect" ? null : "2.0.0",
                   });
                 }),
-              getSnapshot: Effect.succeed(provider),
-              refresh: Effect.sync(() => {
-                events.push(`probe:${id}`);
-                if (
-                  id === "broken-discovery" ||
-                  (scenario === "selected defect" && id === "personal")
-                ) {
-                  throw new Error("Provider discovery failed");
-                }
-                return cached
-                  ? provider
-                  : {
-                      ...provider,
-                      version: "2.0.0",
-                      models: [
-                        {
-                          slug: config.model,
-                          name: config.model,
-                          isCustom: false,
-                          capabilities: createModelCapabilities({ optionDescriptors: [] }),
-                        },
-                      ],
-                    };
-              }),
+              ...snapshotState(
+                provider,
+                Effect.sync(() => {
+                  events.push(`probe:${id}`);
+                  if (
+                    id === "broken-discovery" ||
+                    (scenario === "selected defect" && id === "personal")
+                  ) {
+                    throw new Error("Provider discovery failed");
+                  }
+                  return cached
+                    ? provider
+                    : {
+                        ...provider,
+                        version: "2.0.0",
+                        models: [
+                          {
+                            slug: config.model,
+                            name: config.model,
+                            isCustom: false,
+                            capabilities: createModelCapabilities({ optionDescriptors: [] }),
+                          },
+                        ],
+                      };
+                }),
+              ),
+
               startRefresh: () =>
                 Effect.sync(() => {
                   events.push(`probe:${id}`);
@@ -2440,10 +2465,9 @@ it.layer(
                   packageName: null,
                 }),
               ),
-            getSnapshot: Effect.succeed(provider),
+            ...snapshotState(provider, Effect.succeed(provider)),
             startRefresh: () => Effect.succeed(provider),
             cancelRefresh: () => Effect.void,
-            refresh: Effect.succeed(provider),
 
             streamChanges: Stream.empty,
             applyUsageLimits: () => Effect.void,
@@ -2722,8 +2746,8 @@ it.layer(
                   packageName: null,
                 }),
               ),
-            getSnapshot: Effect.succeed(unhealthyProvider),
-            refresh: Effect.succeed(unhealthyProvider),
+            ...snapshotState(unhealthyProvider, Effect.succeed(unhealthyProvider)),
+
             startRefresh: () => Effect.succeed(unhealthyProvider),
             cancelRefresh: () => Effect.void,
             streamChanges: Stream.empty,
@@ -2895,13 +2919,13 @@ it.layer(
                     packageName: null,
                   }),
                 ),
-              getSnapshot: Effect.succeed(codexProvider),
+              ...snapshotState(
+                codexProvider,
+                Ref.update(codexRefreshCalls, (count) => count + 1).pipe(Effect.as(codexProvider)),
+              ),
               startRefresh: () =>
                 Ref.update(codexRefreshCalls, (count) => count + 1).pipe(Effect.as(codexProvider)),
               cancelRefresh: () => Effect.void,
-              refresh: Ref.update(codexRefreshCalls, (count) => count + 1).pipe(
-                Effect.as(codexProvider),
-              ),
 
               streamChanges: Stream.empty,
               applyUsageLimits: () => Effect.void,
@@ -2926,15 +2950,17 @@ it.layer(
                     packageName: null,
                   }),
                 ),
-              getSnapshot: Effect.succeed(failedOpenCodeProvider),
+              ...snapshotState(
+                failedOpenCodeProvider,
+                Ref.update(openCodeRefreshCalls, (count) => count + 1).pipe(
+                  Effect.andThen(Ref.get(catalogSnapshot)),
+                ),
+              ),
               startRefresh: () =>
                 Ref.update(openCodeRefreshCalls, (count) => count + 1).pipe(
                   Effect.andThen(Ref.get(catalogSnapshot)),
                 ),
               cancelRefresh: () => Effect.void,
-              refresh: Ref.update(openCodeRefreshCalls, (count) => count + 1).pipe(
-                Effect.andThen(Ref.get(catalogSnapshot)),
-              ),
 
               streamChanges: Stream.empty,
               applyUsageLimits: () => Effect.void,
@@ -3042,7 +3068,15 @@ it.layer(
                     packageName: null,
                   }),
                 ),
-              getSnapshot: Effect.succeed(provider),
+              ...snapshotState(
+                provider,
+                Effect.gen(function* () {
+                  yield* Ref.update(refreshCalls, (count) => count + 1);
+                  yield* Deferred.succeed(probeStarted, undefined);
+                  yield* Deferred.await(releaseProbe);
+                  return provider;
+                }),
+              ),
               startRefresh: () =>
                 Effect.gen(function* () {
                   yield* Ref.update(refreshCalls, (count) => count + 1);
@@ -3051,12 +3085,6 @@ it.layer(
                   return provider;
                 }),
               cancelRefresh: () => Effect.void,
-              refresh: Effect.gen(function* () {
-                yield* Ref.update(refreshCalls, (count) => count + 1);
-                yield* Deferred.succeed(probeStarted, undefined);
-                yield* Deferred.await(releaseProbe);
-                return provider;
-              }),
 
               streamChanges: Stream.empty,
               applyUsageLimits: () => Effect.void,
@@ -3164,12 +3192,14 @@ it.layer(
                       packageName: null,
                     }),
                   ),
-                getSnapshot: Effect.succeed(snapshot),
-                refresh: Effect.as(refresh, snapshot),
+                ...snapshotState(snapshot, Effect.as(refresh, snapshot)),
+
+                startRefresh: () => Effect.as(refresh, snapshot),
+                cancelRefresh: () => Effect.void,
                 streamChanges: Stream.empty,
                 applyUsageLimits: () => Effect.void,
               },
-              orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
+              orchestrationAdapter: capabilitiesAdapter(),
               textGeneration: {} as ProviderInstance["textGeneration"],
             }) satisfies ProviderInstance;
           const retiredInstance = makeInstance(
@@ -3185,6 +3215,7 @@ it.layer(
           const instanceRegistryLayer = Layer.succeed(
             ProviderInstanceRegistry.ProviderInstanceRegistry,
             {
+              beforeInstanceClose: () => Effect.void,
               getInstance: (requestedId) =>
                 Ref.get(instances).pipe(
                   Effect.map((current) =>
@@ -3314,15 +3345,24 @@ it.layer(
               yield* Deferred.await(releaseRefresh);
               return pendingProvider;
             }),
+            startRefresh: () =>
+              Effect.gen(function* () {
+                yield* publishSnapshot(pendingProvider);
+                yield* publishSnapshot(enrichedProvider);
+                yield* Deferred.await(releaseRefresh);
+                return pendingProvider;
+              }),
+            cancelRefresh: () => Effect.void,
             streamChanges: Stream.fromPubSub(changes),
             applyUsageLimits: () => Effect.void,
           },
-          orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
+          orchestrationAdapter: capabilitiesAdapter(),
           textGeneration: {} as ProviderInstance["textGeneration"],
         } satisfies ProviderInstance;
         const instanceRegistryLayer = Layer.succeed(
           ProviderInstanceRegistry.ProviderInstanceRegistry,
           {
+            beforeInstanceClose: () => Effect.void,
             getInstance: (requestedId) =>
               Effect.succeed(requestedId === instanceId ? instance : undefined),
             listInstances: Effect.succeed([instance]),
@@ -3435,10 +3475,9 @@ it.layer(
                   packageName: null,
                 }),
               ),
-            getSnapshot: Effect.succeed(initialProvider),
+            ...snapshotState(initialProvider, Effect.succeed(refreshedProvider)),
             startRefresh: () => Effect.succeed(refreshedProvider),
             cancelRefresh: () => Effect.void,
-            refresh: Effect.succeed(refreshedProvider),
 
             streamChanges: Stream.fromPubSub(changes),
             applyUsageLimits: () => Effect.void,
@@ -3547,17 +3586,20 @@ it.layer(
                   packageName: null,
                 }),
               ),
-            getSnapshot: Effect.succeed(initialProvider),
-            refresh: Effect.succeed(initialProvider),
+            ...snapshotState(initialProvider, Effect.succeed(initialProvider)),
+
+            startRefresh: () => Effect.succeed(initialProvider),
+            cancelRefresh: () => Effect.void,
             streamChanges: Stream.fromPubSub(changes),
             applyUsageLimits: () => Effect.void,
           },
-          orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
+          orchestrationAdapter: capabilitiesAdapter(),
           textGeneration: {} as ProviderInstance["textGeneration"],
         } satisfies ProviderInstance;
         const layerInstanceRegistry = Layer.succeed(
           ProviderInstanceRegistry.ProviderInstanceRegistry,
           {
+            beforeInstanceClose: () => Effect.void,
             getInstance: (instanceId) =>
               Effect.succeed(instanceId === claudeInstanceId ? instance : undefined),
             listInstances: Effect.succeed([instance]),
@@ -3736,10 +3778,9 @@ it.layer(
                     packageName: null,
                   }),
                 ),
-              getSnapshot: Effect.succeed(initialProvider),
+              ...snapshotState(initialProvider, Effect.succeed(authoritativeProvider)),
               startRefresh: () => Effect.succeed(authoritativeProvider),
               cancelRefresh: () => Effect.void,
-              refresh: Effect.succeed(authoritativeProvider),
 
               streamChanges: Stream.fromPubSub(changes),
               applyUsageLimits: () => Effect.void,
@@ -3851,10 +3892,9 @@ it.layer(
                   packageName: null,
                 }),
               ),
-            getSnapshot: Effect.succeed(cachedProvider),
+            ...snapshotState(cachedProvider, Effect.die(new Error("simulated refresh failure"))),
             startRefresh: () => Effect.die(new Error("simulated refresh failure")),
             cancelRefresh: () => Effect.void,
-            refresh: Effect.die(new Error("simulated refresh failure")),
 
             streamChanges: Stream.empty,
             applyUsageLimits: () => Effect.void,
@@ -3964,10 +4004,9 @@ it.layer(
                   packageName: null,
                 }),
               ),
-            getSnapshot: Effect.succeed(provider),
+            ...snapshotState(provider, Effect.succeed(provider)),
             startRefresh: () => Effect.succeed(provider),
             cancelRefresh: () => Effect.void,
-            refresh: Effect.succeed(provider),
 
             streamChanges: Stream.empty,
             applyUsageLimits: () => Effect.void,
@@ -4587,6 +4626,7 @@ it.layer(
               "cursor",
               "fx",
               "grok",
+              "kiro",
               "muse",
               "opencode",
               "pi",

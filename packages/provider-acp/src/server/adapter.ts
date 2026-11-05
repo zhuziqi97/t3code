@@ -385,11 +385,7 @@ export interface AcpAdapterV2Flavor {
     readonly runtime: AcpSessionRuntime.AcpSessionRuntime["Service"];
     readonly startResult: AcpSessionRuntime.AcpSessionRuntimeStartResult;
     readonly modelSelection: ModelSelection;
-  }) => Effect.Effect<
-    string | undefined,
-    EffectAcpErrors.AcpError,
-    ChildProcessSpawner.ChildProcessSpawner | SecureRandom.SecureRandom | Scope.Scope
-  >;
+  }) => Effect.Effect<string | undefined, EffectAcpErrors.AcpError>;
   /**
    * Model-selection option ids `applyModelSelection` sets itself under a
    * native id, which the generic option loop then skips (Kiro's
@@ -7210,9 +7206,16 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
           ) {
             yield* Ref.set(activeSelection, null);
             if (modelSelection.model === null && resetToDefault && flavor.nativeDefaultModel) {
-              const model = yield* flavor.nativeDefaultModel(
-                runtimePolicy.cwd ?? input.runtimePolicy.cwd ?? process.cwd(),
-              );
+              const model = yield* flavor
+                .nativeDefaultModel(runtimePolicy.cwd ?? input.runtimePolicy.cwd ?? process.cwd())
+                .pipe(
+                  Effect.provideService(
+                    ChildProcessSpawner.ChildProcessSpawner,
+                    childProcessSpawner,
+                  ),
+                  Effect.provideService(SecureRandom.SecureRandom, random),
+                  Scope.provide(sessionScope),
+                );
               if (!model)
                 return yield* EffectAcpErrors.AcpRequestError.invalidParams(
                   "The agent did not report its native default model.",

@@ -1,3 +1,4 @@
+import * as HttpMethod from "effect/http/HttpMethod";
 import { ProjectId, type ConveneIntegrationError, type ThreadId } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -309,7 +310,9 @@ const make = Effect.gen(function* () {
         request.headers[name] === undefined ? [] : [[name, request.headers[name]]],
       ),
     );
-    let outgoing = HttpClientRequest.make(request.method)(credential.mcp_url).pipe(
+    let outgoing = HttpClientRequest.make(request.method as HttpMethod.HttpMethod)(
+      credential.mcp_url,
+    ).pipe(
       HttpClientRequest.setHeaders(forwardedHeaders),
       HttpClientRequest.setHeader("Authorization", `Bearer ${credential.access_token}`),
     );

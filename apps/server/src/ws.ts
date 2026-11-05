@@ -1,9 +1,10 @@
+import type * as Digest from "effect/crypto/Digest";
+import { invalidateSettingsSecrets } from "./sourceControl/sourceControlHostSecrets.ts";
 import * as ComposerPredictions from "./provider/ComposerPredictions.ts";
 import * as ProjectSetupScriptRunner from "./project/ProjectSetupScriptRunner.ts";
 import * as ThreadWorkspaceRecovery from "./orchestration-v2/ThreadWorkspaceRecovery.ts";
 import type * as Rpc from "effect/rpc/Rpc";
 import { OrchestrationDispatchCommandError } from "@t3tools/contracts";
-import * as Context from "effect/Context";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
 import * as PeerLinkRequests from "./peer/PeerLinkRequests.ts";
@@ -3406,6 +3407,7 @@ const makeWsRpcLayer = (
       >;
       const {
         [ORCHESTRATION_V2_WS_METHODS.forceStopThread]: forceStopThread,
+        [ORCHESTRATION_V2_WS_METHODS.getNativeChildWork]: getNativeChildWork,
         [ORCHESTRATION_V2_WS_METHODS.getOlderSettledThreads]: getOlderSettledThreads,
         [ORCHESTRATION_V2_WS_METHODS.getThreadFamily]: getThreadFamily,
         [ORCHESTRATION_V2_WS_METHODS.getWorktreeThreadIds]: getWorktreeThreadIds,
@@ -3428,6 +3430,7 @@ const makeWsRpcLayer = (
       } = handlers;
       const orchestration = {
         [ORCHESTRATION_V2_WS_METHODS.forceStopThread]: forceStopThread,
+        [ORCHESTRATION_V2_WS_METHODS.getNativeChildWork]: getNativeChildWork,
         [ORCHESTRATION_V2_WS_METHODS.getOlderSettledThreads]: getOlderSettledThreads,
         [ORCHESTRATION_V2_WS_METHODS.getThreadFamily]: getThreadFamily,
         [ORCHESTRATION_V2_WS_METHODS.getWorktreeThreadIds]: getWorktreeThreadIds,
@@ -3630,6 +3633,8 @@ export const layer: Layer.Layer<
   | PullRequestReviewGuideService.PullRequestReviewGuideService
   | HttpRouter.Request<"Requires", GuestShareService.GuestShareService>
   | HttpRouter.Request<"Requires", DocumentText.DocumentText>
+  | HttpRouter.Request<"Requires", Digest.Digest>
+  | HttpRouter.Request<"Requires", NativeChildWorkQuery.NativeChildWorkQuery>
   | HttpRouter.Request<"Requires", ComposerPredictions.ComposerPredictions>
   | HttpRouter.Request<"Requires", SessionStore.SessionStore>
   | HttpRouter.Request<"Requires", EnvironmentAuth.EnvironmentAuth>

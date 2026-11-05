@@ -174,9 +174,6 @@ export function resolveEarlyLinuxElectronOptions(
   const isDevelopment = isDevelopmentEnvironment(input.env);
   return {
     isDevelopment,
-    linuxWmClass: isDevelopment
-      ? CONVENE_DESKTOP_IDENTITY.developmentUserDataName
-      : CONVENE_DESKTOP_IDENTITY.executableName,
     linuxDesktopEntryName: resolveLinuxDesktopEntryName(isDevelopment),
     passwordStore: resolveLinuxPasswordStoreSwitch({
       preference,

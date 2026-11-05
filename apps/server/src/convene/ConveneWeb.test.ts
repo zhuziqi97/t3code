@@ -1,3 +1,4 @@
+import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { assert, it } from "@effect/vitest";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
@@ -31,6 +32,7 @@ it.live(
       const authLayer = EnvironmentAuth.layer.pipe(
         Layer.provideMerge(SqlitePersistence.layerMemory),
         Layer.provide(ServerSecretStore.layer),
+        Layer.provide(ManagedPolicy.layerTest()),
         Layer.provide(ServerEnvironment.layerIdentity),
         Layer.provide(Layer.succeedContext(configContext)),
       );

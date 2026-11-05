@@ -232,7 +232,7 @@ it.effect("sets the default locale in the isolated native argv file before start
       yield* Deferred.succeed(fixture.install, "/managed/bin/code-server");
       yield* awaitPhase(ide, "ready");
       const command = fixture.commands[0]!;
-      const dataDir = command.args[command.args.indexOf("--user-data-dir") + 1]!;
+      const dataDir = String(command.args[command.args.indexOf("--user-data-dir") + 1]!);
       assert.equal(
         JSON.parse(yield* fs.readFileString(path.join(dataDir, "User", "argv.json"))).locale,
         "zh-cn",

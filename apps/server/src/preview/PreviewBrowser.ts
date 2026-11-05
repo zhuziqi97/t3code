@@ -1,3 +1,4 @@
+const megabytes = (bytes: number) => (bytes / 1_048_576).toFixed(1);
 import {
   PreviewBrowserInstallError,
   previewBrowserRelease,

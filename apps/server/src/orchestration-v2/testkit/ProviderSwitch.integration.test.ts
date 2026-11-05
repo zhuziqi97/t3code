@@ -1909,7 +1909,7 @@ describe("orchestration v2 provider switching", () => {
             model: outcome === "native-default" ? null : GROK_MODEL_SELECTION.model,
           };
           const layerDatabase = SqlitePersistence.layerMemory;
-          const layerMaintenance = ProjectionMaintenance.layer.pipe(
+          const layerMaintenance = ProjectionReplay.layer.pipe(
             Layer.provide(Layer.mergeAll(EventStore.layer, ProjectionStore.layer)),
             Layer.provide(layerDatabase),
           );
@@ -1949,7 +1949,7 @@ describe("orchestration v2 provider switching", () => {
             const orchestrator = yield* Orchestrator.OrchestratorV2;
             const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
             const eventSink = yield* EventSink.EventSinkV2;
-            const maintenance = yield* ProjectionMaintenance.ProjectionMaintenanceV2;
+            const maintenance = yield* ProjectionReplay.ProjectionReplay;
             const dispatch = (
               key: string,
               modelSelection: ModelSelection,

@@ -1,3 +1,5 @@
+import * as DesktopTray from "../window/DesktopTray.ts";
+import * as ElectronPowerMonitor from "../electron/ElectronPowerMonitor.ts";
 import { assert, it } from "@effect/vitest";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as Deferred from "effect/Deferred";
@@ -85,7 +87,15 @@ it.effect(
         });
       const runApp = DesktopApp.program
         .pipe(
-          Effect.provide(NodeCrypto.layer),
+          Effect.provide(
+            Layer.mergeAll(
+              NodeCrypto.layer,
+              Layer.mock(DesktopTray.DesktopTray)({ configure: () => Effect.void }),
+              Layer.mock(ElectronPowerMonitor.ElectronPowerMonitor)({
+                onSimpleEvent: () => Effect.void,
+              }),
+            ),
+          ),
           Effect.provideService(DesktopAppIdentity.DesktopAppIdentity, {
             resolveUserDataPath: Effect.succeed("/isolated/userdata"),
             configure: record("identity"),
@@ -135,6 +145,7 @@ it.effect(
           } as PreviewPasskeys.PreviewPasskeys["Service"]),
           Effect.provideService(DesktopApplicationMenu.DesktopApplicationMenu, {
             configure: Effect.void,
+            syncLanguage: () => Effect.void,
           }),
           Effect.provideService(DesktopUpdates.DesktopUpdates, {
             configure: Effect.void,

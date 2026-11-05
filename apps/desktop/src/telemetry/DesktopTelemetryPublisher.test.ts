@@ -5,7 +5,6 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Context from "effect/Context";
-import * as Option from "effect/Option";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -13,7 +12,6 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
-import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 
 import type * as Electron from "electron";
@@ -79,7 +77,16 @@ describe("DesktopTelemetryPublisher", () => {
             onSpeedLimitChange: () => Effect.void,
           });
           const layer = DesktopTelemetryPublisher.layer.pipe(
-            Layer.provide(Layer.mergeAll(layerElectronApp([]), layerPower, layerHistory)),
+            Layer.provide(
+              Layer.mergeAll(
+                layerElectronApp([]),
+                layerPower,
+                layerHistory,
+                Layer.mock(DesktopShellEnvironment.DesktopShellEnvironment)({
+                  updates: Stream.empty,
+                }),
+              ),
+            ),
           );
           yield* Effect.gen(function* () {
             const publisher = yield* DesktopTelemetryPublisher.DesktopTelemetryPublisher;

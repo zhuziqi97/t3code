@@ -1436,7 +1436,7 @@ const CODEX_T3_DIRECT_MCP_SERVER = "t3-code-direct";
 const CODEX_DIRECT_ONLY_T3_TOOL = "t3_thread_wait";
 
 export function codexThreadRuntimeParams(input: {
-  readonly threadId: ThreadId | null;
+  readonly threadId?: ThreadId | null;
   readonly mcpSession: McpProviderSession.McpProviderSessionConfig | undefined;
   readonly modelSelection?: { readonly model: string | null };
   readonly runtimePolicy?: ProviderAdapter.ProviderAdapterV2RuntimePolicy;
@@ -1460,14 +1460,14 @@ export function codexThreadRuntimeParams(input: {
     config: {
       ...CODEX_THREAD_CONFIG,
       // One app-server serves many threads, so the id goes in per-thread shell config, not its env.
-      ...(input.threadId === null
+      ...(input.threadId == null
         ? {}
         : { [`shell_environment_policy.set.${PortScanner.AGENT_THREAD_ENV}`]: input.threadId }),
       ...(t3Server === undefined
         ? {}
         : {
             ...Object.fromEntries(
-              Object.entries(mcpSession.additionalServers ?? {}).map(([name, server]) => [
+              Object.entries(mcpSession?.additionalServers ?? {}).map(([name, server]) => [
                 `mcp_servers.${name}`,
                 {
                   url: server.endpoint,
@@ -6375,7 +6375,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                   reportedTurnModel(
                     input.context.providerThread.nativeThreadRef?.nativeId ?? "",
                     input.nativeTurnId,
-                  ),
+                  ) ?? undefined,
                 ),
               };
               if (!holdsForGoal) {
@@ -8374,6 +8374,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
             function* (threadInput) {
               const threadId = yield* getNativeThreadId(threadInput.sourceProviderThread);
               const boundary = yield* resolveCodexForkBoundary(threadInput);
+              const mcpSession = yield* mcpSessions.read(threadInput.targetThreadId);
               const fork = client.request("thread/fork", {
                 threadId,
                 ...(boundary.lastTurnId === undefined ? {} : { lastTurnId: boundary.lastTurnId }),

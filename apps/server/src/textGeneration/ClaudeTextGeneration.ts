@@ -126,9 +126,7 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
       toJsonSchemaObject(outputSchemaJson),
       "Failed to encode structured output schema.",
     );
-    const runClaudeCommand = Effect.fn("runClaudeJson.runClaudeCommand")(function* (
-      noSessionPersistence: boolean,
-    ) {
+    const runClaudeCommand = Effect.fn("runClaudeJson.runClaudeCommand")(function* () {
       const workingDirectory =
         operation === "generateThreadTitle"
           ? yield* fileSystem

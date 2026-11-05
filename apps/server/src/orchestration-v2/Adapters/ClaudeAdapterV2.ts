@@ -4657,7 +4657,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
   const reportedContextWindows = new Map<string, number>();
   const claudeContextWindow = (modelSelection: ModelSelection): number | null =>
     resolveClaudeCatalogContextWindowTokens(BUNDLED_CLAUDE_MODEL_CATALOG, modelSelection) ??
-    reportedContextWindows.get(compileClaudeModelSelection(modelSelection).apiModelId) ??
+    reportedContextWindows.get(compileClaudeModelSelection(modelSelection).apiModelId ?? "") ??
     null;
   const continuationRequests = adapterOptions.continuationRequests ?? {
     offer: () => Effect.void,
