@@ -1027,6 +1027,7 @@ it("applies device shell checks to decoded cases and stops raw UI early", () => 
     stopReason: "end_turn",
   };
   assert.deepEqual(failed(denied.expect, blocked), []);
+  assert.deepEqual(failed(denied.expect, { ...blocked, calls: [] }), []);
   assert.isNotEmpty(
     failed(denied.expect, {
       ...blocked,
