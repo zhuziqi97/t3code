@@ -99,7 +99,7 @@ const environment = {
   environmentId,
   label: "Test environment",
   connection: { phase: "connected" },
-  serverConfig: { environment: { platform: "linux" } },
+  serverConfig: { environment: { platform: "linux", capabilities: { oneTimeSchedules: true } } },
 };
 
 function setup(mode: "missing" | "disabled") {

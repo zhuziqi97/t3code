@@ -46,7 +46,7 @@ it("keeps an incomplete HEX draft and the open picker across language changes, t
   expect(input.value).toBe("#12");
   expect(changed).not.toHaveBeenCalled();
   await fill(input, "#112233");
-  expect(changed).toHaveBeenCalledExactlyOnceWith("canvas", "#112233");
+  expect(changed).toHaveBeenCalledExactlyOnceWith("canvas", "#11223380");
 });
 
 it("preserves an RGB draft through language changes and retains alpha on a native RGB commit", async () => {

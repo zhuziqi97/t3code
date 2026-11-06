@@ -267,14 +267,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "Fallback model",
     to: "/settings/threads",
     scope: "environment-defaults",
-    searchTerms: ["备用模型 fallback model provider usage limit new threads"],
-  },
-  {
-    id: "fallback-model",
-    title: "Fallback model",
-    to: "/settings/threads",
-    scope: "environment-defaults",
-    searchTerms: ["fallback agent provider out of usage new threads"],
+    searchTerms: ["备用模型 fallback agent model provider out of usage limit new threads"],
     environmentOnly: true,
   },
   {

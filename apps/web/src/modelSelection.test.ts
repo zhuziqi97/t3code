@@ -32,6 +32,7 @@ function provider(input: {
   provider?: ProviderDriverKind;
   instanceId: string;
   models?: ReadonlyArray<string>;
+  defaultModel?: string;
   supportsTextGeneration?: boolean;
 }): ServerProvider {
   const driver =
@@ -54,6 +55,7 @@ function provider(input: {
     models: (input.models ?? []).map((slug) => ({
       slug,
       name: slug,
+      isDefault: slug === input.defaultModel,
       isCustom: false,
       capabilities: {},
     })),
@@ -84,7 +86,9 @@ describe("scoped default model selections", () => {
     const codex = {
       projectId: null,
       settings: DEFAULT_UNIFIED_SETTINGS,
-      providers: [provider({ instanceId: "codex", models: ["gpt-6-astra"] })],
+      providers: [
+        provider({ instanceId: "codex", models: ["gpt-6-astra"], defaultModel: "gpt-6-astra" }),
+      ],
     };
     const claude = {
       projectId: null,
@@ -94,6 +98,7 @@ describe("scoped default model selections", () => {
           instanceId: "claudeAgent",
           provider: ProviderDriverKind.make("claudeAgent"),
           models: ["claude-sonnet-4-6"],
+          defaultModel: "claude-sonnet-4-6",
         }),
       ],
     };
@@ -109,7 +114,12 @@ describe("scoped default model selections", () => {
     expect(
       defaultModelSelectionsAreMixed(DEFAULT_CLIENT_SETTINGS, [
         codex,
-        { ...codex, providers: [provider({ instanceId: "codex", models: ["gpt-6-sol"] })] },
+        {
+          ...codex,
+          providers: [
+            provider({ instanceId: "codex", models: ["gpt-6-sol"], defaultModel: "gpt-6-sol" }),
+          ],
+        },
       ]),
     ).toBe(true);
 
@@ -151,14 +161,20 @@ describe("scoped default model selections", () => {
           },
         },
       },
-      providers: [provider({ instanceId: "codex", models: ["gpt-6-astra", "gpt-6-sol"] })],
+      providers: [
+        provider({
+          instanceId: "codex",
+          models: ["gpt-6-astra", "gpt-6-sol"],
+          defaultModel: "gpt-6-astra",
+        }),
+      ],
     };
     const inherited = { ...configured, settings: DEFAULT_SERVER_SETTINGS };
     expect(defaultModelSelectionsAreMixed(DEFAULT_CLIENT_SETTINGS, [configured, inherited])).toBe(
-      true,
+      false,
     );
     expect(defaultModelSelectionsAreMixed(DEFAULT_CLIENT_SETTINGS, [inherited, configured])).toBe(
-      true,
+      false,
     );
     const clientSettings = {
       ...DEFAULT_CLIENT_SETTINGS,
@@ -171,7 +187,7 @@ describe("scoped default model selections", () => {
         { ...inherited, settings: { ...DEFAULT_SERVER_SETTINGS, providerModelPreferences: {} } },
         inherited,
       ]),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("keeps automatic, explicit, and different saved options distinct", () => {

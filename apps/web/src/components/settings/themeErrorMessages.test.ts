@@ -7,7 +7,7 @@ import {
   parseThemeFile,
   THEME_FILE_VERSION,
 } from "../../themePalette";
-import { parseVsCodeThemeFile } from "../../vscodeThemeImport";
+import { parseThemeImport, parseVsCodeThemeFile } from "../../vscodeThemeImport";
 import { describeOversizedThemeFile } from "./ThemeImportDialog";
 import { translateThemeError } from "./themeErrorMessages";
 
@@ -34,6 +34,12 @@ afterEach(() => {
 });
 
 it("translates actual parser failures while retaining native JSON values and color roles", () => {
+  expect(
+    translateThemeError(
+      failure(() => parseThemeImport("{broken JSON 原文")),
+      translate,
+    ),
+  ).toBe("主题文件 不是有效的 JSON。");
   expect(
     translateThemeError(
       failure(() => parseThemeFile({ ...input, version: -1 })),

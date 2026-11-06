@@ -151,7 +151,9 @@ export function translateThemeError(message: string, t: TFunction): string {
       [parameter]:
         parameter === "source" && value === "Extension manifest"
           ? t("appearance.theme.error.manifestLabel")
-          : value,
+          : parameter === "source" && value === "That theme file"
+            ? t("appearance.theme.file")
+            : value,
     });
   }
   const oversized =

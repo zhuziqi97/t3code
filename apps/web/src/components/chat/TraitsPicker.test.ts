@@ -80,7 +80,6 @@ describe("buildTraitsTriggerDisplay", () => {
     expect(display([EFFORT, fastModeDescriptor(false), CONTEXT_WINDOW])).toEqual({
       label: "High · 1M",
       speedLabel: null,
-      otherLabels: ["1M"],
     });
   });
 
@@ -88,12 +87,10 @@ describe("buildTraitsTriggerDisplay", () => {
     expect(display([EFFORT, fastModeDescriptor(true), CONTEXT_WINDOW])).toEqual({
       label: "High Fast · 1M",
       speedLabel: "Fast",
-      otherLabels: ["1M"],
     });
     expect(display([EFFORT, CONTEXT_WINDOW, fastModeDescriptor(true)])).toEqual({
       label: "High Fast · 1M",
       speedLabel: "Fast",
-      otherLabels: ["1M"],
     });
   });
 
@@ -119,7 +116,6 @@ describe("buildTraitsTriggerDisplay", () => {
         ).toEqual({
           label: "Balanced · 1M · High Fast",
           speedLabel: "Fast",
-          otherLabels: ["Balanced", "1M"],
         });
       }
       expect(
@@ -132,7 +128,7 @@ describe("buildTraitsTriggerDisplay", () => {
           },
           t,
         ),
-      ).toEqual({ label: "1M · High Ultrafast", speedLabel: "Ultrafast", otherLabels: ["1M"] });
+      ).toEqual({ label: "1M · High Ultrafast", speedLabel: "Ultrafast" });
     },
   );
 
@@ -155,7 +151,6 @@ describe("buildTraitsTriggerDisplay", () => {
     ).toEqual({
       label: "1M · High Fast · Thinking On",
       speedLabel: "Fast",
-      otherLabels: ["1M", "Thinking On"],
     });
   });
 
@@ -170,17 +165,14 @@ describe("buildTraitsTriggerDisplay", () => {
     expect(display([thinking, fastModeDescriptor(true)])).toEqual({
       label: `${label} · Fast`,
       speedLabel: "Fast",
-      otherLabels: [label],
     });
     expect(display([thinking, { ...EFFORT, id: "reasoning" }, fastModeDescriptor(true)])).toEqual({
       label: `${label} · High Fast`,
       speedLabel: "Fast",
-      otherLabels: [label],
     });
     expect(display([thinking, fastModeDescriptor(false)])).toEqual({
       label: label,
       speedLabel: null,
-      otherLabels: [label],
     });
   });
 
@@ -188,7 +180,6 @@ describe("buildTraitsTriggerDisplay", () => {
     expect(display([CONTEXT_WINDOW, fastModeDescriptor(true)])).toEqual({
       label: "1M · Fast",
       speedLabel: "Fast",
-      otherLabels: ["1M"],
     });
   });
 
@@ -209,7 +200,7 @@ describe("buildTraitsTriggerDisplay", () => {
             },
             t,
           ),
-        ).toEqual({ label: `${label} Fast`, speedLabel: "Fast", otherLabels: [] });
+        ).toEqual({ label: `${label} Fast`, speedLabel: "Fast" });
       }
     },
   );
@@ -218,12 +209,10 @@ describe("buildTraitsTriggerDisplay", () => {
     expect(display([EFFORT, serviceTierDescriptor("default")])).toEqual({
       label: "High",
       speedLabel: null,
-      otherLabels: [],
     });
     expect(display([EFFORT, serviceTierDescriptor("priority")])).toEqual({
       label: "High Fast",
       speedLabel: "Fast",
-      otherLabels: [],
     });
   });
 
@@ -231,7 +220,6 @@ describe("buildTraitsTriggerDisplay", () => {
     expect(display([EFFORT, serviceTierDescriptor("ultrafast")])).toEqual({
       label: "High Ultrafast",
       speedLabel: "Ultrafast",
-      otherLabels: [],
     });
   });
 
@@ -242,14 +230,13 @@ describe("buildTraitsTriggerDisplay", () => {
         EFFORT,
         { ...descriptor, options: descriptor.options.filter(({ id }) => id !== "priority") },
       ]),
-    ).toEqual({ label: "High Ultrafast", speedLabel: "Ultrafast", otherLabels: [] });
+    ).toEqual({ label: "High Ultrafast", speedLabel: "Ultrafast" });
   });
 
   it("keeps other Codex service tiers in the label", () => {
     expect(display([EFFORT, serviceTierDescriptor("flex")])).toEqual({
       label: "High · Flex",
       speedLabel: null,
-      otherLabels: ["Flex"],
     });
   });
 
@@ -262,12 +249,10 @@ describe("buildTraitsTriggerDisplay", () => {
     expect(display([EFFORT, nonSpeedDescriptor])).toEqual({
       label: "High · Standard",
       speedLabel: null,
-      otherLabels: ["Standard"],
     });
     expect(display([nonSpeedDescriptor])).toEqual({
       label: "Standard",
       speedLabel: null,
-      otherLabels: ["Standard"],
     });
   });
 
@@ -275,12 +260,10 @@ describe("buildTraitsTriggerDisplay", () => {
     expect(display([serviceTierDescriptor("default")])).toEqual({
       label: "Standard",
       speedLabel: null,
-      otherLabels: [],
     });
     expect(display([serviceTierDescriptor("priority")])).toEqual({
       label: "Fast",
       speedLabel: "Fast",
-      otherLabels: [],
     });
   });
 
@@ -288,7 +271,6 @@ describe("buildTraitsTriggerDisplay", () => {
     expect(display([serviceTierDescriptor("ultrafast")])).toEqual({
       label: "Ultrafast",
       speedLabel: "Ultrafast",
-      otherLabels: [],
     });
   });
 
@@ -302,7 +284,6 @@ describe("buildTraitsTriggerDisplay", () => {
     expect(display([EFFORT, thinking])).toEqual({
       label: "High · Thinking On",
       speedLabel: null,
-      otherLabels: ["Thinking On"],
     });
   });
 
@@ -310,12 +291,10 @@ describe("buildTraitsTriggerDisplay", () => {
     expect(display([fastModeDescriptor(true)])).toEqual({
       label: "Fast",
       speedLabel: "Fast",
-      otherLabels: [],
     });
     expect(display([fastModeDescriptor(false)])).toEqual({
       label: "Normal",
       speedLabel: null,
-      otherLabels: [],
     });
   });
 
@@ -323,7 +302,6 @@ describe("buildTraitsTriggerDisplay", () => {
     expect(display([EFFORT, CONTEXT_WINDOW])).toEqual({
       label: "High · 1M",
       speedLabel: null,
-      otherLabels: ["1M"],
     });
   });
 
@@ -337,7 +315,7 @@ describe("buildTraitsTriggerDisplay", () => {
         { id: "high", label: "High" },
       ],
     };
-    expect(display([unresolved])).toEqual({ label: "", speedLabel: null, otherLabels: [] });
+    expect(display([unresolved])).toEqual({ label: "", speedLabel: null });
   });
 
   it("still renders prompt-controlled ultrathink with Fast", () => {
@@ -351,7 +329,7 @@ describe("buildTraitsTriggerDisplay", () => {
         },
         t,
       ),
-    ).toEqual({ label: "Ultrathink Fast", speedLabel: "Fast", otherLabels: [] });
+    ).toEqual({ label: "Ultrathink Fast", speedLabel: "Fast" });
   });
 });
 
@@ -474,10 +452,10 @@ it("localizes service tier and boolean trigger values while preserving classifie
       { ...base, descriptors: [descriptor, serviceTierDescriptor("priority")] },
       zh,
     ),
-  ).toEqual({ label: "Ultra 快速", speedLabel: "快速", otherLabels: [] });
+  ).toEqual({ label: "Ultra 快速", speedLabel: "快速" });
   expect(
     buildTraitsTriggerDisplay({ ...base, descriptors: [fastModeDescriptor(false)] }, zh),
-  ).toEqual({ label: "普通", speedLabel: null, otherLabels: [] });
+  ).toEqual({ label: "普通", speedLabel: null });
   expect(
     buildTraitsTriggerDisplay(
       {
@@ -494,7 +472,7 @@ it("localizes service tier and boolean trigger values while preserving classifie
       },
       zh,
     ),
-  ).toEqual({ label: "思考 开启", speedLabel: null, otherLabels: ["思考 开启"] });
+  ).toEqual({ label: "思考 开启", speedLabel: null });
   expect(descriptor.currentValue).toBe("ultra");
 });
 

@@ -26,6 +26,7 @@ const REASONING_DESCRIPTOR_IDS: ReadonlySet<string> = new Set([
 /** The model's reasoning control: a known effort id, or a select its agent marked as reasoning. */
 export function isReasoningControl(descriptor: ProviderOptionDescriptor): boolean {
   return (
+    isReasoningOption(descriptor) ||
     (descriptor.type === "select" && descriptor.role === "reasoning") ||
     REASONING_DESCRIPTOR_IDS.has(descriptor.id)
   );

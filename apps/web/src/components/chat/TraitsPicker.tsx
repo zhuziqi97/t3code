@@ -1,4 +1,3 @@
-import { isReasoningOption } from "@t3tools/shared/model";
 import { getSelectedTraits, getTraitsSectionVisibility } from "./TraitsPicker.logic";
 import {
   buildTraitsTriggerDisplay,
@@ -26,6 +25,7 @@ import {
 } from "@t3tools/contracts";
 import {
   buildProviderOptionSelectionsFromDescriptors,
+  getProviderOptionCurrentValue,
   isClaudeUltrathinkPrompt,
 } from "@t3tools/shared/model";
 import { memo } from "react";
@@ -108,6 +108,18 @@ export function getReasoningTraitStep(input: {
   );
   if (selected.modelIsUnavailable || selected.ultrathinkInBodyText) return null;
   const descriptor = selected.selectDescriptors.find(isReasoningSelect);
+  if (!descriptor && selected.thinkingDescriptor) {
+    const thinking = selected.thinkingDescriptor;
+    const current = getProviderOptionCurrentValue(
+      thinking,
+      { instanceId: input.instanceId, model: input.model, options: input.modelOptions ?? [] },
+      input.reportedModelSelection,
+    );
+    const modelOptions = buildProviderOptionSelectionsFromDescriptors(
+      replaceDescriptorCurrentValue(selected.descriptors, thinking.id, current !== true),
+    );
+    return modelOptions ? { prompt: input.prompt, modelOptions } : null;
+  }
   const choices = descriptor ? selectableProviderOptionChoices(descriptor) : [];
   if (!descriptor || choices.length < 2) return null;
   const isPrimary = descriptor.id === selected.primarySelectDescriptor?.id;

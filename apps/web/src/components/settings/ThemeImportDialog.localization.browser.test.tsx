@@ -115,7 +115,7 @@ it("explains malformed JSON in the current language and preserves the parser dia
   await using _lifecycle = await setupLifecycle();
 
   await render();
-  const json = "{broken JSON 原文";
+  const json = JSON.stringify(input).replace("{", "{ /* native JSON 原文 */");
   let diagnostic = "";
   try {
     JSON.parse(json);
@@ -216,7 +216,9 @@ it("localizes a batch syntax failure without repeating reads or reinstalling its
   const readValid = vi.fn(async () => JSON.stringify(input));
   Object.defineProperty(valid, "text", { value: readValid });
   const broken = new File([""], "Raw Broken.json");
-  const readBroken = vi.fn(async () => "{broken JSON 原文");
+  const readBroken = vi.fn(async () =>
+    JSON.stringify(input).replace("{", "{ /* native JSON 原文 */"),
+  );
   Object.defineProperty(broken, "text", { value: readBroken });
   await chooseFile(valid, broken);
   expect(document.body.textContent).toContain("Raw Broken.json: Theme JSON is invalid: ");

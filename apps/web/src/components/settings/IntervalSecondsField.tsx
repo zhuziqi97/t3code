@@ -7,6 +7,14 @@ import {
   NumberFieldInput,
 } from "../ui/number-field";
 import { normalizeIntervalSeconds } from "./SettingsPanels.logic";
+import { useTranslate } from "../../i18n";
+
+const INTERVAL_LABEL_KEYS: Readonly<Record<string, string>> = {
+  "Git fetch interval": "background.git",
+  "provider health interval": "background.providerHealth",
+  "active host power interval": "background.hostPower",
+  "idle host power interval": "background.idlePower",
+};
 
 export function IntervalSecondsField({
   label,
@@ -21,6 +29,8 @@ export function IntervalSecondsField({
   step: number;
   onCommit: (seconds: number, options: { onFailed: () => void }) => void;
 }) {
+  const t = useTranslate();
+  const labelKey = INTERVAL_LABEL_KEYS[label];
   const [field, setField] = useState({
     saved: value,
     draft: value as number | null,
@@ -66,11 +76,19 @@ export function IntervalSecondsField({
       }}
     >
       <NumberFieldGroup>
-        <NumberFieldDecrement aria-label={`Decrease ${label}`} />
-        <NumberFieldInput
-          aria-label={`${label.charAt(0).toUpperCase()}${label.slice(1)} in seconds`}
+        <NumberFieldDecrement
+          aria-label={labelKey ? t(`${labelKey}.decrease`) : `Decrease ${label}`}
         />
-        <NumberFieldIncrement aria-label={`Increase ${label}`} />
+        <NumberFieldInput
+          aria-label={
+            labelKey
+              ? t(`${labelKey}.interval`)
+              : `${label.charAt(0).toUpperCase()}${label.slice(1)} in seconds`
+          }
+        />
+        <NumberFieldIncrement
+          aria-label={labelKey ? t(`${labelKey}.increase`) : `Increase ${label}`}
+        />
       </NumberFieldGroup>
     </NumberField>
   );

@@ -3,12 +3,16 @@ import { act, render as renderTestUi, type Screen } from "../../../test/render";
 import { type ReactNode } from "react";
 
 import { expect, it, vi } from "vite-plus/test";
-import { EnvironmentId, UsageLimitSourceId } from "@t3tools/contracts";
+import { DEFAULT_UNIFIED_SETTINGS, EnvironmentId, UsageLimitSourceId } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
 
 const state = vi.hoisted(() => ({ update: vi.fn(), cursor: vi.fn(), refresh: vi.fn() }));
 vi.mock("../../hooks/useSettings", async (original) => ({
   ...(await original<typeof import("../../hooks/useSettings")>()),
+  useEnvironmentSettings: (
+    _environmentId: EnvironmentId,
+    selector?: (settings: typeof DEFAULT_UNIFIED_SETTINGS) => unknown,
+  ) => (selector ? selector(DEFAULT_UNIFIED_SETTINGS) : DEFAULT_UNIFIED_SETTINGS),
   useUpdateEnvironmentSettings: (environmentId: EnvironmentId) => (patch: unknown) =>
     state.update(environmentId, patch),
 }));
