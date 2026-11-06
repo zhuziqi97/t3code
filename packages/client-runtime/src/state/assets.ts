@@ -22,6 +22,7 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
+import { RpcClientError } from "effect/rpc";
 
 import * as EnvironmentRegistry from "../connection/registry.ts";
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
@@ -34,7 +35,7 @@ const ASSET_URL_STALE_TIME_MS = 5 * 60_000;
 const ASSET_URL_IDLE_TTL_MS = 60 * 60_000;
 export const ASSET_URL_MAX_IN_FLIGHT = 6;
 const isAssetRequestError = Schema.is(
-  Schema.Union([AssetAccessError, EnvironmentAuthorizationError]),
+  Schema.Union([AssetAccessError, EnvironmentAuthorizationError, RpcClientError.RpcClientError]),
 );
 
 export class InvalidAssetCollectionKeyError extends Schema.TaggedError<InvalidAssetCollectionKeyError>()(

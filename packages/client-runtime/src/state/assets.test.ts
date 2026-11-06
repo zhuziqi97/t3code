@@ -19,6 +19,8 @@ import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
+import { RpcClientError } from "effect/rpc";
+import * as Socket from "effect/socket/Socket";
 
 import * as EnvironmentRegistry from "../connection/registry.ts";
 import {
@@ -89,6 +91,13 @@ describe("createAssetEnvironmentAtoms", () => {
       localDefect: true,
     },
     {
+      name: "a transport failure with cleanup in the local retry",
+      path: "/tmp/clip.mp4",
+      localFails: true,
+      localDefect: true,
+      localTransportFailure: true,
+    },
+    {
       name: "a defect without a typed local failure",
       path: "/tmp/clip.mp4",
       localDefect: true,
@@ -142,7 +151,14 @@ describe("createAssetEnvironmentAtoms", () => {
             }
             if (environmentId === localId && scenario.localFails) {
               const localError = Effect.fail(
-                new AssetWorkspaceAssetNotFoundError({ resource, checkedPath: "/local/clip.mp4" }),
+                scenario.localTransportFailure
+                  ? new RpcClientError.RpcClientError({
+                      reason: new Socket.SocketReadError({ cause: "read failed" }),
+                    })
+                  : new AssetWorkspaceAssetNotFoundError({
+                      resource,
+                      checkedPath: "/local/clip.mp4",
+                    }),
               );
               return scenario.localDefect
                 ? localError.pipe(Effect.ensuring(Effect.die("cleanup failed")))
