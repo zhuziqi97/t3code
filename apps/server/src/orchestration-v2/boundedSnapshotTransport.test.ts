@@ -406,16 +406,33 @@ const seedQuestions = Effect.gen(function* () {
     ...failed,
     payload: { ...failed.payload, status: "failed", startedAt: null },
   });
+  const cancelled = runCreated(CHILD, RunId.make("run:question:cancelled"), at);
   const resumed = runCreated(CHILD, RunId.make("run:question:resumed"), at);
-  if (resumed.type !== "run.created") throw new Error("Expected run");
+  if (cancelled.type !== "run.created" || resumed.type !== "run.created")
+    throw new Error("Expected run");
   yield* projections.apply({
-    ...resumed,
-    payload: { ...resumed.payload, ordinal: 2, status: "running", completedAt: null },
+    ...cancelled,
+    payload: { ...cancelled.payload, ordinal: 2, status: "running", completedAt: null },
   });
   for (const [index, capability] of ["message", "live"].entries()) {
     const requestId = RuntimeRequestId.make(`request:question:${capability}`);
     const nodeId = NodeId.make(`node:question:${capability}`);
-    const item = itemUpdated(CHILD, resumed.payload.id, capability, index + 1, at);
+    if (capability === "live") {
+      yield* projections.apply({
+        id: EventId.make("event:question:cancelled"),
+        type: "run.updated",
+        threadId: CHILD,
+        runId: cancelled.payload.id,
+        occurredAt: at,
+        payload: { ...cancelled.payload, ordinal: 2, status: "cancelled" },
+      });
+      yield* projections.apply({
+        ...resumed,
+        payload: { ...resumed.payload, ordinal: 3, status: "running", completedAt: null },
+      });
+    }
+    const questionRunId = capability === "message" ? cancelled.payload.id : resumed.payload.id;
+    const item = itemUpdated(CHILD, questionRunId, capability, index + 1, at);
     if (item.type !== "turn-item.updated" || item.payload.type !== "command_execution") {
       throw new Error("Expected command item");
     }
@@ -438,7 +455,7 @@ const seedQuestions = Effect.gen(function* () {
       id: EventId.make(`event:question:${capability}`),
       type: "runtime-request.updated",
       threadId: CHILD,
-      runId: resumed.payload.id,
+      runId: questionRunId,
       nodeId,
       occurredAt: at,
       payload: {
@@ -520,12 +537,18 @@ function itemIds(projection: OrchestrationV2ThreadProjection): string[] {
 }
 
 it.layer(TestLayer)("compact bounded snapshot transport", (it) => {
-  it.effect("keeps pending question bodies outside a resumed child's history window", () =>
+  it.effect("keeps pending questions visible across child cancellation and resume", () =>
     Effect.gen(function* () {
       yield* seedQuestions;
       const projections = yield* ProjectionStore.ProjectionStoreV2;
       const window = yield* projections.getThreadSnapshotWindow(CHILD, { rowLimit: 77 });
-      const assertQuestions = (projection: OrchestrationV2ThreadProjection) => {
+      const assertQuestions = (
+        projection: OrchestrationV2ThreadProjection,
+        visibleRequestIds: ReadonlyArray<string> = [
+          "request:question:message",
+          "request:question:live",
+        ],
+      ) => {
         assert.strictEqual(projection.thread.id, CHILD);
         assert.strictEqual(projection.runs.at(-1)?.id, RunId.make("run:question:resumed"));
         assert.strictEqual(projection.runs.at(-1)?.status, "running");
@@ -538,24 +561,57 @@ it.layer(TestLayer)("compact bounded snapshot transport", (it) => {
           ),
           ["Read the message question", "Read the live question"],
         );
-        assert.isFalse(
-          projection.visibleTurnItems.some((row) => row.item.type === "user_input_request"),
+        assert.deepStrictEqual(
+          projection.turnItems
+            .filter((item) => item.type === "user_input_request")
+            .map((item) => [item.requestId, item.runId, item.responseMode ?? "live"]),
+          [
+            ["request:question:message", "run:question:cancelled", "message"],
+            ["request:question:live", "run:question:resumed", "live"],
+          ],
+        );
+        assert.deepStrictEqual(
+          projection.visibleTurnItems.flatMap((row) =>
+            row.item.type === "user_input_request" ? [row.item.requestId] : [],
+          ),
+          visibleRequestIds,
+        );
+        assert.strictEqual(
+          projection.runs.find((run) => run.id === "run:question:cancelled")?.status,
+          "cancelled",
+        );
+        assert.deepStrictEqual(
+          projection.runtimeRequests
+            .map(
+              (request) =>
+                [String(request.id), request.status, request.responseCapability] as const,
+            )
+            .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+          [
+            [
+              "request:question:live",
+              "pending",
+              { type: "live", providerSessionId: ProviderSessionId.make("session:question") },
+            ],
+            ["request:question:message", "pending", { type: "message" }],
+          ],
         );
       };
+      assertQuestions(yield* projections.getThreadProjection(CHILD));
       assertQuestions(window.projection);
       yield* withHttp(async (get) => {
         const response = await get(
           `/api/orchestration/threads/${encodeURIComponent(CHILD)}/bounded?compactTurnItems=1`,
         );
         assert.strictEqual(response.status, 200);
-        assertQuestions(boundedSnapshotProjection(decodeBounded(await response.text())));
+        assertQuestions(boundedSnapshotProjection(decodeBounded(await response.text())), []);
       });
       const socket = yield* firstSnapshot({
         threadId: CHILD,
         acceptBoundedSnapshot: true,
         acceptCompactTurnItems: true,
       });
-      assertQuestions(boundedSnapshotProjection(socket.decoded));
+      assertQuestions(boundedSnapshotProjection(socket.decoded), []);
       for (const request of window.projection.runtimeRequests) {
         yield* projections.apply({
           id: EventId.make(`event:${request.id}:answered`),
@@ -571,10 +627,48 @@ it.layer(TestLayer)("compact bounded snapshot transport", (it) => {
           },
         });
       }
-      const answered = yield* projections.getThreadSnapshotWindow(CHILD, { rowLimit: 77 });
-      assert.isFalse(
-        answered.projection.turnItems.some((item) => item.type === "user_input_request"),
+      const full = yield* projections.getThreadProjection(CHILD);
+      assert.strictEqual(
+        full.runs.find((run) => run.id === "run:question:cancelled")?.status,
+        "cancelled",
       );
+      assert.strictEqual(full.runs.at(-1)?.status, "running");
+      assert.lengthOf(
+        full.turnItems.filter((item) => item.type === "user_input_request"),
+        2,
+      );
+      assert.lengthOf(full.runtimeRequests, 2);
+      assert.deepStrictEqual(
+        full.runtimeRequests.find((request) => request.id === "request:question:message")
+          ?.responseCapability,
+        { type: "message" },
+      );
+      for (const request of full.runtimeRequests) {
+        assert.strictEqual(request.status, "resolved");
+        assert.deepStrictEqual(request.answers, { "0": "Done" });
+      }
+      const assertAnswered = (projection: OrchestrationV2ThreadProjection) => {
+        assert.isFalse(projection.turnItems.some((item) => item.type === "user_input_request"));
+        assert.isFalse(
+          projection.visibleTurnItems.some((row) => row.item.type === "user_input_request"),
+        );
+        assert.deepStrictEqual(projection.runtimeRequests, []);
+      };
+      const answered = yield* projections.getThreadSnapshotWindow(CHILD, { rowLimit: 77 });
+      assertAnswered(answered.projection);
+      yield* withHttp(async (get) => {
+        const response = await get(
+          `/api/orchestration/threads/${encodeURIComponent(CHILD)}/bounded?compactTurnItems=1`,
+        );
+        assert.strictEqual(response.status, 200);
+        assertAnswered(boundedSnapshotProjection(decodeBounded(await response.text())));
+      });
+      const answeredSocket = yield* firstSnapshot({
+        threadId: CHILD,
+        acceptBoundedSnapshot: true,
+        acceptCompactTurnItems: true,
+      });
+      assertAnswered(boundedSnapshotProjection(answeredSocket.decoded));
     }),
   );
 
