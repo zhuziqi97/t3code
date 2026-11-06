@@ -1807,6 +1807,7 @@ describe("OpenCodeAdapterV2", () => {
             children: async () => ({ data: [] }),
           },
         },
+        true,
         {},
         { options: [{ id: "variant", value: "high" }], interactionMode: "plan" },
       );
