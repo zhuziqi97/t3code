@@ -55,7 +55,7 @@ export function FileExplorerPane({
           );
           // A responsive default must not shrink to make room for the content reserve.
           const availableWidth = Math.max(
-            row.clientWidth - 320,
+            fileExplorerMaxWidth(row.clientWidth),
             defaultWidthFraction === undefined ? minWidth : initialWidth,
           );
           setMaxWidth(Math.max(minWidth, Math.min(MAX_WIDTH, availableWidth)));
@@ -68,7 +68,7 @@ export function FileExplorerPane({
       className={cn(
         "relative flex min-h-0 min-w-0 shrink-0 bg-background",
         resizable
-          ? "h-2/5 min-h-40 border-t border-border/60 @min-[34rem]/file-preview:h-auto @min-[34rem]/file-preview:w-(--resizable-width) @min-[34rem]/file-preview:min-h-0 @min-[34rem]/file-preview:border-t-0 @min-[34rem]/file-preview:border-l"
+          ? "w-(--resizable-width) border-l border-border/60 @max-[34rem]/file-preview:h-2/5 @max-[34rem]/file-preview:min-h-40 @max-[34rem]/file-preview:w-auto @max-[34rem]/file-preview:border-t @max-[34rem]/file-preview:border-l-0"
           : "flex-1",
       )}
       style={

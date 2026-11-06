@@ -368,6 +368,7 @@ describe("root reopen shortcut", () => {
       }),
       expect.objectContaining({ command: "sidebar.toggle" }),
       expect.objectContaining({ command: "rightPanel.toggle" }),
+      expect.objectContaining({ command: "preview.focusUrl" }),
     ]);
   });
 

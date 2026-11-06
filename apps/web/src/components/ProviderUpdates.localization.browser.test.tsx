@@ -66,6 +66,7 @@ vi.mock("../state/environments", async (original) => ({
 vi.mock("../state/session", async (original) => ({
   ...(await original<typeof import("../state/session")>()),
   useEnvironmentScope: (id: EnvironmentId) => state.permitted.has(id),
+  useEnvironmentsWithScope: () => state.permitted,
   readEnvironmentScope: (id: EnvironmentId) => state.permitted.has(id),
 }));
 vi.mock("../state/use-atom-command", async (original) => ({

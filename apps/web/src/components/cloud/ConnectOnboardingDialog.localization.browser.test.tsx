@@ -53,6 +53,10 @@ vi.mock("~/cloud/useCloudLinkController", async (original) => ({
   ...(await original<typeof import("~/cloud/useCloudLinkController")>()),
   useCloudLinkController: () => state.controller,
 }));
+vi.mock("~/state/entities", async (original) => ({
+  ...(await original<typeof import("~/state/entities")>()),
+  useServerConfigs: () => new Map(),
+}));
 vi.mock("~/state/environments", async (original) => ({
   ...(await original<typeof import("~/state/environments")>()),
   useEnvironments: () => ({ isReady: true, environments: [] }),

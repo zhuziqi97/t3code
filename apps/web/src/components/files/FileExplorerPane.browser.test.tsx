@@ -1,3 +1,4 @@
+import "~/index.css";
 import { describe, expect, it } from "vite-plus/test";
 
 import { render } from "../../../test/render";
@@ -13,7 +14,7 @@ describe("FileExplorerPane", () => {
       view: "Files",
       defaultWidth: 256,
       minWidth: 160,
-      expected: 164,
+      expected: 160,
     },
   ])(
     "preserves the $view initial width in a 420px row",

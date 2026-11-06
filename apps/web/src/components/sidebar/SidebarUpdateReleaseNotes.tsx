@@ -118,7 +118,9 @@ export function SidebarUpdateReleaseNotes({
                 )
               ) : (
                 <h3 className="mb-2 text-foreground text-xs leading-4 font-semibold">
-                  {index === 0 ? "What's changed" : `Changes in ${releaseNote.version}`}
+                  {index === 0
+                    ? t("update.notes.changed")
+                    : t("update.notes.version", { version: releaseNote.version })}
                 </h3>
               )}
               {releaseNote.intro ? (

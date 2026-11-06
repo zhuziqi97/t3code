@@ -49,6 +49,7 @@ vi.mock("../../onboarding/firstRun", async (original) => ({
 vi.mock("../../state/entities", async (original) => ({
   ...(await original<typeof import("../../state/entities")>()),
   useProjects: () => mocks.projects,
+  useServerConfigs: () => new Map(),
   readProjects: () => mocks.projects,
   waitForProject: mocks.waitForProject,
 }));

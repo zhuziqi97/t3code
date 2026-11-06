@@ -6,7 +6,8 @@ import { render } from "../../test/render";
 import { openCommandPalette } from "../commandPaletteBus";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { __setClientSettingsForTests, getClientSettings } from "../hooks/useSettings";
-import { useProjects } from "../state/entities";
+import { readProjects, useProjects } from "../state/entities";
+import { useUiStateStore } from "../uiStateStore";
 import type { Project } from "../types";
 import Sidebar from "./Sidebar";
 import { SidebarProvider } from "./ui/sidebar";
@@ -45,6 +46,11 @@ describe("sidebar header new thread", () => {
     { mode: "legacy", count: 2, shift: false, picker: false },
   ] as const)("$mode sidebar, $count projects, shift=$shift: picker=$picker", async (scenario) => {
     using stack = new DisposableStack();
+    const previousScope = useUiStateStore.getState().sidebarProjectScopeKey;
+    stack.defer(() => useUiStateStore.setState({ sidebarProjectScopeKey: previousScope }));
+    useUiStateStore.setState({
+      sidebarProjectScopeKey: scenario.picker ? null : "local:/projects/active",
+    });
     const previousSettings = getClientSettings();
     stack.defer(() => __setClientSettingsForTests(previousSettings));
     __setClientSettingsForTests({
@@ -59,10 +65,11 @@ describe("sidebar header new thread", () => {
     };
     const startThread = vi.fn().mockResolvedValue(null);
     vi.mocked(useProjects).mockReturnValue(projects);
+    vi.mocked(readProjects).mockReturnValue(projects);
     vi.mocked(useHandleNewThread).mockReturnValue({
       activeDraftThread: null,
       activeThread: null,
-      defaultProjectRef: currentProjectRef,
+      defaultProjectRef: scenario.picker ? null : currentProjectRef,
       handleNewThread: startThread,
       routeDraftId: null,
       routeThreadRef: null,
@@ -74,9 +81,15 @@ describe("sidebar header new thread", () => {
       </SidebarProvider>,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "New thread", exact: true }), {
-      modifiers: scenario.shift ? ["Shift"] : [],
-    });
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: scenario.picker ? "New thread…" : "New thread in active · /projects/active",
+        exact: true,
+      }),
+      {
+        modifiers: scenario.shift ? ["Shift"] : [],
+      },
+    );
 
     if (scenario.picker) {
       expect(openCommandPalette).toHaveBeenCalledExactlyOnceWith({ open: "new-thread-in" });
