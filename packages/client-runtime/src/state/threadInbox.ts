@@ -196,14 +196,14 @@ export function createInboxReturnTracker() {
         const placement =
           actual || previous?.working
             ? JSON.stringify([
-          thread.archivedAt,
-          thread.deletedAt,
-          thread.pinnedAt,
-          thread.settledOverride,
-          thread.settledAt,
-          thread.snoozedAt,
-          thread.snoozedUntil,
-          thread.activeOrderKey,
+                thread.archivedAt,
+                thread.deletedAt,
+                thread.pinnedAt,
+                thread.settledOverride,
+                thread.settledAt,
+                thread.snoozedAt,
+                thread.snoozedUntil,
+                thread.activeOrderKey,
               ])
             : null;
         const actionable =

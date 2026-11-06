@@ -248,20 +248,20 @@ function BetaSettingsSection() {
           const policy = environment.serverConfig?.managedPolicy;
           const managed = isManagedSettingPath(policy, "linkedEnvironmentsEnabled");
           return (
-          <SettingsSwitchRow
-            key={environment.environmentId}
-            icon="link"
-            label={environment.label}
+            <SettingsSwitchRow
+              key={environment.environmentId}
+              icon="link"
+              label={environment.label}
               {...(managed ? { subtitle: `Managed by ${policy?.organization}.` } : {})}
-            value={environment.serverConfig?.settings.linkedEnvironmentsEnabled === true}
+              value={environment.serverConfig?.settings.linkedEnvironmentsEnabled === true}
               disabled={managed || !writable.has(environment.environmentId)}
-            onValueChange={(value) =>
-              void updateSettings({
-                environmentId: environment.environmentId,
-                input: { patch: { linkedEnvironmentsEnabled: value } },
-              })
-            }
-          />
+              onValueChange={(value) =>
+                void updateSettings({
+                  environmentId: environment.environmentId,
+                  input: { patch: { linkedEnvironmentsEnabled: value } },
+                })
+              }
+            />
           );
         })}
       </SettingsSection>

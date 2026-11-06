@@ -2682,10 +2682,10 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
                   providerTurnId: providerTurn.id,
                   kind: "turn_start",
                   record: {
-                  type: "prompt",
-                  message: payload.message,
-                  streamingBehavior: "steer",
-                  ...(payload.images.length === 0 ? {} : { images: payload.images }),
+                    type: "prompt",
+                    message: payload.message,
+                    streamingBehavior: "steer",
+                    ...(payload.images.length === 0 ? {} : { images: payload.images }),
                   },
                 });
               }
@@ -2776,10 +2776,10 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
                     providerTurnId: turn.providerTurn.id,
                     kind: "steer",
                     record: {
-                    type: "prompt",
-                    message: payload.message,
-                    streamingBehavior: "steer",
-                    ...(payload.images.length === 0 ? {} : { images: payload.images }),
+                      type: "prompt",
+                      message: payload.message,
+                      streamingBehavior: "steer",
+                      ...(payload.images.length === 0 ? {} : { images: payload.images }),
                     },
                   });
                 }
@@ -3460,7 +3460,7 @@ function piQuestion(
   // Pi's select and editor dialogs carry only a title, so show it once, as the question.
   // Extensions may send a blank placeholder, which is not a valid question.
   const detail = [recordString(event, "message"), recordString(event, "placeholder")].find(
-      (text) => text !== undefined && text.trim().length > 0,
+    (text) => text !== undefined && text.trim().length > 0,
   );
   return {
     id: questionId,

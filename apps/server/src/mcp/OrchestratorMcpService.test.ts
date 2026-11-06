@@ -2381,7 +2381,11 @@ describe("OrchestratorMcpService provider resolution", () => {
             assert.equal(untouched.messages.length, 0);
             assert.equal(untouched.runs.length, 0);
           }).pipe(Effect.provide(layerTest));
-        }).pipe(Effect.provide(Layer.mergeAll(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer), NodeCrypto.layer))),
+        }).pipe(
+          Effect.provide(
+            Layer.mergeAll(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer), NodeCrypto.layer),
+          ),
+        ),
       ),
   );
 

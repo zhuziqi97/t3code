@@ -905,15 +905,15 @@ export const make = Effect.gen(function* () {
     directories: ReadonlyArray<string>,
   ) {
     type GitIdentity =
-    | { readonly _tag: "Repository"; readonly git: AgentSessionProjectGit | null }
-    | { readonly _tag: "Worktree" }
+      | { readonly _tag: "Repository"; readonly git: AgentSessionProjectGit | null }
+      | { readonly _tag: "Worktree" }
       | { readonly _tag: "NotGit" };
     const identities = new Map<string, GitIdentity>();
     const repositories: Array<{ directory: string; gitDir: string; linkedWorktree: boolean }> = [];
     const pointers: Array<{ directory: string; gitPath: string }> = [];
     for (const directory of directories) {
-    const gitPath = path.join(directory, ".git");
-    const gitStats = yield* statOption(gitPath);
+      const gitPath = path.join(directory, ".git");
+      const gitStats = yield* statOption(gitPath);
       if (Option.isNone(gitStats)) identities.set(directory, { _tag: "NotGit" });
       else if (gitStats.value.type === "Directory") {
         repositories.push({ directory, gitDir: gitPath, linkedWorktree: false });
@@ -927,7 +927,7 @@ export const make = Effect.gen(function* () {
       if (target === undefined || target.length === 0) {
         identities.set(directory, { _tag: "NotGit" });
         continue;
-    }
+      }
       const gitDir = path.resolve(directory, target);
       if (/[\\/]worktrees[\\/][^\\/]+[\\/]?$/.test(gitDir)) {
         linkedWorktrees.push({ directory, gitDir });
@@ -953,19 +953,19 @@ export const make = Effect.gen(function* () {
     );
     for (const { directory, gitDir, linkedWorktree } of repositories) {
       const configText = configTexts.get(path.join(gitDir, "config")) ?? "";
-    // Bare repositories have no main checkout, so offer their linked worktrees independently.
+      // Bare repositories have no main checkout, so offer their linked worktrees independently.
       if (linkedWorktree && !isBareGitConfig(configText)) {
         identities.set(directory, { _tag: "Worktree" });
         continue;
       }
-    const originUrl = parseOriginUrlFromGitConfig(configText);
+      const originUrl = parseOriginUrlFromGitConfig(configText);
       identities.set(directory, {
-      _tag: "Repository",
-      git: {
-        remoteKey:
-          originUrl === null ? null : sourceControlDefinitions.repositoryKeyFromRemote(originUrl),
-        repository: repositoryPathFromRemoteUrl(originUrl),
-      },
+        _tag: "Repository",
+        git: {
+          remoteKey:
+            originUrl === null ? null : sourceControlDefinitions.repositoryKeyFromRemote(originUrl),
+          repository: repositoryPathFromRemoteUrl(originUrl),
+        },
       });
     }
     return identities;
@@ -1573,11 +1573,11 @@ export const make = Effect.gen(function* () {
       if (key === undefined) {
         const gitIdentity = directoryGitIdentities.get(resolved);
         if (gitIdentity === undefined || gitIdentity._tag === "Worktree") {
-            key = "";
-          } else {
-            key = yield* directoryIdentity(resolved, stats.value);
-            gitIdentities.set(key, gitIdentity._tag === "Repository" ? gitIdentity.git : null);
-          }
+          key = "";
+        } else {
+          key = yield* directoryIdentity(resolved, stats.value);
+          gitIdentities.set(key, gitIdentity._tag === "Repository" ? gitIdentity.git : null);
+        }
         directoryKeys.set(resolved, key);
       }
       if (key === "") continue;

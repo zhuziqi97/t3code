@@ -137,8 +137,8 @@ const make = Effect.gen(function* () {
         (settings) =>
           resolveProjectSettings(settings, projectId).settings.newWorktreesStartFromOrigin,
       ),
-    asOperationFailed("Unable to read server settings"),
-  );
+      asOperationFailed("Unable to read server settings"),
+    );
 
   const handoffIds = (scope: McpThreadInvocationScope) =>
     random.uuidV4().pipe(

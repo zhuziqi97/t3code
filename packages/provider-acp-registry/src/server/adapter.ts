@@ -184,7 +184,9 @@ export const makeAcpRegistryAdapterV2 = Effect.fn("makeAcpRegistryAdapterV2")(fu
     yield* Effect.serviceOption(AcpRegistryRuntimeCoordinator.AcpRegistryRuntimeCoordinator),
   );
   const probeServices = yield* Effect.context<
-    AcpRegistrySupport.AcpRegistryCatalog | ChildProcessSpawner.ChildProcessSpawner | SecureRandom.SecureRandom
+    | AcpRegistrySupport.AcpRegistryCatalog
+    | ChildProcessSpawner.ChildProcessSpawner
+    | SecureRandom.SecureRandom
   >();
   const registryAgentId = options.settings.source === "local" ? "" : options.settings.agentId;
   const startupKey =

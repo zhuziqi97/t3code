@@ -147,10 +147,10 @@ function getOpenCodePromptFailure(error: unknown): OpenCodePromptFailure | null 
     return null;
   }
 
-    return {
-      ...(name ? { name } : {}),
+  return {
+    ...(name ? { name } : {}),
     ...(statusCode !== undefined ? { statusCode } : {}),
-    };
+  };
 }
 
 function isOpenCodeTextPart(part: unknown): part is OpenCodeTextPart {

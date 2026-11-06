@@ -1436,7 +1436,7 @@ export const layer: Layer.Layer<
                   event.type === "provider_thread.updated" &&
                   event.providerThread.id === input.providerThread.id;
                 const nativeChildTurn =
-                      event.type === "provider_turn.updated" &&
+                  event.type === "provider_turn.updated" &&
                   event.providerTurn.providerThreadId !== input.providerThread.id;
                 if (event.type === "provider_turn.updated" && !nativeChildTurn) {
                   firstRootProviderTurnId ??= event.providerTurn.id;
@@ -1455,7 +1455,7 @@ export const layer: Layer.Layer<
                           event.providerTurn.id !== firstRootProviderTurnId
                             ? "continuation"
                             : input.attempt.reason,
-                  },
+                      },
                   providerSessionId: input.providerSessionId,
                   providerInstanceId: input.run.providerInstanceId,
                   threadId: input.run.threadId,

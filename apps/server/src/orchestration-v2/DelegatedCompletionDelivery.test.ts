@@ -1175,13 +1175,13 @@ it.layer(layerTest)("delegated completion delivery repairs", (it) => {
                       taskId,
                       completionWake: "always",
                     }
-                : {
-                    type: "delegated_task.completion-delivery.acknowledge",
-                    commandId: CommandId.make(`command:${race}:task-status`),
-                    parentThreadId: threadId,
-                    taskId,
-                    observedByRunId: runId,
-                  },
+                  : {
+                      type: "delegated_task.completion-delivery.acknowledge",
+                      commandId: CommandId.make(`command:${race}:task-status`),
+                      parentThreadId: threadId,
+                      taskId,
+                      observedByRunId: runId,
+                    },
             ),
           (spy) => Effect.sync(() => spy.mockRestore()),
         );

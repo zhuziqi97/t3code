@@ -140,16 +140,16 @@ describe("provider compatibility", () => {
   ] as const)(
     "supports the managed Antigravity runtime for %s-%s in the bundled manifest",
     (platform, arch) => {
-    const policies = decodeCompatibilityPolicies(bundledManifest.compatibility);
+      const policies = decodeCompatibilityPolicies(bundledManifest.compatibility);
       const release = resolveAntigravityReleaseAsset(platform, arch);
-    assert.strictEqual(
-      resolveProviderCompatibility(
-        policies,
-        ProviderDriverKind.make("antigravity"),
-        `agy_acp_server_${release?.version}`,
-      )?.status,
-      "supported",
-    );
+      assert.strictEqual(
+        resolveProviderCompatibility(
+          policies,
+          ProviderDriverKind.make("antigravity"),
+          `agy_acp_server_${release?.version}`,
+        )?.status,
+        "supported",
+      );
     },
   );
 

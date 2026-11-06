@@ -320,7 +320,7 @@ function RemoteSubagentRow(props: {
             title={title}
             hint={
               environment === null
-            ? `Runs on ${remoteChild.label}. Connect to it to open the thread there.`
+                ? `Runs on ${remoteChild.label}. Connect to it to open the thread there.`
                 : `Open on ${remoteChild.label}`
             }
           />
@@ -382,7 +382,7 @@ function DelegatedFromRow(props: {
             title={title}
             hint={
               environment === null
-            ? `Delegated from ${label ?? "a linked environment"}. Connect to it to open the parent thread.`
+                ? `Delegated from ${label ?? "a linked environment"}. Connect to it to open the parent thread.`
                 : "Open parent agent"
             }
           />
@@ -504,15 +504,15 @@ export function ThreadRelationshipsPanel(props: {
     // The graph rebuilds missing parents from lineage, so filter the rows it returns.
     .filter((row) => !isHiddenRelation(row.threadId) && !isHiddenUnloadedRelation(row))
     .map((row) => {
-    const agent =
-      row.edge.kind === "subagent" && !isParentThreadRelationship(row.edge, props.threadId)
-        ? subagentsByThreadId.get(row.threadId)
-        : undefined;
-    const workflowGroup = agent === undefined ? undefined : workflowGroupsById.get(agent.id);
-    return workflowGroup === undefined
-      ? row
-      : { ...row, edge: { ...row.edge, status: workflowGroup.workflow.status } };
-  });
+      const agent =
+        row.edge.kind === "subagent" && !isParentThreadRelationship(row.edge, props.threadId)
+          ? subagentsByThreadId.get(row.threadId)
+          : undefined;
+      const workflowGroup = agent === undefined ? undefined : workflowGroupsById.get(agent.id);
+      return workflowGroup === undefined
+        ? row
+        : { ...row, edge: { ...row.edge, status: workflowGroup.workflow.status } };
+    });
   const canMerge = mergeTargetThreadId !== null && latestMergeBackRun !== null;
   const canDetach = projection ? canDetachThreadProviderSession(projection) : false;
 
@@ -661,7 +661,7 @@ export function ThreadRelationshipsPanel(props: {
       ? null
       : isHiddenRelation(mergeTargetThreadId)
         ? null
-      : (graph.nodes.get(mergeTargetThreadId)?.thread?.title ?? null);
+        : (graph.nodes.get(mergeTargetThreadId)?.thread?.title ?? null);
 
   const renderRelationshipRow = ({ threadId, edge }: ThreadRelationshipWalkRow) => {
     const node = graph.nodes.get(threadId);

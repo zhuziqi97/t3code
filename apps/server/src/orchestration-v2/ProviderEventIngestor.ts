@@ -811,11 +811,11 @@ export const layer: Layer.Layer<
                     if (oldest !== undefined) completedTurnAnalytics.delete(oldest);
                   }
                   yield* analytics.turnCompleted({
-                      driver: input.event.driver,
-                      providerTurn,
-                      ...(input.analyticsContext === undefined
-                        ? {}
-                        : { context: input.analyticsContext }),
+                    driver: input.event.driver,
+                    providerTurn,
+                    ...(input.analyticsContext === undefined
+                      ? {}
+                      : { context: input.analyticsContext }),
                   });
                 }),
               ),

@@ -396,19 +396,19 @@ export function SettingsRow({
   const renderedReset =
     unavailable || managedBy !== undefined || managed !== undefined ? null : isProjectScope &&
       scopedKeys.length > 0 ? (
-    source === "project" || source === "mixed" ? (
-      <SettingResetButton
-        label={typeof title === "string" ? title : t("settings.override")}
-        tooltip={t("settings.resetInherited")}
-        ariaLabel={t("settings.resetInheritedLabel", {
-          label: typeof title === "string" ? title : t("settings.override"),
-        })}
-        onClick={() => (onResetOverride ? onResetOverride() : clearOverrides(scopedKeys))}
-      />
-    ) : null
-  ) : (
-    resetAction
-  );
+      source === "project" || source === "mixed" ? (
+        <SettingResetButton
+          label={typeof title === "string" ? title : t("settings.override")}
+          tooltip={t("settings.resetInherited")}
+          ariaLabel={t("settings.resetInheritedLabel", {
+            label: typeof title === "string" ? title : t("settings.override"),
+          })}
+          onClick={() => (onResetOverride ? onResetOverride() : clearOverrides(scopedKeys))}
+        />
+      ) : null
+    ) : (
+      resetAction
+    );
   const inertControl = (message: string) => (
     <Tooltip>
       <TooltipTrigger
@@ -435,23 +435,23 @@ export function SettingsRow({
       : managedBy !== undefined && control
         ? inertControl(`Managed by ${managedBy}.`)
         : unavailable && control
-      ? inertControl(
-          !canWriteSettings
-            ? t("settings.permissionDenied", {
-                environments: context
-                  ? context.connectedEnvironments
-                      .filter((target) => !writableIds.has(target.environmentId))
-                      .map((target) => target.label)
-                      .join(", ") || t("settings.theSelectedEnvironment")
-                  : (primaryEnvironment?.label ?? t("settings.thePrimaryEnvironment")),
-              })
-            : context
-              ? t("settings.reconnect")
-              : t("settings.primaryUnavailable"),
-        )
-      : environmentWide && control
-        ? inertControl(t("settings.environmentWide"))
-        : control;
+          ? inertControl(
+              !canWriteSettings
+                ? t("settings.permissionDenied", {
+                    environments: context
+                      ? context.connectedEnvironments
+                          .filter((target) => !writableIds.has(target.environmentId))
+                          .map((target) => target.label)
+                          .join(", ") || t("settings.theSelectedEnvironment")
+                      : (primaryEnvironment?.label ?? t("settings.thePrimaryEnvironment")),
+                  })
+                : context
+                  ? t("settings.reconnect")
+                  : t("settings.primaryUnavailable"),
+            )
+          : environmentWide && control
+            ? inertControl(t("settings.environmentWide"))
+            : control;
   const customized =
     context !== null &&
     settingKeys.some((key) =>

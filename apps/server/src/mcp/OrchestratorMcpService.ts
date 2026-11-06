@@ -1088,18 +1088,18 @@ const make = Effect.gen(function* () {
 
   const loadProjection = (threadId: ThreadId, includeUserMessages = true) =>
     loadThreadRecords(
-        threadId,
-        [
-          "runs",
-          "messages",
-          "providerThreads",
-          "providerTurns",
-          "runtimeRequests",
-          "contextTransfers",
-          "turnItems",
-        ],
-        { turnItemTypes: [], messageRoles: includeUserMessages ? ["user"] : [] },
-      );
+      threadId,
+      [
+        "runs",
+        "messages",
+        "providerThreads",
+        "providerTurns",
+        "runtimeRequests",
+        "contextTransfers",
+        "turnItems",
+      ],
+      { turnItemTypes: [], messageRoles: includeUserMessages ? ["user"] : [] },
+    );
 
   // A dispatcher thread holds thousands of tasks, each with its full prompt; read only the ones named.
   const loadTasks = (threadId: ThreadId, taskIds: ReadonlyArray<NodeId>) =>
@@ -1836,12 +1836,12 @@ const make = Effect.gen(function* () {
         wakeEvents.map(({ thread, eventType }) =>
           threadManagement
             .streamStoredEventsFrom({
-            threadId:
+              threadId:
                 thread === "parent" || childThreadId === null
                   ? scope.thread.threadId
                   : childThreadId,
-            afterSequence,
-            eventType,
+              afterSequence,
+              eventType,
             })
             .pipe(
               Stream.filter(

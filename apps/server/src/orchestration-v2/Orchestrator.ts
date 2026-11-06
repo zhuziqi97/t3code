@@ -1420,7 +1420,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           providerTurnAttemptIds: run?.activeAttemptId == null ? [] : [run.activeAttemptId],
         });
         if (!isUndeliveredMailboxSteer({ ...messages, ...runs, ...turns }, delivery.messageId))
-        return;
+          return;
       }
       const projection = yield* projectionStore.getThreadRecords(threadId, ["providerThreads"], {
         providerThreadIds: parentRun.providerThreadId === null ? [] : [parentRun.providerThreadId],
@@ -5952,7 +5952,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         ? delegatedCompletion.taskIds.every(
             (id) =>
               projection.subagents.find((task) => task.id === id)?.completionWake === "always",
-      )
+          )
         : command.notification?.source.kind === "delegated_task"
     ) {
       const active = projection.runs.find((run) => run.status === "running");
@@ -6463,19 +6463,19 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     // have updated the app thread, so classify against the native thread's owner.
     const providerSwitchPlan = isProviderSwitch
       ? yield* providerSwitchService
-        .plan({
-          projection: {
-            ...projection,
-            thread: {
-              ...projection.thread,
-              modelSelection: {
-                ...projection.thread.modelSelection,
-                instanceId: activeProviderThread.providerInstanceId,
+          .plan({
+            projection: {
+              ...projection,
+              thread: {
+                ...projection.thread,
+                modelSelection: {
+                  ...projection.thread.modelSelection,
+                  instanceId: activeProviderThread.providerInstanceId,
+                },
               },
             },
-          },
-          targetModelSelection: modelSelection,
-        })
+            targetModelSelection: modelSelection,
+          })
           .pipe(mapDispatchError(command))
       : null;
     const canResumeAcrossInstances =
@@ -9635,18 +9635,18 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
   ) {
     const projection = yield* loadProjectionForCommand(
       command,
-        [
-          "runs",
-          "nodes",
-          "attempts",
-          "messages",
-          "providerThreads",
-          "providerTurns",
-          "providerSessions",
-          "turnItems",
-          "runtimeRequests",
-          "subagents",
-        ],
+      [
+        "runs",
+        "nodes",
+        "attempts",
+        "messages",
+        "providerThreads",
+        "providerTurns",
+        "providerSessions",
+        "turnItems",
+        "runtimeRequests",
+        "subagents",
+      ],
       // User messages measure a restart's model switch.
       { turnItemTypes: ["user_message"], messageRoles: ["user"] },
     );
@@ -9931,8 +9931,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
   ) {
     const projection = yield* loadProjectionForCommand(
       command,
-        ["runs", "messages", "nodes", "attempts", "subagents", "turnItems"],
-        { turnItemTypes: [], messageRoles: ["user"] },
+      ["runs", "messages", "nodes", "attempts", "subagents", "turnItems"],
+      { turnItemTypes: [], messageRoles: ["user"] },
     );
     const queuedRun = projection.runs.find((candidate) => candidate.id === command.runId);
     if (queuedRun === undefined || queuedRun.status !== "queued") {
@@ -10039,8 +10039,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       });
     }
     const projection = yield* loadProjectionForCommand(command, ["runs", "messages", "turnItems"], {
-        turnItemTypes: ["user_message"],
-        messageRoles: ["user"],
+      turnItemTypes: ["user_message"],
+      messageRoles: ["user"],
     });
     const queuedRun = projection.runs.find((candidate) => candidate.id === command.runId);
     if (queuedRun === undefined || queuedRun.status !== "queued") {
@@ -10771,15 +10771,15 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     }
     // An attempt that already ended keeps its status; only its run was left running.
     if (attempt.status === "running") {
-    yield* emitEvent({
-      ...base,
-      type: "run-attempt.updated",
-      payload: {
-        ...attempt,
-        status: "interrupted",
-        completedAt: input.now,
-      },
-    });
+      yield* emitEvent({
+        ...base,
+        type: "run-attempt.updated",
+        payload: {
+          ...attempt,
+          status: "interrupted",
+          completedAt: input.now,
+        },
+      });
     }
     const providerThread = input.projection.providerThreads.find(
       (candidate) => candidate.id === input.providerTurn.providerThreadId,

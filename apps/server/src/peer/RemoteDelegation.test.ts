@@ -1029,8 +1029,8 @@ it.effect.each(["no active parent run", "a newer run owned by another provider"]
           state: "acknowledged",
           observedByRunId: null,
         });
-    }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+      }),
+    ).pipe(Effect.provide(NodeHttpServer.layerTest)),
 );
 
 it.effect(

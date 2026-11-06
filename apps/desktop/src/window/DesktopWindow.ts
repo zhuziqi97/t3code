@@ -850,7 +850,7 @@ export const make = Effect.gen(function* () {
         return;
       firstRevealComplete = true;
       pendingMainReveals.delete(window);
-        window.webContents.setBackgroundThrottling(true);
+      window.webContents.setBackgroundThrottling(true);
       if (persistedSettings.mainWindowMaximized) window.maximize();
       yield* electronWindow.reveal(window);
       yield* dismissConnectingSplash;

@@ -527,11 +527,11 @@ export function AddProviderInstanceDialog({
                         aria-label="More providers"
                       />
                       {!acpRegistryAllowed ? null : (
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                        <div aria-hidden className="flex-1 border-t border-border/70" />
-                        <span>{t("provider.add.chooseRegistry")}</span>
-                        <div aria-hidden className="flex-1 border-t border-border/70" />
-                      </div>
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                          <div aria-hidden className="flex-1 border-t border-border/70" />
+                          <span>{t("provider.add.chooseRegistry")}</span>
+                          <div aria-hidden className="flex-1 border-t border-border/70" />
+                        </div>
                       )}
                       {!acpRegistryAllowed ? null : isAcpRegistry && isManualAcpConfiguration ? (
                         <div className="grid gap-4">
@@ -757,10 +757,10 @@ export function AddProviderInstanceDialog({
                     {t("provider.add.configureManually")}
                   </Button>
                   {driverLocks?.configKeys.has("setupMode") ? null : (
-                  <ChatGptConnectionButton
-                    size="sm"
-                    onClick={() => setAddingChatGptAccount(true)}
-                  />
+                    <ChatGptConnectionButton
+                      size="sm"
+                      onClick={() => setAddingChatGptAccount(true)}
+                    />
                   )}
                 </>
               ) : wizardStep < (isAcpRegistry ? 1 : 2) ? (

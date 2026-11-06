@@ -944,9 +944,9 @@ describe("PiAdapterV2", () => {
           aborted
             ? { type: "compaction_end", result: null, aborted: true }
             : {
-          type: "compaction_end",
-          result: { summary: "Native compaction finished" },
-          willRetry: true,
+                type: "compaction_end",
+                result: { summary: "Native compaction finished" },
+                willRetry: true,
               },
         );
         const prompt = yield* fake.takeRequest("prompt");
@@ -4968,7 +4968,7 @@ describe("PiRpc framing", () => {
       Effect.provide(
         Layer.merge(NodeServices.layer, Logger.layer([logCapture], { mergeWithExisting: false })),
       ),
-  );
+    );
   });
 });
 

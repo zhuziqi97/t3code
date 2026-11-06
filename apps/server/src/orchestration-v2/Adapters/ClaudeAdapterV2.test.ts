@@ -2865,9 +2865,9 @@ describe("ClaudeAdapterV2 native session identity", () => {
         const providerThread =
           importedNativeThreadId === undefined
             ? yield* runtime.ensureThread({
-          threadId,
-          modelSelection: CLAUDE_TEST_MODEL_SELECTION,
-          runtimePolicy: CLAUDE_TEST_RUNTIME_POLICY,
+                threadId,
+                modelSelection: CLAUDE_TEST_MODEL_SELECTION,
+                runtimePolicy: CLAUDE_TEST_RUNTIME_POLICY,
               })
             : yield* runtime.resumeThread({
                 threadId,
@@ -2901,7 +2901,7 @@ describe("ClaudeAdapterV2 native session identity", () => {
                   createdAt: now,
                   updatedAt: now,
                 },
-        });
+              });
         yield* runtime.startTurn(
           makeClaudeTestTurnInput({
             threadId,
@@ -9695,9 +9695,9 @@ describe("ClaudeAdapterV2 background wake turns", () => {
             NodeServices.layer,
             NodeCrypto.layer,
           ),
-          ),
         ),
       ),
+    ),
   );
 
   it.effect("preserves settled background work until an explicit stop", () =>
@@ -12485,9 +12485,9 @@ describe("ClaudeAdapterV2 background wake turns", () => {
             NodeServices.layer,
             NodeCrypto.layer,
           ),
-          ),
         ),
       ),
+    ),
   );
 
   it.effect("streams a background subagent's work while the root turn is idle", () =>

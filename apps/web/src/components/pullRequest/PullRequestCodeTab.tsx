@@ -565,7 +565,7 @@ function PullRequestCodeTab({
   const { parsedSlices, loadedFiles, sourceFileStats } = diffModel(
     loadedSlices,
     `pull-request:${scopeKey}:${resolvedTheme}:${ignoreWhitespace}`,
-      ignoreWhitespace,
+    ignoreWhitespace,
   );
   const testFileCount = loadedFiles.filter((file) =>
     isTestChangedFile(resolveFileDiffPath(file)),

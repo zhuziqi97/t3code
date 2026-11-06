@@ -1693,15 +1693,15 @@ export const make = Effect.fn("AcpSessionRuntime.make")(function* (
       : Effect.void
     ).pipe(
       Effect.andThen(
-    handleSessionUpdate({
-      queue: eventQueue,
-      modeStateRef,
-      configOptionsRef,
-      toolCallsRef,
-      shownToolCallIds,
-      assistantSegmentRef,
-      assistantItemRuntimeId,
-      params: notification,
+        handleSessionUpdate({
+          queue: eventQueue,
+          modeStateRef,
+          configOptionsRef,
+          toolCallsRef,
+          shownToolCallIds,
+          assistantSegmentRef,
+          assistantItemRuntimeId,
+          params: notification,
         }),
       ),
     );
@@ -2063,9 +2063,9 @@ export const make = Effect.fn("AcpSessionRuntime.make")(function* (
             return Ref.get(configOptionUpdates).pipe(
               Effect.flatMap((updatesBefore) =>
                 runLoggedRequest(
-              "session/set_config_option",
-              requestPayload,
-              acp.agent.setSessionConfigOption(requestPayload),
+                  "session/set_config_option",
+                  requestPayload,
+                  acp.agent.setSessionConfigOption(requestPayload),
                 ).pipe(
                   Effect.tap((response) =>
                     Ref.get(configOptionUpdates).pipe(

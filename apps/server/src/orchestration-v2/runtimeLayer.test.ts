@@ -3215,43 +3215,43 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
   ] as const)(
     "handles repeated host read failures: $reason (activity fails: $activityFails)",
     ({ reason, activityFails }) =>
-    Effect.gen(function* () {
-      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
         const threadId = ThreadId.make(
           `runtime-pull-request-watch-unreadable-${reason}-${activityFails}`,
         );
         const projectId = ProjectId.make(`pr-watch-unreadable-project-${reason}-${activityFails}`);
-      yield* seedProject({
-        projectId,
-        title: "Watch unreadable",
-        workspaceRoot: "/workspace/watch-unreadable",
-        defaultModelSelection: null,
-        createdAt: "2026-10-01T00:00:00.000Z",
-      });
-      yield* orchestrator.dispatch({
-        type: "thread.create",
-        createdBy: "user",
-        creationSource: "web",
+        yield* seedProject({
+          projectId,
+          title: "Watch unreadable",
+          workspaceRoot: "/workspace/watch-unreadable",
+          defaultModelSelection: null,
+          createdAt: "2026-10-01T00:00:00.000Z",
+        });
+        yield* orchestrator.dispatch({
+          type: "thread.create",
+          createdBy: "user",
+          creationSource: "web",
           commandId: CommandId.make(`pr-watch-unreadable-create-${reason}-${activityFails}`),
-        threadId,
-        projectId,
-        title: "Watch unreadable",
-        modelSelection,
-        runtimeMode: "full-access",
-        interactionMode: "default",
-        branch: null,
-        worktreePath: null,
-      });
-      yield* orchestrator.dispatch({
-        type: "thread.pull-request.watch",
+          threadId,
+          projectId,
+          title: "Watch unreadable",
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: null,
+        });
+        yield* orchestrator.dispatch({
+          type: "thread.pull-request.watch",
           commandId: CommandId.make(`pr-watch-unreadable-start-${reason}-${activityFails}`),
-        threadId,
-        host: "github.com",
-        repository: "pingdotgg/t3code",
-        number: 8,
-        watching: true,
-        link: { url: "https://github.com/pingdotgg/t3code/pull/8", source: "agent" },
-      });
+          threadId,
+          host: "github.com",
+          repository: "pingdotgg/t3code",
+          number: 8,
+          watching: true,
+          link: { url: "https://github.com/pingdotgg/t3code/pull/8", source: "agent" },
+        });
         let disconnected = false;
         let passed = false;
         let genericFailure = false;
@@ -3267,12 +3267,12 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
               detail: "host read failed",
             }),
           });
-      const reactor = yield* PullRequestWatchReactor.make.pipe(
-        Effect.provide(
-          Layer.mergeAll(
-            NodeServices.layer,
+        const reactor = yield* PullRequestWatchReactor.make.pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              NodeServices.layer,
               NodeCrypto.layer,
-            Layer.mock(PullRequestService.PullRequestService)({
+              Layer.mock(PullRequestService.PullRequestService)({
                 watchFingerprint: () => Effect.succeed(null),
                 detail: () =>
                   genericFailure
@@ -3310,10 +3310,10 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
                         reviewThreads: [],
                         commits: [],
                       }),
-            }),
+              }),
+            ),
           ),
-        ),
-      );
+        );
         const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
         const sweep = reactor.sweep.pipe(Effect.andThen(worker.drain()));
         const summaries = Effect.map(
@@ -3329,9 +3329,9 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
           yield* sweep;
         }
 
-      const thread = yield* orchestrator.getThreadShell(threadId);
+        const thread = yield* orchestrator.getThreadShell(threadId);
         if (reason !== "failed") {
-      assert.isUndefined(thread?.pullRequests?.[0]?.watch);
+          assert.isUndefined(thread?.pullRequests?.[0]?.watch);
           assert.deepEqual(yield* summaries, ["#8: stopped watching, could not read it"]);
           return;
         }
@@ -3355,7 +3355,7 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
           watching: false,
         });
         yield* worker.drain();
-    }),
+      }),
   );
 
   it.effect("wakes once for a state it reported, across a restart and a new watch", () =>

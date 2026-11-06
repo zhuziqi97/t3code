@@ -81,37 +81,37 @@ const providerInstanceFor = (instanceId: ProviderInstanceId) =>
 const layerWithPolicy = (policy?: ManagedPolicySummary) =>
   RuntimePolicy.layerFromProjectStore.pipe(
     Layer.provide(ServerSettings.layerTest({}, policy)),
-  Layer.provide(
-    Layer.succeed(ProviderInstanceRegistry.ProviderInstanceRegistry, {
-      beforeInstanceClose: () => Effect.void,
-      getInstance: (instanceId) => Effect.succeed(providerInstanceFor(instanceId)),
-      listInstances: Effect.succeed([]),
-      listUnavailable: Effect.succeed([]),
-      streamChanges: Stream.empty,
-      subscribeChanges: Effect.never,
-    }),
-  ),
-  Layer.provide(
-    Layer.mock(ProjectStore.ProjectStoreV2)({
-      get: () =>
-        Effect.succeedSome({
-          projectId,
-          title: "Project",
-          workspaceRoot: "/project-root",
-          defaultModelSelection: null,
-          defaultThreadEnvMode: null,
-          autoPull: false,
-          faviconPath: null,
-          projectIcon: null,
-          scripts: [],
-          pinnedAt: null,
-          archivedAt: null,
-          createdAt: "2026-06-21T00:00:00.000Z",
-          updatedAt: "2026-06-21T00:00:00.000Z",
-          deletedAt: null,
-        }),
-    }),
-  ),
+    Layer.provide(
+      Layer.succeed(ProviderInstanceRegistry.ProviderInstanceRegistry, {
+        beforeInstanceClose: () => Effect.void,
+        getInstance: (instanceId) => Effect.succeed(providerInstanceFor(instanceId)),
+        listInstances: Effect.succeed([]),
+        listUnavailable: Effect.succeed([]),
+        streamChanges: Stream.empty,
+        subscribeChanges: Effect.never,
+      }),
+    ),
+    Layer.provide(
+      Layer.mock(ProjectStore.ProjectStoreV2)({
+        get: () =>
+          Effect.succeedSome({
+            projectId,
+            title: "Project",
+            workspaceRoot: "/project-root",
+            defaultModelSelection: null,
+            defaultThreadEnvMode: null,
+            autoPull: false,
+            faviconPath: null,
+            projectIcon: null,
+            scripts: [],
+            pinnedAt: null,
+            archivedAt: null,
+            createdAt: "2026-06-21T00:00:00.000Z",
+            updatedAt: "2026-06-21T00:00:00.000Z",
+            deletedAt: null,
+          }),
+      }),
+    ),
   );
 
 const layerTest = layerWithPolicy();

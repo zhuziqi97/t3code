@@ -2586,33 +2586,33 @@ export const layerWithOptions = (
               for (const providerThread of detachedProviderThreads) {
                 if (providerThread.nativeThreadRef === null) continue;
                 const ownerThreadId = providerThread.appThreadId ?? input.threadId;
-              yield* threadAttachment.withLock(
+                yield* threadAttachment.withLock(
                   threadAttachmentKey({
                     providerSessionId: input.providerSessionId,
                     threadId: ownerThreadId,
                   }),
-                Effect.gen(function* () {
-                  const entry = (yield* Ref.get(sessions)).get(key);
-                  if (
-                    entry?.runtime !== detached.value.runtime ||
+                  Effect.gen(function* () {
+                    const entry = (yield* Ref.get(sessions)).get(key);
+                    if (
+                      entry?.runtime !== detached.value.runtime ||
                       entry.attachedThreadIds.has(ownerThreadId)
-                  ) {
-                    return;
-                  }
+                    ) {
+                      return;
+                    }
                     yield* unloadThread({ providerThread }).pipe(
-                        Effect.timeout(UNLOAD_THREAD_TIMEOUT_MS),
-                        Effect.catchCause((cause) =>
+                      Effect.timeout(UNLOAD_THREAD_TIMEOUT_MS),
+                      Effect.catchCause((cause) =>
                         Effect.logWarning("orchestration-v2.driver-session.detach-unload-failed", {
-                              providerSessionId: input.providerSessionId,
+                          providerSessionId: input.providerSessionId,
                           threadId: ownerThreadId,
-                              providerThreadId: providerThread.id,
-                              cause,
+                          providerThreadId: providerThread.id,
+                          cause,
                         }),
-                          ),
-                  );
-                }),
-              );
-            }
+                      ),
+                    );
+                  }),
+                );
+              }
             }
             yield* scheduleIdleRelease(input.providerSessionId);
           },

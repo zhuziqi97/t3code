@@ -736,13 +736,13 @@ export const layer: Layer.Layer<
       // A side chat shares its parent's worktree; the turn that gets its context asks before acting.
       const resolvedPolicy = yield* runtimePolicy
         .resolve({
-        thread:
-          projection.thread.lineage.sideChat === true &&
-          (sideChatHandoff !== undefined ||
-            !projection.runs.some((previous) => previous.ordinal < run.ordinal))
-            ? { ...projection.thread, runtimeMode: "approval-required" }
-            : projection.thread,
-        modelSelection: run.modelSelection,
+          thread:
+            projection.thread.lineage.sideChat === true &&
+            (sideChatHandoff !== undefined ||
+              !projection.runs.some((previous) => previous.ordinal < run.ordinal))
+              ? { ...projection.thread, runtimeMode: "approval-required" }
+              : projection.thread,
+          modelSelection: run.modelSelection,
         })
         .pipe(Effect.result);
       if (resolvedPolicy._tag === "Failure") {
@@ -753,7 +753,7 @@ export const layer: Layer.Layer<
           title: "Thread mode is above the policy limit",
           error,
           message: error.message,
-      });
+        });
         return;
       }
       const resolvedRuntimePolicy = resolvedPolicy.success;
