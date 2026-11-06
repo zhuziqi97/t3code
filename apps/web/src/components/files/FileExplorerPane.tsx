@@ -22,7 +22,7 @@ export function FileExplorerPane({
   defaultWidth = 256,
   defaultWidthFraction,
   minWidth = MIN_WIDTH,
-  resizeLabel = "Resize file explorer",
+  resizeLabel,
 }: {
   resizable: boolean;
   children: ReactNode;
