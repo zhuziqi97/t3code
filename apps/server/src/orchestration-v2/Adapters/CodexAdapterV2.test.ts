@@ -3242,93 +3242,114 @@ describe("CodexAdapterV2 post-settle continuation", () => {
       ),
   );
 
-  it.effect("resumes a provider thread without requesting or decoding its history", () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const scenario = "codex-resume-metadata";
-
-        const nativeThreadId = `native-${scenario}-thread`;
-
-        const preamble = codexReplayPreamble({
-          nativeThreadId,
-          nativeTurnId: "unused-turn",
-          prompt: "unused-prompt",
-        }).slice(0, 5);
-
-        const transcript = makeCodexReplayTranscript({
-          scenario,
-          entries: [
-            ...preamble,
+  it.effect.each([false, true])(
+    "resumes a provider thread without requesting or decoding its history (fresh transport: %s)",
+    (freshTransport) =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const scenario = "codex-resume-metadata";
+          const nativeThreadId = `native-${scenario}-thread`;
+          const threadId = ThreadId.make(`thread-${scenario}`);
+          const explicitThreadId = ThreadId.make(`thread-${scenario}-explicit`);
+          const threadIds = [threadId, null, explicitThreadId];
+          const preamble = codexReplayPreamble({
+            nativeThreadId,
+            nativeTurnId: "unused-turn",
+            prompt: "unused-prompt",
+          }).slice(0, 5);
+          const resumeEntries = (id: number, appThreadId: ThreadId | null) => [
             {
-              type: "expect_outbound",
+              type: "expect_outbound" as const,
               label: "thread/resume",
               frame: {
-                id: 3,
+                id,
                 method: "thread/resume",
                 params: {
                   threadId: nativeThreadId,
                   excludeTurns: true,
+                  ...(freshTransport
+                    ? {
+                        cwd: CODEX_TEST_RUNTIME_POLICY.cwd,
+                        model: CODEX_TEST_MODEL_SELECTION.model,
+                        config: {
+                          ...CodexAdapterV2.CODEX_THREAD_CONFIG,
+                          ...(appThreadId === null ? {} : { [T3_THREAD_ENV_KEY]: appThreadId }),
+                        },
+                      }
+                    : {}),
                 },
               },
             },
             {
-              type: "emit_inbound",
+              type: "emit_inbound" as const,
               label: "thread/resume",
-              frame: { id: 3, result: { thread: { id: nativeThreadId, updatedAt: 1782622450 } } },
+              frame: { id, result: { thread: { id: nativeThreadId, updatedAt: 1782622450 } } },
             },
-          ],
-        });
-
-        const resumeThreadEnvs: Array<unknown> = [];
-
-        const harness = yield* makeCodexReplayHarness(
-          transcript,
-          () => Effect.void,
-          (method, params) =>
+          ];
+          const resumeThreadEnvs: Array<unknown> = [];
+          const onRawRequest = (method: string, params: unknown) =>
             Effect.sync(() => {
               if (method === "thread/resume") resumeThreadEnvs.push(threadEnvOf(params));
+            });
+          const initial = yield* makeCodexReplayHarness(
+            makeCodexReplayTranscript({
+              scenario,
+              entries: [
+                ...preamble,
+                ...(freshTransport
+                  ? []
+                  : threadIds.flatMap((id, index) => resumeEntries(3 + index, id))),
+              ],
             }),
-        );
-
-        const resumed = yield* harness.runtime.resumeThread({
-          providerThread: harness.providerThread,
-          modelSelection: CODEX_TEST_MODEL_SELECTION,
-          runtimePolicy: CODEX_TEST_RUNTIME_POLICY,
-        });
-
-        yield* harness.runtime.resumeThread({
-          providerThread: { ...harness.providerThread, appThreadId: null },
-          modelSelection: CODEX_TEST_MODEL_SELECTION,
-          runtimePolicy: CODEX_TEST_RUNTIME_POLICY,
-        });
-
-        const explicitThreadId = ThreadId.make(`thread-${scenario}-explicit`);
-
-        yield* harness.runtime.resumeThread({
-          threadId: explicitThreadId,
-          providerThread: harness.providerThread,
-          modelSelection: CODEX_TEST_MODEL_SELECTION,
-          runtimePolicy: CODEX_TEST_RUNTIME_POLICY,
-        });
-
-        assert.equal(resumed.nativeThreadRef?.nativeId, nativeThreadId);
-
-        assert.equal(resumed.status, "idle");
-
-        assert.equal(DateTime.toEpochMillis(resumed.updatedAt), 1782622450000);
-
-        assert.deepEqual(resumeThreadEnvs, [harness.threadId, undefined, explicitThreadId]);
-      }).pipe(
-        Effect.provide(
-          Layer.mergeAll(
-            IdAllocator.layer,
-            McpProviderSessions.layer,
-            Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),
-            NodeCrypto.layer,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            { onRawRequest },
+          );
+          for (const [index, appThreadId] of threadIds.entries()) {
+            const harness = freshTransport
+              ? yield* makeCodexReplayHarness(
+                  makeCodexReplayTranscript({
+                    scenario,
+                    entries: [...preamble.slice(0, 3), ...resumeEntries(2, appThreadId)],
+                  }),
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  { existingProviderThread: initial.providerThread, onRawRequest },
+                )
+              : initial;
+            const resumed = yield* harness.runtime.resumeThread({
+              ...(index === 2 ? { threadId: explicitThreadId } : {}),
+              providerThread:
+                index === 1
+                  ? { ...harness.providerThread, appThreadId: null }
+                  : harness.providerThread,
+              modelSelection: CODEX_TEST_MODEL_SELECTION,
+              runtimePolicy: CODEX_TEST_RUNTIME_POLICY,
+            });
+            assert.equal(resumed.nativeThreadRef?.nativeId, nativeThreadId);
+            assert.equal(resumed.status, "idle");
+            assert.equal(DateTime.toEpochMillis(resumed.updatedAt), 1782622450000);
+          }
+          assert.deepEqual(
+            resumeThreadEnvs,
+            freshTransport
+              ? [threadId, undefined, explicitThreadId]
+              : [undefined, undefined, undefined],
+          );
+        }).pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              IdAllocator.layer,
+              McpProviderSessions.layer,
+              Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),
+            ),
           ),
         ),
       ),
-    ),
   );
 
   it.effect.each(
@@ -3932,9 +3953,6 @@ describe("CodexAdapterV2 post-settle continuation", () => {
                   params: {
                     threadId: nativeThreadId,
                     excludeTurns: true,
-                    cwd: CODEX_TEST_RUNTIME_POLICY.cwd,
-                    model: CODEX_TEST_MODEL_SELECTION.model,
-                    config: CodexAdapterV2.CODEX_THREAD_CONFIG,
                   },
                 },
               },
@@ -11441,6 +11459,14 @@ describe("CodexAdapterV2 process spawning", () => {
             url: "http://127.0.0.1:43123/mcp",
             tool_timeout_sec: 3_900,
             http_headers: { Authorization: "Bearer secret-codex-token" },
+            disabled_tools: ["t3_thread_wait"],
+          },
+          "mcp_servers.t3-code-direct": {
+            url: "http://127.0.0.1:43123/mcp",
+            tool_timeout_sec: 3_900,
+            http_headers: { Authorization: "Bearer secret-codex-token" },
+            enabled_tools: ["t3_thread_wait"],
+            omit_tools_from: ["code_mode", "deferred"],
           },
         },
       },

@@ -7492,6 +7492,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                     ...(reuseConfiguration
                       ? {}
                       : codexThreadRuntimeParams({
+                          threadId: threadInput.threadId ?? threadInput.providerThread.appThreadId,
                           mcpSession,
                           ...(threadInput.modelSelection === undefined
                             ? {}
