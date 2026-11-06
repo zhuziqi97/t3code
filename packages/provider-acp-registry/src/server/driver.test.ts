@@ -8,6 +8,7 @@ import * as Schema from "effect/Schema";
 import * as AcpRegistrySupport from "./AcpRegistrySupport.ts";
 import {
   applyAcpRegistryAvailableCommands,
+  applyAcpRegistryLiveConfiguration,
   buildCheckedAcpRegistrySnapshot,
   checkAcpRegistryProviderReadiness,
   checkAcpRegistryProviderStatus,
