@@ -41,8 +41,8 @@ describe("V2 client presentation", () => {
     };
     const active = presentThreadShell(environmentId, running);
     expect(active.latestSentMessageAt).toBe("2026-06-19T23:58:00.000Z");
-    expect(active.hasPendingUserInput).toBe(false);
-    expect(isThreadWorking(active)).toBe(true);
+    expect(active.hasPendingUserInput).toBe(true);
+    expect(isThreadWorking(active)).toBe(false);
     expect(canSnooze(active, { now: "2026-06-20T00:05:00.000Z" })).toBe(false);
 
     const completed = presentThreadShell(environmentId, {
@@ -57,8 +57,39 @@ describe("V2 client presentation", () => {
       "latestSentMessageAt",
     );
     expect(isThreadWorking(completed)).toBe(false);
-    expect(canSnooze(active, { now: "2026-06-20T00:05:00.000Z" })).toBe(false);
+    expect(canSnooze(completed, { now: "2026-06-20T00:05:00.000Z" })).toBe(false);
     expect(effectiveSnoozed(active, { now: "2026-06-20T00:05:00.000Z" })).toBe(false);
+    expect(effectiveSnoozed(completed, { now: "2026-06-20T00:05:00.000Z" })).toBe(false);
+
+    const resumedRunId = RunId.make("run-resumed-after-question");
+    for (const lifecycle of [
+      { status: "running", latestRunId: runId, activeRunId: runId },
+      { status: "waiting", latestRunId: runId, activeRunId: runId },
+      { status: "completed", latestRunId: runId, activeRunId: null },
+      { status: "cancelled", latestRunId: runId, activeRunId: null },
+      { status: "running", latestRunId: resumedRunId, activeRunId: resumedRunId },
+    ] as const) {
+      const pending = presentThreadShell(environmentId, { ...running, ...lifecycle });
+      expect(pending.source.pendingRuntimeRequest?.id).toBe(running.pendingRuntimeRequest.id);
+      expect(pending.latestRun?.status).toBe(lifecycle.status);
+      expect(pending.runtime?.activeRunId).toBe(lifecycle.activeRunId);
+      expect(pending.hasPendingUserInput).toBe(true);
+      expect(isThreadWorking(pending)).toBe(false);
+      expect(canSnooze(pending, { now: "2026-06-20T00:05:00.000Z" })).toBe(false);
+      expect(effectiveSnoozed(pending, { now: "2026-06-20T00:05:00.000Z" })).toBe(false);
+
+      const cleared = presentThreadShell(environmentId, {
+        ...running,
+        ...lifecycle,
+        pendingRuntimeRequest: null,
+      });
+      expect(cleared.hasPendingUserInput).toBe(false);
+      expect(isThreadWorking(cleared)).toBe(
+        lifecycle.status === "running" || lifecycle.status === "waiting",
+      );
+      expect(canSnooze(cleared, { now: "2026-06-20T00:05:00.000Z" })).toBe(true);
+      expect(effectiveSnoozed(cleared, { now: "2026-06-20T00:05:00.000Z" })).toBe(true);
+    }
   });
 
   it("moves a running thread with any question out of Working", () => {
