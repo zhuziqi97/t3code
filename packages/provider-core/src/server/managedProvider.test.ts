@@ -173,8 +173,11 @@ describe("makeManagedServerProvider", () => {
     Effect.scoped(
       Effect.gen(function* () {
         const calls = yield* Ref.make(0);
+        const invalidations = yield* Ref.make(0);
         const usageProbeStarted = yield* Deferred.make<void>();
+        const statusQueued = yield* Deferred.make<void>();
         const statusProbeStarted = yield* Deferred.make<void>();
+        const statusCompleted = yield* Deferred.make<void>();
         const releaseStatusProbe = yield* Deferred.make<void>();
         const provider = yield* makeManagedServerProvider<TestSettings>({
           resolveMaintenance: () => Effect.succeed(maintenanceCapabilities),
@@ -182,6 +185,7 @@ describe("makeManagedServerProvider", () => {
           streamSettings: Stream.empty,
           haveSettingsChanged: () => false,
           initialSnapshot: () => Effect.succeed(initialSnapshot),
+          invalidateUsageCache: Ref.update(invalidations, (count) => count + 1),
           checkProvider: Effect.gen(function* () {
             const count = yield* Ref.updateAndGet(calls, (count) => count + 1);
             if (count === 2) {
@@ -211,19 +215,30 @@ describe("makeManagedServerProvider", () => {
         );
         const running = yield* provider.refreshUsage!.pipe(Effect.forkChild);
         yield* Deferred.await(usageProbeStarted);
-        const status = yield* provider.refresh.pipe(Effect.forkChild({ startImmediately: true }));
+        yield* provider.startRefresh({
+          work: (check) =>
+            Effect.gen(function* () {
+              const status = yield* check.pipe(Effect.forkChild({ startImmediately: true }));
+              yield* Deferred.succeed(statusQueued, undefined);
+              yield* Fiber.join(status);
+              yield* Deferred.succeed(statusCompleted, undefined);
+            }),
+        });
+        yield* Deferred.await(statusQueued);
         const waiting = yield* provider.refreshUsage!.pipe(
           Effect.forkChild({ startImmediately: true }),
         );
         yield* Fiber.interrupt(running);
         yield* Deferred.await(statusProbeStarted);
+        assert.strictEqual(yield* Ref.get(invalidations), 1);
         const extra = yield* provider.refreshUsage!.pipe(
           Effect.forkChild({ startImmediately: true }),
         );
-        yield* Deferred.succeed(releaseStatusProbe, undefined);
-        yield* Fiber.join(status);
-        yield* Fiber.join(waiting);
         yield* Fiber.join(extra);
+        yield* Deferred.succeed(releaseStatusProbe, undefined);
+        yield* Deferred.await(statusCompleted);
+        yield* Fiber.join(waiting);
+        assert.strictEqual(yield* Ref.get(invalidations), 2);
         assert.strictEqual(yield* Ref.get(calls), 4);
       }),
     ).pipe(Effect.provide(layerAlwaysRunTest)),
