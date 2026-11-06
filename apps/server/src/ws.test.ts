@@ -1061,10 +1061,11 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
         streamChanges: Stream.fromQueue(providerChanges).pipe(
           Stream.tap(() => Queue.offer(pulled, undefined)),
         ),
-        startRefresh: (input) =>
+        refreshWorkspaceSnapshot: (input) =>
           Effect.sync(() => {
             assert.equal(input.instanceId, instanceId);
             assert.equal(input.cwd, "/b");
+            assert.equal(input.fresh, false);
             return [provider];
           }),
       }),
@@ -1200,9 +1201,9 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
 it.effect.each(["thread", "shell"] as const)(
   "%s resume from a cursor below the pruned boundary loads a snapshot",
   (scope) =>
-  Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient;
-    const now = "2026-10-13T00:00:00.000Z";
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      const now = "2026-10-13T00:00:00.000Z";
       const threadId = ThreadId.make("thread:pruned");
       const insert = (version: number) => sql<{ sequence: number }>`
       INSERT INTO orchestration_events (
@@ -1296,15 +1297,15 @@ it.effect.each(["thread", "shell"] as const)(
             ? yield* subscribeOrchestrationV2Thread({ threadId, afterSequence: first!.sequence })
             : yield* subscribeOrchestrationV2Shell({ afterSequence: first!.sequence });
         return stream;
-    }).pipe(
+      }).pipe(
         Effect.provideService(Statement.CurrentTransformer, gateReplayRead),
-      Effect.provideService(ThreadManagement.ThreadManagementService, {
-        ensureLegacyTranscript: () => Effect.void,
+        Effect.provideService(ThreadManagement.ThreadManagementService, {
+          ensureLegacyTranscript: () => Effect.void,
           getThreadSnapshot: () => Effect.die("snapshot"),
           listActiveShellIndex: () => Effect.die("snapshot"),
           readShellSnapshot: () => Effect.die("snapshot"),
           listActiveSubagentThreadIds: () => Effect.succeed([]),
-      } as unknown as ThreadManagement.ThreadManagementService["Service"]),
+        } as unknown as ThreadManagement.ThreadManagementService["Service"]),
         Effect.provideService(ProjectStore.ProjectStoreV2, {
           listShells: () => Effect.succeed([]),
         } as unknown as ProjectStore.ProjectStoreV2["Service"]),
@@ -1317,7 +1318,7 @@ it.effect.each(["thread", "shell"] as const)(
         } as ProjectEnrichment.ProjectEnrichmentService["Service"]),
         Effect.exit,
         Effect.forkChild,
-    );
+      );
       const fiber = yield* subscription;
       yield* Deferred.await(readStarted);
       // A pass publishes its boundary, then deletes the rows it covers.
