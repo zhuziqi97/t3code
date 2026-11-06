@@ -367,7 +367,7 @@ it.effect("names the click target that matched nothing when the server browser t
 
       expect(error._tag).toBe("PreviewAutomationTimeoutError");
       expect(error.message).toBe(
-        'Preview automation click timed out after 15000ms. No element matches ".definitely-no-such-t3-target".',
+        'Preview automation host timed out while executing click. No element matches ".definitely-no-such-t3-target".',
       );
     }),
   ),
@@ -1112,11 +1112,14 @@ it.effect("reports a host timeout separately from the budget for waiting on its 
       const error = yield* broker
         .invoke<void>({ scope, operation: "snapshot", input: {}, timeoutMs: 15_000 })
         .pipe(Effect.flip);
+      if (error._tag !== "PreviewAutomationTimeoutError")
+        return yield* Effect.die("Expected timeout");
       expect(error).toMatchObject({
         _tag: "PreviewAutomationTimeoutError",
         remoteTag: "PreviewAutomationTimeoutError",
         timeoutMs: 15_000,
       });
+      expect(error.remoteMessageLength).toBe("Screenshot timed out after 10000ms".length);
       expect(error.message).toBe("Preview automation host timed out while executing snapshot.");
     }),
   ),
@@ -1141,6 +1144,10 @@ it.effect("reports the actual budget when no host response arrives", () =>
       yield* Deferred.await(received);
       yield* TestClock.adjust(3_000);
       const error = yield* Fiber.join(result);
+      if (error._tag !== "PreviewAutomationTimeoutError")
+        return yield* Effect.die("Expected timeout");
+      expect(error.remoteTag).toBeUndefined();
+      expect(error.timeoutMs).toBe(3_000);
       expect(error.message).toBe(
         "Preview automation timed out waiting for the host response to snapshot after 3000ms.",
       );
