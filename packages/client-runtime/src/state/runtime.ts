@@ -48,15 +48,26 @@ const pendingOnceSessionReplaced =
   (session: RpcSession.RpcSession) =>
   <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     effect.pipe(
-      // The query's error type is generic, so its tags are unknown to `catchTags`.
-      Effect.catchIf(isEnvironmentRpcUnavailable, (error) =>
-        EnvironmentSupervisor.EnvironmentSupervisor.pipe(
+      // Typed catches would elect unrelated query failures to defects in a mixed cause.
+      Effect.catchCause((cause) => {
+        const error = Cause.findErrorOption(cause);
+        if (
+          Cause.hasDies(cause) ||
+          Cause.hasInterrupts(cause) ||
+          Option.isNone(error) ||
+          !isEnvironmentRpcUnavailable(error.value)
+        ) {
+          return Effect.failCause(cause);
+        }
+        return EnvironmentSupervisor.EnvironmentSupervisor.pipe(
           Effect.flatMap((supervisor) => SubscriptionRef.get(supervisor.session)),
           Effect.flatMap((current) =>
-            Option.isSome(current) && current.value === session ? Effect.fail(error) : Effect.never,
+            Option.isSome(current) && current.value === session
+              ? Effect.failCause(cause)
+              : Effect.never,
           ),
-        ),
-      ),
+        );
+      }),
     );
 
 interface EnvironmentAtomOptions<Input, A, E, R> {

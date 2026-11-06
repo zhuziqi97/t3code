@@ -1,8 +1,10 @@
 import {
+  AssetAccessError,
   type AssetCreateUrlInput,
   type AssetCreateUrlResult,
   type AssetImageDimensions,
   AssetResource,
+  EnvironmentAuthorizationError,
   EnvironmentId,
   type ProjectCloneSnapshot,
   WS_METHODS,
@@ -31,6 +33,9 @@ const ASSET_URL_REFRESH_INTERVAL_MS = 30 * 60_000;
 const ASSET_URL_STALE_TIME_MS = 5 * 60_000;
 const ASSET_URL_IDLE_TTL_MS = 60 * 60_000;
 export const ASSET_URL_MAX_IN_FLIGHT = 6;
+const isAssetRequestError = Schema.is(
+  Schema.Union([AssetAccessError, EnvironmentAuthorizationError]),
+);
 
 export class InvalidAssetCollectionKeyError extends Schema.TaggedError<InvalidAssetCollectionKeyError>()(
   "InvalidAssetCollectionKeyError",
@@ -285,10 +290,23 @@ export function createAssetEnvironmentAtoms<R, E>(
     )
       return yield* error;
     const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
-    // Map the full cause so retry defects and interruption survive.
+    // Effect elects typed errors to defects when a finalizer also fails.
     const asset = yield* registry
       .run(local.environmentId, mint(local.environmentId, input))
-      .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, () => error))));
+      .pipe(
+        Effect.catchCause((cause) =>
+          Effect.failCause(
+            Cause.fromReasons(
+              cause.reasons.map((reason) =>
+                Cause.isFailReason(reason) ||
+                (Cause.isDieReason(reason) && isAssetRequestError(reason.defect))
+                  ? Cause.makeFailReason(error).annotate(Cause.reasonAnnotations(reason))
+                  : reason,
+              ),
+            ),
+          ),
+        ),
+      );
     return { ...asset, relativeUrl: new URL(asset.relativeUrl, local.httpBaseUrl).href };
   });
   const createUrl = createEnvironmentQueryAtomFamily(runtime, {

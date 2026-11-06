@@ -88,6 +88,16 @@ describe("createAssetEnvironmentAtoms", () => {
       localFails: true,
       localDefect: true,
     },
+    {
+      name: "a defect without a typed local failure",
+      path: "/tmp/clip.mp4",
+      localDefect: true,
+    },
+    {
+      name: "an interrupted local retry",
+      path: "/tmp/clip.mp4",
+      localInterrupted: true,
+    },
     { name: "remote success", path: "/tmp/clip.mp4", success: true },
     { name: "relative path", path: "clip.mp4" },
     { name: "no primary", path: "/tmp/clip.mp4", primary: "none" },
@@ -124,6 +134,12 @@ describe("createAssetEnvironmentAtoms", () => {
         const client = {
           [WS_METHODS.assetsCreateUrl]: () => {
             calls.push(environmentId);
+            if (environmentId === localId && scenario.localInterrupted) {
+              return Effect.interrupt;
+            }
+            if (environmentId === localId && scenario.localDefect && !scenario.localFails) {
+              return Effect.die("cleanup failed");
+            }
             if (environmentId === localId && scenario.localFails) {
               const localError = Effect.fail(
                 new AssetWorkspaceAssetNotFoundError({ resource, checkedPath: "/local/clip.mp4" }),
@@ -197,15 +213,27 @@ describe("createAssetEnvironmentAtoms", () => {
             ? "https://local.test/api/assets/local/media"
             : "/api/assets/remote/media",
         );
-      } else if (scenario.localDefect) {
+      } else if (scenario.localDefect || scenario.localInterrupted) {
         const cause = yield* Effect.sandbox(result).pipe(Effect.flip);
-        expect(Cause.findErrorOption(cause)).toEqual(Option.some(error));
-        expect(Cause.findDefect(cause)).toEqual(Result.succeed("cleanup failed"));
+        expect(Cause.findErrorOption(cause)).toEqual(
+          scenario.localFails ? Option.some(error) : Option.none(),
+        );
+        if (scenario.localDefect) {
+          expect(Cause.findDefect(cause)).toEqual(Result.succeed("cleanup failed"));
+          expect(Cause.hasInterrupts(cause)).toBe(false);
+        } else {
+          expect(Cause.hasInterruptsOnly(cause)).toBe(true);
+        }
       } else {
         expect(yield* Effect.flip(result)).toEqual(error);
       }
       expect(calls).toEqual(
-        scenario.fallback || scenario.localFails ? [remoteId, localId] : [remoteId],
+        scenario.fallback ||
+          scenario.localFails ||
+          scenario.localDefect ||
+          scenario.localInterrupted
+          ? [remoteId, localId]
+          : [remoteId],
       );
       if (scenario.primary === "reconnecting") {
         registry.set(localEnvironment, localTarget);
