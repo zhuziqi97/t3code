@@ -2,6 +2,7 @@ import * as Result from "effect/Result";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
@@ -166,7 +167,7 @@ describe("PiProvider", () => {
     {
       label: "never answers",
       versionDelay: "Infinity",
-      status: "error",
+      status: "warning",
       version: null,
       message: "Pi CLI is installed but timed out while running `pi --version`.",
       probesAfterVersion: false,
@@ -174,6 +175,7 @@ describe("PiProvider", () => {
   ] as const)("gives `pi --version` 10 s when it $label", (row) =>
     Effect.gen(function* () {
       const spawned: Array<string> = [];
+      const completed = yield* Deferred.make<void>();
       const spawner = ChildProcessSpawner.make((command) => {
         const args = ChildProcess.isStandardCommand(command) ? command.args : [];
         spawned.push(args.join(" "));
@@ -185,9 +187,12 @@ describe("PiProvider", () => {
       });
       const fiber = yield* checkPiProviderStatus(settings).pipe(
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+        Effect.tap(() => Deferred.succeed(completed, undefined)),
         Effect.forkChild,
       );
-      yield* TestClock.adjust("10 seconds");
+      yield* TestClock.adjust("9 seconds");
+      if (!row.probesAfterVersion) assert.isFalse(yield* Deferred.isDone(completed));
+      yield* TestClock.adjust("1 second");
       const snapshot = yield* Fiber.join(fiber);
       assert.equal(snapshot.status, row.status);
       assert.equal(snapshot.version, row.version);
