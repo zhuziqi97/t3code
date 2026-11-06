@@ -486,6 +486,7 @@ describe("DesktopWindow", () => {
         const createCount = yield* Ref.make(0);
         const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
         const backgroundClose = yield* Deferred.make<void>();
+        const firstReveal = yield* Deferred.make<void>();
         let backgroundCloses = 0;
         let reveals = 0;
         const layer = layerTest({
@@ -494,6 +495,7 @@ describe("DesktopWindow", () => {
           mainWindow,
           onReveal: () => {
             reveals += 1;
+            Deferred.doneUnsafe(firstReveal, Effect.void);
           },
           onBackgroundClose: () =>
             Effect.sync(() => {
@@ -504,6 +506,10 @@ describe("DesktopWindow", () => {
           const desktopWindow = yield* DesktopWindow.DesktopWindow;
           const state = yield* DesktopState.DesktopState;
           yield* desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773"));
+          assert.equal(reveals, 0);
+          fakeWindow.windowListeners.get("ready-to-show")!();
+          yield* Deferred.await(firstReveal);
+          assert.equal(reveals, 1);
           const close = fakeWindow.windowListeners.get("close")!;
           let prevented = false;
           close({
@@ -516,7 +522,7 @@ describe("DesktopWindow", () => {
           const creations = yield* Ref.get(createCount);
           yield* desktopWindow.activate;
           assert.equal(yield* Ref.get(createCount), creations);
-          assert.isAbove(reveals, 0);
+          assert.equal(reveals, 2);
           yield* Ref.set(state.quitting, true);
           prevented = false;
           close({
