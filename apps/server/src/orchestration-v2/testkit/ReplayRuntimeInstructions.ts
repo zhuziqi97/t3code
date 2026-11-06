@@ -1,6 +1,9 @@
 import type { ProviderDriverKind, ProviderReplayTranscript } from "@t3tools/contracts";
 
-import { buildRuntimeInstructions } from "@t3tools/provider-core/server/runtimeInstructions";
+import {
+  buildRuntimeInstructions,
+  PULL_REQUEST_LINKING_INSTRUCTIONS,
+} from "@t3tools/provider-core/server/runtimeInstructions";
 
 export function materializeReplayTranscriptRuntimeInstructions(
   transcript: ProviderReplayTranscript,
@@ -13,11 +16,13 @@ export function materializeReplayTranscriptRuntimeInstructions(
         ? "Grok"
         : runtime.driver === "kiro"
           ? "Kiro"
-        : runtime.driver === "acpRegistry"
-          ? "acpRegistry"
-          : runtime.driver === "fx"
-            ? "fx"
-            : undefined;
+          : runtime.driver === "muse"
+            ? "Muse Code"
+            : runtime.driver === "acpRegistry"
+              ? "acpRegistry"
+              : runtime.driver === "fx"
+                ? "fx"
+                : undefined;
   if (harness === undefined) return transcript;
   const instructions = buildRuntimeInstructions({ harness, model: runtime.model });
 
@@ -27,6 +32,46 @@ export function materializeReplayTranscriptRuntimeInstructions(
       if (entry.type !== "expect_outbound") return entry;
       const frame = entry.frame;
       if (typeof frame !== "object" || frame === null) return entry;
+      if (
+        runtime.driver === "muse" &&
+        "method" in frame &&
+        frame.method === "turn/start" &&
+        "params" in frame &&
+        typeof frame.params === "object" &&
+        frame.params !== null &&
+        "input" in frame.params &&
+        Array.isArray(frame.params.input)
+      ) {
+        const input: ReadonlyArray<unknown> = frame.params.input;
+        const first = input[0];
+        if (
+          typeof first !== "object" ||
+          first === null ||
+          !("text" in first) ||
+          typeof first.text !== "string" ||
+          !first.text.startsWith("<runtime_info>")
+        )
+          return entry;
+        return {
+          ...entry,
+          frame: {
+            ...frame,
+            params: {
+              ...frame.params,
+              input: [
+                {
+                  ...first,
+                  text: first.text.replace(
+                    /<pull_request_linking>[\s\S]*?<\/pull_request_linking>/u,
+                    PULL_REQUEST_LINKING_INSTRUCTIONS,
+                  ),
+                },
+                ...input.slice(1),
+              ],
+            },
+          },
+        };
+      }
       if (
         runtime.driver === "cursor" &&
         "type" in frame &&
