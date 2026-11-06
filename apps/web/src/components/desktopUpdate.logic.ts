@@ -132,6 +132,7 @@ export function getDesktopUpdateButtonTooltip(
   translate: TFunction = i18n.t,
   managedDenial?: string,
 ): string {
+  if (managedDenial !== undefined) return managedDenial;
   if (state.convene) {
     if (state.status === "checking") return translate("update.checking");
     if (state.message) return formatDesktopUpdateMessage(state.message, translate);

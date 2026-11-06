@@ -137,6 +137,9 @@ describe("desktop update button state", () => {
         helpUrl: "https://platform.example/prefix/help/t3code",
       },
     };
+    expect(
+      getDesktopUpdateButtonTooltip(state, i18n.getFixedT("en"), "Org /raw/update policy"),
+    ).toBe("Org /raw/update policy");
     expect(resolveDesktopUpdateButtonAction(state)).toBe("open-download");
     expect(resolveDesktopUpdateButtonAction({ ...state, status: "downloaded" })).toBe("none");
     expect(

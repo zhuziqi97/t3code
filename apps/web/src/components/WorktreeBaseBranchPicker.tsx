@@ -1,6 +1,6 @@
 import type { EnvironmentId } from "@t3tools/contracts";
 import { ChevronDownIcon, GitBranchIcon } from "lucide-react";
-import { useDeferredValue, useState } from "react";
+import { useState } from "react";
 import { useTranslate } from "../i18n";
 
 import { usePaginatedBranches } from "../state/queries";

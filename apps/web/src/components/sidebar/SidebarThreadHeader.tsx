@@ -14,7 +14,6 @@ import { SidebarInput, SidebarMenuButton } from "../ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
 export interface SidebarThreadHeaderProps {
-  searchFieldRef?: RefObject<HTMLDivElement | null>;
   newThreadTargetLabel: string | null;
   hasProjects: boolean;
   projectScope: ReactNode;
@@ -35,7 +34,6 @@ export interface SidebarThreadHeaderProps {
 }
 
 export function SidebarThreadHeader({
-  searchFieldRef,
   newThreadTargetLabel,
   hasProjects,
   projectScope,

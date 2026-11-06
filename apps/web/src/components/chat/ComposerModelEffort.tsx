@@ -1,5 +1,4 @@
 import { i18n, useTranslate } from "../../i18n";
-import { isReasoningOption } from "@t3tools/shared/model";
 import {
   formatProviderOptionName,
   formatProviderOptionChoiceLabel,
