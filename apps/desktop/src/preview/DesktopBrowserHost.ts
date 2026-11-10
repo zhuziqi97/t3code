@@ -293,7 +293,10 @@ export const make = Effect.gen(function* () {
 
   /** A detached session, such as a closed viewer, waits on nothing it sent. */
   const dropSessionHolds = (tab: AttachedTab, owner: string) => {
-    tab.screencasts.delete(owner);
+    const streamed = tab.screencasts.delete(owner);
+    if (streamed && tab.screencasts.size === 0) {
+      void tab.debuggee.debugger.sendCommand("Page.stopScreencast").catch(() => {});
+    }
     for (const [pending, hold] of tab.focusPending) {
       if (hold.owner === owner) tab.focusPending.delete(pending);
     }
@@ -334,6 +337,7 @@ export const make = Effect.gen(function* () {
             if (owner !== undefined) streamingOwners.add(owner);
           } else if (sessionId === undefined && method === "Page.stopScreencast") {
             tab.screencasts.delete(owner);
+            if (tab.screencasts.size > 0) return Promise.resolve({});
           }
           // A person's input through a viewer, or Playwright's own housekeeping, is not the agent's.
           if (
