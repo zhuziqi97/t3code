@@ -3882,6 +3882,8 @@ export const en = {
   "convene.resource.unavailable": "The resource could not be read. Try again.",
   "convene.resource.projectUnavailable": "This project is not connected to this resource module.",
   "convene.resource.open": "Open Convene resource",
+  "convene.resource.requiresThread":
+    "Open this link from an existing thread to view the Convene resource.",
   "convene.resource.issueStateOpen": "Open",
   "convene.resource.issueStateClosed": "Closed",
   "chat.context.window": "Context Window",

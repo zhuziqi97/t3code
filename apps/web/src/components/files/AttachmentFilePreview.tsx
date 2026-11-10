@@ -92,7 +92,8 @@ export function AttachmentFilePreview(props: {
         resource: Extract<AssetResource, { _tag: "media-file" | "draft-workspace-file" }>;
       };
   htmlRender?: boolean;
-  threadRef?: ScopedThreadRef;
+  environmentId?: EnvironmentId | undefined;
+  threadRef?: ScopedThreadRef | undefined;
   origin?: string;
   onRemove?: () => void;
   onClose?: () => void;
@@ -302,6 +303,10 @@ export function AttachmentFilePreview(props: {
         <ChatMarkdown
           text={maskMarkdownFrontmatter(content.text)}
           cwd={undefined}
+          threadRef={props.threadRef}
+          environmentId={
+            props.threadRef?.environmentId ?? props.environmentId ?? props.asset?.environmentId
+          }
           className="mx-auto max-w-4xl px-6 py-5"
         />
       </ScrollArea>

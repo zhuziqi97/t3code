@@ -943,7 +943,7 @@ function RenderedMarkdownSurface({
   | "wordWrap"
   | "onPostRender"
 > & {
-  threadRef: ScopedThreadRef;
+  threadRef: ScopedThreadRef | undefined;
   readOnly: boolean;
   workspaceMutationId: string | null;
 }) {
@@ -953,6 +953,7 @@ function RenderedMarkdownSurface({
   return (
     <ScrollArea className="min-h-0 flex-1">
       <FileMarkdownPreview
+        environmentId={environmentId}
         text={contents}
         cwd={cwd}
         relativePath={relativePath}
@@ -1364,7 +1365,7 @@ export default function FilePreviewPanel({
               sizeBytes={attachment.sizeBytes}
               asset={{ environmentId, attachmentId: attachment.id }}
               htmlRender={attachment.htmlRender === true}
-              threadRef={threadRef}
+              threadRef={draft ? undefined : threadRef}
             />
           ) : relativePath && isVideo && absolutePath ? (
             <WorkspaceVideoPreview
@@ -1497,7 +1498,7 @@ export default function FilePreviewPanel({
                 environmentId={environmentId}
                 cwd={cwd}
                 relativePath={relativePath}
-                threadRef={threadRef}
+                threadRef={draft ? undefined : threadRef}
                 contents={file.data.contents}
                 workspaceMutationId={workspaceMutationId}
                 readOnly={file.data.truncated || isHostFile || !canWriteFiles}

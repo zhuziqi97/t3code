@@ -3670,6 +3670,7 @@ export const zh: Partial<Messages> = {
   "convene.resource.unavailable": "暂时无法读取平台资源，请重试。",
   "convene.resource.projectUnavailable": "此项目未关联此资源所在模块。",
   "convene.resource.open": "查看 Convene 资源",
+  "convene.resource.requiresThread": "请从已有会话打开此链接以查看 Convene 资源。",
   "convene.resource.issueStateOpen": "未关闭",
   "convene.resource.issueStateClosed": "已关闭",
   "chat.context.window": "上下文窗口",

@@ -728,6 +728,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const previewFile = composerFiles.find((file) => file.id === previewFileId);
   const composerContextActions = {
     environmentId,
+    threadRef: routeKind === "server" ? routeThreadRef : undefined,
     cwd: gitCwd ?? undefined,
     expandImage: (imageId: string) => {
       const preview = buildExpandedImagePreview(composerImages, imageId);
@@ -3515,6 +3516,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 {previewFile ? (
                   <ComposerFilePreviewDialog
                     file={previewFile}
+                    environmentId={environmentId}
+                    threadRef={routeKind === "server" ? routeThreadRef : undefined}
                     onRemove={removeComposerFileFromDraft}
                     onPreviewFileIdChange={setPreviewFileId}
                   />

@@ -3,7 +3,6 @@ import { useConveneResourceStore } from "./convene/conveneResourceStore";
 import { isConveneResourceLink } from "@t3tools/client-runtime/convene-resource-reader";
 import { buildFileLinkParentSuffixByPath, fileLinkLabel } from "@t3tools/shared/fileLinks";
 import {
-  isWindowsDrivePathHref,
   normalizeMarkdownLinkDestination,
   extractInlineCodeSpans,
   extractMarkdownLinkHrefs,
@@ -92,7 +91,6 @@ import type {
 } from "react-markdown";
 import { createIncrementalMarkdownPlugin } from "../markdown-incremental";
 import type { Pluggable, PluggableList } from "unified";
-import { defaultUrlTransform } from "react-markdown";
 import { parseAssistantCitationHref } from "@t3tools/shared/assistantCitations";
 import { parseComposerContextHref } from "@t3tools/shared/composerContextReferences";
 import { parseThreadLinkHref } from "@t3tools/shared/threadLinks";
@@ -137,6 +135,7 @@ import { useRenderedAppearance } from "../hooks/useTheme";
 import { useClientSettings } from "../hooks/useSettings";
 import { chatMarkdownClipboardPayload } from "../markdown-clipboard";
 import {
+  markdownUrlTransform,
   resolveInlineCodeFileLinkMeta,
   resolveMarkdownFileLinkMeta,
   rewriteMarkdownFileUriHref,
@@ -403,14 +402,6 @@ const CHAT_MARKDOWN_LITERAL_HTML_REHYPE_PLUGINS = [
   rehypeTextDirection,
   rehypeChipPunctuation,
 ] satisfies NonNullable<ReactMarkdownOptions["rehypePlugins"]>;
-
-function markdownUrlTransform(href: string) {
-  if (parseAssistantCitationHref(href)) return href;
-  if (parseComposerContextHref(href)) return href;
-  if (parseThreadLinkHref(href)) return href;
-  if (isWindowsDrivePathHref(href)) return href;
-  return rewriteMarkdownFileUriHref(href) ?? defaultUrlTransform(href);
-}
 
 const NO_MARKDOWN_EDITORS: ReadonlyArray<EditorId> = [];
 
@@ -1087,12 +1078,13 @@ const CHAT_MARKDOWN_COMPONENTS = {
     } = use(ChatMarkdownRendererContext);
     const text = use(ChatMarkdownTextContext);
     if (href && isConveneResourceLink(href)) {
-      return (
+      const link = (
         <a
           {...props}
           href={href}
           className="text-primary underline underline-offset-2"
           aria-label={t("convene.resource.open")}
+          aria-disabled={!threadRef}
           onClick={(event) => {
             event.preventDefault();
             if (threadRef) useConveneResourceStore.getState().open(threadRef, href);
@@ -1100,6 +1092,14 @@ const CHAT_MARKDOWN_COMPONENTS = {
         >
           {children}
         </a>
+      );
+      return threadRef ? (
+        link
+      ) : (
+        <Tooltip>
+          <TooltipTrigger render={link} />
+          <TooltipPopup>{t("convene.resource.requiresThread")}</TooltipPopup>
+        </Tooltip>
       );
     }
     const citation = href ? parseAssistantCitationHref(href) : null;
