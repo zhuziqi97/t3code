@@ -2,6 +2,7 @@ import {
   type ClaudeSettings,
   type ModelCapabilities,
   type ServerProvider,
+  type ServerProviderModel,
   type ServerProviderSlashCommand,
   type ServerProviderResetCredits,
 } from "@t3tools/contracts";
@@ -12,11 +13,13 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { createModelCapabilities } from "@t3tools/shared/model";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
 import {
   query as claudeQuery,
+  type ModelInfo as ClaudeModelInfo,
   type Options as ClaudeQueryOptions,
   type ModelInfo,
   type SlashCommand as ClaudeSlashCommand,
@@ -49,14 +52,29 @@ import {
   BUNDLED_CLAUDE_MODEL_CATALOG,
   withClaudeReportedModels,
   type ClaudeModelCatalog,
+  claudeReportedModels,
   formatClaudeVersionUpgradeMessage,
   resolveClaudeModelsForVersion,
   resolveClaudeUpdateRequiredModels,
+  withUltracodeToggle,
 } from "./ClaudeModelCatalog.ts";
 
 const DEFAULT_CLAUDE_MODEL_CAPABILITIES: ModelCapabilities = createModelCapabilities({
   optionDescriptors: [],
 });
+
+function claudeProviderModels(
+  builtInModels: ReadonlyArray<ServerProviderModel>,
+  customModels: ClaudeSettings["customModels"],
+): ReadonlyArray<ServerProviderModel> {
+  return providerModelsFromSettings(
+    builtInModels,
+    customModels,
+    DEFAULT_CLAUDE_MODEL_CAPABILITIES,
+  ).map((model) =>
+    model.isCustom ? { ...model, capabilities: withUltracodeToggle(model.capabilities) } : model,
+  );
+}
 
 const CLAUDE_PRESENTATION = {
   displayName: "Claude",
@@ -248,7 +266,7 @@ export type ClaudeCapabilitiesProbe = {
   /** OAuth applies only to firstParty; Bedrock uses external AWS credentials and omits subscription/token fields. */
   readonly apiProvider: string | undefined;
   readonly slashCommands: ReadonlyArray<ServerProviderSlashCommand>;
-  readonly models?: ReadonlyArray<ModelInfo>;
+  readonly models?: ReadonlyArray<ClaudeModelInfo>;
   readonly defaultModel?: string;
   /** Undefined means get_usage failed; absent windows on success mean no subscription windows, as with API keys. */
   readonly usage?: Pick<SDKControlGetUsageResponse, "rate_limits_available" | "rate_limits">;
@@ -327,13 +345,27 @@ function waitForAbortSignal(signal: AbortSignal): Promise<void> {
   });
 }
 
-/** Keep native gateway discovery alive until Claude Code's configured deadline. */
-function claudeGatewayDiscoveryGraceMs(environment: NodeJS.ProcessEnv): number {
-  const enabled = environment.CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY?.trim().toLowerCase();
-  if (!enabled || enabled === "0" || enabled === "false" || !environment.ANTHROPIC_BASE_URL?.trim())
-    return 0;
+/**
+ * With gateway model discovery on, Claude Code refreshes its model cache in the background after
+ * initialization, so the probe subprocess outlives init by Claude Code's discovery timeout.
+ */
+function claudeGatewayDiscoveryGraceMs(environment: Readonly<Record<string, unknown>>): number {
+  const enabled = String(environment.CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY ?? "")
+    .trim()
+    .toLowerCase();
+  if (!enabled || enabled === "0" || enabled === "false") return 0;
+  if (!String(environment.ANTHROPIC_BASE_URL ?? "").trim()) return 0;
   const configured = Number(environment.CLAUDE_CODE_GATEWAY_MODEL_DISCOVERY_TIMEOUT_MS);
   return Number.isFinite(configured) && configured > 0 ? configured : 3_000;
+}
+
+class ClaudeCapabilitiesProbeSdkError extends Schema.TaggedError<ClaudeCapabilitiesProbeSdkError>()(
+  "ClaudeCapabilitiesProbeSdkError",
+  { operation: Schema.Literals(["initialize", "usage"]), cause: Schema.Defect() },
+) {
+  override get message(): string {
+    return `Claude capability probe ${this.operation} failed.`;
+  }
 }
 
 /** A never-yielding prompt allows local initialization IPC without sending an Anthropic request. */
@@ -344,7 +376,6 @@ const probeClaudeCapabilities = (
   includeUsage = true,
 ) => {
   const abort = new AbortController();
-  let discoveryGraceMs = 0;
   const abortProbe = Effect.sync(() => {
     if (!abort.signal.aborted) abort.abort();
   });
@@ -356,25 +387,36 @@ const probeClaudeCapabilities = (
       claudeEnvironment,
     );
     const managedMcpConfig = yield* hasClaudeManagedMcpConfig();
-    return yield* Effect.tryPromise(async () => {
-      const q = claudeQuery({
-        // oxlint-disable-next-line require-yield -- never yields, so no prompt reaches the API
-        prompt: (async function* (): AsyncGenerator<SDKUserMessage> {
-          await waitForAbortSignal(abort.signal);
-        })(),
-        options: buildClaudeCapabilitiesProbeQueryOptions({
-          executablePath,
-          abortController: abort,
-          environment: claudeEnvironment,
-          cwd,
-          managedMcpConfig,
-        }),
-      });
-      const init = await q.initializationResult();
-      return { q, init };
+    // Workspace probes (no usage) discard models; the machine probe refreshes the shared cache.
+    const graceMs = includeUsage
+      ? claudeGatewayDiscoveryGraceMs({
+          ...claudeEnvironment,
+          ...(yield* readClaudeSettingsEnv(claudeSettings, cwd, claudeEnvironment)),
+        })
+      : 0;
+    return yield* Effect.tryPromise({
+      try: async () => {
+        const q = claudeQuery({
+          // oxlint-disable-next-line require-yield -- never yields, so no prompt reaches the API
+          prompt: (async function* (): AsyncGenerator<SDKUserMessage> {
+            await waitForAbortSignal(abort.signal);
+          })(),
+          options: buildClaudeCapabilitiesProbeQueryOptions({
+            executablePath,
+            abortController: abort,
+            environment: claudeEnvironment,
+            cwd,
+            managedMcpConfig,
+          }),
+        });
+        const init = await q.initializationResult();
+        return { q, init, graceMs };
+      },
+      catch: (cause) => new ClaudeCapabilitiesProbeSdkError({ operation: "initialize", cause }),
     });
   }).pipe(
-    Effect.flatMap(({ q, init }) =>
+    Effect.timeout(CAPABILITIES_PROBE_TIMEOUT_MS),
+    Effect.flatMap(({ q, init, graceMs }) =>
       Effect.gen(function* () {
         const account = init.account as
           | {
@@ -408,9 +450,13 @@ const probeClaudeCapabilities = (
         // `behaviors`: with a few GB of transcripts it outlasts the deadline.
         const usageCheckedAt = DateTime.formatIso(yield* DateTime.now);
         const usageResult = includeUsage
-          ? yield* Effect.tryPromise(() =>
-              q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }),
-            ).pipe(Effect.timeout(DEFAULT_TIMEOUT_MS), Effect.result)
+          ? yield* Effect.tryPromise({
+              try: () =>
+                q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({
+                  skipBehaviors: true,
+                }),
+              catch: (cause) => new ClaudeCapabilitiesProbeSdkError({ operation: "usage", cause }),
+            }).pipe(Effect.timeout(DEFAULT_TIMEOUT_MS), Effect.result)
           : undefined;
         const usage =
           usageResult && Result.isSuccess(usageResult)
@@ -426,15 +472,19 @@ const probeClaudeCapabilities = (
           apiKeySource: account?.apiKeySource,
           apiProvider: account?.apiProvider,
           slashCommands: parseClaudeInitializationCommands(init.commands),
-          ...(init.models ? { models: init.models } : {}),
+          ...(init.models?.length ? { models: init.models } : {}),
           ...(defaultModel ? { defaultModel } : {}),
           ...(usage ? { usage, usageCheckedAt } : {}),
         } satisfies ClaudeCapabilitiesProbe;
-      }),
+      }).pipe(
+        Effect.tap(() =>
+          graceMs > 0
+            ? Effect.sleep(graceMs).pipe(Effect.andThen(abortProbe), Effect.forkDetach)
+            : abortProbe,
+        ),
+      ),
     ),
-    // Native gateway discovery remains owned by this operation and is cancellable.
-    Effect.tap(() => (discoveryGraceMs > 0 ? Effect.sleep(discoveryGraceMs) : Effect.void)),
-    Effect.ensuring(abortProbe),
+    Effect.onError(() => abortProbe),
     Effect.tapError((error) =>
       Effect.logWarning("Claude capability probe failed.", { errorTag: error._tag }),
     ),
@@ -526,10 +576,9 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
 > {
   const resolvedEnvironment = environment ?? process.env;
   const checkedAt = DateTime.formatIso(yield* DateTime.now);
-  const allModels = providerModelsFromSettings(
+  const allModels = claudeProviderModels(
     modelCatalog.models.map((entry) => entry.model),
     claudeSettings.customModels,
-    DEFAULT_CLAUDE_MODEL_CAPABILITIES,
   );
 
   if (!claudeSettings.enabled) {
@@ -749,10 +798,9 @@ export const makePendingClaudeProvider = Effect.fn("ClaudeProvider.makePendingCl
     modelCatalog: ClaudeModelCatalog = BUNDLED_CLAUDE_MODEL_CATALOG,
   ): Effect.fn.Return<ServerProviderDraft> {
     const checkedAt = yield* nowIso;
-    const models = providerModelsFromSettings(
+    const models = claudeProviderModels(
       modelCatalog.models.map((entry) => entry.model),
       claudeSettings.customModels,
-      DEFAULT_CLAUDE_MODEL_CAPABILITIES,
     );
 
     if (!claudeSettings.enabled) {

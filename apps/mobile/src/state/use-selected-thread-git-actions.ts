@@ -22,10 +22,10 @@ import {
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
 
-import { useBranches } from "../state/queries";
+import { useBranches } from "./queries";
+import { threadEnvironment } from "./threads";
+import { vcsActionManager, vcsEnvironment } from "./vcs";
 import { workspaceRecoveryEnvironment } from "./workspaceRecovery";
-import { threadEnvironment } from "../state/threads";
-import { vcsActionManager, vcsEnvironment } from "../state/vcs";
 import { uuidv4 } from "../lib/uuid";
 import { appAtomRegistry } from "./atom-registry";
 import { readEnvironmentScope, useEnvironmentScope } from "./session";

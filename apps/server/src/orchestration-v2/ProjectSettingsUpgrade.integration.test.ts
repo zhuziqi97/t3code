@@ -159,8 +159,7 @@ const layerRuntime = (dbPath: string) => {
     Layer.provide(
       Layer.succeed(ProviderInstanceRegistry.ProviderInstanceRegistry, {
         beforeInstanceClose: () => Effect.void,
-        // @effect-diagnostics-next-line effectSucceedWithVoid:off - The runtime API needs an absent value, not void.
-        getInstance: () => Effect.succeed(undefined),
+        getInstance: () => Effect.undefined,
         listInstances: Effect.succeed([]),
         listUnavailable: Effect.succeed([]),
         streamChanges: Stream.empty,

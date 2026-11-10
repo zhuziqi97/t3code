@@ -3,6 +3,7 @@ import { isConveneResourceLink } from "@t3tools/client-runtime/convene-resource-
 import { parseAssistantCitationHref } from "@t3tools/shared/assistantCitations";
 import { parseComposerContextHref } from "@t3tools/shared/composerContextReferences";
 import { parseThreadLinkHref } from "@t3tools/shared/threadLinks";
+import { isLocalEditorFileUrl } from "@t3tools/contracts";
 import { fileBasename, isAbsolutePath, workspaceRelativeFilePath } from "@t3tools/shared/path";
 import {
   isWindowsDrivePathHref,
@@ -23,6 +24,7 @@ export function markdownUrlTransform(href: string) {
   if (parseComposerContextHref(href)) return href;
   if (parseThreadLinkHref(href)) return href;
   if (isWindowsDrivePathHref(href)) return href;
+  if (isLocalEditorFileHref(href)) return href;
   return rewriteMarkdownFileUriHref(href) ?? defaultUrlTransform(href);
 }
 
@@ -52,6 +54,14 @@ export function rewriteMarkdownFileUriHref(href: string | undefined): string | n
   if (!href) return null;
   const target = parseFileUrlHref(normalizeMarkdownLinkDestination(href));
   return target ? `${target.path}${target.hash}` : null;
+}
+
+export function isLocalEditorFileHref(href: string): boolean {
+  try {
+    return isLocalEditorFileUrl(new URL(href));
+  } catch {
+    return false;
+  }
 }
 
 export function resolveInlineCodeFileLinkMeta(

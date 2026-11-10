@@ -31,7 +31,7 @@ import { canSnooze } from "@t3tools/client-runtime/state/thread-settled";
 import { threadChipCopyTarget } from "@t3tools/client-runtime/thread-reference";
 import type { MenuAction } from "@react-native-menu/menu";
 import { memo, useCallback, useMemo, useState, type ComponentProps } from "react";
-import { Platform, Pressable, useWindowDimensions, View } from "react-native";
+import { Platform, Pressable, Text as RNText, useWindowDimensions, View } from "react-native";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 
 import type { ThreadListProvider } from "../../state/thread-list-environments";
@@ -73,6 +73,7 @@ import {
   resolveThreadListV2Status,
   resolveThreadListV2ProviderDrivers,
   resolveThreadListV2SwipeActions,
+  layoutThreadListV2RowMenuActions,
   type ThreadListV2Status,
 } from "./threadListV2";
 import { QueuedMessageIcon } from "./queued-message-icon";
@@ -84,7 +85,8 @@ import { PullRequestGlyph } from "../pull-requests/pullRequestGlyphs";
 import { pullRequestStatus } from "../pull-requests/pullRequestStatus";
 
 interface StatusLabel {
-  readonly label: string;
+  // Null when the icon and timer carry the status on their own.
+  readonly label: string | null;
   readonly icon: AppSymbolName;
   readonly className: string;
   readonly iconTintClassName: string;
@@ -140,11 +142,28 @@ const DONE_STATUS_LABEL: StatusLabel = {
   iconTintClassName: "accent-adaptive-emerald-700-300",
 };
 
-function ThreadListV2Duration(props: { readonly startedAt: string | null }) {
+// DM Sans has no tabular figures, so a ticking timer in it reflows the row every second.
+const TABULAR_DURATION_STYLE = {
+  fontFamily: Platform.OS === "ios" ? "System" : "sans-serif",
+  fontWeight: "700",
+  fontVariant: ["tabular-nums"],
+} as const;
+
+function ThreadListV2Duration(props: {
+  readonly startedAt: string | null;
+  readonly leadingSpace: boolean;
+}) {
   const startedAtMs = Date.parse(props.startedAt ?? "");
   const nowMs = useVisibleSecondClock(Number.isFinite(startedAtMs));
   if (!Number.isFinite(startedAtMs)) return null;
-  return ` ${formatWorkingDurationLabel(nowMs - startedAtMs)}`;
+  return (
+    <>
+      {props.leadingSpace ? " " : null}
+      <RNText style={TABULAR_DURATION_STYLE}>
+        {formatWorkingDurationLabel(nowMs - startedAtMs)}
+      </RNText>
+    </>
+  );
 }
 
 function ThreadListV2Section(props: {
@@ -837,9 +856,9 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     ],
     [snoozePresets, t],
   );
-  const arrangementMenuItems = useMemo<MenuAction[]>(
-    () => [
-      ...(props.reorderSupported === true
+  const reorderMenuItems = useMemo<MenuAction[]>(
+    () =>
+      props.reorderSupported === true
         ? [
             { id: "arrange", title: t("thread.menu.arrange"), image: "line.3.horizontal" },
             {
@@ -855,23 +874,19 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
               attributes: { disabled: props.canMoveDown !== true },
             } satisfies MenuAction,
           ]
-        : []),
-      ...(props.pinningSupported
+        : [],
+    [props.canMoveDown, props.canMoveUp, props.reorderSupported],
+  );
+  const pinMenuItems = useMemo<MenuAction[]>(
+    () =>
+      props.pinningSupported
         ? [
             thread.pinnedAt != null
               ? { id: "unpin", title: t("thread.unpin.short"), image: "pin.slash" }
               : { id: "pin", title: t("thread.pin.short"), image: "pin" },
           ]
-        : []),
-    ],
-    [
-      props.canMoveDown,
-      props.canMoveUp,
-      props.reorderSupported,
-      props.pinningSupported,
-      thread.pinnedAt,
-      t,
-    ],
+        : [],
+    [props.pinningSupported, thread.pinnedAt],
   );
   const autoSettleMenuItems = useMemo<MenuAction[]>(
     () =>
@@ -1278,15 +1293,20 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
               <Text
                 className={cn(
                   "text-xs font-t3-bold",
-                  (status === "working" || status === "waiting") && "tabular-nums",
                   selected ? selectedThreadRowColors.foregroundClassName : statusLabel.className,
                 )}
               >
                 {statusLabel.label}
                 {status === "working" ? (
-                  <ThreadListV2Duration startedAt={resolveThreadWorkingStartedAt(thread)} />
+                  <ThreadListV2Duration
+                    startedAt={resolveThreadWorkingStartedAt(thread)}
+                    leadingSpace={statusLabel.label !== null}
+                  />
                 ) : status === "waiting" ? (
-                  <ThreadListV2Duration startedAt={thread.latestRun?.completedAt ?? null} />
+                  <ThreadListV2Duration
+                    startedAt={thread.latestRun?.completedAt ?? null}
+                    leadingSpace={statusLabel.label !== null}
+                  />
                 ) : null}
               </Text>
             </View>

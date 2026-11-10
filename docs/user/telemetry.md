@@ -8,7 +8,11 @@ Local diagnostic logs and resource monitoring remain available for troubleshooti
 not change requests sent to the agents and model providers you configure, or to a Convene
 platform you choose to connect to.
 
-## Mobile app crash reports
+The web app in a browser, including one the `t3` CLI opens, does not read these environment
+variables. When its build has relay tracing configured, it sends its own connection traces even
+if the server has opted out. The browser app has no relay tracing toggle.
+
+## Mobile app diagnostics
 
 When the iOS or Android app crashes or hits an error, it sends a report to T3 Code: the error
 message, the stack trace, the app version, and the device model and OS version. Each launch also
@@ -17,6 +21,22 @@ the T3 Connect relay to Axiom. They do not include your threads, prompts, or con
 but an error message can quote a value the app was handling.
 
 To stop sending them, turn off **Send crash reports** in **Settings > About T3 Code > Diagnostics**.
+
+The mobile app also sends relay connection traces when its build has tracing configured. These
+carry an identifier for the current app session. **Send crash reports** does not control these
+traces, and the mobile app has no separate relay tracing toggle. Server environment variables and
+managed policy do not disable mobile tracing.
+
+## Agent activity for mobile notifications
+
+When **Publish agent activity** is enabled on a host, it sends project and thread titles, model
+names, activity status, and environment and thread identifiers to the T3 Connect relay for
+[mobile notifications and live activities](./mobile-notifications.md). This is separate from
+product events and relay diagnostics. The telemetry opt-out does not disable it.
+
+To stop publishing, turn off **Publish agent activity** under **Settings > Sharing & access** on
+the host. Turning off notifications on a phone controls that phone's alerts, not the host's
+publishing setting.
 
 ## Export diagnostics to your own receiver
 

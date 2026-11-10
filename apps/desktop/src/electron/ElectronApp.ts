@@ -50,6 +50,7 @@ export class ElectronApp extends Context.Service<
      * on Linux and can differ from the host's locale.
      */
     readonly systemLocale: Effect.Effect<string>;
+    readonly preferredSystemLanguages: Effect.Effect<ReadonlyArray<string>>;
     readonly whenReady: Effect.Effect<void, ElectronAppWhenReadyError>;
     readonly requestSingleInstanceLock: Effect.Effect<boolean>;
     readonly quit: Effect.Effect<void>;
@@ -159,6 +160,7 @@ export const make = ElectronApp.of({
     }
     return toSystemLocaleTag(identifier, hourCycle);
   }),
+  preferredSystemLanguages: Effect.sync(() => Electron.app.getPreferredSystemLanguages()),
   whenReady: Effect.gen(function* () {
     const isPackaged = Electron.app.isPackaged;
     yield* Effect.tryPromise({

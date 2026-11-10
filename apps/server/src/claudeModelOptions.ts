@@ -9,7 +9,6 @@ import {
 import {
   BUNDLED_CLAUDE_MODEL_CATALOG,
   getClaudeCatalogModelCapabilities,
-  isClaudeCatalogUltracodeEffort,
   normalizeClaudeCatalogEffort,
   resolveClaudeCatalogApiModelId,
   resolveClaudeCatalogEffort,
@@ -31,7 +30,10 @@ export function compileClaudeModelSelection(
   catalog: ClaudeModelCatalog = BUNDLED_CLAUDE_MODEL_CATALOG,
 ): CompiledClaudeModelSelection {
   const capabilities = getClaudeCatalogModelCapabilities(catalog, selection.model);
-  const descriptors = getProviderOptionDescriptors({ caps: capabilities });
+  const descriptors = getProviderOptionDescriptors({
+    caps: capabilities,
+    selections: selection.options,
+  });
   const supportsBoolean = (id: string) =>
     descriptors.some((descriptor) => descriptor.type === "boolean" && descriptor.id === id);
   const rawEffort = getModelSelectionStringOptionValue(selection, "effort");
@@ -42,14 +44,17 @@ export function compileClaudeModelSelection(
       ? undefined
       : resolveClaudeCatalogEffort(catalog, selection.model, rawEffort));
   const effort = normalizeClaudeCatalogEffort(catalog, resolvedEffort, selection.model);
-  const fastMode =
-    getModelSelectionBooleanOptionValue(selection, "fastMode") ??
-    (selection.model !== null && supportsBoolean("fastMode") ? false : undefined);
-  const thinking = getModelSelectionBooleanOptionValue(selection, "thinking");
+  const fastMode = supportsBoolean("fastMode")
+    ? (getModelSelectionBooleanOptionValue(selection, "fastMode") ?? false)
+    : undefined;
+  const thinking = supportsBoolean("thinking")
+    ? getModelSelectionBooleanOptionValue(selection, "thinking")
+    : undefined;
+  const ultracode = descriptors.find((descriptor) => descriptor.id === "ultracode")?.currentValue;
   const settings = {
     ...(typeof thinking === "boolean" ? { alwaysThinkingEnabled: thinking } : {}),
     ...(typeof fastMode === "boolean" ? { fastMode } : {}),
-    ...(isClaudeCatalogUltracodeEffort(resolvedEffort) ? { ultracode: true } : {}),
+    ...(typeof ultracode === "boolean" ? { ultracode } : {}),
   };
   const apiModelId = resolveClaudeCatalogApiModelId(catalog, selection);
   const allowance = resolveClaudeCatalogCustomContextWindowTokens(catalog, selection);

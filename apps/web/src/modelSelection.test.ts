@@ -625,7 +625,6 @@ describe("instance-scoped model selection", () => {
       model: state.selectedModel,
       models: providers[0]!.models,
       modelOptions: state.modelOptions?.[instanceId],
-      planModeEnabled: false,
     });
 
     expect(state.selectedModel).toBe("gpt-missing");
@@ -833,7 +832,6 @@ describe("instance-scoped model selection", () => {
       model: state.selectedModel,
       models: providers[0]!.models,
       modelOptions: state.modelOptions?.[instanceId],
-      planModeEnabled: false,
     });
 
     expect(
@@ -871,7 +869,6 @@ describe("instance-scoped model selection", () => {
       model: state.selectedModel,
       models: providers[1]!.models,
       modelOptions: state.modelOptions?.[instanceId],
-      planModeEnabled: false,
     });
 
     expect(
@@ -999,7 +996,6 @@ describe("resolveAppModelSelectionState with the opencode plan agent", () => {
   };
   const settings: UnifiedSettings = {
     ...DEFAULT_UNIFIED_SETTINGS,
-    planModeEnabled: false,
     textGenerationModelSelection: createModelSelection(instanceId, model, [
       { id: "agent", value: "plan" },
     ]),
@@ -1067,7 +1063,6 @@ describe("default model settings and new-thread composer parity", () => {
           model,
           models,
           modelOptions,
-          planModeEnabled: settings.planModeEnabled,
         });
       const composerTraits = traits(composer.selectedModel, composer.modelOptions?.[instanceId]);
 

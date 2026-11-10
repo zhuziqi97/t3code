@@ -38,6 +38,7 @@ function layerElectronApp(
     metadata: Effect.die("unexpected metadata read"),
     name: Effect.succeed("T3 Code"),
     systemLocale: Effect.succeed("en-US"),
+    preferredSystemLanguages: Effect.succeed(["en-US"]),
     whenReady: Effect.void,
     requestSingleInstanceLock: Effect.succeed(true),
     quit: Effect.void,
@@ -147,6 +148,7 @@ describe("DesktopTelemetryPublisher", () => {
               Layer.succeed(DesktopShellEnvironment.DesktopShellEnvironment, {
                 installIntoProcess: Effect.succeed(true),
                 awaitDiscovery: Effect.succeed(true),
+                awaitUserShellDiscovery: Effect.succeed(true),
                 updates: Stream.make({
                   version: 1,
                   type: "shellEnvironment",

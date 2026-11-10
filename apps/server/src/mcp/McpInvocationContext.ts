@@ -135,7 +135,8 @@ export interface McpInvocationScope {
 export const threadLinkFor = (
   scope: Pick<McpInvocationScope, "environmentId">,
   threadId: ThreadId,
-): string => formatThreadLink({ environmentId: scope.environmentId, threadId });
+  title?: string,
+): string => formatThreadLink({ environmentId: scope.environmentId, threadId }, title);
 
 export class McpInvocationContext extends Context.Service<
   McpInvocationContext,
