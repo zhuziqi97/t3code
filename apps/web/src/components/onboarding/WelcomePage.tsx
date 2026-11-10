@@ -322,6 +322,7 @@ export function WelcomePage({
             </div>
             <p className="mt-1.5 text-sm text-muted-foreground">
               <Trans
+                t={t}
                 i18n={i18n}
                 i18nKey="wizard.settingUp"
                 values={{ environment: label }}
@@ -1440,6 +1441,7 @@ function AgentInstallTerminal({
             t("wizard.agents.terminalPermission")
           ) : setupState === "writeFailed" ? (
             <Trans
+              t={t}
               i18n={i18n}
               i18nKey="wizard.runInTerminal"
               components={{
@@ -2016,6 +2018,7 @@ function CliPathSetup() {
       <p className="min-w-0 flex-1 text-sm text-muted-foreground">
         {setup.added ? (
           <Trans
+            t={t}
             i18n={i18n}
             i18nKey="wizard.agents.cliOnPath"
             values={{ path: setup.file }}
@@ -2023,6 +2026,7 @@ function CliPathSetup() {
           />
         ) : (
           <Trans
+            t={t}
             i18n={i18n}
             i18nKey="wizard.agents.cliNeedsPath"
             values={{ path: setup.file }}
