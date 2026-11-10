@@ -43,6 +43,7 @@ import * as ServerSettings from "../serverSettings.ts";
 import * as Sqlite from "../persistence/Sqlite.ts";
 import * as CodexUsageHistory from "./CodexUsageHistory.ts";
 import * as CursorAccountReader from "@t3tools/provider-cursor/server/CursorAccountReader";
+import * as CursorKeychain from "@t3tools/provider-cursor/server/CursorKeychain";
 import * as CursorUsageAccounts from "@t3tools/provider-cursor/server/CursorUsageAccounts";
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as BackgroundPolicy from "../background/BackgroundPolicy.ts";
@@ -157,8 +158,19 @@ const layerService = (input: {
   readonly platform?: NodeJS.Platform;
   readonly hostname?: string;
   readonly secretStore?: Partial<ServerSecretStore.ServerSecretStore["Service"]>;
+  readonly keychainAccessToken?: CursorKeychain.CursorKeychain["Service"]["accessToken"];
 }) =>
-  layerCursorUsageAccounts(CursorAccountReader.layer).pipe(
+  layerCursorUsageAccounts(
+    CursorAccountReader.layer.pipe(
+      Layer.provide(
+        Layer.succeed(CursorKeychain.CursorKeychain, {
+          accessToken:
+            input.keychainAccessToken ??
+            Effect.die("The usage fixture must not read the real Keychain"),
+        }),
+      ),
+    ),
+  ).pipe(
     Layer.provideMerge(AntigravityUsage.layer),
     Layer.provideMerge(MuseUsageHome.layer),
     Layer.provideMerge(ProviderHostLive.layer),
@@ -1482,6 +1494,136 @@ describe("UsageService", () => {
     }).pipe(Effect.scoped, Effect.provide(TestClock.layer())),
   );
 
+  it.live("does not read the macOS Cursor Keychain before account usage is enabled", () =>
+    Effect.gen(function* () {
+      const { settings, home } = yield* setup;
+      let reads = 0;
+      const accessToken = `header.${Buffer.from(JSON.stringify({ sub: "auth|keychain-fixture" })).toString("base64url")}.signature`;
+      let accountRequests = 0;
+      yield* Effect.gen(function* () {
+        const service = yield* UsageService.make;
+        const settingsService = yield* ServerSettings.ServerSettingsService;
+        const before = yield* service.readSummary({ ...WINDOW, awaitRefresh: true });
+        const cursor = cursorSource(before);
+        assert.strictEqual(cursor?.status, "missing");
+        assert.strictEqual(cursor?.action, "enableCursorKeychain");
+        assert.strictEqual(reads, 0);
+
+        yield* Effect.promise(() => NodeFSP.mkdir(NodePath.join(home, ".cursor")));
+        yield* settingsService.updateSettings({ cursorKeychainUsageEnabled: true });
+        const enabled = cursorSource(yield* service.readSummary({ ...WINDOW, awaitRefresh: true }));
+        assert.strictEqual(enabled?.status, "ok");
+        assert.isUndefined(enabled?.action);
+        assert.strictEqual(reads, 1);
+        assert.strictEqual(accountRequests, 1);
+
+        yield* settingsService.updateSettings({ cursorKeychainUsageEnabled: false });
+        const disabled = cursorSource(
+          yield* service.readSummary({ ...WINDOW, awaitRefresh: true }),
+        );
+        assert.strictEqual(disabled?.action, "enableCursorKeychain");
+        assert.strictEqual(disabled?.status, "missing");
+        assert.strictEqual(reads, 1);
+        assert.strictEqual(accountRequests, 1);
+      }).pipe(
+        Effect.provide(
+          layerService({
+            prefix: "usage-service-cursor-keychain-disabled",
+            home,
+            settings,
+            platform: "darwin",
+            environment: {},
+            keychainAccessToken: Effect.sync(() => {
+              reads++;
+              return accessToken;
+            }),
+            onRatesFetch: (request) => {
+              if (request.url !== "https://cursor.com/api/dashboard/get-filtered-usage-events")
+                return;
+              accountRequests++;
+              assert.include(request.headers.cookie ?? "", encodeURIComponent(accessToken));
+              assert.strictEqual(request.headers.origin, "https://cursor.com");
+            },
+          }),
+        ),
+      );
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("ignores a stale macOS Keychain login when Cursor is not installed", () =>
+    Effect.gen(function* () {
+      const { settings, home } = yield* setup;
+      const cursor = makeFakeCursor();
+      cursor.state.error = "Sign in to Cursor again to read account usage.";
+      const readCursorSource = Effect.gen(function* () {
+        const service = yield* makeWithCursor(cursor.read);
+        const summary = yield* service.readSummary({ ...WINDOW, awaitRefresh: true });
+        return cursorSource(summary);
+      }).pipe(
+        Effect.provide(
+          layerService({
+            prefix: "usage-service-cursor-keychain-uninstalled",
+            home,
+            settings: { ...settings, cursorKeychainUsageEnabled: true },
+            platform: "darwin",
+            environment: {},
+          }),
+        ),
+      );
+
+      assert.isUndefined(yield* readCursorSource);
+      assert.lengthOf(cursor.state.calls, 0);
+
+      yield* Effect.promise(() => NodeFSP.mkdir(NodePath.join(home, ".cursor")));
+      const installed = yield* readCursorSource;
+      assert.strictEqual(installed?.message, "Sign in to Cursor again to read account usage.");
+      assert.lengthOf(cursor.state.calls, 1);
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("ignores stale Cursor file logins when the active credential store differs", () =>
+    Effect.gen(function* () {
+      const { settings, home } = yield* setup;
+      for (const [index, testCase] of [
+        {
+          platform: "darwin" as const,
+          environment: { AGENT_CLI_CREDENTIAL_STORE: "memory" },
+          authPath: [".cursor", "auth.json"],
+        },
+        {
+          platform: "linux" as const,
+          environment: { AGENT_CLI_CREDENTIAL_STORE: "memory" },
+          authPath: ["config", "cursor", "auth.json"],
+        },
+      ].entries()) {
+        const authPath = NodePath.join(home, ...testCase.authPath);
+        yield* Effect.promise(async () => {
+          await NodeFSP.mkdir(NodePath.dirname(authPath), { recursive: true });
+          await NodeFSP.writeFile(
+            authPath,
+            encodeUnknownJsonString({ accessToken: "stale-token" }),
+          );
+        });
+        const service = yield* UsageService.make.pipe(
+          Effect.provide(
+            layerService({
+              prefix: `usage-service-cursor-store-${index}`,
+              home,
+              settings,
+              platform: testCase.platform,
+              environment: testCase.environment,
+            }),
+          ),
+        );
+        const summary = yield* service.readSummary(WINDOW);
+        const cursor = summary.sources.find((source) => source.fingerprint.provider === "cursor");
+        assert.strictEqual(cursor?.status, "missing");
+        assert.include(cursor?.message ?? "", "Cursor CLI login");
+        assert.isFalse(summary.buckets.some((bucket) => bucket.provider === "cursor"));
+      }
+    }).pipe(Effect.scoped),
+  );
+
   it.live("reads the Cursor account of an API key or T3 sign-in instead of a CLI login", () =>
     Effect.gen(function* () {
       const { settings, home } = yield* setup;
@@ -1523,7 +1665,9 @@ describe("UsageService", () => {
         );
         if (index === 2) {
           assert.deepStrictEqual(cursor.state.credentials, []);
-          assert.isUndefined(cursorSource(summary));
+          assert.strictEqual(cursorSource(summary)?.status, "missing");
+          assert.strictEqual(cursorSource(summary)?.action, "enableCursorKeychain");
+          assert.isFalse(summary.buckets.some((bucket) => bucket.provider === "cursor"));
           continue;
         }
         assert.deepStrictEqual(cursor.state.credentials, [
@@ -1604,6 +1748,7 @@ describe("UsageService", () => {
         const accounts = Context.get(context, CursorUsageAccounts.CursorUsageAccounts);
         const scan = (awaitRefresh: boolean) =>
           accounts.scan({
+            keychainUsageEnabled: false,
             instances: [
               {
                 instanceId: ProviderInstanceId.make("cursor"),

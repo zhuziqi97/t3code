@@ -11,6 +11,7 @@ import * as HttpClientError from "effect/http/HttpClientError";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as TestClock from "effect/testing/TestClock";
 
+import * as CursorKeychain from "./CursorKeychain.ts";
 import { readCursorAccountUsage } from "./accountUsage.ts";
 
 interface DashboardRequest {
@@ -56,8 +57,9 @@ const readAccountUsage = (
   sinceMs: number,
   endDate: number,
   answer: (request: DashboardRequest) => Response | Promise<Response>,
+  keychainToken?: Parameters<typeof readCursorAccountUsage>[3],
 ) =>
-  readCursorAccountUsage(credentialSource, sinceMs, endDate).pipe(
+  readCursorAccountUsage(credentialSource, sinceMs, endDate, keychainToken).pipe(
     Effect.provideService(HttpClient.HttpClient, dashboard(answer)),
   );
 
@@ -391,6 +393,25 @@ describe("readCursorAccountUsage", () => {
         assert.deepStrictEqual(result.records, []);
         assert.strictEqual(open, 0);
       }
+    }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+  );
+  it.effect("asks for Keychain approval when the prompt goes unanswered", () =>
+    Effect.gen(function* () {
+      const result = yield* readAccountUsage(
+        { kind: "keychain" },
+        0,
+        1,
+        () => {
+          throw new Error("no network expected");
+        },
+        Effect.fail(new CursorKeychain.CursorKeychainTimeoutError()),
+      );
+      assert.deepStrictEqual(result, {
+        accountKey: null,
+        records: [],
+        missing: false,
+        error: "Allow Keychain access on the Mac running T3 Code, then refresh.",
+      });
     }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
 });

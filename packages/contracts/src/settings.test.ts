@@ -868,6 +868,12 @@ describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
   it("decodes a fully empty config (legacy on-disk shape) without complaint", () => {
     const decoded = decodeServerSettings({});
     expect(decoded.providerInstances).toEqual({});
+    expect(decoded.cursorKeychainUsageEnabled).toBe(false);
+    for (const enabled of [true, false]) {
+      const patch = { cursorKeychainUsageEnabled: enabled };
+      expect(decodeServerSettingsPatch(patch)).toEqual(patch);
+      expect(decodeServerSettings(patch).cursorKeychainUsageEnabled).toBe(enabled);
+    }
   });
 
   it("decodes a multi-instance map mixing first-party and fork drivers", () => {

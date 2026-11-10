@@ -631,6 +631,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
         const saved = yield* serverSettings.updateSettings({
           usageModelAliases,
           usageLimitSources,
+          cursorKeychainUsageEnabled: true,
         });
         const updated = yield* serverSettings.updateSettings({
           storageCleanup: { worktreeSettledAfterDays: 0, worktreeKeepWhen: "any-local-files" },
@@ -640,12 +641,15 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
         assert.deepStrictEqual(persisted.usagePriceOverrides, { "example-model": prices });
         assert.deepStrictEqual(persisted.usageModelAliases, usageModelAliases);
         assert.deepStrictEqual(persisted.usageLimitSources, usageLimitSources);
+        assert.isTrue(persisted.cursorKeychainUsageEnabled);
         assert.equal(persisted.storageCleanup.worktreeSettledAfterDays, 0);
         assert.equal(persisted.storageCleanup.worktreeKeepWhen, "any-local-files");
 
         yield* serverSettings.updateSettings({ usagePriceOverrides: { "example-model": null } });
         const restored = yield* readPersisted;
         assert.deepStrictEqual(restored.usagePriceOverrides, {});
+        yield* serverSettings.updateSettings({ cursorKeychainUsageEnabled: false });
+        assert.isFalse((yield* readPersisted).cursorKeychainUsageEnabled);
       }),
     ).pipe(Effect.provide(layerServerSettings())),
   );
