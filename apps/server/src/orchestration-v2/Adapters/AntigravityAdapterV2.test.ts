@@ -293,8 +293,7 @@ describe("AntigravityAdapterV2 client file system", () => {
               Effect.provideService(Path.Path, path),
             ),
           withProcess: (_stop, task) => task,
-          // @effect-diagnostics-next-line effectSucceedWithVoid:off - The runtime API needs an absent value, not void.
-          defaultModel: Effect.succeed(undefined),
+          defaultModel: Effect.undefined,
           makeRuntime: (input) =>
             makeAntigravityAcpRuntime({
               ...input,
@@ -766,8 +765,7 @@ describe("AntigravityAdapterV2 client file system under restrictive policies", (
               ),
             ),
           withProcess: (_stop, task) => task,
-          // @effect-diagnostics-next-line effectSucceedWithVoid:off - The runtime API needs an absent value, not void.
-          defaultModel: Effect.succeed(undefined),
+          defaultModel: Effect.undefined,
         });
         const workspace = yield* fileSystem.makeTempDirectoryScoped({
           prefix: "t3-ag-restrictive-",
