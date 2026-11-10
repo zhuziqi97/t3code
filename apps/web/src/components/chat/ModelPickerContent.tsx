@@ -648,6 +648,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       const candidates =
         lockedProvider !== null ? result.filter((m) => matchesLockedProvider(m)) : result;
       return rankModelPickerSearch(candidates, searchQuery, (model) => ({
+        slug: model.slug,
         name: getDisplayModelName(model),
         ...(model.shortName ? { shortName: model.shortName } : {}),
         ...(model.subProvider ? { subProvider: model.subProvider } : {}),

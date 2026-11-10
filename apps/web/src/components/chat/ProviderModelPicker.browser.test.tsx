@@ -91,6 +91,7 @@ it("keeps each registry image when adding a model from another ACP agent", async
 
 it("keeps a docked picker open after a pick and hands focus to that model's effort", async () => {
   const instanceId = ProviderInstanceId.make("codex");
+  const rawModelId = "vendor-internal/midnight-opaque-2026";
   const entries = deriveProviderInstanceEntries([
     {
       instanceId,
@@ -111,7 +112,7 @@ it("keeps a docked picker open after a pick and hands focus to that model's effo
       instanceId,
       [
         { slug: "original", name: "Original model" },
-        { slug: "second", name: "Second model" },
+        { slug: rawModelId, name: "Second model" },
         { slug: "plain", name: "Plain model" },
       ],
     ],
@@ -119,7 +120,7 @@ it("keeps a docked picker open after a pick and hands focus to that model's effo
   // The last level is the selected one; "plain" has no effort to pick.
   const levels: Record<string, ReadonlyArray<string>> = {
     original: ["Low", "High"],
-    second: ["Medium"],
+    [rawModelId]: ["Medium"],
     plain: [],
   };
 
@@ -160,9 +161,12 @@ it("keeps a docked picker open after a pick and hands focus to that model's effo
   await userEvent.keyboard("{ArrowLeft}");
   await expect.element(search).toHaveFocus();
 
+  await search.fill("midnight-opaque-2026");
+  await expect.element(page.getByRole("option", { name: /Second model/ })).toBeVisible();
   await page.getByRole("option", { name: /Second model/ }).click();
   await expect.element(page.getByRole("radio", { name: "Medium" })).toHaveFocus();
 
+  await search.fill("");
   await page.getByRole("option", { name: /Plain model/ }).click();
   await page.getByRole("option", { name: /Second model/ }).click();
   await expect.element(page.getByRole("radio", { name: "Medium" })).toHaveFocus();
