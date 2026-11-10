@@ -246,8 +246,8 @@ it("translates HTTP connection failures at presentation time while preserving th
       message: `Failed to fetch remote environment endpoint ${url} (${diagnostic}).`,
       cause: new Error(diagnostic),
     }),
-    new RemoteEnvironmentAuthTimeoutError(url, 10000),
-    new RemoteEnvironmentAuthUndeclaredStatusError(url, 503),
+    new RemoteEnvironmentAuthTimeoutError({ requestUrl: url, timeoutMs: 10000 }),
+    new RemoteEnvironmentAuthUndeclaredStatusError({ requestUrl: url, status: 503 }),
   ];
   const translated = failures.map((failure) =>
     formatConnectionErrorMessage(mapRemoteEnvironmentError(failure).message, i18n.t),

@@ -121,6 +121,23 @@ describe("projectedSubagentsToRuntime workflow expansion", () => {
       }).modelLabel,
     ).toBe("Claude Opus 5.5");
     expect(resolveSubagentMetadata({ model: workflow!.model }).modelLabel).toBe("Not reported");
+    const modelSelection = {
+      instanceId: ProviderInstanceId.make("claudeAgent"),
+      model: null,
+      options: [{ id: "effort", value: "xhigh" }],
+    };
+    const provider = {
+      driver: ProviderDriverKind.make("claudeAgent"),
+      models: [
+        { slug: "claude-opus-5-5", name: "Claude Opus 5.5", isCustom: false, capabilities: null },
+      ],
+    };
+    expect(
+      resolveSubagentMetadata({ model: workflow!.model, modelSelection, provider }).modelLabel,
+    ).toBe("Not reported");
+    expect(formatSubagentEffort({ modelSlug: "claude-opus-5-5", modelSelection, provider })).toBe(
+      null,
+    );
   });
 
   it.each(["completed", "cancelled", "failed"] as const)(

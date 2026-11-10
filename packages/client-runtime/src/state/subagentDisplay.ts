@@ -67,7 +67,7 @@ export function resolveSubagentMetadata(input: {
     | null
     | undefined;
 }) {
-  const model = input.model?.trim() || input.modelSelection?.model.trim();
+  const model = input.model?.trim() || input.modelSelection?.model?.trim();
   const slug = input.provider
     ? resolveSelectableModel(input.provider.driver, model, input.provider.models)
     : model;

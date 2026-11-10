@@ -69,7 +69,10 @@ export function deriveProviderExtensionStatuses(
           >
         >;
         readonly providerSessions: ReadonlyArray<
-          Pick<"id" | "providerInstanceId" | "status" | "extensionStatuses">
+          Pick<
+            OrchestrationV2ProviderSession,
+            "id" | "providerInstanceId" | "status" | "extensionStatuses"
+          >
         >;
       })
     | null,
@@ -290,7 +293,7 @@ export function formatSubagentEffort(input: {
   if (!provider || !selection || !modelSlug) return null;
   const selectionSlug =
     resolveSelectableModel(provider.driver, selection.model, provider.models) ??
-    selection.model.trim();
+    selection.model?.trim();
   if (selectionSlug !== modelSlug) return null;
   if (provider.models.some((model) => model.slug === modelSlug)) {
     return formatModelSelectionEffort({ ...selection, model: modelSlug }, provider.models);
