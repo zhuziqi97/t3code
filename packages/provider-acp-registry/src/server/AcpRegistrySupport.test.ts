@@ -13,6 +13,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
+import * as PlatformError from "effect/PlatformError";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -29,6 +30,9 @@ const registryUrl = "https://registry.test/registry.json";
 const archiveUrl = "https://registry.test/example-agent.bin";
 const decodeAcpRegistrySettings = Schema.decodeSync(AcpRegistrySettings);
 const encodeUnknownJson = Schema.encodeUnknownSync(Schema.fromJsonString(Schema.Unknown));
+const decodePackageReceiptRoot = Schema.decodeEffect(
+  Schema.fromJsonString(Schema.Struct({ packageRoot: Schema.String })),
+);
 
 function makeAgent(
   distribution: AcpRegistrySupport.AcpRegistryAgent["distribution"],
@@ -727,11 +731,40 @@ describe("AcpRegistrySupport", () => {
         prefix: "t3-acp-registry-global-package-",
       });
       const toolchain = yield* makeFakeNpmToolchain(cacheDir);
+      let unreadablePath: string | undefined;
+      let entryUnreadable = false;
       const resolver = yield* AcpRegistrySupport.makeAcpRegistryCatalog({
         cacheDir,
         toolsDir: `${cacheDir}/tools`,
         registryUrl,
-      }).pipe(Effect.provideService(HostProcess.Environment, toolchain.environment));
+      }).pipe(
+        Effect.provideService(HostProcess.Environment, toolchain.environment),
+        Effect.provideService(FileSystem.FileSystem, {
+          ...fileSystem,
+          readFileString: (filePath, encoding) =>
+            filePath === unreadablePath
+              ? Effect.fail(
+                  PlatformError.systemError({
+                    _tag: "PermissionDenied",
+                    module: "FileSystem",
+                    method: "readFileString",
+                    pathOrDescriptor: filePath,
+                  }),
+                )
+              : fileSystem.readFileString(filePath, encoding),
+          exists: (filePath) =>
+            entryUnreadable
+              ? Effect.fail(
+                  PlatformError.systemError({
+                    _tag: "PermissionDenied",
+                    module: "FileSystem",
+                    method: "exists",
+                    pathOrDescriptor: filePath,
+                  }),
+                )
+              : fileSystem.exists(filePath),
+        }),
+      );
 
       const first = yield* resolver.resolve(settings(), "/workspace", toolchain.environment);
       const second = yield* resolver.resolve(settings(), "/workspace", toolchain.environment);
@@ -749,6 +782,38 @@ describe("AcpRegistrySupport", () => {
         installed: true,
         version: "1.2.3",
       });
+      const receiptDirectory = `${cacheDir}/acp-registry/package-installs`;
+      const [receiptFile] = yield* fileSystem.readDirectory(receiptDirectory);
+      if (receiptFile === undefined)
+        return yield* Effect.die("Expected the prepared package receipt.");
+      const receiptPath = `${receiptDirectory}/${receiptFile}`;
+      const receipt = yield* decodePackageReceiptRoot(
+        yield* fileSystem.readFileString(receiptPath),
+      );
+      const unknownResults = [];
+      for (const filePath of [receiptPath, `${receipt.packageRoot}/package.json`]) {
+        const original = yield* fileSystem.readFileString(filePath);
+        unreadablePath = filePath;
+        unknownResults.push(yield* resolver.inspectInstallation(settings(), toolchain.environment));
+        unreadablePath = undefined;
+        yield* fileSystem.writeFileString(filePath, "invalid json");
+        unknownResults.push(yield* resolver.inspectInstallation(settings(), toolchain.environment));
+        expect(yield* resolver.inspect(settings(), toolchain.environment)).toMatchObject({
+          status: "unprepared",
+        });
+        yield* fileSystem.remove(filePath);
+        expect(yield* resolver.inspectInstallation(settings(), toolchain.environment)).toEqual({
+          installed: false,
+          version: null,
+        });
+        yield* fileSystem.writeFileString(filePath, original);
+      }
+      entryUnreadable = true;
+      unknownResults.push(yield* resolver.inspectInstallation(settings(), toolchain.environment));
+      entryUnreadable = false;
+      expect(unknownResults).toEqual(
+        Array.from({ length: 5 }, () => ({ installed: null, version: null })),
+      );
       expect(yield* fileSystem.readFileString(toolchain.logPath)).toBe(npmCommands);
     }).pipe(
       Effect.scoped,
@@ -1964,11 +2029,39 @@ describe("AcpRegistrySupport", () => {
       const cacheDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-acp-registry-uninstall-reservation-",
       });
+      let unreadablePath: string | undefined;
+      let entryUnreadable = false;
       const resolver = yield* AcpRegistrySupport.makeAcpRegistryCatalog({
         cacheDir,
         toolsDir: `${cacheDir}/tools`,
         registryUrl,
-      });
+      }).pipe(
+        Effect.provideService(FileSystem.FileSystem, {
+          ...fileSystem,
+          readFileString: (filePath, encoding) =>
+            filePath === unreadablePath
+              ? Effect.fail(
+                  PlatformError.systemError({
+                    _tag: "PermissionDenied",
+                    module: "FileSystem",
+                    method: "readFileString",
+                    pathOrDescriptor: filePath,
+                  }),
+                )
+              : fileSystem.readFileString(filePath, encoding),
+          exists: (filePath) =>
+            entryUnreadable
+              ? Effect.fail(
+                  PlatformError.systemError({
+                    _tag: "PermissionDenied",
+                    module: "FileSystem",
+                    method: "exists",
+                    pathOrDescriptor: filePath,
+                  }),
+                )
+              : fileSystem.exists(filePath),
+        }),
+      );
 
       yield* resolver.prepare({ agentId: agent.id });
       expect(yield* resolver.uninstallManagedBinary({ agentId: agent.id })).toEqual({
@@ -1979,6 +2072,20 @@ describe("AcpRegistrySupport", () => {
         installed: true,
         version: agent.version,
       });
+      const recordPath = `${cacheDir}/acp-registry/installed-agents/${agent.id}/binary.json`;
+      const record = yield* fileSystem.readFileString(recordPath);
+      unreadablePath = recordPath;
+      const unreadable = yield* resolver.inspectInstallation(settings());
+      unreadablePath = undefined;
+      yield* fileSystem.writeFileString(recordPath, "invalid json");
+      const invalid = yield* resolver.inspectInstallation(settings());
+      yield* fileSystem.writeFileString(recordPath, record);
+      entryUnreadable = true;
+      const missingAccess = yield* resolver.inspectInstallation(settings());
+      entryUnreadable = false;
+      expect([unreadable, invalid, missingAccess]).toEqual(
+        Array.from({ length: 3 }, () => ({ installed: null, version: null })),
+      );
       expect(yield* resolver.uninstallManagedBinary({ agentId: agent.id })).toEqual({
         agentId: agent.id,
         removed: false,
@@ -1988,6 +2095,12 @@ describe("AcpRegistrySupport", () => {
         agentId: agent.id,
         removed: true,
       });
+      expect(yield* resolver.inspectInstallation(settings())).toEqual({
+        installed: false,
+        version: null,
+      });
+      yield* fileSystem.writeFileString(recordPath, "invalid json");
+      expect(yield* resolver.inspect(settings())).toMatchObject({ status: "unprepared" });
     }).pipe(
       Effect.scoped,
       Effect.provide(
