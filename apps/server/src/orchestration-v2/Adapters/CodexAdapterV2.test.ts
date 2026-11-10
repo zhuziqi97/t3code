@@ -2469,6 +2469,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
           undefined,
           undefined,
           undefined,
+          undefined,
           Ref.get(enabled),
         );
         // The flag is read per turn: turning it off after the session opened stops sampling.
@@ -2586,6 +2587,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
       });
       const harness = yield* makeCodexReplayHarness(
         transcript,
+        undefined,
         undefined,
         undefined,
         undefined,
@@ -6712,6 +6714,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
           undefined,
           undefined,
           undefined,
+          {},
           () => Deferred.succeed(snapshotReceipt, undefined),
         );
         yield* harness.runtime.startTurn(

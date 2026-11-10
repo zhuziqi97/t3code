@@ -89,10 +89,17 @@ export const make = Effect.gen(function* () {
     (request) => {
       const driver = TEXT_GENERATOR_DRIVERS[config.kind];
       const label = generatorLabel(config);
+      const model = request.modelSelection.model;
+      if (model === null) {
+        return Effect.fail(
+          new TextGenerationError({
+            operation: request.operation,
+            detail: "Select a model for this text generator.",
+          }),
+        );
+      }
       return connect(config).pipe(
-        Effect.flatMap((connection) =>
-          driver.generate(connection, request.modelSelection.model, request.prompt),
-        ),
+        Effect.flatMap((connection) => driver.generate(connection, model, request.prompt)),
         Effect.provideService(HttpClient.HttpClient, http),
         Effect.mapError(
           (error) =>

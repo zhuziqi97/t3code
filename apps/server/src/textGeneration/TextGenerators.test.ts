@@ -8,6 +8,7 @@ import {
 import * as SecretResolver from "@t3tools/secret-provider-core/server/SecretResolver";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import { expect, vi } from "vite-plus/test";
@@ -75,6 +76,13 @@ it.effect.each([
       Effect.provideService(FetchHttpClient.Fetch, upstream),
     );
     expect(result).toEqual({ title: "Fix login" });
+    const noModel = yield* run!({
+      ...request,
+      modelSelection: { instanceId: ID, model: null },
+    }).pipe(Effect.result, Effect.provideService(FetchHttpClient.Fetch, upstream));
+    expect(Result.isFailure(noModel)).toBe(true);
+    if (Result.isFailure(noModel)) expect(noModel.failure.detail).toContain("Select a model");
+    expect(upstream).toHaveBeenCalledTimes(1);
     expect(yield* generators.runner(ProviderInstanceId.make("codex"))).toBeUndefined();
 
     upstream.mockResolvedValueOnce(

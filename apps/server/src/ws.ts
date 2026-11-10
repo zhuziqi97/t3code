@@ -280,7 +280,6 @@ import {
   SOCKET_FRAME_PARTS_QUERY_PARAM,
   splitLargeSocketFrames,
 } from "@t3tools/shared/socketFrameParts";
-import { isTelemetryIdHash } from "@t3tools/shared/telemetryId";
 import {
   sameUsageLimitCommandCoverage,
   withUsageLimitsCommands,
@@ -3530,6 +3529,8 @@ const makeWsRpcLayer = (
         [ORCHESTRATION_V2_WS_METHODS.getNativeChildWork]: getNativeChildWork,
         [ORCHESTRATION_V2_WS_METHODS.getOlderSettledThreads]: getOlderSettledThreads,
         [ORCHESTRATION_V2_WS_METHODS.getThreadFamily]: getThreadFamily,
+        [ORCHESTRATION_V2_WS_METHODS.getThreadLinkMetadata]: getThreadLinkMetadata,
+        [ORCHESTRATION_V2_WS_METHODS.getThreadTitles]: getThreadTitles,
         [ORCHESTRATION_V2_WS_METHODS.getWorktreeThreadIds]: getWorktreeThreadIds,
         [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: dispatchCommand,
         [ORCHESTRATION_V2_WS_METHODS.getWorkflowScript]: getWorkflowScript,
@@ -3546,6 +3547,7 @@ const makeWsRpcLayer = (
         [ORCHESTRATION_V2_WS_METHODS.subscribeShell]: subscribeShell,
         [ORCHESTRATION_V2_WS_METHODS.subscribeThread]: subscribeThread,
         [ORCHESTRATION_V2_WS_METHODS.subscribeCommandOutput]: subscribeCommandOutput,
+        [ORCHESTRATION_V2_WS_METHODS.subscribePromptSuggestion]: subscribePromptSuggestion,
         ...core
       } = handlers;
       const orchestration = {
@@ -3553,6 +3555,8 @@ const makeWsRpcLayer = (
         [ORCHESTRATION_V2_WS_METHODS.getNativeChildWork]: getNativeChildWork,
         [ORCHESTRATION_V2_WS_METHODS.getOlderSettledThreads]: getOlderSettledThreads,
         [ORCHESTRATION_V2_WS_METHODS.getThreadFamily]: getThreadFamily,
+        [ORCHESTRATION_V2_WS_METHODS.getThreadLinkMetadata]: getThreadLinkMetadata,
+        [ORCHESTRATION_V2_WS_METHODS.getThreadTitles]: getThreadTitles,
         [ORCHESTRATION_V2_WS_METHODS.getWorktreeThreadIds]: getWorktreeThreadIds,
         [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: dispatchCommand,
         [ORCHESTRATION_V2_WS_METHODS.getWorkflowScript]: getWorkflowScript,
@@ -3569,6 +3573,7 @@ const makeWsRpcLayer = (
         [ORCHESTRATION_V2_WS_METHODS.subscribeShell]: subscribeShell,
         [ORCHESTRATION_V2_WS_METHODS.subscribeThread]: subscribeThread,
         [ORCHESTRATION_V2_WS_METHODS.subscribeCommandOutput]: subscribeCommandOutput,
+        [ORCHESTRATION_V2_WS_METHODS.subscribePromptSuggestion]: subscribePromptSuggestion,
       };
       const coreLayer = CoreServerWsRpcGroup.toLayer(core);
       const orchestrationLayer = OrchestrationServerWsRpcGroup.toLayer(orchestration);
@@ -3768,6 +3773,10 @@ export const layer: Layer.Layer<
   | HttpRouter.Request<"Requires", Digest.Digest>
   | HttpRouter.Request<"Requires", NativeChildWorkQuery.NativeChildWorkQuery>
   | HttpRouter.Request<"Requires", ComposerPredictions.ComposerPredictions>
+  | HttpRouter.Request<"Requires", import("./assets/AssetSigner.ts").AssetSigner>
+  | HttpRouter.Request<"Requires", ProviderInstallation.ProviderInstallation>
+  | HttpRouter.Request<"Requires", import("effect/crypto/Signature").Signature>
+  | HttpRouter.Request<"Requires", TextGenerators.TextGenerators>
   | HttpRouter.Request<"Requires", SessionStore.SessionStore>
   | HttpRouter.Request<"Requires", EnvironmentAuth.EnvironmentAuth>
   | HttpRouter.Request<"Requires", AnalyticsService.AnalyticsService>

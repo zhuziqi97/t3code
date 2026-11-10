@@ -251,7 +251,8 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       const requestedModel = modelSelection.model;
       const listed = models.filter((candidate) => !candidate.isCustom);
       // An unlisted slug is one this account can't run, e.g. gpt-6-luna on a ChatGPT login.
-      const requestedFamily = codexModelFamily(requestedModel);
+      const requestedFamily =
+        requestedModel === null ? undefined : codexModelFamily(requestedModel);
       const matchedModel =
         models.find((candidate) => candidate.slug === requestedModel)?.slug ??
         // Managed snapshots omit configured custom models; send those as requested.
@@ -260,11 +261,13 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
         )?.slug ??
         listed.find((candidate) => codexModelFamily(candidate.slug) === requestedFamily)?.slug;
       const model =
-        matchedModel ??
-        listed.find((candidate) => candidate.isDefault)?.slug ??
-        listed.find((candidate) => !candidate.isLegacy)?.slug ??
-        listed[0]?.slug ??
-        requestedModel;
+        requestedModel === null
+          ? null
+          : (matchedModel ??
+            listed.find((candidate) => candidate.isDefault)?.slug ??
+            listed.find((candidate) => !candidate.isLegacy)?.slug ??
+            listed[0]?.slug ??
+            requestedModel);
       // The selection's options were chosen for the requested model and may not fit a fallback.
       const fellBack = matchedModel === undefined && model !== requestedModel;
       const launchArgs = resolveCodexLaunchArgs(effectiveConfig.launchArgs, effectiveEnvironment);

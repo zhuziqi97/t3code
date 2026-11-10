@@ -179,10 +179,10 @@ export function makeSubagentConversationArtifacts(input: {
 /** A delegated result, led by a note when the provider reported running another model than requested. */
 export function withExecutedModelNote(
   result: string,
-  requestedModel: string,
+  requestedModel: string | null,
   executedModel: string | null | undefined,
 ): string {
-  return executedModel == null || executedModel === requestedModel
+  return requestedModel === null || executedModel == null || executedModel === requestedModel
     ? result
     : `Requested model ${requestedModel}; the provider reported running ${executedModel}.\n\n${result}`;
 }

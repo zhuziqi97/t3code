@@ -265,6 +265,13 @@ it.layer(layerCodexTextGenerationTest)("CodexTextGeneration", (it) => {
     },
     { selectedModel: "gpt-6-luna", models: ["gpt-5.6-luna"], expected: "gpt-5.6-luna" },
     { selectedModel: "gpt-6-luna", models: [], expected: "gpt-6-luna" },
+    { selectedModel: null, models: [], expected: null },
+    {
+      selectedModel: null,
+      models: ["gpt-6-astra"],
+      defaultModel: "gpt-6-astra",
+      expected: null,
+    },
   ])(
     "dispatches $expected for $selectedModel from $models",
     ({ selectedModel, models, defaultModel, expected }) =>
@@ -273,7 +280,7 @@ it.layer(layerCodexTextGenerationTest)("CodexTextGeneration", (it) => {
           output: JSON.stringify({ title: "Live title" }),
           models,
           ...(defaultModel ? { defaultModel } : {}),
-          requireArg: `--model ${expected}`,
+          ...(expected === null ? { forbidArg: "--model" } : { requireArg: `--model ${expected}` }),
         },
         (textGeneration) =>
           Effect.gen(function* () {

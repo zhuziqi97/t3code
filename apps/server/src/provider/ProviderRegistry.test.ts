@@ -2303,6 +2303,7 @@ it.layer(
               Layer.succeed(ModelManifest.ModelManifest, {
                 current: Effect.succeed(manifest),
                 refresh: Effect.succeed(manifest),
+                refreshOnDemand: Effect.succeed(manifest),
                 forceRefresh: Ref.update(manifestRefreshes, (count) => count + 1).pipe(
                   Effect.as(manifest),
                 ),

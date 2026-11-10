@@ -1163,6 +1163,7 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
       ],
     };
     let scansCwd = true;
+    let refreshCwd = "/b";
     const providerChanges = yield* Queue.unbounded<ReadonlyArray<ServerProvider>>();
     const pulled = yield* Queue.unbounded<void>();
     const responses = yield* Queue.unbounded<
@@ -1183,7 +1184,7 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
         refreshWorkspaceSnapshot: (input) =>
           Effect.sync(() => {
             assert.equal(input.instanceId, instanceId);
-            assert.equal(input.cwd, "/b");
+            assert.equal(input.cwd, refreshCwd);
             assert.equal(input.fresh, false);
             return [provider];
           }),
@@ -1345,6 +1346,7 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
     assert.deepEqual(yield* Queue.take(responses), { providers: [provider] });
     // A failed scan still gives a client without the machine catalog its commands.
     scansCwd = true;
+    refreshCwd = "/c";
     yield* server.write(0, {
       _tag: "Request",
       id: RpcMessage.RequestId("refresh-failed-scan"),
