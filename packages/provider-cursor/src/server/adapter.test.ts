@@ -286,7 +286,12 @@ describe("CursorAdapterV2", () => {
                       }),
                       cancel: Effect.void,
                     };
-                  }),
+                  }).pipe(
+                    Effect.mapError(
+                      (cause) =>
+                        new CursorAgentSdk.CursorAgentSdkRunnerError({ method: "send", cause }),
+                    ),
+                  ),
               });
             },
           }),
