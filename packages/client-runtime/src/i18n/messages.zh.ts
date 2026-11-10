@@ -3660,6 +3660,8 @@ export const zh: Partial<Messages> = {
   "convene.resource.openPlatform": "在平台打开",
   "convene.resource.viewIssue": "查看所属事项",
   "convene.resource.refresh": "刷新",
+  "convene.resource.moreContent": "加载更多正文",
+  "convene.resource.documentChanged": "文档已更新，请刷新后继续阅读。",
   "convene.resource.moreComments": "加载更多评论",
   "convene.resource.comment": "评论 {{number}}",
   "convene.resource.deleted": "这条评论已删除。",

@@ -3872,6 +3872,8 @@ export const en = {
   "convene.resource.openPlatform": "Open in platform",
   "convene.resource.viewIssue": "View parent issue",
   "convene.resource.refresh": "Refresh",
+  "convene.resource.moreContent": "Load more content",
+  "convene.resource.documentChanged": "This document changed. Refresh to continue reading.",
   "convene.resource.moreComments": "Load more comments",
   "convene.resource.comment": "Comment {{number}}",
   "convene.resource.deleted": "This comment was deleted.",
