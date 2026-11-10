@@ -338,6 +338,7 @@ import {
   ServerRemoveKeybindingInput,
   ServerRemoveKeybindingResult,
   ServerProviderUpdatedPayload,
+  ServerProviderInstallation,
   ServerSelfUpdateError,
   ServerNpmRelease,
   ServerNpmReleaseError,
@@ -532,6 +533,7 @@ export const WS_METHODS = {
   serverGetConfig: "server.getConfig",
   serverGetNpmRelease: "server.getNpmRelease",
   serverRefreshProviders: "server.refreshProviders",
+  serverDiscoverProviderInstallations: "server.discoverProviderInstallations",
   serverCancelProviderRefresh: "server.cancelProviderRefresh",
   serverUpdateProvider: "server.updateProvider",
   serverUpdateServer: "server.updateServer",
@@ -675,6 +677,15 @@ const WsServerGetConfigRpc = Rpc.make(WS_METHODS.serverGetConfig, {
   success: ServerConfig,
   error: Schema.Union([KeybindingsConfigError, ServerSettingsError, EnvironmentAuthorizationError]),
 });
+
+export const WsServerDiscoverProviderInstallationsRpc = Rpc.make(
+  WS_METHODS.serverDiscoverProviderInstallations,
+  {
+    payload: Schema.Struct({}),
+    success: Schema.Struct({ installations: Schema.Array(ServerProviderInstallation) }),
+    error: EnvironmentAuthorizationError,
+  },
+);
 
 export const WsServerRefreshProvidersRpc = Rpc.make(WS_METHODS.serverRefreshProviders, {
   payload: Schema.Struct({
@@ -2168,6 +2179,7 @@ export const WsCoreRpcGroup = RpcGroup.make(
   WsGuestShareCreateRpc,
   WsServerProbeRpc,
   WsServerGetConfigRpc,
+  WsServerDiscoverProviderInstallationsRpc,
   WsServerRefreshProvidersRpc,
   WsServerCancelProviderRefreshRpc,
   WsServerUpdateProviderRpc,

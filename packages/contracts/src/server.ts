@@ -300,6 +300,15 @@ export const ServerProvider = Schema.Struct({
 });
 export type ServerProvider = typeof ServerProvider.Type;
 
+export const ServerProviderInstallation = Schema.Struct({
+  instanceId: ProviderInstanceId,
+  driver: ProviderDriverKind,
+  installed: Schema.NullOr(Schema.Boolean),
+  version: Schema.NullOr(TrimmedNonEmptyString),
+  message: Schema.optional(TrimmedNonEmptyString),
+});
+export type ServerProviderInstallation = typeof ServerProviderInstallation.Type;
+
 export const ServerProviders = ForwardCompatibleArray(ServerProvider);
 export type ServerProviders = typeof ServerProviders.Type;
 
