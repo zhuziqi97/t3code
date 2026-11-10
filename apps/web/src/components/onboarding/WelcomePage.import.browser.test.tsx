@@ -13,8 +13,10 @@ import {
   type AuthSessionState,
   type EnvironmentCloudLinkStateResult,
   type ServerProvider,
+  type ServerProviderInstallation,
 } from "@t3tools/contracts";
 import { AsyncResult, Atom } from "effect/reactivity";
+import * as Cause from "effect/Cause";
 import { expect, it, vi } from "vite-plus/test";
 
 import "~/index.css";
@@ -35,6 +37,7 @@ const state = vi.hoisted(() => ({
   createProject: vi.fn(),
   importThreads: vi.fn(),
   refreshProviders: vi.fn(),
+  discoverInstallations: vi.fn(),
   completeOnboarding: vi.fn(),
   onDone: vi.fn(),
   scan: vi.fn(),
@@ -146,8 +149,14 @@ vi.mock(import("../../onboarding/useProjectScans"), async (original) => {
 });
 vi.mock(import("../../state/use-atom-command"), async (original) => ({
   ...(await original()),
-  useAtomCommand: ((command: "createProject" | "importThreads" | "refreshProviders") =>
-    state[command]) as never,
+  useAtomCommand: ((
+    command: "createProject" | "importThreads" | "refreshProviders" | { label: string },
+  ) =>
+    typeof command === "string"
+      ? state[command]
+      : command.label === "environment-data:server:discover-provider-installations"
+        ? state.discoverInstallations
+        : undefined) as never,
 }));
 
 import { welcomeImportSelectionKey } from "../../onboarding/welcomeState";
@@ -311,6 +320,9 @@ function setup() {
     .mockReset()
     .mockResolvedValue(AsyncResult.success({ importedCount: 1, skippedCount: 0 }));
   state.refreshProviders.mockReset().mockResolvedValue(AsyncResult.success(undefined));
+  state.discoverInstallations
+    .mockReset()
+    .mockResolvedValue(AsyncResult.success({ installations: [] }));
   state.completeOnboarding.mockReset().mockResolvedValue(undefined);
   state.onDone.mockReset();
   state.scan.mockReset();
@@ -404,13 +416,97 @@ it("finishes setup without landing when the imported project never reaches the c
 
 it("waits for a ready agent to start, and Start without an agent still finishes setup", async () => {
   using _now = setup();
+  localStorage.setItem(
+    welcomeImportSelectionKey(primaryId),
+    JSON.stringify({ knownKeys: [], keys: [], optedOut: false }),
+  );
+  state.discoverInstallations.mockResolvedValueOnce(
+    AsyncResult.failure(Cause.fail(new Error("controlled discovery failure"))),
+  );
   appAtomRegistry.set(state.providers as Atom.Writable<ReadonlyArray<ServerProvider>>, []);
   await using _screen = await mountWelcome();
   expect(button("Import 2 projects and start").disabled).toBe(true);
+  await vi.waitFor(() =>
+    expect(document.body.textContent).toContain("Could not check installed agents."),
+  );
+  expect(
+    document.querySelector<HTMLAnchorElement>('a[href^="/settings/providers"]')!.href,
+  ).toContain("environmentId=primary");
 
   await click("Start without an agent");
   await vi.waitFor(() => expect(state.onDone).toHaveBeenCalledOnce());
   expect(state.createProject).toHaveBeenCalledTimes(2);
+});
+
+it("keeps installation facts scoped when switching computers without enabling an agent", async () => {
+  using _now = setup();
+  const other = EnvironmentId.make("other-computer");
+  state.sessions.set(
+    other,
+    Atom.make<SessionResult>(AsyncResult.success(session([]))).pipe(Atom.keepAlive),
+  );
+  appAtomRegistry.set(candidatesAtom(), []);
+  const pi = {
+    ...readyClaude,
+    instanceId: ProviderInstanceId.make("pi"),
+    driver: ProviderDriverKind.make("pi"),
+    enabled: false,
+    installed: false,
+    status: "disabled" as const,
+  };
+  appAtomRegistry.set(state.providers as Atom.Writable<ReadonlyArray<ServerProvider>>, [pi]);
+  const installation: ServerProviderInstallation = {
+    instanceId: pi.instanceId,
+    driver: pi.driver,
+    installed: true,
+    version: "7.5.0",
+  };
+  type Discovery = {
+    _tag: "Success";
+    value: { installations: readonly ServerProviderInstallation[] };
+  };
+  const first = deferred<Discovery>();
+  const second = deferred<Discovery>();
+  state.discoverInstallations
+    .mockReset()
+    .mockReturnValueOnce(first.promise)
+    .mockReturnValueOnce(second.promise)
+    .mockResolvedValueOnce(AsyncResult.success({ installations: [installation] }));
+  await using screen = await mountWelcome();
+  await vi.waitFor(() => expect(state.discoverInstallations).toHaveBeenCalledTimes(1));
+  await screen.rerender(
+    <RegistryContext.Provider value={appAtomRegistry}>
+      <WelcomePage environmentId={other} onDone={state.onDone} />
+    </RegistryContext.Provider>,
+  );
+  await vi.waitFor(() => expect(state.discoverInstallations).toHaveBeenCalledTimes(2));
+  await act(async () =>
+    second.resolve(AsyncResult.success({ installations: [{ ...installation, installed: false }] })),
+  );
+  await expect.element(screen.getByText("Not installed", { exact: true })).toBeVisible();
+  await act(async () => first.resolve(AsyncResult.success({ installations: [installation] })));
+  await expect.element(screen.getByText("Not installed", { exact: true })).toBeVisible();
+  await expect
+    .element(screen.getByText("Installed · 7.5.0", { exact: true }))
+    .not.toBeInTheDocument();
+  await screen.rerender(
+    <RegistryContext.Provider value={appAtomRegistry}>
+      <WelcomePage environmentId={primaryId} onDone={state.onDone} />
+    </RegistryContext.Provider>,
+  );
+  await expect.element(screen.getByText("Installed · 7.5.0", { exact: true })).toBeVisible();
+  await expect.element(screen.getByText("Disabled", { exact: true })).toBeVisible();
+  await expect
+    .element(screen.getByRole("button", { name: "Start without an agent" }))
+    .toBeEnabled();
+  expect(state.discoverInstallations.mock.calls.map(([input]) => input)).toEqual([
+    { environmentId: primaryId, input: {} },
+    { environmentId: other, input: {} },
+    { environmentId: primaryId, input: {} },
+  ]);
+  expect(state.refreshProviders).toHaveBeenCalledTimes(3);
+  expect(state.createProject).not.toHaveBeenCalled();
+  expect(state.importThreads).not.toHaveBeenCalled();
 });
 
 it("blocks leaving the page until the imported projects have landed", async () => {

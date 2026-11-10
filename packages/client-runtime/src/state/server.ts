@@ -1417,6 +1417,14 @@ export function createServerEnvironmentAtoms<R, E>(
         key: ({ environmentId, input }) => JSON.stringify([environmentId, input]),
       },
     }),
+    discoverProviderInstallations: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:discover-provider-installations",
+      tag: WS_METHODS.serverDiscoverProviderInstallations,
+      concurrency: {
+        mode: "singleFlight",
+        key: ({ environmentId }) => environmentId,
+      },
+    }),
     refreshProviders: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:refresh-providers",
       tag: WS_METHODS.serverRefreshProviders,

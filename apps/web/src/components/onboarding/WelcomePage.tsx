@@ -16,6 +16,7 @@ import type {
   ScopedProjectRef,
   ServerConfig,
   ServerProvider,
+  ServerProviderInstallation,
 } from "@t3tools/contracts";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { resolveProviderInstanceDisplayName as agentName } from "@t3tools/client-runtime/state/provider-instance-display";
@@ -75,6 +76,7 @@ import {
   cliTerminalStep,
   codexCardProvider,
   codexNeedsSetup,
+  findWelcomeInstallation,
   groupWelcomeAgents,
   isBrokenVersion,
   turnedOnInstance,
@@ -412,15 +414,22 @@ interface AgentTerminalSession {
 }
 
 // Shared by the page (to enable Start) and the agents section, so both agree on what is ready.
-function useWelcomeAgents(environmentId: EnvironmentId) {
+function useWelcomeAgents(
+  environmentId: EnvironmentId,
+  installations?: ReadonlyArray<ServerProviderInstallation>,
+) {
   const providers = useAtomValue(serverEnvironment.providersValueAtom(environmentId));
   const serverConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId));
   const managedPolicy = serverConfig?.managedPolicy;
   return {
     providers,
     serverConfig,
-    ...groupWelcomeAgents(providers, serverConfig?.settings, agentName, (provider) =>
-      isManagedDriverAllowed(managedPolicy, provider.driver),
+    ...groupWelcomeAgents(
+      providers,
+      serverConfig?.settings,
+      agentName,
+      (provider) => isManagedDriverAllowed(managedPolicy, provider.driver),
+      installations,
     ),
   };
 }
@@ -444,7 +453,31 @@ function AgentsSection({
   // The project scan only reads agents that are on, so turning one on can find more history.
   readonly onImportSourceEnabled: () => void;
 }) {
-  const { providers, serverConfig, checking, found, available } = useWelcomeAgents(environmentId);
+  const t = useTranslate();
+  const discoverInstallations = useAtomCommand(serverEnvironment.discoverProviderInstallations, {
+    reportFailure: false,
+  });
+  const canDiscover = useAtomValue(
+    serverEnvironment.discoverProviderInstallations.permissionAtom(environmentId),
+  );
+  const [installationDiscovery, setInstallationDiscovery] = useState<{
+    environmentId: EnvironmentId;
+    result: Awaited<ReturnType<typeof discoverInstallations>>;
+  } | null>(null);
+  const discovery =
+    canDiscover && installationDiscovery?.environmentId === environmentId
+      ? installationDiscovery.result
+      : null;
+  const installations = discovery?._tag === "Success" ? discovery.value.installations : undefined;
+  const installationPending = canDiscover && discovery === null;
+  const {
+    providers,
+    serverConfig,
+    checking: checkingProviders,
+    found,
+    available,
+  } = useWelcomeAgents(environmentId, installations);
+  const checking = checkingProviders || installationPending;
   const refreshProviders = useAtomCommand(serverEnvironment.refreshProviders, {
     reportFailure: false,
   });
@@ -457,10 +490,28 @@ function AgentsSection({
   const [codexSetupId, setCodexSetupId] = useState<ProviderInstanceId | null>(null);
   const [cliTerminalFor, setCliTerminalFor] = useState<ProviderInstanceId | null>(null);
 
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- asks the environment to refresh its provider list when the environment changes
+  const checkInstallations = useEffectEvent((target: EnvironmentId) =>
+    discoverInstallations({ environmentId: target, input: {} }),
+  );
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reads installation facts from the selected environment and discards responses after it changes
   useEffect(() => {
-    void refreshProviders({ environmentId, input: {} });
-  }, [environmentId, refreshProviders]);
+    if (!canDiscover) return;
+    let current = true;
+    void checkInstallations(environmentId).then((result) => {
+      if (current) setInstallationDiscovery({ environmentId, result });
+    });
+    return () => {
+      current = false;
+    };
+  }, [environmentId, canDiscover]);
+
+  const refreshAgentStates = useEffectEvent((target: EnvironmentId) => {
+    void refreshProviders({ environmentId: target, input: {} });
+  });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- refreshes existing provider readiness once for the selected environment
+  useEffect(() => {
+    refreshAgentStates(environmentId);
+  }, [environmentId]);
 
   // Opened once the finished checks find nothing, since adding an agent is then the task. A first
   // status can be wrong, so this waits for the checks, and a later check never closes it.
@@ -473,7 +524,9 @@ function AgentsSection({
     return (
       isInstallableDriver(provider.driver) &&
       !isBrokenVersion(provider) &&
-      (state === "install" || state === "signIn")
+      ((state === "install" &&
+        findWelcomeInstallation(provider, installations)?.installed !== true) ||
+        state === "signIn")
     );
   };
   // Codex's card also offers ChatGPT sign-in, which still works when the CLI check failed.
@@ -547,7 +600,7 @@ function AgentsSection({
         const cause = squashAtomCommandFailure(result);
         toastManager.add({
           type: "error",
-          title: `Could not turn on ${agentName(provider)}`,
+          title: t("wizard.agents.turnOnFailed", { name: agentName(provider) }),
           ...(cause instanceof Error ? { description: cause.message } : {}),
         });
       }
@@ -581,27 +634,27 @@ function AgentsSection({
         <Button
           size="xs"
           variant="outline"
-          aria-label={`Turn on: ${name}`}
+          aria-label={`${t("wizard.agents.turnOn")}: ${name}`}
           disabled={!canManageProviders || serverConfig === null}
           onClick={() => void turnOn(provider)}
         >
-          Turn on
+          {t("wizard.agents.turnOn")}
         </Button>
       );
     }
     // Settings updates a broken CLI the way it was installed, including a custom binary path.
-    if (isBrokenVersion(provider)) return settingsAction("Update");
+    if (isBrokenVersion(provider)) return settingsAction(t("providerUpdate.action.update"));
     if (serverConfig !== null && codexNeedsSetup(provider, serverConfig.settings)) {
       const open = codexSetupId === provider.instanceId;
       return (
         <Button
           size="xs"
           variant="outline"
-          aria-label={`Set up: ${name}`}
+          aria-label={`${t("wizard.agents.setup")}: ${name}`}
           aria-expanded={open}
           onClick={() => setCodexSetupId(open ? null : provider.instanceId)}
         >
-          Set up
+          {t("wizard.agents.setup")}
         </Button>
       );
     }
@@ -620,7 +673,11 @@ function AgentsSection({
       );
     }
     return settingsAction(
-      state === "signIn" ? "Sign in" : state === "attention" ? "Details" : "Set up",
+      state === "signIn"
+        ? t("wizard.signIn")
+        : state === "attention"
+          ? t("common.details")
+          : t("wizard.agents.setup"),
     );
   };
 
@@ -630,7 +687,7 @@ function AgentsSection({
       (provider) =>
         needsInstallOrSignIn(provider) || codexNeedsSetup(provider, serverConfig?.settings),
     )
-      ? "This connection cannot control terminals."
+      ? t("wizard.agents.terminalPermission")
       : null,
     !canManageProviders &&
     (acpAllowed ||
@@ -638,22 +695,34 @@ function AgentsSection({
         (provider) =>
           stateOf(provider) === "disabled" || codexNeedsSetup(provider, serverConfig?.settings),
       ))
-      ? "This connection cannot manage agents."
+      ? t("wizard.agents.managePermission")
       : null,
   ].filter((note) => note !== null);
 
   return (
-    <WelcomeSection title="Agents">
+    <WelcomeSection title={t("wizard.step.agents")}>
       {found.map((provider) => (
         <AgentRow
           key={provider.instanceId}
           provider={provider}
           state={stateOf(provider)}
+          installation={findWelcomeInstallation(provider, installations)}
+          installationPending={installationPending}
           action={actionFor(provider)}
         />
       ))}
       {checking && found.length === 0 ? (
-        <p className="text-sm leading-10 text-muted-foreground">Checking {label}…</p>
+        <p className="text-sm leading-10 text-muted-foreground">
+          {t("wizard.agents.checkingNamed", { environment: label })}
+        </p>
+      ) : null}
+      {!canDiscover || discovery?._tag === "Failure" ? (
+        <p className="py-2 text-xs text-muted-foreground" role="status">
+          {t("wizard.agents.installationFailed")}{" "}
+          <Link to="/settings/providers" search={{ environmentId }} className="underline">
+            {t("wizard.agents.openSettings")}
+          </Link>
+        </p>
       ) : null}
       {notes.map((note) => (
         <p key={note} className="pl-8 text-xs text-muted-foreground">
@@ -671,7 +740,7 @@ function AgentsSection({
               found.length > 0 ? "text-muted-foreground" : "text-foreground",
             )}
           >
-            {found.length > 0 ? "Add more agents" : "Set up an agent"}
+            {found.length > 0 ? t("wizard.agents.addMore") : t("wizard.agents.setupOne")}
           </span>
           {showMore ? null : <AgentLogoStack providers={available} acp={acpAllowed} />}
           <ChevronDownIcon className="ml-auto size-4 text-muted-foreground group-data-panel-open:rotate-180" />
@@ -683,6 +752,8 @@ function AgentsSection({
                 key={provider.instanceId}
                 provider={provider}
                 state={stateOf(provider)}
+                installation={findWelcomeInstallation(provider, installations)}
+                installationPending={installationPending}
                 compact
                 action={actionFor(provider)}
               />
@@ -694,7 +765,7 @@ function AgentsSection({
                 <ACPRegistryIcon className="size-4" />
               </RowIcon>
               <span className="min-w-0 flex-1 text-sm text-muted-foreground">
-                More agents in the ACP Registry
+                {t("wizard.agents.moreInRegistry")}
               </span>
               <Button
                 size="xs"
@@ -702,7 +773,7 @@ function AgentsSection({
                 disabled={!canManageProviders}
                 onClick={() => setAddingProvider(true)}
               >
-                Browse
+                {t("wizard.agents.browse")}
               </Button>
             </div>
           ) : null}
@@ -1141,7 +1212,8 @@ function TerminalAction({
   readonly disabled: boolean;
   readonly onClick: () => void;
 }) {
-  const label = signIn ? "Sign in" : "Install";
+  const t = useTranslate();
+  const label = signIn ? t("wizard.signIn") : t("wizard.install");
   return (
     <Button
       size="xs"
@@ -1159,33 +1231,49 @@ function TerminalAction({
 function AgentRow({
   provider,
   state,
+  installation,
+  installationPending,
   action,
   compact = false,
 }: {
   readonly provider: ServerProvider;
   readonly state: ReturnType<typeof welcomeAgentState>;
+  readonly installation: ServerProviderInstallation | undefined;
+  readonly installationPending: boolean;
   readonly action?: ReactNode;
   // A row in the "Add more agents" grid: the button carries the state, so no detail line.
   readonly compact?: boolean;
 }) {
+  const t = useTranslate();
   const name = agentName(provider);
+  const installationLabel = installationPending
+    ? t("wizard.agents.installationChecking")
+    : installation?.installed === true
+      ? `${t("wizard.agents.installed")}${installation.version ? ` · ${installation.version}` : ""}`
+      : installation?.installed === false
+        ? t("wizard.agents.notInstalled")
+        : t("wizard.agents.installationUnknown");
   // Claude Code and Codex tiles show Install or Set up; other agents that are on say why not.
   const brokenMessage = isBrokenVersion(provider)
     ? (provider.compatibilityAdvisory?.message ?? null)
     : null;
   const detail =
-    state === "install"
-      ? isInstallableDriver(provider.driver)
-        ? null
-        : "Not installed"
-      : compact || state === "ready" || state === "checking"
-        ? null
-        : state === "attention"
-          ? (provider.unavailableReason ??
-            brokenMessage ??
-            provider.message ??
-            getProviderSummary(provider).headline)
-          : (brokenMessage ?? getProviderSummary(provider).headline);
+    state === "disabled"
+      ? t("wizard.disabled")
+      : state === "install"
+        ? installation?.installed === true
+          ? t("wizard.agents.setup")
+          : isInstallableDriver(provider.driver)
+            ? null
+            : t("wizard.agents.notInstalled")
+        : compact || state === "ready" || state === "checking"
+          ? null
+          : state === "attention"
+            ? (provider.unavailableReason ??
+              brokenMessage ??
+              provider.message ??
+              getProviderSummary(provider, t).headline)
+            : (brokenMessage ?? getProviderSummary(provider, t).headline);
   return (
     <div className={cn("flex items-center gap-3", compact ? "min-h-9" : "min-h-10 py-1")}>
       <RowIcon>
@@ -1199,6 +1287,12 @@ function AgentRow({
         <span className={cn("block truncate text-sm text-foreground", !compact && "font-medium")}>
           {name}
         </span>
+        <p className="text-xs leading-relaxed text-muted-foreground">{installationLabel}</p>
+        {installation?.message ? (
+          <p className="line-clamp-2 text-xs break-words text-muted-foreground">
+            {installation.message}
+          </p>
+        ) : null}
         {detail ? (
           <p className="line-clamp-2 text-xs leading-relaxed break-words text-muted-foreground">
             {detail}
@@ -1209,10 +1303,10 @@ function AgentRow({
         {state === "ready" ? (
           <span className="inline-flex items-center gap-1.5 text-xs font-medium text-success-foreground">
             <CheckIcon className="size-3.5" />
-            Ready
+            {t("wizard.ready")}
           </span>
         ) : state === "checking" ? (
-          <span className="text-xs text-muted-foreground">Checking…</span>
+          <span className="text-xs text-muted-foreground">{t("wizard.checking")}</span>
         ) : (
           action
         )}

@@ -42,25 +42,47 @@ const allowAll = () => true;
 
 describe("groupWelcomeAgents", () => {
   it("lists agents on the computer by state, then name, and everything else by name", () => {
-    const groups = groupWelcomeAgents(
-      [
-        provider("Zeta", { auth: { status: "unauthenticated" }, status: "error" }),
-        provider("Codex"),
-        provider("Pi", { enabled: false, status: "disabled" }),
-        provider("Grok", { installed: false, status: "error", auth: { status: "unknown" } }),
-        provider("Claude"),
-        provider("Cursor", { installed: false, status: "warning", auth: { status: "unknown" } }),
-      ],
-      undefined,
-      nameOf,
-      allowAll,
-    );
+    const providers = [
+      provider("Zeta", { auth: { status: "unauthenticated" }, status: "error" }),
+      provider("Codex"),
+      provider("Pi", { enabled: false, status: "disabled" }),
+      provider("Grok", { installed: false, status: "error", auth: { status: "unknown" } }),
+      provider("Claude"),
+      provider("Cursor", { installed: null, status: "checking", auth: { status: "unknown" } }),
+    ];
+    const groups = groupWelcomeAgents(providers, undefined, nameOf, allowAll);
 
     expect(names(groups.found)).toEqual(["Claude", "Codex", "Zeta"]);
     // Cursor is still being checked; it stays listed instead of disappearing.
     expect(names(groups.available)).toEqual(["Cursor", "Grok", "Pi"]);
     expect(groups.checking).toBe(true);
     expect(groups.readyCount).toBe(2);
+    const installation = {
+      instanceId: ProviderInstanceId.make("pi"),
+      driver: ProviderDriverKind.make("pi"),
+      installed: true,
+      version: null,
+    };
+    const discovered = groupWelcomeAgents(providers, undefined, nameOf, allowAll, [installation]);
+    expect(names(discovered.found)).toEqual(["Claude", "Codex", "Zeta", "Pi"]);
+    expect(names(discovered.available)).toEqual(["Cursor", "Grok"]);
+    expect(discovered.readyCount).toBe(2);
+    for (const installed of [false, null]) {
+      expect(
+        names(
+          groupWelcomeAgents(providers, undefined, nameOf, allowAll, [
+            { ...installation, installed },
+          ]).found,
+        ),
+      ).toEqual(names(groups.found));
+    }
+    expect(
+      names(
+        groupWelcomeAgents(providers, undefined, nameOf, allowAll, [
+          { ...installation, driver: ProviderDriverKind.make("other") },
+        ]).found,
+      ),
+    ).toEqual(names(groups.found));
   });
 
   it("uses this computer's settings and keeps agents that failed to load with the found ones", () => {
@@ -150,7 +172,7 @@ describe("cliTerminalStep", () => {
         auth: { status: "unauthenticated" },
       }),
     ).toBe("wait");
-    expect(step({ installed: false, status: "warning", auth: { status: "unknown" } })).toBe("wait");
+    expect(step({ installed: null, status: "checking", auth: { status: "unknown" } })).toBe("wait");
     expect(step({ installed: false, status: "error", auth: { status: "unknown" } })).toBe("open");
     expect(step({ auth: { status: "unauthenticated" } })).toBe("open");
     // A check that timed out still gets the sign-in command.

@@ -7,6 +7,7 @@ import {
   type ProviderInstanceId,
   resolveProjectProviderInstanceEnabled,
   type ServerProvider,
+  type ServerProviderInstallation,
   type ServerSettings,
 } from "@t3tools/contracts";
 
@@ -21,6 +22,16 @@ type FoundState = keyof typeof FOUND_ORDER;
 const isFoundState = (state: string): state is FoundState => state in FOUND_ORDER;
 
 const ACP_REGISTRY_DRIVER = ProviderDriverKind.make("acpRegistry");
+
+export function findWelcomeInstallation(
+  provider: ServerProvider,
+  installations: ReadonlyArray<ServerProviderInstallation> | undefined,
+) {
+  return installations?.find(
+    (installation) =>
+      installation.instanceId === provider.instanceId && installation.driver === provider.driver,
+  );
+}
 
 /**
  * An agent's state for new threads on this computer. The server also lists agents that only some
@@ -37,8 +48,10 @@ export function welcomeAgentState(
   }
   const state = getOnboardingProviderState(provider);
   if (state === "ready" && provider.compatibilityAdvisory?.status === "broken") return "attention";
-  // An ACP agent that is not prepared reports the same fields as one still being checked.
-  return state === "checking" && provider.driver === ACP_REGISTRY_DRIVER ? "attention" : state;
+  // Registry agents are prepared in Settings rather than through the CLI installer.
+  return (state === "checking" || state === "install") && provider.driver === ACP_REGISTRY_DRIVER
+    ? "attention"
+    : state;
 }
 
 /**
@@ -51,8 +64,12 @@ export function groupWelcomeAgents(
   settings: ComputerSettings | null | undefined,
   nameOf: (provider: ServerProvider) => string,
   isAllowed: (provider: ServerProvider) => boolean,
+  installations?: ReadonlyArray<ServerProviderInstallation>,
 ) {
-  const found: Array<{ readonly provider: ServerProvider; readonly state: FoundState }> = [];
+  const found: Array<{
+    readonly provider: ServerProvider;
+    readonly state: ReturnType<typeof welcomeAgentState>;
+  }> = [];
   const available: ServerProvider[] = [];
   let checking = providers == null;
   let readyCount = 0;
@@ -61,13 +78,14 @@ export function groupWelcomeAgents(
     const state = welcomeAgentState(provider, settings);
     if (state === "ready") readyCount += 1;
     if (state === "checking") checking = true;
-    if (isFoundState(state)) found.push({ provider, state });
+    const installed = findWelcomeInstallation(provider, installations)?.installed === true;
+    if (isFoundState(state) || installed) found.push({ provider, state });
     else available.push(provider);
   }
   const byName = (a: ServerProvider, b: ServerProvider) => nameOf(a).localeCompare(nameOf(b));
-  found.sort(
-    (a, b) => FOUND_ORDER[a.state] - FOUND_ORDER[b.state] || byName(a.provider, b.provider),
-  );
+  const order = (state: ReturnType<typeof welcomeAgentState>) =>
+    isFoundState(state) ? FOUND_ORDER[state] : 3;
+  found.sort((a, b) => order(a.state) - order(b.state) || byName(a.provider, b.provider));
   available.sort(byName);
   return { checking, readyCount, found: found.map((entry) => entry.provider), available };
 }
