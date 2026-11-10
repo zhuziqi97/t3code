@@ -203,9 +203,9 @@ export const makeAcpMcpOverAcpBridge = Effect.fn("AcpMcpOverAcpBridge.make")(fun
     connect: Effect.fn("mcpOverAcpBridge.connect")(function* (request) {
       const server = servers.get(request.serverId);
       if (server === undefined) {
-        return yield* Effect.fail(
-          new AcpMcpOverAcpError({ message: `Unknown ACP MCP server "${request.serverId}".` }),
-        );
+        return yield* new AcpMcpOverAcpError({
+          message: `Unknown ACP MCP server "${request.serverId}".`,
+        });
       }
       if (connections.size >= MAX_CONNECTIONS) {
         return yield* new AcpMcpOverAcpError({ message: "Too many MCP-over-ACP connections." });
