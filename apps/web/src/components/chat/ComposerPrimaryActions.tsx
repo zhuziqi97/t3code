@@ -1,6 +1,6 @@
 import { useTranslate } from "../../i18n";
 import { memo, type MouseEventHandler, type PointerEventHandler, type ReactNode } from "react";
-import { CheckIcon, ChevronDownIcon, ChevronLeftIcon, Minimize2Icon, PlayIcon } from "lucide-react";
+import { CheckIcon, ChevronLeftIcon, Minimize2Icon, PlayIcon } from "lucide-react";
 import { CornerUpRight, ListPlus } from "lucide";
 import { MorphIcon } from "~/components/MorphIcon";
 import { useEnvironmentIdentificationMode } from "~/hooks/useSettings";
@@ -206,65 +206,6 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
             questionIndex: pendingAction.questionIndex,
           })}
         </button>
-      </div>
-    );
-  }
-
-  if (showPlanFollowUpPrompt && (promptHasText || !canResume)) {
-    if (promptHasText) {
-      return (
-        <button
-          type="submit"
-          className={cn(messageActionPillClassName, "h-9 sm:h-8", compact ? "px-3" : "px-4")}
-          {...pointerFocusProps}
-          disabled={isSendBusy || isSendDisabled || isEnvironmentUnavailable}
-        >
-          {isSendBusy ? t("chat.primary.sending") : t("chat.primary.refine")}
-        </button>
-      );
-    }
-
-    return (
-      <div data-chat-composer-implement-actions="true" className="flex items-center justify-end">
-        <button
-          type="submit"
-          className={cn(messageActionPillClassName, "h-9 rounded-r-none px-4 sm:h-8")}
-          {...pointerFocusProps}
-          disabled={isSendBusy || isSendDisabled || isEnvironmentUnavailable}
-        >
-          {isSendBusy ? t("chat.primary.sending") : t("chat.primary.implement")}
-        </button>
-        <Menu>
-          <MenuTrigger
-            render={
-              <button
-                type="button"
-                className={cn(
-                  messageActionPillClassName,
-                  "h-9 rounded-l-none border-l border-message-action-foreground/20 px-2 sm:h-8",
-                )}
-                aria-label={t("chat.primary.implementationActions")}
-                // Canceling pointerdown also suppresses the mousedown that opens the menu.
-                onMouseDown={
-                  preserveComposerFocusOnPointerDown ? (event) => event.preventDefault() : undefined
-                }
-                disabled={isSendBusy || isSendDisabled || isEnvironmentUnavailable}
-              />
-            }
-          >
-            <ChevronDownIcon className="size-3.5" />
-          </MenuTrigger>
-          <MenuPopup align="end" side="top" {...composerFloatingLayerProps}>
-            <MenuItem
-              disabled={isSendBusy || isSendDisabled || isEnvironmentUnavailable}
-              onClick={() => {
-                if (canOperateThread) onImplementPlanInNewThread();
-              }}
-            >
-              {t("chat.primary.implementNew")}
-            </MenuItem>
-          </MenuPopup>
-        </Menu>
       </div>
     );
   }
