@@ -50,6 +50,7 @@ export function useDesktopCliCommand() {
 }
 
 export function CliCommandSettingsRow() {
+  const t = useTranslate();
   const { state, busy, run } = useDesktopCliCommand();
 
   if (!state?.supported) return null;

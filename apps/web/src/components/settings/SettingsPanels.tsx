@@ -844,43 +844,6 @@ function AutoSettleDaysInput({
   );
 }
 
-export function LegacyFeaturesSection() {
-  const t = useTranslate();
-  const settings = useScopedSettings();
-  const updateSettings = useUpdateScopedSettings();
-
-  return (
-    <SettingsSection id="legacy-features" title={t("section.legacy")}>
-      <SettingsRow
-        {...searchableSetting("legacy-plan-mode")}
-        description={t("legacy.plan.description")}
-        control={
-          <Switch
-            checked={settings.planModeEnabled}
-            onCheckedChange={(checked) => {
-              updateSettings({ planModeEnabled: Boolean(checked) });
-            }}
-            aria-label={t("legacy.plan.label")}
-          />
-        }
-      />
-      <SettingsRow
-        {...searchableSetting("legacy-context-window-indicator")}
-        description={t("legacy.context.description")}
-        control={
-          <Switch
-            checked={settings.contextWindowMeterEnabled}
-            onCheckedChange={(checked) =>
-              updateSettings({ contextWindowMeterEnabled: Boolean(checked) })
-            }
-            aria-label={t("legacy.context.label")}
-          />
-        }
-      />
-    </SettingsSection>
-  );
-}
-
 export function GeneralSettingsPanel() {
   const t = useTranslate();
   const settings = useScopedSettings();
@@ -2313,7 +2276,6 @@ export function AboutSettingsPanel() {
   const t = useTranslate();
   // The Welcome page sets up this computer, so it needs one.
   const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const telemetryOff = managedTelemetryOffMessage(primaryPolicy);
   return (
     <SettingsPageContainer>
       <SettingsSection id="about" title={t("section.app")}>

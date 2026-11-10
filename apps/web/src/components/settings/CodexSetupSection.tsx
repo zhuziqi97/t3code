@@ -838,7 +838,7 @@ function ManagedCodexSetup({
       onClose={() => setAccountPickerOpen(false)}
       disabled={unavailable || busy}
       canRemove={canRemoveAuthMethod}
-      error={error}
+      error={errorMessage}
       onRemove={(methodId) => {
         void run(() => removeAuthMethod({ environmentId, input: { instanceId, methodId } }));
       }}

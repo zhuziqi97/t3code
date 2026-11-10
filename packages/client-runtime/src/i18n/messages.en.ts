@@ -2464,6 +2464,7 @@ export const en = {
   "settings.search.remove-agent-credits-on-merge.title": "Remove agent credits when merging",
   "settings.search.pull-request-merge-method.title": "Default merge method",
   "settings.sections.projects": "Project",
+  "settings.sections.voice": "Voice",
   "settings.sections.general": "General",
   "settings.sections.appearance": "Appearance",
   "settings.sections.keybindings": "Keybindings",

@@ -1,39 +1,6 @@
 import { useTranslate } from "../../i18n";
-import {
-  lazy,
-  Suspense,
-  useEffect,
-  useRef,
-  useState,
-  type ComponentType,
-  type KeyboardEvent,
-} from "react";
-import {
-  ArchiveIcon,
-  FlaskConicalIcon,
-  BotIcon,
-  createLucideIcon,
-  CalendarClockIcon,
-  FileDiffIcon,
-  FolderTreeIcon,
-  GitBranchIcon,
-  GlobeIcon,
-  InfoIcon,
-  MessageSquareTextIcon,
-  MessagesSquareIcon,
-  PanelsTopLeftIcon,
-  KeyboardIcon,
-  KeyRoundIcon,
-  MicIcon,
-  PaletteIcon,
-  SearchIcon,
-  ServerIcon,
-  Settings2Icon,
-  ShieldCheckIcon,
-  SmartphoneIcon,
-  WrenchIcon,
-  XIcon,
-} from "lucide-react";
+import { lazy, Suspense, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { SearchIcon, XIcon } from "lucide-react";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 
 import { cn } from "../../lib/utils";
@@ -57,6 +24,7 @@ import {
   type SettingsPath,
   type SettingsSearchItem,
 } from "./settingsSearch";
+import { validateSettingsScopeSearch } from "./settingsScope";
 import { useAvailableSettingsSearchItems } from "./useAvailableSettingsSearchItems";
 import { useSettingsSectionNavigation } from "./useSettingsSectionNavigation";
 import { workspaceAreaProps } from "../../lib/workspaceFocus";
@@ -74,36 +42,6 @@ const T3ConnectSidebarAvatar = lazy(() =>
   })),
 );
 
-const SETTINGS_SECTION_ICONS: Readonly<
-  Record<SettingsPath, ComponentType<{ className?: string }>>
-> = {
-  "/settings/general": Settings2Icon,
-  "/settings/diagnostics": WrenchIcon,
-  "/settings/voice": MicIcon,
-  "/settings/appearance": PaletteIcon,
-  "/settings/chat": MessageSquareTextIcon,
-  "/settings/diffs": FileDiffIcon,
-  "/settings/projects": PanelsTopLeftIcon,
-  "/settings/keybindings": KeyboardIcon,
-  "/settings/snap-shot": SnapShotIcon,
-  "/settings/providers": BotIcon,
-  "/settings/threads": MessagesSquareIcon,
-  "/settings/browser": GlobeIcon,
-  "/settings/devices": SmartphoneIcon,
-  "/settings/scheduled-tasks": CalendarClockIcon,
-  "/settings/source-control": GitBranchIcon,
-  "/settings/worktrees": FolderTreeIcon,
-  "/settings/connections": ServerIcon,
-  "/settings/convene": GlobeIcon,
-  "/settings/access": ShieldCheckIcon,
-  "/settings/secrets": KeyRoundIcon,
-  "/settings/maintenance": WrenchIcon,
-  "/settings/labs": FlaskConicalIcon,
-  "/settings/about": InfoIcon,
-  "/settings/archived": ArchiveIcon,
-};
-
-// Detail pages without a nav entry highlight the page that links to them.
 const SETTINGS_DETAIL_PAGE_PARENTS: Readonly<Record<string, SettingsPath>> = {
   "/settings/diagnostics": "/settings/maintenance",
   "/settings/open-source-licenses": "/settings/about",
@@ -124,6 +62,8 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
   const navArea = workspaceAreaProps("settings-nav", 0, "Settings sections");
   const navigate = useNavigate();
   const currentHash = useLocation({ select: (location) => location.hash });
+  const currentSearch = useLocation({ select: (location) => location.search });
+  const scopeSearch = validateSettingsScopeSearch(currentSearch);
   const activePath = SETTINGS_DETAIL_PAGE_PARENTS[pathname] ?? pathname;
   const navPaths = SETTINGS_NAV_GROUPS.flatMap((group) =>
     group.sections.map((section) => section.path),

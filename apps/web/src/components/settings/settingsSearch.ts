@@ -40,6 +40,7 @@ export interface SettingsSearchItem {
   readonly cloudOnly?: boolean;
   readonly environmentOnly?: boolean;
   readonly providerSettingsOnly?: boolean;
+  readonly macProviderSettingsOnly?: boolean;
   readonly localBackendManagementOnly?: boolean;
   readonly localEnvironmentOnly?: boolean;
   readonly primaryEnvironmentOnly?: boolean;
@@ -57,6 +58,7 @@ export interface SettingsSearchAvailability {
   readonly hasCloudPublicConfig: boolean;
   readonly hasEnvironment: boolean;
   readonly hasProviderSettingsEnvironment: boolean;
+  readonly hasMacProviderSettingsEnvironment?: boolean;
   readonly canManageLocalBackend: boolean;
   readonly isWslSettingsRowVisible: boolean;
   readonly hasThreadAutoSettlement: boolean;
@@ -1799,33 +1801,6 @@ export type SettingsSearchItemId = (typeof SETTINGS_SEARCH_ITEMS)[number]["id"];
 
 const SEARCH_ITEMS_BY_ID = new Map(SETTINGS_SEARCH_ITEMS.map((item) => [item.id, item] as const));
 
-const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScope | null>> = {
-  "/settings/convene": "environment",
-  "/settings/diagnostics": "environment",
-  "/settings/projects": "project",
-  "/settings/general": null,
-  "/settings/voice": null,
-  "/settings/appearance": null,
-  "/settings/chat": null,
-  "/settings/diffs": null,
-  "/settings/snap-shot": null,
-  "/settings/keybindings": null,
-  "/settings/providers": null,
-  "/settings/threads": null,
-  "/settings/browser": null,
-  "/settings/devices": null,
-  "/settings/source-control": "environment-defaults",
-  "/settings/worktrees": "project-defaults",
-  "/settings/connections": "connections",
-  "/settings/access": "connections",
-  "/settings/secrets": null,
-  "/settings/scheduled-tasks": null,
-  "/settings/maintenance": null,
-  "/settings/labs": null,
-  "/settings/about": null,
-  "/settings/archived": "project-defaults",
-};
-
 const RENAMED_SETTINGS_PATHS: Readonly<Record<string, SettingsPath>> = {
   "/settings/integrations": "/settings/browser",
   "/settings/storage": "/settings/maintenance",
@@ -1958,6 +1933,7 @@ export function filterAvailableSettingsSearchItems(
       (!item.cloudOnly || availability.hasCloudPublicConfig) &&
       (!item.environmentOnly || availability.hasEnvironment) &&
       (!item.providerSettingsOnly || availability.hasProviderSettingsEnvironment) &&
+      (!item.macProviderSettingsOnly || availability.hasMacProviderSettingsEnvironment) &&
       (!item.localBackendManagementOnly || availability.canManageLocalBackend) &&
       (!item.localEnvironmentOnly || !availability.localEnvironmentDisabled) &&
       (!item.primaryEnvironmentOnly || availability.hasPrimaryEnvironment === true) &&

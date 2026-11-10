@@ -522,7 +522,8 @@ function TextGenerationTaskPicker({
     selections: [selection],
   });
   // Only a text generator's model can be tried cheaply; agents start a whole session.
-  const testable = Object.hasOwn(settings.textGenerators, selection.instanceId);
+  const testable =
+    Object.hasOwn(settings.textGenerators, selection.instanceId) && selection.model !== null;
   const testKey = `${selection.instanceId}:${selection.model}`;
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<{
@@ -531,6 +532,7 @@ function TextGenerationTaskPicker({
   } | null>(null);
   const shown = result?.key === testKey ? result : null;
   const test = async () => {
+    if (selection.model === null) return;
     setTesting(true);
     const error = await testTextGeneratorModel(
       environmentId,

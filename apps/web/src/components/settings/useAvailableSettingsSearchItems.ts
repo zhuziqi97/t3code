@@ -11,12 +11,13 @@ import { useEnvironmentQuery } from "~/state/query";
 import { useEnvironmentScope } from "~/state/session";
 import { isWslSettingsRowVisible } from "./ConnectionsSettings.logic";
 import { isProviderSettingsEnvironmentAvailable } from "./ProviderSettingsPanel.logic";
+import type { SettingsScopeSearch } from "./settingsScope";
 import {
   filterAvailableSettingsSearchItems,
   getThreadAutoSettlementSearchAvailability,
 } from "./settingsSearch";
 
-export function useAvailableSettingsSearchItems() {
+export function useAvailableSettingsSearchItems(scopeSearch: SettingsScopeSearch = {}) {
   const { environments } = useEnvironments();
   // Explicit booleans keep flags out of the filter cache so environment updates do not rebuild the list.
   const hasEnvironment =
@@ -28,6 +29,15 @@ export function useAvailableSettingsSearchItems() {
         hasServerConfig: environment.serverConfig !== null,
       }),
     ) === true;
+  const hasMacProviderSettingsEnvironment = environments.some(
+    (environment) =>
+      (scopeSearch.machine === undefined || environment.environmentId === scopeSearch.machine) &&
+      environment.serverConfig?.environment.platform.os === "darwin" &&
+      isProviderSettingsEnvironmentAvailable({
+        connectionPhase: environment.connection.phase,
+        hasServerConfig: true,
+      }),
+  );
   // Any machine that offers it; the row then shows for a settings scope where all selected ones do.
   const hasFastWorktreeCheckoutEnvironment =
     environments.some(
@@ -65,6 +75,7 @@ export function useAvailableSettingsSearchItems() {
     hasCloudPublicConfig: cloudPublicConfig,
     hasEnvironment,
     hasProviderSettingsEnvironment,
+    hasMacProviderSettingsEnvironment,
     canManageLocalBackend,
     isWslSettingsRowVisible: wslSettingsRowVisible,
     hasThreadAutoSettlement,

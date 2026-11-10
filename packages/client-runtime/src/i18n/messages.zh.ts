@@ -2322,6 +2322,7 @@ export const zh: Partial<Messages> = {
   "settings.search.remove-agent-credits-on-merge.title": "合并时移除智能体署名",
   "settings.search.pull-request-merge-method.title": "默认合并方式",
   "settings.sections.projects": "项目",
+  "settings.sections.voice": "语音",
   "settings.sections.general": "通用",
   "settings.sections.appearance": "外观",
   "settings.sections.keybindings": "快捷键",
