@@ -22,6 +22,7 @@ import {
 import { grokUsageReader } from "./usage.ts";
 import { readGrokAccount } from "./usageLimits.ts";
 import { makeManagedServerProvider } from "@t3tools/provider-core/server/managedProvider";
+import { makeProviderInstallationProbe } from "@t3tools/provider-core/server/snapshotProbe";
 import {
   defaultProviderContinuationIdentity,
   type ProviderDriver,
@@ -259,6 +260,10 @@ export const GrokDriver: ProviderDriver<GrokSettings, GrokDriverEnv, Path.Path> 
       displayName,
       accentColor,
       enabled,
+      probeInstallation: yield* makeProviderInstallationProbe(
+        effectiveConfig.binaryPath,
+        processEnv,
+      ),
       snapshot,
       snapshotForCwd,
       orchestrationAdapter,

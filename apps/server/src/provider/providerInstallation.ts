@@ -5,10 +5,11 @@ import {
   type ProviderInstallCancelInput,
   type ProviderInstallState,
   type ProviderInstanceId,
+  type ServerProviderInstallation,
   ProviderSetupError,
   type ProviderSetupInput,
 } from "@t3tools/contracts";
-import { resolveCommandPath } from "@t3tools/shared/shell";
+import { CommandResolutionCache, resolveCommandPath } from "@t3tools/shared/shell";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -34,6 +35,7 @@ const decodeAntigravitySettings = Schema.decodeUnknownEffect(AntigravitySettings
 export class ProviderInstallation extends Context.Service<
   ProviderInstallation,
   {
+    readonly discover: Effect.Effect<ReadonlyArray<ServerProviderInstallation>>;
     readonly start: (
       input: ProviderSetupInput,
     ) => Effect.Effect<ProviderInstallState, ProviderSetupError>;
@@ -59,6 +61,33 @@ const make = Effect.fn("makeProviderInstallation")(function* () {
   const path = yield* Path.Path;
   const scope = yield* Effect.scope;
   const accountCheckOperations = new Map<ProviderInstanceId, string>();
+
+  const discover = Effect.fn("ProviderInstallation.discover")(function* () {
+    const current = yield* instances.listInstances;
+    const unavailable = yield* instances.listUnavailable;
+    const found = yield* Effect.forEach(current, (instance) =>
+      Effect.gen(function* () {
+        const installation =
+          instance.probeInstallation === undefined
+            ? { installed: null, version: null }
+            : yield* instance.probeInstallation;
+        return {
+          instanceId: instance.instanceId,
+          driver: instance.driverKind,
+          ...installation,
+        };
+      }),
+    ).pipe(Effect.provideService(CommandResolutionCache, new Map()));
+    return [
+      ...found,
+      ...unavailable.map(({ instanceId, driver }) => ({
+        instanceId,
+        driver,
+        installed: null,
+        version: null,
+      })),
+    ];
+  });
 
   const readEntries = Effect.fn("ProviderInstallation.readEntries")(function* (
     instanceId: ProviderInstanceId,
@@ -228,7 +257,7 @@ const make = Effect.fn("makeProviderInstallation")(function* () {
     return yield* installation.state;
   });
 
-  return { start, cancel, subscribe, remove };
+  return { discover: discover(), start, cancel, subscribe, remove };
 });
 
 export const layer = Layer.effect(ProviderInstallation, make());

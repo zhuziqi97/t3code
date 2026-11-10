@@ -20,6 +20,7 @@ import * as ProviderContinuationRequests from "@t3tools/provider-core/server/Pro
 import { checkMuseProviderStatus, makePendingMuseProvider } from "./status.ts";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
 import { makeManagedServerProvider } from "@t3tools/provider-core/server/managedProvider";
+import { makeProviderInstallationProbe } from "@t3tools/provider-core/server/snapshotProbe";
 import { enrichMuseSnapshot, latestMuseVersion, museMaintenance } from "./maintenance.ts";
 import { makeMuseEnvironment } from "./sdk.ts";
 import { museUsageReader } from "./usage.ts";
@@ -197,6 +198,10 @@ export const MuseDriver: ProviderDriver<
       displayName,
       accentColor,
       enabled,
+      probeInstallation: yield* makeProviderInstallationProbe(
+        effectiveConfig.binaryPath,
+        processEnvironment,
+      ),
       snapshot: { ...snapshot, resolveMaintenance },
       orchestrationAdapter,
       textGeneration,

@@ -3,7 +3,10 @@ import { assert, it } from "@effect/vitest";
 import { DEFAULT_SERVER_SETTINGS, ProviderInstanceId } from "@t3tools/contracts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Path from "effect/Path";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
 import * as Sink from "effect/Sink";
@@ -113,12 +116,21 @@ const makePiSpawner = Effect.fnUntraced(function* (
   return { spawner, launches, pendingCommand };
 });
 
-const create = (config: Partial<PiSettings> = {}, enabled = true) =>
+const create = (
+  config: Partial<PiSettings> = {},
+  enabled = true,
+  identity?: {
+    readonly instanceId: ProviderInstanceId;
+    readonly environment: Parameters<typeof PiDriver.create>[0]["environment"];
+  },
+) =>
   PiDriver.create({
-    instanceId: ProviderInstanceId.make("pi-workspace-test"),
+    instanceId: identity?.instanceId ?? ProviderInstanceId.make("pi-workspace-test"),
     displayName: "My Pi",
     accentColor: "#abcdef",
-    environment: [{ name: "PI_CODING_AGENT_DIR", value: "/isolated-pi", sensitive: false }],
+    environment: identity?.environment ?? [
+      { name: "PI_CODING_AGENT_DIR", value: "/isolated-pi", sensitive: false },
+    ],
     enabled,
     config: { ...PiDriver.defaultConfig(), binaryPath: "custom-pi", ...config },
   });
@@ -185,16 +197,39 @@ it.layer(layerTest)("PiDriver workspace discovery", (it) => {
 
   it.effect("does not run a disabled provider's workspace probe", () =>
     Effect.gen(function* () {
-      const instance = yield* create({}, false).pipe(
-        Effect.provideService(
-          ChildProcessSpawner.ChildProcessSpawner,
-          ChildProcessSpawner.make(() => Effect.die("Disabled Pi must not spawn")),
-        ),
-      );
-      assert.isDefined(instance.snapshotForCwd);
-      const workspace = yield* instance.snapshotForCwd!("/first");
-      assert.isFalse(workspace.enabled);
-      assert.deepEqual(workspace.skills, []);
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const platform = yield* HostProcess.Platform;
+      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "t3-pi-discovery-" });
+      const present = path.join(directory, "present");
+      const missing = path.join(directory, "missing");
+      yield* fs.makeDirectory(present);
+      yield* fs.makeDirectory(missing);
+      const command = PiDriver.defaultConfig().binaryPath;
+      const executable = path.join(present, platform === "win32" ? `${command}.exe` : command);
+      yield* fs.writeFileString(executable, "Must never execute this file.");
+      yield* fs.chmod(executable, 0o755);
+      for (const [id, directory, installed] of [
+        ["pi-found", present, true],
+        ["pi-missing", missing, false],
+      ] as const) {
+        const instance = yield* create({ binaryPath: command }, false, {
+          instanceId: ProviderInstanceId.make(id),
+          environment: [{ name: "PATH", value: directory, sensitive: false }],
+        }).pipe(
+          Effect.provideService(
+            ChildProcessSpawner.ChildProcessSpawner,
+            ChildProcessSpawner.make(() => Effect.die("Disabled Pi must not spawn")),
+          ),
+        );
+        assert.isDefined(instance.snapshotForCwd);
+        const workspace = yield* instance.snapshotForCwd!("/first");
+        assert.isFalse(workspace.enabled);
+        assert.deepEqual(workspace.skills, []);
+        const before = yield* instance.snapshot.refresh;
+        assert.deepEqual(yield* instance.probeInstallation!, { installed, version: null });
+        assert.deepEqual(yield* instance.snapshot.getSnapshot, before);
+      }
     }).pipe(Effect.scoped),
   );
 

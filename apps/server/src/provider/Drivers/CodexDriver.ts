@@ -30,6 +30,7 @@ import {
 } from "../CodexProvider.ts";
 import { resolveCodexLaunchArgs } from "../codexLaunchArgs.ts";
 import { makeManagedServerProvider } from "@t3tools/provider-core/server/managedProvider";
+import { makeProviderInstallationProbe } from "@t3tools/provider-core/server/snapshotProbe";
 import * as ModelCatalog from "@t3tools/provider-core/server/ModelCatalog";
 import { applyCodexModelCatalog } from "../codexModelCatalog.ts";
 import type { ProviderDriver, ProviderInstance } from "@t3tools/provider-core/server/driver";
@@ -378,6 +379,10 @@ export const CodexDriver: ProviderDriver<
       displayName,
       accentColor,
       enabled,
+      probeInstallation: yield* makeProviderInstallationProbe(
+        effectiveConfig.binaryPath,
+        processEnv,
+      ),
       snapshot,
       snapshotForCwd,
       consumeResetCredit,

@@ -128,6 +128,10 @@ export interface CodexExecutable {
 }
 interface CodexInstallationService {
   readonly managedDirectory: string;
+  readonly inspectInstallation: Effect.Effect<{
+    readonly installed: boolean | null;
+    readonly version: string | null;
+  }>;
   readonly resolve: () => Effect.Effect<CodexExecutable, CodexInstallationError>;
   readonly acquire: () => Effect.Effect<CodexExecutable, CodexInstallationError, Scope.Scope>;
   readonly compatibility: (
@@ -429,6 +433,21 @@ export const makeCodexInstallation = Effect.fn("makeCodexInstallation")(function
     const local = yield* resolveLocal();
     return local ?? (yield* resolveManaged());
   });
+  const inspectInstallation = Effect.fn("CodexInstallation.inspectInstallation")(
+    function* () {
+      const local = yield* resolveCommandPath("codex", { env: environment }).pipe(
+        Effect.provideService(HostProcess.Platform, platform),
+        Effect.provideService(FileSystem.FileSystem, fs),
+        Effect.provideService(Path.Path, path),
+      );
+      if (local !== null) return { installed: true, version: null };
+      if (!(yield* fs.exists(activePath))) return { installed: false, version: null };
+      const active = yield* readRecord(activePath, ActiveRelease);
+      const executable = yield* completedRelease(active.version);
+      return { installed: true, version: executable.version };
+    },
+    Effect.orElseSucceed(() => ({ installed: null, version: null })),
+  );
   const reuseLocal = Effect.fn("CodexInstallation.reuseLocal")(function* () {
     const local = yield* resolveLocal();
     if (!local) return false;
@@ -825,6 +844,7 @@ export const makeCodexInstallation = Effect.fn("makeCodexInstallation")(function
 
   return CodexInstallation.of({
     managedDirectory,
+    inspectInstallation: inspectInstallation(),
     resolve,
     acquire,
     compatibility,

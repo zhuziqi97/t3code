@@ -532,6 +532,13 @@ export class AcpRegistryCatalog extends Context.Service<
       settings: AcpRegistrySettings,
       environment?: NodeJS.ProcessEnv,
     ) => Effect.Effect<AcpRegistryInspection, AcpRegistryError>;
+    readonly inspectInstallation: (
+      settings: AcpRegistrySettings,
+      environment?: NodeJS.ProcessEnv,
+    ) => Effect.Effect<
+      { readonly installed: boolean | null; readonly version: string | null },
+      AcpRegistryError
+    >;
     readonly resolve: (
       settings: AcpRegistrySettings,
       cwd: string,
@@ -1506,6 +1513,7 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
     preference: AcpRegistryDistributionPreference,
     environment: NodeJS.ProcessEnv,
     currentAgent?: AcpRegistryAgent,
+    options: { readonly checkPackageManager?: boolean } = {},
   ) {
     const kinds: ReadonlyArray<AcpRegistryDistributionKind> =
       preference === "auto" ? ["binary", "npx", "uvx"] : [preference];
@@ -1543,7 +1551,7 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
       if (manager === undefined) continue;
       const receipt = yield* readPackageReceipt(agent, kind, distribution.packageName!, manager);
       if (Option.isNone(receipt)) continue;
-      if (kind === "uvx") {
+      if (kind === "uvx" && options.checkPackageManager !== false) {
         const existing = yield* discoverUvGlobalPackage(agent, distribution.packageName!, manager, {
           ...environment,
           UV_TOOL_DIR: packageInstallRoot(agent, kind),
@@ -1885,6 +1893,30 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
         )
       : Effect.void;
 
+  const inspectInstallation: AcpRegistryCatalog["Service"]["inspectInstallation"] = Effect.fn(
+    "AcpRegistryCatalog.inspectInstallation",
+  )(function* (settings, environment = hostEnvironment) {
+    const command = settings.commandPath.trim();
+    if (command) {
+      const executable = resolveExecutable(command, platform, environment);
+      if (executable === undefined) return { installed: false, version: null };
+      yield* validateLocalExecutable(executable);
+      return { installed: true, version: null };
+    }
+    const agentId = settings.agentId.trim();
+    if (settings.source === "local" || !agentId) return { installed: null, version: null };
+    const installed = yield* findInstallation(
+      agentId,
+      settings.distribution,
+      environment,
+      undefined,
+      {
+        checkPackageManager: false,
+      },
+    );
+    return { installed: installed !== undefined, version: installed?.version ?? null };
+  });
+
   const inspect: AcpRegistryCatalog["Service"]["inspect"] = Effect.fn("AcpRegistryCatalog.inspect")(
     function* (settings, environment) {
       if (settings.source === "local") {
@@ -2190,6 +2222,7 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
     refresh,
     search,
     prepare,
+    inspectInstallation,
     inspect,
     resolve,
     uninstallManagedBinary,

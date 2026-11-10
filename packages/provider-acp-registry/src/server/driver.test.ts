@@ -58,6 +58,7 @@ function catalogWithInspection(
     refresh: () => Effect.die("unused refresh"),
     search: () => Effect.die("unused search"),
     prepare: () => Effect.die("unused prepare"),
+    inspectInstallation: () => Effect.die("unused installation inspection"),
     inspect: () => Effect.succeed(inspection),
     resolve: () => Effect.die("unused resolve"),
     uninstallManagedBinary: () => Effect.die("unused uninstall"),

@@ -45,6 +45,7 @@ const resolved: AcpRegistrySupport.ResolvedAcpRegistryAgent = {
 };
 const catalog: AcpRegistrySupport.AcpRegistryCatalog["Service"] = {
   refresh: () => Effect.die("unused refresh"),
+  inspectInstallation: () => Effect.die("unused installation inspection"),
   inspect: () =>
     Effect.succeed({
       status: "ready",

@@ -13,6 +13,8 @@ import type {
   ServerProviderUsageLimits,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -22,6 +24,41 @@ import { mergeCustomModels } from "@t3tools/shared/model";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { createProviderVersionAdvisory } from "./maintenanceResolver.ts";
 import { collectUint8StreamText } from "./collectStreamText.ts";
+import { resolveCommandPath } from "@t3tools/shared/shell";
+import { expandHomePath } from "./pathExpansion.ts";
+
+export const makeProviderInstallationProbe = Effect.fn("makeProviderInstallationProbe")(function* (
+  command: string,
+  environment: NodeJS.ProcessEnv,
+) {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const home = yield* HostProcess.HomeDirectory;
+  return Effect.gen(function* () {
+    let inspectionFailed = false;
+    const executable = yield* resolveCommandPath(expandHomePath(command, home), {
+      env: environment,
+    }).pipe(
+      Effect.provideService(FileSystem.FileSystem, {
+        ...fileSystem,
+        // The shared resolver treats failed stats as missing; discovery must retain unknown.
+        stat: (filePath) =>
+          fileSystem.stat(filePath).pipe(
+            Effect.tapError((error) =>
+              Effect.sync(() => {
+                if (error.reason._tag !== "NotFound") inspectionFailed = true;
+              }),
+            ),
+          ),
+      }),
+      Effect.provideService(Path.Path, path),
+    );
+    return {
+      installed: executable !== null ? true : inspectionFailed ? null : false,
+      version: null,
+    };
+  });
+});
 
 const WINDOWS_COMMAND_NOT_FOUND_PATTERNS = [
   /is not recognized as an internal or external command/i,

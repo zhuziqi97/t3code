@@ -36,6 +36,7 @@ import {
   type ClaudeCapabilitiesProbe,
 } from "../ClaudeProvider.ts";
 import { makeManagedServerProvider } from "@t3tools/provider-core/server/managedProvider";
+import { makeProviderInstallationProbe } from "@t3tools/provider-core/server/snapshotProbe";
 import * as ModelCatalog from "@t3tools/provider-core/server/ModelCatalog";
 import {
   resolveClaudeModelCatalog,
@@ -417,6 +418,10 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv, Path.
       displayName,
       accentColor,
       enabled,
+      probeInstallation: yield* makeProviderInstallationProbe(
+        effectiveConfig.binaryPath,
+        processEnv,
+      ),
       snapshot,
       invalidateCaches: Cache.invalidateAll(capabilitiesProbeCache),
       snapshotForCwd: (cwd: string) =>

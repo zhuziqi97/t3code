@@ -36,6 +36,7 @@ import { probeCursorSkills } from "./skills.ts";
 import { makeCursorAuth } from "./auth.ts";
 import * as CursorCredentialStore from "./credentialStore.ts";
 import * as CursorAgentSdk from "./CursorAgentSdk.ts";
+import { inspectCursorSdkInstallation } from "./sdk.ts";
 import * as CursorSdk from "./CursorSdk.ts";
 import * as CursorKeychain from "./CursorKeychain.ts";
 import * as CursorUsageAccounts from "./CursorUsageAccounts.ts";
@@ -290,6 +291,7 @@ export const CursorDriver: ProviderDriver<
       displayName,
       accentColor,
       enabled,
+      probeInstallation: Effect.sync(inspectCursorSdkInstallation),
       auth: auth.controller,
       snapshot,
       snapshotForCwd: (cwd) =>

@@ -836,6 +836,9 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
       displayName,
       accentColor,
       enabled,
+      probeInstallation: catalog
+        .inspectInstallation(effectiveConfig, processEnvironment)
+        .pipe(Effect.orElseSucceed(() => ({ installed: null, version: null }))),
       auth,
       snapshot: {
         ...snapshot,

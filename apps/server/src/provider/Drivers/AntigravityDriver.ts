@@ -551,6 +551,7 @@ export const AntigravityDriver: ProviderDriver<
       displayName,
       accentColor,
       enabled,
+      probeInstallation: installation.inspectInstallation(config.binaryPath, processEnvironment),
       snapshot: provider.snapshot,
       snapshotForCwd: (cwd) =>
         !enabled

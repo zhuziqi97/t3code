@@ -6,6 +6,19 @@ const requireCursorSdk = NodeModule.createRequire(import.meta.url);
 let sdk: typeof import("@cursor/sdk") | undefined;
 let sqlite: typeof import("@cursor/sdk/sqlite") | undefined;
 
+export function inspectCursorSdkInstallation() {
+  try {
+    requireCursorSdk.resolve("@cursor/sdk");
+    return { installed: true, version: null };
+  } catch (cause) {
+    return {
+      installed:
+        cause instanceof Error && Reflect.get(cause, "code") === "MODULE_NOT_FOUND" ? false : null,
+      version: null,
+    };
+  }
+}
+
 export function loadCursorSdk(): typeof import("@cursor/sdk") {
   if (sdk !== undefined) return sdk;
   const start = performance.now();

@@ -146,6 +146,10 @@ it.effect.each(["0.156.0", "0.156.1", "0.156.2", "0.157.0"])(
   (version) =>
     Effect.gen(function* () {
       const h = yield* makeHarness({ local: { version } });
+      const probesBefore = yield* h.fs.readFileString(h.probeLog);
+      expect(yield* h.installation.inspectInstallation).toEqual({ installed: true, version: null });
+      expect(yield* h.fs.readFileString(h.probeLog)).toBe(probesBefore);
+      expect(h.downloads()).toBe(0);
       expect(yield* h.installation.start).toMatchObject({
         source: "local",
         phase: "succeeded",
@@ -315,8 +319,13 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const { installation, fs, baseDir } = yield* makeHarness();
+      expect(yield* installation.inspectInstallation).toEqual({ installed: false, version: null });
       yield* installation.start;
       expect((yield* terminalState(installation)).phase).toBe("succeeded");
+      expect(yield* installation.inspectInstallation).toEqual({
+        installed: true,
+        version: "0.156.1",
+      });
       const executable = yield* installation.resolve();
       expect(executable.executablePath).toBe(`${baseDir}/tools/codex/0.156.1/bin/codex`);
       expect(

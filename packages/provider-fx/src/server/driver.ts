@@ -17,6 +17,7 @@ import {
   fxDefaultModelId,
 } from "./status.ts";
 import { makeManagedServerProvider } from "@t3tools/provider-core/server/managedProvider";
+import { makeProviderInstallationProbe } from "@t3tools/provider-core/server/snapshotProbe";
 import {
   defaultProviderContinuationIdentity,
   type ProviderDriver,
@@ -152,6 +153,10 @@ export const FxDriver: ProviderDriver<FxSettings, FxDriverEnv> = {
       displayName,
       accentColor,
       enabled,
+      probeInstallation: yield* makeProviderInstallationProbe(
+        effectiveConfig.binaryPath,
+        processEnv,
+      ),
       snapshot,
       snapshotForCwd: (cwd) =>
         !effectiveConfig.enabled

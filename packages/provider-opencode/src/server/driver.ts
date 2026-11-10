@@ -40,6 +40,7 @@ import {
   makeManagedServerProvider,
   reportProviderProgress,
 } from "@t3tools/provider-core/server/managedProvider";
+import { makeProviderInstallationProbe } from "@t3tools/provider-core/server/snapshotProbe";
 import * as OpenCodeRuntime from "./OpenCodeRuntime.ts";
 import {
   makeOpenCodeRuntimeProbe,
@@ -510,6 +511,10 @@ export const OpenCodeDriver: ProviderDriver<
       displayName,
       accentColor,
       enabled,
+      probeInstallation: yield* makeProviderInstallationProbe(
+        effectiveConfig.binaryPath,
+        processEnv,
+      ),
       snapshot,
       snapshotForCwd: (cwd) =>
         !effectiveConfig.enabled

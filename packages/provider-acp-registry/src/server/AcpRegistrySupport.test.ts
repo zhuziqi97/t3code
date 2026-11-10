@@ -745,6 +745,11 @@ describe("AcpRegistrySupport", () => {
       const npmCommands = yield* fileSystem.readFileString(toolchain.logPath);
       expect(npmCommands.match(/^install --global /gmu)).toHaveLength(1);
       expect(npmCommands).toContain("install --global @example/acp@V1.2.3");
+      expect(yield* resolver.inspectInstallation(settings(), toolchain.environment)).toEqual({
+        installed: true,
+        version: "1.2.3",
+      });
+      expect(yield* fileSystem.readFileString(toolchain.logPath)).toBe(npmCommands);
     }).pipe(
       Effect.scoped,
       Effect.provide(
@@ -834,6 +839,13 @@ describe("AcpRegistrySupport", () => {
         "C:\\workspace",
         windowsEnvironment,
       );
+
+      const commandsBefore = yield* fileSystem.readFileString(toolchain.logPath);
+      expect(yield* windowsResolver.inspectInstallation(settings(), windowsEnvironment)).toEqual({
+        installed: true,
+        version: "0.10.1",
+      });
+      expect(yield* fileSystem.readFileString(toolchain.logPath)).toBe(commandsBefore);
 
       expect(resolved.spawn).toMatchObject({
         env: { PATH: `${toolchain.globalBin};C:\\provider\\bin` },
@@ -1959,6 +1971,14 @@ describe("AcpRegistrySupport", () => {
       });
 
       yield* resolver.prepare({ agentId: agent.id });
+      expect(yield* resolver.uninstallManagedBinary({ agentId: agent.id })).toEqual({
+        agentId: agent.id,
+        removed: false,
+      });
+      expect(yield* resolver.inspectInstallation(settings())).toEqual({
+        installed: true,
+        version: agent.version,
+      });
       expect(yield* resolver.uninstallManagedBinary({ agentId: agent.id })).toEqual({
         agentId: agent.id,
         removed: false,

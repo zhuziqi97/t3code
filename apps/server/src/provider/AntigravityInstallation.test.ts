@@ -273,6 +273,11 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("Antigravity inst
         Effect.map(Option.getOrThrow),
       );
       expect(initial).toMatchObject({ phase: "idle", installedVersion: previousVersion });
+      expect(yield* installation.inspectInstallation()).toEqual({
+        installed: true,
+        version: previousVersion,
+      });
+      expect(requests).toEqual([]);
       const started = yield* installation.start;
       expect(started).toMatchObject({ phase: "downloading", downloadedBytes: 0 });
       yield* Deferred.await(enteredValidation);
@@ -925,6 +930,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("Antigravity inst
   it.effect("reports unsupported hosts without downloading or changing state", () =>
     Effect.gen(function* () {
       const { installation, requests } = yield* makeHarness({ asset: null, platform: "darwin" });
+      expect(yield* installation.inspectInstallation()).toEqual({
+        installed: false,
+        version: null,
+      });
       expect(yield* installation.start.pipe(Effect.flip)).toMatchObject({ operation: "start" });
       expect(yield* installation.resolve().pipe(Effect.flip)).toMatchObject({
         operation: "resolve",

@@ -328,6 +328,7 @@ describe("ACP Registry probe", () => {
       search: () => Effect.die("unused search"),
       prepare: () => Effect.die("unused prepare"),
       inspect: () => Effect.die("unused inspect"),
+      inspectInstallation: () => Effect.die("unused installation inspection"),
       uninstallManagedBinary: () => Effect.die("unused uninstall"),
       resolve: () =>
         Effect.succeed({

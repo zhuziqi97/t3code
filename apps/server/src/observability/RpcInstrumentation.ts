@@ -50,6 +50,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.conveneSubscribeResourceChanges]: "server",
   [WS_METHODS.serverGetNpmRelease]: "server",
   [WS_METHODS.serverRefreshProviders]: "server",
+  [WS_METHODS.serverDiscoverProviderInstallations]: "server",
   [WS_METHODS.serverCancelProviderRefresh]: "server",
   [WS_METHODS.serverUpdateProvider]: "server",
   [WS_METHODS.providerAuthStart]: "provider",

@@ -108,6 +108,7 @@ import {
   WS_METHODS,
   WsRpcGroup,
   WsCoreRpcGroup,
+  WsServerRefreshProvidersRpc,
   WsOrchestrationRpcGroup,
 } from "@t3tools/contracts";
 import {
@@ -677,6 +678,8 @@ const ServerWsRpcGroup = WsRpcGroup.middleware(RpcInstrumentation);
 const CoreServerWsRpcGroup = WsCoreRpcGroup.middleware(RpcInstrumentation).omit(
   WS_METHODS.threadWorkspaceInspect,
   WS_METHODS.threadWorkspaceRecover,
+  WS_METHODS.serverDiscoverProviderInstallations,
+  WS_METHODS.serverRefreshProviders,
 );
 const OrchestrationServerWsRpcGroup = WsOrchestrationRpcGroup.middleware(RpcInstrumentation);
 const layerWorkspaceInspectRpc = ServerWsRpcGroup.toLayerHandler(
@@ -691,6 +694,13 @@ const layerWorkspaceRecoverRpc = ServerWsRpcGroup.toLayerHandler(
   Effect.map(
     ThreadWorkspaceRecovery.ThreadWorkspaceRecovery,
     (service) => (input) => service.recover(input),
+  ),
+);
+const layerProviderInstallationsRpc = ServerWsRpcGroup.toLayerHandler(
+  WS_METHODS.serverDiscoverProviderInstallations,
+  Effect.map(
+    ProviderInstallation.ProviderInstallation,
+    (service) => () => service.discover.pipe(Effect.map((installations) => ({ installations }))),
   ),
 );
 
@@ -3522,9 +3532,11 @@ const makeWsRpcLayer = (
             ),
           ),
       } satisfies RpcGroup.HandlersFrom<
-        RpcGroup.Rpcs<typeof CoreServerWsRpcGroup | typeof OrchestrationServerWsRpcGroup>
+        | RpcGroup.Rpcs<typeof CoreServerWsRpcGroup | typeof OrchestrationServerWsRpcGroup>
+        | typeof WsServerRefreshProvidersRpc
       >;
       const {
+        [WS_METHODS.serverRefreshProviders]: refreshProviders,
         [ORCHESTRATION_V2_WS_METHODS.forceStopThread]: forceStopThread,
         [ORCHESTRATION_V2_WS_METHODS.getNativeChildWork]: getNativeChildWork,
         [ORCHESTRATION_V2_WS_METHODS.getOlderSettledThreads]: getOlderSettledThreads,
@@ -3577,9 +3589,15 @@ const makeWsRpcLayer = (
       };
       const coreLayer = CoreServerWsRpcGroup.toLayer(core);
       const orchestrationLayer = OrchestrationServerWsRpcGroup.toLayer(orchestration);
+      const refreshProvidersLayer = ServerWsRpcGroup.toLayerHandler(
+        WS_METHODS.serverRefreshProviders,
+        refreshProviders,
+      );
       return Layer.mergeAll(
         layerWorkspaceInspectRpc,
         layerWorkspaceRecoverRpc,
+        layerProviderInstallationsRpc,
+        refreshProvidersLayer,
         coreLayer,
         orchestrationLayer,
       );
