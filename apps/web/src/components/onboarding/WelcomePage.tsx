@@ -5,7 +5,8 @@ import {
 } from "@t3tools/client-runtime/i18n";
 import { updateClientSettings } from "../../hooks/useSettings";
 import { Select, SelectTrigger, SelectValue, SelectPopup, SelectItem } from "../ui/select";
-import { useResolvedLanguage, useTranslate } from "../../i18n";
+import { i18n, useResolvedLanguage, useTranslate } from "../../i18n";
+import { Trans } from "react-i18next";
 import { useAuth } from "@clerk/react";
 import { useAtomValue } from "@effect/atom-react";
 import type {
@@ -130,7 +131,6 @@ const ConveneConnectionPanel = lazy(() =>
 );
 
 const AGENT_ONBOARDING_THREAD_ID = ThreadId.make("onboarding-agent-setup");
-const SCAN_LIMIT_MESSAGE = "Scan limit reached. Some projects or conversations may be missing.";
 
 /**
  * First-run page for one computer: its agents, the projects found in agent history, and the
@@ -148,7 +148,7 @@ export function WelcomePage({
   const { environments } = useEnvironments();
   const label =
     environments.find((environment) => environment.environmentId === environmentId)?.label ??
-    "this computer";
+    t("wizard.thisComputer");
   const agentReady = useWelcomeAgents(environmentId).readyCount > 0;
   // The phone and `t3` on PATH belong to the primary computer, so only it offers them.
   const isPrimary = usePrimaryEnvironmentId() === environmentId;
@@ -184,8 +184,8 @@ export function WelcomePage({
       toastManager.add({
         id: "welcome-finishing",
         type: "info",
-        title: "Finishing setup",
-        description: "One moment.",
+        title: i18n.t("wizard.finishing"),
+        description: i18n.t("wizard.oneMoment"),
       });
       return true;
     },
@@ -221,14 +221,14 @@ export function WelcomePage({
         if (importWarning) {
           toastManager.add({
             type: "warning",
-            title: "Some history was not imported",
+            title: i18n.t("wizard.import.someHistoryNotImported"),
             description: importWarning,
             timeout: 0,
           });
         } else if (importedThreadCount > 0) {
           toastManager.add({
             type: "success",
-            title: `Imported ${importedThreadCount} ${importedThreadCount === 1 ? "thread" : "threads"}`,
+            title: i18n.t("wizard.import.imported", { count: importedThreadCount }),
           });
         }
         return true;
@@ -237,8 +237,8 @@ export function WelcomePage({
         holdPageRef.current = false;
         const errorToast = {
           type: "error",
-          title: "Could not finish setup",
-          description: "Your settings could not be saved. Try again.",
+          title: i18n.t("wizard.completion.couldNotFinish"),
+          description: i18n.t("wizard.completion.settingsNotSaved"),
         } as const;
         if (completionErrorToastIdRef.current === null) {
           completionErrorToastIdRef.current = toastManager.add(errorToast);
@@ -280,7 +280,7 @@ export function WelcomePage({
 
   return (
     <SidebarInset
-      {...workspaceAreaProps("home", 1, "Welcome")}
+      {...workspaceAreaProps("home", 1, t("wizard.welcome"))}
       role="main"
       className="h-dvh min-h-0 overflow-hidden overscroll-y-none"
     >
@@ -321,7 +321,12 @@ export function WelcomePage({
               </Select>
             </div>
             <p className="mt-1.5 text-sm text-muted-foreground">
-              Setting up <span className="text-foreground">{label}</span>.
+              <Trans
+                i18n={i18n}
+                i18nKey="wizard.settingUp"
+                values={{ environment: label }}
+                components={{ environment: <span className="text-foreground" /> }}
+              />
             </p>
             <div className="mt-10 border-t border-border/60">
               <AgentsSection
@@ -347,23 +352,23 @@ export function WelcomePage({
                 <span />
               ) : (
                 <Button variant="ghost-muted" disabled={isImporting} onClick={start}>
-                  Start without an agent
+                  {t("wizard.startWithoutAgent")}
                 </Button>
               )}
               <div className="flex items-center gap-3">
                 {agentReady ? null : (
-                  <span className="text-xs text-muted-foreground">Set up one agent to start.</span>
+                  <span className="text-xs text-muted-foreground">{t("wizard.agentRequired")}</span>
                 )}
                 <Button disabled={!agentReady || isImporting} onClick={start}>
                   {isImporting
                     ? selected.length > 0
-                      ? "Importing…"
-                      : "Starting…"
+                      ? t("wizard.projects.importing")
+                      : t("wizard.starting")
                     : newCount > 0
-                      ? `Import ${newCount} ${newCount === 1 ? "project" : "projects"} and start`
+                      ? t("wizard.projects.importAndStart", { count: newCount })
                       : selected.length > 0
-                        ? "Import threads and start"
-                        : "Start"}
+                        ? t("wizard.projects.importThreadsAndStart")
+                        : t("wizard.start")}
                 </Button>
               </div>
             </div>
@@ -853,6 +858,11 @@ function ProjectsSection({
   readonly projectImport: ReturnType<typeof useProjectImport>;
   readonly isImporting: boolean;
 }) {
+  const t = useTranslate();
+  const language = useResolvedLanguage();
+  const sources = new Intl.ListFormat(language === "zh" ? "zh-CN" : "en", {
+    type: "conjunction",
+  }).format(AgentSessionSource.literals.map((source) => IMPORT_SOURCE_NAMES[source]));
   const [reviewing, setReviewing] = useState(false);
   const {
     canWrite,
@@ -867,26 +877,26 @@ function ProjectsSection({
   if (scan === undefined) return null;
   if (scan.isPending && candidates.length === 0) {
     return (
-      <WelcomeSection title="Projects">
+      <WelcomeSection title={t("wizard.step.projects")}>
         <p className="text-sm leading-10 text-muted-foreground">
-          Looking for projects in your {IMPORT_SOURCES_LABEL} history…
+          {t("wizard.projects.scanningHistory", { sources })}
         </p>
       </WelcomeSection>
     );
   }
   const retry = (
     <Button variant="ghost" size="sm" onClick={scan.refresh}>
-      Retry
+      {t("wizard.retry")}
     </Button>
   );
   if (scan.error !== null && candidates.length === 0) {
     return (
-      <WelcomeSection title="Projects">
+      <WelcomeSection title={t("wizard.step.projects")}>
         <div
           role="alert"
           className="flex min-h-10 items-center justify-between gap-3 text-sm text-muted-foreground"
         >
-          <span>Could not check projects. {scan.error}</span>
+          <span>{t("wizard.projects.couldNotCheck", { error: scan.error })}</span>
           {retry}
         </div>
       </WelcomeSection>
@@ -894,9 +904,9 @@ function ProjectsSection({
   }
   if (candidates.length === 0) {
     return scan.data?.truncated ? (
-      <WelcomeSection title="Projects">
+      <WelcomeSection title={t("wizard.step.projects")}>
         <p className="text-xs leading-10 text-muted-foreground" role="status">
-          {SCAN_LIMIT_MESSAGE}
+          {t("wizard.projects.scanLimitReached")}
         </p>
       </WelcomeSection>
     ) : null;
@@ -913,7 +923,7 @@ function ProjectsSection({
     selected.length < candidates.length &&
     !(selected.length === defaultKeys.length && defaultKeys.every((key) => selectedKeys.has(key)));
   return (
-    <WelcomeSection title="Projects">
+    <WelcomeSection title={t("wizard.step.projects")}>
       <div className="flex min-h-10 items-center gap-3 py-1">
         <label className="flex min-w-0 flex-1 items-center gap-3">
           <RowIcon>
@@ -929,11 +939,11 @@ function ProjectsSection({
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-medium text-foreground">
               {canWrite && selected.length > 0
-                ? `Import ${selected.length} ${selected.length === 1 ? "project" : "projects"} and their threads`
-                : "Import projects and their threads"}
+                ? t("wizard.projects.importWithThreads", { count: selected.length })
+                : t("wizard.projects.importWithThreadsLabel")}
             </span>
             <span className="block text-xs text-muted-foreground">
-              From your {IMPORT_SOURCES_LABEL} history
+              {t("wizard.projects.fromHistory", { sources })}
             </span>
           </span>
         </label>
@@ -944,7 +954,9 @@ function ProjectsSection({
             aria-expanded={reviewing}
             onClick={() => setReviewing((open) => !open)}
           >
-            {reviewing ? "Hide" : `Review all ${candidates.length}`}
+            {reviewing
+              ? t("wizard.projects.hide")
+              : t("wizard.projects.reviewAll", { count: candidates.length })}
             <ChevronDownIcon className={cn("size-3.5", reviewing && "rotate-180")} />
           </Button>
         ) : null}
@@ -954,7 +966,10 @@ function ProjectsSection({
         <fieldset className="-mx-1.5 mt-1 min-w-0" disabled={isImporting}>
           <div className="flex items-center justify-between gap-3 px-2 text-xs text-muted-foreground">
             <span role="status">
-              {selected.length} of {candidates.length} selected
+              {t("wizard.projects.selectedCount", {
+                selected: selected.length,
+                total: candidates.length,
+              })}
             </span>
             <div className="flex items-center gap-1">
               <Button
@@ -963,7 +978,7 @@ function ProjectsSection({
                 disabled={selected.length === candidates.length}
                 onClick={() => setSelectedKeys(new Set(allKeys))}
               >
-                Select all
+                {t("wizard.projects.selectAll")}
               </Button>
               <Button
                 variant="ghost"
@@ -971,7 +986,7 @@ function ProjectsSection({
                 disabled={selected.length === 0}
                 onClick={() => setSelectedKeys(new Set())}
               >
-                Select none
+                {t("wizard.projects.selectNone")}
               </Button>
             </div>
           </div>
@@ -988,7 +1003,7 @@ function ProjectsSection({
       ) : null}
       {scan.data?.truncated ? (
         <p className="pl-8 text-xs text-muted-foreground" role="status">
-          {SCAN_LIMIT_MESSAGE}
+          {t("wizard.projects.scanLimitReached")}
         </p>
       ) : null}
       {scan.error !== null ? (
@@ -996,7 +1011,7 @@ function ProjectsSection({
           role="alert"
           className="flex items-center justify-between gap-3 pl-8 text-sm text-muted-foreground"
         >
-          <span>Could not check projects again. {scan.error}</span>
+          <span>{t("wizard.projects.checkAgainFailed", { error: scan.error })}</span>
           {retry}
         </div>
       ) : null}
@@ -1178,7 +1193,7 @@ function OnboardingCodexSetup({
           const cause = squashAtomCommandFailure(result);
           toastManager.add({
             type: "error",
-            title: "Could not save Codex setup",
+            title: i18n.t("wizard.agents.codexSetupFailed"),
             ...(cause instanceof Error ? { description: cause.message } : {}),
           });
         }
@@ -1322,6 +1337,7 @@ function AgentInstallTerminal({
   readonly session: AgentTerminalSession;
   readonly onClose: () => void;
 }) {
+  const t = useTranslate();
   const { command, cwd, driver, environmentId, keybindings, providerInstanceId } = session;
   const canOperateTerminal = useEnvironmentScope(environmentId, AuthTerminalOperateScope);
   const [advancedTypography] = useLocalStorage(
@@ -1421,18 +1437,21 @@ function AgentInstallTerminal({
       <div className="flex items-center justify-between border-b border-border/60 bg-background/60 px-3 py-1.5">
         <span className="text-2xs font-medium text-muted-foreground">
           {!canOperateTerminal ? (
-            "This connection cannot control terminals."
+            t("wizard.agents.terminalPermission")
           ) : setupState === "writeFailed" ? (
-            <>
-              Run <code className="rounded bg-muted px-1 font-mono">{command}</code> in this
-              terminal.
-            </>
+            <Trans
+              i18n={i18n}
+              i18nKey="wizard.runInTerminal"
+              components={{
+                command: <code className="rounded bg-muted px-1 font-mono">{command}</code>,
+              }}
+            />
           ) : setupState === "ready" ? (
-            "Review the command, then press Enter to run it."
+            t("wizard.agents.reviewCommand")
           ) : setupState === "openFailed" ? (
-            "Could not open the setup terminal."
+            t("wizard.agents.couldNotOpenTerminal")
           ) : (
-            "Preparing command..."
+            t("wizard.agents.preparingCommand")
           )}
         </span>
         <div className="flex items-center gap-1">
@@ -1447,11 +1466,11 @@ function AgentInstallTerminal({
                 }
               }}
             >
-              Retry
+              {t("wizard.retry")}
             </Button>
           ) : null}
           <Button size="xs" variant="ghost-muted" onClick={onClose}>
-            Close
+            {t("wizard.close")}
           </Button>
         </div>
       </div>
@@ -1461,7 +1480,7 @@ function AgentInstallTerminal({
             threadRef={threadRef}
             threadId={AGENT_ONBOARDING_THREAD_ID}
             terminalId={terminalId}
-            terminalLabel={`Install ${driver}`}
+            terminalLabel={t("wizard.agents.terminalLabel", { driver })}
             cwd={cwd}
             providerInstanceId={providerInstanceId}
             advancedTypography={advancedTypography}
@@ -1475,8 +1494,6 @@ function AgentInstallTerminal({
     </div>
   );
 }
-
-const IMPORT_PERMISSION_MESSAGE = "This connection cannot import projects or thread history.";
 
 // Creates the selected projects, then imports each one's agent history. Owns retry state so a
 // second Start resumes instead of recreating projects.
@@ -1502,6 +1519,7 @@ function useProjectImport({
     importedThreadCount?: number,
   ) => Promise<boolean>;
 }) {
+  const t = useTranslate();
   const writableEnvironments = useEnvironmentsWithScope(scans, AuthOrchestrationOperateScope);
   const createProject = useAtomCommand(projectEnvironment.create, { reportFailure: false });
   const importThreads = useAtomCommand(agentSessionImport, { reportFailure: false });
@@ -1561,7 +1579,7 @@ function useProjectImport({
   const canImport = selected.every((candidate) =>
     writableEnvironments.has(candidate.environmentId),
   );
-  const visibleImportError = canWrite && canImport ? "" : IMPORT_PERMISSION_MESSAGE;
+  const visibleImportError = canWrite && canImport ? "" : t("wizard.import.permissionDenied");
 
   const importedThreadTotal = () =>
     lastImportSelectionRef.current.reduce(
@@ -1714,13 +1732,18 @@ function useProjectImport({
     const importedThreadCount = importedThreadTotal();
     if (importedProjectsCount < selection.length) {
       if (importedThreadCount > 0 && skippedThreadCount > 0) {
-        importWarningRef.current = `Imported ${importedThreadCount} ${importedThreadCount === 1 ? "thread" : "threads"}. ${skippedThreadCount} ${skippedThreadCount === 1 ? "thread" : "threads"} could not be imported.`;
+        importWarningRef.current =
+          i18n.t("wizard.import.imported", { count: importedThreadCount }) +
+          i18n.t("wizard.import.sentenceSeparator") +
+          i18n.t("wizard.import.skipped", { count: skippedThreadCount });
       } else if (skippedThreadCount > 0) {
-        importWarningRef.current = `${skippedThreadCount} ${skippedThreadCount === 1 ? "thread could" : "threads could"} not be imported.`;
+        importWarningRef.current = i18n.t("wizard.import.skipped", { count: skippedThreadCount });
       } else if (importedThreadCount > 0) {
-        importWarningRef.current = `Imported ${importedThreadCount} ${importedThreadCount === 1 ? "thread" : "threads"}. Some thread history could not be imported.`;
+        importWarningRef.current = i18n.t("wizard.import.importedWithRemaining", {
+          count: importedThreadCount,
+        });
       } else {
-        importWarningRef.current = "Could not import thread history.";
+        importWarningRef.current = i18n.t("wizard.import.couldNotImport");
       }
     }
     finishAfterImport();
@@ -1754,6 +1777,7 @@ function ImportCandidateList({
   readonly selectedKeys: ReadonlySet<string>;
   readonly onSelectionChange: (next: ReadonlySet<string>) => void;
 }) {
+  const t = useTranslate();
   const { repositories, other } = groupOnboardingProjects(candidates);
   const setKeys = (keys: ReadonlyArray<string>, checked: boolean) => {
     const next = new Set(selectedKeys);
@@ -1790,9 +1814,11 @@ function ImportCandidateList({
             />
             <CollapsibleTrigger className="group flex min-w-0 flex-1 items-center gap-1.5 text-left">
               <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground transition-transform group-data-panel-open:rotate-90" />
-              <span className="truncate text-sm text-muted-foreground">Other folders</span>
+              <span className="truncate text-sm text-muted-foreground">
+                {t("wizard.projects.otherFolders")}
+              </span>
               <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums">
-                {other.length} {other.length === 1 ? "folder" : "folders"}
+                {t("wizard.projects.folderCount", { count: other.length })}
               </span>
             </CollapsibleTrigger>
           </div>
@@ -1941,9 +1967,6 @@ const IMPORT_SOURCE_NAMES: Record<AgentSessionSource, string> = {
   codex: "Codex",
   pi: "Pi",
 };
-const IMPORT_SOURCES_LABEL = new Intl.ListFormat("en", { type: "conjunction" }).format(
-  AgentSessionSource.literals.map((source) => IMPORT_SOURCE_NAMES[source]),
-);
 
 function ImportRowMeta({
   sources,
@@ -1954,8 +1977,10 @@ function ImportRowMeta({
   readonly threadCount: number;
   readonly lastActiveAt: string | null;
 }) {
-  const relative = lastActiveAt === null ? null : formatRelativeTime(lastActiveAt);
-  const age = relative === null ? "" : relative.suffix === null ? "now" : relative.value;
+  const t = useTranslate();
+  const relative = lastActiveAt === null ? null : formatRelativeTime(lastActiveAt, t);
+  const age =
+    relative === null ? "" : relative.suffix === null ? t("time.justNow") : relative.value;
   return (
     <span className="ml-auto grid shrink-0 grid-cols-[1rem_1rem_1rem_2.5rem_2.25rem] items-center gap-x-1 text-xs text-muted-foreground tabular-nums">
       {AgentSessionSource.literals.map((source) => (
@@ -1979,6 +2004,7 @@ function ImportRowMeta({
 
 /** The desktop app links `t3` on a fresh install; this puts its folder on PATH when it is not. */
 function CliPathSetup() {
+  const t = useTranslate();
   const { state, busy, run } = useDesktopCliCommand();
   const setup = state?.pathSetup;
   if (!setup) return null;
@@ -1989,19 +2015,24 @@ function CliPathSetup() {
       </RowIcon>
       <p className="min-w-0 flex-1 text-sm text-muted-foreground">
         {setup.added ? (
-          <>
-            Added to {setup.file}. Open a new terminal to use <code className="font-mono">t3</code>.
-          </>
+          <Trans
+            i18n={i18n}
+            i18nKey="wizard.agents.cliOnPath"
+            values={{ path: setup.file }}
+            components={{ command: <code className="font-mono">t3</code> }}
+          />
         ) : (
-          <>
-            Use <code className="font-mono">t3</code> from any terminal. Adds one line to{" "}
-            {setup.file}.
-          </>
+          <Trans
+            i18n={i18n}
+            i18nKey="wizard.agents.cliNeedsPath"
+            values={{ path: setup.file }}
+            components={{ command: <code className="font-mono">t3</code> }}
+          />
         )}
       </p>
       {setup.added ? null : (
         <Button size="xs" variant="outline" disabled={busy} onClick={() => run("addToPath")}>
-          Add to PATH
+          {t("wizard.agents.addToPath")}
         </Button>
       )}
     </div>
