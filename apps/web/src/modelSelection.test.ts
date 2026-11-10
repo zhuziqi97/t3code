@@ -1177,7 +1177,7 @@ it.each([
     model: state.selectedModel,
     models: [],
     modelOptions: state.modelOptions?.[instanceId],
-    planModeEnabled: false,
+    includePlanAgent: false,
   });
   expect(dispatch.modelOptionsForDispatch).toEqual(selection.options);
 });
@@ -1287,7 +1287,7 @@ it("dispatches a new native default as its concrete model and reasoning choice",
     model: state.selectedModel,
     models: providers[0]!.models,
     modelOptions: state.modelOptions?.[instanceId],
-    planModeEnabled: true,
+    includePlanAgent: true,
   });
   expect(
     createModelSelection(instanceId, state.selectedModel, dispatch.modelOptionsForDispatch),

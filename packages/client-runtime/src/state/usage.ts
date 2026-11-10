@@ -59,9 +59,16 @@ export async function refreshUsageLimits<A>(
   environmentId: EnvironmentId,
   refresh: () => Promise<A>,
   automatic = false,
+  afterPending = false,
 ): Promise<A | undefined> {
   const pending = limitsRefreshes.get(environmentId);
   if (pending !== undefined) {
+    if (afterPending) {
+      try {
+        await pending;
+      } catch {}
+      return refreshUsageLimits(environmentId, refresh, false, true);
+    }
     return automatic ? undefined : ((await pending) as A);
   }
   const refreshAfter = limitsRefreshAfter.get(environmentId) ?? 0;

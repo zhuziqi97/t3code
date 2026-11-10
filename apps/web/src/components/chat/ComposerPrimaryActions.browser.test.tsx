@@ -101,7 +101,6 @@ describe.each([true, false])("composer collapsed=%s", (collapsed) => {
         isRunning: true,
         canInterrupt: true,
         hasSendableContent: true,
-        promptHasText: true,
         followUpBehavior,
         isEditingQueuedMessage: editing,
         onInterrupt,
@@ -177,7 +176,6 @@ it("opens a collapsed composer to confirm compaction without dispatching the dra
   const props = actionProps({
     compact: true,
     hasSendableContent: true,
-    promptHasText: true,
     compactBeforeSendTokens: 12_000,
     onExpandForCompaction: onExpand,
   });

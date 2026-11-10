@@ -257,7 +257,7 @@ export function UsagePage() {
     if (nextMetric === "limits") setLimitsNow(Date.now());
     updatePreferences({ metric: nextMetric });
   };
-  const refreshLimits = (automatic = false) =>
+  const refreshLimits = (automatic = false, afterPending = false) =>
     // Settled so the timestamp still advances when a refresh throws.
     settlePromise(() =>
       Promise.all(
@@ -268,6 +268,7 @@ export function UsagePage() {
               environmentId,
               () => refreshProviders({ environmentId, input: {} }),
               automatic,
+              afterPending,
             );
           }
         }),
