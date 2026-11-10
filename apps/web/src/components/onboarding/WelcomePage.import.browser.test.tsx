@@ -2,9 +2,12 @@ import { RegistryContext } from "@effect/atom-react";
 import {
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
+  AuthProvidersManageScope,
+  AuthTerminalOperateScope,
   AuthRelayReadScope,
   AuthRelayWriteScope,
   EnvironmentId,
+  DEFAULT_SERVER_SETTINGS,
   ProjectId,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -14,6 +17,9 @@ import {
   type EnvironmentCloudLinkStateResult,
   type ServerProvider,
   type ServerProviderInstallation,
+  type ProviderAuthState,
+  type ProviderInstallState,
+  type ServerConfig,
 } from "@t3tools/contracts";
 import { AsyncResult, Atom } from "effect/reactivity";
 import * as Cause from "effect/Cause";
@@ -33,11 +39,20 @@ const state = vi.hoisted(() => ({
   projects: null as unknown,
   providers: null as unknown,
   config: null as unknown,
+  settings: null as unknown,
   candidates: null as unknown,
   createProject: vi.fn(),
   importThreads: vi.fn(),
   refreshProviders: vi.fn(),
   discoverInstallations: vi.fn(),
+  openTerminal: vi.fn(),
+  writeTerminal: vi.fn(),
+  closeTerminal: vi.fn(),
+  updateSettings: vi.fn(),
+  startInstall: vi.fn(),
+  signIn: vi.fn(),
+  authQuery: null as unknown,
+  installationQuery: null as unknown,
   completeOnboarding: vi.fn(),
   onDone: vi.fn(),
   scan: vi.fn(),
@@ -105,7 +120,10 @@ vi.mock(import("../../state/server"), async (original) => {
       ...actual.serverEnvironment,
       providersValueAtom: (() => state.providers) as never,
       configValueAtom: (() => state.config) as never,
+      settingsValueAtom: (() => state.settings) as never,
       refreshProviders: "refreshProviders" as never,
+      providerAuthState: (() => state.authQuery) as never,
+      providerInstallState: (() => state.installationQuery) as never,
     },
   };
 });
@@ -122,6 +140,15 @@ vi.mock(import("../../state/projects"), async (original) => ({
   ...(await original()),
   projectEnvironment: { create: "createProject" } as never,
 }));
+vi.mock(import("../../state/terminal"), async (original) => ({
+  ...(await original()),
+  terminalEnvironment: {
+    open: "openTerminal",
+    write: "writeTerminal",
+    close: "closeTerminal",
+  } as never,
+}));
+vi.mock(import("../ThreadTerminalDrawer"), () => ({ TerminalViewport: () => <></> }));
 vi.mock(import("../../state/agentSessions"), async (original) => ({
   ...(await original()),
   agentSessionImport: "importThreads" as never,
@@ -150,13 +177,27 @@ vi.mock(import("../../onboarding/useProjectScans"), async (original) => {
 vi.mock(import("../../state/use-atom-command"), async (original) => ({
   ...(await original()),
   useAtomCommand: ((
-    command: "createProject" | "importThreads" | "refreshProviders" | { label: string },
+    command:
+      | "createProject"
+      | "importThreads"
+      | "refreshProviders"
+      | "openTerminal"
+      | "writeTerminal"
+      | "closeTerminal"
+      | { label: string },
   ) =>
     typeof command === "string"
       ? state[command]
       : command.label === "environment-data:server:discover-provider-installations"
         ? state.discoverInstallations
-        : undefined) as never,
+        : command.label === "environment-data:server:update-settings"
+          ? state.updateSettings
+          : command.label === "environment-data:provider:install-start"
+            ? state.startInstall
+            : command.label === "environment-data:provider:auth-start" ||
+                command.label === "environment-data:chatgpt:reconnect-profile"
+              ? state.signIn
+              : undefined) as never,
 }));
 
 import { welcomeImportSelectionKey } from "../../onboarding/welcomeState";
@@ -309,6 +350,7 @@ function setup() {
   state.projects = Atom.make<ReadonlyArray<Project>>([]).pipe(Atom.keepAlive);
   state.providers = Atom.make<ReadonlyArray<ServerProvider>>([readyClaude]).pipe(Atom.keepAlive);
   state.config = Atom.make(null).pipe(Atom.keepAlive);
+  state.settings = Atom.make(DEFAULT_SERVER_SETTINGS).pipe(Atom.keepAlive);
   state.candidates = Atom.make<ReadonlyArray<AgentSessionProjectCandidate>>([
     candidate("/projects/first"),
     candidate("/projects/second"),
@@ -323,6 +365,38 @@ function setup() {
   state.discoverInstallations
     .mockReset()
     .mockResolvedValue(AsyncResult.success({ installations: [] }));
+  state.openTerminal.mockReset().mockResolvedValue(AsyncResult.success(undefined));
+  state.writeTerminal.mockReset().mockResolvedValue(AsyncResult.success(undefined));
+  state.closeTerminal.mockReset().mockResolvedValue(AsyncResult.success(undefined));
+  state.updateSettings.mockReset();
+  state.startInstall.mockReset();
+  state.signIn
+    .mockReset()
+    .mockResolvedValue(AsyncResult.failure(Cause.fail(new Error("controlled sign-in held"))));
+  state.authQuery = Atom.make(
+    AsyncResult.success<ProviderAuthState>({
+      instanceId: ProviderInstanceId.make("codex"),
+      phase: "idle",
+      flowId: null,
+      authorizationUrl: null,
+      expiresAt: null,
+      message: null,
+    }),
+  ).pipe(Atom.keepAlive);
+  state.installationQuery = Atom.make(
+    AsyncResult.success<ProviderInstallState>({
+      driver: ProviderDriverKind.make("codex"),
+      operationId: null,
+      phase: "idle",
+      downloadedBytes: 0,
+      totalBytes: null,
+      version: "fixture-1",
+      installedVersion: null,
+      source: "managed",
+      canRemove: false,
+      message: null,
+    }),
+  ).pipe(Atom.keepAlive);
   state.completeOnboarding.mockReset().mockResolvedValue(undefined);
   state.onDone.mockReset();
   state.scan.mockReset();
@@ -505,6 +579,180 @@ it("keeps installation facts scoped when switching computers without enabling an
     { environmentId: primaryId, input: {} },
   ]);
   expect(state.refreshProviders).toHaveBeenCalledTimes(3);
+  expect(state.createProject).not.toHaveBeenCalled();
+  expect(state.importThreads).not.toHaveBeenCalled();
+});
+
+function allowAgentSetup() {
+  appAtomRegistry.set(
+    sessionAtom(primaryId),
+    AsyncResult.success(session([AuthProvidersManageScope, AuthTerminalOperateScope])),
+  );
+  const config = {
+    settings: DEFAULT_SERVER_SETTINGS,
+    cwd: "/controlled-project",
+    keybindings: {},
+    environment: { platform: { os: "linux" } },
+  } as ServerConfig;
+  appAtomRegistry.set(state.config as Atom.Writable<ServerConfig | null>, config);
+  appAtomRegistry.set(candidatesAtom(), []);
+  return config;
+}
+
+it("refreshes after CLI setup and ignores an older installation result on the same computer", async () => {
+  using _now = setup();
+  allowAgentSetup();
+  const cli = {
+    ...readyClaude,
+    installed: false,
+    status: "error" as const,
+    auth: { status: "unknown" as const },
+  };
+  appAtomRegistry.set(state.providers as Atom.Writable<ReadonlyArray<ServerProvider>>, [cli]);
+  const installation = {
+    instanceId: cli.instanceId,
+    driver: cli.driver,
+    installed: false,
+    version: null,
+  };
+  const old = deferred<{
+    _tag: "Success";
+    value: { installations: readonly ServerProviderInstallation[] };
+  }>();
+  state.discoverInstallations
+    .mockReset()
+    .mockResolvedValueOnce(AsyncResult.success({ installations: [installation] }))
+    .mockReturnValueOnce(old.promise)
+    .mockResolvedValue(
+      AsyncResult.success({
+        installations: [{ ...installation, installed: true, version: "fixture-cli" }],
+      }),
+    );
+  await using screen = await mountWelcome();
+  await expect.element(screen.getByText("Not installed", { exact: true })).toBeVisible();
+  await act(async () =>
+    appAtomRegistry.set(state.providers as Atom.Writable<ReadonlyArray<ServerProvider>>, [
+      { ...cli, checkedAt: "2026-01-01T00:01:00.000Z" },
+    ]),
+  );
+  await expect.element(screen.getByText("Not installed", { exact: true })).toBeVisible();
+  await click("Browse");
+  await click("Cancel");
+  await expect.element(screen.getByText("Checking installation…", { exact: true })).toBeVisible();
+  await click("Install");
+  await expect
+    .element(screen.getByText("Review the command, then press Enter to run it.", { exact: true }))
+    .toBeVisible();
+  await click("Close");
+  await expect.element(screen.getByText("Installed · fixture-cli", { exact: true })).toBeVisible();
+  await act(async () => old.resolve(AsyncResult.success({ installations: [installation] })));
+  await expect.element(screen.getByText("Installed · fixture-cli", { exact: true })).toBeVisible();
+  await expect.element(screen.getByText("Ready", { exact: true })).not.toBeInTheDocument();
+});
+
+it("discovers a newly added account and its managed installation before authentication succeeds", async () => {
+  using _now = setup();
+  const config = allowAgentSetup();
+  appAtomRegistry.set(state.providers as Atom.Writable<ReadonlyArray<ServerProvider>>, []);
+  let facts: readonly ServerProviderInstallation[] = [];
+  state.discoverInstallations.mockImplementation(async () =>
+    AsyncResult.success({ installations: facts }),
+  );
+  state.updateSettings.mockImplementation(
+    async ({
+      input,
+    }: {
+      input: { patch: { providerInstances: ServerConfig["settings"]["providerInstances"] } };
+    }) => {
+      const [id, entry] = Object.entries(input.patch.providerInstances).find(([key]) =>
+        key.startsWith("codex_"),
+      )!;
+      const instanceId = ProviderInstanceId.make(id);
+      const provider: ServerProvider = {
+        ...readyClaude,
+        instanceId,
+        driver: ProviderDriverKind.make("codex"),
+        displayName: entry.displayName,
+        installed: false,
+        status: "error",
+        auth: { status: "unauthenticated" },
+        setup: { canAuthenticate: true, canInstall: false },
+      };
+      const settings = {
+        ...DEFAULT_SERVER_SETTINGS,
+        providerInstances: input.patch.providerInstances,
+      };
+      facts = [{ instanceId, driver: provider.driver, installed: false, version: null }];
+      appAtomRegistry.set(
+        state.authQuery as Atom.Writable<AsyncResult.AsyncResult<ProviderAuthState>>,
+        AsyncResult.success({
+          instanceId,
+          phase: "idle",
+          flowId: null,
+          authorizationUrl: null,
+          expiresAt: null,
+          message: null,
+        }),
+      );
+      appAtomRegistry.set(state.settings as Atom.Writable<typeof settings>, settings);
+      appAtomRegistry.set(state.config as Atom.Writable<ServerConfig | null>, {
+        ...config,
+        settings,
+      });
+      appAtomRegistry.set(state.providers as Atom.Writable<ReadonlyArray<ServerProvider>>, [
+        provider,
+      ]);
+      return AsyncResult.success(undefined);
+    },
+  );
+  const running: ProviderInstallState = {
+    driver: ProviderDriverKind.make("codex"),
+    operationId: "welcome-install",
+    phase: "downloading",
+    downloadedBytes: 0,
+    totalBytes: null,
+    version: "fixture-1",
+    installedVersion: null,
+    source: "managed",
+    canRemove: false,
+    message: null,
+  };
+  state.startInstall.mockImplementation(async () => {
+    appAtomRegistry.set(
+      state.installationQuery as Atom.Writable<AsyncResult.AsyncResult<ProviderInstallState>>,
+      AsyncResult.success(running),
+    );
+    return AsyncResult.success(running);
+  });
+  await using screen = await mountWelcome();
+  await click("Browse");
+  await click("Continue with ChatGPT");
+  await click("Continue");
+  await click("Finish later");
+  await expect.element(screen.getByText("Not installed", { exact: true })).toBeVisible();
+  await act(async () =>
+    appAtomRegistry.set(
+      state.providers as Atom.Writable<ReadonlyArray<ServerProvider>>,
+      appAtomRegistry
+        .get(state.providers as Atom.Writable<ReadonlyArray<ServerProvider>>)
+        .map((provider) => ({
+          ...provider,
+          setup: { canAuthenticate: true, canInstall: true },
+        })),
+    ),
+  );
+  await click("Set up");
+  await click("Continue with ChatGPT");
+  await vi.waitFor(() => expect(state.startInstall).toHaveBeenCalledOnce());
+  facts = [{ ...facts[0]!, installed: true, version: "fixture-1" }];
+  await act(async () =>
+    appAtomRegistry.set(
+      state.installationQuery as Atom.Writable<AsyncResult.AsyncResult<ProviderInstallState>>,
+      AsyncResult.success({ ...running, phase: "succeeded", installedVersion: "fixture-1" }),
+    ),
+  );
+  await expect.element(screen.getByText("Installed · fixture-1", { exact: true })).toBeVisible();
+  await expect.element(screen.getByText("Ready", { exact: true })).not.toBeInTheDocument();
   expect(state.createProject).not.toHaveBeenCalled();
   expect(state.importThreads).not.toHaveBeenCalled();
 });

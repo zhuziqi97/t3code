@@ -1421,7 +1421,7 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:discover-provider-installations",
       tag: WS_METHODS.serverDiscoverProviderInstallations,
       concurrency: {
-        mode: "singleFlight",
+        mode: "serial",
         key: ({ environmentId }) => environmentId,
       },
     }),

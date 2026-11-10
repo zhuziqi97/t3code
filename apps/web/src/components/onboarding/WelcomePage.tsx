@@ -466,12 +466,17 @@ function AgentsSection({
   const canDiscover = useAtomValue(
     serverEnvironment.discoverProviderInstallations.permissionAtom(environmentId),
   );
+  const [installationRevision, setInstallationRevision] = useState(0);
+  const refreshInstallations = () => setInstallationRevision((revision) => revision + 1);
   const [installationDiscovery, setInstallationDiscovery] = useState<{
     environmentId: EnvironmentId;
+    revision: number;
     result: Awaited<ReturnType<typeof discoverInstallations>>;
   } | null>(null);
   const discovery =
-    canDiscover && installationDiscovery?.environmentId === environmentId
+    canDiscover &&
+    installationDiscovery?.environmentId === environmentId &&
+    installationDiscovery.revision === installationRevision
       ? installationDiscovery.result
       : null;
   const installations = discovery?._tag === "Success" ? discovery.value.installations : undefined;
@@ -504,12 +509,13 @@ function AgentsSection({
     if (!canDiscover) return;
     let current = true;
     void checkInstallations(environmentId).then((result) => {
-      if (current) setInstallationDiscovery({ environmentId, result });
+      if (current)
+        setInstallationDiscovery({ environmentId, revision: installationRevision, result });
     });
     return () => {
       current = false;
     };
-  }, [environmentId, canDiscover]);
+  }, [environmentId, canDiscover, installationRevision]);
 
   const refreshAgentStates = useEffectEvent((target: EnvironmentId) => {
     void refreshProviders({ environmentId: target, input: {} });
@@ -791,6 +797,7 @@ function AgentsSection({
             environmentId={environmentId}
             provider={codexSetupProvider}
             serverConfig={serverConfig}
+            onInstalled={refreshInstallations}
             onUseCliChange={(useCli) =>
               setCliTerminalFor(useCli ? codexSetupProvider.instanceId : null)
             }
@@ -804,6 +811,7 @@ function AgentsSection({
           session={terminalSession}
           onClose={() => {
             setTerminalSession(null);
+            refreshInstallations();
             void refreshProviders({ environmentId, input: {} });
           }}
         />
@@ -814,8 +822,13 @@ function AgentsSection({
           environmentId={environmentId}
           environmentLabel={label}
           showMoreProviders
-          onOpenChange={setAddingProvider}
+          onOpenChange={(open) => {
+            setAddingProvider(open);
+            if (!open) refreshInstallations();
+          }}
+          onInstalled={refreshInstallations}
           onCreated={(_instanceId, driver) => {
+            refreshInstallations();
             void refreshProviders({ environmentId, input: {} });
             // A new Claude Code, Codex, or Pi instance can bring more history to import.
             if (isImportSource(driver)) onImportSourceEnabled();
@@ -1159,12 +1172,14 @@ function OnboardingCodexSetup({
   provider,
   serverConfig,
   onUseCliChange,
+  onInstalled,
 }: {
   readonly environmentId: EnvironmentId;
   readonly provider: ServerProvider;
   readonly serverConfig: ServerConfig;
   // True asks for the CLI's install or sign-in terminal once Codex has checked the CLI.
   readonly onUseCliChange: (useCli: boolean) => void;
+  readonly onInstalled: () => void;
 }) {
   const canManageProviders = useEnvironmentScope(environmentId, AuthProvidersManageScope);
   const canOperateTerminal = useEnvironmentScope(environmentId, AuthTerminalOperateScope);
@@ -1213,6 +1228,7 @@ function OnboardingCodexSetup({
       existingCliDisabled={!canOperateTerminal}
       displayName={agentName(provider)}
       onModeChange={changeMode}
+      onInstalled={onInstalled}
     />
   );
 }

@@ -107,6 +107,7 @@ interface CodexSetupSectionProps {
   readonly displayName?: string | undefined;
   readonly onAutoStartConsumed?: () => void;
   readonly onSignInCancelled?: (() => void) | undefined;
+  readonly onInstalled?: (() => void) | undefined;
 }
 
 export function CodexSetupSection(props: CodexSetupSectionProps) {
@@ -249,12 +250,14 @@ export function AddManagedCodexAccountDialog({
   environmentId,
   onClose,
   onAccountCreated,
+  onInstalled,
 }: {
   readonly environmentId: EnvironmentId;
   readonly onClose: () => void;
   readonly onAccountCreated?:
     | ((instanceId: ProviderInstanceId, displayName: string) => void)
     | undefined;
+  readonly onInstalled?: (() => void) | undefined;
 }) {
   const canManageProviders = useEnvironmentScope(environmentId, AuthProvidersManageScope);
   return (
@@ -275,6 +278,7 @@ export function AddManagedCodexAccountDialog({
           onAutoStartConsumed={noop}
           onModeChange={noop}
           onSignInCancelled={onClose}
+          onInstalled={onInstalled}
           allowExistingCli={false}
         />
       )}
@@ -296,6 +300,7 @@ function ManagedCodexSetup({
   presentation,
   displayName,
   onSignInCancelled,
+  onInstalled,
 }: CodexSetupSectionProps & {
   readonly autoStart: boolean;
   readonly onAutoStartConsumed: () => void;
@@ -605,7 +610,10 @@ function ManagedCodexSetup({
           settle: (current) => settleProviderInstall(started, current),
           signal,
         }).then((ready) => {
-          if (ready && !signal.aborted) void signIn(methodId, signal);
+          if (ready && !signal.aborted) {
+            onInstalled?.();
+            void signIn(methodId, signal);
+          }
         });
       },
     );

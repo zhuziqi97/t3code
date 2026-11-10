@@ -148,6 +148,7 @@ interface AddProviderInstanceDialogProps {
   readonly environmentLabel: string;
   readonly onOpenChange: (open: boolean) => void;
   readonly onCreated?: (instanceId: ProviderInstanceId, driver: ProviderDriverKind) => void;
+  readonly onInstalled?: (() => void) | undefined;
   /** Opens with "Show more" expanded, so the ACP Registry search is in view. */
   readonly showMoreProviders?: boolean;
 }
@@ -158,6 +159,7 @@ export function AddProviderInstanceDialog({
   environmentLabel,
   onOpenChange,
   onCreated,
+  onInstalled,
   showMoreProviders: initialShowMoreProviders = false,
 }: AddProviderInstanceDialogProps) {
   const t = useTranslate();
@@ -440,6 +442,7 @@ export function AddProviderInstanceDialog({
         environmentId={environmentId}
         onClose={() => onOpenChange(false)}
         onAccountCreated={(instanceId) => onCreated?.(instanceId, ProviderDriverKind.make("codex"))}
+        onInstalled={onInstalled}
       />
     );
   }
