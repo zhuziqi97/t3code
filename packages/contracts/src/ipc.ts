@@ -33,6 +33,20 @@ export interface ContextMenuItem<T extends string = string> {
   children?: readonly ContextMenuItem<T>[];
 }
 
+export const DesktopFileDownloadInput = Schema.Struct({
+  id: Schema.String,
+  url: Schema.String,
+  name: Schema.String,
+});
+export type DesktopFileDownloadInput = typeof DesktopFileDownloadInput.Type;
+export const DesktopFileDownloadResult = Schema.Literals(["completed", "cancelled", "failed"]);
+export type DesktopFileDownloadResult = typeof DesktopFileDownloadResult.Type;
+export interface DesktopFileDownloadProgress {
+  readonly id: string;
+  readonly receivedBytes: number;
+  readonly totalBytes: number;
+}
+
 export type QuitShortcutHintEvent =
   | { readonly state: "down"; readonly mode: Exclude<QuitConfirmationMode, "direct"> }
   | { readonly state: "up" };
@@ -1141,6 +1155,11 @@ export interface DesktopBridge {
   openExternal: (url: string) => Promise<boolean>;
   /** Reads http(s) media in the main process, outside renderer CORS and CSP; null on network failure. */
   readMedia: (url: string) => Promise<DesktopMediaRead | null>;
+  downloadFile: (
+    input: DesktopFileDownloadInput,
+    onProgress: (progress: DesktopFileDownloadProgress) => void,
+  ) => Promise<DesktopFileDownloadResult>;
+  cancelFileDownload: (id: string) => Promise<void>;
   openSystemSettings: (pane: SystemSettingsPane) => Promise<boolean>;
   checkSystemPermission: (pane: SystemSettingsPane) => Promise<boolean>;
   probeRemoteEditors: () => Promise<readonly EditorId[]>;

@@ -1,5 +1,6 @@
 import type {
   DesktopBridge,
+  DesktopFileDownloadProgress,
   DesktopPreviewAnnotationVoiceEvent,
   DesktopPreviewOpenLinkEvent,
   DesktopPreviewPointerEvent,
@@ -223,6 +224,18 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     ipcRenderer.invoke(IpcChannels.CANCEL_PROVIDER_AUTH_CALLBACK_CHANNEL, url),
   openExternal: (url: string) => ipcRenderer.invoke(IpcChannels.OPEN_EXTERNAL_CHANNEL, url),
   readMedia: (url: string) => ipcRenderer.invoke(IpcChannels.READ_MEDIA_CHANNEL, url),
+  downloadFile: async (input, onProgress) => {
+    const listener = (_event: Electron.IpcRendererEvent, progress: DesktopFileDownloadProgress) => {
+      if (progress.id === input.id) onProgress(progress);
+    };
+    ipcRenderer.on(IpcChannels.FILE_DOWNLOAD_PROGRESS_CHANNEL, listener);
+    try {
+      return await ipcRenderer.invoke(IpcChannels.DOWNLOAD_FILE_CHANNEL, input);
+    } finally {
+      ipcRenderer.off(IpcChannels.FILE_DOWNLOAD_PROGRESS_CHANNEL, listener);
+    }
+  },
+  cancelFileDownload: (id) => ipcRenderer.invoke(IpcChannels.CANCEL_FILE_DOWNLOAD_CHANNEL, id),
   checkSystemPermission: (pane: string) =>
     ipcRenderer.invoke(IpcChannels.CHECK_SYSTEM_PERMISSION_CHANNEL, pane),
   openSystemSettings: (pane: string) =>

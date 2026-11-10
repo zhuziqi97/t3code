@@ -2,9 +2,6 @@ import { filePreviewDelimiter } from "@t3tools/shared/delimitedPreview";
 import type { AssetResource, EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
 import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
 import { readFilePreviewResponse } from "@t3tools/client-runtime/file-preview";
-import { settlePromise } from "@t3tools/client-runtime/state/runtime";
-import * as AsyncResult from "effect/reactivity/AsyncResult";
-import * as Cause from "effect/Cause";
 import {
   filePreviewKind,
   officePreviewKind,
@@ -13,7 +10,7 @@ import {
 import { ChevronRightIcon, DownloadIcon, Trash2Icon, WrapTextIcon, XIcon } from "lucide-react";
 import { Check, Code2, Copy, Eye, Table2 } from "lucide";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { i18n, useTranslate } from "~/i18n";
+import { useTranslate } from "~/i18n";
 import { formatFilePreviewErrorMessage, renderedToggleLabel } from "./filePreviewMode";
 
 import { useAssetUrlRefresh } from "~/assets/assetUrls";
@@ -27,6 +24,7 @@ import { useClientSettings } from "~/hooks/useSettings";
 import { cn } from "~/lib/utils";
 
 import { BinaryFilePreview } from "./BinaryFilePreview";
+import { FileDownloadStatus, useFileDownload } from "./useFileDownload";
 import { PreviewImage } from "./PreviewImage";
 import { AudioPreview } from "./AudioPreview";
 import { BrowserDocumentFrame } from "./BrowserDocumentFrame";
@@ -138,7 +136,7 @@ export function AttachmentFilePreview(props: {
     props.file ? null : resource,
   );
   const prepareDownload = useAssetUrlRefresh(props.asset?.environmentId ?? null, downloadResource);
-  const [saving, setSaving] = useState(false);
+  const download = useFileDownload();
   const [localUrl, setLocalUrl] = useState<string | null>(null);
   const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
   const [rendered, setRendered] = useState(true);
@@ -234,38 +232,7 @@ export function AttachmentFilePreview(props: {
     !((kind === "markdown" || kind === "mermaid") && rendered);
 
   const save = () => {
-    setSaving(true);
-    void settlePromise(async () => {
-      let file = props.file;
-      if (!file) {
-        const target = await prepareDownload();
-        if (!target) throw new Error("Reconnect to the environment and try again.");
-        const response = await fetch(target);
-        if (!response.ok) throw new Error("The file could not be loaded. Try again.");
-        file = await response.blob();
-      }
-      // Blob downloads keep desktop's custom app scheme from navigating to an external browser.
-      const downloadUrl = URL.createObjectURL(file);
-      // Scheduled before the click so the URL is revoked even if the click throws.
-      setTimeout(() => URL.revokeObjectURL(downloadUrl), 30_000);
-      const anchor = document.createElement("a");
-      anchor.href = downloadUrl;
-      anchor.download = props.name;
-      anchor.click();
-    }).then((result) => {
-      if (!AsyncResult.isSuccess(result)) {
-        const cause = Cause.squash(result.cause);
-        toastManager.add({
-          type: "error",
-          title: i18n.t("filePreview.saveFailed"),
-          description:
-            cause instanceof Error
-              ? formatFilePreviewErrorMessage(cause.message)
-              : i18n.t("restore.tryAgain"),
-        });
-      }
-      setSaving(false);
-    });
+    download.start({ name: props.name, file: props.file, prepare: prepareDownload });
   };
 
   const body = failure ? (
@@ -462,8 +429,14 @@ export function AttachmentFilePreview(props: {
         ) : null}
         {url ? (
           <FileSurfaceAction
-            label={t(saving ? "filePreview.preparing" : "filePreview.save")}
-            disabled={saving}
+            label={t(
+              download.state.phase === "downloading"
+                ? "filePreview.downloading"
+                : download.busy
+                  ? "filePreview.preparing"
+                  : "filePreview.save",
+            )}
+            disabled={download.busy}
             onPress={save}
           >
             <DownloadIcon className="size-3.5" />
@@ -480,6 +453,7 @@ export function AttachmentFilePreview(props: {
           </FileSurfaceAction>
         ) : null}
       </div>
+      <FileDownloadStatus download={download} />
       {content?.truncated ? (
         <FileSurfaceNotice>
           {t(
