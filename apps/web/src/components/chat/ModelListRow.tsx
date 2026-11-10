@@ -56,7 +56,6 @@ export const ModelListRow = memo(function ModelListRow(props: {
           "data-disabled:pointer-events-auto data-disabled:cursor-not-allowed",
       )}
     >
-      {/* One row shape in every tab: the logo names the provider, so Favorites needs no second line. */}
       <ProviderInstanceIcon
         driverKind={props.driverKind}
         displayName={props.providerDisplayName}
@@ -70,27 +69,19 @@ export const ModelListRow = memo(function ModelListRow(props: {
         badgeClassName="right-[-0.125rem] bottom-[-0.125rem] h-3 min-w-3 px-0.5 text-5xs"
       />
       <div className="flex min-w-0 flex-1 items-center gap-2 text-left">
-        <div
-          className="min-w-0 truncate text-sm font-normal leading-snug"
-          // Names the row in full on hover only when it is cut off.
-          onPointerEnter={(event) => {
-            const name = event.currentTarget;
-            name.title = name.scrollWidth > name.clientWidth ? getDisplayModelName(model) : "";
-          }}
-        >
-          {getDisplayModelName(model)}
-          {props.showModelId ? (
-            <span className="ml-2 text-xs text-muted-foreground">{props.slug}</span>
-          ) : null}
-          {/* The logo is decorative, so name the provider for screen readers. */}
-          <span className="sr-only">, {props.providerDisplayName}</span>
+        <div className="min-w-0 flex-1 py-1">
+          <div className="wrap-anywhere whitespace-normal text-sm font-normal leading-snug">
+            {getDisplayModelName(model)}
+          </div>
+          <div className="wrap-anywhere whitespace-normal text-xs leading-snug text-muted-foreground">
+            {props.providerDisplayName}
+            {props.subProvider ? ` · ${props.subProvider}` : null}
+            {props.showModelId || props.slug !== getDisplayModelName(model) ? (
+              <span className="font-mono"> · {props.slug}</span>
+            ) : null}
+          </div>
         </div>
         {props.isSelected ? <CheckIcon className="size-3.5 shrink-0" aria-hidden="true" /> : null}
-        {props.subProvider ? (
-          <span className="min-w-0 shrink truncate text-xs text-muted-foreground/70">
-            {props.subProvider}
-          </span>
-        ) : null}
         {props.showNewBadge ? (
           <span
             className="shrink-0 rounded border border-update/35 bg-update/15 px-0.5 py-px text-3xs font-bold uppercase leading-none tracking-wide text-update-foreground"

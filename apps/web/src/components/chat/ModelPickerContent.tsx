@@ -168,9 +168,9 @@ export function adjacentModelPickerProvider(input: {
 }
 
 const EMPTY_MODEL_JUMP_LABELS = new Map<string, string>();
-const MODEL_LIST_ESTIMATED_ITEM_SIZE = 32;
+const MODEL_LIST_ESTIMATED_ITEM_SIZE = 48;
 // Rendered heights in `--spacing` units. Chrome is the search box and list padding, plus a 1px border.
-const ROW_UNITS = 8;
+const ROW_UNITS = 12;
 const ROW_SEPARATOR_UNITS = 0.5;
 const LIST_CHROME_UNITS = 15.5;
 
@@ -841,8 +841,8 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       <div
         ref={pickerContentRef}
         className={cn(
-          "relative flex w-screen max-w-90 flex-row overflow-hidden",
-          props.docked ? "max-sm:h-56 max-sm:w-full max-sm:max-w-none" : "max-h-86.5",
+          "relative flex w-[min(28rem,calc(100vw-1rem))] flex-row overflow-hidden",
+          props.docked ? "max-sm:h-56" : "max-h-86.5",
         )}
         // Docked, the popup sets the height; a minimum here would overflow short windows.
         style={
