@@ -71,6 +71,7 @@ const make = Effect.gen(function* () {
   const crypto = yield* Crypto.SecureRandom;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const environment = yield* HostProcess.Environment;
+  const platform = yield* HostProcess.Platform;
   const lock = yield* Semaphore.make(1);
   const state = yield* SubscriptionRef.make<ConveneIdeResult>({
     service: "code-server",
@@ -104,7 +105,7 @@ const make = Effect.gen(function* () {
   });
 
   const configureLanguage = Effect.fn("ConveneIde.configureLanguage")(function* (
-    executable: string,
+    command: CodeServerInstallation.CodeServerCommand,
   ) {
     yield* installation.prepareLanguage();
     const marker = path.join(dataDir, ".t3-default-language");
@@ -120,8 +121,9 @@ const make = Effect.gen(function* () {
     if (!findNodeAtLocation(root, ["locale"])) {
       const exit = yield* spawner.exitCode(
         ChildProcess.make(
-          executable,
+          command.executable,
           [
+            ...command.args,
             ...isolationArgs,
             "--install-extension",
             "MS-CEINTL.vscode-language-pack-zh-hans@1.131.0",
@@ -145,7 +147,7 @@ const make = Effect.gen(function* () {
   });
 
   const launch = Effect.fn("ConveneIde.launch")(function* (id: string) {
-    const executable = yield* installation.ensure((progress) => reportProgress(id, progress));
+    const command = yield* installation.ensure((progress) => reportProgress(id, progress));
     yield* fs.makeDirectory(path.join(dataDir, "User"), { recursive: true });
     const settingsPath = path.join(dataDir, "User", "settings.json");
     if (!(yield* fs.exists(settingsPath))) {
@@ -155,7 +157,7 @@ const make = Effect.gen(function* () {
       );
     }
     yield* reportProgress(id, { stage: "configuring-language" });
-    yield* configureLanguage(executable).pipe(
+    yield* configureLanguage(command).pipe(
       // A language download must not indefinitely block an otherwise usable editor.
       Effect.timeout("2 minutes"),
       Effect.catch(() =>
@@ -174,8 +176,9 @@ const make = Effect.gen(function* () {
     const ready = yield* Deferred.make<string>();
     const child = yield* spawner.spawn(
       ChildProcess.make(
-        executable,
+        command.executable,
         [
+          ...command.args,
           "--bind-addr",
           "127.0.0.1:0",
           "--auth",
@@ -312,9 +315,10 @@ const make = Effect.gen(function* () {
     if (file) {
       const line = input.file?.line ?? (input.file?.column ? 1 : undefined);
       const uri = new URL("vscode-remote://remote");
+      const filePath =
+        platform === "win32" ? file.absolutePath.replaceAll("\\", "/") : file.absolutePath;
       uri.pathname =
-        file.absolutePath.replaceAll("%", "%25") +
-        (line ? `:${line}:${input.file?.column ?? 1}` : "");
+        filePath.replaceAll("%", "%25") + (line ? `:${line}:${input.file?.column ?? 1}` : "");
       const payload: Array<readonly [string, string]> = [["openFile", uri.toString()]];
       if (line) payload.push(["gotoLineMode", "true"]);
       search.set("payload", encodePayload(payload));

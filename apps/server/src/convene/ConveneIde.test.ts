@@ -1,5 +1,6 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeVM from "node:vm";
+import * as NodePath from "@effect/platform-node/NodePath";
 import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { ProjectId } from "@t3tools/contracts";
@@ -35,128 +36,151 @@ const OPEN = {
 } as const;
 const QUERY = { ...OPEN, operation: "QUERY" } as const;
 
-const setup = Effect.gen(function* () {
-  const install = yield* Deferred.make<
-    string,
-    CodeServerInstallation.CodeServerInstallationError
-  >();
-  const exit = yield* Deferred.make<ChildProcessSpawner.ExitCode>();
-  const reports =
-    yield* Queue.unbounded<
-      NonNullable<Parameters<CodeServerInstallation.CodeServerInstallation["Service"]["ensure"]>[0]>
+const setupFor = (platform: "linux" | "win32") =>
+  Effect.gen(function* () {
+    const install = yield* Deferred.make<
+      string,
+      CodeServerInstallation.CodeServerInstallationError
     >();
-  const commands: Array<ChildProcess.StandardCommand> = [];
-  const languageCommands: Array<ChildProcess.StandardCommand> = [];
-  let languageExit = 0;
-  let preparationFailed = false;
-  let installations = 0;
-  let stops = 0;
-  const spawner = ChildProcessSpawner.make((command) =>
-    Effect.acquireRelease(
-      Effect.gen(function* () {
-        assert.equal(command._tag, "StandardCommand");
-        if (command._tag !== "StandardCommand") return yield* Effect.die("Expected a command");
-        const language = command.args.includes("--install-extension");
-        const childExit = language
-          ? undefined
-          : commands.length === 0
-            ? exit
-            : yield* Deferred.make<ChildProcessSpawner.ExitCode>();
-        (language ? languageCommands : commands).push(command);
-        return ChildProcessSpawner.makeHandle({
-          pid: ChildProcessSpawner.ProcessId(123),
-          exitCode: childExit
-            ? Deferred.await(childExit)
-            : Effect.succeed(ChildProcessSpawner.ExitCode(languageExit)),
-          isRunning: childExit
-            ? Deferred.isDone(childExit).pipe(Effect.map((done) => !done))
-            : Effect.succeed(false),
-          kill: () =>
-            childExit
-              ? Deferred.succeed(childExit, ChildProcessSpawner.ExitCode(0)).pipe(
-                  Effect.tap((first) =>
-                    Effect.sync(() => {
-                      if (first) stops++;
-                    }),
-                  ),
-                  Effect.asVoid,
+    const exit = yield* Deferred.make<ChildProcessSpawner.ExitCode>();
+    const reports =
+      yield* Queue.unbounded<
+        NonNullable<
+          Parameters<CodeServerInstallation.CodeServerInstallation["Service"]["ensure"]>[0]
+        >
+      >();
+    const commands: Array<ChildProcess.StandardCommand> = [];
+    const languageCommands: Array<ChildProcess.StandardCommand> = [];
+    let languageExit = 0;
+    let preparationFailed = false;
+    let installations = 0;
+    let stops = 0;
+    const spawner = ChildProcessSpawner.make((command) =>
+      Effect.acquireRelease(
+        Effect.gen(function* () {
+          assert.equal(command._tag, "StandardCommand");
+          if (command._tag !== "StandardCommand") return yield* Effect.die("Expected a command");
+          const language = command.args.includes("--install-extension");
+          const childExit = language
+            ? undefined
+            : commands.length === 0
+              ? exit
+              : yield* Deferred.make<ChildProcessSpawner.ExitCode>();
+          (language ? languageCommands : commands).push(command);
+          return ChildProcessSpawner.makeHandle({
+            pid: ChildProcessSpawner.ProcessId(123),
+            exitCode: childExit
+              ? Deferred.await(childExit)
+              : Effect.succeed(ChildProcessSpawner.ExitCode(languageExit)),
+            isRunning: childExit
+              ? Deferred.isDone(childExit).pipe(Effect.map((done) => !done))
+              : Effect.succeed(false),
+            kill: () =>
+              childExit
+                ? Deferred.succeed(childExit, ChildProcessSpawner.ExitCode(0)).pipe(
+                    Effect.tap((first) =>
+                      Effect.sync(() => {
+                        if (first) stops++;
+                      }),
+                    ),
+                    Effect.asVoid,
+                  )
+                : Effect.void,
+            unref: Effect.succeed(Effect.void),
+            stdin: Sink.drain,
+            stdout: Stream.make(
+              new TextEncoder().encode("info  HTTP server listening on http://127.0.0.1:45678\n"),
+            ),
+            stderr: Stream.empty,
+            all: Stream.empty,
+            getInputFd: () => Sink.drain,
+            getOutputFd: () => Stream.empty,
+          });
+        }),
+        (child) => child.kill().pipe(Effect.orDie),
+      ),
+    );
+    const workspaces = ConveneWorkspaces.ConveneWorkspaces.of({
+      changes: Stream.never,
+      list: () => Effect.succeed([]),
+      resolve: (project, key) =>
+        Effect.succeed(
+          project === PROJECT && (key === "root" || key === "worktree")
+            ? {
+                projectId: project,
+                key,
+                path:
+                  platform === "win32"
+                    ? key === "root"
+                      ? "C:\\用户\\项目 Work"
+                      : "C:\\用户\\分支 Work"
+                    : key === "root"
+                      ? "/workspace/project"
+                      : "/workspace/worktree",
+                displayName: key,
+                branch: null,
+                available: true,
+              }
+            : null,
+        ),
+      rememberThread: () => Effect.void,
+      rebindThread: () => Effect.void,
+      threadKey: () => Effect.succeed(null),
+    });
+    const layer = ConveneIde.layer.pipe(
+      Layer.provide(
+        Layer.succeed(CodeServerInstallation.CodeServerInstallation, {
+          prepareLanguage: () =>
+            preparationFailed
+              ? Effect.fail(
+                  new CodeServerInstallation.CodeServerInstallationError({
+                    code: "install_failed",
+                  }),
                 )
               : Effect.void,
-          unref: Effect.succeed(Effect.void),
-          stdin: Sink.drain,
-          stdout: Stream.make(
-            new TextEncoder().encode("info  HTTP server listening on http://127.0.0.1:45678\n"),
-          ),
-          stderr: Stream.empty,
-          all: Stream.empty,
-          getInputFd: () => Sink.drain,
-          getOutputFd: () => Stream.empty,
-        });
-      }),
-      (child) => child.kill().pipe(Effect.orDie),
-    ),
-  );
-  const workspaces = ConveneWorkspaces.ConveneWorkspaces.of({
-    changes: Stream.never,
-    list: () => Effect.succeed([]),
-    resolve: (project, key) =>
-      Effect.succeed(
-        project === PROJECT && (key === "root" || key === "worktree")
-          ? {
-              projectId: project,
-              key,
-              path: key === "root" ? "/workspace/project" : "/workspace/worktree",
-              displayName: key,
-              branch: null,
-              available: true,
-            }
-          : null,
+          ensure: (report) =>
+            Effect.sync(() => installations++).pipe(
+              Effect.andThen(report ? Queue.offer(reports, report) : Effect.void),
+              Effect.andThen(Deferred.await(install)),
+              Effect.map((executable) => ({
+                executable,
+                args: platform === "win32" ? ["C:\\T3 工具\\code-server"] : [],
+              })),
+            ),
+        }),
       ),
-    rememberThread: () => Effect.void,
-    rebindThread: () => Effect.void,
-    threadKey: () => Effect.succeed(null),
+      Layer.provide(Layer.succeed(ConveneWorkspaces.ConveneWorkspaces, workspaces)),
+      Layer.provide(
+        platform === "win32"
+          ? WorkspacePaths.layer.pipe(Layer.provide(NodePath.layerWin32))
+          : WorkspacePaths.layer,
+      ),
+      Layer.provide(Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner)),
+      Layer.provide(Layer.succeed(HostProcess.Platform, platform)),
+      Layer.provideMerge(
+        ServerConfig.layerTest(platform === "win32" ? "C:\\用户\\项目 Work" : process.cwd(), {
+          prefix: "t3-managed-ide-",
+        }).pipe(Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+      ),
+    );
+    return {
+      install,
+      exit,
+      commands,
+      languageCommands,
+      reports,
+      layer,
+      failLanguage: (code: number) => {
+        languageExit = code;
+      },
+      failPreparation: (failed: boolean) => {
+        preparationFailed = failed;
+      },
+      counts: () => ({ installations, stops }),
+    };
   });
-  const layer = ConveneIde.layer.pipe(
-    Layer.provide(
-      Layer.succeed(CodeServerInstallation.CodeServerInstallation, {
-        prepareLanguage: () =>
-          preparationFailed
-            ? Effect.fail(
-                new CodeServerInstallation.CodeServerInstallationError({ code: "install_failed" }),
-              )
-            : Effect.void,
-        ensure: (report) =>
-          Effect.sync(() => installations++).pipe(
-            Effect.andThen(report ? Queue.offer(reports, report) : Effect.void),
-            Effect.andThen(Deferred.await(install)),
-          ),
-      }),
-    ),
-    Layer.provide(Layer.succeed(ConveneWorkspaces.ConveneWorkspaces, workspaces)),
-    Layer.provide(WorkspacePaths.layer),
-    Layer.provide(Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner)),
-    Layer.provideMerge(
-      ServerConfig.layerTest(process.cwd(), { prefix: "t3-managed-ide-" }).pipe(
-        Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
-      ),
-    ),
-  );
-  return {
-    install,
-    exit,
-    commands,
-    languageCommands,
-    reports,
-    layer,
-    failLanguage: (code: number) => {
-      languageExit = code;
-    },
-    failPreparation: (failed: boolean) => {
-      preparationFailed = failed;
-    },
-    counts: () => ({ installations, stops }),
-  };
-});
+
+const setup = setupFor("linux");
 
 const awaitPhase = (ide: ConveneIde.ConveneIde["Service"], phase: "ready" | "failed") =>
   ide.changes.pipe(
@@ -187,38 +211,66 @@ it.effect("does not let inherited PORT override the managed loopback binding", (
   }),
 );
 
-it.effect("gets or starts one shared runtime and resolves each workspace independently", () =>
-  Effect.gen(function* () {
-    const fixture = yield* setup;
-    yield* Effect.gen(function* () {
-      const ide = yield* ConveneIde.ConveneIde;
-      assert.equal((yield* ide.handle(QUERY)).phase, "stopped");
-      assert.equal(fixture.counts().installations, 0);
-      const first = yield* ide.handle(OPEN);
-      assert.equal(first.phase, "installing");
-      assert.deepEqual(first.progress, { stage: "checking" });
-      const repeated = yield* Effect.all([ide.handle(OPEN), ide.handle(OPEN)]);
-      assert.ok(repeated.every((item) => item.runtimeId === first.runtimeId));
-      yield* Deferred.succeed(fixture.install, "/managed/bin/code-server");
-      yield* awaitPhase(ide, "ready");
-      const root = yield* ide.handle(OPEN);
-      const worktree = yield* ide.handle({ ...OPEN, workspaceKey: "worktree" });
-      assert.equal(root.runtimeId, worktree.runtimeId);
-      assert.equal(
-        new URL(root.entryPath!, "http://entry/session/").searchParams.get("folder"),
-        "/workspace/project",
-      );
-      assert.equal(
-        new URL(worktree.entryPath!, "http://entry/session/").searchParams.get("folder"),
-        "/workspace/worktree",
-      );
-      assert.deepEqual(fixture.counts(), { installations: 1, stops: 0 });
-      assert.equal(fixture.commands.length, 1);
-      assert.ok(fixture.commands[0]!.args.includes("--disable-proxy"));
-      assert.equal(yield* ide.upstream(root.runtimeId!), "http://127.0.0.1:45678");
-    }).pipe(Effect.provide(fixture.layer));
-    assert.equal(fixture.counts().stops, 1);
-  }),
+it.effect.each(["linux", "win32"] as const)(
+  "gets or starts one shared runtime and resolves each workspace independently: %s",
+  (platform) =>
+    Effect.gen(function* () {
+      const fixture = yield* setupFor(platform);
+      yield* Effect.gen(function* () {
+        const ide = yield* ConveneIde.ConveneIde;
+        assert.equal((yield* ide.handle(QUERY)).phase, "stopped");
+        assert.equal(fixture.counts().installations, 0);
+        const first = yield* ide.handle(OPEN);
+        assert.equal(first.phase, "installing");
+        assert.deepEqual(first.progress, { stage: "checking" });
+        const repeated = yield* Effect.all([ide.handle(OPEN), ide.handle(OPEN)]);
+        assert.ok(repeated.every((item) => item.runtimeId === first.runtimeId));
+        yield* Deferred.succeed(
+          fixture.install,
+          platform === "win32"
+            ? "C:\\T3 工具\\code-server\\lib\\node.exe"
+            : "/managed/bin/code-server",
+        );
+        yield* awaitPhase(ide, "ready");
+        const root = yield* ide.handle(OPEN);
+        const worktree = yield* ide.handle({ ...OPEN, workspaceKey: "worktree" });
+        assert.equal(root.runtimeId, worktree.runtimeId);
+        assert.equal(
+          new URL(root.entryPath!, "http://entry/session/").searchParams.get("folder"),
+          platform === "win32" ? "C:\\用户\\项目 Work" : "/workspace/project",
+        );
+        assert.equal(
+          new URL(worktree.entryPath!, "http://entry/session/").searchParams.get("folder"),
+          platform === "win32" ? "C:\\用户\\分支 Work" : "/workspace/worktree",
+        );
+        assert.deepEqual(fixture.counts(), { installations: 1, stops: 0 });
+        assert.equal(fixture.commands.length, 1);
+        assert.ok(fixture.commands[0]!.args.includes("--disable-proxy"));
+        if (platform === "win32") {
+          assert.equal(fixture.commands[0]!.command, "C:\\T3 工具\\code-server\\lib\\node.exe");
+          assert.equal(fixture.commands[0]!.args[0], "C:\\T3 工具\\code-server");
+          assert.equal(fixture.commands[0]!.options.cwd, "C:\\用户\\项目 Work");
+          assert.equal(fixture.languageCommands[0]!.command, fixture.commands[0]!.command);
+          assert.equal(fixture.languageCommands[0]!.args[0], fixture.commands[0]!.args[0]);
+          assert.ok(
+            fixture.languageCommands[0]!.args.includes(
+              "MS-CEINTL.vscode-language-pack-zh-hans@1.131.0",
+            ),
+          );
+          const fs = yield* FileSystem.FileSystem;
+          const path = yield* Path.Path;
+          const dataDir = String(
+            fixture.commands[0]!.args[fixture.commands[0]!.args.indexOf("--user-data-dir") + 1],
+          );
+          assert.equal(
+            JSON.parse(yield* fs.readFileString(path.join(dataDir, "User", "argv.json"))).locale,
+            "zh-cn",
+          );
+        }
+        assert.equal(yield* ide.upstream(root.runtimeId!), "http://127.0.0.1:45678");
+      }).pipe(Effect.provide(fixture.layer));
+      assert.equal(fixture.counts().stops, 1);
+    }),
 );
 
 it.effect("sets the default locale in the isolated native argv file before starting", () =>
@@ -540,11 +592,15 @@ it.effect("reports an unexpected exit and does not restart on another open", () 
   }),
 );
 
-it.effect(
-  "checks native workspace and relative file before starting, then returns a native file selection",
-  () =>
+it.effect.each(["linux", "win32"] as const)(
+  "checks native workspace and relative file before starting, then returns a native file selection: %s",
+  (platform) =>
     Effect.gen(function* () {
-      const fixture = yield* setup;
+      const fixture = yield* setupFor(platform);
+      const remoteRoot =
+        platform === "win32"
+          ? "vscode-remote://remote/C:/%E7%94%A8%E6%88%B7/%E9%A1%B9%E7%9B%AE%20Work"
+          : "vscode-remote://remote/workspace/project";
       yield* Effect.gen(function* () {
         const ide = yield* ConveneIde.ConveneIde;
         assert.equal(
@@ -558,7 +614,12 @@ it.effect(
         );
         assert.equal(fixture.counts().installations, 0);
         yield* ide.handle(OPEN);
-        yield* Deferred.succeed(fixture.install, "/managed/bin/code-server");
+        yield* Deferred.succeed(
+          fixture.install,
+          platform === "win32"
+            ? "C:\\T3 工具\\code-server\\lib\\node.exe"
+            : "/managed/bin/code-server",
+        );
         yield* awaitPhase(ide, "ready");
         const result = yield* ide.handle({
           ...QUERY,
@@ -567,7 +628,7 @@ it.effect(
         const uri = new URL(result.entryPath!, "http://entry/session/");
         assert.equal(uri.pathname, `/session/api/convene/ide/code-server/${result.runtimeId}/`);
         assert.deepEqual(JSON.parse(uri.searchParams.get("payload")!), [
-          ["openFile", "vscode-remote://remote/workspace/project/src/target%20file.ts:3:2"],
+          ["openFile", `${remoteRoot}/src/target%20file.ts:3:2`],
           ["gotoLineMode", "true"],
         ]);
         const columnOnly = yield* ide.handle({
@@ -576,7 +637,7 @@ it.effect(
         });
         const columnUri = new URL(columnOnly.entryPath!, "http://entry/session/");
         assert.deepEqual(JSON.parse(columnUri.searchParams.get("payload")!), [
-          ["openFile", "vscode-remote://remote/workspace/project/src/target%20file.ts:1:2"],
+          ["openFile", `${remoteRoot}/src/target%20file.ts:1:2`],
           ["gotoLineMode", "true"],
         ]);
         const literalPercent = yield* ide.handle({
@@ -586,12 +647,14 @@ it.effect(
         const literalUri = new URL(literalPercent.entryPath!, "http://entry/session/");
         const literalPayload = JSON.parse(literalUri.searchParams.get("payload")!);
         assert.deepEqual(literalPayload, [
-          ["openFile", "vscode-remote://remote/workspace/project/literal%253Acolon.md:1:1"],
+          ["openFile", `${remoteRoot}/literal%253Acolon.md:1:1`],
           ["gotoLineMode", "true"],
         ]);
         assert.equal(
           decodeURIComponent(new URL(literalPayload[0][1]).pathname),
-          "/workspace/project/literal%3Acolon.md:1:1",
+          platform === "win32"
+            ? "/C:/用户/项目 Work/literal%3Acolon.md:1:1"
+            : "/workspace/project/literal%3Acolon.md:1:1",
         );
       }).pipe(Effect.provide(fixture.layer));
     }),

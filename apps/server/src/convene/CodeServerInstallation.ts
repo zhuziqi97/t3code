@@ -15,6 +15,11 @@ import * as ServerConfig from "../config.ts";
 
 export const VERSION = "4.141.0";
 
+export interface CodeServerCommand {
+  readonly executable: string;
+  readonly args: ReadonlyArray<string>;
+}
+
 export class CodeServerInstallationError extends Schema.TaggedError<CodeServerInstallationError>()(
   "CodeServerInstallationError",
   {
@@ -34,7 +39,7 @@ export class CodeServerInstallation extends Context.Service<
   {
     readonly ensure: (
       onProgress?: (progress: NonNullable<ConveneIdeResult["progress"]>) => Effect.Effect<unknown>,
-    ) => Effect.Effect<string, CodeServerInstallationError>;
+    ) => Effect.Effect<CodeServerCommand, CodeServerInstallationError>;
     readonly prepareLanguage: () => Effect.Effect<void, CodeServerInstallationError>;
   }
 >()("t3/convene/CodeServerInstallation") {}
@@ -50,15 +55,32 @@ const make = Effect.gen(function* () {
   const platform = yield* HostProcess.Platform;
   const arch = yield* HostProcess.Architecture;
   const supported =
-    (platform === "linux" || platform === "darwin") && (arch === "x64" || arch === "arm64");
-  const asset = `code-server-${VERSION}-${platform === "darwin" ? "macos" : platform}-${arch === "x64" ? "amd64" : arch}.tar.gz`;
+    ((platform === "linux" || platform === "darwin") && (arch === "x64" || arch === "arm64")) ||
+    (platform === "win32" && arch === "x64");
+  const assetPlatform =
+    platform === "darwin" ? "macos" : platform === "win32" ? "windows" : platform;
+  const asset = `code-server-${VERSION}-${assetPlatform}-${arch === "x64" ? "amd64" : arch}.tar.gz`;
   const directory = path.join(
     config.baseDir,
     "tools",
     "code-server",
     `${VERSION}-${platform}-${arch}`,
   );
-  const executable = path.join(directory, "bin", "code-server");
+  const runtimeFiles =
+    platform === "win32"
+      ? [["lib", "node.exe"], ["package.json"], ["out", "node", "entry.js"]]
+      : [["bin", "code-server"]];
+  // Match the Windows launcher without passing user paths through cmd.exe.
+  const command = {
+    executable: path.join(directory, ...runtimeFiles[0]!),
+    args: platform === "win32" ? [directory] : [],
+  };
+  const hasRuntime = Effect.fn("CodeServerInstallation.hasRuntime")(function* (root: string) {
+    for (const file of runtimeFiles) {
+      if (!(yield* fs.exists(path.join(root, ...file)))) return false;
+    }
+    return true;
+  });
 
   const prepareLanguage = Effect.fn("CodeServerInstallation.prepareLanguage")(
     function* () {
@@ -109,7 +131,9 @@ const make = Effect.gen(function* () {
     function* (onProgress?: Parameters<CodeServerInstallation["Service"]["ensure"]>[0]) {
       if (!supported)
         return yield* new CodeServerInstallationError({ code: "unsupported_platform" });
-      if (yield* fs.exists(executable)) return executable;
+      if (yield* hasRuntime(directory)) {
+        return command;
+      }
       yield* fs.makeDirectory(path.dirname(directory), { recursive: true });
       const staging = yield* fs.makeTempDirectoryScoped({
         directory: path.dirname(directory),
@@ -156,11 +180,11 @@ const make = Effect.gen(function* () {
       const exit = yield* spawner.exitCode(
         ChildProcess.make("tar", ["-xzf", archive, "-C", extracted, "--strip-components=1"]),
       );
-      if (exit !== 0 || !(yield* fs.exists(path.join(extracted, "bin", "code-server")))) {
+      if (exit !== 0 || !(yield* hasRuntime(extracted))) {
         return yield* new CodeServerInstallationError({ code: "install_failed" });
       }
       yield* fs.rename(extracted, directory);
-      return executable;
+      return command;
     },
     Effect.scoped,
     Effect.timeout("15 minutes"),
