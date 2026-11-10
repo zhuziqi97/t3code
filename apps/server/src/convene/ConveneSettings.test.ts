@@ -10,6 +10,7 @@ import * as Stream from "effect/Stream";
 import { ConveneManageInput } from "@t3tools/contracts";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as HttpClientError from "effect/http/HttpClientError";
 import type * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as ConveneConfiguration from "./ConveneConfiguration.ts";
@@ -33,7 +34,9 @@ function pairedSettingsFixture() {
   const writes: ConvenePlatform.Connection[] = [];
   let respond: (
     request: HttpClientRequest.HttpClientRequest,
-  ) => Effect.Effect<{ status: number; body: unknown }> = (request) =>
+  ) => Effect.Effect<{ status: number; body: unknown }, HttpClientError.HttpClientError> = (
+    request,
+  ) =>
     Effect.succeed({
       status: 200,
       body: {
@@ -311,26 +314,101 @@ it.effect("loads the changed address and unchanged identity in a fresh platform 
   });
 });
 
-it.effect("does not start a new pairing when changing an unpaired connection", () => {
-  const fixture = pairedSettingsFixture();
-  return Effect.gen(function* () {
-    const settings = yield* ConveneSettings.ConveneSettings;
-    yield* settings.manage({ operation: "disconnect" });
-    const requestCount = fixture.requests.length;
-    assert.equal(
-      (yield* Effect.flip(
-        settings.manage({
-          operation: "change-address",
-          baseUrl: "https://current.example.test",
+it.effect.each(["online", "invalid credential", "platform failure", "network failure"] as const)(
+  "does not start a new pairing when changing an unpaired connection (%s)",
+  (scenario) => {
+    const fixture = pairedSettingsFixture();
+    return Effect.gen(function* () {
+      const platform = yield* ConvenePlatform.ConvenePlatform;
+      const settings = yield* ConveneSettings.ConveneSettings;
+      const changes = yield* PubSub.subscribe(platform.changes);
+      if (scenario === "online") {
+        yield* settings.manage({ operation: "disconnect" });
+      } else {
+        if (scenario !== "invalid credential") yield* platform.accessToken;
+        fixture.setResponse((request) =>
+          scenario === "network failure"
+            ? Effect.fail(
+                new HttpClientError.HttpClientError({
+                  reason: new HttpClientError.TransportError({ request }),
+                }),
+              )
+            : Effect.succeed({
+                status: scenario === "invalid credential" ? 401 : 503,
+                body: {
+                  error: {
+                    code:
+                      scenario === "invalid credential"
+                        ? "RUNNER_CREDENTIAL_INVALID"
+                        : "UPSTREAM_UNAVAILABLE",
+                  },
+                },
+              }),
+        );
+        const error = yield* Effect.flip(settings.manage({ operation: "disconnect" }));
+        assert.equal(
+          error.code,
+          scenario === "invalid credential"
+            ? "RUNNER_CREDENTIAL_INVALID"
+            : scenario === "platform failure"
+              ? "UPSTREAM_UNAVAILABLE"
+              : "PLATFORM_UNAVAILABLE",
+        );
+        assert.equal(
+          "status" in error ? error.status : undefined,
+          scenario === "invalid credential"
+            ? 401
+            : scenario === "platform failure"
+              ? 503
+              : undefined,
+        );
+        assert.deepEqual(fixture.saved(), fixture.original);
+        assert.equal(yield* PubSub.size(platform.changes), 0);
+        const requestsBeforeLocalRemoval = fixture.requests.length;
+        yield* settings.manage(yield* decodeManageInput({ operation: "disconnect-local" }));
+        assert.equal(fixture.requests.length, requestsBeforeLocalRemoval);
+      }
+      assert.equal(yield* PubSub.size(platform.changes), 1);
+      yield* PubSub.take(changes);
+      assert.equal((yield* Effect.flip(platform.accessToken)).code, "NOT_PAIRED");
+      const requestCount = fixture.requests.length;
+      assert.equal(
+        (yield* Effect.flip(
+          settings.manage({
+            operation: "change-address",
+            baseUrl: "https://current.example.test",
+          }),
+        )).code,
+        "NOT_PAIRED",
+      );
+      assert.equal(fixture.saved(), undefined);
+      assert.equal(fixture.requests.length, requestCount);
+      assert.equal(fixture.writes.length, 0);
+      fixture.setResponse((request) =>
+        Effect.succeed({
+          status: 200,
+          body: {
+            success: true,
+            data: request.url.endsWith("/execution-runner-pairings/exchange")
+              ? { runner_id: "replacement-runner", refresh_credential: "replacement-refresh" }
+              : { access_token: "replacement-access", expires_in: 3600 },
+          },
         }),
-      )).code,
-      "NOT_PAIRED",
-    );
-    assert.equal(fixture.saved(), undefined);
-    assert.equal(fixture.requests.length, requestCount);
-    assert.equal(fixture.writes.length, 0);
-  }).pipe(Effect.provide(fixture.layer));
-});
+      );
+      yield* settings.manage({
+        operation: "exchange",
+        baseUrl: "https://replacement.example.test",
+        deviceCode: "replacement-device",
+      });
+      assert.deepEqual(fixture.saved(), {
+        baseUrl: "https://replacement.example.test",
+        runnerId: "replacement-runner",
+        refreshCredential: "replacement-refresh",
+      });
+      assert.equal(yield* platform.accessToken, "replacement-access");
+    }).pipe(Effect.scoped, Effect.provide(fixture.layer));
+  },
+);
 
 it.effect(
   "waits without saving credentials, persists an approved pairing and preserves terminal platform errors",

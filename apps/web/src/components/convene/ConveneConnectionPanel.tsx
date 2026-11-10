@@ -47,21 +47,34 @@ function ConveneConnectionPanelContent({ environmentId }: { environmentId: Envir
   const [expired, setExpired] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [disconnectFailed, setDisconnectFailed] = useState(false);
   const [copied, setCopied] = useState<"code" | "link" | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
   const paired = status?.runnerId !== null && status?.runnerId !== undefined;
   if (status?.runnerId === null && addressDraft !== null) setAddressDraft(null);
-  const connectionError = (cause: unknown, changingAddress = false) => {
+  const connectionError = (
+    cause: unknown,
+    operation: Parameters<typeof manage>[0]["input"]["operation"],
+  ) => {
     const code = typeof cause === "object" && cause !== null && "code" in cause ? cause.code : null;
+    const httpStatus =
+      typeof cause === "object" && cause !== null && "status" in cause ? cause.status : null;
+    if (operation === "disconnect-local") return t("convene.connection.localDisconnectFailed");
+    if (httpStatus === 401 || httpStatus === 403 || code === "RUNNER_CREDENTIAL_INVALID")
+      return t("convene.connection.credentialRejected");
+    if (code === "PLATFORM_UNAVAILABLE" || (typeof httpStatus === "number" && httpStatus >= 500))
+      return t("convene.connection.platformUnavailable");
     return code === "INVALID_PLATFORM_URL"
       ? t("convene.connection.invalidUrl")
-      : changingAddress
+      : operation === "change-address"
         ? t("convene.connection.changeAddressFailed")
-        : code === "RUNNER_PAIRING_EXPIRED" ||
-            code === "RUNNER_PAIRING_INVALID" ||
-            code === "RUNNER_PAIRING_CONSUMED"
-          ? t("convene.connection.expired")
-          : t("convene.connection.checkFailed");
+        : operation === "disconnect"
+          ? t("convene.connection.disconnectFailed")
+          : code === "RUNNER_PAIRING_EXPIRED" ||
+              code === "RUNNER_PAIRING_INVALID" ||
+              code === "RUNNER_PAIRING_CONSUMED"
+            ? t("convene.connection.expired")
+            : t("convene.connection.checkFailed");
   };
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Clipboard feedback owns a timer that must be cancelled when the feedback changes or unmounts.
   useEffect(() => {
@@ -144,9 +157,11 @@ function ConveneConnectionPanelContent({ environmentId }: { environmentId: Envir
     setBusy(false);
     if (response._tag === "Failure") {
       const cause = squashAtomCommandFailure(response);
-      setError(connectionError(cause, input.operation === "change-address"));
+      setError(connectionError(cause, input.operation));
+      if (input.operation === "disconnect") setDisconnectFailed(true);
       return;
     }
+    setDisconnectFailed(false);
     if (response.value.type === "pairing") {
       setPairing({
         value: response.value.pairing,
@@ -303,6 +318,20 @@ function ConveneConnectionPanelContent({ environmentId }: { environmentId: Envir
                 {t("convene.connection.disconnect")}
               </Button>
             </div>
+            {(status?.phase === "offline" || disconnectFailed) && (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  {t("convene.connection.localDisconnectDescription")}
+                </p>
+                <Button
+                  variant="outline"
+                  disabled={busy || !permitted}
+                  onClick={() => void run({ operation: "disconnect-local" })}
+                >
+                  {t("convene.connection.localDisconnect")}
+                </Button>
+              </div>
+            )}
           </div>
         )
       ) : pairing ? (

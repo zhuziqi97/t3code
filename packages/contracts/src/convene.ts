@@ -206,7 +206,7 @@ export const ConveneManageInput = Schema.Union([
     baseUrl: Schema.NonEmptyString,
     deviceCode: Schema.NonEmptyString,
   }),
-  Schema.Struct({ operation: Schema.Literals(["reconnect", "disconnect"]) }),
+  Schema.Struct({ operation: Schema.Literals(["reconnect", "disconnect", "disconnect-local"]) }),
 ]);
 export const ConveneManageResult = Schema.Union([
   Schema.Struct({ type: Schema.Literal("pairing"), pairing: ConvenePairing }),
@@ -268,6 +268,7 @@ export class ConveneIntegrationError extends Schema.TaggedError<ConveneIntegrati
   {
     operation: Schema.String,
     code: Schema.String,
+    status: Schema.optional(Schema.Number),
     cause: Schema.optional(Schema.Defect()),
   },
 ) {

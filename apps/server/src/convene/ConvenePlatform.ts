@@ -70,6 +70,8 @@ export class ConvenePlatformError extends Schema.TaggedError<ConvenePlatformErro
   }
 }
 
+const isPlatformError = Schema.is(ConvenePlatformError);
+
 export class ConvenePlatform extends Context.Service<
   ConvenePlatform,
   {
@@ -83,6 +85,7 @@ export class ConvenePlatform extends Context.Service<
     ) => Effect.Effect<Connection, ConvenePlatformError>;
     readonly changeAddress: (baseUrl: string) => Effect.Effect<Connection, ConvenePlatformError>;
     readonly disconnect: Effect.Effect<void, ConvenePlatformError>;
+    readonly disconnectLocal: Effect.Effect<void, ConvenePlatformError>;
     readonly accessToken: Effect.Effect<string, ConvenePlatformError>;
     readonly credential: (
       projectId: string,
@@ -208,6 +211,17 @@ const make = Effect.gen(function* () {
         ),
       );
   });
+  const disconnectLocal = Effect.fn("ConvenePlatform.disconnectLocal")(function* () {
+    yield* secrets
+      .remove("convene-connection.json")
+      .pipe(
+        Effect.mapError(
+          (cause) => new ConvenePlatformError({ operation: "disconnect-local", cause }),
+        ),
+      );
+    access = undefined;
+    yield* reconnect;
+  });
   return ConvenePlatform.of({
     readConnection,
     accessToken,
@@ -281,17 +295,16 @@ const make = Effect.gen(function* () {
           Schema.Unknown,
           yield* tokenFor(current.value),
         );
-        yield* secrets.remove("convene-connection.json");
       }
-      yield* reconnect;
+      yield* disconnectLocal();
     }).pipe(
-      Effect.tap(() =>
-        Effect.sync(() => {
-          access = undefined;
-        }),
+      Effect.mapError((cause) =>
+        isPlatformError(cause)
+          ? cause
+          : new ConvenePlatformError({ operation: "disconnect", cause }),
       ),
-      Effect.mapError((cause) => new ConvenePlatformError({ operation: "disconnect", cause })),
     ),
+    disconnectLocal: disconnectLocal(),
     credential: Effect.fn("ConvenePlatform.credential")(function* (projectId, targetId) {
       const current = yield* connection;
       const token = yield* tokenFor(current);

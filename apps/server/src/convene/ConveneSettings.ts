@@ -68,6 +68,8 @@ const make = Effect.gen(function* () {
       if (result === null) return { type: "pending" as const };
     } else if (input.operation === "disconnect") {
       yield* platform.disconnect;
+    } else if (input.operation === "disconnect-local") {
+      yield* platform.disconnectLocal;
     } else {
       yield* platform.reconnect;
     }
@@ -82,6 +84,7 @@ const make = Effect.gen(function* () {
             : new ConveneIntegrationError({
                 operation: "connection",
                 code: cause.code ?? "PLATFORM_UNAVAILABLE",
+                ...(cause.status === undefined ? {} : { status: cause.status }),
                 cause,
               }),
         ),

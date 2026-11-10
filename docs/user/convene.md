@@ -12,6 +12,8 @@ When your platform's address changes, choose **Change address** in **Settings �
 
 **Disconnect Convene** unpairs that environment and removes its platform associations and MCP configuration. It closes its platform access, while local projects and provider sessions remain available. Pairing again creates a new platform client and requires configuring its projects again.
 
+If the platform is unavailable or no longer accepts the credential, choose **Unpair locally** to remove this environment's pairing and connect again. This does not revoke the client record or access on the previous platform. The CLI equivalent is `t3code-convene convene disconnect --local-only`; restart a running server afterward to close its existing connection.
+
 Adding a folder, creating a project or starting a clone offers optional Convene configuration after the native project has been created. Closing the dialog or a platform failure keeps the native project. Reopen it from **Settings → choose the project → Project → Configure Convene**. Grouped repositories configure each native project and environment separately.
 
 An **execution association** connects a native project to a Convene module. A project can associate several modules, and a module can associate projects on several clients. Select a project folder or reported Git worktree, then explicitly activate it. Each module has one active location across the owner's clients; activating another location moves that module's execution there. Association, selection, activation, deactivation and removal are separate operations.

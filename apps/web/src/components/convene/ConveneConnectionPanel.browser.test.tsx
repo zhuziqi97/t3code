@@ -172,7 +172,7 @@ it("saves the paired address without re-pairing or treating the RPC acknowledgem
 
 it.each([
   ["INVALID_PLATFORM_URL", "Enter a valid Convene platform address"],
-  ["PLATFORM_UNAVAILABLE", "Could not change the address"],
+  ["PLATFORM_UNAVAILABLE", "Could not reach the Convene platform"],
 ] as const)("keeps the address draft and existing connection after %s", async (code, message) => {
   await using _lifecycle = await setupLifecycle();
   await setStatus(connectedStatus);
