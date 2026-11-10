@@ -2562,7 +2562,7 @@ const make = Effect.gen(function* () {
       Effect.tryPromise({
         try: () => tab.page.context().newCDPSession(tab.page),
         catch: (cause) => new ServerBrowserLaunchError({ cause }),
-      }),
+      }).pipe(Effect.withSpan("ServerBrowser.attachViewer.session")),
       (session) =>
         Effect.promise(() =>
           session
@@ -2577,24 +2577,25 @@ const make = Effect.gen(function* () {
     let framesInFlight = 0;
     let mayHaveDropped = false;
     let motion = false;
+    let frameRevision = 0;
+    const firstFrame = Promise.withResolvers<void>();
     const recentFrames: Array<number> = [];
     let screencastParams = Promise.resolve();
     let screencastScale = 1;
     const startScreencast = (scale: number) => {
       screencastScale = scale;
-      screencastParams = screencastParams.then(async () => {
+      const started = screencastParams.then(async () => {
         if (tab.capturing > 0) return;
         await session.send("Page.stopScreencast").catch(constVoid);
-        await session
-          .send("Page.startScreencast", {
-            format: "jpeg",
-            quality: screencastScale < 1 ? Math.min(quality, SCREENCAST_MOTION_QUALITY) : quality,
-            maxWidth: Math.max(1, Math.round(input.maxWidth * screencastScale)),
-            maxHeight: Math.max(1, Math.round(input.maxHeight * screencastScale)),
-          })
-          .catch(constVoid);
+        await session.send("Page.startScreencast", {
+          format: "jpeg",
+          quality: screencastScale < 1 ? Math.min(quality, SCREENCAST_MOTION_QUALITY) : quality,
+          maxWidth: Math.max(1, Math.round(input.maxWidth * screencastScale)),
+          maxHeight: Math.max(1, Math.round(input.maxHeight * screencastScale)),
+        });
       });
-      return screencastParams;
+      screencastParams = started.catch(constVoid);
+      return started;
     };
     const viewer: ViewerState = {
       id: NodeCrypto.randomUUID(),
@@ -2630,7 +2631,7 @@ const make = Effect.gen(function* () {
         );
         return screencastParams;
       },
-      resume: () => startScreencast(screencastScale),
+      resume: () => startScreencast(screencastScale).catch(constVoid),
       scrolledAt: 0,
       requestedSize: null,
     };
@@ -2653,10 +2654,12 @@ const make = Effect.gen(function* () {
     broadcastControl(tab);
     pushFileChooser(tab);
     const pushStill = async () => {
+      const revision = frameRevision;
       const data = await withCaptureLock(tab, () =>
         ServerBrowserPage.captureViewport(session, { format: "jpeg", quality }),
-      ).catch(() => null);
-      if (data) viewer.push({ _tag: "frame", data: Buffer.from(data, "base64"), ack: Effect.void });
+      );
+      if (data && revision === frameRevision)
+        viewer.push({ _tag: "frame", data: Buffer.from(data, "base64"), ack: Effect.void });
     };
     let settleTimer: ReturnType<typeof setTimeout> | null = null;
     yield* Effect.addFinalizer(() =>
@@ -2667,6 +2670,7 @@ const make = Effect.gen(function* () {
     let screencastStarted = false;
     session.on("Page.screencastFrame", (frame) => {
       screencastStarted = true;
+      frameRevision++;
       if (framesInFlight > 0) mayHaveDropped = true;
       framesInFlight += 1;
       const arrivedAt = Date.now();
@@ -2678,11 +2682,11 @@ const make = Effect.gen(function* () {
         arrivedAt - viewer.scrolledAt < SCREENCAST_MOTION_WINDOW_MS
       ) {
         motion = true;
-        void startScreencast(0.5);
+        void startScreencast(0.5).catch(constVoid);
       } else if (motion && arrivedAt - viewer.scrolledAt > SCREENCAST_SETTLE_MS) {
         motion = false;
         recentFrames.length = 0;
-        void startScreencast(1);
+        void startScreencast(1).catch(constVoid);
       }
       if (settleTimer !== null) clearTimeout(settleTimer);
       settleTimer = setTimeout(() => {
@@ -2692,9 +2696,9 @@ const make = Effect.gen(function* () {
         if (motion) {
           motion = false;
           recentFrames.length = 0;
-          void startScreencast(1);
+          void startScreencast(1).catch(constVoid);
         }
-        void pushStill();
+        void pushStill().catch(constVoid);
       }, SCREENCAST_SETTLE_MS);
       viewer.push({
         _tag: "frame",
@@ -2708,12 +2712,24 @@ const make = Effect.gen(function* () {
           }),
         ),
       });
+      firstFrame.resolve();
     });
     void broadcastViewport(tab).catch(constVoid);
-    yield* Effect.promise(() => startScreencast(1));
-    // An idle page does not repaint for a new screencast, so the viewer
-    // starts from a still unless a live frame beat it.
-    if (!screencastStarted) yield* Effect.promise(pushStill);
+    yield* Effect.raceFirst(
+      Effect.gen(function* () {
+        yield* Effect.tryPromise({
+          try: () => startScreencast(1),
+          catch: (cause) => new ServerBrowserLaunchError({ cause }),
+        }).pipe(Effect.withSpan("ServerBrowser.attachViewer.screencast"));
+        // The pending screenshot keeps its capture lock even when a live frame wins readiness.
+        if (!screencastStarted)
+          yield* Effect.tryPromise({
+            try: pushStill,
+            catch: (cause) => new ServerBrowserLaunchError({ cause }),
+          }).pipe(Effect.withSpan("ServerBrowser.attachViewer.initialStill"));
+      }),
+      Effect.promise(() => firstFrame.promise),
+    );
     return {
       output,
       input: (raw: unknown) =>

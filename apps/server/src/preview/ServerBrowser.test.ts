@@ -840,8 +840,47 @@ it.live("streams to a read-only viewer without allowing takeover, input, or view
   Effect.scoped(
     Effect.gen(function* () {
       const { browser, tabId } = yield* ready;
-      const viewer = yield* browser.attachViewer(viewerInput(tabId, false));
-      const page = contexts[0]!.page;
+      const context = contexts[0]!;
+      const firstCapture = Promise.withResolvers<ReturnType<typeof makeSession>>();
+      const finishCapture = Promise.withResolvers<Record<string, unknown>>();
+      const secondStarted = Promise.withResolvers<void>();
+      const captures: string[] = [];
+      let firstSettled = false;
+      let viewers = 0;
+      const newSession = context.newCDPSession;
+      context.newCDPSession = async (target) => {
+        const session = await newSession(target);
+        const viewerNumber = ++viewers;
+        const send = session.send.getMockImplementation()!;
+        session.send.mockImplementation(async (method, input) => {
+          if (method === "Page.startScreencast" && viewerNumber === 2) secondStarted.resolve();
+          if (method === "Page.captureScreenshot") {
+            if (viewerNumber === 1) {
+              captures.push("first");
+              firstCapture.resolve(session);
+              const result = await finishCapture.promise;
+              firstSettled = true;
+              captures.push("first settled");
+              return result;
+            }
+            expect(firstSettled).toBe(true);
+            captures.push("second");
+          }
+          return send(method, input);
+        });
+        return session;
+      };
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => finishCapture.resolve({ data: "c3RhbGU=" })),
+      );
+      const attaching = yield* browser
+        .attachViewer(viewerInput(tabId, false))
+        .pipe(Effect.forkScoped);
+      const firstSession = yield* Effect.promise(() => firstCapture.promise);
+      firstSession.emit("Page.screencastFrame", { data: "bGl2ZQ==", sessionId: 1 });
+      const viewer = yield* Fiber.join(attaching);
+      expect(firstSettled).toBe(false);
+      const page = context.page;
       page.setViewportSize.mockClear();
       const session = contexts[0]!.sessions.at(-1)!;
       session.send.mockClear();
@@ -856,13 +895,23 @@ it.live("streams to a read-only viewer without allowing takeover, input, or view
       expect(session.send.mock.calls.some(([method]) => method.startsWith("Input."))).toBe(false);
       const outputs = yield* Queue.takeAll(viewer.output);
       expect(outputs).toContainEqual(
-        expect.objectContaining({ _tag: "frame", data: Buffer.from("frame") }),
+        expect.objectContaining({ _tag: "frame", data: Buffer.from("live") }),
       );
       expect(outputs).toContainEqual(expect.objectContaining({ _tag: "viewport" }));
       expect(outputs).toContainEqual(
         expect.objectContaining({ _tag: "control", canOperate: false, controller: "agent" }),
       );
-      const operator = yield* browser.attachViewer(viewerInput(tabId, true));
+      const operating = yield* browser
+        .attachViewer(viewerInput(tabId, true))
+        .pipe(Effect.forkScoped);
+      yield* Effect.promise(() => secondStarted.promise);
+      expect(captures).toEqual(["first"]);
+      finishCapture.resolve({ data: "c3RhbGU=" });
+      const operator = yield* Fiber.join(operating);
+      expect(captures).toEqual(["first", "first settled", "second"]);
+      expect(yield* Queue.takeAll(viewer.output)).not.toContainEqual(
+        expect.objectContaining({ _tag: "frame", data: Buffer.from("stale") }),
+      );
       yield* operator.input({ type: "takeControl" });
       yield* operator.input({ type: "text", text: "typed" });
       yield* operator.input({ type: "resize", width: 390, height: 844 });
@@ -873,6 +922,33 @@ it.live("streams to a read-only viewer without allowing takeover, input, or view
       yield* operator.input({ type: "releaseControl" });
     }),
   ).pipe(Effect.provide(layer)),
+);
+
+it.live.each(["Page.startScreencast", "Page.captureScreenshot"])(
+  "rejects a viewer when first-frame preparation fails at %s",
+  (failedMethod) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const { browser, tabId } = yield* ready;
+        const context = contexts[0]!;
+        const newSession = context.newCDPSession;
+        const cause = new Error("fixture preparation failed");
+        context.newCDPSession = async (target) => {
+          const session = await newSession(target);
+          const send = session.send.getMockImplementation()!;
+          session.send.mockImplementation(async (method, input) => {
+            if (method === failedMethod) throw cause;
+            return send(method, input);
+          });
+          return session;
+        };
+        const error = yield* browser
+          .attachViewer(viewerInput(tabId, false))
+          .pipe(Effect.scoped, Effect.flip);
+        expect(error).toMatchObject({ _tag: "ServerBrowserLaunchError", cause });
+        expect(context.sessions.at(-1)!.detach).toHaveBeenCalledOnce();
+      }),
+    ).pipe(Effect.provide(layer)),
 );
 
 it.live(
