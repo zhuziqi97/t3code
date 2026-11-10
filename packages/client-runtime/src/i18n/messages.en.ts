@@ -767,6 +767,16 @@ export const en = {
     "Disconnect unpairs this environment and removes its Convene associations and MCP configuration. Local projects and sessions remain available.",
   "convene.connection.reconnect": "Reconnect",
   "convene.connection.disconnect": "Disconnect Convene",
+  "convene.connection.localDisconnect": "Unpair locally",
+  "convene.connection.localDisconnectDescription":
+    "Remove this environment's local pairing only. This does not revoke its client record or access on the previous platform. You can pair again afterward.",
+  "convene.connection.localDisconnectFailed": "Could not remove the local pairing. Try again.",
+  "convene.connection.disconnectFailed":
+    "Could not disconnect from the platform. Check its address and your connection, or unpair locally.",
+  "convene.connection.credentialRejected":
+    "The platform rejected this credential. Check the platform address, or unpair locally and connect again.",
+  "convene.connection.platformUnavailable":
+    "Could not reach the Convene platform. Check its address, your network, and the platform service, then try again.",
   "convene.connection.expired": "The pairing code expired. Start again to receive a new code.",
   "convene.connection.open": "Open Convene",
   "convene.connection.checking": "Checking approval…",

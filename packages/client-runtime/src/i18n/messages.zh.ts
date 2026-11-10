@@ -740,6 +740,16 @@ export const zh: Partial<Messages> = {
     "断开连接将取消此环境的配对，并移除其 Convene 关联与 MCP 配置。本地项目和会话仍然保留。",
   "convene.connection.reconnect": "重新连接",
   "convene.connection.disconnect": "断开 Convene 连接",
+  "convene.connection.localDisconnect": "仅解除本地配对",
+  "convene.connection.localDisconnectDescription":
+    "仅清除此环境的本地配对，不会撤销旧平台上的客户端记录或授权。解除后可以重新配对。",
+  "convene.connection.localDisconnectFailed": "无法清除本地配对，请重试。",
+  "convene.connection.disconnectFailed":
+    "无法在平台断开连接。请检查平台地址和网络，或仅解除本地配对。",
+  "convene.connection.credentialRejected":
+    "平台已拒绝当前凭据。请核对平台地址，或解除本地配对后重新连接。",
+  "convene.connection.platformUnavailable":
+    "无法连接 Convene 平台，请检查地址、网络或平台服务后重试。",
   "convene.connection.expired": "配对码已过期，请重新获取。",
   "convene.connection.open": "打开 Convene",
   "convene.connection.checking": "正在检查授权…",
