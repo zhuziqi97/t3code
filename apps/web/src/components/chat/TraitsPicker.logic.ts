@@ -58,9 +58,9 @@ export function getSelectedTraits(
   promptUltrathink: "none" | "prefix" | "body",
   modelOptions: ProviderOptions | null | undefined,
   allowPromptInjectedEffort: boolean,
-  planModeEnabled: boolean,
+  includePlanAgent = false,
 ) {
-  const caps = getProviderModelCapabilities(models, model, provider, planModeEnabled);
+  const caps = getProviderModelCapabilities(models, model, provider, includePlanAgent);
   const modelIsUnavailable =
     provider === "opencode" &&
     model != null &&
@@ -68,7 +68,7 @@ export function getSelectedTraits(
     !models.some((candidate) => candidate.slug === normalizeModelSlug(model, provider));
   const descriptors = modelIsUnavailable
     ? buildUnavailableModelOptionDescriptors(
-        planModeEnabled
+        includePlanAgent
           ? modelOptions
           : modelOptions?.filter((option) => option.id !== "agent" || option.value !== "plan"),
       )
@@ -140,7 +140,7 @@ export function getTraitsSectionVisibility(input: {
   promptUltrathink?: "none" | "prefix" | "body" | undefined;
   modelOptions?: ProviderOptions | null | undefined;
   allowPromptInjectedEffort?: boolean;
-  planModeEnabled: boolean;
+  includePlanAgent?: boolean | undefined;
 }) {
   const selected = getSelectedTraits(
     input.provider,
@@ -149,7 +149,7 @@ export function getTraitsSectionVisibility(input: {
     input.promptUltrathink ?? "none",
     input.modelOptions,
     input.allowPromptInjectedEffort ?? true,
-    input.planModeEnabled,
+    input.includePlanAgent ?? false,
   );
 
   const showEffort = selected.primarySelectDescriptor !== null;

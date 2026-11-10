@@ -187,7 +187,7 @@ describe("live provider-turn usage (#8144)", () => {
     expect(snapshot?.usedPercentage).toBeNull();
     expect(snapshot?.autoCompactThreshold).toBeNull();
     expect(snapshot?.compactsAutomatically).toBeNull();
-    expect(formatContextWindowCompactionMessage(null, snapshot?.autoCompactThreshold)).toBe(
+    expect(formatContextWindowCompactionMessage(snapshot?.autoCompactThreshold)).toBe(
       "Context compacts automatically when needed.",
     );
   });

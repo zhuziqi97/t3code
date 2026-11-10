@@ -9,6 +9,10 @@ import {
 } from "@t3tools/contracts";
 
 import "~/index.css";
+import { scopedThreadKey } from "@t3tools/client-runtime/environment";
+import { useDiffPanelStore } from "../diffPanelStore";
+import { browserMiniPlayerSource, usePreviewMiniPlayerStore } from "../previewMiniPlayerStore";
+import { useRightPanelStore } from "../rightPanelStore";
 
 import { act, render as renderTestUi, type Screen } from "../../test/render";
 
@@ -222,6 +226,29 @@ vi.mock("./useSettings", async (original) => ({
 }));
 
 import { useThreadActions } from "./useThreadActions";
+
+function resetThreadPanelState() {
+  useRightPanelStore.setState(useRightPanelStore.getInitialState(), true);
+  useDiffPanelStore.setState(useDiffPanelStore.getInitialState(), true);
+  usePreviewMiniPlayerStore.setState(usePreviewMiniPlayerStore.getInitialState(), true);
+}
+
+function seedThreadPanelState(ref: ScopedThreadRef) {
+  useRightPanelStore.getState().show(ref);
+  useDiffPanelStore.getState().selectGitScope(ref, "branch");
+  usePreviewMiniPlayerStore.getState().open(ref, browserMiniPlayerSource("tab"));
+}
+
+function threadPanelStatePresence(ref: ScopedThreadRef) {
+  const key = scopedThreadKey(ref);
+  return {
+    rightPanel: key in useRightPanelStore.getState().byThreadKey,
+    diffPanel: key in useDiffPanelStore.getState().byThreadKey,
+    miniPlayer: key in usePreviewMiniPlayerStore.getState().byThreadKey,
+  };
+}
+const panelStateKept = { rightPanel: true, diffPanel: true, miniPlayer: true };
+const panelStateCleared = { rightPanel: false, diffPanel: false, miniPlayer: false };
 
 const primary = EnvironmentId.make("primary");
 
@@ -438,9 +465,11 @@ async function setupLifecycle() {
   renderStack = stack;
   stack.defer(async () => {
     await act(() => hookRenderers.splice(0).forEach((renderer) => renderer.unmount()));
+    resetThreadPanelState();
     vi.unstubAllGlobals();
   });
 
+  resetThreadPanelState();
   state.serverConfig.shellThreadFamilies = false;
   state.familyLookupFails = false;
   state.familyThreads = [];

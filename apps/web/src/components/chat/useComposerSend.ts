@@ -265,8 +265,6 @@ export function useComposerSend(input: ComposerSendInput) {
     activeThreadKey,
     activeThreadBranch,
     activeProject,
-    activeProposedPlan,
-    activeProjectDefaultModelSelection,
     activeMessageCount,
     isServerThread,
     isLocalDraftThread,

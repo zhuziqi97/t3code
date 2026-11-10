@@ -68,7 +68,7 @@ function Harness({
         model="raw-model"
         promptUltrathink={readPromptUltrathink(prompt)}
         modelOptions={options}
-        planModeEnabled
+        includePlanAgent
         onModelOptionsChange={(next) => {
           state.save(next);
           setOptions(next);

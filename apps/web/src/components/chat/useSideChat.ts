@@ -1,5 +1,4 @@
 import { i18n, useTranslate } from "../../i18n";
-import type { ScopedThreadRef } from "@t3tools/contracts";
 import type { ModelSelection, RuntimeMode, ScopedThreadRef } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { deriveThreadTitleSeed } from "@t3tools/client-runtime/operations";
@@ -54,6 +53,7 @@ export function useSideChat(input: {
   const start = async (threadRef: ScopedThreadRef, prompt: string | undefined) => {
     const { runtimeMode, modelSelection } = input.readSettings();
     const targetThreadId = newThreadId();
+    const targetRef = scopeThreadRef(threadRef.environmentId, targetThreadId);
     const fork = await forkSideChat({
       environmentId: threadRef.environmentId,
       input: { sourceThreadId: threadRef.threadId, targetThreadId, title: t("chat.side.title") },
@@ -68,7 +68,7 @@ export function useSideChat(input: {
         environmentId: threadRef.environmentId,
         input: { threadId: targetThreadId, onlyIfUnused: true },
       });
-    if (!(await waitForThreadShell(scopeThreadRef(threadRef.environmentId, targetThreadId)))) {
+    if (!(await waitForThreadShell(targetRef))) {
       input.onError(i18n.t("chat.side.notReceived"));
       discard();
       return false;
