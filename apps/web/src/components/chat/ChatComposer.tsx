@@ -3276,7 +3276,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const predictionControls = (
     <ComposerPrediction
       view={prediction.view}
-      accept={acceptPrediction}
       dismiss={prediction.dismiss}
       hint={routeKind === "server" && prediction.hint}
       shortcut={shortcutLabelForCommand(keybindings, "chat.requestPrediction", {
