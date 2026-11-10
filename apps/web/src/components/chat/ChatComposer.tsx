@@ -874,6 +874,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     activeProjectId,
     threadRef: composerDraftTarget,
     threadModelSelection: activeThreadModelSelection,
+    reportedModelSelection,
     projectModelSelection: activeProjectDefaultModelSelection,
     promptInjectionState: getComposerPromptInjectionState(prompt),
     candidateInstanceIds: [
