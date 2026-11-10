@@ -1,5 +1,5 @@
 import { useTranslate } from "../../i18n";
-import { ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
+import { RuntimeMode } from "@t3tools/contracts";
 import { memo, useRef } from "react";
 import { EllipsisIcon } from "lucide-react";
 import { Menu, MenuPopup, MenuTrigger } from "../ui/menu";
@@ -43,24 +43,6 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
         <ComposerControlIcon icon={EllipsisIcon} size={size} />
       </MenuTrigger>
       <MenuPopup align="start" {...composerFloatingLayerProps}>
-        {props.showInteractionModeToggle ? (
-          <>
-            <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">
-              {t("chat.controls.mode")}
-            </div>
-            <MenuRadioGroup
-              value={props.interactionMode}
-              onValueChange={(value) => {
-                if (!value || value === props.interactionMode) return;
-                props.onToggleInteractionMode();
-              }}
-            >
-              <MenuRadioItem value="default">{t("chat.controls.chat")}</MenuRadioItem>
-              <MenuRadioItem value="plan">{t("chat.mode.plan")}</MenuRadioItem>
-            </MenuRadioGroup>
-            {props.showPermissions !== false ? <MenuDivider /> : null}
-          </>
-        ) : null}
         {props.showPermissions === false ? null : (
           <ComposerPermissionsSection
             runtimeMode={props.runtimeMode}

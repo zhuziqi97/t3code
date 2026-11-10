@@ -1,12 +1,7 @@
 import { useTranslate } from "../../i18n";
 import { runtimeModePresentation } from "./runtimeModeConfig";
 
-import type {
-  ModelSelection,
-  ProviderInstanceId,
-  ProviderInteractionMode,
-  RuntimeMode,
-} from "@t3tools/contracts";
+import type { ModelSelection, ProviderInstanceId, RuntimeMode } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import { type ComponentProps, memo, useId, useRef, useState } from "react";
 
@@ -17,6 +12,7 @@ import { ComposerControl, ComposerControlIcon } from "./ComposerControl";
 import { focusRequestedPermission, useComposerMenuProps } from "./composerEventScope";
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
 import { ContextWindowMeter } from "./ContextWindowMeter";
+import type { ContextWindowSnapshot } from "../../lib/contextWindow";
 import { resolveModelPickerSelectedModel } from "./ModelPickerContent";
 import { ProviderModelPicker } from "./ProviderModelPicker";
 import { runtimeModeConfig } from "./runtimeModeConfig";
@@ -51,48 +47,6 @@ export const ComposerFooterModeControls = memo(function ComposerFooterModeContro
     props.runtimeModeOptions.find((option) => option.mode === props.runtimeMode) ??
     supervisedRuntimeModeOption;
   const RuntimeModeIcon = runtimeModeOption.icon;
-  const interactionModeTooltip =
-    props.interactionMode === "plan" ? t("chat.mode.planHint") : t("chat.mode.defaultHint");
-
-  const interactionModeToggle = props.showInteractionModeToggle ? (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <ComposerControl
-            size={size}
-            className="shrink-0 whitespace-nowrap"
-            aria-pressed={props.interactionMode === "plan"}
-            type="button"
-            onClick={props.onToggleInteractionMode}
-            aria-label={interactionModeTooltip}
-          />
-        }
-      >
-        {props.interactionMode === "plan" ? (
-          <ComposerControlIcon
-            icon={PencilRulerIcon}
-            size={size}
-            className="text-current opacity-100"
-          />
-        ) : (
-          <ComposerControlIcon
-            icon={BotIcon}
-            size={size}
-            opticalSize={size === "xs" ? "default" : "large"}
-          />
-        )}
-        {/* The compacted row (xs) keeps this icon-only, like the other controls there. */}
-        <span
-          data-composer-control-label
-          className={size === "xs" ? "sr-only" : "sr-only sm:not-sr-only"}
-        >
-          {props.interactionMode === "plan" ? t("chat.mode.plan") : t("chat.mode.build")}
-        </span>
-      </TooltipTrigger>
-      <TooltipPopup side="top">{interactionModeTooltip}</TooltipPopup>
-    </Tooltip>
-  ) : null;
-
   // The chip opens the same Permissions toggle used in the effort menu.
   const runtimePresentation = runtimeModePresentation(runtimeModeOption.mode, t);
   const permissionsTooltip = t("chat.permissions.description", {
@@ -243,6 +197,12 @@ export function ComposerPermissionsSection(props: {
 
 export const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(props: {
   children?: React.ReactNode;
+  activeContextWindow: ContextWindowSnapshot | null;
+  reserveContextWindowMeter: boolean;
+  activeThreadModelDisplayName: string | null;
+  compactDisabled: boolean;
+  compactDisabledReason: string | null;
+  onCompactContext?: () => void;
   compact: boolean;
   canOperateThread: boolean;
   isPreparingWorktree: boolean;
