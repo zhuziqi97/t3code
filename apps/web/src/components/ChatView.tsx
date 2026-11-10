@@ -3604,6 +3604,7 @@ export default function ChatView(props: ChatViewProps) {
                                   <NativeChildWorkDialog
                                     environmentId={environmentId}
                                     threadId={threadId}
+                                    idle={providerSubagentStatus?.status === "idle"}
                                   />
                                 ) : null
                               }
