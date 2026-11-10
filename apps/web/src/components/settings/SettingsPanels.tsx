@@ -1250,6 +1250,19 @@ export function ChatSettingsPanel() {
           }
         />
         <SettingsRow
+          {...searchableSetting("legacy-context-window-indicator", t)}
+          description={t("legacy.context.description")}
+          control={
+            <Switch
+              checked={settings.contextWindowMeterEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ contextWindowMeterEnabled: Boolean(checked) })
+              }
+              aria-label={t("legacy.context.label")}
+            />
+          }
+        />
+        <SettingsRow
           {...searchableSetting("composer-rich-text", t)}
           description={t("general.richText.description")}
           resetAction={

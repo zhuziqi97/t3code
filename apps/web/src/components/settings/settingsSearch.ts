@@ -881,6 +881,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     ],
   },
   {
+    id: "legacy-context-window-indicator",
+    get title() {
+      return i18n.t("legacy.context.label");
+    },
+    to: "/settings/chat",
+    searchTerms: ["context window indicator token meter 上下文窗口 用量 指示器"],
+  },
+  {
     id: "composer-rich-text",
     get title() {
       return i18n.t("settings.search.composer-rich-text.title");
