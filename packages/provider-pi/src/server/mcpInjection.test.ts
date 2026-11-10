@@ -1,4 +1,3 @@
-import { materializePiT3McpExtension } from "./mcpInjection.ts";
 import { PI_T3_MCP_EXTENSION_FILENAME } from "./mcpExtensionSource.ts";
 import * as FileSystem from "effect/FileSystem";
 import * as Effect from "effect/Effect";
@@ -13,12 +12,10 @@ import {
   T3_PI_MCP_EXTENSION_PATH_ENV,
   T3_PI_MCP_SERVERS_ENV,
 } from "./mcpExtensionSource.ts";
-import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
 import * as NodePath from "effect/Path";
 import * as NodeFS from "effect/FileSystem";
-import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   buildPiRpcLaunch,
   materializePiT3McpExtension,
