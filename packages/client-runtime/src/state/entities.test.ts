@@ -22,7 +22,7 @@ import { canSnooze, effectiveSnoozed } from "./threadSettled.ts";
 const environmentId = EnvironmentId.make("environment-v2");
 
 describe("V2 client presentation", () => {
-  it("an async question blocks snooze and wakes a snoozed thread", () => {
+  it("an async question allows snooze and wakes an older snooze", () => {
     const runId = RunId.make("run-async-question");
     const running = {
       ...v2ThreadShell,

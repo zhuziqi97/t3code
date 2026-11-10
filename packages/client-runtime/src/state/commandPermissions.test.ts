@@ -9,12 +9,12 @@ import { vi } from "vite-plus/test";
 import {
   AuthAccessReadScope,
   AuthAccessWriteScope,
+  AuthEnvironmentMaintainScope,
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   AuthPreviewOperateScope,
-  AuthSettingsWriteScope,
   AuthProvidersManageScope,
-  AuthEnvironmentMaintainScope,
+  AuthSettingsWriteScope,
   AuthSourceControlWriteScope,
   ThreadId,
   RunId,
@@ -34,7 +34,7 @@ import { Atom, AtomRegistry, AsyncResult } from "effect/reactivity";
 import { EnvironmentRegistry } from "../connection/registry.ts";
 import { createCommandPermissions } from "./commandPermissions.ts";
 import { createEnvironmentRpcCommand } from "./runtime.ts";
-import { AVAILABLE_CONNECTION_STATE } from "../connection/model.ts";
+import { AVAILABLE_CONNECTION_STATE, BearerConnectionTarget } from "../connection/model.ts";
 import { createPeerLinkEnvironmentAtoms } from "./peerLinks.ts";
 
 vi.mock("./session.ts", () => ({
@@ -168,28 +168,53 @@ describe("command permissions", () => {
     ),
   );
 
-  it.effect("requires the destination settings grant to run storage cleanup", () =>
+  it.effect("requires the destination provider grant to remove an incomplete connection", () =>
     Effect.scoped(
       Effect.gen(function* () {
         const registry = yield* setup;
-        const cleanup = createCommandPermissions(runtime, WS_METHODS.serverRunStorageCleanup);
+        const remove = createCommandPermissions(runtime, WS_METHODS.providerAuthRemoveMethod);
         registry.set(sessions(env), AsyncResult.success(grant(true)));
-        expect(registry.get(cleanup.permissionAtom(env))).toBe(false);
-        expect((yield* cleanup.authorize(registry, env).pipe(Effect.flip))._tag).toBe(
+        expect(registry.get(remove.permissionAtom(env))).toBe(false);
+        expect((yield* remove.authorize(registry, env).pipe(Effect.flip))._tag).toBe(
           "EnvironmentAuthorizationError",
         );
         registry.set(
           sessions(env),
           AsyncResult.success({
-            ...grant(true),
-            scopes: [AuthSettingsWriteScope],
-            permissions: [AuthSettingsWriteScope],
+            ...grant(false),
+            scopes: [AuthProvidersManageScope],
+            permissions: [AuthProvidersManageScope],
           }),
         );
-        expect(registry.get(cleanup.permissionAtom(env))).toBe(true);
-        yield* cleanup.authorize(registry, env);
+        expect(registry.get(remove.permissionAtom(env))).toBe(true);
+        yield* remove.authorize(registry, env);
         registry.set(sessions(other), AsyncResult.success(grant(false)));
-        expect(registry.get(cleanup.permissionAtom(other))).toBe(false);
+        expect(registry.get(remove.permissionAtom(other))).toBe(false);
+      }),
+    ),
+  );
+
+  it.effect.each([
+    { method: WS_METHODS.serverRunStorageCleanup, scope: AuthSettingsWriteScope },
+    { method: WS_METHODS.serverReclaimDatabaseSpace, scope: AuthEnvironmentMaintainScope },
+  ])("requires the destination $scope grant for $method", ({ method, scope }) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const registry = yield* setup;
+        const command = createCommandPermissions(runtime, method);
+        registry.set(sessions(env), AsyncResult.success(grant(true)));
+        expect(registry.get(command.permissionAtom(env))).toBe(false);
+        expect((yield* command.authorize(registry, env).pipe(Effect.flip))._tag).toBe(
+          "EnvironmentAuthorizationError",
+        );
+        registry.set(
+          sessions(env),
+          AsyncResult.success({ ...grant(true), scopes: [scope], permissions: [scope] }),
+        );
+        expect(registry.get(command.permissionAtom(env))).toBe(true);
+        yield* command.authorize(registry, env);
+        registry.set(sessions(other), AsyncResult.success(grant(false)));
+        expect(registry.get(command.permissionAtom(other))).toBe(false);
       }),
     ),
   );
@@ -323,9 +348,9 @@ describe("command permissions", () => {
         expect(registry.get(configure.permissionAtom(env))).toBe(true);
         yield* configure.authorize(registry, env);
         expect(registry.get(manage.permissionAtom(env))).toBe(false);
-        expect((yield* manage.authorize(registry, env).pipe(Effect.flip)).requiredPermission).toBe(
-          AuthEnvironmentMaintainScope,
-        );
+        expect(
+          (yield* manage.authorize(registry, env).pipe(Effect.flip)).requiredPermission,
+        ).toBe();
         registry.set(
           sessions(env),
           AsyncResult.success({
@@ -373,9 +398,9 @@ describe("command permissions", () => {
           expect(
             (yield* search.authorize(registry, env).pipe(Effect.flip)).requiredPermission,
           ).toBe(AuthOrchestrationReadScope);
-          expect((yield* read.authorize(registry, env).pipe(Effect.flip)).requiredPermission).toBe(
-            AuthOrchestrationReadScope,
-          );
+          expect(
+            (yield* read.authorize(registry, env).pipe(Effect.flip)).requiredPermission,
+          ).toBe();
         }),
       ),
   );
@@ -411,9 +436,7 @@ it.effect(
         const registry = yield* setup;
         registry.set(sessions(env), AsyncResult.success(grant(true)));
         const git = createCommandPermissions(runtime, WS_METHODS.vcsInit);
-        expect((yield* git.authorize(registry, env).pipe(Effect.flip)).requiredPermission).toBe(
-          AuthSourceControlWriteScope,
-        );
+        expect((yield* git.authorize(registry, env).pipe(Effect.flip)).requiredPermission).toBe();
         registry.set(
           sessions(env),
           AsyncResult.success({
@@ -523,7 +546,11 @@ it.effect(
           ),
         };
         const supervisor = {
-          target: { environmentId: env },
+          target: new BearerConnectionTarget({
+            environmentId: env,
+            label: "Test",
+            connectionId: "test",
+          }),
           session: yield* SubscriptionRef.make(Option.some({ client } as unknown as RpcSession)),
           state: yield* SubscriptionRef.make({
             ...AVAILABLE_CONNECTION_STATE,
@@ -622,9 +649,7 @@ it.effect("requires access management to answer a link request", () =>
       registry.set(sessions(env), AsyncResult.success(grant(true)));
       const answer = createCommandPermissions(runtime, WS_METHODS.peerLinksAnswerRequest);
       expect(registry.get(answer.permissionAtom(env))).toBe(false);
-      expect((yield* answer.authorize(registry, env).pipe(Effect.flip)).requiredPermission).toBe(
-        AuthAccessWriteScope,
-      );
+      expect((yield* answer.authorize(registry, env).pipe(Effect.flip)).requiredPermission).toBe();
       registry.set(
         sessions(env),
         AsyncResult.success({

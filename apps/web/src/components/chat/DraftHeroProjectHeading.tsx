@@ -49,7 +49,7 @@ export function DraftHeroProjectHeading({
         </span>
       </span>
       <h1 className="flex w-full flex-col items-center justify-center gap-2 text-center font-normal text-2xl text-foreground tracking-tight sm:text-3xl lg:group-data-[inline=true]/draft-hero:flex-row">
-        <span className="max-w-full lg:group-data-[inline=true]/draft-hero:shrink-0">
+        <span className="max-w-full lg:group-data-[inline=true]/draft-hero:shrink-0 [@media(max-height:28rem)]:sr-only">
           <span className="lg:group-data-[inline=true]/draft-hero:hidden">
             {t("chat.hero.buildQuestion")}
           </span>
@@ -59,7 +59,7 @@ export function DraftHeroProjectHeading({
         </span>
         <span className="flex min-w-0 max-w-full items-baseline justify-center text-base tracking-normal lg:group-data-[inline=true]/draft-hero:text-3xl lg:group-data-[inline=true]/draft-hero:tracking-tight">
           <span className="min-w-0">{children}</span>
-          <span className="hidden shrink-0 lg:group-data-[inline=true]/draft-hero:inline">
+          <span className="hidden shrink-0 lg:group-data-[inline=true]/draft-hero:inline [@media(max-height:28rem)]:hidden!">
             {t("chat.hero.projectSuffix")}
           </span>
         </span>

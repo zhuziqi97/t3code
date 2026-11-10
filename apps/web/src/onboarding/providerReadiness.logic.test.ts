@@ -9,7 +9,6 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   getOnboardingProviderState,
   resolveOnboardingProviderLoginCommand,
-  selectOnboardingProvidersByDriver,
 } from "./providerReadiness.logic";
 
 const readyCodex: ServerProvider = {
@@ -90,49 +89,6 @@ describe("getOnboardingProviderState", () => {
 
   it("waits for a provider snapshot before offering an action", () => {
     expect(getOnboardingProviderState(undefined)).toBe("checking");
-  });
-});
-
-describe("selectOnboardingProvidersByDriver", () => {
-  it("prefers a ready instance with unknown authentication to an unauthenticated instance", () => {
-    const signedOutCodex: ServerProvider = {
-      ...readyCodex,
-      instanceId: ProviderInstanceId.make("codex_work"),
-      status: "error",
-      auth: { status: "unauthenticated" },
-    };
-
-    expect(selectOnboardingProvidersByDriver([signedOutCodex, readyCodex]).get("codex")).toBe(
-      readyCodex,
-    );
-  });
-
-  it("prefers a provider with an actionable sign-in over a failed provider", () => {
-    const failedCodex: ServerProvider = { ...readyCodex, status: "error" };
-    const signedOutCodex: ServerProvider = {
-      ...readyCodex,
-      instanceId: ProviderInstanceId.make("codex_work"),
-      status: "error",
-      auth: { status: "unauthenticated" },
-    };
-
-    expect(selectOnboardingProvidersByDriver([failedCodex, signedOutCodex]).get("codex")).toBe(
-      signedOutCodex,
-    );
-  });
-
-  it("prefers installed providers over missing or disabled instances", () => {
-    const disabledCodex: ServerProvider = { ...readyCodex, enabled: false };
-    const missingCodex: ServerProvider = {
-      ...readyCodex,
-      instanceId: ProviderInstanceId.make("codex_work"),
-      installed: false,
-      status: "error",
-    };
-
-    expect(
-      selectOnboardingProvidersByDriver([disabledCodex, missingCodex, readyCodex]).get("codex"),
-    ).toBe(readyCodex);
   });
 });
 

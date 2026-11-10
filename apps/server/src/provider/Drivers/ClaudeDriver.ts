@@ -171,6 +171,32 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv, Path.
       continuationGroupKey,
     });
 
+    const scopedLimitNames = yield* makeClaudeScopedLimitNames;
+    const orchestrationAdapter = yield* createClaudeAdapterV2(
+      {
+        instanceId,
+        displayName,
+        accentColor,
+        environment,
+        enabled,
+        config,
+      },
+      {
+        scopedLimitNames,
+        onUsageLimits: (update) => snapshot.applyUsageLimits(update),
+        modelCatalog,
+      },
+    ).pipe(
+      Effect.mapError(
+        (cause) =>
+          new ProviderDriverError({
+            driver: DRIVER_KIND,
+            instanceId,
+            detail: "Failed to build Claude orchestration adapter.",
+            cause,
+          }),
+      ),
+    );
     // A transient miss may reuse this workspace's last account once. Usage keeps its age.
     const lastGoodCapabilities = yield* Ref.make<ReadonlyMap<string, ClaudeCapabilitiesProbe>>(
       new Map(),
