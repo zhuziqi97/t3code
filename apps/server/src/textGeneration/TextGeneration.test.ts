@@ -107,16 +107,18 @@ describe("TextGeneration.make", () => {
         }),
       );
       const generation = yield* TextGeneration.make.pipe(
-        Effect.provide(ServerSettings.layerTest()),
-        Effect.provide(layerTextGenerators),
-        Effect.provideService(
-          ProviderInstanceRegistry.ProviderInstanceRegistry,
-          makeStubRegistry([instance]),
-        ),
         Effect.provide(
-          Layer.mock(SourceControlProviderRegistry.SourceControlProviderRegistry)({
-            resolveLink: () => Effect.die("Supplied context must not be fetched again"),
-          }),
+          Layer.mergeAll(
+            ServerSettings.layerTest(),
+            layerTextGenerators,
+            Layer.succeed(
+              ProviderInstanceRegistry.ProviderInstanceRegistry,
+              makeStubRegistry([instance]),
+            ),
+            Layer.mock(SourceControlProviderRegistry.SourceControlProviderRegistry)({
+              resolveLink: () => Effect.die("Supplied context must not be fetched again"),
+            }),
+          ),
         ),
       );
       yield* generation.generateThreadTitle({
@@ -153,16 +155,18 @@ describe("TextGeneration.make", () => {
       );
 
       const tg = yield* TextGeneration.make.pipe(
-        Effect.provide(ServerSettings.layerTest()),
-        Effect.provide(layerTextGenerators),
-        Effect.provideService(
-          ProviderInstanceRegistry.ProviderInstanceRegistry,
-          makeStubRegistry([personal, work]),
-        ),
         Effect.provide(
-          Layer.mock(SourceControlProviderRegistry.SourceControlProviderRegistry)({
-            resolveLink: () => Effect.die("No link lookup expected"),
-          }),
+          Layer.mergeAll(
+            ServerSettings.layerTest(),
+            layerTextGenerators,
+            Layer.succeed(
+              ProviderInstanceRegistry.ProviderInstanceRegistry,
+              makeStubRegistry([personal, work]),
+            ),
+            Layer.mock(SourceControlProviderRegistry.SourceControlProviderRegistry)({
+              resolveLink: () => Effect.die("No link lookup expected"),
+            }),
+          ),
         ),
       );
 
@@ -180,16 +184,15 @@ describe("TextGeneration.make", () => {
   it.effect("fails with TextGenerationError when the instance is unknown", () =>
     Effect.gen(function* () {
       const tg = yield* TextGeneration.make.pipe(
-        Effect.provide(ServerSettings.layerTest()),
-        Effect.provide(layerTextGenerators),
-        Effect.provideService(
-          ProviderInstanceRegistry.ProviderInstanceRegistry,
-          makeStubRegistry([]),
-        ),
         Effect.provide(
-          Layer.mock(SourceControlProviderRegistry.SourceControlProviderRegistry)({
-            resolveLink: () => Effect.die("No link lookup expected"),
-          }),
+          Layer.mergeAll(
+            ServerSettings.layerTest(),
+            layerTextGenerators,
+            Layer.succeed(ProviderInstanceRegistry.ProviderInstanceRegistry, makeStubRegistry([])),
+            Layer.mock(SourceControlProviderRegistry.SourceControlProviderRegistry)({
+              resolveLink: () => Effect.die("No link lookup expected"),
+            }),
+          ),
         ),
       );
 
