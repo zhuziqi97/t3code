@@ -137,7 +137,6 @@ import { useClientSettings } from "../hooks/useSettings";
 import { chatMarkdownClipboardPayload } from "../markdown-clipboard";
 import {
   markdownUrlTransform,
-  isLocalEditorFileHref,
   resolveInlineCodeFileLinkMeta,
   resolveMarkdownFileLinkMeta,
   rewriteMarkdownFileUriHref,
@@ -233,6 +232,7 @@ interface ChatMarkdownProps {
   threadRef?: ScopedThreadRef | undefined;
   pullRequestPanelRef?: ScopedThreadRef | undefined;
   environmentId?: EnvironmentId | undefined;
+  onConveneResourceOpen?: (() => void) | undefined;
   onTaskListChange?: ((input: { markerOffset: number; checked: boolean }) => void) | undefined;
   isStreaming?: boolean;
   skills?: ReadonlyArray<ServerProviderSkill>;
@@ -479,6 +479,7 @@ function useChatMarkdownState({
   threadRef,
   pullRequestPanelRef,
   environmentId: explicitEnvironmentId,
+  onConveneResourceOpen,
   onTaskListChange,
   isStreaming = false,
   skills = EMPTY_MARKDOWN_SKILLS,
@@ -915,6 +916,7 @@ function useChatMarkdownState({
     pullRequestsEnabled,
     skills,
     threadRef,
+    onConveneResourceOpen,
     updateThreadPullRequestLink,
   };
   return {
@@ -1062,6 +1064,7 @@ const CHAT_MARKDOWN_COMPONENTS = {
       imageBaseDir,
       markdownFileLinkMetaByHref,
       threadRef,
+      onConveneResourceOpen,
       openMarkdownMedia,
       openChangeRequestLink,
       openDeferredMarkdownLink,
@@ -1086,7 +1089,10 @@ const CHAT_MARKDOWN_COMPONENTS = {
           aria-disabled={!threadRef}
           onClick={(event) => {
             event.preventDefault();
-            if (threadRef) useConveneResourceStore.getState().open(threadRef, href);
+            if (threadRef) {
+              useConveneResourceStore.getState().open(threadRef, href);
+              onConveneResourceOpen?.();
+            }
           }}
         >
           {children}

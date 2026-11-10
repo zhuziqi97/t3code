@@ -271,6 +271,7 @@ export function AttachmentFilePreview(props: {
           text={maskMarkdownFrontmatter(content.text)}
           cwd={undefined}
           threadRef={props.threadRef}
+          onConveneResourceOpen={props.onClose}
           environmentId={
             props.threadRef?.environmentId ?? props.environmentId ?? props.asset?.environmentId
           }
