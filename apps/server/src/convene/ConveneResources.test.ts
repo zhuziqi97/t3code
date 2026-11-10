@@ -321,7 +321,7 @@ it.effect(
             },
           ]);
           const document = {
-            status: "ready",
+            status: "ready" as const,
             resource_uri: "convene://docs/a/b/c/notes",
             web_path: "/p/a/b/m/c/docs/notes",
             document: {
