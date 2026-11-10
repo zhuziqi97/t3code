@@ -4,6 +4,7 @@ import {
   getModelSelectionStringOptionValue,
   getProviderOptionDescriptors,
   resolvePromptInjectedEffort,
+  withLegacyUltracodeEffort,
 } from "@t3tools/shared/model";
 
 import {
@@ -36,7 +37,11 @@ export function compileClaudeModelSelection(
   });
   const supportsBoolean = (id: string) =>
     descriptors.some((descriptor) => descriptor.type === "boolean" && descriptor.id === id);
-  const rawEffort = getModelSelectionStringOptionValue(selection, "effort");
+  const options = withLegacyUltracodeEffort(capabilities.optionDescriptors, selection.options);
+  const rawEffort = getModelSelectionStringOptionValue(
+    { ...selection, ...(options ? { options } : {}) },
+    "effort",
+  );
   const promptEffort = resolvePromptInjectedEffort(capabilities, rawEffort) ?? undefined;
   const resolvedEffort =
     (promptEffort === undefined ? rawEffort : undefined) ??
@@ -44,12 +49,10 @@ export function compileClaudeModelSelection(
       ? undefined
       : resolveClaudeCatalogEffort(catalog, selection.model, rawEffort));
   const effort = normalizeClaudeCatalogEffort(catalog, resolvedEffort, selection.model);
-  const fastMode = supportsBoolean("fastMode")
-    ? (getModelSelectionBooleanOptionValue(selection, "fastMode") ?? false)
-    : undefined;
-  const thinking = supportsBoolean("thinking")
-    ? getModelSelectionBooleanOptionValue(selection, "thinking")
-    : undefined;
+  const fastMode =
+    getModelSelectionBooleanOptionValue(selection, "fastMode") ??
+    (selection.model !== null && supportsBoolean("fastMode") ? false : undefined);
+  const thinking = getModelSelectionBooleanOptionValue(selection, "thinking");
   const ultracode = descriptors.find((descriptor) => descriptor.id === "ultracode")?.currentValue;
   const settings = {
     ...(typeof thinking === "boolean" ? { alwaysThinkingEnabled: thinking } : {}),

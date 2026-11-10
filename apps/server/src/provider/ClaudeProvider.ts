@@ -21,7 +21,6 @@ import {
   query as claudeQuery,
   type ModelInfo as ClaudeModelInfo,
   type Options as ClaudeQueryOptions,
-  type ModelInfo,
   type SlashCommand as ClaudeSlashCommand,
   type SDKControlGetUsageResponse,
   type SDKUserMessage,
@@ -52,7 +51,6 @@ import {
   BUNDLED_CLAUDE_MODEL_CATALOG,
   withClaudeReportedModels,
   type ClaudeModelCatalog,
-  claudeReportedModels,
   formatClaudeVersionUpgradeMessage,
   resolveClaudeModelsForVersion,
   resolveClaudeUpdateRequiredModels,
@@ -361,7 +359,7 @@ function claudeGatewayDiscoveryGraceMs(environment: Readonly<Record<string, unkn
 
 class ClaudeCapabilitiesProbeSdkError extends Schema.TaggedError<ClaudeCapabilitiesProbeSdkError>()(
   "ClaudeCapabilitiesProbeSdkError",
-  { operation: Schema.Literals(["initialize", "usage"]), cause: Schema.Defect() },
+  { operation: Schema.Literals(["initialize", "usage", "context"]), cause: Schema.Defect() },
 ) {
   override get message(): string {
     return `Claude capability probe ${this.operation} failed.`;
@@ -381,7 +379,6 @@ const probeClaudeCapabilities = (
   });
   return Effect.gen(function* () {
     const claudeEnvironment = yield* makeClaudeEnvironment(claudeSettings, environment);
-    discoveryGraceMs = claudeGatewayDiscoveryGraceMs(claudeEnvironment);
     const executablePath = yield* resolveClaudeSdkExecutablePath(
       claudeSettings.binaryPath,
       claudeEnvironment,
@@ -441,9 +438,10 @@ const probeClaudeCapabilities = (
           slashCommands: parseClaudeInitializationCommands(init.commands),
         });
         // Ask the CLI for its effective model without sending a prompt or token-count request.
-        const context = yield* Effect.tryPromise(() =>
-          q.getContextUsage({ detail: "summary" }),
-        ).pipe(Effect.timeout(DEFAULT_TIMEOUT_MS), Effect.result);
+        const context = yield* Effect.tryPromise({
+          try: () => q.getContextUsage({ detail: "summary" }),
+          catch: (cause) => new ClaudeCapabilitiesProbeSdkError({ operation: "context", cause }),
+        }).pipe(Effect.timeout(DEFAULT_TIMEOUT_MS), Effect.result);
         const defaultModel = Result.isSuccess(context) ? context.success.model?.trim() : undefined;
         // Usage has its own deadline so a slow optional request cannot discard initialization.
         // Only the rate limits are read, so skip the local transcript scan that fills

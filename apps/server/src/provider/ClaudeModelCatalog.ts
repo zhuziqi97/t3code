@@ -156,7 +156,7 @@ export function scopeClaudeModelCatalog(
         (entry) => entry.slug === model.slug,
       )?.contextWindowTokens;
       return {
-        model,
+        model: { ...model, capabilities: withUltracodeToggle(model.capabilities ?? null) },
         runtime: previous?.runtime ?? {},
         compatibility: previous?.compatibility ?? {},
         ...(customContextWindowTokens === undefined ? {} : { customContextWindowTokens }),

@@ -7,7 +7,6 @@ import {
   scopeClaudeModelCatalog,
 } from "./provider/ClaudeModelCatalog.ts";
 import { compileClaudeModelSelection } from "./claudeModelOptions.ts";
-import {} from "./provider/ClaudeModelCatalog.ts";
 
 const selection = (
   model: string | null,

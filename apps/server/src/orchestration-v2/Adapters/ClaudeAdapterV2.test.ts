@@ -95,10 +95,7 @@ import { WorktreeToolkit } from "../../mcp/toolkits/worktree/tools.ts";
 import { ThreadToolkit } from "../../mcp/toolkits/thread/tools.ts";
 import { OrchestratorToolkit } from "../../mcp/toolkits/orchestrator/tools.ts";
 import { ClaudeExecutableFileCheck } from "../../provider/Drivers/ClaudeExecutable.ts";
-import {
-  BUNDLED_CLAUDE_MODEL_CATALOG,
-  type ClaudeModelCatalog,
-} from "../../provider/ClaudeModelCatalog.ts";
+import { BUNDLED_CLAUDE_MODEL_CATALOG } from "../../provider/ClaudeModelCatalog.ts";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import type * as ProviderContinuationRequests from "@t3tools/provider-core/server/ProviderContinuationRequests";
@@ -3237,7 +3234,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
     readonly subagentLaunchToolUseId?: string;
     readonly nativeSessionId?: string;
     readonly settings?: ClaudeSettings;
-    readonly modelCatalog?: Effect.Effect<ClaudeModelCatalog>;
+    readonly modelCatalog?: NonNullable<ClaudeAdapterV2.ClaudeAdapterV2Options["modelCatalog"]>;
     readonly freshQueueOnReopen?: boolean;
     readonly forkSession?: ClaudeAdapterV2.ClaudeAgentSdkQueryRunnerShape["forkSession"];
     readonly allocateSessionId?: Effect.Effect<string>;
@@ -15361,24 +15358,25 @@ describe("ClaudeAdapterV2 background wake turns", () => {
       source: "downloaded catalog",
       model: "claude-sonnet-5",
       harness: {
-        modelCatalog: Effect.succeed({
-          models: BUNDLED_CLAUDE_MODEL_CATALOG.models.map((entry) =>
-            entry.model.slug === "claude-sonnet-5"
-              ? {
-                  ...entry,
-                  model: {
-                    ...entry.model,
-                    capabilities: {
-                      optionDescriptors: [
-                        ...(entry.model.capabilities?.optionDescriptors ?? []),
-                        { id: "ultracode", label: "Ultracode", type: "boolean" as const },
-                      ],
+        modelCatalog: () =>
+          Effect.succeed({
+            models: BUNDLED_CLAUDE_MODEL_CATALOG.models.map((entry) =>
+              entry.model.slug === "claude-sonnet-5"
+                ? {
+                    ...entry,
+                    model: {
+                      ...entry.model,
+                      capabilities: {
+                        optionDescriptors: [
+                          ...(entry.model.capabilities?.optionDescriptors ?? []),
+                          { id: "ultracode", label: "Ultracode", type: "boolean" as const },
+                        ],
+                      },
                     },
-                  },
-                }
-              : entry,
-          ),
-        }),
+                  }
+                : entry,
+            ),
+          }),
       },
     },
   ])(

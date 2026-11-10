@@ -18,11 +18,6 @@ import {
 import {
   BUNDLED_CLAUDE_MODEL_CATALOG,
   type ClaudeModelCatalog,
-  getClaudeCatalogModelCapabilities,
-  normalizeClaudeCatalogEffort,
-  resolveClaudeCatalogApiModelId,
-  resolveClaudeCatalogEffort,
-  resolveClaudeModelSlug,
   scopeClaudeModelCatalog,
 } from "../provider/ClaudeModelCatalog.ts";
 import {
@@ -147,45 +142,6 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
       toJsonSchemaObject(outputSchemaJson),
       "Failed to encode structured output schema.",
     );
-    const caps = getClaudeCatalogModelCapabilities(catalog, resolvedModelSelection.model);
-    const descriptors = getProviderOptionDescriptors({
-      caps,
-      selections: resolvedModelSelection.options,
-    });
-    const findDescriptor = (id: string) => descriptors.find((descriptor) => descriptor.id === id);
-    const rawEffortSelection = getModelSelectionStringOptionValue(resolvedModelSelection, "effort");
-    const resolvedEffort = resolveClaudeCatalogEffort(
-      catalog,
-      resolvedModelSelection.model,
-      rawEffortSelection,
-    );
-    const cliEffort = normalizeClaudeCatalogEffort(
-      catalog,
-      resolvedEffort,
-      resolvedModelSelection.model,
-    );
-    const ultracode = findDescriptor("ultracode")?.currentValue;
-    const thinkingDescriptor = findDescriptor("thinking");
-    const fastModeDescriptor = findDescriptor("fastMode");
-    // Only a chosen value; otherwise Claude Code's own default applies, as in chat turns.
-    const thinking =
-      thinkingDescriptor?.type === "boolean"
-        ? getModelSelectionBooleanOptionValue(resolvedModelSelection, "thinking")
-        : undefined;
-    const fastMode =
-      fastModeDescriptor?.type === "boolean" ? fastModeDescriptor.currentValue : undefined;
-    const settings = {
-      disableAllHooks: true,
-      ...(typeof thinking === "boolean" ? { alwaysThinkingEnabled: thinking } : {}),
-      ...(fastMode ? { fastMode: true } : {}),
-      ...(typeof ultracode === "boolean" ? { ultracode } : {}),
-    };
-    const settingsJson = yield* encodeJsonForOperation(
-      operation,
-      settings,
-      "Failed to encode Claude CLI settings.",
-    );
-
     const runClaudeCommand = Effect.fn("runClaudeJson.runClaudeCommand")(function* (
       noSessionPersistence: boolean,
     ) {
@@ -203,13 +159,11 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
         yield* modelCatalog(workingDirectory),
         claudeSettings.customModels,
       );
-      const compiled = yield* Effect.try(() =>
-        compileClaudeModelSelection(modelSelection, catalog),
-      ).pipe(
-        Effect.mapError((cause) =>
+      const compiled = yield* Effect.try({
+        try: () => compileClaudeModelSelection(modelSelection, catalog),
+        catch: (cause) =>
           normalizeCliError("claude", operation, cause, "Invalid Claude model configuration"),
-        ),
-      );
+      });
       const cliEffort = compiled.effort;
       const settings = { disableAllHooks: true, ...compiled.settings };
       const settingsJson = yield* encodeJsonForOperation(

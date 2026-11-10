@@ -7,6 +7,7 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
+import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -233,9 +234,10 @@ const make = Effect.gen(function* () {
                 if (cached?.token === context.token && now - cached.at < 300_000) {
                   config = cached.config;
                 } else {
-                  const claims = yield* Effect.try(() => decodeJwt(context.token)).pipe(
-                    Effect.flatMap(accountClaims),
-                  );
+                  const claims = yield* Effect.try({
+                    try: () => decodeJwt(context.token),
+                    catch: (cause) => new Cause.UnknownError(cause),
+                  }).pipe(Effect.flatMap(accountClaims));
                   const auth = claims["https://api.openai.com/auth"];
                   const accountId = auth.chatgpt_account_id ?? auth.account_id;
                   if (!accountId) return result("unsupported");

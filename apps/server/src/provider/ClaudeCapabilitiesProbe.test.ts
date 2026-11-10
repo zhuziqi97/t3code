@@ -13,17 +13,11 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
-import { probeClaudeCapabilities, probeClaudeWorkspaceSnapshot } from "./ClaudeProvider.ts";
 import { COMPACT_SLASH_COMMAND } from "@t3tools/provider-core/server/snapshotProbe";
 // @effect-diagnostics nodeBuiltinImport:off - cleanup uses Node's retrying rm, which the FileSystem service does not expose.
 import { vi } from "vite-plus/test";
-import * as ClaudeSdk from "@anthropic-ai/claude-agent-sdk";
 import { assert, it } from "@effect/vitest";
 import * as HostProcess from "@t3tools/shared/HostProcess";
-import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
-import * as Schema from "effect/Schema";
-import * as TestClock from "effect/testing/TestClock";
 
 import {
   buildClaudeCapabilitiesProbeQueryOptions,
@@ -525,7 +519,7 @@ it.effect("keeps the probe subprocess alive while gateway model discovery can fi
       }),
     );
     const capabilities = yield* probeClaudeCapabilities(
-      yield* decodeClaudeSettings({ binaryPath: "claude" }),
+      decodeClaudeSettings({ binaryPath: "claude" }),
       { PATH: (yield* HostProcess.Environment).PATH, CLAUDE_CONFIG_DIR: configDir },
     );
     assert.deepEqual(
