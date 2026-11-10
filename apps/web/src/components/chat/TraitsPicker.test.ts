@@ -434,7 +434,7 @@ it("cycles an arbitrary thought_level option using its native IDs", () => {
     ),
     category: "thought_level",
   };
-  const step = getReasoningTraitStep({
+  const input = {
     provider: ProviderDriverKind.make("acpRegistry"),
     instanceId: ProviderInstanceId.make("local"),
     model: "graded",
@@ -450,12 +450,27 @@ it("cycles an arbitrary thought_level option using its native IDs", () => {
     reportedModelSelection: null,
     prompt: "keep prompt",
     includePlanAgent: true,
-    direction: 1,
-  });
+    direction: 1 as const,
+  };
+  const step = getReasoningTraitStep(input);
   expect(step).toEqual({
     prompt: "keep prompt",
     modelOptions: [{ id: "vendor/depth", value: "high" }],
   });
+  const nativeDefault = {
+    ...input,
+    model: "",
+    reportedModelSelection: { instanceId: input.instanceId, model: "graded" },
+  };
+  expect(getReasoningTraitStep(nativeDefault)).toEqual(step);
+  expect(nativeDefault.model).toBe("");
+  expect(
+    getReasoningTraitStep({
+      ...nativeDefault,
+      reportedModelSelection: { instanceId: ProviderInstanceId.make("other"), model: "graded" },
+    }),
+  ).toBeNull();
+  expect(getReasoningTraitStep({ ...nativeDefault, model: "other-model" })).toBeNull();
 });
 
 it("localizes service tier and boolean trigger values while preserving classified strength labels and raw selections", () => {

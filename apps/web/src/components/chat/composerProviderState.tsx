@@ -16,7 +16,7 @@ import {
 } from "@t3tools/shared/model";
 
 import type { DraftId } from "../../composerDraftStore";
-import { getProviderModelCapabilities } from "../../providerModels";
+import { getProviderModelCapabilities, resolveModelForCapabilities } from "../../providerModels";
 import {
   getReasoningTraitStep,
   type PromptUltrathink,
@@ -25,6 +25,8 @@ import {
 
 type ComposerProviderStateInput = {
   provider: ProviderDriverKind;
+  instanceId?: ProviderInstanceId | undefined;
+  reportedModelSelection?: ModelSelection | null | undefined;
   model: string | null;
   models: ReadonlyArray<ServerProviderModel>;
   promptInjectionState?: ComposerPromptInjectionState;
@@ -106,14 +108,8 @@ function resolveComposerOptionSelections(
 }
 
 export function getComposerProviderState(input: ComposerProviderStateInput): ComposerProviderState {
-  const {
-    provider,
-    model,
-    models,
-    modelOptions,
-    promptInjectionState = "none",
-    includePlanAgent,
-  } = input;
+  const { provider, models, modelOptions, promptInjectionState = "none", includePlanAgent } = input;
+  const model = resolveModelForCapabilities(input);
   if (provider === "opencode") {
     const normalizedModel = normalizeModelSlug(model, provider);
     const modelIsInCatalog = models.some((candidate) => candidate.slug === normalizedModel);
@@ -184,7 +180,7 @@ export function getComposerReasoningStep(input: {
   const { prompt, cursor } = input;
   const { selections } = resolveComposerOptionSelections(
     input.models,
-    input.model,
+    resolveModelForCapabilities(input),
     input.provider,
     input.modelOptions,
     input.includePlanAgent,
@@ -218,7 +214,7 @@ export function resolveComposerTraitsInput(
   const { threadRef, draftId, ...rest } = input;
   const { selections } = resolveComposerOptionSelections(
     input.models,
-    input.model,
+    resolveModelForCapabilities(input),
     input.provider,
     input.modelOptions,
     input.includePlanAgent,

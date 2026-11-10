@@ -33,6 +33,7 @@ export function useComposerProviderModel(
     readonly activeProjectId: ProjectId | null;
     readonly threadRef: ScopedThreadRef | DraftId;
     readonly threadModelSelection: ModelSelection | null | undefined;
+    readonly reportedModelSelection?: ModelSelection | null | undefined;
     readonly projectModelSelection: ModelSelection | null | undefined;
     readonly promptInjectionState: ReturnType<typeof getComposerPromptInjectionState>;
     readonly isNewThread: boolean;
@@ -80,6 +81,8 @@ export function useComposerProviderModel(
   const selectedProviderModels = selection.selectedProviderEntry?.models ?? NO_PROVIDER_MODELS;
   const composerProviderState = getComposerProviderState({
     provider: selectedProvider,
+    instanceId: selectedInstanceId,
+    reportedModelSelection: input.reportedModelSelection,
     model: modelState.selectedModel,
     models: selectedProviderModels,
     promptInjectionState,

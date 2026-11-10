@@ -1214,6 +1214,34 @@ it("preserves explicit default semantics through project and draft priority", ()
     settings,
   };
   expect(deriveEffectiveComposerModelState({ ...base, draft: null }).selectedModel).toBe("");
+  const state = deriveEffectiveComposerModelState({ ...base, draft: null });
+  const dispatch = getComposerProviderState({
+    provider: driver,
+    instanceId,
+    reportedModelSelection: { instanceId, model: "native" },
+    model: state.selectedModel,
+    models: [
+      {
+        ...providers[0]!.models[0]!,
+        capabilities: {
+          optionDescriptors: [
+            {
+              id: "vendor/depth",
+              label: "Reasoning",
+              type: "select",
+              currentValue: "high",
+              options: [{ id: "high", label: "High" }],
+            },
+          ],
+        },
+      },
+    ],
+    modelOptions: state.modelOptions?.[instanceId],
+  });
+  expect(dispatch.promptEffort).toBe("high");
+  expect(
+    createModelSelection(instanceId, state.selectedModel, dispatch.modelOptionsForDispatch),
+  ).toEqual(project);
   const explicit = createModelSelection(instanceId, "user-choice");
   expect(
     deriveEffectiveComposerModelState({

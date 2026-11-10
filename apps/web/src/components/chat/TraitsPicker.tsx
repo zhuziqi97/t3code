@@ -1,4 +1,5 @@
 import { getSelectedTraits, getTraitsSectionVisibility } from "./TraitsPicker.logic";
+import { resolveModelForCapabilities } from "../../providerModels";
 import {
   buildTraitsTriggerDisplay,
   getDescriptorStringValue,
@@ -103,7 +104,7 @@ export function getReasoningTraitStep(input: {
   const selected = getSelectedTraits(
     input.provider,
     input.models,
-    input.model,
+    resolveModelForCapabilities(input),
     readPromptUltrathink(input.prompt),
     input.modelOptions,
     true,
@@ -206,6 +207,8 @@ export function useTraitsSelection({
   };
   const selected = getTraitsSectionVisibility({
     provider,
+    instanceId,
+    reportedModelSelection,
     models,
     model,
     promptUltrathink,

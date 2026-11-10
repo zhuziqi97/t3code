@@ -1,5 +1,7 @@
 import {
   ProviderDriverKind,
+  type ModelSelection,
+  type ProviderInstanceId,
   type ModelCapabilities,
   type ServerProviderModel,
 } from "@t3tools/contracts";
@@ -8,6 +10,19 @@ import { createModelCapabilities, resolveSelectableModel } from "@t3tools/shared
 const EMPTY_CAPABILITIES: ModelCapabilities = createModelCapabilities({
   optionDescriptors: [],
 });
+
+export function resolveModelForCapabilities(input: {
+  model: string | null | undefined;
+  instanceId?: ProviderInstanceId | undefined;
+  reportedModelSelection?: ModelSelection | null | undefined;
+}): string | null {
+  return (
+    input.model ||
+    (input.instanceId !== undefined && input.reportedModelSelection?.instanceId === input.instanceId
+      ? input.reportedModelSelection.model
+      : null)
+  );
+}
 
 export function formatProviderDriverKindLabel(provider: ProviderDriverKind): string {
   return provider
