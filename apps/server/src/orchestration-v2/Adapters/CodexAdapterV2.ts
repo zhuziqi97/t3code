@@ -1524,18 +1524,12 @@ const decodeCodexResumeMetadata = Schema.decodeUnknownEffect(
 
 const isResumeThreadError = Schema.is(ProviderAdapter.ProviderAdapterResumeThreadError);
 
-const sameCodexMcpConfiguration = (
-  previous: McpProviderSession.McpProviderSessionConfig | undefined,
-  current: McpProviderSession.McpProviderSessionConfig | undefined,
+const sameCodexAdditionalMcpConfiguration = (
+  previous: McpProviderSession.McpProviderSessionConfig["additionalServers"],
+  current: McpProviderSession.McpProviderSessionConfig["additionalServers"],
 ) => {
-  if (previous === undefined || current === undefined) return previous === current;
-  if (
-    previous.endpoint !== current.endpoint ||
-    previous.authorizationHeader !== current.authorizationHeader
-  )
-    return false;
-  const before = previous.additionalServers ?? {};
-  const after = current.additionalServers ?? {};
+  const before = previous ?? {};
+  const after = current ?? {};
   return (
     Object.keys(before).length === Object.keys(after).length &&
     Object.entries(before).every(
@@ -1543,6 +1537,18 @@ const sameCodexMcpConfiguration = (
         after[name]?.endpoint === server.endpoint &&
         after[name]?.authorizationHeader === server.authorizationHeader,
     )
+  );
+};
+
+const sameCodexMcpConfiguration = (
+  previous: McpProviderSession.McpProviderSessionConfig | undefined,
+  current: McpProviderSession.McpProviderSessionConfig | undefined,
+) => {
+  if (previous === undefined || current === undefined) return previous === current;
+  return (
+    previous.endpoint === current.endpoint &&
+    previous.authorizationHeader === current.authorizationHeader &&
+    sameCodexAdditionalMcpConfiguration(previous.additionalServers, current.additionalServers)
   );
 };
 
@@ -7546,13 +7552,44 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                     connection.state !== "notLoaded" &&
                     !connection.resetObserved &&
                     sameCodexMcpConfiguration(connection.consumed.mcp, mcpSession);
-                  const preserve = () =>
-                    new ProviderAdapter.ProviderAdapterResumeThreadError({
-                      driver: CODEX_PROVIDER,
-                      providerSessionId: input.providerSessionId,
-                      providerThreadId: threadInput.providerThread.id,
-                      preserveNativeThread: true,
-                    });
+                  const coldBeforeResume =
+                    previous === undefined ||
+                    connection.state === "closed" ||
+                    connection.state === "notLoaded";
+                  const previousMcp = connection.consumed?.mcp;
+                  yield* Effect.annotateCurrentSpan({
+                    "codex.resume.connection_state": connection.state,
+                    "codex.resume.previous_configuration_known": connection.consumed !== undefined,
+                    "codex.resume.reset_observed_before": connection.resetObserved,
+                    "codex.resume.reuse_configuration": reuseConfiguration,
+                    "codex.resume.cold_before_resume": coldBeforeResume,
+                    "codex.resume.mcp_endpoint_changed":
+                      connection.consumed !== undefined &&
+                      previousMcp?.endpoint !== mcpSession?.endpoint,
+                    "codex.resume.mcp_credential_changed":
+                      connection.consumed !== undefined &&
+                      previousMcp?.authorizationHeader !== mcpSession?.authorizationHeader,
+                    "codex.resume.additional_mcp_changed":
+                      connection.consumed !== undefined &&
+                      !sameCodexAdditionalMcpConfiguration(
+                        previousMcp?.additionalServers,
+                        mcpSession?.additionalServers,
+                      ),
+                  });
+                  const preserve = (reason: string, detail: string) =>
+                    Effect.annotateCurrentSpan({ "codex.resume.refusal_reason": reason }).pipe(
+                      Effect.andThen(
+                        Effect.fail(
+                          new ProviderAdapter.ProviderAdapterResumeThreadError({
+                            driver: CODEX_PROVIDER,
+                            providerSessionId: input.providerSessionId,
+                            providerThreadId: threadInput.providerThread.id,
+                            preserveNativeThread: true,
+                            detail,
+                          }),
+                        ),
+                      ),
+                    );
                   if (
                     previous !== undefined &&
                     connection.state !== "closed" &&
@@ -7560,13 +7597,12 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                     !reuseConfiguration
                   ) {
                     if (yield* hasPendingBackgroundWorkForThread(threadInput.providerThread)) {
-                      return yield* preserve();
+                      return yield* preserve(
+                        "background_work",
+                        "The native Codex thread still has background work and a different MCP configuration. T3 did not close the native conversation or its background resources.",
+                      );
                     }
                   }
-                  const coldBeforeResume =
-                    previous === undefined ||
-                    connection.state === "closed" ||
-                    connection.state === "notLoaded";
                   if (!coldBeforeResume) connection.resetObserved = false;
                   // Model/cwd are applied by turn/start; resume must preserve unchanged MCP resources.
                   const resume = client.raw.request("thread/resume", {
@@ -7610,11 +7646,23 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                       }),
                     ),
                   );
-                  if (response.thread.id !== nativeThreadId) return yield* preserve();
+                  yield* Effect.annotateCurrentSpan({
+                    "codex.resume.native_status": response.thread.status?.type ?? "unknown",
+                    "codex.resume.native_id_matches": response.thread.id === nativeThreadId,
+                    "codex.resume.reset_observed_after": connection.resetObserved,
+                  });
+                  if (response.thread.id !== nativeThreadId)
+                    return yield* preserve(
+                      "native_thread_mismatch",
+                      "Codex returned a different native thread during resume. The original native conversation was preserved; no new turn was started.",
+                    );
                   if (connection) {
                     if (reuseConfiguration && connection.resetObserved) {
                       yield* rememberNativeConnection(nativeThreadId);
-                      return yield* preserve();
+                      return yield* preserve(
+                        "reset_during_rejoin",
+                        "Codex reset the native thread during resume. The original native conversation was preserved; no new turn was started.",
+                      );
                     }
                     if (
                       !reuseConfiguration &&
@@ -7622,7 +7670,10 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                       !(connection.resetObserved && response.thread.status?.type === "idle")
                     ) {
                       connection.state = "subscribed";
-                      return yield* preserve();
+                      return yield* preserve(
+                        "mcp_configuration_unconfirmed",
+                        "Codex did not confirm the current MCP configuration. T3 kept the original native conversation and did not close its background resources. No new turn was started.",
+                      );
                     }
                   }
                   if (reuseConfiguration) {
@@ -7640,7 +7691,10 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                       ),
                     )
                   )
-                    return yield* preserve();
+                    return yield* preserve(
+                      "mcp_configuration_changed",
+                      "MCP configuration changed during Codex resume. The native conversation was preserved; no new turn was started.",
+                    );
                   return {
                     ...threadInput.providerThread,
                     providerSessionId: input.providerSessionId,

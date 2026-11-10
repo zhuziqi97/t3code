@@ -10860,6 +10860,15 @@ describe("CodexAdapterV2 post-settle continuation", () => {
       const resumed = yield* Effect.result(session.runtime.resumeThread({ providerThread }));
       assert.equal(sentMcp("thread/resume"), "Bearer current-test-credential");
       assert.equal(resumed._tag, "Failure");
+      if (resumed._tag === "Failure") {
+        assert.equal(resumed.failure._tag, "ProviderAdapterResumeThreadError");
+        if (resumed.failure._tag === "ProviderAdapterResumeThreadError") {
+          assert.isTrue(resumed.failure.preserveNativeThread);
+          assert.include(resumed.failure.message, "did not confirm the current MCP configuration");
+          assert.notInclude(resumed.failure.message, "current-test-credential");
+          assert.notInclude(resumed.failure.message, "original-test-credential");
+        }
+      }
     }).pipe(
       Effect.scoped,
       Effect.provide(

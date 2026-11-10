@@ -236,11 +236,13 @@ export class ProviderAdapterResumeThreadError extends Schema.TaggedError<Provide
     providerSessionId: ProviderSessionId,
     providerThreadId: ProviderThreadId,
     preserveNativeThread: Schema.optional(Schema.Literal(true)),
+    detail: Schema.optional(Schema.String),
     cause: Schema.optional(Schema.Defect()),
   },
 ) {
   override get message(): string {
-    return `Failed to resume ${this.driver} provider thread ${this.providerThreadId}.`;
+    const message = `Failed to resume ${this.driver} provider thread ${this.providerThreadId}.`;
+    return this.detail === undefined ? message : `${message} ${this.detail}`;
   }
 }
 
