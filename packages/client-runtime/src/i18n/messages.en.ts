@@ -3421,6 +3421,11 @@ export const en = {
   "project.actions.deleted": 'Deleted action "{{name}}"',
   "common.unknown": "Unknown",
   "chat.subagent.open": "Open subagent {{name}}",
+  "chat.nativeChildWork.open": "Native batch details",
+  "chat.nativeChildWork.title": "Native subagent batch",
+  "chat.nativeChildWork.description":
+    "Read only. Individual children cannot receive messages or be stopped here.",
+  "chat.nativeChildWork.idle": "The parent turn ended. Child completion has not been confirmed.",
   "thread.snooze.until": "Snoozed, {{time}}",
   "thread.settle.time": "Settled {{time}}",
   "chat.revert.reconnectFirst": "Reconnect {{environment}} before reverting checkpoints.",
