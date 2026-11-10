@@ -634,9 +634,11 @@ function PoolSection({ pool, now }: { readonly pool: LimitPool; readonly now: nu
 export function UsageLimitsPooled({
   presentations,
   now,
+  cursorPrompt,
 }: {
   readonly presentations: Parameters<typeof collectLimitAccounts>[0];
   readonly now: number;
+  readonly cursorPrompt?: ReactNode;
 }) {
   const t = useTranslate();
   const [segmentPopover] = useState(() => PopoverCreateHandle<SegmentPayload>());
@@ -644,14 +646,20 @@ export function UsageLimitsPooled({
   const pools = collectLimitPools(collectLimitAccounts(presentations), now);
   const notices = collectLimitNotices(presentations, t);
   const externalLinks = collectExternalUsageLinks(presentations);
+  const cursorPromptAt =
+    Math.max(
+      pools.findIndex((pool) => pool.driver === "codex"),
+      pools.findIndex((pool) => pool.driver === "claudeAgent"),
+    ) + 1;
   return (
     <div className="flex flex-col gap-8">
       {pools.length === 0 && notices.length === 0 && !cursorPrompt && externalLinks.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t("usage.limits.noProviderLimits")}</p>
       ) : null}
       <SegmentPopoverContext value={segmentPopover}>
-        {pools.map((pool) => (
+        {pools.map((pool, index) => (
           <Fragment key={pool.driver}>
+            {index === cursorPromptAt ? cursorPrompt : null}
             <PoolSection pool={pool} now={now} />
           </Fragment>
         ))}
@@ -669,6 +677,7 @@ export function UsageLimitsPooled({
           ) : null
         }
       </Popover>
+      {cursorPromptAt === pools.length ? cursorPrompt : null}
       {externalLinks.map((link) => (
         <section
           key={link.url}

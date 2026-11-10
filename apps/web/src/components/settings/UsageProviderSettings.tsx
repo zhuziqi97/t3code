@@ -1,3 +1,7 @@
+import { useAtomValue } from "@effect/atom-react";
+import { useAtomCommand } from "../../state/use-atom-command";
+import { serverEnvironment } from "../../state/server";
+import { Switch } from "../ui/switch";
 import { useTranslate } from "../../i18n";
 import type { EnvironmentId, UnifiedSettings } from "@t3tools/contracts";
 import { PlusIcon } from "lucide-react";
@@ -22,11 +26,13 @@ export function UsageProviderSettings({
   environmentId,
   environmentLabel,
   sources,
+  cursorKeychainUsageEnabled,
   readOnly,
 }: {
   readonly environmentId: EnvironmentId;
   readonly environmentLabel: string;
   readonly sources: UnifiedSettings["usageLimitSources"];
+  readonly cursorKeychainUsageEnabled: boolean;
   readonly readOnly: boolean;
 }) {
   const t = useTranslate();
@@ -40,7 +46,20 @@ export function UsageProviderSettings({
   const platform = useAtomValue(serverEnvironment.configValueAtom(environmentId))?.environment
     .platform;
   const [adding, setAdding] = useState(false);
+  const [updatingCursor, setUpdatingCursor] = useState(false);
   const entries = Object.entries(sources);
+
+  const setCursorUsageEnabled = async (enabled: boolean) => {
+    setUpdatingCursor(true);
+    const result = await updateCursorSettings({
+      environmentId,
+      input: { patch: { cursorKeychainUsageEnabled: enabled } },
+    });
+    if (result._tag === "Success") {
+      await refreshProviders({ environmentId, input: {} });
+    }
+    setUpdatingCursor(false);
+  };
 
   return (
     <>

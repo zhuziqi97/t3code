@@ -6,6 +6,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { Atom } from "effect/reactivity";
 import {
   USAGE_CONTRACT_VERSION,
+  ProviderDriverKind,
   type EnvironmentId,
   type UsageProviderKind,
   type UsageSummaryInput,
@@ -15,7 +16,10 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { settlePromise } from "@t3tools/client-runtime/state/runtime";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import * as Cause from "effect/Cause";
-import { refreshUsageLimits } from "@t3tools/client-runtime/state/usage";
+import {
+  cursorKeychainAccessEnvironments,
+  refreshUsageLimits,
+} from "@t3tools/client-runtime/state/usage";
 import {
   usageEnvironmentProgress,
   usageLoadingState,
@@ -69,6 +73,7 @@ import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../
 import { AppRouteModal, AppRouteModalClose } from "../AppRouteModal";
 import { Skeleton } from "../ui/skeleton";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import {
   WorkspaceBreadcrumb,
@@ -224,6 +229,9 @@ export function UsagePage() {
   const presentationsWithProviders = useAtomValue(
     environmentPresentations.presentationsWithProvidersAtom,
   );
+  const cursorAccessEnvironments = hiddenProviders.has("cursor")
+    ? []
+    : cursorKeychainAccessEnvironments(selectedEnvironments);
   const refreshProviders = useAtomCommand(serverEnvironment.refreshProviders, {
     reportFailure: false,
   });
@@ -532,6 +540,17 @@ export function UsagePage() {
                 selectedEnvironmentIds={selectedEnvironmentIds}
                 hiddenProviders={hiddenProviders}
                 now={limitsNow}
+                cursorPrompt={
+                  cursorAccessEnvironments.length > 0 ? (
+                    <CursorEnableLimits
+                      environments={cursorAccessEnvironments}
+                      onEnabled={() => {
+                        void refresh();
+                        void refreshLimits(false, true);
+                      }}
+                    />
+                  ) : null
+                }
               />
             ) : shown === null ? (
               <UsageSkeleton />
@@ -556,6 +575,11 @@ export function UsagePage() {
                 selectedEnvironments={selectedEnvironments}
                 hiddenProviders={hiddenProviders}
                 refreshingUsage={refreshingUsage}
+                cursorAccessEnvironments={cursorAccessEnvironments}
+                onCursorEnabled={() => {
+                  void refresh();
+                  void refreshLimits(false, true);
+                }}
                 showChatGptSharing={showChatGptSharing}
                 onSelectModel={selectUsageModel}
               />
@@ -604,6 +628,8 @@ function UsageOverview({
   selectedEnvironments,
   hiddenProviders,
   refreshingUsage,
+  cursorAccessEnvironments,
+  onCursorEnabled,
   showChatGptSharing,
   onSelectModel,
 }: {
@@ -617,6 +643,8 @@ function UsageOverview({
   readonly selectedEnvironments: readonly EnvironmentUsageStatus[];
   readonly hiddenProviders: ReadonlySet<UsageProviderKind>;
   readonly refreshingUsage: boolean;
+  readonly cursorAccessEnvironments: readonly EnvironmentUsageStatus[];
+  readonly onCursorEnabled: () => void;
   readonly showChatGptSharing: boolean;
   readonly onSelectModel: (key: string) => void;
 }) {
@@ -659,6 +687,17 @@ function UsageOverview({
     0,
   );
   const rankedProviders = rankProvidersByMetric(activeProviders, merged.providers, metric);
+  const cursorInsertAt =
+    Math.max(rankedProviders.indexOf("codex"), rankedProviders.indexOf("claude")) + 1;
+  const summaryRows = [
+    ...rankedProviders
+      .slice(0, cursorInsertAt)
+      .map((provider) => ({ kind: "usage" as const, provider })),
+    ...cursorAccessEnvironments.map((environment) => ({ kind: "enable" as const, environment })),
+    ...rankedProviders
+      .slice(cursorInsertAt)
+      .map((provider) => ({ kind: "usage" as const, provider })),
+  ];
 
   return (
     <div aria-busy={loadingPartial} className="flex flex-col gap-6">
@@ -714,7 +753,18 @@ function UsageOverview({
             </div>
           ) : null}
 
-          {rankedProviders.map((provider) => {
+          {summaryRows.map((row) => {
+            if (row.kind === "enable")
+              return (
+                <CursorEnableRow
+                  key={`enable:${row.environment.environmentId}`}
+                  environmentId={row.environment.environmentId}
+                  label={row.environment.label}
+                  showEnvironment={selectedEnvironments.length > 1}
+                  onEnabled={onCursorEnabled}
+                />
+              );
+            const provider = row.provider;
             const totals = merged.providers.find((entry) => entry.provider === provider);
             const share = metric === "cost" ? (totals?.costShare ?? 0) : (totals?.tokenShare ?? 0);
             const providerSessions = totals?.sessions ?? 0;
