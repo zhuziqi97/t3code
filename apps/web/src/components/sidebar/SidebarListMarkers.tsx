@@ -2,6 +2,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { type ReactNode, useLayoutEffect } from "react";
 import { cn } from "~/lib/utils";
+import { CollapsibleSectionHeader } from "../ui/collapsible-section-header";
 import {
   animateSidebarLayoutChanges,
   sidebarMarkerId,

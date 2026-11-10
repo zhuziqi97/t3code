@@ -3,6 +3,8 @@ import { canShareWithGuestAtom } from "./chat/guestShareAvailability";
 import { ProjectEnvironmentBadge } from "./ProjectEnvironmentBadge";
 import {
   filterSidebarProjectScopeItems,
+  isSidebarEnvironmentDisconnected,
+  belongsInSidebarWorkingShelf,
   reduceSidebarProjectScopeMenuState,
 } from "./Sidebar.logic";
 import { discardComposerDraft } from "../lib/discardComposerDraft";
@@ -150,13 +152,13 @@ import { useSidebarProjectGroups } from "../hooks/useSidebarProjectGroups";
 import { useTerminalFocus } from "../hooks/useTerminalFocus";
 import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
 import { registerSettleAndAdvance } from "../settleAndAdvance";
-import { startNewThreadFromContext } from "../lib/chatThreadActions";
 import { useClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
 import {
   useEnvironmentIdentities,
+  useEnvironmentConnectionSummaries,
   useConnectedEnvironmentIds,
   useEnvironmentMachines,
   usePrimaryEnvironmentId,
@@ -355,6 +357,7 @@ interface SidebarThreadPartitionInput {
   readonly connectedEnvironmentIds: readonly EnvironmentId[];
   readonly optimisticDrop: SidebarOptimisticDrop | null;
   readonly workingShelfEnabled: boolean;
+  readonly disconnectedEnvironmentIds: ReadonlySet<EnvironmentId>;
   /** Boring mode: folders list active threads by the user's latest message. */
   readonly sortActiveBySend: boolean;
   // Snooze wakes, the queued-turn grace and the Working shelf's exit grace depend
@@ -590,6 +593,7 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
     optimisticDrop,
     workingShelfEnabled,
     sortActiveBySend,
+    disconnectedEnvironmentIds,
   } = input;
   const preciseNow = new Date().toISOString();
   const visible = filterSidebarV2VisibleThreads(threads, scopedProjectKeys, delegatedUnderParent);
@@ -598,8 +602,11 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
   const active: EnvironmentThreadShell[] = [];
   const working: EnvironmentThreadShell[] = [];
   const inbox = (thread: EnvironmentThreadShell, manuallyMoved = false) =>
-    workingShelfEnabled &&
-    (manuallyMoved ? isThreadWorking(thread) : inboxObservation.isWorking(thread))
+    belongsInSidebarWorkingShelf(thread, {
+      enabled: workingShelfEnabled,
+      disconnectedEnvironmentIds,
+      isWorking: manuallyMoved ? isThreadWorking : inboxObservation.isWorking,
+    })
       ? working
       : active;
   const snoozed: EnvironmentThreadShell[] = [];
@@ -966,7 +973,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       );
     },
   });
-  const boringSidebarEnabled = useClientSettings((settings) => settings.boringSidebarEnabled);
   const folderRowsMultiline = useClientSettings((settings) => settings.boringSidebarMultilineRows);
   const newThreadContext = useHandleNewThread();
   // Row callbacks capture only the handler; the rest of the context changes with the route.
@@ -1880,10 +1886,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   };
 
   // Folder rows only drag out to the composer; folders own their order, so nothing drops in the list.
-  const isContextDrag =
-    projectFolders !== null ||
-    dragState?.contextDrag === true ||
-    dragState?.activeSection === "working";
+  const isContextDrag = dragState?.contextDrag === true || dragState?.activeSection === "working";
   const dragTargetSection = isContextDrag ? null : (dragState?.targetSection ?? null);
   const finishThreadDrag = (started: boolean) => {
     dragSensorRef.current = null;
@@ -2242,7 +2245,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     );
   })();
   const handleThreadDragEnd = (event: DragEndEvent) => {
-    if (projectFolders !== null) return;
     const activeKey = String(event.active.id);
     if (projectDrag.end(activeKey, event.over === null ? null : String(event.over.id))) return;
     const activeSection = sectionByThreadKey.get(activeKey);

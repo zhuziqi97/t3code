@@ -3704,8 +3704,6 @@ export default function ChatView(props: ChatViewProps) {
                                 contextWindowEntries={serverVisibleTurnItems}
                                 contextWindowLiveUsage={activeThreadLiveTokenUsage}
                                 contextWindowProviderThread={activeProviderThread}
-                                compactThreadUnavailable={compactThreadUnavailable}
-                                compactDisabled={compactDisabled}
                                 compactDisabledReason={compactDisabledReason}
                                 resolvedTheme={resolvedTheme}
                                 settings={settings}

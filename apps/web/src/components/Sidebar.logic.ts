@@ -1,6 +1,9 @@
 import type { TFunction } from "i18next";
 import { i18n } from "../i18n";
-import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
+import type {
+  EnvironmentServerConfig,
+  EnvironmentConnectionPhase,
+} from "@t3tools/client-runtime/connection";
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
 import { isShownUnderParent } from "@t3tools/client-runtime/state/threads";

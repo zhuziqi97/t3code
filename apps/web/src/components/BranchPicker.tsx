@@ -6,7 +6,6 @@ import { useId, useRef, useState, type ComponentProps, type ReactNode } from "re
 import { MiddleTruncate } from "./ui/middle-truncate";
 import { cn } from "../lib/utils";
 import { useTranslate } from "../i18n";
-import { shouldLoadNextBranchPageAfterScroll } from "../state/paginatedBranches";
 import { RefreshIcon } from "./ui/refresh-icon";
 import { Switch } from "./ui/switch";
 import { getVirtualizedScrollFadeClassName } from "./ui/scroll-area";

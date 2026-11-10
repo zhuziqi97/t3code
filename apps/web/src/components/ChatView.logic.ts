@@ -28,6 +28,7 @@ import {
   type PreviewAnnotationPayload,
   ProviderDriverKind,
   type ProviderInstanceId,
+  type ProviderInteractionMode,
   type ServerProvider,
   type ScopedProjectRef,
   type ScopedThreadRef,
@@ -1489,4 +1490,19 @@ export function deriveAvailableRevertTurnCounts(projection: ThreadStructure | nu
     if (providerTurn?.providerThreadId === providerThread.id) available.add(run.ordinal);
   }
   return available;
+}
+
+export function resolveComposerInteractionMode(input: {
+  planModeEnabled: boolean;
+  provider: Pick<ServerProvider, "showInteractionModeToggle"> | null | undefined;
+  interactionMode: ProviderInteractionMode;
+}): { enabled: boolean; interactionMode: ProviderInteractionMode } {
+  const enabled =
+    input.planModeEnabled &&
+    input.provider != null &&
+    input.provider.showInteractionModeToggle !== false;
+  return {
+    enabled,
+    interactionMode: enabled ? input.interactionMode : "default",
+  };
 }
