@@ -1200,6 +1200,35 @@ describe("session-scoped ACP configuration", () => {
     expect(a[0]?.models[0]?.capabilities?.optionDescriptors).toEqual([depth]);
     expect(b[0]?.models[1]?.capabilities?.optionDescriptors).toEqual([]);
     expect(provider.models[0]?.capabilities?.optionDescriptors?.[0]?.id).toBe("preview");
+    const advertised = {
+      modelSelection: { instanceId, model: "session-only" },
+      models: [
+        { id: "session-only", name: "Session Model" },
+        { id: "plain", name: "Plain Model" },
+      ],
+      optionDescriptors: [depth],
+    };
+    const session = applyThreadProviderConfiguration([provider], advertised);
+    expect(session[0]?.models.map(({ slug, name }) => ({ slug, name }))).toEqual([
+      { slug: "session-only", name: "Session Model" },
+      { slug: "plain", name: "Plain Model" },
+    ]);
+    expect(session[0]?.models[0]?.capabilities?.optionDescriptors).toEqual([depth]);
+    expect(
+      applyThreadProviderConfiguration([provider], { ...advertised, models: [] })[0]?.models.map(
+        ({ slug }) => slug,
+      ),
+    ).toEqual(["session-only"]);
+    const defaultProvider = {
+      ...provider,
+      models: [{ ...provider.models[0]!, isDefault: true }],
+    };
+    expect(
+      applyThreadProviderConfiguration([defaultProvider], {
+        modelSelection: { instanceId, model: null },
+        optionDescriptors: [depth],
+      })[0]?.models[0]?.capabilities?.optionDescriptors,
+    ).toEqual(provider.models[0]?.capabilities?.optionDescriptors);
     expect(
       applyThreadProviderConfiguration([provider], {
         modelSelection: { instanceId: ProviderInstanceId.make("other"), model: "graded" },

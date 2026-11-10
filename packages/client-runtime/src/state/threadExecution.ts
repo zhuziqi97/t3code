@@ -220,12 +220,24 @@ export function applyThreadProviderConfiguration(
   configuration: OrchestrationV2ProviderThreadNativeMetadata | null,
 ): ReadonlyArray<ServerProvider> {
   const selection = configuration?.modelSelection;
-  if (configuration?.optionDescriptors === undefined || !selection) return providers;
+  if (
+    !selection ||
+    (configuration?.models === undefined && configuration?.optionDescriptors === undefined)
+  )
+    return providers;
   return providers.map((provider) => {
     if (provider.instanceId !== selection.instanceId) return provider;
-    const modelId = selection.model ?? provider.models.find((model) => model.isDefault)?.slug;
-    const models = provider.models.map((model) =>
-      model.slug === modelId
+    const modelId = selection.model;
+    const catalog =
+      configuration.models?.map(({ id, name }) => ({
+        capabilities: null,
+        ...provider.models.find((model) => model.slug === id),
+        slug: id,
+        name,
+        isCustom: false,
+      })) ?? provider.models;
+    const models = catalog.map((model) =>
+      model.slug === modelId && configuration.optionDescriptors !== undefined
         ? {
             ...model,
             capabilities: { optionDescriptors: configuration.optionDescriptors },
@@ -237,7 +249,10 @@ export function applyThreadProviderConfiguration(
         slug: modelId,
         name: modelId,
         isCustom: false,
-        capabilities: { optionDescriptors: configuration.optionDescriptors },
+        capabilities:
+          configuration.optionDescriptors === undefined
+            ? null
+            : { optionDescriptors: configuration.optionDescriptors },
       });
     return { ...provider, models };
   });
