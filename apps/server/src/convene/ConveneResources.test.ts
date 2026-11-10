@@ -310,7 +310,7 @@ it.effect(
           };
           const first = yield* service.read(input);
           assert.equal(first.status, "ready");
-          if (first.status === "ready") {
+          if (first.status === "ready" && "issue" in first) {
             assert.equal(first.comments[0]?.body, "Exact comment");
             assert.equal(first.web_url, `${baseUrl}/p/a/b/m/c/issues/7#issuecomment-31`);
           }
@@ -320,6 +320,63 @@ it.effect(
               authorization: "Bearer runner-access",
             },
           ]);
+          const document = {
+            status: "ready",
+            resource_uri: "convene://docs/a/b/c/notes",
+            web_path: "/p/a/b/m/c/docs/notes",
+            document: {
+              id: "00000000-0000-4000-8000-000000000001",
+              title: "Notes",
+              version: 2,
+              mime_type: null,
+            },
+            content: "Last line\n",
+            slice: {
+              start_line: 201,
+              end_line: 201,
+              returned_lines: 1,
+              total_lines: 201,
+              has_more_before: true,
+              has_more_after: false,
+              next_start_line: null,
+              truncated: true,
+            },
+          };
+          reply = { status: 200, body: { success: true, data: document } };
+          assert.deepEqual(
+            yield* service.read({ ...input, uri: document.resource_uri, startLine: 201 }),
+            { ...document, web_url: `${baseUrl}${document.web_path}` },
+          );
+          assert.deepEqual(requests.at(-1)?.body, {
+            client_project_id: "actual-client-project",
+            uri: document.resource_uri,
+            page: 1,
+            start_line: 201,
+          });
+          const emptyDocument = {
+            ...document,
+            content: "",
+            slice: {
+              start_line: 1,
+              end_line: null,
+              returned_lines: 0,
+              total_lines: 0,
+              has_more_before: false,
+              has_more_after: false,
+              next_start_line: null,
+              truncated: false,
+            },
+          };
+          reply = { status: 200, body: { success: true, data: emptyDocument } };
+          assert.deepEqual(yield* service.read({ ...input, uri: document.resource_uri }), {
+            ...emptyDocument,
+            web_url: `${baseUrl}${document.web_path}`,
+          });
+          assert.deepEqual(requests.at(-1)?.body, {
+            client_project_id: "actual-client-project",
+            uri: document.resource_uri,
+            page: 1,
+          });
           reply = { status: 403, body: { error: { code: "PERMISSION_DENIED" } } };
           assert.equal((yield* service.read(input)).status, "unauthorized");
           reply = { status: 404, body: { error: { code: "RESOURCE_NOT_FOUND" } } };
@@ -329,6 +386,15 @@ it.effect(
             body: { error: { code: "RESOURCE_NOT_FOUND", detail: { resource_type: "issue" } } },
           };
           assert.equal((yield* service.read(input)).status, "notFound");
+          for (const resourceType of ["document_node", "module"]) {
+            reply = {
+              status: 404,
+              body: {
+                error: { code: "RESOURCE_NOT_FOUND", detail: { resource_type: resourceType } },
+              },
+            };
+            assert.equal((yield* service.read(input)).status, "notFound");
+          }
           reply = {
             status: 404,
             body: {

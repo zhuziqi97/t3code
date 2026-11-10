@@ -48,6 +48,7 @@ function ResourceDetail(props: {
   const [state, setState] = useState<ConveneResourceReaderState>({
     uri: props.uri,
     pending: true,
+    needsRefresh: false,
     result: null,
   });
   const [reader] = useState(() =>
@@ -71,8 +72,10 @@ function ResourceDetail(props: {
     ? { status: "unauthorized" as const, resource_uri: props.uri }
     : phase === "offline" || phase === "unpaired"
       ? { status: "disconnected" as const, resource_uri: props.uri }
-      : state.result;
-  const ready = result?.status === "ready" ? result : null;
+      : state.uri === props.uri
+        ? state.result
+        : null;
+  const ready = result?.status === "ready" && "issue" in result ? result : null;
   const markdown = (body: string) => (
     <SelectableMarkdownText
       markdown={body}
@@ -111,6 +114,9 @@ function ResourceDetail(props: {
           {props.uri}
         </Text>
         {state.pending && permitted && <Text>{t("convene.resource.loading")}</Text>}
+        {result?.status === "ready" && "document" in result && (
+          <Text accessibilityRole="alert">{t("convene.resource.unsupported")}</Text>
+        )}
         {result && result.status !== "ready" && (
           <Text accessibilityRole="alert">{t(`convene.resource.${result.status}`)}</Text>
         )}

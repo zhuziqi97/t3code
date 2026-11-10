@@ -38,12 +38,18 @@ function ResourceDetail({ threadRef, uri }: { threadRef: ScopedThreadRef; uri: s
   const [state, setState] = useState<ConveneResourceReaderState>({
     uri,
     pending: true,
+    needsRefresh: false,
     result: null,
   });
-  const read = useStableCallback(async (target: string, page: number) => {
+  const read = useStableCallback(async (target: string, page: number, startLine?: number) => {
     const response = await command({
       environmentId: threadRef.environmentId,
-      input: { threadId: threadRef.threadId, uri: target, page },
+      input: {
+        threadId: threadRef.threadId,
+        uri: target,
+        page,
+        ...(startLine === undefined ? {} : { startLine }),
+      },
     });
     return response._tag === "Success"
       ? response.value
@@ -60,8 +66,12 @@ function ResourceDetail({ threadRef, uri }: { threadRef: ScopedThreadRef; uri: s
     ? { status: "unauthorized" as const, resource_uri: uri }
     : phase === "offline" || phase === "unpaired"
       ? { status: "disconnected" as const, resource_uri: uri }
-      : state.result;
+      : state.uri === uri
+        ? state.result
+        : null;
   const ready = result?.status === "ready" ? result : null;
+  const issue = ready && "issue" in ready ? ready : null;
+  const document = ready && "document" in ready ? ready : null;
   const open = useConveneResourceStore((s) => s.open);
   return (
     <>
@@ -97,38 +107,57 @@ function ResourceDetail({ threadRef, uri }: { threadRef: ScopedThreadRef; uri: s
         {result && result.status !== "ready" && (
           <p role="alert">{t(`convene.resource.${result.status}`)}</p>
         )}
-        {ready && (
+        {state.needsRefresh && <p role="alert">{t("convene.resource.documentChanged")}</p>}
+        {document && (
+          <div className="space-y-5">
+            <h2 className="text-lg font-semibold">{document.document.title}</h2>
+            <ChatMarkdown text={document.content} cwd={undefined} threadRef={threadRef} />
+            {!state.needsRefresh && document.slice.next_start_line !== null && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={state.pending}
+                onClick={() =>
+                  void reader.load(uri, 1, document.slice.next_start_line ?? undefined)
+                }
+              >
+                {t("convene.resource.moreContent")}
+              </Button>
+            )}
+          </div>
+        )}
+        {issue && (
           <div className="space-y-5">
             <div>
               <h2 className="text-lg font-semibold">
-                #{ready.issue.number} {ready.issue.title}
+                #{issue.issue.number} {issue.issue.title}
               </h2>
               <p className="text-sm text-muted-foreground">
                 {t(
-                  ready.issue.state === "OPEN"
+                  issue.issue.state === "OPEN"
                     ? "convene.resource.issueStateOpen"
                     : "convene.resource.issueStateClosed",
                 )}
               </p>
             </div>
-            {ready.focused_comment_number !== null && (
+            {issue.focused_comment_number !== null && (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => open(threadRef, ready.issue.resource_uri)}
+                onClick={() => open(threadRef, issue.issue.resource_uri)}
               >
                 {t("convene.resource.viewIssue")}
               </Button>
             )}
-            {ready.issue.body !== undefined && (
-              <ChatMarkdown text={ready.issue.body} cwd={undefined} threadRef={threadRef} />
+            {issue.issue.body !== undefined && (
+              <ChatMarkdown text={issue.issue.body} cwd={undefined} threadRef={threadRef} />
             )}
-            {ready.comments.map((comment) => (
+            {issue.comments.map((comment) => (
               <article
                 key={comment.number}
                 id={`convene-comment-${comment.number}`}
                 className={
-                  comment.number === ready.focused_comment_number
+                  comment.number === issue.focused_comment_number
                     ? "rounded-lg border border-primary bg-primary/5 p-3"
                     : "border-t pt-4"
                 }
@@ -150,13 +179,13 @@ function ResourceDetail({ threadRef, uri }: { threadRef: ScopedThreadRef; uri: s
                 )}
               </article>
             ))}
-            {ready.focused_comment_number === null &&
-              ready.page * ready.page_size < ready.total && (
+            {issue.focused_comment_number === null &&
+              issue.page * issue.page_size < issue.total && (
                 <Button
                   variant="outline"
                   size="sm"
                   disabled={state.pending}
-                  onClick={() => void reader.load(uri, ready.page + 1)}
+                  onClick={() => void reader.load(uri, issue.page + 1)}
                 >
                   {t("convene.resource.moreComments")}
                 </Button>
