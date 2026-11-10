@@ -2036,6 +2036,8 @@ export type OrchestrationV2DomainEvent = typeof OrchestrationV2DomainEvent.Type;
 
 export const OrchestrationV2ThreadProjection = Schema.Struct({
   thread: OrchestrationV2AppThread,
+  /** Complete local message history, excluding attachment-free /compact; absent on older servers. */
+  hasLocalConversation: Schema.optionalKey(Schema.Boolean),
   runs: Schema.Array(OrchestrationV2Run),
   attempts: Schema.Array(OrchestrationV2RunAttempt),
   nodes: Schema.Array(OrchestrationV2ExecutionNode),

@@ -388,7 +388,7 @@ const inheritsForkConversation = ({
 
 export type ProjectionRecordField = Exclude<
   keyof OrchestrationV2ThreadProjection,
-  "thread" | "updatedAt" | "visibleTurnItems"
+  "thread" | "updatedAt" | "visibleTurnItems" | "hasLocalConversation"
 >;
 export type ProjectionRecords<K extends ProjectionRecordField> = Pick<
   OrchestrationV2ThreadProjection,
@@ -3134,6 +3134,24 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               `;
     });
 
+    // SQLite trim defaults to ASCII spaces; compact recognition uses JavaScript trim.
+    const javascriptTrimWhitespace =
+      " \t\n\r\v\f\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff";
+
+    const readHasLocalConversation = Effect.fn("ProjectionStore.readHasLocalConversation")(
+      function* (threadId: ThreadId) {
+        const rows = yield* sql<{ present: number }>`
+        SELECT EXISTS(
+          SELECT 1 FROM orchestration_v2_projection_messages
+          WHERE thread_id = ${threadId} AND role = 'user'
+            AND (lower(trim(json_extract(payload_json, '$.text'), ${javascriptTrimWhitespace})) <> '/compact'
+              OR json_array_length(payload_json, '$.attachments') > 0)
+        ) AS present
+      `;
+        return rows[0]?.present === 1;
+      },
+    );
+
     const readCanonicalProjection = Effect.fn("ProjectionStore.readCanonicalProjection")(
       function* (
         threadId: ThreadId,
@@ -3780,6 +3798,9 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
           providerTurns,
           runtimeRequests,
           messages: orderedMessages,
+          ...(fields === undefined
+            ? { hasLocalConversation: yield* readHasLocalConversation(threadId) }
+            : {}),
           plans,
           turnItems,
           checkpointScopes,
@@ -4485,10 +4506,6 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       Effect.mapError((cause) => new ProjectionStoreSetupError({ cause })),
     );
 
-    // SQLite trim defaults to ASCII spaces; compact recognition uses JavaScript trim.
-    const javascriptTrimWhitespace =
-      " \t\n\r\v\f\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff";
-
     const getTurnStartContext: ProjectionStoreV2Shape["getTurnStartContext"] = (threadId, runId) =>
       sql
         .withTransaction(
@@ -4555,17 +4572,10 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 OR (role = 'user' AND trim(json_extract(payload_json, '$.text'), ${javascriptTrimWhitespace}) GLOB '/goal*')
               ) ORDER BY created_at ASC, message_id ASC
             `.pipe(Effect.flatMap(decodeRows(decodeMessagePayload, threadId)));
-            const conversation = yield* sql<{ present: number }>`
-              SELECT EXISTS(
-                SELECT 1 FROM orchestration_v2_projection_messages
-                WHERE thread_id = ${threadId} AND role = 'user'
-                    AND (lower(trim(json_extract(payload_json, '$.text'), ${javascriptTrimWhitespace})) <> '/compact'
-                      OR json_array_length(payload_json, '$.attachments') > 0)
-              ) AS present
-            `;
+            const hasLocalConversation = yield* readHasLocalConversation(threadId);
             return {
               hasConversation:
-                conversation[0]?.present === 1 ||
+                hasLocalConversation ||
                 inheritsForkConversation({ thread, contextTransfers, contextHandoffs }),
               thread,
               runs,

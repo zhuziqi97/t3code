@@ -4,6 +4,7 @@ import type { OrchestrationV2ThreadProjection } from "@t3tools/contracts";
 import {
   canForkProjectedAssistantItem,
   deriveThreadQueueWorkflowState,
+  hasCompactableConversation,
   resolveLatestMergeBackRun,
   threadSupportsProviderHandoff,
 } from "./threadWorkflows.ts";
@@ -30,6 +31,55 @@ const capabilities = (input?: {
   }) as never;
 
 describe("thread workflows", () => {
+  it("uses complete local conversation metadata independently of the loaded window", () => {
+    const projection = {
+      thread: { id: "thread", forkedFrom: null },
+      visibleTurnItems: [],
+      contextTransfers: [],
+      contextHandoffs: [],
+    } as unknown as OrchestrationV2ThreadProjection;
+    expect(hasCompactableConversation({ ...projection, hasLocalConversation: true })).toBe(true);
+    expect(hasCompactableConversation({ ...projection, hasLocalConversation: false })).toBe(false);
+    const windowWithUser = {
+      ...projection,
+      visibleTurnItems: [{ item: { type: "user_message", text: "hello", attachments: [] } }],
+    } as unknown as OrchestrationV2ThreadProjection;
+    expect(hasCompactableConversation(windowWithUser)).toBe(true);
+    expect(hasCompactableConversation({ ...windowWithUser, hasLocalConversation: false })).toBe(
+      false,
+    );
+    for (const attachments of [[], [{ id: "file" }]]) {
+      const compact = {
+        ...projection,
+        visibleTurnItems: [{ item: { type: "user_message", text: "\t/COMPACT\n", attachments } }],
+      } as unknown as OrchestrationV2ThreadProjection;
+      expect(hasCompactableConversation(compact)).toBe(attachments.length > 0);
+    }
+    const fork = {
+      ...projection,
+      hasLocalConversation: false,
+      thread: {
+        ...projection.thread,
+        forkedFrom: { type: "run", threadId: "source", runId: "run" },
+      },
+    } as unknown as OrchestrationV2ThreadProjection;
+    expect(hasCompactableConversation(fork)).toBe(true);
+    for (const messages of [[], [{ text: "inherited" }]]) {
+      const portable = {
+        ...fork,
+        contextTransfers: [
+          {
+            type: "fork",
+            targetThreadId: "thread",
+            resolution: { strategy: "portable_context", contextHandoffId: "handoff" },
+          },
+        ],
+        contextHandoffs: [{ id: "handoff", history: { messages } }],
+      } as unknown as OrchestrationV2ThreadProjection;
+      expect(hasCompactableConversation(portable)).toBe(messages.length > 0);
+      expect(portable.hasLocalConversation).toBe(false);
+    }
+  });
   it("allows a completed thread to switch providers after its session detaches", () => {
     const projection = {
       thread: {

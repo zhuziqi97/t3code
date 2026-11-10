@@ -77,6 +77,7 @@ const PREPARED: PreparedConnection = {
 };
 const BASE_PROJECTION: OrchestrationV2ThreadProjection = {
   ...v2Projection,
+  hasLocalConversation: false,
   thread: { ...v2Projection.thread, title: "Cached thread" },
 };
 
@@ -460,6 +461,99 @@ describe("EnvironmentThreads", () => {
       }),
   );
 
+  it.effect(
+    "revalidates a removed conversation qualifier with a bounded snapshot and accepts false",
+    () =>
+      Effect.gen(function* () {
+        const message = {
+          id: MessageId.make("editable-message"),
+          threadId: THREAD_ID,
+          runId: null,
+          nodeId: null,
+          role: "user" as const,
+          text: "hello",
+          attachments: [],
+          streaming: false,
+          createdBy: "user" as const,
+          creationSource: "web" as const,
+          createdAt: v2Now,
+          updatedAt: v2Now,
+        };
+        const projection = { ...BASE_PROJECTION, hasLocalConversation: true, messages: [message] };
+        const resumeCache: NonNullable<Parameters<typeof makeEnvironmentThreadState>[1]> = {
+          snapshot: undefined,
+          owner: undefined,
+        };
+        const h = yield* makeHarness({
+          cached: projection,
+          resumeCache,
+          cachedHistory: { historyCursor: "older", hasMoreHistory: true },
+        });
+        yield* awaitThreadState(h.observed, (value) => value.status === "live");
+        yield* Queue.offer(h.inputs, {
+          kind: "event",
+          sequence: 8,
+          event: {
+            id: EventId.make("edited-message"),
+            type: "message.updated",
+            threadId: THREAD_ID,
+            occurredAt: v2Now,
+            payload: { ...message, text: "/compact" },
+          },
+        });
+        yield* SubscriptionRef.changes(h.subscriptionCount).pipe(
+          Stream.filter((count) => count === 2),
+          Stream.runHead,
+        );
+        expect(yield* Ref.get(h.lastSubscribeAfterSequence)).toBeUndefined();
+        expect(yield* Ref.get(h.lastAcceptBoundedSnapshot)).toBe(true);
+        expect(yield* Ref.get(h.loaderCalls)).toBe(0);
+        expect(resumeCache.snapshot?.sequence).toBe(CACHED_SNAPSHOT_SEQUENCE);
+        yield* Queue.offer(h.inputs, {
+          ...snapshot(
+            {
+              ...projection,
+              hasLocalConversation: false,
+              messages: [{ ...message, text: "/compact" }],
+            },
+            8,
+          ),
+          historyCursor: "older",
+          hasMoreHistory: true,
+        });
+        const refreshed = yield* awaitThreadState(
+          h.observed,
+          (value) => Option.getOrNull(value.data)?.hasLocalConversation === false,
+        );
+        expect(refreshed.history.hasMoreHistory).toBe(true);
+        expect(Option.getOrThrow(refreshed.data).visibleTurnItems).toHaveLength(0);
+        yield* Queue.offer(h.inputs, {
+          kind: "event",
+          sequence: 9,
+          event: {
+            id: EventId.make("new-message"),
+            type: "message.updated",
+            threadId: THREAD_ID,
+            occurredAt: v2Now,
+            payload: { ...message, id: MessageId.make("new-message") },
+          },
+        });
+        yield* awaitThreadState(
+          h.observed,
+          (value) => Option.getOrNull(value.data)?.hasLocalConversation === true,
+        );
+        expect(yield* SubscriptionRef.get(h.subscriptionCount)).toBe(2);
+        yield* Queue.offer(
+          h.inputs,
+          snapshot({ ...BASE_PROJECTION, hasLocalConversation: false }, 10),
+        );
+        yield* awaitThreadState(
+          h.observed,
+          (value) =>
+            value.sequence === 10 && Option.getOrNull(value.data)?.hasLocalConversation === false,
+        );
+      }).pipe(Effect.scoped),
+  );
   it.effect("discards an oversized version-4 cache and requests a fresh bounded snapshot", () =>
     Effect.gen(function* () {
       const item: OrchestrationV2TurnItem = {
@@ -913,24 +1007,33 @@ describe("EnvironmentThreads", () => {
     }),
   );
 
-  it.effect("resumes a warm cache via afterSequence without an HTTP fetch", () =>
-    Effect.gen(function* () {
-      const harness = yield* makeHarness({ cached: BASE_PROJECTION });
+  it.effect.each([true, false])(
+    "resumes a warm cache with conversation metadata %s without an HTTP fetch",
+    (hasMetadata) =>
+      Effect.gen(function* () {
+        const { hasLocalConversation: _hasLocalConversation, ...legacy } = BASE_PROJECTION;
+        const harness = yield* makeHarness({ cached: hasMetadata ? BASE_PROJECTION : legacy });
 
-      yield* Queue.offer(harness.inputs, titleUpdated("Live title", CACHED_SNAPSHOT_SEQUENCE + 1));
-      const live = yield* awaitThreadState(
-        harness.observed,
-        (value) =>
-          value.status === "live" &&
-          Option.isSome(value.data) &&
-          value.data.value.thread.title === "Live title",
-      );
+        yield* Queue.offer(
+          harness.inputs,
+          titleUpdated("Live title", CACHED_SNAPSHOT_SEQUENCE + 1),
+        );
+        const live = yield* awaitThreadState(
+          harness.observed,
+          (value) =>
+            value.status === "live" &&
+            Option.isSome(value.data) &&
+            value.data.value.thread.title === "Live title",
+        );
 
-      // Readers compare this to a command's commit sequence; it moves with the data it describes.
-      expect(live.sequence).toBe(CACHED_SNAPSHOT_SEQUENCE + 1);
-      expect(yield* Ref.get(harness.lastSubscribeAfterSequence)).toBe(CACHED_SNAPSHOT_SEQUENCE);
-      expect(yield* Ref.get(harness.loaderCalls)).toBe(0);
-    }),
+        // Readers compare this to a command's commit sequence; it moves with the data it describes.
+        expect(live.sequence).toBe(CACHED_SNAPSHOT_SEQUENCE + 1);
+        expect(yield* Ref.get(harness.lastSubscribeAfterSequence)).toBe(
+          hasMetadata ? CACHED_SNAPSHOT_SEQUENCE : undefined,
+        );
+        expect(yield* Ref.get(harness.lastAcceptBoundedSnapshot)).toBe(true);
+        expect(yield* Ref.get(harness.loaderCalls)).toBe(0);
+      }),
   );
 
   describe("cached work (#18188)", () => {

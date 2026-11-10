@@ -17,7 +17,10 @@ import {
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 
-import { applyOrchestrationV2ProjectionEvent } from "./orchestrationV2Projection.ts";
+import {
+  applyOrchestrationV2ProjectionEvent,
+  needsConversationSnapshot,
+} from "./orchestrationV2Projection.ts";
 
 const now = DateTime.makeUnsafe("2026-06-20T00:00:00.000Z");
 const threadId = ThreadId.make("thread-reducer");
@@ -106,6 +109,53 @@ const emptyProjection = {
 } as OrchestrationV2ThreadProjection;
 
 describe("applyOrchestrationV2ProjectionEvent", () => {
+  it("updates local conversation facts from user upserts and revalidates a disappearing qualifier", () => {
+    const message = {
+      id: MessageId.make("message"),
+      threadId,
+      runId: null,
+      nodeId: null,
+      role: "user" as const,
+      text: "hello",
+      attachments: [],
+      streaming: false,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: "user" as const,
+      creationSource: "web" as const,
+    };
+    const event = {
+      id: "event-message" as OrchestrationV2DomainEvent["id"],
+      type: "message.updated" as const,
+      threadId,
+      occurredAt: now,
+      payload: message,
+    };
+    const before = { ...emptyProjection, hasLocalConversation: false };
+    const after = applyOrchestrationV2ProjectionEvent(before, event)!;
+    expect(after.hasLocalConversation).toBe(true);
+    const compact = { ...event, payload: { ...message, text: "/compact" } };
+    expect(needsConversationSnapshot(after, compact)).toBe(true);
+    expect(needsConversationSnapshot({ ...after, messages: [] }, compact)).toBe(true);
+    expect(
+      needsConversationSnapshot(
+        { ...after, messages: [{ ...message, id: MessageId.make("other") }] },
+        compact,
+      ),
+    ).toBe(false);
+    expect(needsConversationSnapshot(before, compact)).toBe(false);
+    expect(needsConversationSnapshot(emptyProjection, compact)).toBe(false);
+    expect(needsConversationSnapshot({ ...after, messages: [compact.payload] }, compact)).toBe(
+      false,
+    );
+    expect(applyOrchestrationV2ProjectionEvent(before, compact)!.hasLocalConversation).toBe(false);
+    expect(
+      applyOrchestrationV2ProjectionEvent(before, {
+        ...event,
+        payload: { ...message, role: "assistant" },
+      })!.hasLocalConversation,
+    ).toBe(false);
+  });
   it("applies a compact PR sync without replacing other links or thread metadata", () => {
     const link = (number: number): ThreadPullRequestLink => ({
       host: "github.com",

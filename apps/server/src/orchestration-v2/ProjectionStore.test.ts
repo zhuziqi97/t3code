@@ -2754,6 +2754,49 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
         },
       });
 
+      const readConversation = Effect.fn("readConversation")(function* () {
+        const snapshot = yield* projectionStore.getThreadSnapshotWindow(threadId, { rowLimit: 1 });
+        return snapshot.projection.hasLocalConversation;
+      });
+      assert.isFalse(yield* readConversation());
+      const compactMessage = {
+        createdBy: "user" as const,
+        creationSource: "web" as const,
+        id: MessageId.make("message:bounded-sql-history:compact"),
+        threadId,
+        runId: null,
+        nodeId: null,
+        role: "user" as const,
+        text: "\t/COMPACT\n",
+        streaming: false,
+        createdAt: now,
+        updatedAt: now,
+      };
+      for (const attachments of [
+        [],
+        [
+          {
+            type: "image" as const,
+            id: "image",
+            name: "image.png",
+            mimeType: "image/png",
+            sizeBytes: 1,
+          },
+        ],
+        [],
+      ]) {
+        yield* projectionStore.apply({
+          id: EventId.make(`event:bounded-sql-history:compact:${attachments.length}`),
+          type: "message.updated",
+          threadId,
+          occurredAt: now,
+          payload: { ...compactMessage, attachments },
+        });
+        assert.strictEqual(yield* readConversation(), attachments.length > 0);
+      }
+      yield* sql`DELETE FROM orchestration_v2_projection_messages WHERE thread_id = ${threadId}`;
+      assert.isFalse(yield* readConversation());
+
       for (let ordinal = 1; ordinal <= 1_000; ordinal += 1) {
         const id = `turn-item:bounded-sql-history:${ordinal}`;
         const runId = `run:bounded-sql-history:${ordinal}`;
@@ -2896,6 +2939,7 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
         { concurrency: 4 },
       );
       for (const snapshot of snapshots) {
+        assert.propertyVal(snapshot.projection, "hasLocalConversation", true);
         assert.lengthOf(snapshot.projection.turnItems, 76);
         assert.lengthOf(snapshot.projection.runs, 76);
         assert.lengthOf(snapshot.projection.visibleTurnItems, 76);
@@ -2914,6 +2958,17 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
           [baselineId],
         );
       }
+      assert.isTrue(yield* readConversation());
+      const toolWindow = yield* projectionStore.getThreadSnapshotWindow(threadId, {
+        rowLimit: 1,
+        anchorItemId: TurnItemId.make("turn-item:bounded-sql-history:999"),
+      });
+      assert.lengthOf(toolWindow.projection.visibleTurnItems, 1);
+      assert.isTrue(
+        toolWindow.projection.visibleTurnItems.every((row) => row.item.type !== "user_message"),
+      );
+      assert.isEmpty(toolWindow.projection.messages);
+      assert.isTrue(toolWindow.projection.hasLocalConversation);
       const humanWindow = () =>
         projectionStore.getThreadSnapshotWindow(threadId, {
           rowLimit: 77,

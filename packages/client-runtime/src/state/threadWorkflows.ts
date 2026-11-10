@@ -13,6 +13,33 @@ type Run = Projection["runs"][number];
 type Message = Projection["messages"][number];
 type ProviderSession = Projection["providerSessions"][number];
 
+export function hasCompactableConversation(
+  projection: Pick<
+    Projection,
+    "hasLocalConversation" | "thread" | "visibleTurnItems" | "contextTransfers" | "contextHandoffs"
+  >,
+): boolean {
+  const localConversation =
+    projection.hasLocalConversation ??
+    projection.visibleTurnItems.some(
+      ({ item }) =>
+        item.type === "user_message" &&
+        (item.text.trim().toLowerCase() !== "/compact" || item.attachments.length > 0),
+    );
+  if (localConversation) return true;
+  if (projection.thread.forkedFrom?.type !== "run") return false;
+  const resolution = projection.contextTransfers.find(
+    (transfer) => transfer.type === "fork" && transfer.targetThreadId === projection.thread.id,
+  )?.resolution;
+  return (
+    resolution?.strategy !== "portable_context" ||
+    projection.contextHandoffs.some(
+      (handoff) =>
+        handoff.id === resolution.contextHandoffId && (handoff.history?.messages.length ?? 0) > 0,
+    )
+  );
+}
+
 const ACTIVE_RUN_STATUSES = new Set<Run["status"]>(["preparing", "starting", "running", "waiting"]);
 const MERGE_BACK_RUN_STATUSES = new Set<Run["status"]>(["waiting", "completed"]);
 const MERGE_BACK_BLOCKING_RUN_STATUSES = new Set<Run["status"]>([

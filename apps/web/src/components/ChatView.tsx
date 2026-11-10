@@ -97,6 +97,7 @@ import {
 } from "@t3tools/client-runtime/state/subagentRuntime";
 import {
   getUserQueuedThreadRuns,
+  hasCompactableConversation,
   threadSupportsProviderHandoff,
 } from "@t3tools/client-runtime/state/thread-workflows";
 import { resolvePendingHandoff } from "@t3tools/client-runtime/handoff";
@@ -2437,11 +2438,8 @@ export default function ChatView(props: ChatViewProps) {
     scrollToEnd,
     persistThreadSettingsForNextTurn,
   });
-  const activeThreadHasCompactableConversation = serverVisibleTurnItems.some(
-    ({ item }) =>
-      item.type === "user_message" &&
-      (item.text.trim().toLowerCase() !== "/compact" || item.attachments.length > 0),
-  );
+  const activeThreadHasCompactableConversation =
+    serverProjection !== null && hasCompactableConversation(serverProjection);
   const pendingHandoffSelection = composerSelectedModelSelection ?? activeThread?.modelSelection;
   const pendingHandoffSelectionUsable = providerInstanceEntries.some(
     (entry) =>

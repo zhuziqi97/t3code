@@ -34,7 +34,10 @@ import { runCachePersistence } from "./cachePersistence.ts";
 import * as ManagedRelay from "../relay/managedRelay.ts";
 import { isAuthorizationFailure, request, subscribeDynamic } from "../rpc/client.ts";
 import { parseThreadKey, threadKey } from "./entities.ts";
-import { applyOrchestrationV2ProjectionEvent } from "./orchestrationV2Projection.ts";
+import {
+  applyOrchestrationV2ProjectionEvent,
+  needsConversationSnapshot,
+} from "./orchestrationV2Projection.ts";
 import { THREAD_SNAPSHOT_IDLE_TTL_MS } from "./threadRetention.ts";
 import { followStreamInEnvironment } from "./runtime.ts";
 import * as ThreadHistoryController from "./threadHistoryController.ts";
@@ -278,11 +281,16 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
   };
   if (resumeCache?.owner === owner) resumeCache.snapshot = committed;
   const awaitingCompletion = yield* Ref.make(false);
+  const conversationRefreshes = yield* Queue.sliding<void>(1);
+  const forceSnapshot = yield* Ref.make(
+    Option.isSome(initialState.data) && initialState.data.value.hasLocalConversation === undefined,
+  );
   const applyLock = yield* Semaphore.make(1);
   // Save only completed data/cursor updates. A canceled scope must not cache
   // a cursor whose event has not reached the data yet.
   const announceRequests = makeThreadRequestsResolvedAnnouncer(environmentId, threadId);
   const remember = Effect.gen(function* () {
+    if (yield* Ref.get(forceSnapshot)) return;
     const current = yield* SubscriptionRef.get(state);
     const sequence = yield* SubscriptionRef.get(lastSequence);
     // Only a synchronized projection from the scope that owns the thread is
@@ -473,6 +481,7 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
     }));
 
   const setDeleted = Effect.fn("EnvironmentThreadState.setDeleted")(function* () {
+    yield* Ref.set(forceSnapshot, false);
     yield* Ref.set(awaitingCompletion, false);
     yield* SubscriptionRef.set(state, {
       data: Option.none(),
@@ -538,6 +547,7 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
           readonly projection: OrchestrationV2ThreadProjection;
           readonly history: ThreadHistoryMeta;
         };
+    let refreshConversation = false;
 
     const applyEvent = (
       current: EnvironmentThreadState,
@@ -566,6 +576,7 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
             }
           : undefined;
       const next = applyOrchestrationV2ProjectionEvent(current.data.value, item.event, partial);
+      refreshConversation ||= needsConversationSnapshot(current.data.value, item.event);
       if (next === null || next === current.data.value) {
         return [{ _tag: "noop" }, current];
       }
@@ -608,7 +619,15 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
       yield* setDeleted();
       return;
     }
-    if (result._tag === "applied" && shouldPersistThread(result.projection, result.history)) {
+    if (refreshConversation) {
+      yield* Ref.set(forceSnapshot, true);
+      yield* Queue.offer(conversationRefreshes, undefined);
+    }
+    if (
+      result._tag === "applied" &&
+      !(yield* Ref.get(forceSnapshot)) &&
+      shouldPersistThread(result.projection, result.history)
+    ) {
       const snapshotSequence = yield* SubscriptionRef.get(lastSequence);
       yield* queuePersist(
         snapshotToPersist(
@@ -635,6 +654,7 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
     }
 
     if (item.kind === "snapshot") {
+      yield* Ref.set(forceSnapshot, false);
       yield* SubscriptionRef.set(lastSequence, item.snapshotSequence);
       const hasProgressiveHistory =
         item.historyCursor !== undefined ||
@@ -1055,7 +1075,7 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
         }
 
         const sequence = yield* SubscriptionRef.get(lastSequence);
-        const canResume = Option.isSome(current.data);
+        const canResume = Option.isSome(current.data) && !(yield* Ref.get(forceSnapshot));
         const acceptBoundedSnapshot = yield* Ref.get(acceptsBoundedSocketSnapshots);
 
         return {
@@ -1088,7 +1108,10 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
           if (!retryOverHttp) yield* setStreamError(formatThreadError(cause));
         }),
         retryExpectedFailureAfter: "250 millis",
-        resubscribe: Stream.merge(foregroundResubscriptions, Stream.fromQueue(httpRetries)),
+        resubscribe: Stream.merge(
+          Stream.merge(foregroundResubscriptions, Stream.fromQueue(httpRetries)),
+          Stream.fromQueue(conversationRefreshes),
+        ),
       },
     ).pipe(Stream.runForEachArray(applyItems)),
   );
