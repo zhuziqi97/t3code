@@ -5476,8 +5476,11 @@ export const zh: Partial<Messages> = {
   "terminal.clipboardFailed": "无法读取剪贴板",
   "terminal.clipboard.copyUnavailable": "剪贴板不可用，无法复制终端选中的内容。",
   "terminal.clipboard.copyFailed": "无法将终端选中的内容复制到剪贴板。",
-  "terminal.clipboard.readUnavailable": "剪贴板不可用，无法粘贴到终端。",
-  "terminal.clipboard.readFailed": "无法读取剪贴板内容。",
+  "terminal.clipboard.readUnavailable":
+    "此浏览器无法读取剪贴板以从菜单粘贴。请聚焦终端后按 {{shortcut}}；菜单粘贴需要支持此功能的浏览器，并通过 HTTPS 或 localhost 访问。",
+  "terminal.clipboard.readDenied":
+    "浏览器拒绝了剪贴板读取。请允许此网站访问剪贴板，或聚焦终端后按 {{shortcut}} 粘贴。",
+  "terminal.clipboard.readFailed": "无法读取剪贴板内容。请聚焦终端后按 {{shortcut}} 粘贴。",
   "terminal.menuFailed": "无法打开终端右键菜单",
   "terminal.cursorFailed": "无法移动光标",
   "terminal.deleteInputFailed": "无法删除终端输入",

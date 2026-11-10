@@ -205,7 +205,7 @@ it("retranslates initialization errors while retaining raw diagnostics and avoid
 it.each([
   ["copy", false, "剪贴板不可用，无法复制终端选中的内容。"],
   ["copy", true, "无法将终端选中的内容复制到剪贴板。"],
-  ["paste", false, "剪贴板不可用，无法粘贴到终端。"],
+  ["paste", false, "此浏览器无法读取剪贴板以从菜单粘贴。"],
   ["paste", true, "无法读取剪贴板内容。"],
 ] as const)(
   "shows a Chinese %s clipboard failure with API availability %s",

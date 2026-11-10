@@ -31,6 +31,7 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import { getTerminalLabel } from "@t3tools/shared/terminalLabels";
+import { isMacPlatform } from "@t3tools/shared/keybindings";
 import * as Schema from "effect/Schema";
 import {
   type PointerEvent as ReactPointerEvent,
@@ -48,6 +49,7 @@ import { stackedThreadToast, toastManager } from "~/components/ui/toast";
 import {
   ClipboardApiUnavailableError,
   ClipboardReadError,
+  ClipboardReadDeniedError,
   ClipboardReadUnavailableError,
   ClipboardWriteError,
   readTextFromClipboard,
@@ -116,6 +118,7 @@ const isClipboardApiUnavailableError = Schema.is(ClipboardApiUnavailableError);
 const isClipboardWriteError = Schema.is(ClipboardWriteError);
 const isClipboardReadUnavailableError = Schema.is(ClipboardReadUnavailableError);
 const isClipboardReadError = Schema.is(ClipboardReadError);
+const isClipboardReadDeniedError = Schema.is(ClipboardReadDeniedError);
 
 interface DrawerLayout {
   viewportHeight: number;
@@ -878,12 +881,20 @@ function TerminalSessionViewport({
               ? "terminal.clipboard.copyFailed"
               : isClipboardReadUnavailableError(error)
                 ? "terminal.clipboard.readUnavailable"
-                : isClipboardReadError(error)
-                  ? "terminal.clipboard.readFailed"
-                  : null;
+                : isClipboardReadDeniedError(error)
+                  ? "terminal.clipboard.readDenied"
+                  : isClipboardReadError(error)
+                    ? "terminal.clipboard.readFailed"
+                    : null;
           writeSystemMessage(
             activeTerminal,
-            clipboardKey ? i18n.t(clipboardKey) : error instanceof Error ? error.message : fallback,
+            clipboardKey
+              ? i18n.t(clipboardKey, {
+                  shortcut: isMacPlatform(navigator.platform ?? "") ? "⌘V" : "Ctrl+Shift+V",
+                })
+              : error instanceof Error
+                ? error.message
+                : fallback,
           );
         }
       };
@@ -915,7 +926,6 @@ function TerminalSessionViewport({
           );
         } catch (error) {
           reportIfCurrent(requestId, error, i18n.t("terminal.clipboardFailed"));
-          return;
         }
         focusIfCurrent(requestId);
       };

@@ -5793,8 +5793,11 @@ export const en = {
     "Clipboard API is unavailable while copying terminal selection.",
   "terminal.clipboard.copyFailed": "Failed to copy terminal selection to the clipboard.",
   "terminal.clipboard.readUnavailable":
-    "Clipboard API is unavailable while reading terminal input.",
-  "terminal.clipboard.readFailed": "Failed to read terminal input from the clipboard.",
+    "This browser cannot read the clipboard for menu paste. Focus the terminal and press {{shortcut}}. Menu paste requires a supported browser over HTTPS or localhost.",
+  "terminal.clipboard.readDenied":
+    "The browser denied clipboard access. Allow clipboard access for this site, or focus the terminal and press {{shortcut}} to paste.",
+  "terminal.clipboard.readFailed":
+    "Failed to read terminal input from the clipboard. Focus the terminal and press {{shortcut}} to paste.",
   "terminal.menuFailed": "Unable to open the terminal context menu",
   "terminal.cursorFailed": "Failed to move cursor",
   "terminal.deleteInputFailed": "Failed to delete terminal input",
