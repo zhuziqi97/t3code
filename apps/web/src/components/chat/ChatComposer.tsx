@@ -82,12 +82,8 @@ import {
   extendReplacementRangeForTrailingSpace,
   replaceTextRange,
 } from "../../composer-logic";
-import {
-  deriveComposerSendState,
-  getAntigravitySendBlockReason,
-  resolveComposerInteractionMode,
-} from "../ChatView.logic";
-import { DEFAULT_COMPOSER_PLACEHOLDER } from "../../composerPlaceholder";
+import { deriveComposerSendState, getAntigravitySendBlockReason } from "../ChatView.logic";
+import { deriveLatestContextWindowSnapshot } from "~/lib/contextWindow";
 import {
   dataTransferHasComposerMention,
   makeComposerMentionDragHandlers,
@@ -260,7 +256,6 @@ import {
   resolveProviderSlashCommandsForCwd,
 } from "@t3tools/client-runtime/providerSkills";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
-import { Kbd } from "../ui/kbd";
 import { useSoftwareKeyboardOpen } from "../../hooks/useSoftwareKeyboardOpen";
 import { useStableCallback } from "../../hooks/useStableCallback";
 import { usePanelAnimationSettings } from "../../panelAnimations";
@@ -428,6 +423,10 @@ export interface ChatComposerProps {
 
   compactThreadUnavailable: boolean;
   compactDisabled: boolean;
+  compactDisabledReason: string | null;
+  contextWindowEntries: Parameters<typeof deriveLatestContextWindowSnapshot>[0];
+  contextWindowLiveUsage: Parameters<typeof deriveLatestContextWindowSnapshot>[1];
+  contextWindowProviderThread: Parameters<typeof deriveLatestContextWindowSnapshot>[2];
 
   resolvedTheme: "light" | "dark";
   settings: UnifiedSettings;
@@ -546,6 +545,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     projectName,
     compactThreadUnavailable,
     compactDisabled,
+    compactDisabledReason,
+    contextWindowEntries,
+    contextWindowLiveUsage,
+    contextWindowProviderThread,
     resolvedTheme,
     settings,
     keybindings,
@@ -970,6 +973,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     modelOptionsByInstance,
   );
   const reserveContextWindowMeter = settings.contextWindowMeterEnabled;
+  const activeContextWindow = deriveLatestContextWindowSnapshot(
+    contextWindowEntries,
+    contextWindowLiveUsage,
+    contextWindowProviderThread,
+  );
+  const resolvedCompactDisabledReason =
+    compactDisabledReason ?? (noProviderAvailable ? t("chat.compact.unavailable") : null);
+  const compactCommandAvailable = providerSupportsManualCompaction(selectedProviderEntry);
 
   const [composerCursor, setComposerCursor] = useState(() => {
     const value = isLiteralPendingAnswer ? (activePendingProgress?.customAnswer ?? prompt) : prompt;
@@ -3244,14 +3255,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         composerRequiresModifier: composerRequiresModifier(settings.sendShortcut, prompt),
       },
     }),
-    showPlanFollowUpPrompt: pendingUserInputs.length === 0 && showPlanFollowUpPrompt,
-    promptHasText: prompt.trim().length > 0,
+    voiceInputActive,
     isSendBusy,
-    sendDisabledReason,
+    sendDisabledReason: voiceSendDisabledReason,
     isEnvironmentUnavailable:
       environmentUnavailable !== null || noProviderAvailable || projectSelectionRequired,
     isPreparingWorktree,
-    hasSendableContent: composerSendState.hasSendableContent,
+    hasSendableContent: composerSendState.hasSendableContent || voiceInputActive,
     canResume: showResumeAction,
     preserveComposerFocusOnPointerDown: isMobileViewport,
     isEditingQueuedMessage,
@@ -3259,7 +3269,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     onResume,
     onPreviousPendingQuestion: onPreviousActivePendingUserInputQuestion,
     onInterrupt: handleInterruptPrimaryActionStable,
-    onImplementPlanInNewThread: handleImplementPlanInNewThreadPrimaryActionStable,
     compactBeforeSendTokens: props.resumeCompactionTokens,
     keepFullHistory: props.keepFullHistory,
     onToggleKeepFullHistory: props.onToggleKeepFullHistory,
@@ -3649,13 +3658,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                           ? isChoiceOnlyPendingQuestion
                             ? t("chat.input.chooseAbove")
                             : t("chat.input.ownAnswer")
-                          : showPlanFollowUpPrompt && activeProposedPlan
-                            ? t("chat.plan.feedbackPlaceholder")
-                            : projectSelectionRequired
-                              ? t("chat.project.chooseAbove")
-                              : showProviderUnavailable
-                                ? t("chat.provider.enableToSend")
-                                : t("chat.prompt.hint")
+                          : projectSelectionRequired
+                            ? t("chat.project.chooseAbove")
+                            : showProviderUnavailable
+                              ? t("chat.provider.enableToSend")
+                              : t("chat.prompt.hint")
                     }
                     disabled={
                       projectSelectionRequired ||
@@ -3750,7 +3757,47 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     {...(compactCommandAvailable
                       ? { onCompactContext: compactThreadContextStable }
                       : {})}
-                  />
+                  >
+                    {speechInput.available ? (
+                      <>
+                        <ComposerSpeechRecordingPill
+                          state={speechInput.state}
+                          progress={null}
+                          finishShortcutLabel={dictationShortcutLabel}
+                          cancelShortcutLabel="Esc"
+                          level={speechInput.level}
+                          disabled={dictationDisabled}
+                          onStart={() => void speechInput.start()}
+                          onStop={() => void speechInput.stop()}
+                          onCancel={() => speechInput.cancel()}
+                          onSkipPostProcessing={() => speechInput.skipPostProcessing()}
+                        />
+                        <ComposerSpeechButton
+                          state={speechInput.state}
+                          progress={null}
+                          shortcutLabel={dictationShortcutLabel}
+                          disabled={dictationDisabled}
+                          onStart={() => void speechInput.start()}
+                          onCancel={() => speechInput.cancel()}
+                        />
+                      </>
+                    ) : null}
+                    <VoiceInputSetup
+                      environmentId={speechInput.transcriptionEnvironmentId}
+                      open={speechInput.setup.open}
+                      step={speechInput.setup.step}
+                      status={speechInput.status}
+                      model={speechInput.setup.model}
+                      language={speechInput.setup.language}
+                      downloading={speechInput.setup.downloading}
+                      error={speechInput.setup.error}
+                      onOpenChange={speechInput.setup.setOpen}
+                      onRetryCatalog={speechInput.setup.retryCatalog}
+                      onDownload={() => void speechInput.setup.download()}
+                      onCancelDownload={() => void speechInput.setup.cancelDownload()}
+                      onStartRecording={() => void speechInput.setup.startRecording()}
+                    />
+                  </ComposerFooterPrimaryActions>
                 </div>
               </div>
             )}
