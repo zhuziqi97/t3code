@@ -14,6 +14,7 @@ export const ACP_EMPTY_OPTION_VALUE = "_t3/empty";
 
 const MAX_OPTION_DESCRIPTORS = 16;
 const MAX_OPTION_CHOICES = 64;
+const MAX_MODELS = 256;
 const MAX_TEXT_LENGTH = 256;
 const MAX_DESCRIPTION_LENGTH = 1_024;
 
@@ -149,6 +150,27 @@ export function acpProviderOptionDescriptors(input: {
   return descriptors.slice(0, MAX_OPTION_DESCRIPTORS);
 }
 
+function sessionModels(
+  candidates: ReadonlyArray<{ readonly id: string; readonly name: string }> | undefined,
+  currentModelId: string | null,
+) {
+  if (candidates === undefined) return undefined;
+  const seen = new Set<string>();
+  const models: Array<{ readonly id: string; readonly name: string }> = [];
+  for (const candidate of candidates) {
+    const id = boundedOpaqueValue(candidate.id, MAX_TEXT_LENGTH);
+    if (id === undefined || seen.has(id)) continue;
+    seen.add(id);
+    models.push({ id, name: boundedText(candidate.name, MAX_TEXT_LENGTH) || id });
+  }
+  const bounded = models.slice(0, MAX_MODELS);
+  const current = models.find((model) => model.id === currentModelId);
+  if (current !== undefined && !bounded.some((model) => model.id === currentModelId)) {
+    bounded[MAX_MODELS - 1] = current;
+  }
+  return bounded;
+}
+
 export function acpSessionConfiguration(input: {
   readonly instanceId: ProviderInstanceId;
   readonly configOptions: ReadonlyArray<EffectAcpSchema.SessionConfigOption>;
@@ -159,16 +181,28 @@ export function acpSessionConfiguration(input: {
   const modelOption = findModelConfigOption(input.configOptions);
   const model =
     modelOption?.type === "select" ? modelOption.currentValue : input.modelState?.currentModelId;
+  const modelId = model ? (boundedOpaqueValue(model, MAX_TEXT_LENGTH) ?? null) : null;
+  const candidates =
+    modelOption === undefined
+      ? input.modelState?.availableModels.map((candidate) => ({
+          id: candidate.modelId,
+          name: candidate.name,
+        }))
+      : flattenSelectChoices(modelOption.options).map((candidate) => ({
+          id: candidate.value,
+          name: candidate.name,
+        }));
   return {
     modelSelection: {
       instanceId: input.instanceId,
-      model: model ? (boundedOpaqueValue(model, MAX_TEXT_LENGTH) ?? null) : null,
+      model: modelId,
       options: optionDescriptors.flatMap((descriptor) =>
         descriptor.currentValue === undefined
           ? []
           : [{ id: descriptor.id, value: descriptor.currentValue }],
       ),
     },
+    models: sessionModels(candidates, modelId),
     optionDescriptors,
   };
 }

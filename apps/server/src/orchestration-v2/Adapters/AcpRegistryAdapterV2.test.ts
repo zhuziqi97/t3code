@@ -16,7 +16,7 @@ import {
   ProviderInstanceId,
   ProviderSessionId,
   ThreadId,
-  type OrchestrationV2ProviderThreadNativeMetadata,
+  OrchestrationV2ProviderThreadNativeMetadata,
 } from "@t3tools/contracts";
 
 import { pendingBackgroundTurnItems } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
@@ -513,7 +513,8 @@ describe("AcpRegistryAdapterV2", () => {
       readonly setup: unknown;
       readonly pickFrames: ReadonlyArray<Frame>;
       readonly customModels?: ReadonlyArray<string>;
-      readonly storedModel?: string;
+      readonly storedModel?: string | null;
+      readonly instanceId?: ProviderInstanceId;
       readonly storedModePick?: string;
       readonly storedOptions?: ModelSelection["options"];
       readonly sessionId?: string;
@@ -564,7 +565,7 @@ describe("AcpRegistryAdapterV2", () => {
         },
         ACP_REGISTRY_PROVIDER,
       );
-      const instanceId = ProviderInstanceId.make("acp-registry-stored-picks");
+      const instanceId = input.instanceId ?? ProviderInstanceId.make("acp-registry-stored-picks");
       const adapter = yield* makeAcpRegistryAdapterV2({
         selfInvocation: yield* resolveSelfInvocation(),
         instanceId,
@@ -602,13 +603,16 @@ describe("AcpRegistryAdapterV2", () => {
       });
       const stored: ModelSelection = {
         instanceId,
-        model: input.storedModel ?? "default",
+        model: input.storedModel === undefined ? "default" : input.storedModel,
         ...(input.storedOptions ? { options: input.storedOptions } : {}),
         ...(input.storedModePick === undefined
           ? {}
           : { options: [{ id: ACP_SESSION_MODE_OPTION_ID, value: input.storedModePick }] }),
       };
       const configurations: Array<OrchestrationV2ProviderThreadNativeMetadata | null> = [];
+      const decodeConfiguration = Schema.decodeUnknownEffect(
+        OrchestrationV2ProviderThreadNativeMetadata,
+      );
       const runtime = yield* Effect.gen(function* () {
         const runtime = yield* adapter.openSession({
           threadId,
@@ -622,7 +626,11 @@ describe("AcpRegistryAdapterV2", () => {
           modelSelection: stored,
           runtimePolicy,
         });
-        configurations.push(providerThread.nativeMetadata ?? null);
+        configurations.push(
+          providerThread.nativeMetadata == null
+            ? null
+            : yield* decodeConfiguration(providerThread.nativeMetadata),
+        );
         if (input.turnModels === undefined) return runtime;
         const now = yield* DateTime.now;
         let current = stored;
@@ -658,7 +666,7 @@ describe("AcpRegistryAdapterV2", () => {
               }),
             ),
           );
-          configurations.push(metadata ?? null);
+          configurations.push(metadata == null ? null : yield* decodeConfiguration(metadata));
           current = target;
         }
         return runtime;
@@ -680,7 +688,13 @@ describe("AcpRegistryAdapterV2", () => {
           answer("session/set_mode", {}),
         ],
         storedModePick: "autoEdit",
-      }).pipe(Effect.provide(layerTest), Effect.scoped),
+      }).pipe(
+        Effect.tap(({ configurations }) =>
+          Effect.sync(() => assert.isUndefined(configurations[0]?.models)),
+        ),
+        Effect.provide(layerTest),
+        Effect.scoped,
+      ),
     );
 
     it.effect("switches a mode config option under its own id", () =>
@@ -745,7 +759,7 @@ describe("AcpRegistryAdapterV2", () => {
                 currentModelId: "hermes",
                 availableModels: ["hermes", "auto", "default"].map((modelId) => ({
                   modelId,
-                  name: modelId,
+                  name: `Native ${modelId}`,
                 })),
               },
             },
@@ -806,7 +820,7 @@ describe("AcpRegistryAdapterV2", () => {
               answer("session/set_config_option", { configOptions: [groupedOption("default")] }),
               ...prompt(configOptionUpdate([])),
               ...setModel("hermes"),
-              ...prompt(),
+              ...prompt(configOptionUpdate([{ ...flatOption("hermes"), options: [] }])),
             ],
           });
           assert.deepEqual(
@@ -823,6 +837,26 @@ describe("AcpRegistryAdapterV2", () => {
               "custom-model",
               "default",
               "hermes",
+            ],
+          );
+          const legacyModels = ["hermes", "auto", "default"].map((id) => ({
+            id,
+            name: `Native ${id}`,
+          }));
+          assert.deepEqual(
+            configurations.map((configuration) => configuration?.models),
+            [
+              legacyModels,
+              legacyModels,
+              legacyModels,
+              legacyModels,
+              legacyModels,
+              [{ id: "auto", name: "Auto" }],
+              [{ id: "auto", name: "Auto" }],
+              [{ id: "default", name: "Default" }],
+              [{ id: "default", name: "Default" }],
+              legacyModels,
+              [],
             ],
           );
         }).pipe(Effect.provide(layerTest), Effect.scoped),
@@ -902,53 +936,55 @@ describe("AcpRegistryAdapterV2", () => {
       },
     );
 
-    it.effect("keeps unadvertised default and auto selections agent-controlled", () =>
-      Effect.gen(function* () {
-        const { configurations } = yield* openWithStoredPicks({
-          setup: {
-            models: {
-              currentModelId: "hermes",
-              availableModels: ["hermes", "other"].map((modelId) => ({ modelId, name: modelId })),
+    it.effect.each(["default", null] as const)(
+      "keeps unadvertised default and auto selections agent-controlled (initial: %s)",
+      (storedModel) =>
+        Effect.gen(function* () {
+          const { configurations } = yield* openWithStoredPicks({
+            setup: {
+              models: {
+                currentModelId: "hermes",
+                availableModels: ["hermes", "other"].map((modelId) => ({ modelId, name: modelId })),
+              },
             },
-          },
-          storedModel: "default",
-          turnModels: ["auto", "default", "other", "default", "auto", "default", "auto"],
-          pickFrames: [
-            ...prompt(),
-            ...prompt(),
-            ...setModel("other"),
-            ...prompt(
-              configOptionUpdate([
-                {
-                  ...modelOption("live-model", "other"),
-                  options: [{ value: "other", name: "Other" }],
-                },
-              ]),
-            ),
-            ...prompt(),
-            ...prompt(),
-            ...prompt(
-              configOptionUpdate([
-                {
-                  ...modelOption("replacement-model", "other", true),
-                  options: [
-                    {
-                      group: "models",
-                      name: "Models",
-                      options: [{ value: "other", name: "Other" }],
-                    },
-                  ],
-                },
-              ]),
-            ),
-            ...prompt(),
-          ],
-        });
-        assert.deepEqual(
-          configurations.map((configuration) => configuration?.modelSelection?.model),
-          ["hermes", "hermes", "hermes", "other", "other", "other", "other", "other"],
-        );
-      }).pipe(Effect.provide(layerTest), Effect.scoped),
+            storedModel,
+            turnModels: ["auto", "default", "other", "default", "auto", "default", "auto"],
+            pickFrames: [
+              ...prompt(),
+              ...prompt(),
+              ...setModel("other"),
+              ...prompt(
+                configOptionUpdate([
+                  {
+                    ...modelOption("live-model", "other"),
+                    options: [{ value: "other", name: "Other" }],
+                  },
+                ]),
+              ),
+              ...prompt(),
+              ...prompt(),
+              ...prompt(
+                configOptionUpdate([
+                  {
+                    ...modelOption("replacement-model", "other", true),
+                    options: [
+                      {
+                        group: "models",
+                        name: "Models",
+                        options: [{ value: "other", name: "Other" }],
+                      },
+                    ],
+                  },
+                ]),
+              ),
+              ...prompt(),
+            ],
+          });
+          assert.deepEqual(
+            configurations.map((configuration) => configuration?.modelSelection?.model),
+            ["hermes", "hermes", "hermes", "other", "other", "other", "other", "other"],
+          );
+        }).pipe(Effect.provide(layerTest), Effect.scoped),
     );
 
     const modelOptions = [
@@ -1094,7 +1130,15 @@ describe("AcpRegistryAdapterV2", () => {
       () =>
         Effect.gen(function* () {
           const a = yield* openWithStoredPicks({
-            setup: { configOptions: [modelConfig("graded"), depth()] },
+            setup: {
+              configOptions: [
+                {
+                  ...modelConfig("graded"),
+                  options: [{ value: "graded", name: "Session A model" }],
+                },
+                depth(),
+              ],
+            },
             storedModel: "graded",
             sessionId: "session-A",
             pickFrames: [],
@@ -1102,7 +1146,10 @@ describe("AcpRegistryAdapterV2", () => {
           const b = yield* openWithStoredPicks({
             setup: {
               configOptions: [
-                modelConfig("boolean"),
+                {
+                  ...modelConfig("boolean"),
+                  options: [{ value: "boolean", name: "Session B model" }],
+                },
                 {
                   id: "vendor/depth",
                   name: "Thinking",
@@ -1129,8 +1176,19 @@ describe("AcpRegistryAdapterV2", () => {
             }),
           });
           assert.equal(stillA.nativeMetadata?.optionDescriptors?.[0]?.currentValue, "high");
+          assert.deepEqual(stillA.nativeMetadata?.models, [
+            { id: "graded", name: "Session A model" },
+          ]);
           const restored = yield* openWithStoredPicks({
-            setup: { configOptions: [modelConfig("graded"), depth("low")] },
+            setup: {
+              configOptions: [
+                {
+                  ...modelConfig("graded"),
+                  options: [{ value: "graded", name: "Restored A model" }],
+                },
+                depth("low"),
+              ],
+            },
             storedModel: "graded",
             sessionId: "session-A",
             load: true,
@@ -1138,6 +1196,34 @@ describe("AcpRegistryAdapterV2", () => {
           });
           assert.equal(a.configurations[0]?.modelSelection?.model, "graded");
           assert.equal(a.configurations[0]?.optionDescriptors?.[0]?.currentValue, "high");
+          const otherId = ProviderInstanceId.make("acp-registry-other-instance");
+          const other = yield* openWithStoredPicks({
+            instanceId: otherId,
+            setup: {
+              configOptions: [
+                {
+                  ...modelConfig("plain"),
+                  options: [{ value: "plain", name: "Other instance model" }],
+                },
+              ],
+            },
+            storedModel: "plain",
+            sessionId: "session-A",
+            pickFrames: [],
+          });
+          assert.deepEqual(a.configurations[0]?.models, [
+            { id: "graded", name: "Session A model" },
+          ]);
+          assert.deepEqual(b.configurations[0]?.models, [
+            { id: "boolean", name: "Session B model" },
+          ]);
+          assert.deepEqual(restored.configurations[0]?.models, [
+            { id: "graded", name: "Restored A model" },
+          ]);
+          assert.deepEqual(other.configurations[0]?.models, [
+            { id: "plain", name: "Other instance model" },
+          ]);
+          assert.equal(other.configurations[0]?.modelSelection?.instanceId, otherId);
           assert.equal(b.configurations[0]?.optionDescriptors?.[0]?.currentValue, true);
           assert.equal(restored.configurations[0]?.optionDescriptors?.[0]?.currentValue, "low");
           assert.equal(a.configurations[0]?.optionDescriptors?.[0]?.currentValue, "high");

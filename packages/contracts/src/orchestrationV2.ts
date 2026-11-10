@@ -1061,6 +1061,9 @@ export type OrchestrationV2PendingBackgroundTask = typeof OrchestrationV2Pending
 export const OrchestrationV2ProviderThreadNativeMetadata = Schema.Struct({
   optionDescriptors: Schema.optional(Schema.Array(ProviderOptionDescriptor)),
   modelSelection: Schema.optional(ModelSelection),
+  models: Schema.optional(
+    Schema.Array(Schema.Struct({ id: TrimmedNonEmptyString, name: TrimmedNonEmptyString })),
+  ),
   title: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   updatedAt: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   itemIdentityVersion: Schema.optional(Schema.Literal(2)),
