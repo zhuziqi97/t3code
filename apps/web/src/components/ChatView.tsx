@@ -6,7 +6,6 @@ import {
   applyThreadProviderConfiguration,
 } from "@t3tools/client-runtime/state/thread-execution";
 import { useTranslate } from "../i18n";
-import { deriveLatestContextWindowSnapshot } from "../lib/contextWindow";
 import { ChildThreadApprovals } from "./chat/ChildThreadApprovals";
 import { workspaceAreaProps } from "../lib/workspaceFocus";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";

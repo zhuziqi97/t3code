@@ -3127,35 +3127,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   );
   const showJumpHints = useThreadJumpHintsVisible(shouldShowJumpHintsNow);
 
-  const handleNewThreadClick = (event?: ReactMouseEvent) => {
-    if (
-      shouldCreateNewThreadInCurrentProject(
-        event?.shiftKey ?? false,
-        scopeGroups.length,
-        projectGroups.length,
-      )
-    ) {
-      if (isMobile) setOpenMobile(false);
-      // With no current or open project, such as when every project is archived, pick one.
-      void startNewThreadFromContext({
-        activeDraftThread: newThreadContext.activeDraftThread,
-        activeThread: newThreadContext.activeThread ?? undefined,
-        defaultProjectRef: newThreadContext.defaultProjectRef,
-        handleNewThread,
-      }).then((started) => {
-        if (!started) openCommandPalette({ open: "new-thread-in" });
-      });
-      return;
-    }
-    if (isMobile) setOpenMobile(false);
-    openCommandPalette({ open: "new-thread-in" });
-  };
-
-  const newThreadShortcutLabel =
-    shortcutLabelForCommand(keybindings, "chat.new") ??
-    (shouldCreateNewThreadInCurrentProject(false, scopeGroups.length, projectGroups.length)
-      ? shortcutLabelForCommand(keybindings, "chat.newLocal")
-      : undefined);
   const newThreadInProjectShortcutLabel = shortcutLabelForCommand(keybindings, "chat.newLocal");
   const handleNewThreadClick = () => {
     if (isMobile) setOpenMobile(false);
@@ -3389,13 +3360,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 newThreadTarget.kind === "project"
                   ? `${newThreadTarget.label} · ${projectByKey.get(`${newThreadTarget.projectRef.environmentId}:${newThreadTarget.projectRef.projectId}`)?.workspaceRoot ?? ""}`
                   : null
-              }
-              showNewThreadInProjectHint={
-                !shouldCreateNewThreadInCurrentProject(
-                  false,
-                  scopeGroups.length,
-                  projectGroups.length,
-                )
               }
               showNewThreadInProjectHint={false}
               searchInputRef={threadSearchInputRef}
