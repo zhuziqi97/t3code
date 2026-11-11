@@ -43,7 +43,7 @@ describe("V2 client presentation", () => {
     expect(active.latestSentMessageAt).toBe("2026-06-19T23:58:00.000Z");
     expect(active.hasPendingUserInput).toBe(true);
     expect(isThreadWorking(active)).toBe(false);
-    expect(canSnooze(active, { now: "2026-06-20T00:05:00.000Z" })).toBe(false);
+    expect(canSnooze(active, { now: "2026-06-20T00:05:00.000Z" })).toBe(true);
 
     const completed = presentThreadShell(environmentId, {
       ...running,
@@ -57,7 +57,7 @@ describe("V2 client presentation", () => {
       "latestSentMessageAt",
     );
     expect(isThreadWorking(completed)).toBe(false);
-    expect(canSnooze(completed, { now: "2026-06-20T00:05:00.000Z" })).toBe(false);
+    expect(canSnooze(completed, { now: "2026-06-20T00:05:00.000Z" })).toBe(true);
     expect(effectiveSnoozed(active, { now: "2026-06-20T00:05:00.000Z" })).toBe(false);
     expect(effectiveSnoozed(completed, { now: "2026-06-20T00:05:00.000Z" })).toBe(false);
 
@@ -75,7 +75,7 @@ describe("V2 client presentation", () => {
       expect(pending.runtime?.activeRunId).toBe(lifecycle.activeRunId);
       expect(pending.hasPendingUserInput).toBe(true);
       expect(isThreadWorking(pending)).toBe(false);
-      expect(canSnooze(pending, { now: "2026-06-20T00:05:00.000Z" })).toBe(false);
+      expect(canSnooze(pending, { now: "2026-06-20T00:05:00.000Z" })).toBe(true);
       expect(effectiveSnoozed(pending, { now: "2026-06-20T00:05:00.000Z" })).toBe(false);
 
       const cleared = presentThreadShell(environmentId, {

@@ -1,6 +1,8 @@
 import type { ProviderOptionDescriptor } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
+import { createI18n } from "./i18n/index.ts";
+
 import { buildTraitsTriggerDisplay, getDescriptorStringValue } from "./modelTraits.ts";
 
 describe("buildTraitsTriggerDisplay", () => {
@@ -23,13 +25,16 @@ describe("buildTraitsTriggerDisplay", () => {
       ...(input.currentValue ? { currentValue: input.currentValue } : {}),
     };
 
-    expect(
-      buildTraitsTriggerDisplay({
-        descriptors: [descriptor],
-        primarySelectDescriptorId: descriptor.id,
-        ultrathinkPromptControlled: false,
-      }).label,
-    ).toBe(input.label);
+    const traits = {
+      descriptors: [descriptor],
+      primarySelectDescriptorId: descriptor.id,
+      ultrathinkPromptControlled: false,
+    };
+    expect(buildTraitsTriggerDisplay(traits).label).toBe(input.label);
+    const t = createI18n().getFixedT("zh");
+    expect(buildTraitsTriggerDisplay(traits, t).label).toBe(
+      input.label === "Thinking" ? "思考" : input.label,
+    );
     expect(getDescriptorStringValue(descriptor)).toBe(input.value);
   });
 });

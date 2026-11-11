@@ -182,18 +182,23 @@ export function buildTraitsTriggerDisplay(
         ? "Ultrathink"
         : descriptor.type === "boolean"
           ? `${t ? formatProviderOptionName(descriptor, t) : descriptor.label} ${descriptor.currentValue === true ? (t ? t("common.on") : "On") : t ? t("common.off") : "Off"}`
-          : t
-            ? getLocalizedProviderOptionCurrentLabel(
-                descriptor,
-                t,
-                input.modelSelection,
-                input.reportedModelSelection,
-              )
-            : getProviderOptionCurrentLabel(
-                descriptor,
-                input.modelSelection,
-                input.reportedModelSelection,
-              );
+          : ((t
+              ? getLocalizedProviderOptionCurrentLabel(
+                  descriptor,
+                  t,
+                  input.modelSelection,
+                  input.reportedModelSelection,
+                )
+              : getProviderOptionCurrentLabel(
+                  descriptor,
+                  input.modelSelection,
+                  input.reportedModelSelection,
+                )) ??
+            (descriptor.id === "thinking"
+              ? t
+                ? formatProviderOptionName(descriptor, t)
+                : descriptor.label
+              : null));
     if (typeof label === "string" && label.length > 0) {
       if (reasoningLabelIndex === -1 && isReasoningSelect(descriptor)) {
         reasoningLabelIndex = labels.length;

@@ -47,6 +47,7 @@ const TARGET = new PrimaryConnectionTarget({
 const THREAD_ID = v2ThreadId;
 const THREAD: OrchestrationV2ThreadProjection = {
   ...v2Projection,
+  hasLocalConversation: false,
   thread: { ...v2Projection.thread, title: "Cached thread" },
 };
 const SNAPSHOT: OrchestrationV2ThreadDetailSnapshot = { snapshotSequence: 7, projection: THREAD };
@@ -262,35 +263,47 @@ describe("createEnvironmentThreadStateAtoms", () => {
     vi.restoreAllMocks();
   });
 
-  it.effect("keeps warm data and resumes a completed cursor without loading another snapshot", () =>
-    Effect.gen(function* () {
-      const h = yield* makeHarness();
-      const unmount = h.registry.mount(h.stateAtom);
-      const first = yield* Queue.take(h.subscriptions);
-      yield* Queue.offer(first.events, {
-        kind: "event",
-        sequence: 8,
-        event: {
-          id: EventId.make("metadata-1"),
-          type: "thread.metadata-updated",
-          threadId: THREAD_ID,
-          occurredAt: THREAD.thread.updatedAt,
-          payload: { ...THREAD.thread, title: "Retained title" },
-        },
-      });
-      yield* Queue.offer(first.events, { kind: "synchronized" });
-      yield* observeState(h.registry, h.stateAtom, (state) => state.status === "live");
-      const before = currentThread(h.registry, h.stateAtom);
-      unmount();
-      yield* Deferred.await(first.closed);
-      const remount = h.registry.mount(h.stateAtom);
-      expect(currentThread(h.registry, h.stateAtom)).toBe(before);
-      const next = yield* Queue.take(h.subscriptions);
-      expect(next.afterSequence).toBe(8);
-      expect(h.counts()).toEqual({ httpLoads: 0, diskLoads: 1, opened: 2, active: 1 });
-      remount();
-      yield* Deferred.await(next.closed);
-    }),
+  it.effect.each([false, true, undefined])(
+    "keeps warm data and resumes a completed cursor only with conversation metadata: %s",
+    (hasLocalConversation) =>
+      Effect.gen(function* () {
+        const { hasLocalConversation: _metadata, ...legacy } = THREAD;
+        const h = yield* makeHarness({
+          snapshot: {
+            ...SNAPSHOT,
+            projection: {
+              ...legacy,
+              ...(hasLocalConversation === undefined ? {} : { hasLocalConversation }),
+            },
+          },
+        });
+        const unmount = h.registry.mount(h.stateAtom);
+        const first = yield* Queue.take(h.subscriptions);
+        yield* Queue.offer(first.events, {
+          kind: "event",
+          sequence: 8,
+          event: {
+            id: EventId.make("metadata-1"),
+            type: "thread.metadata-updated",
+            threadId: THREAD_ID,
+            occurredAt: THREAD.thread.updatedAt,
+            payload: { ...THREAD.thread, title: "Retained title" },
+          },
+        });
+        yield* Queue.offer(first.events, { kind: "synchronized" });
+        yield* observeState(h.registry, h.stateAtom, (state) => state.status === "live");
+        const before = currentThread(h.registry, h.stateAtom);
+        expect(before.hasLocalConversation).toBe(hasLocalConversation);
+        unmount();
+        yield* Deferred.await(first.closed);
+        const remount = h.registry.mount(h.stateAtom);
+        expect(currentThread(h.registry, h.stateAtom)).toBe(before);
+        const next = yield* Queue.take(h.subscriptions);
+        expect(next.afterSequence).toBe(hasLocalConversation === undefined ? undefined : 8);
+        expect(h.counts()).toEqual({ httpLoads: 0, diskLoads: 1, opened: 2, active: 1 });
+        remount();
+        yield* Deferred.await(next.closed);
+      }),
   );
 
   it.effect("cancels older-page work on unmount and permits it again on a warm return", () =>
