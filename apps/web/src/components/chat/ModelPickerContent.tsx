@@ -367,6 +367,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     onOpenProviderSetup,
   } = props;
   const [searchQuery, setSearchQuery] = useState("");
+  const [modelDetailsKey, setModelDetailsKey] = useState<string | null>(null);
   const modelListRef = useRef<LegendListRef | null>(null);
   const pickerContentRef = useRef<HTMLDivElement>(null);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- publishes this picker's mount to global keydown handlers
@@ -777,6 +778,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     modelJumpLabelByKey,
     activeModelKey,
     selectedModelKeySet,
+    modelDetailsKey,
   };
 
   const onWindowKeyDown = (event: globalThis.KeyboardEvent) => {
@@ -886,6 +888,16 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
           value={onToggleModel ? [...selectedModelKeySet] : activeModelKey}
           onItemHighlighted={(modelKey, eventDetails) => {
             highlightedModelKeyRef.current = typeof modelKey === "string" ? modelKey : null;
+            const event = eventDetails.event;
+            const keyboardNavigation =
+              eventDetails.reason === "keyboard" &&
+              event.type === "keydown" &&
+              "key" in event &&
+              typeof event.key === "string" &&
+              ["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key);
+            setModelDetailsKey(
+              keyboardNavigation && typeof modelKey === "string" ? modelKey : null,
+            );
             if (eventDetails.reason === "keyboard" && eventDetails.index >= 0) {
               void modelListRef.current?.scrollIndexIntoView?.({
                 index: eventDetails.index,
@@ -926,8 +938,10 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
               ref={searchInputRef}
               placeholder={t("chat.model.search")}
               value={searchQuery}
+              onBlur={() => setModelDetailsKey(null)}
               onChange={(e) => {
                 if (!isSearching) setSearchHeight(pickerContentRef.current?.offsetHeight ?? 0);
+                setModelDetailsKey(null);
                 setSearchQuery(e.target.value);
               }}
               onKeyDown={(e) => {
@@ -1064,6 +1078,12 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                     unavailable={model.isUnavailable === true}
                     jumpLabel={modelJumpLabelByKey.get(modelKey) ?? null}
                     disabledReason={disabledReason}
+                    detailsOpen={modelKey === modelDetailsKey}
+                    onDetailsOpenChange={(open) => {
+                      setModelDetailsKey((current) =>
+                        open ? modelKey : current === modelKey ? null : current,
+                      );
+                    }}
                     onToggleFavorite={toggleFavorite}
                   />
                 );

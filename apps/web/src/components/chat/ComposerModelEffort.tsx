@@ -533,7 +533,7 @@ export function ComposerEffortColumn(props: { traits: TraitsSelectionInput | nul
       {/* Matches the search row's box, so one rule runs across the top of the popup. */}
       <div className="shrink-0 px-3 pt-2.5">
         <div className="flex h-8.25 -translate-y-px items-center gap-2 border-b border-border/70 pb-1.5 text-sm">
-          <span className="text-muted-foreground">
+          <span className="shrink-0 text-muted-foreground">
             {(controls?.effort
               ? formatProviderOptionName(controls.effort.descriptor, t)
               : undefined) ?? (controls?.others.length ? "Options" : t("chat.traits.effort"))}

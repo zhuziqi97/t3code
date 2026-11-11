@@ -1,6 +1,6 @@
 import { useTranslate } from "../../i18n";
 import { type ProviderDriverKind, type ProviderInstanceId } from "@t3tools/contracts";
-import { memo } from "react";
+import { memo, useRef } from "react";
 import { CheckIcon, StarIcon } from "lucide-react";
 import { getDisplayModelName } from "./providerIconUtils";
 import { ComboboxItem } from "../ui/combobox";
@@ -34,6 +34,8 @@ export const ModelListRow = memo(function ModelListRow(props: {
   unavailable?: boolean;
   jumpLabel?: string | null;
   disabledReason?: string | null;
+  detailsOpen: boolean;
+  onDetailsOpenChange: (open: boolean) => void;
   onToggleFavorite: (instanceId: ProviderInstanceId, slug: string) => void;
 }) {
   const t = useTranslate();
@@ -42,9 +44,14 @@ export const ModelListRow = memo(function ModelListRow(props: {
     name: props.name,
     subProvider: props.subProvider,
   };
+  const modelName = getDisplayModelName(model);
+  const showModelId = props.showModelId || props.slug !== modelName;
+  const rowRef = useRef<HTMLDivElement>(null);
 
   const row = (
     <ComboboxItem
+      ref={rowRef}
+      render={<TooltipTrigger render={<div />} />}
       hideIndicator
       selectedFill={false}
       index={props.index}
@@ -70,16 +77,18 @@ export const ModelListRow = memo(function ModelListRow(props: {
       />
       <div className="flex min-w-0 flex-1 items-center gap-2 text-left">
         <div className="min-w-0 flex-1 py-1">
-          <div className="wrap-anywhere whitespace-normal text-sm font-normal leading-snug">
-            {getDisplayModelName(model)}
+          <div className="line-clamp-2 wrap-anywhere whitespace-normal text-sm font-normal leading-snug">
+            {modelName}
           </div>
-          <div className="wrap-anywhere whitespace-normal text-xs leading-snug text-muted-foreground">
+          <div className="truncate text-xs leading-snug text-muted-foreground">
             {props.providerDisplayName}
             {props.subProvider ? ` · ${props.subProvider}` : null}
-            {props.showModelId || props.slug !== getDisplayModelName(model) ? (
-              <span className="font-mono"> · {props.slug}</span>
-            ) : null}
           </div>
+          {showModelId ? (
+            <div className="truncate font-mono text-xs leading-snug text-muted-foreground">
+              {props.slug}
+            </div>
+          ) : null}
         </div>
         {props.isSelected ? <CheckIcon className="size-3.5 shrink-0" aria-hidden="true" /> : null}
         {props.showNewBadge ? (
@@ -134,15 +143,37 @@ export const ModelListRow = memo(function ModelListRow(props: {
     </ComboboxItem>
   );
 
-  if (!props.disabledReason) {
-    return row;
-  }
-
   return (
-    <Tooltip>
-      <TooltipTrigger render={row} />
-      <TooltipPopup side="left" align="center">
-        {props.disabledReason}
+    <Tooltip
+      open={props.detailsOpen}
+      onOpenChange={(open) => {
+        const truncated = Array.from(
+          rowRef.current?.querySelectorAll(".line-clamp-2, .truncate") ?? [],
+        ).some(
+          (element) =>
+            element.scrollWidth > element.clientWidth ||
+            element.scrollHeight > element.clientHeight,
+        );
+        props.onDetailsOpenChange(open && (Boolean(props.disabledReason) || truncated));
+      }}
+    >
+      {row}
+      <TooltipPopup
+        side="right"
+        align="start"
+        anchor={() =>
+          rowRef.current?.closest<HTMLElement>("[data-model-picker-content]") ?? rowRef.current
+        }
+      >
+        <div className="pointer-events-auto max-h-[min(24rem,50dvh,calc(var(--available-height)-1rem))] space-y-1 overflow-y-auto">
+          <div>{modelName}</div>
+          <div className="text-muted-foreground">
+            {props.providerDisplayName}
+            {props.subProvider ? ` · ${props.subProvider}` : null}
+          </div>
+          {showModelId ? <div className="font-mono">{props.slug}</div> : null}
+          {props.disabledReason ? <div>{props.disabledReason}</div> : null}
+        </div>
       </TooltipPopup>
     </Tooltip>
   );
