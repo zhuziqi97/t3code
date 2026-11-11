@@ -1787,6 +1787,7 @@ export const en = {
   "menu.quit": "Quit",
   "menu.exit": "Exit",
   "menu.closeWindow": "Close Window",
+  "menu.closeDeveloperTools": "Close Developer Tools",
   "menu.close": "Close",
   "menu.undo": "Undo",
   "menu.redo": "Redo",

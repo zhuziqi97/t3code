@@ -1700,6 +1700,7 @@ export const zh: Partial<Messages> = {
   "menu.quit": "退出",
   "menu.exit": "退出",
   "menu.closeWindow": "关闭窗口",
+  "menu.closeDeveloperTools": "关闭开发者工具",
   "menu.close": "关闭",
   "menu.undo": "撤销",
   "menu.redo": "重做",
