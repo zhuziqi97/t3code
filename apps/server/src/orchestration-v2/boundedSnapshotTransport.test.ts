@@ -564,10 +564,15 @@ it.layer(TestLayer)("compact bounded snapshot transport", (it) => {
         assert.deepStrictEqual(
           projection.turnItems
             .filter((item) => item.type === "user_input_request")
-            .map((item) => [item.requestId, item.runId, item.responseMode ?? "live"]),
+            .map((item) => [item.requestId, item.nodeId, item.runId, item.responseMode ?? "live"]),
           [
-            ["request:question:message", "run:question:cancelled", "message"],
-            ["request:question:live", "run:question:resumed", "live"],
+            [
+              "request:question:message",
+              "node:question:message",
+              "run:question:cancelled",
+              "message",
+            ],
+            ["request:question:live", "node:question:live", "run:question:resumed", "live"],
           ],
         );
         assert.deepStrictEqual(
@@ -576,29 +581,46 @@ it.layer(TestLayer)("compact bounded snapshot transport", (it) => {
           ),
           visibleRequestIds,
         );
-        assert.strictEqual(
-          projection.runs.find((run) => run.id === "run:question:cancelled")?.status,
-          "cancelled",
-        );
         assert.deepStrictEqual(
           projection.runtimeRequests
             .map(
               (request) =>
-                [String(request.id), request.status, request.responseCapability] as const,
+                [
+                  String(request.id),
+                  request.nodeId,
+                  request.status,
+                  request.responseCapability,
+                ] as const,
             )
             .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
           [
             [
               "request:question:live",
+              NodeId.make("node:question:live"),
               "pending",
               { type: "live", providerSessionId: ProviderSessionId.make("session:question") },
             ],
-            ["request:question:message", "pending", { type: "message" }],
+            [
+              "request:question:message",
+              NodeId.make("node:question:message"),
+              "pending",
+              { type: "message" },
+            ],
           ],
         );
       };
-      assertQuestions(yield* projections.getThreadProjection(CHILD));
-      assertQuestions(window.projection);
+      const fullProjection = yield* projections.getThreadProjection(CHILD);
+      assertQuestions(fullProjection);
+      assert.strictEqual(
+        fullProjection.runs.find((run) => run.id === "run:question:cancelled")?.status,
+        "cancelled",
+      );
+      assertQuestions(window.projection, []);
+      assert.deepStrictEqual(
+        window.projection.visibleTurnItems.map((row) => row.sourceItemId),
+        fullProjection.visibleTurnItems.slice(-77).map((row) => row.sourceItemId),
+      );
+      assert.lengthOf(window.projection.turnItems, window.projection.visibleTurnItems.length + 2);
       yield* withHttp(async (get) => {
         const response = await get(
           `/api/orchestration/threads/${encodeURIComponent(CHILD)}/bounded?compactTurnItems=1`,
