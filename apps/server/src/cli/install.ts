@@ -7,9 +7,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-import { Command, Prompt } from "effect/cli";
-import * as ChildProcess from "effect/process/ChildProcess";
-import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
+import { Command } from "effect/cli";
 
 import packageJson from "../../package.json" with { type: "json" };
 import {
@@ -266,33 +264,6 @@ export const isForegroundPs = (output: string) => {
 };
 
 /**
- * A background job (`npx t3 serve &`) that reads the terminal is stopped by the shell, so only
- * the terminal's foreground process group may prompt. Unknown counts as background.
- */
-export const inTerminalForeground = Effect.gen(function* () {
-  const fs = yield* FileSystem.FileSystem;
-  const platform = yield* HostProcess.Platform;
-  if (platform === "win32") return true;
-  if (platform === "linux") {
-    return isForegroundProcStat(
-      yield* fs.readFileString("/proc/self/stat").pipe(Effect.orElseSucceed(() => "")),
-    );
-  }
-  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  return isForegroundPs(
-    yield* spawner
-      .string(
-        // Absolute: under npx, PATH starts with a project's node_modules/.bin.
-        ChildProcess.make("/bin/ps", ["-o", "tpgid=,pgid=", "-p", String(process.pid)], {
-          stdin: "ignore",
-          stderr: "ignore",
-        }),
-      )
-      .pipe(Effect.orElseSucceed(() => "")),
-  );
-});
-
-/**
  * Before a command run through npx, pnpm dlx, or bunx at a terminal, asks to install the `t3`
  * command. Yes is the default. No, no answer, or a failed install is saved in the T3 home until
  * the next minor release. Returns false when the user quits the prompt, so the command does not run.
@@ -371,10 +342,3 @@ export const offerCliInstall = Effect.fn("cli.install.offer")(function* <E, R, E
   yield* Console.log("");
   return true;
 });
-
-export const confirmCliInstall = Prompt.run(
-  Prompt.Confirm({
-    message: "Install the t3 command? Then you can run `t3` directly.",
-    initial: true,
-  }),
-).pipe(Effect.catchTags({ QuitError: () => Effect.void }));
