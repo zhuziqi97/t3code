@@ -64,13 +64,11 @@ const DEFAULT_CLAUDE_MODEL_CAPABILITIES: ModelCapabilities = createModelCapabili
 function claudeProviderModels(
   builtInModels: ReadonlyArray<ServerProviderModel>,
   customModels: ClaudeSettings["customModels"],
+  customModelCapabilities: ModelCapabilities | null = DEFAULT_CLAUDE_MODEL_CAPABILITIES,
 ): ReadonlyArray<ServerProviderModel> {
-  return providerModelsFromSettings(
-    builtInModels,
-    customModels,
-    DEFAULT_CLAUDE_MODEL_CAPABILITIES,
-  ).map((model) =>
-    model.isCustom ? { ...model, capabilities: withUltracodeToggle(model.capabilities) } : model,
+  return providerModelsFromSettings(builtInModels, customModels, customModelCapabilities).map(
+    (model) =>
+      model.isCustom ? { ...model, capabilities: withUltracodeToggle(model.capabilities) } : model,
   );
 }
 
@@ -537,13 +535,14 @@ export const probeClaudeWorkspaceSnapshot = Effect.fn("probeClaudeWorkspaceSnaps
     ...machineSnapshot,
     models:
       capabilities?.models?.length || capabilities?.defaultModel
-        ? providerModelsFromSettings(
+        ? claudeProviderModels(
             withClaudeReportedModels(
               modelCatalog,
               capabilities.models ?? [],
               capabilities.defaultModel,
             ).models.map((entry) => entry.model),
             claudeSettings.customModels,
+            null,
           )
         : machineSnapshot.models,
     skills,
@@ -648,10 +647,9 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
     });
   }
 
-  const catalogModels = providerModelsFromSettings(
+  const catalogModels = claudeProviderModels(
     resolveClaudeModelsForVersion(modelCatalog, parsedVersion),
     claudeSettings.customModels,
-    DEFAULT_CLAUDE_MODEL_CAPABILITIES,
   );
   const updateRequiredModels = resolveClaudeUpdateRequiredModels(modelCatalog, parsedVersion);
   const versionUpgradeMessage = formatClaudeVersionUpgradeMessage(modelCatalog, parsedVersion);
@@ -666,7 +664,7 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
     probeResult && Result.isFailure(probeResult) ? probeResult.failure : undefined;
   const models =
     capabilities?.models?.length || capabilities?.defaultModel
-      ? providerModelsFromSettings(
+      ? claudeProviderModels(
           withClaudeReportedModels(
             {
               models: modelCatalog.models.filter((entry) =>
@@ -677,7 +675,6 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
             capabilities.defaultModel,
           ).models.map((entry) => entry.model),
           claudeSettings.customModels,
-          DEFAULT_CLAUDE_MODEL_CAPABILITIES,
         )
       : catalogModels;
   const skills = yield* discoverClaudeSkills(claudeSettings, cwd, resolvedEnvironment);

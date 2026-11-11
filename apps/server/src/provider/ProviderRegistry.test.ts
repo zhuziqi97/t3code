@@ -4718,24 +4718,35 @@ it.layer(
         assert.deepStrictEqual(
           added.map((model) => [model.slug, model.name, model.isCustom]),
           [
+            ["sonnet", "Sonnet", false],
+            ["claude-haiku-4-5[1m]", "Haiku", false],
+            ["best", "Best", false],
+            ["gateway/kimi-3[1m]", "Kimi (mine)", false],
             ["gateway/glm-5[1m]", "GLM 5", false],
+            ["gateway/glm-5", "GLM 5 again", false],
             ["gateway/claude-relay", "Claude Relay", false],
-            ["gateway/kimi-3[1m]", "Kimi (mine)", true],
           ],
         );
-        assert.deepStrictEqual(added[0]?.capabilities?.optionDescriptors, []);
-        assert.deepStrictEqual(added[1]?.capabilities?.optionDescriptors, [
-          {
-            id: "effort",
-            label: "Reasoning",
-            type: "select",
-            options: [
-              { id: "default", label: "Default", isDefault: true },
-              { id: "low", label: "Low" },
-              { id: "high", label: "High" },
-            ],
-          },
-        ]);
+        assert.deepStrictEqual(
+          added.find((model) => model.slug === "gateway/glm-5[1m]")?.capabilities
+            ?.optionDescriptors,
+          [],
+        );
+        assert.deepStrictEqual(
+          added.find((model) => model.slug === "gateway/claude-relay")?.capabilities
+            ?.optionDescriptors,
+          [
+            {
+              id: "effort",
+              label: "Effort",
+              type: "select",
+              options: [
+                { id: "low", label: "low" },
+                { id: "high", label: "high" },
+              ],
+            },
+          ],
+        );
       }).pipe(
         Effect.provide(
           layerMockSpawner((args) => {
@@ -4987,39 +4998,46 @@ it.layer(
 
     it.effect("advertises Ultracode as a toggle on custom models", () =>
       Effect.gen(function* () {
-        const status = yield* checkClaudeProviderStatus(
-          {
-            ...defaultClaudeSettings,
-            customModels: [
-              {
-                slug: "claude-custom-tuned",
-                capabilities: {
-                  optionDescriptors: [
-                    {
-                      id: "effort",
-                      label: "Reasoning",
-                      type: "select",
-                      options: [
-                        { id: "high", label: "High", isDefault: true },
-                        { id: "ultracode", label: "Ultracode" },
-                      ],
-                    },
-                  ],
-                },
-              },
-            ],
-          },
+        for (const resolveCapabilities of [
           claudeCapabilities(),
-        );
-        const custom = status.models.find((model) => model.slug === "claude-custom-tuned");
-        assert.deepStrictEqual(
-          custom?.capabilities?.optionDescriptors?.map((descriptor) =>
-            descriptor.type === "select"
-              ? `${descriptor.id}:${descriptor.options.map((option) => option.id).join("|")}`
-              : `${descriptor.id}:${descriptor.type}`,
-          ),
-          ["effort:high|xhigh", "ultracode:boolean"],
-        );
+          claudeCapabilities({
+            models: [{ value: "native-reported", displayName: "Native", description: "" }],
+          }),
+        ]) {
+          const status = yield* checkClaudeProviderStatus(
+            {
+              ...defaultClaudeSettings,
+              customModels: [
+                {
+                  slug: "claude-custom-tuned",
+                  capabilities: {
+                    optionDescriptors: [
+                      {
+                        id: "effort",
+                        label: "Reasoning",
+                        type: "select",
+                        options: [
+                          { id: "high", label: "High", isDefault: true },
+                          { id: "ultracode", label: "Ultracode" },
+                        ],
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+            resolveCapabilities,
+          );
+          const custom = status.models.find((model) => model.slug === "claude-custom-tuned");
+          assert.deepStrictEqual(
+            custom?.capabilities?.optionDescriptors?.map((descriptor) =>
+              descriptor.type === "select"
+                ? `${descriptor.id}:${descriptor.options.map((option) => option.id).join("|")}`
+                : `${descriptor.id}:${descriptor.type}`,
+            ),
+            ["effort:high|xhigh", "ultracode:boolean"],
+          );
+        }
       }).pipe(
         Effect.provide(
           layerMockSpawner((args) => {

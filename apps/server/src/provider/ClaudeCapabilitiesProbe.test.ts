@@ -104,7 +104,28 @@ it.layer(NodeServices.layer)("Claude capability probe SDK boundary", (it) => {
         yield* Effect.addFinalizer(() => Effect.sync(() => query.mockRestore()));
         for (const [index, cwd] of workspaces.entries()) {
           const scoped = yield* probeClaudeWorkspaceSnapshot(
-            decodeClaudeSettings({ homePath: configDir }),
+            decodeClaudeSettings({
+              homePath: configDir,
+              customModels: [
+                "unknown-custom",
+                {
+                  slug: "custom-tuned",
+                  capabilities: {
+                    optionDescriptors: [
+                      {
+                        id: "effort",
+                        label: "Effort",
+                        type: "select",
+                        options: [
+                          { id: "high", label: "High", isDefault: true },
+                          { id: "ultracode", label: "Ultracode" },
+                        ],
+                      },
+                    ],
+                  },
+                },
+              ],
+            }),
             machineSnapshot,
             cwd,
             { ...process.env, T3_WORKSPACE_PROBE: "owned-instance" },
@@ -112,6 +133,25 @@ it.layer(NodeServices.layer)("Claude capability probe SDK boundary", (it) => {
           assert.deepEqual(
             scoped.models.filter((model) => model.isDefault).map((model) => model.slug),
             ["native-default"],
+          );
+          assert.isNull(
+            scoped.models.find((model) => model.slug === "unknown-custom")?.capabilities,
+          );
+          assert.deepEqual(
+            scoped.models.find((model) => model.slug === "custom-tuned")?.capabilities
+              ?.optionDescriptors,
+            [
+              {
+                id: "effort",
+                label: "Effort",
+                type: "select",
+                options: [
+                  { id: "high", label: "High", isDefault: true },
+                  { id: "xhigh", label: "Extra High" },
+                ],
+              },
+              { id: "ultracode", label: "Ultracode", type: "boolean" },
+            ],
           );
           assert.deepEqual(scoped, {
             ...machineSnapshot,
