@@ -629,7 +629,6 @@
   "devDependencies": {
     "@effect/vitest": "catalog:",
     "@types/three": "0.180.0",
-    "typescript": "catalog:",
     "vite-plus": "catalog:"
   }
 }
