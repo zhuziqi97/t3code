@@ -220,12 +220,12 @@ describe.skipIf(HostProcess.Platform.defaultValue() !== "linux")("install.sh t3 
         `printf '\\n%s\\n' 'export PATH="$PATH:$HOME/bin"' >> ~/.zshrc`,
       );
 
-      // Containers and CI often have no SHELL; `set -u` must not stop the installer there.
+      // Bash-as-sh restores an unset SHELL from passwd; empty exercises the installer's fallback.
       const noShell = await installOver({
         script: "install.sh",
         home,
         binDir,
-        env: { HOME: root, SHELL: undefined, PATH: "/usr/bin:/bin" },
+        env: { HOME: root, SHELL: "", PATH: "/usr/bin:/bin" },
       });
       expect(noShell.code, noShell.output).toBe(0);
       expect(noShell.output).toContain(`Add ${binDir} to your PATH`);
