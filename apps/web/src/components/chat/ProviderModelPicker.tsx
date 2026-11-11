@@ -152,7 +152,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement | null>(null);
   const size = props.size ?? "sm";
-  const docked = props.effortColumn !== undefined;
+  const docked = props.effortColumn !== undefined || props.footer !== undefined;
 
   const activeEntry =
     props.instanceEntries.find((entry) => entry.instanceId === props.activeInstanceId) ?? null;
@@ -466,26 +466,31 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
         padding="none"
         touchBackdrop
       >
-        {props.effortColumn ? (
+        {docked ? (
           <DockedPickerContext value={{ modelLabel: triggerTitle }}>
-            <div className="flex min-w-0 max-w-[calc(100vw-1rem)] max-h-(--available-height) flex-col">
-              {/* One fixed height, so a model with more options never resizes the popup. Short
-                  windows shrink it and keep the footer. */}
-              <div className="flex h-86.5 min-h-0 min-w-0 max-sm:h-auto max-sm:flex-col">
+            <div className="flex min-w-0 max-w-[calc(100vw-1rem)] max-h-(--available-height) flex-col max-sm:max-h-[min(var(--available-height),calc(100dvh-6rem))]">
+              <div className="flex h-86.5 min-h-0 min-w-0 max-sm:h-auto max-sm:flex-col max-sm:overflow-y-auto">
                 {picker}
-                <div
-                  data-model-picker-effort
-                  className="flex min-h-0 min-w-0 w-48 flex-col sm:shrink-0 border-l border-border/70 bg-muted/40 max-sm:h-64 max-sm:w-full max-sm:border-t max-sm:border-l-0"
-                  onKeyDown={(event) => {
-                    if (event.key !== "ArrowLeft" || event.altKey || event.ctrlKey || event.metaKey)
-                      return;
-                    event.preventDefault();
-                    event.stopPropagation();
-                    searchInputRef.current?.focus();
-                  }}
-                >
-                  {props.effortColumn}
-                </div>
+                {props.effortColumn ? (
+                  <div
+                    data-model-picker-effort
+                    className="flex min-h-0 min-w-0 w-48 flex-col sm:shrink-0 border-l border-border/70 bg-muted/40 max-sm:w-full max-sm:shrink-0 max-sm:border-t max-sm:border-l-0"
+                    onKeyDown={(event) => {
+                      if (
+                        event.key !== "ArrowLeft" ||
+                        event.altKey ||
+                        event.ctrlKey ||
+                        event.metaKey
+                      )
+                        return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      searchInputRef.current?.focus();
+                    }}
+                  >
+                    {props.effortColumn}
+                  </div>
+                ) : null}
               </div>
               {props.footer}
             </div>

@@ -34,6 +34,7 @@ export const ModelListRow = memo(function ModelListRow(props: {
   unavailable?: boolean;
   jumpLabel?: string | null;
   disabledReason?: string | null;
+  inlineDetails: boolean;
   detailsOpen: boolean;
   onDetailsOpenChange: (open: boolean) => void;
   onToggleFavorite: (instanceId: ProviderInstanceId, slug: string) => void;
@@ -51,7 +52,7 @@ export const ModelListRow = memo(function ModelListRow(props: {
   const row = (
     <ComboboxItem
       ref={rowRef}
-      render={<TooltipTrigger render={<div />} />}
+      render={props.inlineDetails ? <div /> : <TooltipTrigger render={<div />} />}
       hideIndicator
       selectedFill={false}
       index={props.index}
@@ -142,6 +143,28 @@ export const ModelListRow = memo(function ModelListRow(props: {
       </div>
     </ComboboxItem>
   );
+
+  if (props.inlineDetails) {
+    return (
+      <>
+        {row}
+        <details className="px-8 pb-1 text-xs" onKeyDown={(event) => event.stopPropagation()}>
+          <summary className="w-fit cursor-pointer text-muted-foreground">
+            {t("common.details")}
+          </summary>
+          <div className="mt-1 max-h-40 space-y-1 overflow-y-auto overscroll-contain wrap-anywhere whitespace-normal select-text">
+            <div>{modelName}</div>
+            <div className="text-muted-foreground">
+              {props.providerDisplayName}
+              {props.subProvider ? ` · ${props.subProvider}` : null}
+            </div>
+            {showModelId ? <div className="font-mono">{props.slug}</div> : null}
+            {props.disabledReason ? <div>{props.disabledReason}</div> : null}
+          </div>
+        </details>
+      </>
+    );
+  }
 
   return (
     <Tooltip

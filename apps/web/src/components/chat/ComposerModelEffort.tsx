@@ -82,6 +82,13 @@ function columnControls(
   return { effort, others: controls.filter((control) => control !== effort) };
 }
 
+export function hasComposerEffortControls(traits: TraitsSelectionInput | null): boolean {
+  if (!traits) return false;
+  const visibility = getTraitsSectionVisibility(traits);
+  const controls = columnControls(visibility.selectDescriptors, visibility.booleanDescriptors);
+  return controls.effort !== null || controls.others.length > 0;
+}
+
 /**
  * What the model trigger shows after the model name: the effort word (or bars, per the
  * Appearance setting), a bolt for Fast, a workflow icon for Ultracode, and other traits such as a

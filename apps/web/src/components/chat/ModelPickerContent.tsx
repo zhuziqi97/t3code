@@ -1,6 +1,7 @@
 import { ProviderOperationActions } from "../ProviderOperationActions";
 import { useTranslate } from "../../i18n";
 import { useLegendListRef } from "~/hooks/useLegendListRef";
+import { useMediaQuery } from "~/hooks/useMediaQuery";
 import {
   ANTIGRAVITY_DEFAULT_MODEL,
   type ProviderInstanceId,
@@ -368,6 +369,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
   } = props;
   const [searchQuery, setSearchQuery] = useState("");
   const [modelDetailsKey, setModelDetailsKey] = useState<string | null>(null);
+  const isNarrow = useMediaQuery("max-sm");
   const modelListRef = useRef<LegendListRef | null>(null);
   const pickerContentRef = useRef<HTMLDivElement>(null);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- publishes this picker's mount to global keydown handlers
@@ -779,6 +781,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     activeModelKey,
     selectedModelKeySet,
     modelDetailsKey,
+    isNarrow,
   };
 
   const onWindowKeyDown = (event: globalThis.KeyboardEvent) => {
@@ -844,7 +847,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
         ref={pickerContentRef}
         className={cn(
           "relative flex w-[min(28rem,calc(100vw-1rem))] flex-row overflow-hidden",
-          props.docked ? "max-sm:h-56" : "max-h-86.5",
+          props.docked ? "max-sm:h-[min(21.625rem,50dvh)] max-sm:shrink-0" : "max-h-86.5",
         )}
         // Docked, the popup sets the height; a minimum here would overflow short windows.
         style={
@@ -896,7 +899,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
               typeof event.key === "string" &&
               ["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key);
             setModelDetailsKey(
-              keyboardNavigation && typeof modelKey === "string" ? modelKey : null,
+              !isNarrow && keyboardNavigation && typeof modelKey === "string" ? modelKey : null,
             );
             if (eventDetails.reason === "keyboard" && eventDetails.index >= 0) {
               void modelListRef.current?.scrollIndexIntoView?.({
@@ -1078,6 +1081,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                     unavailable={model.isUnavailable === true}
                     jumpLabel={modelJumpLabelByKey.get(modelKey) ?? null}
                     disabledReason={disabledReason}
+                    inlineDetails={isNarrow}
                     detailsOpen={modelKey === modelDetailsKey}
                     onDetailsOpenChange={(open) => {
                       setModelDetailsKey((current) =>

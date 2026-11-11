@@ -28,6 +28,7 @@ import {
   ComposerEffortColumn,
   ComposerPickerFooter,
   describeComposerEffort,
+  hasComposerEffortControls,
 } from "./ComposerModelEffort";
 import type { useComposerProviderModel } from "./useComposerProviderModel";
 import { resolveComposerControlsOwnership } from "./composerControlsOwnership";
@@ -221,7 +222,11 @@ export function ComposerControlsBar(props: {
       triggerShortcuts={
         pickerOwnsModeShortcut ? "composer.effort composer.mode" : "composer.effort"
       }
-      effortColumn={<ComposerEffortColumn traits={traitsInput} />}
+      effortColumn={
+        hasComposerEffortControls(traitsInput) ? (
+          <ComposerEffortColumn traits={traitsInput} />
+        ) : undefined
+      }
       footer={
         <ComposerPickerFooter
           traits={traitsInput}
