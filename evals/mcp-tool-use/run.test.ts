@@ -35,7 +35,6 @@ import {
   t3SystemAppend,
   t3SubagentContext,
   withDevices,
-  answerToolCall,
   codexRequest,
 } from "./run.ts";
 import { briefRoute, gradeDevice, shellInvocations } from "./device-grading.ts";
@@ -907,7 +906,7 @@ it.effect("saves a new secret file for each request and tells the shell simulato
         type: "tool_use",
         id,
         name: "mcp__t3-code__request_secret",
-        input: { label: "Token", delivery },
+        input: { label: "Token", reason: "Fixture token", delivery },
       }).pipe(Effect.map((result) => JSON.parse(String(result.content))));
     const first = yield* request("a", "file");
     const second = yield* request("b", "file");
@@ -936,7 +935,7 @@ it.effect("saves a new secret file for each request and tells the shell simulato
       type: "tool_use",
       id: "d",
       name: "mcp__t3-code__request_secret",
-      input: { delivery: "file" },
+      input: { label: "Token", reason: "Fixture token", delivery: "file" },
     });
     assert.deepEqual(declined.secretFiles, []);
   }).pipe(Effect.provide(FetchHttpClient.layer)),
@@ -965,7 +964,7 @@ it.effect("saves a pasted value with no card where request_secret takes one", ()
       type: "tool_use",
       id: "a",
       name: "mcp__t3-code__request_secret",
-      input: { label: "Pixel PIN", value: "482916" },
+      input: { label: "Pixel PIN", reason: "Fixture device pairing", value: "482916" },
     }).pipe(Effect.map((block) => JSON.parse(String(block.content))));
     if (!savesPastedSecrets) {
       // On refs without `value`, T3 ignores it and the card runs.
