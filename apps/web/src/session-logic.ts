@@ -1,6 +1,6 @@
 import type { TFunction } from "i18next";
 import { i18n } from "./i18n";
-import type { ThreadStructure, ThreadStructureRuntime } from "@t3tools/client-runtime/state/shell";
+import type { ThreadStructureRuntime } from "@t3tools/client-runtime/state/shell";
 import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
 import {
   type AssetResource,

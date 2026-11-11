@@ -178,7 +178,7 @@ export function ArchivedThreadsPanel() {
     if (pending.has(scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)))) return;
     const result = await settlePromise(async () => {
       const clicked = await readLocalApi()?.contextMenu.show(
-        ARCHIVE_ACTIONS.map(({ action, label }) => ({
+        ARCHIVE_ACTIONS.map(({ action }) => ({
           id: action,
           label: t(action === "unarchive" ? "archive.unarchive" : "common.delete"),
           destructive: action === "delete",
@@ -249,7 +249,7 @@ export function ArchivedThreadsPanel() {
                   }
                   control={
                     <div className="flex shrink-0 items-center gap-2">
-                      {ARCHIVE_ACTIONS.map(({ action, label, Icon }) => (
+                      {ARCHIVE_ACTIONS.map(({ action, Icon }) => (
                         <Tooltip key={action}>
                           <TooltipTrigger
                             render={

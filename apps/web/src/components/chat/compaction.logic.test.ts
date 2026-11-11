@@ -4,7 +4,6 @@ import { describe, expect, it } from "vite-plus/test";
 import { deriveProviderInstanceEntries } from "../../providerInstances";
 import { hasDismissedResumeCompaction } from "@t3tools/client-runtime/state/context-window";
 import { hasAvailableCompactionProvider } from "./compaction.logic";
-import { resolveContextWindowModelDisplayName } from "./ContextWindowMeter.logic";
 
 function claudeProvider(input: {
   instanceId: string;

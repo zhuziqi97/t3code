@@ -70,33 +70,6 @@ export interface SettingsSearchAvailability {
   readonly hasPrimaryEnvironment?: boolean;
 }
 
-export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
-  "/settings/convene": "Convene",
-  "/settings/diagnostics": "Diagnostics",
-  "/settings/projects": "Projects",
-  "/settings/general": "General",
-  "/settings/appearance": "Appearance",
-  "/settings/chat": "Chat",
-  "/settings/diffs": "Diffs & pull requests",
-  "/settings/keybindings": "Keybindings",
-  "/settings/snap-shot": "SnapShots",
-  "/settings/providers": "Providers",
-  "/settings/threads": "Threads",
-  "/settings/browser": "Browser",
-  "/settings/devices": "Devices",
-  "/settings/scheduled-tasks": "Scheduled tasks",
-  "/settings/source-control": "Source control",
-  "/settings/worktrees": "Worktrees",
-  "/settings/connections": "Environments",
-  "/settings/access": "Sharing & access",
-  "/settings/secrets": "Secrets",
-  "/settings/maintenance": "Maintenance",
-  "/settings/labs": "Labs",
-  "/settings/about": "About",
-  "/settings/voice": "Voice",
-  "/settings/archived": "Archive",
-};
-
 /** Sidebar order. A group without a heading is set apart by space alone. */
 export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
   readonly heading: string | null;

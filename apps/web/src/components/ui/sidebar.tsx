@@ -24,7 +24,7 @@ import {
   setLocalStorageItem,
   writeLocalStorageValue,
 } from "~/hooks/useLocalStorage";
-import { resolveSidebarState, type ResponsiveSidebarState } from "./sidebarState";
+import { resolveSidebarState } from "./sidebarState";
 import {
   SidebarContext,
   SidebarInstanceContext,
