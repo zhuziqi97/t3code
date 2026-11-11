@@ -575,6 +575,7 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
       );
       let appliedModel: string | null = null;
       let appliedThinking: string | null = null;
+      let restoreThinkingPending = false;
       // Pi reloads extensions (resetting the tier) on paths the adapter cannot see, so a chosen tier
       // is resent every turn; Standard sends a clear only when an earlier tier may still be set.
       let serviceTierMayBeSet = false;
@@ -2475,6 +2476,7 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
           threadState = null;
           appliedModel = null;
           appliedThinking = null;
+          restoreThinkingPending = false;
           appliedSessionName = null;
           contextWindow = null;
           const result = yield* lifecycleRequest(
@@ -2587,10 +2589,13 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
           // captured baseline, otherwise Pi stays on the last model applied.
           if (resetToDefault && baselineModel === null)
             return yield* protocolError("Pi did not report a configured native default model");
-          if ((appliedModel !== null || resetToDefault) && baselineModel !== null) {
+          const restoringNativeModel =
+            (appliedModel !== null || resetToDefault) && baselineModel !== null;
+          if (restoringNativeModel) {
             const restoredModel = yield* request({ type: "set_model", ...baselineModel });
             reportedModel = restoredModel;
             appliedThinking = null;
+            restoreThinkingPending = baselineThinking !== null;
             contextWindow = rememberModelContextWindow(restoredModel);
             appliedModel = null;
             const updatedAt = yield* DateTime.now;
@@ -2604,10 +2609,12 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
           if (
             thinking === undefined &&
             baselineThinking !== null &&
-            (appliedThinking !== baselineThinking || resetToDefault)
+            (restoreThinkingPending || appliedThinking !== null) &&
+            (restoreThinkingPending || appliedThinking !== baselineThinking || resetToDefault)
           ) {
             yield* request({ type: "set_thinking_level", level: baselineThinking });
-            appliedThinking = baselineThinking;
+            appliedThinking = null;
+            restoreThinkingPending = false;
           }
         } else if (modelSelection.model !== appliedModel) {
           const parsed = parsePiModelSlug(modelSelection.model);
@@ -2624,6 +2631,7 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
           reportedModel = selectedModel;
           // Pi resets thinking to the target model's configured default on set_model.
           appliedThinking = null;
+          restoreThinkingPending = false;
           contextWindow = rememberModelContextWindow(selectedModel);
           appliedModel = modelSelection.model;
           const updatedAt = yield* DateTime.now;
@@ -2646,6 +2654,7 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
         if (thinking !== undefined && thinking !== appliedThinking) {
           yield* request({ type: "set_thinking_level", level: thinking });
           appliedThinking = thinking;
+          restoreThinkingPending = false;
         }
         const requestedTier = getModelSelectionStringOptionValue(modelSelection, "serviceTier");
         const serviceTier =
@@ -3294,6 +3303,7 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
                       lastNativeThreadId = forkSessionFile;
                       appliedModel = null;
                       appliedThinking = null;
+                      restoreThinkingPending = false;
                       appliedSessionName = null;
                       lastKnownLeaf = leafId;
                       leafCursorStale = entriesData === undefined;
