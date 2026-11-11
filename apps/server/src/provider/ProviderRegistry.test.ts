@@ -1825,7 +1825,10 @@ it.layer(
                       }),
                     ),
                   ),
-                ...snapshotState(provider, Effect.succeed(provider)),
+                ...snapshotState(
+                  provider,
+                  Ref.update(probes, (count) => count + 1).pipe(Effect.as(provider)),
+                ),
 
                 startRefresh: () => Effect.succeed(provider),
                 cancelRefresh: () => Effect.void,

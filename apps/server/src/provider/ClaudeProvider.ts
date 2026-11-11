@@ -412,7 +412,6 @@ const probeClaudeCapabilities = (
       catch: (cause) => new ClaudeCapabilitiesProbeSdkError({ operation: "initialize", cause }),
     });
   }).pipe(
-    Effect.timeout(CAPABILITIES_PROBE_TIMEOUT_MS),
     Effect.flatMap(({ q, init, graceMs }) =>
       Effect.gen(function* () {
         const account = init.account as
@@ -470,7 +469,7 @@ const probeClaudeCapabilities = (
           apiKeySource: account?.apiKeySource,
           apiProvider: account?.apiProvider,
           slashCommands: parseClaudeInitializationCommands(init.commands),
-          ...(init.models?.length ? { models: init.models } : {}),
+          ...(init.models ? { models: init.models } : {}),
           ...(defaultModel ? { defaultModel } : {}),
           ...(usage ? { usage, usageCheckedAt } : {}),
         } satisfies ClaudeCapabilitiesProbe;
