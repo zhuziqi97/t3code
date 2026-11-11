@@ -226,7 +226,7 @@ const SETTINGS_SCREENS = {
   SettingsLanguage: createNativeStackScreen({
     screen: SettingsLanguageRouteScreen,
     linking: "settings/language",
-    options: { ...SETTINGS_PAGE_OPTIONS, title: "Language" },
+    options: settingsPage("Language"),
   }),
   SettingsAbout: createNativeStackScreen({
     screen: SettingsAboutRouteScreen,

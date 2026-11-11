@@ -5,7 +5,6 @@ import Constants from "expo-constants";
 import * as Updates from "expo-updates";
 import { useAtomValue } from "@effect/atom-react";
 import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { useState } from "react";

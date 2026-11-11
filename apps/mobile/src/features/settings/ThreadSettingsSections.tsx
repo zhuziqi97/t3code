@@ -44,7 +44,6 @@ export function SettingsLabsRouteScreen() {
         contentContainerClassName="gap-6 px-5 pt-4"
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
       >
-        <BetaSettingsSection />
         <LegacySettingsSection />
         <ContextWindowSettingsSection />
         <MachineBetaSection
@@ -299,10 +298,7 @@ function MachineBetaSection({
           );
         })}
       </SettingsSection>
-      <Text className="px-2 text-sm text-foreground-muted">
-        Let agents on a machine work on your other machines, and theirs on it. Turn it on for each
-        machine. While it is off, nothing new starts over a link; tasks already running finish.
-      </Text>
+      <Text className="px-2 text-sm text-foreground-muted">{description}</Text>
     </View>
   );
 }

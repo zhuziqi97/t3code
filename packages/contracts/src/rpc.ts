@@ -678,7 +678,7 @@ const WsServerGetConfigRpc = Rpc.make(WS_METHODS.serverGetConfig, {
   error: Schema.Union([KeybindingsConfigError, ServerSettingsError, EnvironmentAuthorizationError]),
 });
 
-export const WsServerDiscoverProviderInstallationsRpc = Rpc.make(
+const WsServerDiscoverProviderInstallationsRpc = Rpc.make(
   WS_METHODS.serverDiscoverProviderInstallations,
   {
     payload: Schema.Struct({}),

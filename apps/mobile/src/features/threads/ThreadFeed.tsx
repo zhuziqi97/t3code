@@ -2679,10 +2679,7 @@ const THREAD_FEED_MAINTAIN_SCROLL_AT_END = {
   on: { dataChange: true, itemLayout: true, layout: true },
 } as const;
 
-export const ThreadFeed = memo(function ThreadFeed({
-  ref,
-  ...props
-}: ThreadFeedProps & { readonly ref?: Ref<ThreadFeedHandle> }) {
+export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   const t = useTranslate();
   const { listRef, onIsAtEndChange, onHeaderMaterialVisibilityChange } = props;
   const workflowOpening = useWorkflowOpening(props.detailRef);
@@ -3418,7 +3415,7 @@ export const ThreadFeed = memo(function ThreadFeed({
         cancelAnimationFrame(disclosureSettleSecondFrameRef.current);
       }
     },
-    [reflowSettleTimerRef],
+    [],
   );
 
   const settleDisclosureAfterLayout = () => {
@@ -3615,7 +3612,7 @@ export const ThreadFeed = memo(function ThreadFeed({
     if (previous.textSizeKey !== textSizeKey || hasHtmlRenders) {
       listRef.current?.clearCaches({ mode: "sizes" });
     }
-  }, [textSizeKey, contentWidth, hasHtmlRenders, listRef]);
+  }, [textSizeKey, contentWidth, hasHtmlRenders, listRef, previousRowGeometry]);
 
   const renderItem = (info: { item: GroupedThreadFeedRow; index: number }) => (
     <DisclosureRow
@@ -3820,7 +3817,7 @@ export const ThreadFeed = memo(function ThreadFeed({
                   <View className="flex-row flex-wrap items-center gap-2 px-1 py-2">
                     {endFeedback.end.completedAt ? (
                       <Text className="text-xs tabular-nums text-foreground-secondary">
-                        {formatMessageTime(endFeedback.end.completedAt)}
+                        {formatMessageTimestamp(endFeedback.end.completedAt)}
                       </Text>
                     ) : null}
                     <Text className="text-xs text-foreground-secondary">{endFeedback.label}</Text>

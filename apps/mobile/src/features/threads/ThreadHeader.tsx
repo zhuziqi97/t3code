@@ -22,67 +22,6 @@ export function ThreadHeader(props: {
   const goBack = useWorkspaceBackNavigation("threads");
   const { panes, toggleAuxiliaryPane, composerKeyboardActive, startNewTask } =
     useAdaptiveWorkspaceLayout();
-  const { onOpenTerminal, onMergeBack } = props.gitControls;
-  const native = useThreadHeaderOptions(props);
-  const androidHeaderActions = useMemo<ReadonlyArray<AppBarAction>>(() => {
-    const actions: AppBarAction[] = [];
-    if (props.gitControls.webIde) {
-      actions.push({
-        accessibilityLabel: props.gitControls.webIde.title,
-        icon: "terminal",
-        onPress: props.gitControls.webIde.onPress,
-      });
-    }
-    if (props.onReturnToThread) {
-      actions.push({
-        accessibilityLabel: "Return to chat",
-        icon: "chevron.left",
-        onPress: props.onReturnToThread,
-      });
-    }
-    if (props.hasThreadCwd) {
-      const filesVisible = props.inspectorMode === "files" && panes.auxiliaryPaneVisible;
-      actions.push({
-        accessibilityLabel: filesVisible ? "Close files" : "Open files",
-        selected: filesVisible,
-        icon: "folder",
-        onPress: filesVisible ? toggleAuxiliaryPane : props.onOpenFilesInspector,
-      });
-    }
-    if (props.hasWorkspaceRoot && props.gitControls.canOpenTerminal) {
-      actions.push({
-        accessibilityLabel: "Open terminal",
-        icon: "terminal",
-        onPress: () => onOpenTerminal(null),
-      });
-    }
-    actions.push({
-      accessibilityLabel: "Open git controls",
-      icon: "point.topleft.down.curvedto.point.bottomright.up",
-      onPress: props.onOpenGitInspector,
-    });
-    if (onMergeBack) {
-      actions.push({
-        accessibilityLabel: "Merge back to source",
-        icon: PullRequestGlyph.merged,
-        onPress: onMergeBack,
-      });
-    }
-    return actions;
-  }, [
-    props.inspectorMode,
-    props.gitControls.webIde,
-    panes.auxiliaryPaneVisible,
-    props.onOpenFilesInspector,
-    onOpenTerminal,
-    onMergeBack,
-    props.onOpenGitInspector,
-    toggleAuxiliaryPane,
-    props.onReturnToThread,
-    props.hasThreadCwd,
-    props.hasWorkspaceRoot,
-    props.gitControls.canOpenTerminal,
-  ]);
   const gitMenu = useThreadGitMenuDefinition(props.gitControls);
   const terminalMenu = threadTerminalMenu(props.gitControls);
   const filesVisible = props.inspectorMode === "files" && panes.auxiliaryPaneVisible;

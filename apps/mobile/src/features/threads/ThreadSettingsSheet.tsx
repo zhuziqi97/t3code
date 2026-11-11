@@ -1288,9 +1288,6 @@ function ThreadSettingsChoiceScreen() {
 function ThreadSettingsPickerNavigator(props: ThreadSettingsPickerPresentation) {
   const t = useTranslate();
   const session = useThreadSettingsSession();
-  const theme = useUniwindTheme();
-  const solidSheetBackground = theme["--color-sheet-solid"];
-  const foreground = theme["--color-foreground"];
   const screenOptions = useSheetStackOptions();
   const presentation = {
     onClose: props.onClose,

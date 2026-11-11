@@ -765,7 +765,10 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const statusLabel =
     statusPresentation === undefined
       ? undefined
-      : { ...statusPresentation, label: t(statusPresentation.label) };
+      : {
+          ...statusPresentation,
+          label: statusPresentation.label === null ? null : t(statusPresentation.label),
+        };
   const recede = shouldRecedeThreadRow({ status, selected });
   const isRegeneratingTitle = thread.titleRegeneration != null;
   const rowAccessibilityLabel = `${thread.title}${props.hasQueuedMessages ? ", messages queued to send" : ""}${isRegeneratingTitle ? ", regenerating title" : ""}`;
@@ -875,7 +878,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
             } satisfies MenuAction,
           ]
         : [],
-    [props.canMoveDown, props.canMoveUp, props.reorderSupported],
+    [props.canMoveDown, props.canMoveUp, props.reorderSupported, t],
   );
   const pinMenuItems = useMemo<MenuAction[]>(
     () =>
@@ -886,7 +889,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
               : { id: "pin", title: t("thread.pin.short"), image: "pin" },
           ]
         : [],
-    [props.pinningSupported, thread.pinnedAt],
+    [props.pinningSupported, thread.pinnedAt, t],
   );
   const autoSettleMenuItems = useMemo<MenuAction[]>(
     () =>
@@ -939,91 +942,93 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     ],
     [canTurnIntoProject, props.titleRegenerationSupported, thread.runtime, isRegeneratingTitle, t],
   );
-  const snoozableCardMenuActions = useMemo<MenuAction[]>(
-    () => [
-      { id: "settle", title: t("thread.settle.short"), image: "checkmark" },
-      {
-        id: "snooze",
-        title: t("thread.snooze.short"),
-        image: "clock",
-        subactions: snoozePresetActions,
-      },
-      ...arrangementMenuItems,
-      ...titleMenuItems,
-      ...autoSettleMenuItems,
-      { id: "archive", title: t("legacy.archive"), image: "archivebox" },
-      {
-        id: "delete",
-        title: t("common.delete"),
-        image: "trash",
-        attributes: { destructive: true },
-      },
-    ],
-    [arrangementMenuItems, autoSettleMenuItems, snoozePresetActions, titleMenuItems, t],
-  );
-  const cardMenuActions = useMemo<MenuAction[]>(
-    () => [
-      { id: "settle", title: t("thread.settle.short"), image: "checkmark" },
-      ...arrangementMenuItems,
-      ...titleMenuItems,
-      ...autoSettleMenuItems,
-      { id: "archive", title: t("legacy.archive"), image: "archivebox" },
-      {
-        id: "delete",
-        title: t("common.delete"),
-        image: "trash",
-        attributes: { destructive: true },
-      },
-    ],
-    [arrangementMenuItems, autoSettleMenuItems, titleMenuItems, t],
-  );
-  const slimMenuActions = useMemo<MenuAction[]>(
-    () => [
-      { id: "unsettle", title: t("thread.settle.undo"), image: "arrow.uturn.backward" },
-      ...arrangementMenuItems.filter(
-        (action) => action.id !== "move-up" && action.id !== "move-down",
-      ),
-      ...titleMenuItems,
-      ...autoSettleMenuItems,
-      { id: "archive", title: t("legacy.archive"), image: "archivebox" },
-      {
-        id: "delete",
-        title: t("common.delete"),
-        image: "trash",
-        attributes: { destructive: true },
-      },
-    ],
-    [arrangementMenuItems, autoSettleMenuItems, titleMenuItems, t],
-  );
-  const snoozedMenuActions = useMemo<MenuAction[]>(
-    () => [
-      { id: "unsnooze", title: t("thread.wake"), image: "clock" },
-      ...titleMenuItems,
-      ...autoSettleMenuItems,
-      { id: "archive", title: t("legacy.archive"), image: "archivebox" },
-      {
-        id: "delete",
-        title: t("common.delete"),
-        image: "trash",
-        attributes: { destructive: true },
-      },
-    ],
-    [autoSettleMenuItems, titleMenuItems, t],
-  );
-  const legacyMenuActions = useMemo<MenuAction[]>(
-    () => [
-      { id: "archive", title: t("legacy.archive"), image: "archivebox" },
-      ...arrangementMenuItems,
-      ...titleMenuItems,
-      {
-        id: "delete",
-        title: t("common.delete"),
-        image: "trash",
-        attributes: { destructive: true },
-      },
-    ],
-    [arrangementMenuItems, titleMenuItems, t],
-  );
+  const menuActions = useMemo<MenuAction[]>(() => {
+    const nested = Platform.OS === "ios";
+    const archive: MenuAction = { id: "archive", title: t("legacy.archive"), image: "archivebox" };
+    const remove: MenuAction = {
+      id: "delete",
+      title: t("common.delete"),
+      image: "trash",
+      attributes: { destructive: true },
+    };
+    const direct: MenuAction[] = [
+      ...(thread.branch
+        ? [
+            {
+              id: "new-thread-on-branch",
+              title: getThreadListV2NewBranchMenuTitle(thread.branch, t),
+              image: "square.and.pencil",
+            },
+          ]
+        : []),
+      { id: "copy-thread", title: t("chat.copy.thread"), image: "text.bubble" },
+      { id: "copy-thread-id", title: t("chat.copy.threadId"), image: "doc.on.doc" },
+    ];
+    if (snoozedRow) {
+      return layoutThreadListV2RowMenuActions({
+        nested,
+        direct: [...direct, { id: "unsnooze", title: t("thread.wake"), image: "clock" }],
+        reorder: [],
+        pin: [],
+        secondary: [...titleMenuItems, ...autoSettleMenuItems, archive, remove],
+      });
+    }
+    if (!props.settlementSupported) {
+      return layoutThreadListV2RowMenuActions({
+        nested,
+        direct: [...direct, archive],
+        reorder: reorderMenuItems,
+        pin: pinMenuItems,
+        secondary: [...titleMenuItems, remove],
+      });
+    }
+    if (canUnsettle) {
+      return layoutThreadListV2RowMenuActions({
+        nested,
+        direct: [
+          ...direct,
+          { id: "unsettle", title: t("thread.settle.undo"), image: "arrow.uturn.backward" },
+        ],
+        reorder: reorderMenuItems.filter(
+          (action) => action.id !== "move-up" && action.id !== "move-down",
+        ),
+        pin: pinMenuItems,
+        secondary: [...titleMenuItems, ...autoSettleMenuItems, archive, remove],
+      });
+    }
+    return layoutThreadListV2RowMenuActions({
+      nested,
+      direct: [
+        ...direct,
+        { id: "settle", title: t("thread.settle.short"), image: "checkmark" },
+        ...(swipeActions.secondary === "snooze"
+          ? [
+              {
+                id: "snooze",
+                title: t("thread.snooze.short"),
+                image: "clock",
+                subactions: snoozePresetActions,
+              },
+            ]
+          : []),
+      ],
+      reorder: reorderMenuItems,
+      pin: pinMenuItems,
+      secondary: [...titleMenuItems, ...autoSettleMenuItems, archive, remove],
+    });
+  }, [
+    autoSettleMenuItems,
+    canUnsettle,
+    pinMenuItems,
+    props.settlementSupported,
+    reorderMenuItems,
+    snoozePresetActions,
+    snoozedRow,
+    swipeActions.secondary,
+    thread.branch,
+    titleMenuItems,
+    t,
+  ]);
   const handleMenuAction = useCallback(
     ({ nativeEvent }: { readonly nativeEvent: { readonly event: string } }) => {
       if (nativeEvent.event === "new-thread-on-branch") onNewThreadOnBranch(thread);
@@ -1601,32 +1606,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         threadTitle={thread.title}
       >
         {(close) => (
-          <Menu
-            actions={[
-              ...(thread.branch
-                ? [
-                    {
-                      id: "new-thread-on-branch",
-                      title: getThreadListV2NewBranchMenuTitle(thread.branch, t),
-                      image: "square.and.pencil",
-                    },
-                  ]
-                : []),
-              { id: "copy-thread", title: t("chat.copy.thread"), image: "text.bubble" },
-              { id: "copy-thread-id", title: t("chat.copy.threadId"), image: "doc.on.doc" },
-              ...(snoozedRow
-                ? snoozedMenuActions
-                : !props.settlementSupported
-                  ? legacyMenuActions
-                  : canUnsettle
-                    ? slimMenuActions
-                    : swipeActions.secondary === "snooze"
-                      ? snoozableCardMenuActions
-                      : cardMenuActions),
-            ]}
-            onPressAction={handleMenuAction}
-            shouldOpenOnLongPress
-          >
+          <Menu actions={menuActions} onPressAction={handleMenuAction} shouldOpenOnLongPress>
             {rowContent(close)}
           </Menu>
         )}
