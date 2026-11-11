@@ -70,23 +70,26 @@ describe("resolveProjectSettings", () => {
     expect(resolveProjectSettings(settings, otherProjectId).settings.defaultAutoPull).toBe(true);
   });
 
-  it("preserves the project text generation model when its provider is disabled", () => {
-    const disabledSelection = createModelSelection(ProviderInstanceId.make("claudeAgent"), "opus");
-    const settings = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
-      providerInstances: {
-        [ProviderInstanceId.make("claudeAgent")]: {
-          driver: ProviderDriverKind.make("claudeAgent"),
-          enabled: false,
+  it.each(["opus", null])(
+    "preserves the project text generation model when its provider is disabled: %s",
+    (model) => {
+      const disabledSelection = createModelSelection(ProviderInstanceId.make("claudeAgent"), model);
+      const settings = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
+        providerInstances: {
+          [ProviderInstanceId.make("claudeAgent")]: {
+            driver: ProviderDriverKind.make("claudeAgent"),
+            enabled: false,
+          },
         },
-      },
-      projectSettingsOverrides: {
-        [projectId]: { textGenerationModelSelection: disabledSelection },
-      },
-    });
-    const resolved = resolveProjectSettings(settings, projectId);
-    expect(resolved.settings.textGenerationModelSelection).toEqual(disabledSelection);
-    expect(resolved.sources.textGenerationModelSelection).toBe("project");
-  });
+        projectSettingsOverrides: {
+          [projectId]: { textGenerationModelSelection: disabledSelection },
+        },
+      });
+      const resolved = resolveProjectSettings(settings, projectId);
+      expect(resolved.settings.textGenerationModelSelection).toEqual(disabledSelection);
+      expect(resolved.sources.textGenerationModelSelection).toBe("project");
+    },
+  );
 
   it("honours the aggregate's own fields only until the server has folded them", () => {
     const aggregateModel = createModelSelection(ProviderInstanceId.make("codex"), "gpt-5.5");
@@ -121,21 +124,24 @@ describe("resolveProjectSettings", () => {
     expect(folded.sources.defaultModelSelection).toBe("environment");
   });
 
-  it("preserves the project default model when its provider is disabled", () => {
-    const disabledSelection = createModelSelection(ProviderInstanceId.make("claudeAgent"), "opus");
-    const settings = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
-      providerInstances: {
-        [ProviderInstanceId.make("claudeAgent")]: {
-          driver: ProviderDriverKind.make("claudeAgent"),
-          enabled: false,
+  it.each(["opus", null])(
+    "preserves the project default model when its provider is disabled: %s",
+    (model) => {
+      const disabledSelection = createModelSelection(ProviderInstanceId.make("claudeAgent"), model);
+      const settings = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
+        providerInstances: {
+          [ProviderInstanceId.make("claudeAgent")]: {
+            driver: ProviderDriverKind.make("claudeAgent"),
+            enabled: false,
+          },
         },
-      },
-      projectSettingsOverrides: { [projectId]: { defaultModelSelection: disabledSelection } },
-    });
-    const resolved = resolveProjectSettings(settings, projectId);
-    expect(resolved.settings.defaultModelSelection).toEqual(disabledSelection);
-    expect(resolved.sources.defaultModelSelection).toBe("project");
-  });
+        projectSettingsOverrides: { [projectId]: { defaultModelSelection: disabledSelection } },
+      });
+      const resolved = resolveProjectSettings(settings, projectId);
+      expect(resolved.settings.defaultModelSelection).toEqual(disabledSelection);
+      expect(resolved.sources.defaultModelSelection).toBe("project");
+    },
+  );
 
   it("moves text generation off an instance the project turned off", () => {
     const codex = ProviderInstanceId.make("codex");

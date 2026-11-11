@@ -379,7 +379,7 @@ export function buildProviderOptionSelectionsFromDescriptors(
 }
 
 export function buildExplicitProviderOptionSelectionsFromDescriptors(
-  _descriptors: ReadonlyArray<ProviderOptionDescriptor> | null | undefined,
+  descriptors: ReadonlyArray<ProviderOptionDescriptor> | null | undefined,
   selections: ReadonlyArray<ProviderOptionSelection> | null | undefined,
 ): Array<ProviderOptionSelection> | undefined {
   if (!selections || selections.length === 0) {
@@ -387,7 +387,7 @@ export function buildExplicitProviderOptionSelectionsFromDescriptors(
   }
   // Discovery can be incomplete or stale. An explicit value belongs to the
   // saved selection; only the agent can accept or reject it at dispatch.
-  return selections.map(cloneSelection);
+  return withLegacyUltracodeEffort(descriptors, selections).map(cloneSelection);
 }
 
 export function isClaudeUltrathinkPrompt(text: string | null | undefined): boolean {

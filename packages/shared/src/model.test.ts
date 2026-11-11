@@ -180,6 +180,17 @@ describe("descriptor helpers", () => {
       { id: "effort", value: "xhigh" },
       { id: "ultracode", value: true },
     ]);
+    expect(
+      buildExplicitProviderOptionSelectionsFromDescriptors(descriptors, [
+        ...legacy,
+        { id: "ultracode", value: false },
+        { id: "nativeOption", value: "raw-value" },
+      ]),
+    ).toEqual([
+      { id: "effort", value: "xhigh" },
+      { id: "ultracode", value: false },
+      { id: "nativeOption", value: "raw-value" },
+    ]);
   });
 
   it("compares complete model selections independent of option ordering", () => {

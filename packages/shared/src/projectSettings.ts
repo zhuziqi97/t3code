@@ -136,23 +136,14 @@ function resolveProjectOverrides(
     const value = overrides[key];
     // Forward-compatible decoding can leave a present undefined, which is not an override.
     if (value === undefined) continue;
-    if (
-      (key === "textGenerationModelSelection" || key === "defaultModelSelection") &&
-      value !== undefined &&
-      value !== null &&
-      !(
-        key === "textGenerationModelSelection"
-          ? resolveTextGenerationSelectionEnabled
-          : resolveProjectProviderInstanceEnabled
-      )(settings, projectId, (value as ModelSelection).instanceId)
-    ) {
-      continue;
-    }
     effective[key] = value;
     sources[key] = "project";
   }
   const textGeneration = effective.textGenerationModelSelection as ModelSelection;
-  if (!resolveTextGenerationSelectionEnabled(settings, projectId, textGeneration.instanceId)) {
+  if (
+    overrides.providerInstances?.[textGeneration.instanceId]?.enabled === false &&
+    !resolveTextGenerationSelectionEnabled(settings, projectId, textGeneration.instanceId)
+  ) {
     const fallback = fallbackTextGenerationModelSelection(
       settings.providerInstances,
       (instanceId) => resolveProjectProviderInstanceEnabled(settings, projectId, instanceId),

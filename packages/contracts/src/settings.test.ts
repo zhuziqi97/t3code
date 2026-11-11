@@ -818,6 +818,9 @@ describe("ServerSettings thread settlement", () => {
     const settings = decodeServerSettings({});
     expect(settings.sidebarAutoSettleAfterDays).toBe(3);
     expect(settings.sidebarAutoSettleOnMerge).toBe(true);
+    expect(decodeServerSettings({ sidebarAutoSettleAfterDays: 7 }).sidebarAutoSettleAfterDays).toBe(
+      7,
+    );
   });
 
   it("allows both automatic rules to be disabled", () => {
