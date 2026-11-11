@@ -227,7 +227,10 @@ it.effect(
       });
       expect(aboveCeiling.launched[0]?.runtimeMode).toBe("auto-accept-edits");
       expect(aboveCeiling.result).toMatchObject({
-        link: `<t3-thread://v2/environment/${aboveCeiling.launched[0]?.threadId}>`,
+        threadId: aboveCeiling.launched[0]?.threadId,
+        projectId: aboveCeiling.projectId,
+        modelSelection: aboveCeiling.modelSelection,
+        link: `[Fix](t3-thread://v2/environment/${aboveCeiling.launched[0]?.threadId})`,
       });
 
       const requested = yield* launchWith("full-access", "approval-required", {
