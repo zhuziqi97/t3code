@@ -6142,6 +6142,7 @@ it.effect.each(["ensureThread", "resumeThread", "forkThread", "startTurn"] as co
       const state = yield* Ref.make(emptyState),
         otherState = yield* Ref.make(emptyState),
         failPrepare = yield* Ref.make(false),
+        failedAttachments = yield* Ref.make<ReadonlyArray<string>>([]),
         calls = yield* Ref.make<ReadonlyArray<string>>([]);
       const record = (name: string) => Ref.update(calls, (current) => [...current, name]);
       const runtimeMethods = {
@@ -6268,6 +6269,7 @@ it.effect.each(["ensureThread", "resumeThread", "forkThread", "startTurn"] as co
         };
         yield* Ref.set(failPrepare, true);
         const failed = yield* Effect.result(invoke(runtime));
+        assert.deepEqual(yield* Ref.get(failedAttachments), [threadId]);
         assert.equal(failed._tag, "Failure");
         if (failed._tag === "Failure")
           assert.equal(
@@ -6314,8 +6316,12 @@ it.effect.each(["ensureThread", "resumeThread", "forkThread", "startTurn"] as co
                 ? Ref.get(failPrepare).pipe(
                     Effect.flatMap((fail) =>
                       fail
-                        ? Effect.fail(
-                            new ConveneWorkspaces.ConveneWorkspaceError({ projectId: project }),
+                        ? Ref.update(failedAttachments, (current) => [...current, id]).pipe(
+                            Effect.andThen(
+                              Effect.fail(
+                                new ConveneWorkspaces.ConveneWorkspaceError({ projectId: project }),
+                              ),
+                            ),
                           )
                         : Effect.void,
                     ),

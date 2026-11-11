@@ -1964,14 +1964,19 @@ export const layerWithOptions = (
             subscribeEvents.pipe(Effect.map((subscription) => subscription.events)),
           ),
           ensureThread: (input) =>
-            observeActivity(
+            ensureThreadAttached({
               providerSessionId,
-              ensureThreadAttached({
-                providerSessionId,
-                threadId: input.threadId,
-                runtime,
-              }),
-            ).pipe(
+              threadId: input.threadId,
+              runtime,
+            }).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new ProviderAdapter.ProviderAdapterEnsureThreadError({
+                    driver: runtime.driver,
+                    threadId: input.threadId,
+                    cause,
+                  }),
+              ),
               Effect.andThen(loadNatively(runtime.ensureThread(input))),
               Effect.tap(({ loaded: providerThread, linkedEnvironments }) =>
                 markProviderThreadLoaded({
@@ -2061,14 +2066,19 @@ export const layerWithOptions = (
             );
           },
           forkThread: (input) =>
-            observeActivity(
+            ensureThreadAttached({
               providerSessionId,
-              ensureThreadAttached({
-                providerSessionId,
-                threadId: input.targetThreadId,
-                runtime,
-              }),
-            ).pipe(
+              threadId: input.targetThreadId,
+              runtime,
+            }).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new ProviderAdapter.ProviderAdapterForkThreadError({
+                    driver: runtime.driver,
+                    providerThreadId: input.sourceProviderThread.id,
+                    cause,
+                  }),
+              ),
               Effect.andThen(loadNatively(runtime.forkThread(input))),
               Effect.tap(({ loaded: providerThread, linkedEnvironments }) =>
                 markProviderThreadLoaded({
