@@ -316,6 +316,8 @@ it.live("keeps heartbeat, changed directories, refresh ACKs, and reconnection in
     const cacheStarted = yield* Deferred.make<void>();
     const releaseCache = yield* Deferred.make<void>();
     const dataBound = yield* Deferred.make<void>();
+    const dataFailed = yield* Deferred.make<Record<string, unknown>>();
+    let failDataToken = false;
     const updateSource = yield* Deferred.make<string>();
     const workspaceReported = yield* Deferred.make<void>();
     const workspaceChanges = yield* PubSub.unbounded<void>();
@@ -372,6 +374,8 @@ it.live("keeps heartbeat, changed directories, refresh ACKs, and reconnection in
           while (true)
             for (const frame of yield* pull) {
               const message = yield* decode(frame);
+              if (message.TYPE === "DATA_CHANNEL_RESULT")
+                yield* Deferred.succeed(dataFailed, message);
               if (message.TYPE === "HELLO") {
                 helloCount++;
                 yield* send({ TYPE: "HELLO_ACK", PAYLOAD: { HEARTBEAT_INTERVAL_SECONDS: 15 } });
@@ -447,7 +451,16 @@ it.live("keeps heartbeat, changed directories, refresh ACKs, and reconnection in
           runnerId: "runner",
           refreshCredential: "credential",
         }),
-        accessToken: Effect.succeed("access"),
+        accessToken: Effect.suspend(() =>
+          failDataToken
+            ? Effect.fail(
+                new ConvenePlatform.ConvenePlatformError({
+                  operation: "refresh",
+                  cause: new Error("controlled token failure"),
+                }),
+              )
+            : Effect.succeed("access"),
+        ),
         changes: platformChanges,
       }),
       Layer.mock(ConveneMcp.ConveneMcp)({
@@ -531,6 +544,22 @@ it.live("keeps heartbeat, changed directories, refresh ACKs, and reconnection in
     yield* Effect.gen(function* () {
       const connection = yield* ConveneConnection.ConveneConnection;
       yield* Deferred.await(dataBound);
+      failDataToken = true;
+      yield* Queue.offer(control, {
+        TYPE: "OPEN_DATA_CHANNEL",
+        REQUEST_ID: "failed-read",
+        CONNECTION_ID: "control",
+        KIND: "HTTP",
+        REPORT_THRESHOLD_MS: 1000,
+      });
+      assert.include(yield* Deferred.await(dataFailed), {
+        TYPE: "DATA_CHANNEL_RESULT",
+        REQUEST_ID: "failed-read",
+        CONNECTION_ID: "control",
+        OUTCOME: "failed",
+        STAGE: "token",
+      });
+      failDataToken = false;
       assert.equal(yield* Deferred.await(updateSource), HttpServer.formatAddress(server.address));
       assert.equal((yield* connection.status).phase, "connecting");
       yield* Deferred.succeed(releaseCache, undefined);

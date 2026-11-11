@@ -7,6 +7,7 @@ import {
   type ConveneStatus,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
+import * as Clock from "effect/Clock";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Crypto from "effect/crypto/SecureRandom";
@@ -288,7 +289,13 @@ const start = Effect.fn("ConveneConnection.start")(function* (
                 const fiber = dataChannels.get(control.REQUEST_ID);
                 if (fiber) yield* Fiber.interrupt(fiber).pipe(Effect.forkScoped);
               } else {
-                const fiber = yield* ConveneDataChannel.open(paired.baseUrl, control).pipe(
+                const receivedAt = yield* Clock.currentTimeNanos;
+                const fiber = yield* ConveneDataChannel.open(
+                  paired.baseUrl,
+                  control,
+                  send,
+                  receivedAt,
+                ).pipe(
                   Effect.provide(webContext),
                   Effect.scoped,
                   Effect.tapError((error) =>

@@ -8,9 +8,11 @@ import * as Effect from "effect/Effect";
 import * as PubSub from "effect/PubSub";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Exit from "effect/Exit";
 
 import * as Schema from "effect/Schema";
 import * as Socket from "effect/socket/Socket";
+import { type ConveneDataResult } from "@t3tools/contracts";
 import {
   HttpClientRequest,
   HttpClientResponse,
@@ -27,6 +29,55 @@ import * as ConveneWeb from "./ConveneWeb.ts";
 const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 const decodeJsonRecord = Schema.decodeUnknownEffect(
   Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)),
+);
+
+it.effect("reports token failure to the requesting control owner without exposing its cause", () =>
+  Effect.gen(function* () {
+    const results: Array<unknown> = [];
+    const exit = yield* ConveneDataChannel.open(
+      "http://unused",
+      {
+        TYPE: "OPEN_DATA_CHANNEL",
+        REQUEST_ID: "failed-request",
+        CONNECTION_ID: "owner",
+        KIND: "HTTP",
+        REPORT_THRESHOLD_MS: 1000,
+      },
+      (result) =>
+        Effect.sync(() => {
+          results.push(result);
+        }),
+    ).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          Layer.mock(ConvenePlatform.ConvenePlatform)({
+            changes: yield* PubSub.unbounded<void>(),
+            accessToken: Effect.fail(
+              new ConvenePlatform.ConvenePlatformError({
+                operation: "refresh",
+                cause: new Error("private credential"),
+              }),
+            ),
+          }),
+          Layer.mock(ConveneNative.ConveneNative)({}),
+          Layer.mock(ConveneWeb.ConveneWeb)({}),
+        ),
+      ),
+      Effect.scoped,
+      Effect.exit,
+    );
+    assert.isTrue(Exit.isFailure(exit));
+    assert.equal(results.length, 1);
+    assert.include(results[0], {
+      TYPE: "DATA_CHANNEL_RESULT",
+      REQUEST_ID: "failed-request",
+      CONNECTION_ID: "owner",
+      OUTCOME: "failed",
+      STAGE: "token",
+      ERROR_CODE: "ConvenePlatformError",
+    });
+    assert.notInclude(JSON.stringify(results), "private credential");
+  }),
 );
 
 it.live("relays native WebSocket text, binary and close reason", () =>
@@ -126,6 +177,8 @@ it.live("relays native WebSocket text, binary and close reason", () =>
 
 it.live("finishes concurrent Web resource responses including HEAD, 204 and 304", () =>
   Effect.gen(function* () {
+    const results: Array<typeof ConveneDataResult.Type> = [];
+    const releaseCompleted = yield* Deferred.make<void>();
     const scenarios = Array.from({ length: 40 }, (_, index) => ({
       index,
       status: index === 1 ? 204 : index === 2 ? 304 : 200,
@@ -154,6 +207,7 @@ it.live("finishes concurrent Web resource responses including HEAD, 204 and 304"
             }
             const message = yield* decodeJsonRecord(frame);
             if (message.TYPE === "BIND_DATA_CHANNEL") {
+              assert.property(message.TIMINGS_MS, "socket_open");
               scenario = scenarios[Number(message.REQUEST_ID)]!;
               yield* send({
                 TYPE: "HTTP_OPEN",
@@ -164,10 +218,13 @@ it.live("finishes concurrent Web resource responses including HEAD, 204 and 304"
               });
             } else if (message.TYPE === "HTTP_RESPONSE") {
               assert.equal(message.STATUS, scenario.status);
+              assert.property(message.TIMINGS_MS, "response_headers");
             } else if (message.TYPE === "HTTP_DONE") {
+              assert.property(message.TIMINGS_MS, "body_done");
               // GET may respond before the platform's upload direction ends.
               yield* send({ TYPE: "HTTP_END" });
               yield* Deferred.succeed(scenario.completed, new Uint8Array(Buffer.concat(bytes)));
+              if (scenario.index === 0) yield* Deferred.await(releaseCompleted);
               return HttpServerResponse.empty();
             }
           }
@@ -221,7 +278,12 @@ it.live("finishes concurrent Web resource responses including HEAD, 204 and 304"
                 REQUEST_ID: String(scenario.index),
                 CONNECTION_ID: "owned",
                 KIND: "HTTP",
+                REPORT_THRESHOLD_MS: scenario.index === 39 ? 1_000_000 : 0,
               },
+              (result) =>
+                Effect.sync(() => {
+                  results.push(result);
+                }),
             ).pipe(Effect.provide(dependencies), Effect.forkScoped);
             const actual = yield* Deferred.await(scenario.completed);
             assert.deepEqual(
@@ -230,11 +292,28 @@ it.live("finishes concurrent Web resource responses including HEAD, 204 and 304"
                 ? new Uint8Array()
                 : scenario.bytes,
             );
-            yield* Fiber.join(running);
+            if (scenario.index === 0) {
+              yield* Fiber.interrupt(running);
+              yield* Deferred.succeed(releaseCompleted, undefined);
+            } else yield* Fiber.join(running);
           }),
         ),
       { concurrency: "unbounded", discard: true },
     );
+    assert.equal(results.length, scenarios.length - 1);
+    for (const result of results) {
+      assert.equal(result.OUTCOME, "complete");
+      assert.equal(result.STAGE, "done");
+      if (result.REQUEST_ID !== "0") assert.property(result.TIMINGS_MS, "socket_closed");
+      assert.containsAllKeys(result.TIMINGS_MS, [
+        "token_ready",
+        "socket_open",
+        "bind_sent",
+        "request_received",
+        "response_headers",
+        "body_done",
+      ]);
+    }
   }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
 );
 const decodeJson = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));

@@ -116,6 +116,36 @@ export const ConveneDataControl = Schema.Struct({
   REQUEST_ID: Schema.String,
   CONNECTION_ID: Schema.String,
   KIND: Schema.optional(Schema.Literals(["HTTP", "WS"])),
+  REPORT_THRESHOLD_MS: Schema.optional(Schema.Number),
+});
+export const ConveneDataResult = Schema.Struct({
+  TYPE: Schema.Literal("DATA_CHANNEL_RESULT"),
+  REQUEST_ID: Schema.String,
+  CONNECTION_ID: Schema.String,
+  OUTCOME: Schema.Literals(["complete", "failed", "cancelled"]),
+  STAGE: Schema.Literals([
+    "token",
+    "connect",
+    "authenticate",
+    "bind",
+    "request",
+    "upstream",
+    "body",
+    "close",
+    "done",
+  ]),
+  ELAPSED_MS: Schema.Number,
+  ERROR_CODE: Schema.optional(Schema.String),
+  TIMINGS_MS: Schema.Struct({
+    token_ready: Schema.optional(Schema.Number),
+    socket_open: Schema.optional(Schema.Number),
+    bind_sent: Schema.optional(Schema.Number),
+    request_received: Schema.optional(Schema.Number),
+    response_headers: Schema.optional(Schema.Number),
+    first_body: Schema.optional(Schema.Number),
+    body_done: Schema.optional(Schema.Number),
+    socket_closed: Schema.optional(Schema.Number),
+  }),
 });
 export const ConveneHttpOpen = Schema.Struct({
   TYPE: Schema.Literal("HTTP_OPEN"),
