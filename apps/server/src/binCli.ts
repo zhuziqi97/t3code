@@ -24,12 +24,7 @@ import { projectCommand } from "./cli/project.ts";
 import { threadCommand } from "./cli/thread.ts";
 import { runDefaultServerCommand, serveCommand, startCommand } from "./cli/server.ts";
 import { updateCommand } from "./cli/update.ts";
-import {
-  confirmCliInstall,
-  inTerminalForeground,
-  installCommand,
-  offerCliInstall,
-} from "./cli/install.ts";
+import { installCommand } from "./cli/install.ts";
 import { uninstallCommand } from "./cli/uninstall.ts";
 import { runServiceLauncherCli } from "./cli/serviceLauncher.ts";
 import { speechWorkerCommand } from "./cli/speechWorker.ts";

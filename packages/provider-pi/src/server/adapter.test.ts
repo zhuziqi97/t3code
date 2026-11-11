@@ -284,7 +284,7 @@ const makeFakePi: Effect.Effect<FakePi> = Effect.gen(function* () {
         // Pi reapplies the target model's configured thinking default.
         thinkingLevel = "low";
         currentModel = `${String(record["provider"])}/${String(record["modelId"])}`;
-        return base;
+        return { ...base, data: { provider: record["provider"], id: record["modelId"] } };
       case "set_thinking_level":
         if (failThinking) {
           failThinking = false;
@@ -311,8 +311,6 @@ const makeFakePi: Effect.Effect<FakePi> = Effect.gen(function* () {
         return base;
       case "get_available_models":
         return { ...base, data: { models } };
-      case "set_model":
-        return { ...base, data: { provider: record["provider"], id: record["modelId"] } };
       case "new_session": {
         const cancelled = vetoNewSession;
         vetoNewSession = false;

@@ -373,20 +373,6 @@ function foldClaudeFields(fields: ClaudeFields, record: DecodedTranscriptRecord)
 
 // Codex records setup context as user text ahead of the real request. Skip
 // these leading blocks when deriving a title; imported messages keep them.
-const CODEX_TITLE_PREAMBLE =
-  /^(?:\s*(?:<(recommended_plugins|environment_context|user_instructions|INSTRUCTIONS|in-app-browser-context)(?:\s[^>]*)?>[\s\S]*?<\/\1>|# AGENTS\.md instructions\b[^\n]*|## My request for Codex:))+/;
-
-// Codex appends an entry per rename; like Codex, the newest nonempty name wins.
-function parseCodexThreadNames(contents: string): ReadonlyMap<string, string> {
-  const names = new Map<string, string>();
-  for (const line of contents.split("\n")) {
-    const entry = Option.getOrUndefined(decodeCodexSessionIndexEntry(line));
-    const name = entry?.thread_name.trim();
-    if (entry !== undefined && name) names.set(entry.id, name);
-  }
-  return names;
-}
-
 // A rewound paginated Codex thread continues in a new rollout that inherits a
 // byte prefix of the rollout it replaced.
 function codexHistoryBase(records: ReadonlyArray<DecodedTranscriptRecord>) {
@@ -400,11 +386,6 @@ function codexHistoryBase(records: ReadonlyArray<DecodedTranscriptRecord>) {
     base.end_byte_offset >= 0
     ? base
     : undefined;
-}
-
-function deriveTitle(source: AgentSessionSource, text: string): string | undefined {
-  const request = source === "codex" ? text.replace(CODEX_TITLE_PREAMBLE, "") : text;
-  return request.trim().split("\n")[0]?.slice(0, 100).trim() || undefined;
 }
 
 // Pi keeps abandoned branches in the file; its active branch runs from the last entry to the root.
