@@ -110,7 +110,8 @@ vi.mock("../state/server", async (importOriginal) => {
     environmentServerConfigsAtom: Atom.make(new Map([["secondary", state.serverConfig]])),
   };
 });
-vi.mock("../state/threads", () => ({
+vi.mock("../state/threads", async (original) => ({
+  ...(await original<typeof import("../state/threads")>()),
   threadEnvironment: Object.fromEntries(
     [
       "archive",
