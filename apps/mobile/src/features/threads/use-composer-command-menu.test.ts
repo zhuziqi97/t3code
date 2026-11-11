@@ -153,8 +153,12 @@ describe("mobile model mentions", () => {
   };
 
   it("offers current, visible models labelled with their provider", () => {
+    const nativeDefault = option("native:default", {
+      selection: { instanceId: ProviderInstanceId.make("native"), model: null },
+    });
     const items = buildComposerModelItems(
       [
+        nativeDefault,
         option("traex:gpt-6.1"),
         option("opencode:traex/gpt-6.1", {
           subtitle: "Traex",
@@ -166,12 +170,25 @@ describe("mobile model mentions", () => {
         option("old:gpt-5", { label: "GPT-5", isLegacy: true }),
       ],
       "gpt",
-      ["traex", "opencode", "hidden", "gone", "old"].map((id) => provider(id)),
+      ["traex", "opencode", "hidden", "gone", "old", "native"].map((id) => provider(id)),
     );
     expect(items.map((item) => [item.id, item.description]).toSorted()).toEqual([
       ["model:opencode:traex/gpt-6.1", "OpenCode · Traex"],
       ["model:traex:gpt-6.1", "Traex"],
     ]);
+    expect(
+      resolveComposerCommandSelection({
+        draftMessage: "Before @gpt after",
+        trigger: { rangeStart: 7, rangeEnd: 11 },
+        item: {
+          id: "model:native",
+          type: "model",
+          option: nativeDefault,
+          label: nativeDefault.label,
+          description: "Native default",
+        },
+      }),
+    ).toEqual({ text: "Before @gpt after", cursor: 11 });
   });
 
   it.each([
@@ -197,7 +214,6 @@ it("inserts a canonical document reference without replacing the rest of a mobil
   const result = resolveComposerCommandSelection({
     draftMessage: "Before @guide after",
     trigger: { rangeStart: 7, rangeEnd: 13 },
-    allowInteractionMode: true,
     item: {
       type: "convene-resource",
       id: "convene:doc",
@@ -215,6 +231,6 @@ it("inserts a canonical document reference without replacing the rest of a mobil
   expect(result.text).toBe(
     "Before [Convene docs/guide.md · Guide](<convene://docs/owner/project/module/docs/guide.md>)  after",
   );
-  expect(result.interactionMode).toBeNull();
+  expect(result.cursor).toBe(result.text.indexOf(" after"));
   expect(result.text).not.toContain("$Convene");
 });

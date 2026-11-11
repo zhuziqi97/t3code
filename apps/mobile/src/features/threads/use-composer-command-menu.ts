@@ -204,6 +204,7 @@ export function buildComposerModelItems(
     modelOptions.filter(
       (option) =>
         readyProviderIds.has(option.selection.instanceId) &&
+        option.selection.model !== null &&
         !option.isUnavailable &&
         !option.isHidden &&
         !option.isLegacy,
@@ -244,7 +245,9 @@ export function resolveComposerCommandSelection(input: {
   } else if (item.type === "provider-slash-command") {
     replacement = `/${item.command.name} `;
   } else if (item.type === "model") {
-    replacement = `${formatComposerModelMention(item.option.selection.instanceId, item.option.selection.model)} `;
+    const model = item.option.selection.model;
+    if (model === null) return { text: draftMessage, cursor: trigger.rangeEnd };
+    replacement = `${formatComposerModelMention(item.option.selection.instanceId, model)} `;
   }
   return replaceTextRange(draftMessage, trigger.rangeStart, trigger.rangeEnd, replacement);
 }
