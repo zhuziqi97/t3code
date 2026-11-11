@@ -167,7 +167,12 @@ describe("DesktopApplicationMenu language preference", () => {
               .map((item) => item.role),
             ["minimize", "zoom", "front"],
           );
-          const closeWindow = submenu(template, "文件")[0]!;
+          const file = submenu(template, "文件");
+          const closeTools = file.find((item) => item.accelerator === "CmdOrCtrl+W")!;
+          assert.equal(closeTools.label, "关闭开发者工具");
+          assert.isFalse(closeTools.visible);
+          assert.isUndefined(closeTools.role);
+          const closeWindow = file.find((item) => item.visible !== false)!;
           assert.equal(closeWindow.label, "关闭窗口");
           assert.isUndefined(closeWindow.role);
           assert.isUndefined(closeWindow.accelerator);

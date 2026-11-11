@@ -253,7 +253,7 @@ export const make = Effect.gen(function* () {
                 { type: "separator" as const },
               ]),
           {
-            label: "Close Developer Tools",
+            label: t("menu.closeDeveloperTools"),
             accelerator: "CmdOrCtrl+W",
             visible: false,
             click: () => {
