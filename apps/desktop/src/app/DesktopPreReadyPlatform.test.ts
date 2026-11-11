@@ -210,7 +210,7 @@ describe("DesktopPreReadyPlatform", () => {
             Layer.provide(
               DesktopConfig.layerTest({
                 XDG_DATA_HOME: "/xdg",
-                APPIMAGE: "/Applications/current.AppImage",
+                APPIMAGE: "/Applications/current build.AppImage",
               }),
             ),
           ),
