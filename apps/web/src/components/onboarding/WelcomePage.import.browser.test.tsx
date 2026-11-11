@@ -336,7 +336,7 @@ async function mountWelcome() {
 
 // The mocked modules read `state`, so every test starts by replacing all of it.
 // Returns the clock spy so each test can `using` it; the spy would otherwise outlive the test.
-function setup() {
+function setup({ importOptedIn = false } = {}) {
   const now = vi.spyOn(Date, "now").mockReturnValue(NOW);
   state.sessions.clear();
   for (const id of [primaryId]) {
@@ -409,12 +409,19 @@ function setup() {
   state.refreshLinkState.mockReset();
   state.scanError = null;
   state.scanPending = false;
-  localStorage.removeItem(welcomeImportSelectionKey(primaryId));
+  if (importOptedIn) {
+    localStorage.setItem(
+      welcomeImportSelectionKey(primaryId),
+      JSON.stringify({ knownKeys: [], keys: [], optedOut: false }),
+    );
+  } else {
+    localStorage.removeItem(welcomeImportSelectionKey(primaryId));
+  }
   return now;
 }
 
 it("rechecks after project creation and can retry its history without recreating the project", async () => {
-  using _now = setup();
+  using _now = setup({ importOptedIn: true });
   const creation = deferred<void>();
   state.createProject.mockImplementationOnce(async (input: CreateProjectInput) => {
     await creation.promise;
@@ -442,7 +449,7 @@ it("rechecks after project creation and can retry its history without recreating
 });
 
 it("completes accepted imports when permission is revoked after the final server write", async () => {
-  using _now = setup();
+  using _now = setup({ importOptedIn: true });
   appAtomRegistry.set(candidatesAtom(), [candidate("/projects/first")]);
   const imported = deferred<{ importedCount: number; skippedCount: number }>();
   state.importThreads.mockImplementationOnce(async () =>
@@ -462,7 +469,7 @@ it("completes accepted imports when permission is revoked after the final server
 });
 
 it("finishes setup without landing when the imported project never reaches the client", async () => {
-  using _now = setup();
+  using _now = setup({ importOptedIn: true });
   appAtomRegistry.set(candidatesAtom(), [candidate("/projects/first")]);
   // The server accepts the project, but it never shows up in the client's projects.
   state.createProject.mockResolvedValue(AsyncResult.success(undefined));
@@ -758,7 +765,7 @@ it("discovers a newly added account and its managed installation before authenti
 });
 
 it("blocks leaving the page until the imported projects have landed", async () => {
-  using _now = setup();
+  using _now = setup({ importOptedIn: true });
   const creation = deferred<void>();
   state.createProject.mockImplementationOnce(async (input: CreateProjectInput) => {
     await creation.promise;
@@ -808,7 +815,7 @@ it("blocks leaving the page until the imported projects have landed", async () =
 });
 
 it("gives projects a later scan finds the default, unless the main box was unchecked", async () => {
-  using _now = setup();
+  using _now = setup({ importOptedIn: true });
   await using _screen = await mountWelcome();
   // Turning on another agent rescans and finds a recent project the user has not seen.
   const findProject = (path: string) =>
@@ -831,7 +838,7 @@ it("gives projects a later scan finds the default, unless the main box was unche
 });
 
 it("keeps the project choice across a visit to Settings until setup finishes", async () => {
-  using _now = setup();
+  using _now = setup({ importOptedIn: true });
   {
     await using _first = await mountWelcome();
     const importProjects = document.querySelector<HTMLElement>('[role="checkbox"]');
@@ -847,11 +854,15 @@ it("keeps the project choice across a visit to Settings until setup finishes", a
     expect(state.createProject).not.toHaveBeenCalled();
   }
   await using _third = await mountWelcome();
+  expect(button("Start").disabled).toBe(false);
+  const importProjects = document.querySelector<HTMLElement>('[role="checkbox"]');
+  expect(importProjects?.getAttribute("aria-checked")).toBe("false");
+  await act(async () => importProjects?.click());
   expect(button("Import 2 projects and start").disabled).toBe(false);
 });
 
 it("stays busy while setup saves after an import with nothing to open", async () => {
-  using _now = setup();
+  using _now = setup({ importOptedIn: true });
   appAtomRegistry.set(candidatesAtom(), [candidate("/projects/first")]);
   state.importThreads.mockResolvedValue(AsyncResult.success({ importedCount: 0, skippedCount: 1 }));
   const saved = deferred<void>();
@@ -870,7 +881,7 @@ it("stays busy while setup saves after an import with nothing to open", async ()
 });
 
 it("leaves projects already in T3 Code out of the default import, unless the box is checked", async () => {
-  using _now = setup();
+  using _now = setup({ importOptedIn: true });
   const existing = ProjectId.make("existing");
   const justAdded = ProjectId.make("just-added");
   appAtomRegistry.set(projectsAtom(), [
@@ -898,7 +909,7 @@ it("leaves projects already in T3 Code out of the default import, unless the box
 });
 
 it("keeps the started projects checked when the page opens again after a quit", async () => {
-  using _now = setup();
+  using _now = setup({ importOptedIn: true });
   const imported = deferred<{ importedCount: number; skippedCount: number }>();
   state.importThreads.mockImplementationOnce(async () =>
     AsyncResult.success(await imported.promise),
@@ -919,7 +930,7 @@ it("keeps the started projects checked when the page opens again after a quit", 
 });
 
 it("keeps the project controls when a later scan fails", async () => {
-  using _now = setup();
+  using _now = setup({ importOptedIn: true });
   await using _screen = await mountWelcome();
   state.scanError = "The scan timed out.";
   await act(async () =>
@@ -944,7 +955,7 @@ it("keeps saved picks when Start comes before the project list loads", async () 
 });
 
 it("offers Update for a signed-in agent whose version is broken, and keeps Start off", async () => {
-  using _now = setup();
+  using _now = setup({ importOptedIn: true });
   appAtomRegistry.set(state.providers as Atom.Writable<ReadonlyArray<ServerProvider>>, [
     {
       ...readyClaude,
@@ -968,10 +979,13 @@ it("offers Update for a signed-in agent whose version is broken, and keeps Start
 it("keeps an import opt-out on the page when storage cannot save it", async () => {
   using _now = setup();
   await using _screen = await mountWelcome();
+  const importProjects = document.querySelector<HTMLElement>('[role="checkbox"]');
+  expect(importProjects?.getAttribute("aria-checked")).toBe("false");
+  await act(async () => importProjects?.click());
+  expect(button("Import 2 projects and start").disabled).toBe(false);
   using _full = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
     throw new DOMException("The quota has been exceeded.", "QuotaExceededError");
   });
-  const importProjects = document.querySelector<HTMLElement>('[role="checkbox"]');
   await act(async () => importProjects?.click());
 
   await click("Start");
