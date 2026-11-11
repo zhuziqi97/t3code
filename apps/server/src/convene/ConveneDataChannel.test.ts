@@ -83,6 +83,7 @@ it.effect("reports token failure to the requesting control owner without exposin
 it.live("relays native WebSocket text, binary and close reason", () =>
   Effect.gen(function* () {
     const completed = yield* Deferred.make<void>();
+    const results: Array<typeof ConveneDataResult.Type> = [];
     const bytes = new Uint8Array(3 * 1024 * 1024).fill(197);
     const routes = Layer.mergeAll(
       HttpRouter.add(
@@ -164,14 +165,24 @@ it.live("relays native WebSocket text, binary and close reason", () =>
           ),
       }),
     );
-    const running = yield* ConveneDataChannel.open(base, {
-      TYPE: "OPEN_DATA_CHANNEL",
-      REQUEST_ID: "owned",
-      CONNECTION_ID: "owned",
-      KIND: "WS",
-    }).pipe(Effect.provide(dependencies), Effect.forkScoped);
+    const running = yield* ConveneDataChannel.open(
+      base,
+      {
+        TYPE: "OPEN_DATA_CHANNEL",
+        REQUEST_ID: "owned",
+        CONNECTION_ID: "owned",
+        KIND: "WS",
+        REPORT_THRESHOLD_MS: 1_000_000,
+      },
+      (result) =>
+        Effect.sync(() => {
+          results.push(result);
+        }),
+    ).pipe(Effect.provide(dependencies), Effect.forkScoped);
     yield* Deferred.await(completed);
     yield* Fiber.join(running);
+    assert.equal(results.length, 1);
+    assert.include(results[0], { OUTCOME: "failed", ERROR_CODE: "SocketCloseError:1011" });
   }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
 );
 

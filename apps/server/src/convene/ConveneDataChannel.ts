@@ -37,6 +37,7 @@ export const open = Effect.fn("ConveneDataChannel.open")(function* (
 ) {
   const started = receivedAt ?? (yield* Clock.currentTimeNanos);
   let stage: typeof ConveneDataResult.Type.STAGE = "token";
+  let socketFailure: Socket.SocketError | undefined;
   const timings: {
     -readonly [
       K in keyof typeof ConveneDataResult.Type.TIMINGS_MS
@@ -132,6 +133,11 @@ export const open = Effect.fn("ConveneDataChannel.open")(function* (
       yield* Effect.raceFirst(incoming, outgoing).pipe(
         Effect.catchTags({
           SocketError: (error) => {
+            if (
+              error.reason._tag !== "SocketCloseError" ||
+              ![1000, 1001].includes(error.reason.code)
+            )
+              socketFailure = error;
             const close = new Socket.CloseEvent(
               error.reason._tag === "SocketCloseError" &&
                 ![1005, 1006, 1015].includes(error.reason.code)
@@ -242,15 +248,20 @@ export const open = Effect.fn("ConveneDataChannel.open")(function* (
         const elapsed = Number((yield* Clock.currentTimeNanos) - started) / 1e6;
         // The platform cancels this child after consuming HTTP_DONE.
         const complete =
-          Exit.isSuccess(exit) ||
-          (Exit.hasInterrupts(exit) && stage === "close" && timings.body_done !== undefined);
+          socketFailure === undefined &&
+          (Exit.isSuccess(exit) ||
+            (Exit.hasInterrupts(exit) && stage === "close" && timings.body_done !== undefined));
         // Only platforms requesting reports understand the additive result frame.
         if (
           control.REPORT_THRESHOLD_MS === undefined ||
           (complete && elapsed < control.REPORT_THRESHOLD_MS)
         )
           return;
-        const failure = Exit.isFailure(exit) ? Cause.findErrorOption(exit.cause) : Option.none();
+        const failure = socketFailure
+          ? Option.some(socketFailure)
+          : Exit.isFailure(exit)
+            ? Cause.findErrorOption(exit.cause)
+            : Option.none();
         const error = Option.getOrUndefined(failure);
         const errorCode =
           error?._tag === "SocketError"
@@ -264,7 +275,13 @@ export const open = Effect.fn("ConveneDataChannel.open")(function* (
           TYPE: "DATA_CHANNEL_RESULT",
           REQUEST_ID: control.REQUEST_ID,
           CONNECTION_ID: control.CONNECTION_ID,
-          OUTCOME: complete ? "complete" : Exit.hasInterrupts(exit) ? "cancelled" : "failed",
+          OUTCOME: complete
+            ? "complete"
+            : socketFailure
+              ? "failed"
+              : Exit.hasInterrupts(exit)
+                ? "cancelled"
+                : "failed",
           STAGE: complete ? "done" : stage,
           ELAPSED_MS: elapsed,
           ...(complete ? {} : { ERROR_CODE: errorCode }),
