@@ -3,6 +3,7 @@ import {
   DEFAULT_CLIENT_SETTINGS,
   EnvironmentId,
   ProjectId,
+  RunId,
   ThreadId,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
@@ -133,6 +134,100 @@ function threadShell(projectId: ProjectId, index: number): EnvironmentThreadShel
     title: `Thread ${index}`,
   });
 }
+
+describe("sidebar project row variants", () => {
+  it.each([false, true])(
+    "uses the existing multiline=%s preference in every section",
+    async (multiline) => {
+      using stack = new DisposableStack();
+      const previousSettings = getClientSettings();
+      const previousUi = useUiStateStore.getState();
+      stack.defer(() => __setClientSettingsForTests(previousSettings));
+      stack.defer(() => useUiStateStore.setState(previousUi));
+      __setClientSettingsForTests({
+        ...DEFAULT_CLIENT_SETTINGS,
+        boringSidebarMultilineRows: multiline,
+        sidebarWorkingShelfEnabled: true,
+      });
+      useUiStateStore.setState({
+        sidebarProjectScopeKey: null,
+        projectExpandedById: {},
+        projectOrder: [],
+      });
+      for (const shelf of ["working", "snoozed", "settled"]) {
+        const key = `t3code:sidebar:${shelf}-expanded`;
+        const previous = localStorage.getItem(key);
+        stack.defer(() =>
+          previous === null ? localStorage.removeItem(key) : localStorage.setItem(key, previous),
+        );
+        localStorage.setItem(key, "true");
+      }
+      const projects = [project("active"), project("idle")];
+      const run = RunId.make("working-run");
+      const working = threadShell(projects[0]!.id, 1);
+      const threads = [
+        {
+          ...threadShell(projects[0]!.id, 0),
+          pinnedAt: "2026-01-01T00:00:00.000Z",
+          pinOrderKey: "a0",
+        },
+        {
+          ...working,
+          runtime: {
+            status: "running" as const,
+            activeRunId: run,
+            providerInstanceId: working.providerInstanceId,
+            providerName: null,
+            lastError: null,
+            updatedAt: working.updatedAt,
+          },
+        },
+        threadShell(projects[1]!.id, 2),
+        {
+          ...threadShell(projects[1]!.id, 3),
+          settledOverride: "settled" as const,
+          settledAt: "2026-01-01T00:00:00.000Z",
+        },
+        {
+          ...threadShell(projects[0]!.id, 4),
+          snoozedAt: "2026-01-01T00:00:00.000Z",
+          snoozedUntil: "2099-01-01T00:00:00.000Z",
+        },
+      ];
+      const routeThreadRef = { environmentId: working.environmentId, threadId: working.id };
+      vi.mocked(useProjects).mockReturnValue(projects);
+      vi.mocked(readProjects).mockReturnValue(projects);
+      vi.mocked(useQuietThreadShells).mockReturnValue(threads);
+      vi.mocked(useThreadRouteTarget).mockReturnValue({
+        kind: "server",
+        threadRef: routeThreadRef,
+      });
+      vi.mocked(useHandleNewThread).mockReturnValue({
+        activeDraftThread: null,
+        activeThread: null,
+        defaultProjectRef: { environmentId: working.environmentId, projectId: working.projectId },
+        defaultProjectFallbackReady: true,
+        handleNewThread: vi.fn().mockResolvedValue(null),
+        routeDraftId: null,
+        routeThreadRef,
+      });
+      vi.mocked(SortableThreadRow).mockClear();
+      await using screen = await render(
+        <SidebarProvider>
+          <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
+        </SidebarProvider>,
+      );
+      await expect.element(screen.getByText("Thread 4").first()).toBeInTheDocument();
+      for (const thread of threads) {
+        const call = vi
+          .mocked(SortableThreadRow)
+          .mock.calls.findLast(([props]) => props.thread.id === thread.id);
+        expect(call, thread.title).toBeDefined();
+        expect(call![0].variant, thread.title).toBe(multiline ? "folder-multiline" : "folder");
+      }
+    },
+  );
+});
 
 describe("sidebar render isolation", () => {
   // regression: #33100 Cmd+J re-rendered every sidebar row, which took hundreds of ms with many threads
