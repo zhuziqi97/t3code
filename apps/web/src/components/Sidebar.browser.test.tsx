@@ -225,6 +225,26 @@ describe("sidebar project row variants", () => {
         expect(call, thread.title).toBeDefined();
         expect(call![0].variant, thread.title).toBe(multiline ? "folder-multiline" : "folder");
       }
+      for (const { id: projectId } of projects) {
+        const projectRow = screen.container.querySelector<HTMLElement>(
+          `[data-sidebar-row="project:local:/projects/${projectId}"]`,
+        )!;
+        expect(projectRow).not.toBeNull();
+        const children = Array.from(
+          projectRow
+            .closest("[data-project-block]")!
+            .querySelectorAll<HTMLElement>("[data-sidebar-row]"),
+        ).slice(1);
+        expect(children.length).toBeGreaterThan(0);
+        projectRow.focus();
+        await userEvent.keyboard("{ArrowRight}");
+        expect(document.activeElement).toBe(children[0]);
+        for (const child of children) {
+          child.focus();
+          await userEvent.keyboard("{ArrowLeft}");
+          expect(document.activeElement).toBe(projectRow);
+        }
+      }
     },
   );
 });

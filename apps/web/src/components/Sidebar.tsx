@@ -3583,7 +3583,15 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                       ): ReactNode => {
                         if (item.kind === "thread") {
                           const thread = threadByKey.get(item.key);
-                          return thread ? renderThreadRow(thread, item.section) : null;
+                          return thread
+                            ? renderThreadRow(
+                                thread,
+                                item.section,
+                                item.section !== "pinned" && item.projectKey !== undefined
+                                  ? `project:${item.projectKey}`
+                                  : undefined,
+                              )
+                            : null;
                         }
                         const id = sidebarListItemId(item);
                         const group =
