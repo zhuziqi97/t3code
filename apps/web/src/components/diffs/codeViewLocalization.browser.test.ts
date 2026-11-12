@@ -7,6 +7,7 @@ import {
   FileDiff,
   getSharedHighlighter,
   i18n as diffsI18n,
+  type MatchRange,
   buildSearchReplacementText,
   parseDiffFromFile,
   parsePatchFiles,
@@ -15,7 +16,10 @@ import { Editor, TextDocument } from "@pierre/diffs/edit";
 import { createI18n } from "@t3tools/client-runtime/i18n";
 import { expect, it, vi } from "vite-plus/test";
 
-import { SearchPanelWidget } from "../../../node_modules/@pierre/diffs/dist/search/SearchPanelWidget.js";
+import {
+  SearchPanelWidget,
+  type SearchPanelOptions,
+} from "../../../node_modules/@pierre/diffs/dist/search/SearchPanelWidget.js";
 type SearchWidget = Pick<SearchPanelWidget, "getHostElement" | "cleanup">;
 
 const i18n = createI18n();
@@ -99,38 +103,37 @@ function makeWidget(labels: typeof en | null = en, allowReplace = false) {
   document.body.append(anchor);
   const scrollToMatch = vi.fn();
   const onClose = vi.fn();
-  const widget = new SearchPanelWidget({
+  const replace: NonNullable<SearchPanelOptions<MatchRange>["replace"]> = {
+    replaceMatch: (match, params) => {
+      documentText.applyEdits([
+        {
+          range: {
+            start: documentText.positionAt(match[0]),
+            end: documentText.positionAt(match[1]),
+          },
+          newText: buildSearchReplacementText(documentText, params, ...match),
+        },
+      ]);
+      return undefined;
+    },
+    replaceAll: (matches, params) => {
+      documentText.applyEdits(
+        matches.map((match) => ({
+          range: {
+            start: documentText.positionAt(match[0]),
+            end: documentText.positionAt(match[1]),
+          },
+          newText: buildSearchReplacementText(documentText, params, ...match),
+        })),
+      );
+    },
+  };
+  const widget = new SearchPanelWidget<MatchRange>({
     containerElement: anchor,
     defaultQuery: "",
     scrollToMatch,
     search: (params) => ({ matches: documentText.search(params) }),
-    replace: allowReplace
-      ? {
-          replaceMatch: (match, params) => {
-            documentText.applyEdits([
-              {
-                range: {
-                  start: documentText.positionAt(match[0]),
-                  end: documentText.positionAt(match[1]),
-                },
-                newText: buildSearchReplacementText(documentText, params, ...match),
-              },
-            ]);
-            return undefined;
-          },
-          replaceAll: (matches, params) => {
-            documentText.applyEdits(
-              matches.map((match) => ({
-                range: {
-                  start: documentText.positionAt(match[0]),
-                  end: documentText.positionAt(match[1]),
-                },
-                newText: buildSearchReplacementText(documentText, params, ...match),
-              })),
-            );
-          },
-        }
-      : undefined,
+    ...(allowReplace ? { replace } : {}),
     onUpdate: ({ matches }) => matches[0],
     onClose,
   });
