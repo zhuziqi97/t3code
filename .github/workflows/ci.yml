@@ -210,6 +210,14 @@ jobs:
         if: needs.changes.outputs.typecheck != 'false'
         run: vpr typecheck
 
+      - name: Finish installing browser secret helper build libraries
+        if: needs.changes.outputs.build != 'false'
+        timeout-minutes: 5
+        run: |
+          until test -s "$RUNNER_TEMP/apt-status"; do sleep 1; done
+          cat "$RUNNER_TEMP/apt.log"
+          exit "$(cat "$RUNNER_TEMP/apt-status")"
+
       - name: Build desktop pipeline
         id: build
         if: needs.changes.outputs.build != 'false'
