@@ -1077,12 +1077,12 @@ function UserMessageIntentMarker({
       >
         <Redo2Icon aria-hidden="true" className="size-3" />
         {unread
-          ? `${t("general.followUp.steer")} · waiting to be read`
+          ? t("chat.timeline.steerUnread", { action: t("general.followUp.steer") })
           : t("general.followUp.steer")}
       </TooltipTrigger>
       <TooltipPopup side="top">
         {unread
-          ? "Waiting for the agent to read this. It reads steers between steps, after a running command finishes."
+          ? t("chat.timeline.steerUnreadDescription")
           : intent === "promoted_queued_to_steer"
             ? t("chat.timeline.promoted")
             : t("chat.timeline.steered")}

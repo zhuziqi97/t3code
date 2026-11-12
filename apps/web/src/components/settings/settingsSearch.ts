@@ -565,6 +565,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/chat",
     searchTerms: [
       "accessibility a11y screen reader nvda jaws voiceover orca narrator speech announce read aloud messages activity steps",
+      "屏幕阅读器 无障碍 播报 朗读 状态 消息 步骤",
     ],
   },
   {

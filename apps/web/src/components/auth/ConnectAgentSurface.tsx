@@ -1,5 +1,5 @@
 import { Trans } from "react-i18next";
-import { useTranslate } from "../../i18n";
+import { i18n, useTranslate } from "../../i18n";
 import {
   type AuthMcpApprovalDecision,
   type AuthMcpApprovalDetails,
@@ -47,7 +47,6 @@ export const accessConfig: Record<
 };
 
 const ARM_DELAY_MS = 700;
-const UNSAFE_REDIRECT = "The environment returned an address this page will not open.";
 
 function followRedirect(url: string): boolean {
   const safe = agentRedirectUrl(url);
@@ -167,7 +166,8 @@ export function McpConsent({
     void transport.load(authorization).then((answer) => {
       if (cancelled) return;
       if (answer.kind === "redirect") {
-        if (!followRedirect(answer.url)) setLoaded({ status: "invalid", message: UNSAFE_REDIRECT });
+        if (!followRedirect(answer.url))
+          setLoaded({ status: "invalid", message: i18n.t("agentConnect.unsafeRedirect") });
         return;
       }
       setLoaded(
@@ -216,8 +216,8 @@ export function McpConsent({
       answer.kind === "error"
         ? (answer.message ?? t("agentConnect.unreachable"))
         : answer.kind === "redirect"
-          ? UNSAFE_REDIRECT
-          : "The sign-in could not continue.",
+          ? t("agentConnect.unsafeRedirect")
+          : t("agentConnect.continueFailed"),
     );
   };
 
@@ -268,27 +268,28 @@ export function McpConsent({
         }
       />
       <dl className="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-sm">
-        <dt className="text-muted-foreground">App</dt>
+        <dt className="text-muted-foreground">{t("agentConnect.app")}</dt>
         <dd className="min-w-0 break-words">
-          {details.clientName} <span className="text-muted-foreground">· name set by the app</span>
+          {details.clientName}{" "}
+          <span className="text-muted-foreground">{t("agentConnect.appNamed")}</span>
         </dd>
-        <dt className="text-muted-foreground">Access goes to</dt>
+        <dt className="text-muted-foreground">{t("agentConnect.accessDestination")}</dt>
         <dd className="min-w-0 break-words font-medium">
           {details.redirectHost}
           {redirectsToThisComputer(details.redirectHost) ? (
             <span className="font-normal text-muted-foreground">
               {" "}
-              on the computer that opened this page
+              {t("agentConnect.localComputer")}
             </span>
           ) : (
             <span className="font-normal text-muted-foreground">
               {" "}
-              · whoever runs it gets this access
+              {t("agentConnect.remoteOperator")}
             </span>
           )}
         </dd>
       </dl>
-      <p className="mt-2 text-xs text-muted-foreground">Only approve a sign-in you just started.</p>
+      <p className="mt-2 text-xs text-muted-foreground">{t("agentConnect.onlyOwnSignIn")}</p>
       <p className="mt-2 text-xs text-muted-foreground">
         {redirectsToThisComputer(details.redirectHost) ? (
           t("agentConnect.localRedirect", { host: details.redirectHost })
@@ -327,16 +328,24 @@ export function McpConsent({
               value={pairingCode}
             />
             <p className="text-xs text-muted-foreground">
-              Get one from Use T3 Code in another app (MCP), Settings → Sharing & access, or{" "}
-              <code>t3code-convene auth pairing create</code> on this machine.
+              <Trans
+                t={t}
+                i18nKey="agentConnect.codeSources"
+                values={{ command: "t3code-convene auth pairing create" }}
+                components={{ command: <code /> }}
+              />
             </p>
           </div>
         ) : null}
 
         {codeAccess ? (
           <p className="text-sm">
-            <span className="text-muted-foreground">Access</span>{" "}
-            <span className="font-medium">{accessConfig[codeAccess].label}</span>
+            <span className="text-muted-foreground">{t("agentConnect.access")}</span>{" "}
+            <span className="font-medium">
+              {codeAccess === "read-only"
+                ? t("agentConnect.readOnly")
+                : runtimeModePresentation(codeAccess, t).label}
+            </span>
           </p>
         ) : (
           <div className="space-y-2">
@@ -357,10 +366,7 @@ export function McpConsent({
                 />
               ))}
             </RadioGroup>
-            <p className="text-xs text-muted-foreground">
-              Beyond read only, it can start, message and stop threads, and none of them can run
-              with more than the mode you pick.
-            </p>
+            <p className="text-xs text-muted-foreground">{t("agentConnect.modeLimit")}</p>
           </div>
         )}
 
