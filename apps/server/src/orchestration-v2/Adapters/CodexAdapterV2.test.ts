@@ -6917,15 +6917,14 @@ describe("CodexAdapterV2 post-settle continuation", () => {
                 : Effect.void,
           undefined,
           undefined,
-          // The late reset must land after the terminal its failed read released.
-          (entry) =>
-            entry.label === "account/rateLimits/updated/late"
-              ? Deferred.await(terminalReceipt)
-              : Effect.void,
           undefined,
-          undefined,
-          undefined,
-          {},
+          {
+            // The late reset must land after the terminal its failed read released.
+            beforeEmitInbound: (entry) =>
+              entry.label === "account/rateLimits/updated/late"
+                ? Deferred.await(terminalReceipt)
+                : Effect.void,
+          },
           () => Deferred.succeed(snapshotReceipt, undefined),
         );
         yield* harness.runtime.startTurn(

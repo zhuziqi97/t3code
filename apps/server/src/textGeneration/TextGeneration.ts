@@ -131,7 +131,7 @@ export const make = Effect.gen(function* () {
               instanceId !== selection.instanceId &&
               provider?.enabled === true &&
               resolveProjectProviderInstanceEnabled(settings, projectId ?? null, instanceId) &&
-              provider.installed &&
+              provider.installed === true &&
               provider.auth.status !== "unauthenticated" &&
               provider.status !== "error" &&
               isProviderAvailable(provider) &&

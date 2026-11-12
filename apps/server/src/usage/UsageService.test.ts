@@ -1736,7 +1736,11 @@ describe("UsageService", () => {
                 Effect.gen(function* () {
                   inFlight++;
                   mostInFlight = Math.max(mostInFlight, inFlight);
-                  if (credential.apiKey === "failing-key") {
+                  if (
+                    typeof credential !== "string" &&
+                    credential.kind === "apiKey" &&
+                    credential.apiKey === "failing-key"
+                  ) {
                     yield* Deferred.await(started);
                     return {
                       accountKey: null,
