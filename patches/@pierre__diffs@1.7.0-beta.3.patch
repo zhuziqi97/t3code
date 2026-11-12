@@ -249,6 +249,34 @@ index 984f049ff3694dd353fa6637b0f09fc7dce74992..4d6599905be0fe7b5b5c1a225c0b3ff8
  		this.pendingRender = {
  			workingDiff,
  			diff: pendingRenderDiff
+diff --git a/dist/constants.d.ts b/dist/constants.d.ts
+index 47bba7587b538e62cd12cc710ac4f72ac8704573..cfc04857f350f0910693f59e35f18458424a9e3e 100644
+--- a/dist/constants.d.ts
++++ b/dist/constants.d.ts
+@@ -42,6 +42,9 @@ declare const DEFAULT_MESSAGES: {
+   unknownUnmodifiedLines: string;
+   /** Button that expands an entire collapsed region at once. */
+   expandAll: string;
++  expandUp: string;
++  expandDown: string;
++  expandBoth: string;
+   /** Marker shown after a final line that has no trailing newline. */
+   noNewlineAtEndOfFile: string;
+   /** Merge conflict button that keeps the current (ours) side. */
+diff --git a/dist/constants.js b/dist/constants.js
+index 337c53313ed7717f4503c417ddbcfe77a2905271..19cd59fb820ecb94c266d561544cad108c8ac5b5 100644
+--- a/dist/constants.js
++++ b/dist/constants.js
+@@ -44,6 +44,9 @@ const DEFAULT_MESSAGES = {
+ 	unknownUnmodifiedLines: "More unchanged context may be available",
+ 	/** Button that expands an entire collapsed region at once. */
+ 	expandAll: "Expand all",
++	expandUp: "Expand context upward",
++	expandDown: "Expand context downward",
++	expandBoth: "Expand context in both directions",
+ 	/** Marker shown after a final line that has no trailing newline. */
+ 	noNewlineAtEndOfFile: "No newline at end of file",
+ 	/** Merge conflict button that keeps the current (ours) side. */
 diff --git a/dist/editor/editor.js b/dist/editor/editor.js
 index a9905d43382de2ca03d6111ba9ab3725d8cb6981..466252fbc025fec5e29fc2958ad54b58f89ed124 100644
 --- a/dist/editor/editor.js
@@ -264,6 +292,168 @@ index a9905d43382de2ca03d6111ba9ab3725d8cb6981..466252fbc025fec5e29fc2958ad54b58
  		this.#scrollToPrimaryCaret();
  	}
  	setMarkers(markers) {
+diff --git a/dist/search/SearchPanelWidget.d.ts b/dist/search/SearchPanelWidget.d.ts
+index b1e7085a5c264cdab3ee9bf6473ef364330b08a4..0dc4cd94a3ced7d85a7ec5b7c8ebd782afa62e97 100644
+--- a/dist/search/SearchPanelWidget.d.ts
++++ b/dist/search/SearchPanelWidget.d.ts
+@@ -30,6 +30,7 @@ interface SearchPanelOptions<TMatch = MatchRange> {
+ declare class SearchPanelWidget<TMatch = MatchRange> {
+   #private;
+   constructor(options: SearchPanelOptions<TMatch>);
++  onMessagesChange(): void;
+   mount(): void;
+   getHostElement(): HTMLDivElement;
+   hasQuery(): boolean;
+diff --git a/dist/search/SearchPanelWidget.js b/dist/search/SearchPanelWidget.js
+index 151d80d1a0e5e202342f58d8594e2d2a775b2377..9b64b591fbbaad15bfeb0121a0346f693f0194f2 100644
+--- a/dist/search/SearchPanelWidget.js
++++ b/dist/search/SearchPanelWidget.js
+@@ -20,6 +20,7 @@ var SearchPanelWidget = class {
+ 	#setQuery;
+ 	#hasReplaceHandlers;
+ 	#close;
++	#refreshMessages;
+ 	constructor(options) {
+ 		const { containerElement, unsafeCSS, defaultQuery, defaults, mode = "find", search, isSameMatch = Object.is, scrollToMatch, replace, onQueryChange, onUpdate, onStateChange, onClose } = options;
+ 		let replaceHandlers = replace;
+@@ -139,21 +140,27 @@ var SearchPanelWidget = class {
+ 			onClose();
+ 		};
+ 		this.#close = close;
+-		const iconButton = (opts) => h("button", {
+-			type: "button",
+-			title: opts.label,
+-			ariaLabel: opts.label,
+-			dataset: {
+-				searchIcon: "",
+-				...opts.dataset
+-			},
+-			innerHTML: getEditorIconSvg(opts.icon, opts.size ?? 16),
+-			onclick: opts.onClick
+-		});
+-		const makeToggle = (icon, title, key) => {
++		const buttonMessages = new Map();
++		const iconButton = (opts) => {
++			const label = i18n.t(opts.messageKey);
++			const button = h("button", {
++				type: "button",
++				title: label,
++				ariaLabel: label,
++				dataset: {
++					searchIcon: "",
++					...opts.dataset
++				},
++				innerHTML: getEditorIconSvg(opts.icon, opts.size ?? 16),
++				onclick: opts.onClick
++			});
++			buttonMessages.set(button, opts.messageKey);
++			return button;
++		};
++		const makeToggle = (icon, messageKey, key) => {
+ 			const button = iconButton({
+ 				icon,
+-				label: title,
++				messageKey,
+ 				size: 14,
+ 				onClick: () => {
+ 					const next = !searchParams[key];
+@@ -164,9 +171,9 @@ var SearchPanelWidget = class {
+ 			button.ariaPressed = String(searchParams[key]);
+ 			return button;
+ 		};
+-		const caseSensitiveToggle = makeToggle("case", i18n.t("matchCase"), "caseSensitive");
+-		const wholeWordToggle = makeToggle("whole-word", i18n.t("wholeWord"), "wholeWord");
+-		const regexToggle = makeToggle("regex", i18n.t("regularExpression"), "regex");
++		const caseSensitiveToggle = makeToggle("case", "matchCase", "caseSensitive");
++		const wholeWordToggle = makeToggle("whole-word", "wholeWord", "wholeWord");
++		const regexToggle = makeToggle("regex", "regularExpression", "regex");
+ 		this.#inputElement = h("input", {
+ 			type: "text",
+ 			placeholder: i18n.t("searchPlaceholder"),
+@@ -217,14 +224,14 @@ var SearchPanelWidget = class {
+ 		});
+ 		const prevButton = iconButton({
+ 			icon: "arrow-up",
+-			label: i18n.t("previousMatch"),
++			messageKey: "previousMatch",
+ 			onClick: () => {
+ 				findNextMatch(true);
+ 			}
+ 		});
+ 		const nextButton = iconButton({
+ 			icon: "arrow-down",
+-			label: i18n.t("nextMatch"),
++			messageKey: "nextMatch",
+ 			onClick: () => {
+ 				findNextMatch();
+ 			}
+@@ -237,7 +244,7 @@ var SearchPanelWidget = class {
+ 		});
+ 		const closeElement = iconButton({
+ 			icon: "close",
+-			label: i18n.t("closeSearch"),
++			messageKey: "closeSearch",
+ 			onClick: close,
+ 			dataset: { searchClose: "" }
+ 		});
+@@ -280,17 +287,17 @@ var SearchPanelWidget = class {
+ 			},
+ 			children: [iconButton({
+ 				icon: "replace",
+-				label: i18n.t("replaceMatch"),
++				messageKey: "replaceMatch",
+ 				onClick: replaceCurrentMatch
+ 			}), iconButton({
+ 				icon: "replace-all",
+-				label: i18n.t("replaceAllMatches"),
++				messageKey: "replaceAllMatches",
+ 				onClick: replaceAllMatches
+ 			})]
+ 		});
+ 		const replaceToggleElement = iconButton({
+ 			icon: "chevron",
+-			label: i18n.t("toggleReplace"),
++			messageKey: "toggleReplace",
+ 			dataset: { replaceToggle: "" },
+ 			onClick: () => {
+ 				if (gridElement.dataset.mode === "replace") applyMode("find");
+@@ -335,6 +342,17 @@ var SearchPanelWidget = class {
+ 			emitState();
+ 		};
+ 		this.#applyMode = applyMode;
++		this.#refreshMessages = () => {
++			this.#inputElement.placeholder = i18n.t("searchPlaceholder");
++			replaceInputElement.placeholder = i18n.t("replacePlaceholder");
++			for (const [button, key] of buttonMessages) {
++				const label = i18n.t(key);
++				button.title = label;
++				button.ariaLabel = label;
++			}
++			if (matches.all.length === 0) matchResultElement.textContent = i18n.t("noSearchResults");
++			else updateCurrentMatch(matches.current);
++		};
+ 		this.#host = h("div", { dataset: "searchPanel" });
+ 		const shadowRoot = this.#host.attachShadow({ mode: "open" });
+ 		const spriteContainer = document.createElement("div");
+@@ -360,6 +378,10 @@ var SearchPanelWidget = class {
+ 			emitState();
+ 			queueRender(this.#initializeMatches);
+ 		};
++		i18n.subscribe(this);
++	}
++	onMessagesChange() {
++		this.#refreshMessages();
+ 	}
+ 	mount() {
+ 		this.#mount?.();
+@@ -396,6 +418,7 @@ var SearchPanelWidget = class {
+ 		this.#close?.();
+ 	}
+ 	cleanup() {
++		i18n.unsubscribe(this);
+ 		this.#closed = true;
+ 		dequeueRender(this.#initializeMatches);
+ 		this.#host.remove();
 diff --git a/dist/utils/createFileHeaderElement.js b/dist/utils/createFileHeaderElement.js
 index 19934176d0787ae1304e771c707230d5c8837e83..298b3386eac5126a7c1ec985674e799aac0ffd42 100644
 --- a/dist/utils/createFileHeaderElement.js
@@ -283,6 +473,18 @@ index 19934176d0787ae1304e771c707230d5c8837e83..298b3386eac5126a7c1ec985674e799a
  			properties: { "data-additions-count": "" }
  		}));
  	}
+diff --git a/dist/utils/createSeparator.js b/dist/utils/createSeparator.js
+index a4fc308171d1e48088446340531217c6bc68dc0d..d3269f125a636842455c5330a3dea4c6ed13bacf 100644
+--- a/dist/utils/createSeparator.js
++++ b/dist/utils/createSeparator.js
+@@ -10,6 +10,7 @@ function createExpandButton(type) {
+ 		})],
+ 		properties: {
+ 			role: "button",
++			"aria-label": i18n.t(type === "both" ? "expandBoth" : type === "up" ? "expandUp" : "expandDown"),
+ 			"data-expand-button": "",
+ 			"data-expand-both": type === "both" ? "" : void 0,
+ 			"data-expand-up": type === "up" ? "" : void 0,
 diff --git a/package.json b/package.json
 index 0a0acc4c8734a61cf2d684162914002adf74960d..935937d68f52ed96b7af6b1dbb890dbf512eb0fe 100644
 --- a/package.json
