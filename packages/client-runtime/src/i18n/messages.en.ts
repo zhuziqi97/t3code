@@ -4326,6 +4326,10 @@ export const en = {
   "git.commitHint": "Review and confirm your commit. Leave the message blank to auto-generate one.",
   "diff.context.unchangedLines_one": "{{count}} unmodified line",
   "diff.context.unchangedLines_other": "{{count}} unmodified lines",
+  "diff.context.unchangedLinesMessage":
+    "{count, plural, one {# unmodified line} other {# unmodified lines}}",
+  "diff.find.resultsMessage": "{count, plural, one {# result} other {# results}}",
+  "diff.find.currentMessage": "{index} of {count}",
   "diff.context.more": "More unchanged context may be available",
   "diff.context.expandAll": "Expand all context",
   "diff.context.expandUp": "Expand context upward",

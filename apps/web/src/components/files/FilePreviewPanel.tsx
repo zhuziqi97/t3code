@@ -39,7 +39,7 @@ import {
 import type { WorkerPoolManager } from "@pierre/diffs/worker";
 import { EditProvider, File, Virtualizer, useWorkerPool } from "@pierre/diffs/react";
 import { DiffWorkerPoolProvider } from "../DiffWorkerPoolProvider";
-import { diffViewerLabels } from "../diffs/diffViewerLabels";
+import { useDiffViewerI18n } from "../diffs/diffViewerLabels";
 import { useFilesystemReadAccess } from "~/state/filesystem";
 import {
   isAtomCommandInterrupted,
@@ -687,8 +687,7 @@ function EditableFileSurface({
   onPostRender,
   onPendingChange,
 }: EditableFileSurfaceProps) {
-  const t = useTranslate();
-  const uiLabels = diffViewerLabels(t);
+  useDiffViewerI18n();
   const addReviewComment = useComposerDraftStore((store) => store.addReviewComment);
   const removeReviewComment = useComposerDraftStore((store) => store.removeReviewComment);
   const [lineAnnotations, setLineAnnotations] = useState<FileCommentLineAnnotation[]>([]);
@@ -888,7 +887,6 @@ function EditableFileSurface({
             editorOptions={editorOptions}
             onEditChange={handleEditChange}
             options={{
-              uiLabels,
               disableFileHeader: true,
               enableGutterUtility: !hasOpenCommentForm,
               enableLineSelection: !hasOpenCommentForm,
