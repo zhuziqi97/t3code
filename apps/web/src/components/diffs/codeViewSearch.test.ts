@@ -1,29 +1,22 @@
-import { File, type CodeViewItem } from "@pierre/diffs";
-import { Editor } from "@pierre/diffs/edit";
+import { type CodeViewItem } from "@pierre/diffs";
 import { parsePatchFiles } from "@pierre/diffs/utils/parsePatchFiles";
 import { describe, expect, it } from "vite-plus/test";
 
-// Find-in-diff lives in our @pierre/diffs patch and is not a package export.
-const searchUrl = new URL("./components/CodeViewSearch.js", import.meta.resolve("@pierre/diffs"));
-const { collectMatches } = (await import(/* @vite-ignore */ searchUrl.href)) as {
-  collectMatches(
-    items: ReadonlyArray<CodeViewItem<undefined>>,
-    params: { text: string; caseSensitive: boolean; wholeWord: boolean; regex: boolean },
-  ): Array<{
-    id: string;
-    side: string;
-    isContext: boolean;
-    lineNumber: number;
-    start: number;
-    end: number;
-  }>;
-};
+const searchUrl = new URL("./search/codeViewSearch.js", import.meta.resolve("@pierre/diffs"));
+const { collectCodeViewLineMatches } = (await import(
+  /* @vite-ignore */ searchUrl.href
+)) as typeof import("../../../node_modules/@pierre/diffs/dist/search/codeViewSearch.js");
+
+const { iterateOverDiff } = (await import(
+  /* @vite-ignore */ new URL("./utils/iterateOverDiff.js", import.meta.resolve("@pierre/diffs"))
+    .href
+)) as typeof import("../../../node_modules/@pierre/diffs/dist/utils/iterateOverDiff.js");
 
 const PATCH = `diff --git a/src/a.ts b/src/a.ts
 index 1111111..2222222 100644
 --- a/src/a.ts
 +++ b/src/a.ts
-@@ -1,4 +1,5 @@
+@@ -1,3 +1,4 @@
  const keep = 1;
 -const oldName = 2;
 +const newName = 2;
@@ -51,12 +44,44 @@ function find(
   text: string,
   flags: { caseSensitive?: boolean; wholeWord?: boolean; regex?: boolean } = {},
 ) {
-  return collectMatches(items, {
-    text,
-    caseSensitive: flags.caseSensitive ?? false,
-    wholeWord: flags.wholeWord ?? false,
-    regex: flags.regex ?? false,
-  }).map(({ id, side, lineNumber, start, end }) => `${id}:${side}:${lineNumber}:${start}-${end}`);
+  const lines: Parameters<typeof collectCodeViewLineMatches>[0][number][] = [];
+  for (const item of items) {
+    if (item.type !== "diff") continue;
+    iterateOverDiff({
+      diff: item.fileDiff,
+      diffStyle: "unified",
+      expandedHunks: true,
+      callback: ({ additionLine, deletionLine }) => {
+        const line = additionLine ?? deletionLine;
+        if (!line) return;
+        const side = additionLine ? "additions" : "deletions";
+        lines.push({
+          text: item.fileDiff[additionLine ? "additionLines" : "deletionLines"][line.lineIndex]!,
+          metadata: {
+            itemId: item.id,
+            itemType: "diff",
+            side,
+            lineNumber: line.lineNumber,
+            lineIndex: line.lineIndex,
+          },
+        });
+      },
+    });
+  }
+  return collectCodeViewLineMatches(
+    lines,
+    {
+      text,
+      replaceText: "",
+      caseSensitive: flags.caseSensitive ?? false,
+      wholeWord: flags.wholeWord ?? false,
+      regex: flags.regex ?? false,
+    },
+    100_000,
+  ).map(
+    ({ itemId, side, lineNumber, startCharacter, endCharacter }) =>
+      `${itemId}:${side}:${lineNumber}:${startCharacter}-${endCharacter}`,
+  );
 }
 
 describe("collectMatches", () => {
@@ -64,16 +89,4 @@ describe("collectMatches", () => {
     expect(find("oldName")).toEqual(["file-0:deletions:2:6-13", "file-0:additions:3:14-21"]);
     expect(find("nil")).toEqual(["file-1:deletions:1:0-3", "file-1:additions:1:2-5"]);
   });
-});
-
-it("updates file options with a real attached editor before its first DOM render", () => {
-  const file = new File();
-  const detach = file.__attachEditor(new Editor("file"));
-  try {
-    expect(() => file.setOptions({ uiLabels: { search: "搜索" } })).not.toThrow();
-    expect(() => file.setOptions({})).not.toThrow();
-  } finally {
-    detach();
-    file.cleanUp();
-  }
 });

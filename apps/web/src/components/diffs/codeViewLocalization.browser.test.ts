@@ -6,6 +6,8 @@ import {
   File,
   FileDiff,
   getSharedHighlighter,
+  i18n as diffsI18n,
+  buildSearchReplacementText,
   parseDiffFromFile,
   parsePatchFiles,
 } from "@pierre/diffs";
@@ -13,23 +15,54 @@ import { Editor, TextDocument } from "@pierre/diffs/edit";
 import { createI18n } from "@t3tools/client-runtime/i18n";
 import { expect, it, vi } from "vite-plus/test";
 
-import { diffViewerLabels } from "./diffViewerLabels";
-
-import { SearchPanelWidget } from "../../../node_modules/@pierre/diffs/dist/editor/searchPanel.js";
-type SearchWidget = Pick<SearchPanelWidget, "setLabels" | "cleanup">;
+import { SearchPanelWidget } from "../../../node_modules/@pierre/diffs/dist/search/SearchPanelWidget.js";
+type SearchWidget = Pick<SearchPanelWidget, "getHostElement" | "cleanup">;
 
 const i18n = createI18n();
-const en = diffViewerLabels(i18n.getFixedT("en"));
-const zh = diffViewerLabels(i18n.getFixedT("zh"));
+function messages(locale: "en" | "zh") {
+  const t = i18n.getFixedT(locale);
+  const plural = (key: "diff.context.unchangedLines" | "diff.find.results") =>
+    `{count, plural, one {${t(key, { count: 1 }).replace("1", "#")}} other {${t(key, { count: 2 }).replace("2", "#")}}}`;
+  return {
+    locale,
+    messages: {
+      unmodifiedLines: plural("diff.context.unchangedLines"),
+      unknownUnmodifiedLines: t("diff.context.more"),
+      expandAll: t("diff.context.expandAll"),
+      expandUp: t("diff.context.expandUp"),
+      expandDown: t("diff.context.expandDown"),
+      expandBoth: t("diff.context.expandBoth"),
+      searchPlaceholder: t("diff.find.search"),
+      replacePlaceholder: t("diff.find.replace"),
+      replaceMatch: t("diff.find.replace"),
+      replaceAllMatches: t("diff.find.replaceAll"),
+      matchCase: t("project.search.matchCase"),
+      wholeWord: t("project.search.wholeWord"),
+      regularExpression: t("project.search.regex"),
+      previousMatch: t("diff.find.previous"),
+      nextMatch: t("diff.find.next"),
+      closeSearch: t("diff.find.close"),
+      noSearchResults: t("diff.find.noResults"),
+      searchResultCount: plural("diff.find.results"),
+      searchResultPosition: t("diff.find.current", { current: "{index}", count: 0 }).replace(
+        "0",
+        "{count}",
+      ),
+    },
+  };
+}
+const en = messages("en");
+const zh = messages("zh");
+const setLabels = (labels: typeof en | null = null) => diffsI18n.set(labels ?? undefined);
 const widgets: SearchWidget[] = [];
 const renderers: DiffHunksRenderer[] = [];
 
 function makeRenderer(labels = en) {
+  setLabels(labels);
   const renderer = new DiffHunksRenderer({
     theme: "pierre-dark",
     diffStyle: "unified",
     expansionLineCount: 2,
-    uiLabels: labels,
   });
   renderers.push(renderer);
   return renderer;
@@ -41,24 +74,23 @@ function renderDiff(renderer: DiffHunksRenderer, diff: ReturnType<typeof parseDi
   container.innerHTML = renderer.renderFullHTML(result!);
   return { result: result!, container };
 }
+function searchRoot() {
+  return widgets.at(-1)!.getHostElement().shadowRoot!;
+}
 function searchInput() {
-  return document.querySelector<HTMLInputElement>("input[data-search]")!;
+  return searchRoot().querySelector<HTMLInputElement>("input[data-search]")!;
 }
 function input(value: string) {
   searchInput().value = value;
   searchInput().dispatchEvent(new Event("input", { bubbles: true }));
 }
 function button(label: string) {
-  const found = document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+  const found = searchRoot().querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
   expect(found, label).not.toBeNull();
   return found!;
 }
-function makeWidget(labels: ReturnType<typeof diffViewerLabels> | null = en, allowReplace = false) {
-  // Flush only the widget's first-frame callback; matching uses the real TextDocument.
-  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
-    queueMicrotask(() => callback(0));
-    return 1;
-  });
+function makeWidget(labels: typeof en | null = en, allowReplace = false) {
+  setLabels(labels);
   const documentText = new TextDocument(
     "raw.txt",
     "Raw name 原文\nRaw name 原文\nraw names 原文\n",
@@ -68,26 +100,41 @@ function makeWidget(labels: ReturnType<typeof diffViewerLabels> | null = en, all
   const scrollToMatch = vi.fn();
   const onClose = vi.fn();
   const widget = new SearchPanelWidget({
-    textDocument: documentText,
     containerElement: anchor,
     defaultQuery: "",
-    allowReplace,
-    ...(labels ? { uiLabels: labels } : {}),
     scrollToMatch,
-    applyReplace: (edits) => {
-      documentText.applyEdits(
-        edits.map((edit) => ({
-          range: {
-            start: documentText.positionAt(edit.start),
-            end: documentText.positionAt(edit.end),
+    search: (params) => ({ matches: documentText.search(params) }),
+    replace: allowReplace
+      ? {
+          replaceMatch: (match, params) => {
+            documentText.applyEdits([
+              {
+                range: {
+                  start: documentText.positionAt(match[0]),
+                  end: documentText.positionAt(match[1]),
+                },
+                newText: buildSearchReplacementText(documentText, params, ...match),
+              },
+            ]);
+            return undefined;
           },
-          newText: edit.text,
-        })),
-      );
-    },
-    onUpdate: (matches) => matches[0],
+          replaceAll: (matches, params) => {
+            documentText.applyEdits(
+              matches.map((match) => ({
+                range: {
+                  start: documentText.positionAt(match[0]),
+                  end: documentText.positionAt(match[1]),
+                },
+                newText: buildSearchReplacementText(documentText, params, ...match),
+              })),
+            );
+          },
+        }
+      : undefined,
+    onUpdate: ({ matches }) => matches[0],
     onClose,
   });
+  widget.mount();
   widgets.push(widget);
   return { widget, documentText, scrollToMatch, onClose };
 }
@@ -106,7 +153,7 @@ it("uses renderer-owned counts and preserves raw code when labels change", async
   const renderer = makeRenderer();
   const english = renderDiff(renderer, diff);
   expect(english.container.textContent).toContain("unmodified lines");
-  renderer.setOptions({ ...renderer.options, uiLabels: zh });
+  setLabels(zh);
   const chinese = renderDiff(renderer, diff);
   expect(chinese.container.textContent).toContain("行未修改的内容");
   expect(chinese.container.textContent).toContain("展开全部上下文");
@@ -144,25 +191,25 @@ it("translates unknown trailing context without inventing a line count", async (
 it("keeps the search query, active match, and flags when switching labels", async () => {
   await using _lifecycle = await setupLifecycle();
 
-  const { widget, documentText, scrollToMatch } = makeWidget();
+  const { documentText, scrollToMatch } = makeWidget();
   await Promise.resolve();
   input("name");
   button("Match case").click();
   button("Match whole word").click();
   button("Use regular expression").click();
   button("Next").click();
-  expect(document.querySelector("[data-matches]")?.textContent).toBe("2 of 2");
-  widget.setLabels(zh);
+  expect(searchRoot().querySelector("[data-matches]")?.textContent).toBe("2 of 2");
+  setLabels(zh);
   expect(searchInput().value).toBe("name");
   expect(searchInput().getAttribute("aria-label")).toBe("搜索代码");
-  expect(document.querySelector("[data-matches]")?.textContent).toBe("2 / 2");
+  expect(searchRoot().querySelector("[data-matches]")?.textContent).toBe("2 / 2");
   expect(button("区分大小写").getAttribute("aria-pressed")).toBe("true");
   expect(button("全字匹配").getAttribute("aria-pressed")).toBe("true");
   expect(button("使用正则表达式").getAttribute("aria-pressed")).toBe("true");
   const previousCalls = scrollToMatch.mock.calls.length;
   button("上一个匹配项").click();
   expect(scrollToMatch.mock.calls).toHaveLength(previousCalls + 1);
-  expect(document.querySelector("[data-matches]")?.textContent).toBe("1 / 2");
+  expect(searchRoot().querySelector("[data-matches]")?.textContent).toBe("1 / 2");
   expect(documentText.getText()).toBe("Raw name 原文\nRaw name 原文\nraw names 原文\n");
 });
 
@@ -172,9 +219,9 @@ it("uses Chinese empty results and keeps the read-only panel in find mode", asyn
   const { onClose } = makeWidget(zh);
   await Promise.resolve();
   input("nothing 原文");
-  expect(document.querySelector("[data-matches]")?.textContent).toBe("无匹配结果");
+  expect(searchRoot().querySelector("[data-matches]")?.textContent).toBe("无匹配结果");
   expect(button("上一个匹配项").disabled).toBe(true);
-  expect(document.querySelector<HTMLElement>("[data-search-grid]")?.dataset.mode).toBe("find");
+  expect(searchRoot().querySelector<HTMLElement>("[data-search-grid]")?.dataset.mode).toBe("find");
   button("关闭搜索").click();
   expect(onClose).toHaveBeenCalledOnce();
   expect(document.querySelector("[data-search-panel]")).toBeNull();
@@ -183,17 +230,19 @@ it("uses Chinese empty results and keeps the read-only panel in find mode", asyn
 it("keeps replacement text and replaces the selected occurrence after a language switch", async () => {
   await using _lifecycle = await setupLifecycle();
 
-  const { widget, documentText } = makeWidget(en, true);
+  const { documentText } = makeWidget(en, true);
   await Promise.resolve();
   input("name");
   searchInput().dispatchEvent(
     new KeyboardEvent("keydown", { key: "f", code: "KeyF", ctrlKey: true, altKey: true }),
   );
-  expect(document.querySelector<HTMLElement>("[data-search-grid]")?.dataset.mode).toBe("replace");
-  const replacement = document.querySelector<HTMLInputElement>("input[data-replace]")!;
+  expect(searchRoot().querySelector<HTMLElement>("[data-search-grid]")?.dataset.mode).toBe(
+    "replace",
+  );
+  const replacement = searchRoot().querySelector<HTMLInputElement>("input[data-replace]")!;
   replacement.value = "replacement 原文";
   replacement.dispatchEvent(new Event("input", { bubbles: true }));
-  widget.setLabels(zh);
+  setLabels(zh);
   expect(replacement.value).toBe("replacement 原文");
   button("替换").click();
   expect(documentText.getText()).toBe("Raw replacement 原文 原文\nRaw name 原文\nraw names 原文\n");
@@ -205,9 +254,9 @@ it("retains the package's English defaults when a host supplies no labels", asyn
   makeWidget(null);
   await Promise.resolve();
   expect(searchInput().placeholder).toBe("Search");
-  expect(document.querySelector("[data-matches]")?.textContent).toBe("No results");
+  expect(searchRoot().querySelector("[data-matches]")?.textContent).toBe("No results");
   input("name");
-  expect(document.querySelector("[data-matches]")?.textContent).toBe("1 of 3");
+  expect(searchRoot().querySelector("[data-matches]")?.textContent).toBe("1 of 3");
   expect(button("Match Case")).not.toBeNull();
 });
 
@@ -234,8 +283,10 @@ async function checkLiveSearchLabels(root: ShadowRoot, updateLabels: () => void)
   press("Next");
   expect(root.querySelector("[data-matches]")?.textContent).toBe("2 of 2");
 
+  query.focus();
   updateLabels();
 
+  expect(root.activeElement).toBe(query);
   expect(root.querySelector("input[data-search]")).toBe(query);
   expect(query.value).toBe("name");
   expect(query.getAttribute("aria-label")).toBe("搜索代码");
@@ -252,12 +303,13 @@ async function checkLiveSearchLabels(root: ShadowRoot, updateLabels: () => void)
 }
 
 it.each(["file", "file-diff"] as const)(
-  "updates %s options with its real Editor and an open search panel",
+  "updates native messages with its real %s Editor and an open search panel",
   async (type) => {
     await getSharedHighlighter({ themes: ["pierre-dark"], langs: ["text"] });
     await using screen = await render(null);
     using cleanup = new DisposableStack();
-    const options = { theme: "pierre-dark", uiLabels: en, disableErrorHandling: true };
+    setLabels(en);
+    const options = { theme: "pierre-dark", disableErrorHandling: true };
     const preview = (() => {
       if (type === "file") {
         const file = new File(options);
@@ -266,7 +318,7 @@ it.each(["file", "file-diff"] as const)(
         const editor = new Editor("file");
         editor.edit(file);
         return {
-          setLabels: (uiLabels: typeof en) => file.setOptions({ ...file.options, uiLabels }),
+          setLabels,
           editor,
         };
       }
@@ -279,7 +331,7 @@ it.each(["file", "file-diff"] as const)(
       const editor = new Editor("file-diff");
       editor.edit(file);
       return {
-        setLabels: (uiLabels: typeof en) => file.setOptions({ ...file.options, uiLabels }),
+        setLabels,
         editor,
       };
     })();
@@ -303,11 +355,12 @@ it.each(["file", "file-diff"] as const)(
   },
 );
 
-it("updates an open CodeView search through setOptions without resetting search state", async () => {
+it("updates an open CodeView search through native messages without resetting search state", async () => {
   await getSharedHighlighter({ themes: ["pierre-dark"], langs: ["text"] });
   await using screen = await render(null);
   using cleanup = new DisposableStack();
-  const options = { theme: "pierre-dark", uiLabels: en, disableErrorHandling: true };
+  setLabels(en);
+  const options = { theme: "pierre-dark", disableErrorHandling: true };
   const view = new CodeView(options);
   cleanup.defer(() => view.cleanUp());
   screen.container.style.height = "400px";
@@ -317,9 +370,7 @@ it("updates an open CodeView search through setOptions without resetting search 
   view.setItems([{ id: "raw", type: "diff", fileDiff }]);
   view.openSearch();
   const host = view.getContainerElement()!.querySelector("[data-diffs-search]")!;
-  await checkLiveSearchLabels(host.shadowRoot!, () =>
-    view.setOptions({ ...options, uiLabels: zh }),
-  );
+  await checkLiveSearchLabels(host.shadowRoot!, () => setLabels(zh));
   expect(fileDiff.additionLines.join("")).toBe(sourceFile.contents);
 });
 
@@ -328,6 +379,7 @@ async function setupLifecycle() {
   stack.defer(async () => {
     for (const widget of widgets.splice(0)) widget.cleanup();
     for (const renderer of renderers.splice(0)) renderer.cleanUp();
+    diffsI18n.set();
     document.body.replaceChildren();
     vi.unstubAllGlobals();
   });
@@ -336,3 +388,21 @@ async function setupLifecycle() {
 
   return stack.move();
 }
+
+it("updates native messages with a real attached editor before its first DOM render", async () => {
+  await using _lifecycle = await setupLifecycle();
+  const file = new File({ theme: "pierre-dark" });
+  file.file = { name: "raw.txt", contents: "Raw code 原文\n" };
+  await file.prepareForEditing();
+  const detach = file.__attachEditor(new Editor("file"));
+  try {
+    expect(() =>
+      diffsI18n.set({ locale: "zh", messages: { searchPlaceholder: "搜索" } }),
+    ).not.toThrow();
+    expect(() => file.setOptions({})).not.toThrow();
+  } finally {
+    diffsI18n.set();
+    detach();
+    file.cleanUp();
+  }
+});
