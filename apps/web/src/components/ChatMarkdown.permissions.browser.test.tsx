@@ -15,6 +15,10 @@ import { useRightPanelStore } from "../rightPanelStore";
 
 const state = vi.hoisted(() => ({
   allowed: true,
+  editor: "vscode" as import("../editorPreferences").ClientEditorId,
+  remoteMode: "local-exec" as "local-exec" | "remote-unavailable",
+  browserReason: null as string | null,
+  openBrowser: vi.fn(),
   listeners: new Set<() => void>(),
   openEditor: vi.fn(),
   link: vi.fn(),
@@ -80,12 +84,18 @@ vi.mock(import("../state/entities"), async (original) => ({
 }));
 vi.mock(import("../remoteOpen"), async (original) => ({
   ...(await original()),
-  useRemoteOpenResolution: () => ({ state: { mode: "local-exec" }, isResolved: true }) as never,
+  useRemoteOpenResolution: () => ({ state: { mode: state.remoteMode }, isResolved: true }) as never,
 }));
 vi.mock(import("../hooks/useLocalStorage"), async (original) => ({
   ...(await original()),
-  useLocalStorage: (() => ["vscode", vi.fn()]) as never,
-  getLocalStorageItem: (() => "vscode") as never,
+  useLocalStorage: (() => [state.editor, vi.fn()]) as never,
+  getLocalStorageItem: (() => state.editor) as never,
+}));
+vi.mock(import("../browserEditorAction"), () => ({
+  useBrowserEditorAction: () => ({
+    unavailableReason: state.browserReason,
+    open: state.openBrowser,
+  }),
 }));
 vi.mock(import("../localApi"), async (original) => ({
   ...(await original()),
@@ -128,6 +138,10 @@ const serverConfig = {
 function setup() {
   using stack = new DisposableStack();
   state.allowed = true;
+  state.editor = "vscode";
+  state.remoteMode = "local-exec";
+  state.browserReason = null;
+  state.openBrowser.mockReset().mockResolvedValue(undefined);
   state.listeners.clear();
   state.pullRequests = [];
   state.openEditor.mockReset().mockResolvedValue(AsyncResult.success(undefined));
@@ -276,5 +290,31 @@ it.each(["link-to-thread", "unlink-from-thread"])(
         }),
       }),
     );
+  },
+);
+
+it.each([
+  { available: true, shell: false },
+  { available: false, shell: true },
+])(
+  "uses selected editor availability when browser=$available and shell=$shell",
+  async ({ available, shell }) => {
+    using _setup = setup();
+    state.editor = "browser";
+    state.allowed = shell;
+    state.remoteMode = shell ? "local-exec" : "remote-unavailable";
+    state.browserReason = available ? null : "Browser editor not paired";
+    state.choose.mockResolvedValue(available ? "open" : null);
+    await using screen = await renderMarkdown("[Readme](docs/readme.md)");
+    await screen.openContextMenu();
+    expect(offeredActions().includes("open")).toBe(available);
+    if (available) {
+      await vi.waitFor(() =>
+        expect(state.openBrowser).toHaveBeenCalledWith("/work/docs/readme.md", true),
+      );
+    } else {
+      expect(state.openBrowser).not.toHaveBeenCalled();
+    }
+    expect(state.openEditor).not.toHaveBeenCalled();
   },
 );

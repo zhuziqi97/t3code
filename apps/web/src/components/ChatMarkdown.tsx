@@ -862,7 +862,7 @@ function useChatMarkdownState({
                   environmentId,
                   input: { cwd: (await resolveHostPath()).absolutePath, editor: "file-manager" },
                 })
-            : canUseShellActions
+            : editorAction.unavailableReason(preferredEditor) === null
               ? async () =>
                   editorAction.open(markdownFileEditorTarget(fileLinkMeta, await resolveHostPath()))
               : undefined
