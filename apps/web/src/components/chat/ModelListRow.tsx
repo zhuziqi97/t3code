@@ -1,6 +1,6 @@
 import { useTranslate } from "../../i18n";
 import { type ProviderDriverKind, type ProviderInstanceId } from "@t3tools/contracts";
-import { memo } from "react";
+import { memo, useRef } from "react";
 import { CheckIcon, StarIcon } from "lucide-react";
 import { getDisplayModelName } from "./providerIconUtils";
 import { ComboboxItem } from "../ui/combobox";
@@ -34,6 +34,9 @@ export const ModelListRow = memo(function ModelListRow(props: {
   unavailable?: boolean;
   jumpLabel?: string | null;
   disabledReason?: string | null;
+  inlineDetails: boolean;
+  detailsOpen: boolean;
+  onDetailsOpenChange: (open: boolean) => void;
   onToggleFavorite: (instanceId: ProviderInstanceId, slug: string) => void;
 }) {
   const t = useTranslate();
@@ -42,9 +45,14 @@ export const ModelListRow = memo(function ModelListRow(props: {
     name: props.name,
     subProvider: props.subProvider,
   };
+  const modelName = getDisplayModelName(model);
+  const showModelId = props.showModelId || props.slug !== modelName;
+  const rowRef = useRef<HTMLDivElement>(null);
 
   const row = (
     <ComboboxItem
+      ref={rowRef}
+      render={props.inlineDetails ? <div /> : <TooltipTrigger render={<div />} />}
       hideIndicator
       selectedFill={false}
       index={props.index}
@@ -56,7 +64,6 @@ export const ModelListRow = memo(function ModelListRow(props: {
           "data-disabled:pointer-events-auto data-disabled:cursor-not-allowed",
       )}
     >
-      {/* One row shape in every tab: the logo names the provider, so Favorites needs no second line. */}
       <ProviderInstanceIcon
         driverKind={props.driverKind}
         displayName={props.providerDisplayName}
@@ -70,27 +77,21 @@ export const ModelListRow = memo(function ModelListRow(props: {
         badgeClassName="right-[-0.125rem] bottom-[-0.125rem] h-3 min-w-3 px-0.5 text-5xs"
       />
       <div className="flex min-w-0 flex-1 items-center gap-2 text-left">
-        <div
-          className="min-w-0 truncate text-sm font-normal leading-snug"
-          // Names the row in full on hover only when it is cut off.
-          onPointerEnter={(event) => {
-            const name = event.currentTarget;
-            name.title = name.scrollWidth > name.clientWidth ? getDisplayModelName(model) : "";
-          }}
-        >
-          {getDisplayModelName(model)}
-          {props.showModelId ? (
-            <span className="ml-2 text-xs text-muted-foreground">{props.slug}</span>
+        <div className="min-w-0 flex-1 py-1">
+          <div className="line-clamp-2 wrap-anywhere whitespace-normal text-sm font-normal leading-snug">
+            {modelName}
+          </div>
+          <div className="truncate text-xs leading-snug text-muted-foreground">
+            {props.providerDisplayName}
+            {props.subProvider ? ` · ${props.subProvider}` : null}
+          </div>
+          {showModelId ? (
+            <div className="truncate font-mono text-xs leading-snug text-muted-foreground">
+              {props.slug}
+            </div>
           ) : null}
-          {/* The logo is decorative, so name the provider for screen readers. */}
-          <span className="sr-only">, {props.providerDisplayName}</span>
         </div>
         {props.isSelected ? <CheckIcon className="size-3.5 shrink-0" aria-hidden="true" /> : null}
-        {props.subProvider ? (
-          <span className="min-w-0 shrink truncate text-xs text-muted-foreground/70">
-            {props.subProvider}
-          </span>
-        ) : null}
         {props.showNewBadge ? (
           <span
             className="shrink-0 rounded border border-update/35 bg-update/15 px-0.5 py-px text-3xs font-bold uppercase leading-none tracking-wide text-update-foreground"
@@ -143,15 +144,59 @@ export const ModelListRow = memo(function ModelListRow(props: {
     </ComboboxItem>
   );
 
-  if (!props.disabledReason) {
-    return row;
+  if (props.inlineDetails) {
+    return (
+      <>
+        {row}
+        <details className="px-8 pb-1 text-xs" onKeyDown={(event) => event.stopPropagation()}>
+          <summary className="w-fit cursor-pointer text-muted-foreground">
+            {t("common.details")}
+          </summary>
+          <div className="mt-1 max-h-40 space-y-1 overflow-y-auto overscroll-contain wrap-anywhere whitespace-normal select-text">
+            <div>{modelName}</div>
+            <div className="text-muted-foreground">
+              {props.providerDisplayName}
+              {props.subProvider ? ` · ${props.subProvider}` : null}
+            </div>
+            {showModelId ? <div className="font-mono">{props.slug}</div> : null}
+            {props.disabledReason ? <div>{props.disabledReason}</div> : null}
+          </div>
+        </details>
+      </>
+    );
   }
 
   return (
-    <Tooltip>
-      <TooltipTrigger render={row} />
-      <TooltipPopup side="left" align="center">
-        {props.disabledReason}
+    <Tooltip
+      open={props.detailsOpen}
+      onOpenChange={(open) => {
+        const truncated = Array.from(
+          rowRef.current?.querySelectorAll(".line-clamp-2, .truncate") ?? [],
+        ).some(
+          (element) =>
+            element.scrollWidth > element.clientWidth ||
+            element.scrollHeight > element.clientHeight,
+        );
+        props.onDetailsOpenChange(open && (Boolean(props.disabledReason) || truncated));
+      }}
+    >
+      {row}
+      <TooltipPopup
+        side="right"
+        align="start"
+        anchor={() =>
+          rowRef.current?.closest<HTMLElement>("[data-model-picker-content]") ?? rowRef.current
+        }
+      >
+        <div className="pointer-events-auto max-h-[min(24rem,50dvh,calc(var(--available-height)-1rem))] space-y-1 overflow-y-auto">
+          <div>{modelName}</div>
+          <div className="text-muted-foreground">
+            {props.providerDisplayName}
+            {props.subProvider ? ` · ${props.subProvider}` : null}
+          </div>
+          {showModelId ? <div className="font-mono">{props.slug}</div> : null}
+          {props.disabledReason ? <div>{props.disabledReason}</div> : null}
+        </div>
       </TooltipPopup>
     </Tooltip>
   );

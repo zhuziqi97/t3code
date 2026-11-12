@@ -12,6 +12,7 @@ import {
   KeyboardIcon,
   Link2Icon,
   MessageSquareTextIcon,
+  MicIcon,
   MessagesSquareIcon,
   PaletteIcon,
   PanelsTopLeftIcon,
@@ -107,6 +108,13 @@ export const SETTINGS_SECTIONS = [
     labelKey: "settings.sections.keybindings",
     label: "Keybindings",
     icon: KeyboardIcon,
+    group: "general",
+  },
+  {
+    path: "/settings/voice",
+    labelKey: "settings.sections.voice",
+    label: "Voice",
+    icon: MicIcon,
     group: "general",
   },
   {

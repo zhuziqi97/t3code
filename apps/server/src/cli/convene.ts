@@ -61,11 +61,20 @@ const exchange = Command.make("exchange", {
     ),
   ),
 );
-const disconnect = Command.make("disconnect", { ...authLocationFlags }).pipe(
-  Command.withDescription(
-    "Remove the local Convene credential. Restart this T3 server to close its connection.",
+const disconnect = Command.make("disconnect", {
+  ...authLocationFlags,
+  localOnly: Flag.Boolean("local-only").pipe(
+    Flag.withDescription("Remove only the local pairing without contacting the platform."),
   ),
-  Command.withHandler((flags) => withPlatform(flags, (platform) => platform.disconnect)),
+}).pipe(
+  Command.withDescription(
+    "Revoke the Convene connection and remove its local credential. Restart this T3 server to close its connection.",
+  ),
+  Command.withHandler((flags) =>
+    withPlatform(flags, (platform) =>
+      flags.localOnly ? platform.disconnectLocal : platform.disconnect,
+    ),
+  ),
 );
 export const conveneCommand = Command.make("convene").pipe(
   Command.withDescription("Connect this T3 environment to Convene."),

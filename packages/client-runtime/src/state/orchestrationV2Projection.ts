@@ -1,9 +1,11 @@
 import { applyThreadPullRequestLinkUpdate } from "../threadPullRequests.ts";
-import type {
-  OrchestrationV2DomainEvent,
-  OrchestrationV2Run,
-  OrchestrationV2ThreadProjection,
-  OrchestrationV2TurnItem,
+import {
+  isCompactionCommandMessage,
+  type OrchestrationV2ConversationMessage,
+  type OrchestrationV2DomainEvent,
+  type OrchestrationV2Run,
+  type OrchestrationV2ThreadProjection,
+  type OrchestrationV2TurnItem,
 } from "@t3tools/contracts";
 import {
   restoreSubagentBodies,
@@ -19,6 +21,27 @@ export type ApplyOrchestrationV2ProjectionEventOptions = {
   readonly partialTimeline?: boolean;
   readonly latestLocalTurnOrdinal?: number | null;
 };
+
+function isConversationMessage(message: OrchestrationV2ConversationMessage): boolean {
+  return message.role === "user" && !isCompactionCommandMessage(message);
+}
+
+export function needsConversationSnapshot(
+  projection: OrchestrationV2ThreadProjection,
+  event: OrchestrationV2DomainEvent,
+): boolean {
+  if (
+    projection.hasLocalConversation !== true ||
+    event.type !== "message.updated" ||
+    !isCompactionCommandMessage(event.payload)
+  )
+    return false;
+  const previous = projection.messages.find((message) => message.id === event.payload.id);
+  if (previous && isCompactionCommandMessage(previous)) return false;
+  return !projection.messages.some(
+    (message) => message.id !== event.payload.id && isConversationMessage(message),
+  );
+}
 
 // Only this exact pair differs at one index. Both keys are weak so hints
 // neither retain streaming history nor apply to replacement snapshots.
@@ -367,7 +390,11 @@ export function applyOrchestrationV2ProjectionEvent(
     case "runtime-request.updated":
       return { ...base, runtimeRequests: upsertEntity(base.runtimeRequests, event.payload) };
     case "message.updated":
-      return { ...base, messages: upsertEntity(base.messages, event.payload) };
+      return {
+        ...base,
+        messages: upsertEntity(base.messages, event.payload),
+        ...(isConversationMessage(event.payload) ? { hasLocalConversation: true } : {}),
+      };
     case "plan.updated":
       return { ...base, plans: upsertEntity(base.plans, event.payload) };
     case "turn-item.updated": {

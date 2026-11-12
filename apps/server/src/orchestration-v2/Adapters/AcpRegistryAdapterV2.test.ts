@@ -16,7 +16,7 @@ import {
   ProviderInstanceId,
   ProviderSessionId,
   ThreadId,
-  type OrchestrationV2ProviderThreadNativeMetadata,
+  OrchestrationV2ProviderThreadNativeMetadata,
 } from "@t3tools/contracts";
 
 import { pendingBackgroundTurnItems } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
@@ -245,6 +245,7 @@ const openClaudeReplaySession = Effect.fn("openClaudeReplaySession")(function* (
   entries: ReadonlyArray<unknown>,
   replayGate?: ProviderReplayGate,
   continuationEnabled = true,
+  agentId = "claude-acp",
 ) {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -285,7 +286,7 @@ const openClaudeReplaySession = Effect.fn("openClaudeReplaySession")(function* (
   const adapterOptions = {
     selfInvocation: yield* resolveSelfInvocation(),
     instanceId,
-    settings: yield* decodeAcpRegistryAdapterSettings({ agentId: "claude-acp" }),
+    settings: yield* decodeAcpRegistryAdapterSettings({ agentId }),
     environment: {},
     ...(continuationEnabled ? { continuationRequests } : {}),
     makeRuntime: (runtimeInput: Parameters<typeof replayRuntime>[0]) => {
@@ -512,7 +513,8 @@ describe("AcpRegistryAdapterV2", () => {
       readonly setup: unknown;
       readonly pickFrames: ReadonlyArray<Frame>;
       readonly customModels?: ReadonlyArray<string>;
-      readonly storedModel?: string;
+      readonly storedModel?: string | null;
+      readonly instanceId?: ProviderInstanceId;
       readonly storedModePick?: string;
       readonly storedOptions?: ModelSelection["options"];
       readonly sessionId?: string;
@@ -563,7 +565,7 @@ describe("AcpRegistryAdapterV2", () => {
         },
         ACP_REGISTRY_PROVIDER,
       );
-      const instanceId = ProviderInstanceId.make("acp-registry-stored-picks");
+      const instanceId = input.instanceId ?? ProviderInstanceId.make("acp-registry-stored-picks");
       const adapter = yield* makeAcpRegistryAdapterV2({
         selfInvocation: yield* resolveSelfInvocation(),
         instanceId,
@@ -601,13 +603,16 @@ describe("AcpRegistryAdapterV2", () => {
       });
       const stored: ModelSelection = {
         instanceId,
-        model: input.storedModel ?? "default",
+        model: input.storedModel === undefined ? "default" : input.storedModel,
         ...(input.storedOptions ? { options: input.storedOptions } : {}),
         ...(input.storedModePick === undefined
           ? {}
           : { options: [{ id: ACP_SESSION_MODE_OPTION_ID, value: input.storedModePick }] }),
       };
       const configurations: Array<OrchestrationV2ProviderThreadNativeMetadata | null> = [];
+      const decodeConfiguration = Schema.decodeUnknownEffect(
+        OrchestrationV2ProviderThreadNativeMetadata,
+      );
       const runtime = yield* Effect.gen(function* () {
         const runtime = yield* adapter.openSession({
           threadId,
@@ -621,7 +626,11 @@ describe("AcpRegistryAdapterV2", () => {
           modelSelection: stored,
           runtimePolicy,
         });
-        configurations.push(providerThread.nativeMetadata ?? null);
+        configurations.push(
+          providerThread.nativeMetadata == null
+            ? null
+            : yield* decodeConfiguration(providerThread.nativeMetadata),
+        );
         if (input.turnModels === undefined) return runtime;
         const now = yield* DateTime.now;
         let current = stored;
@@ -657,7 +666,7 @@ describe("AcpRegistryAdapterV2", () => {
               }),
             ),
           );
-          configurations.push(metadata ?? null);
+          configurations.push(metadata == null ? null : yield* decodeConfiguration(metadata));
           current = target;
         }
         return runtime;
@@ -679,7 +688,13 @@ describe("AcpRegistryAdapterV2", () => {
           answer("session/set_mode", {}),
         ],
         storedModePick: "autoEdit",
-      }).pipe(Effect.provide(layerTest), Effect.scoped),
+      }).pipe(
+        Effect.tap(({ configurations }) =>
+          Effect.sync(() => assert.isUndefined(configurations[0]?.models)),
+        ),
+        Effect.provide(layerTest),
+        Effect.scoped,
+      ),
     );
 
     it.effect("switches a mode config option under its own id", () =>
@@ -744,7 +759,7 @@ describe("AcpRegistryAdapterV2", () => {
                 currentModelId: "hermes",
                 availableModels: ["hermes", "auto", "default"].map((modelId) => ({
                   modelId,
-                  name: modelId,
+                  name: `Native ${modelId}`,
                 })),
               },
             },
@@ -805,7 +820,7 @@ describe("AcpRegistryAdapterV2", () => {
               answer("session/set_config_option", { configOptions: [groupedOption("default")] }),
               ...prompt(configOptionUpdate([])),
               ...setModel("hermes"),
-              ...prompt(),
+              ...prompt(configOptionUpdate([{ ...flatOption("hermes"), options: [] }])),
             ],
           });
           assert.deepEqual(
@@ -822,6 +837,26 @@ describe("AcpRegistryAdapterV2", () => {
               "custom-model",
               "default",
               "hermes",
+            ],
+          );
+          const legacyModels = ["hermes", "auto", "default"].map((id) => ({
+            id,
+            name: `Native ${id}`,
+          }));
+          assert.deepEqual(
+            configurations.map((configuration) => configuration?.models),
+            [
+              legacyModels,
+              legacyModels,
+              legacyModels,
+              legacyModels,
+              legacyModels,
+              [{ id: "auto", name: "Auto" }],
+              [{ id: "auto", name: "Auto" }],
+              [{ id: "default", name: "Default" }],
+              [{ id: "default", name: "Default" }],
+              legacyModels,
+              [],
             ],
           );
         }).pipe(Effect.provide(layerTest), Effect.scoped),
@@ -901,53 +936,55 @@ describe("AcpRegistryAdapterV2", () => {
       },
     );
 
-    it.effect("keeps unadvertised default and auto selections agent-controlled", () =>
-      Effect.gen(function* () {
-        const { configurations } = yield* openWithStoredPicks({
-          setup: {
-            models: {
-              currentModelId: "hermes",
-              availableModels: ["hermes", "other"].map((modelId) => ({ modelId, name: modelId })),
+    it.effect.each(["default", null] as const)(
+      "keeps unadvertised default and auto selections agent-controlled (initial: %s)",
+      (storedModel) =>
+        Effect.gen(function* () {
+          const { configurations } = yield* openWithStoredPicks({
+            setup: {
+              models: {
+                currentModelId: "hermes",
+                availableModels: ["hermes", "other"].map((modelId) => ({ modelId, name: modelId })),
+              },
             },
-          },
-          storedModel: "default",
-          turnModels: ["auto", "default", "other", "default", "auto", "default", "auto"],
-          pickFrames: [
-            ...prompt(),
-            ...prompt(),
-            ...setModel("other"),
-            ...prompt(
-              configOptionUpdate([
-                {
-                  ...modelOption("live-model", "other"),
-                  options: [{ value: "other", name: "Other" }],
-                },
-              ]),
-            ),
-            ...prompt(),
-            ...prompt(),
-            ...prompt(
-              configOptionUpdate([
-                {
-                  ...modelOption("replacement-model", "other", true),
-                  options: [
-                    {
-                      group: "models",
-                      name: "Models",
-                      options: [{ value: "other", name: "Other" }],
-                    },
-                  ],
-                },
-              ]),
-            ),
-            ...prompt(),
-          ],
-        });
-        assert.deepEqual(
-          configurations.map((configuration) => configuration?.modelSelection?.model),
-          ["hermes", "hermes", "hermes", "other", "other", "other", "other", "other"],
-        );
-      }).pipe(Effect.provide(layerTest), Effect.scoped),
+            storedModel,
+            turnModels: ["auto", "default", "other", "default", "auto", "default", "auto"],
+            pickFrames: [
+              ...prompt(),
+              ...prompt(),
+              ...setModel("other"),
+              ...prompt(
+                configOptionUpdate([
+                  {
+                    ...modelOption("live-model", "other"),
+                    options: [{ value: "other", name: "Other" }],
+                  },
+                ]),
+              ),
+              ...prompt(),
+              ...prompt(),
+              ...prompt(
+                configOptionUpdate([
+                  {
+                    ...modelOption("replacement-model", "other", true),
+                    options: [
+                      {
+                        group: "models",
+                        name: "Models",
+                        options: [{ value: "other", name: "Other" }],
+                      },
+                    ],
+                  },
+                ]),
+              ),
+              ...prompt(),
+            ],
+          });
+          assert.deepEqual(
+            configurations.map((configuration) => configuration?.modelSelection?.model),
+            ["hermes", "hermes", "hermes", "other", "other", "other", "other", "other"],
+          );
+        }).pipe(Effect.provide(layerTest), Effect.scoped),
     );
 
     const modelOptions = [
@@ -1093,7 +1130,15 @@ describe("AcpRegistryAdapterV2", () => {
       () =>
         Effect.gen(function* () {
           const a = yield* openWithStoredPicks({
-            setup: { configOptions: [modelConfig("graded"), depth()] },
+            setup: {
+              configOptions: [
+                {
+                  ...modelConfig("graded"),
+                  options: [{ value: "graded", name: "Session A model" }],
+                },
+                depth(),
+              ],
+            },
             storedModel: "graded",
             sessionId: "session-A",
             pickFrames: [],
@@ -1101,7 +1146,10 @@ describe("AcpRegistryAdapterV2", () => {
           const b = yield* openWithStoredPicks({
             setup: {
               configOptions: [
-                modelConfig("boolean"),
+                {
+                  ...modelConfig("boolean"),
+                  options: [{ value: "boolean", name: "Session B model" }],
+                },
                 {
                   id: "vendor/depth",
                   name: "Thinking",
@@ -1128,8 +1176,19 @@ describe("AcpRegistryAdapterV2", () => {
             }),
           });
           assert.equal(stillA.nativeMetadata?.optionDescriptors?.[0]?.currentValue, "high");
+          assert.deepEqual(stillA.nativeMetadata?.models, [
+            { id: "graded", name: "Session A model" },
+          ]);
           const restored = yield* openWithStoredPicks({
-            setup: { configOptions: [modelConfig("graded"), depth("low")] },
+            setup: {
+              configOptions: [
+                {
+                  ...modelConfig("graded"),
+                  options: [{ value: "graded", name: "Restored A model" }],
+                },
+                depth("low"),
+              ],
+            },
             storedModel: "graded",
             sessionId: "session-A",
             load: true,
@@ -1137,6 +1196,34 @@ describe("AcpRegistryAdapterV2", () => {
           });
           assert.equal(a.configurations[0]?.modelSelection?.model, "graded");
           assert.equal(a.configurations[0]?.optionDescriptors?.[0]?.currentValue, "high");
+          const otherId = ProviderInstanceId.make("acp-registry-other-instance");
+          const other = yield* openWithStoredPicks({
+            instanceId: otherId,
+            setup: {
+              configOptions: [
+                {
+                  ...modelConfig("plain"),
+                  options: [{ value: "plain", name: "Other instance model" }],
+                },
+              ],
+            },
+            storedModel: "plain",
+            sessionId: "session-A",
+            pickFrames: [],
+          });
+          assert.deepEqual(a.configurations[0]?.models, [
+            { id: "graded", name: "Session A model" },
+          ]);
+          assert.deepEqual(b.configurations[0]?.models, [
+            { id: "boolean", name: "Session B model" },
+          ]);
+          assert.deepEqual(restored.configurations[0]?.models, [
+            { id: "graded", name: "Restored A model" },
+          ]);
+          assert.deepEqual(other.configurations[0]?.models, [
+            { id: "plain", name: "Other instance model" },
+          ]);
+          assert.equal(other.configurations[0]?.modelSelection?.instanceId, otherId);
           assert.equal(b.configurations[0]?.optionDescriptors?.[0]?.currentValue, true);
           assert.equal(restored.configurations[0]?.optionDescriptors?.[0]?.currentValue, "low");
           assert.equal(a.configurations[0]?.optionDescriptors?.[0]?.currentValue, "high");
@@ -1578,6 +1665,85 @@ describe("AcpRegistryAdapterV2", () => {
         new: stdio("Bearer opened-token"),
         load: stdio("Bearer rotated-token"),
       });
+    }).pipe(Effect.provide(layerTest), Effect.scoped),
+  );
+
+  it.effect("the agent process env names the thread it serves", () =>
+    Effect.gen(function* () {
+      const selfInvocation = yield* resolveSelfInvocation();
+      const mockAgentPath = yield* (yield* Path.Path).fromFileUrl(
+        new URL("../../../scripts/acp-mock-agent.ts", import.meta.url),
+      );
+      const endpoint = "http://127.0.0.1:43123/mcp";
+      const instanceId = ProviderInstanceId.make("acp-registry-thread-env");
+      const threadId = ThreadId.make("thread-acp-registry-thread-env");
+      yield* (yield* McpProviderSessions.McpProviderSessions).set({
+        environmentId: EnvironmentId.make("environment-acp-registry-thread-env"),
+        threadId,
+        providerSessionId: "mcp-session-acp-registry-thread-env",
+        providerInstanceId: instanceId,
+        endpoint,
+        authorizationHeader: "Bearer thread-env-token",
+        browserToolsAvailable: false,
+      });
+      // Several agents can run from one directory at once; the spawn env is how
+      // a process the agent starts (an MCP server, a shell tool) finds its own
+      // T3 thread, the same way Claude and Codex sessions do.
+      const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+      const spawnEnvironments: Array<Record<string, unknown> | undefined> = [];
+      const capturingSpawner = ChildProcessSpawner.make((command) =>
+        Effect.sync(() => {
+          if (command._tag === "StandardCommand") spawnEnvironments.push(command.options.env);
+        }).pipe(Effect.andThen(spawner.spawn(command))),
+      );
+      const withCapturedSpawns = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+        effect.pipe(
+          Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, capturingSpawner),
+        );
+      const adapter = yield* withCapturedSpawns(
+        makeAcpRegistryAdapterV2({
+          selfInvocation,
+          instanceId,
+          settings: yield* decodeAcpRegistryAdapterSettings({ agentId: "claude-acp" }),
+          environment: {},
+        }).pipe(
+          Effect.provide(
+            Layer.mock(AcpRegistrySupport.AcpRegistryCatalog)({
+              resolve: () =>
+                Effect.succeed({
+                  distribution: "local" as const,
+                  spawn: {
+                    command: process.execPath,
+                    args: [mockAgentPath],
+                    env: { T3_ACP_SESSION_LIFECYCLE: "1" },
+                  },
+                }),
+            }),
+          ),
+        ),
+      );
+      const modelSelection = { instanceId, model: "default" } as const;
+      const runtimePolicy = ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        cwd: process.cwd(),
+      });
+      const runtime = yield* withCapturedSpawns(
+        adapter.openSession({
+          threadId,
+          providerSessionId: ProviderSessionId.make("provider-session-acp-registry-thread-env"),
+          modelSelection,
+          runtimePolicy,
+        }),
+      );
+      yield* withCapturedSpawns(runtime.ensureThread({ threadId, modelSelection, runtimePolicy }));
+      const agentEnvironment = spawnEnvironments.find(
+        (environment) => environment?.T3_ACP_SESSION_LIFECYCLE === "1",
+      );
+      assert.isDefined(agentEnvironment, "the agent itself must have been spawned");
+      assert.equal(agentEnvironment?.T3CODE_THREAD_ID, "thread-acp-registry-thread-env");
+      assert.equal(agentEnvironment?.T3_ACP_MCP_ENDPOINT, endpoint);
+      assert.equal(agentEnvironment?.T3_ACP_MCP_AUTHORIZATION, "Bearer thread-env-token");
     }).pipe(Effect.provide(layerTest), Effect.scoped),
   );
 
@@ -2062,6 +2228,290 @@ describe("AcpRegistryAdapterV2", () => {
     }).pipe(Effect.provide(layerTest), Effect.scoped),
   );
 
+  it.effect("retains streamed child tool output through the generic Devin route", () =>
+    Effect.gen(function* () {
+      const { update } = claudeFrames;
+      const session = yield* openClaudeReplaySession(
+        [
+          ...claudeFrames.open,
+          ...claudeFrames.prompt(1),
+          update("child-1", {
+            sessionUpdate: "tool_call_update",
+            toolCallId: "early-tool",
+            status: "in_progress",
+            rawInput: { command: "echo early" },
+          }),
+          update("child-1", {
+            sessionUpdate: "tool_call_content_chunk",
+            toolCallId: "early-tool",
+            content: { type: "content", content: { type: "text", text: "early" } },
+          }),
+          update("child-1", {
+            sessionUpdate: "tool_call_update",
+            toolCallId: "early-tool",
+            status: "completed",
+          }),
+          update(CLAUDE_ROOT_SESSION, {
+            sessionUpdate: "tool_call_update",
+            toolCallId: "spawn",
+            status: "in_progress",
+            _meta: { "cognition.ai/subagent_started": { agentId: "child-1", task: "Review" } },
+          }),
+          ...[CLAUDE_ROOT_SESSION, "child-1"].map((sessionId) =>
+            update(sessionId, {
+              sessionUpdate: "tool_call_update",
+              toolCallId: "shared-tool",
+              title: "Read package",
+              kind: "execute",
+              status: "in_progress",
+              rawInput: { command: "cat package.json" },
+              ...(sessionId === "child-1"
+                ? { content: [{ type: "content", content: { type: "text", text: "one" } }] }
+                : {}),
+            }),
+          ),
+          update("child-1", {
+            sessionUpdate: "tool_call_content_chunk",
+            toolCallId: "shared-tool",
+            content: { type: "content", content: { type: "text", text: "two" } },
+          }),
+          update("child-1", {
+            sessionUpdate: "tool_call_update",
+            toolCallId: "shared-tool",
+            status: "completed",
+          }),
+          update("child-1", {
+            sessionUpdate: "tool_call_update",
+            toolCallId: "shared-tool",
+            content: [{ type: "content", content: { type: "text", text: "replacement" } }],
+          }),
+          update("child-1", {
+            sessionUpdate: "tool_call_update",
+            toolCallId: "shared-tool",
+            content: [],
+          }),
+          update("child-1", {
+            sessionUpdate: "tool_call_update",
+            toolCallId: "shared-tool",
+            rawOutput: { stdout: "structured", stderr: "" },
+          }),
+          update("child-1", {
+            sessionUpdate: "tool_call_update",
+            toolCallId: "shared-tool",
+            content: [{ type: "content", content: { type: "text", text: "display" } }],
+          }),
+          update("child-1", {
+            sessionUpdate: "tool_call_update",
+            toolCallId: "shared-tool",
+            rawOutput: { type: "Text", text: "vendor" },
+          }),
+          update("child-1", {
+            sessionUpdate: "tool_call_update",
+            toolCallId: "shared-tool",
+            content: [{ type: "content", content: { type: "text", text: "display" } }],
+          }),
+          claudeMarker("tools complete"),
+          claudeFrames.idle("end_turn"),
+          claudeFrames.closeRequest,
+          claudeFrames.closed,
+        ],
+        undefined,
+        false,
+        "devin",
+      );
+      yield* session.runtime.startTurn(session.turnInput(1));
+      const events = yield* session.throughMarker("tools complete");
+      const child = events.find((event) => event.type === "subagent.updated");
+      if (child?.type !== "subagent.updated") throw new Error("Missing child");
+      const tools = events.flatMap((event) =>
+        event.type === "turn_item.updated" && event.turnItem.type === "dynamic_tool"
+          ? [event.turnItem]
+          : [],
+      );
+      const childTools = tools.filter((item) => item.threadId === child.subagent.childThreadId);
+      assert.deepEqual(
+        childTools.map((item) => item.output),
+        [
+          [{ type: "content", content: { type: "text", text: "one" } }],
+          [{ type: "content", content: { type: "text", text: "onetwo" } }],
+          [{ type: "content", content: { type: "text", text: "onetwo" } }],
+          [{ type: "content", content: { type: "text", text: "replacement" } }],
+          [],
+          { stdout: "structured", stderr: "" },
+          { stdout: "structured", stderr: "" },
+          { type: "Text", text: "vendor" },
+          { type: "Text", text: "vendor" },
+        ],
+      );
+      assert.equal(new Set(childTools.map((item) => item.id)).size, 1);
+      assert.equal(childTools.at(-1)?.nativeItemRef?.nativeId, "child-1:tool:shared-tool");
+      assert.equal(childTools.at(-1)?.status, "completed");
+      assert.deepEqual(childTools.at(-1)?.input, { command: "cat package.json" });
+      const parentTools = events.flatMap((event) =>
+        event.type === "turn_item.updated" &&
+        event.turnItem.type === "command_execution" &&
+        event.turnItem.threadId === session.turnInput(1).threadId &&
+        event.turnItem.nativeItemRef?.nativeId === "shared-tool"
+          ? [event.turnItem]
+          : [],
+      );
+      assert.lengthOf(parentTools, 1);
+      assert.isUndefined(parentTools[0]?.output);
+      assert.isFalse(
+        events.some(
+          (event) => event.type === "message.updated" && event.message.text.includes("onetwo"),
+        ),
+      );
+    }).pipe(Effect.provide(layerTest), Effect.scoped),
+  );
+
+  it.effect("keeps stopped child tools interrupted when a late output chunk arrives", () =>
+    Effect.gen(function* () {
+      const { update } = claudeFrames;
+      const session = yield* openClaudeReplaySession(
+        [
+          ...claudeFrames.open.map((entry) =>
+            entry.frame.method === "initialize" && entry.type === "emit_inbound"
+              ? {
+                  ...entry,
+                  frame: {
+                    ...entry.frame,
+                    result: { protocolVersion: 1, agentCapabilities: {}, authMethods: [] },
+                  },
+                }
+              : entry,
+          ),
+          {
+            type: "expect_outbound",
+            frame: { kind: "request", method: "session/prompt", params: "<any>" },
+          },
+          update(CLAUDE_ROOT_SESSION, {
+            sessionUpdate: "tool_call_update",
+            toolCallId: "spawn",
+            status: "in_progress",
+            _meta: { "cognition.ai/subagent_started": { agentId: "child-1", task: "Review" } },
+          }),
+          update("child-1", {
+            sessionUpdate: "tool_call_update",
+            toolCallId: "stopped-tool",
+            status: "in_progress",
+          }),
+          claudeMarker("before cancel"),
+          {
+            type: "expect_outbound",
+            frame: {
+              kind: "notification",
+              method: "session/cancel",
+              params: { sessionId: CLAUDE_ROOT_SESSION },
+            },
+          },
+          update("child-1", {
+            sessionUpdate: "tool_call_update",
+            toolCallId: "stopped-tool",
+            status: "failed",
+          }),
+          update("child-1", {
+            sessionUpdate: "tool_call_update",
+            toolCallId: "stopped-tool",
+            content: [{ type: "content", content: { type: "text", text: "stopping" } }],
+          }),
+          update("child-1", {
+            sessionUpdate: "tool_call_content_chunk",
+            toolCallId: "stopped-tool",
+            content: { type: "content", content: { type: "text", text: "cancelled" } },
+          }),
+          claudeMarker("late output"),
+          update(CLAUDE_ROOT_SESSION, {
+            sessionUpdate: "tool_call_update",
+            toolCallId: "spawn",
+            status: "failed",
+            _meta: { "cognition.ai/subagent_completed": { agentId: "child-1", success: false } },
+          }),
+          {
+            type: "emit_inbound",
+            frame: {
+              kind: "response",
+              method: "session/prompt",
+              result: { stopReason: "cancelled" },
+            },
+          },
+          claudeFrames.closeRequest,
+          claudeFrames.closed,
+        ],
+        undefined,
+        false,
+        "devin",
+      );
+      const starting = yield* session.runtime
+        .startTurn(session.turnInput(1))
+        .pipe(Effect.forkScoped);
+      const started = yield* session.throughMarker("before cancel");
+      const running = started.findLast((event) => event.type === "provider_turn.updated");
+      if (running?.type !== "provider_turn.updated") throw new Error("Missing active turn");
+      const closing = yield* session.runtime
+        .interruptTurn({
+          providerThread: session.providerThread,
+          providerTurnId: running.providerTurn.id,
+        })
+        .pipe(Effect.forkScoped);
+      const events = yield* session.throughMarker("late output");
+      yield* Fiber.join(closing);
+      yield* Fiber.join(starting);
+      const tools = events.flatMap((event) =>
+        event.type === "turn_item.updated" && event.turnItem.type === "dynamic_tool"
+          ? [event.turnItem]
+          : [],
+      );
+      assert.deepEqual(
+        tools.map((item) => item.status),
+        ["interrupted", "interrupted", "interrupted"],
+      );
+      assert.deepEqual(tools.at(-1)?.output, [
+        { type: "content", content: { type: "text", text: "stoppingcancelled" } },
+      ]);
+    }).pipe(Effect.provide(layerTest), Effect.scoped),
+  );
+
+  it.effect("keeps native child tools interrupted after idle and late output", () =>
+    Effect.gen(function* () {
+      const { update, childState } = claudeFrames;
+      const session = yield* openClaudeReplaySession([
+        ...claudeFrames.open,
+        ...claudeFrames.prompt(1),
+        ...claudeChild.slice(0, -1),
+        update("child-1", {
+          sessionUpdate: "tool_call_update",
+          toolCallId: "unfinished",
+          status: "in_progress",
+        }),
+        childState(CLAUDE_ROOT_SESSION, "child-1", "idle"),
+        update("child-1", {
+          sessionUpdate: "tool_call_content_chunk",
+          toolCallId: "unfinished",
+          content: { type: "content", content: { type: "text", text: "late" } },
+        }),
+        claudeMarker("late native output"),
+        claudeFrames.idle("end_turn"),
+        claudeFrames.closeRequest,
+        claudeFrames.closed,
+      ]);
+      yield* session.runtime.startTurn(session.turnInput(1));
+      const events = yield* session.throughMarker("late native output");
+      const tools = events.flatMap((event) =>
+        event.type === "turn_item.updated" && event.turnItem.type === "dynamic_tool"
+          ? [event.turnItem]
+          : [],
+      );
+      assert.deepEqual(
+        tools.map((tool) => tool.status),
+        ["running", "interrupted", "interrupted"],
+      );
+      assert.deepEqual(tools.at(-1)?.output, [
+        { type: "content", content: { type: "text", text: "late" } },
+      ]);
+    }).pipe(Effect.provide(layerTest), Effect.scoped),
+  );
+
   it.effect.each(["error", "end_turn"])(
     "hands live Claude child tools to the next run after %s and keeps nested output in the child",
     (stopReason) =>
@@ -2152,6 +2602,18 @@ describe("AcpRegistryAdapterV2", () => {
               kind: "execute",
               status: "in_progress",
               rawInput: { command: "cat nested/package.json" },
+            }),
+            ...["one", "two"].map((text) =>
+              update("grandchild", {
+                sessionUpdate: "tool_call_content_chunk",
+                toolCallId: "nested-tool",
+                content: { type: "content", content: { type: "text", text } },
+              }),
+            ),
+            update("grandchild", {
+              sessionUpdate: "tool_call_update",
+              toolCallId: "nested-tool",
+              status: "completed",
             }),
             update("grandchild", {
               sessionUpdate: "agent_message_chunk",
@@ -2250,7 +2712,7 @@ describe("AcpRegistryAdapterV2", () => {
         if (messages[0]?.type === "message.updated") {
           assert.equal(messages[0].message.threadId, row.subagent.childThreadId);
         }
-        const nestedTool = nested.find(
+        const nestedTool = nested.findLast(
           (event) =>
             event.type === "turn_item.updated" &&
             event.turnItem.type === "dynamic_tool" &&
@@ -2260,9 +2722,36 @@ describe("AcpRegistryAdapterV2", () => {
         assert.isDefined(nestedTool);
         if (nestedTool?.type === "turn_item.updated") {
           assert.equal(nestedTool.turnItem.threadId, row.subagent.childThreadId);
-          if (nestedTool.turnItem.type === "dynamic_tool")
+          if (nestedTool.turnItem.type === "dynamic_tool") {
             assert.deepEqual(nestedTool.turnItem.input, { command: "cat nested/package.json" });
+            assert.equal(nestedTool.turnItem.status, "completed");
+          }
+          const toolUpdates = nested.flatMap((event) =>
+            event.type === "turn_item.updated" &&
+            event.turnItem.type === "dynamic_tool" &&
+            event.turnItem.id === nestedTool.turnItem.id
+              ? [event.turnItem]
+              : [],
+          );
+          assert.deepEqual(
+            toolUpdates.map((item) => item.output),
+            [
+              null,
+              [{ type: "content", content: { type: "text", text: "one" } }],
+              [{ type: "content", content: { type: "text", text: "onetwo" } }],
+              [{ type: "content", content: { type: "text", text: "onetwo" } }],
+            ],
+          );
         }
+        assert.isFalse(
+          nested.some(
+            (event) =>
+              event.type === "turn_item.updated" &&
+              event.turnItem.threadId === session.turnInput(1).threadId &&
+              event.turnItem.type === "dynamic_tool" &&
+              JSON.stringify(event.turnItem.output).includes("onetwo"),
+          ),
+        );
         assert.isTrue(
           nested.some(
             (event) =>

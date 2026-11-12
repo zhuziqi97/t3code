@@ -87,7 +87,7 @@ it.effect.each([
         ),
       );
       const installation = Context.get(services, CodeServerInstallation.CodeServerInstallation);
-      assert.equal(yield* installation.ensure(), executable);
+      assert.deepEqual(yield* installation.ensure(), { executable, args: [] });
       yield* installation.prepareLanguage();
       const patched = yield* fs.readFileString(workbench);
       const installed = yield* Effect.promise<LanguageItem[]>(() =>
@@ -234,9 +234,15 @@ it.effect.each([
     ),
 );
 
-it.live.each(["known", "unknown", "encoded", "invalid"] as const)(
-  "reports %s download bytes, unpacks once and reuses without touching user data",
-  (length) =>
+it.live.each([
+  { length: "known", platform: "linux" },
+  { length: "unknown", platform: "linux" },
+  { length: "encoded", platform: "linux" },
+  { length: "invalid", platform: "linux" },
+  { length: "known", platform: "win32" },
+] as const)(
+  "reports $length download bytes on $platform, unpacks once and reuses without touching user data",
+  ({ length, platform }) =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -248,6 +254,19 @@ it.live.each(["known", "unknown", "encoded", "invalid"] as const)(
         path.join(fixture, "release", "bin", "code-server"),
         "#!/bin/sh\nexit 0\n",
       );
+      if (platform === "win32") {
+        yield* fs.makeDirectory(path.join(fixture, "release", "lib"), { recursive: true });
+        yield* fs.makeDirectory(path.join(fixture, "release", "out", "node"), { recursive: true });
+        yield* fs.writeFileString(path.join(fixture, "release", "lib", "node.exe"), "fixture node");
+        yield* fs.writeFileString(
+          path.join(fixture, "release", "out", "node", "entry.js"),
+          "fixture entry",
+        );
+        yield* fs.writeFileString(
+          path.join(fixture, "release", "package.json"),
+          '{"main":"out/node/entry.js"}',
+        );
+      }
       const archive = path.join(fixture, "release.tar.gz");
       assert.equal(
         yield* spawner.exitCode(
@@ -297,7 +316,16 @@ it.live.each(["known", "unknown", "encoded", "invalid"] as const)(
       const report = (value: NonNullable<ConveneIdeResult["progress"]>) =>
         Effect.sync(() => progress.push(value));
       const first = yield* installation.ensure(report);
-      assert.equal(yield* fs.readFileString(first), "#!/bin/sh\nexit 0\n");
+      assert.equal(
+        yield* fs.readFileString(first.executable),
+        platform === "win32" ? "fixture node" : "#!/bin/sh\nexit 0\n",
+      );
+      assert.deepEqual(
+        first.args,
+        platform === "win32"
+          ? [path.join(config.baseDir, "tools", "code-server", "4.141.0-win32-x64")]
+          : [],
+      );
       const total = length === "known" ? { totalBytes: bytes.length } : {};
       assert.deepEqual(progress, [
         { stage: "downloading", receivedBytes: 0, ...total },
@@ -309,7 +337,7 @@ it.live.each(["known", "unknown", "encoded", "invalid"] as const)(
       assert.equal(yield* installation.ensure(report), first);
       assert.deepEqual(progress, []);
       assert.deepEqual(urls, [
-        "https://github.com/coder/code-server/releases/download/v4.141.0/code-server-4.141.0-linux-amd64.tar.gz",
+        `https://github.com/coder/code-server/releases/download/v4.141.0/code-server-4.141.0-${platform === "win32" ? "windows" : "linux"}-amd64.tar.gz`,
       ]);
       assert.equal(yield* fs.readFileString(path.join(data, "keep.txt")), "existing user state");
       assert.ok(
@@ -319,7 +347,7 @@ it.live.each(["known", "unknown", "encoded", "invalid"] as const)(
       );
     }).pipe(
       Effect.provide(base),
-      Effect.provideService(HostProcess.Platform, "linux"),
+      Effect.provideService(HostProcess.Platform, platform),
       Effect.provideService(HostProcess.Architecture, "x64"),
     ),
 );
@@ -395,7 +423,7 @@ it.live.each(["extraction", "stream"] as const)(
       assert.equal(yield* fs.readFileString(path.join(data, "keep.txt")), "existing user state");
       progress.length = 0;
       const executable = yield* installation.ensure(report);
-      assert.equal(yield* fs.readFileString(executable), "#!/bin/sh\nexit 0\n");
+      assert.equal(yield* fs.readFileString(executable.executable), "#!/bin/sh\nexit 0\n");
       assert.equal(downloads, 2);
       assert.deepEqual(progress.at(-1), { stage: "extracting" });
       assert.ok(
@@ -413,7 +441,7 @@ it.live.each(["extraction", "stream"] as const)(
     ),
 );
 
-it.effect("does not download or create a runtime on unsupported Windows hosts", () =>
+it.effect("does not download or create a runtime on unsupported Windows ARM64 hosts", () =>
   Effect.gen(function* () {
     let downloads = 0;
     const client = HttpClient.make(() =>
@@ -430,7 +458,11 @@ it.effect("does not download or create a runtime on unsupported Windows hosts", 
     const installation = Context.get(services, CodeServerInstallation.CodeServerInstallation);
     assert.equal((yield* installation.ensure().pipe(Effect.flip)).code, "unsupported_platform");
     assert.equal(downloads, 0);
-  }).pipe(Effect.provide(base), Effect.provideService(HostProcess.Platform, "win32")),
+  }).pipe(
+    Effect.provide(base),
+    Effect.provideService(HostProcess.Platform, "win32"),
+    Effect.provideService(HostProcess.Architecture, "arm64"),
+  ),
 );
 
 it.effect("leaves an unrecognized native bundle intact when language preparation fails", () =>

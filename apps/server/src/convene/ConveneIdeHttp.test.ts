@@ -411,7 +411,7 @@ it.live("bridges real WebSocket frames to the managed runtime without forwarding
       ),
       (socket) => Effect.sync(() => socket.terminate()),
     );
-    const result = yield* Effect.tryPromise(
+    const result = yield* Effect.promise(
       () =>
         new Promise<string>((resolve, reject) => {
           echo.once("error", reject);

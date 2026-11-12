@@ -152,6 +152,44 @@ describe("DesktopBrowserHost", () => {
     }),
   );
 
+  it.effect("re-sends shown to a backend that starts later and when a tab attaches again", () =>
+    Effect.gen(function* () {
+      const host = yield* DesktopBrowserHost.make;
+      host.attach(key, makeDebuggee().tab);
+      host.setShown(key, true);
+      const reader = yield* takeEvents(host, 5).pipe(Effect.forkScoped);
+
+      yield* Effect.yieldNow;
+      host.detach(key);
+      host.attach(key, makeDebuggee().tab);
+
+      expect(yield* Fiber.join(reader)).toEqual([
+        { type: "attached", ...key },
+        { type: "shown", ...key, shown: true },
+        { type: "detached", ...key },
+        { type: "attached", ...key },
+        { type: "shown", ...key, shown: true },
+      ]);
+    }),
+  );
+
+  it.effect("replays an explicit hidden report before announcing another tab", () =>
+    Effect.gen(function* () {
+      const host = yield* DesktopBrowserHost.make;
+      const other = { ...key, tabId: "tab-2" };
+      host.setShown(key, false);
+      host.attach(key, makeDebuggee().tab);
+      host.setShown(other, true);
+      host.attach(other, makeDebuggee().tab);
+
+      expect(yield* takeEvents(host, 3)).toEqual([
+        { type: "attached", ...key },
+        { type: "shown", ...key, shown: false },
+        { type: "attached", ...other },
+      ]);
+    }),
+  );
+
   it.effect("drops replies from a relay the server released", () =>
     Effect.gen(function* () {
       const host = yield* DesktopBrowserHost.make;
@@ -788,36 +826,59 @@ describe("DesktopBrowserHost", () => {
     }),
   );
 
-  it.effect("keeps a guest focused while any of its screencasts runs", () =>
-    Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
-      const debuggee = makeDebuggee();
-      host.attach(key, debuggee.tab);
-      const replies = yield* watchReplies(host);
-      const raw = (message: Record<string, unknown>) =>
-        host.handleCommandLine(encodeJson({ type: "cdp", ...key, message: encodeJson(message) }));
+  it.effect.each(["stop", "detach"] as const)(
+    "keeps a guest streaming and focused while any of its screencasts runs (last=%s)",
+    (last) =>
+      Effect.gen(function* () {
+        const host = yield* DesktopBrowserHost.make;
+        const debuggee = makeDebuggee();
+        const send = vi.spyOn(debuggee.tab.debugger, "sendCommand");
+        const stops = () => send.mock.calls.filter(([method]) => method === "Page.stopScreencast");
+        host.attach(key, debuggee.tab);
+        const replies = yield* watchReplies(host);
+        const raw = (message: Record<string, unknown>) =>
+          host.handleCommandLine(encodeJson({ type: "cdp", ...key, message: encodeJson(message) }));
 
-      // Two viewers, or a viewer and a recording, each on its own session.
-      yield* raw({ id: 1, method: "Target.attachToTarget", params: { targetId: "GUEST" } });
-      yield* raw({ id: 2, method: "Target.attachToTarget", params: { targetId: "GUEST" } });
-      expect([yield* Queue.take(replies), yield* Queue.take(replies)]).toEqual([1, 2]);
-      yield* raw({ id: 3, method: "Page.startScreencast", sessionId: "t3-preview-page-1" });
-      yield* raw({ id: 4, method: "Page.startScreencast", sessionId: "t3-preview-page-2" });
-      yield* raw({ id: 5, method: "Page.stopScreencast", sessionId: "t3-preview-page-1" });
-      yield* settle;
-      debuggee.release();
-      yield* settle;
-      yield* TestClock.adjust("1 minute");
-      expect(debuggee.focusEmulation).toEqual([true]);
+        // Two viewers, or a viewer and a recording, each on its own session.
+        yield* raw({ id: 1, method: "Target.attachToTarget", params: { targetId: "GUEST" } });
+        yield* raw({ id: 2, method: "Target.attachToTarget", params: { targetId: "GUEST" } });
+        expect([yield* Queue.take(replies), yield* Queue.take(replies)]).toEqual([1, 2]);
+        yield* raw({ id: 3, method: "Page.startScreencast", sessionId: "t3-preview-page-1" });
+        yield* raw({ id: 4, method: "Page.startScreencast", sessionId: "t3-preview-page-2" });
+        yield* raw({ id: 5, method: "Page.stopScreencast", sessionId: "t3-preview-page-1" });
+        yield* settle;
+        debuggee.release();
+        yield* settle;
+        yield* TestClock.adjust("1 minute");
+        expect(debuggee.focusEmulation).toEqual([true]);
+        expect(stops()).toHaveLength(0);
 
-      yield* raw({
-        id: 6,
-        method: "Target.detachFromTarget",
-        params: { sessionId: "t3-preview-page-2" },
-      });
-      yield* TestClock.adjust("1 minute");
-      expect(debuggee.focusEmulation).toEqual([true, false]);
-    }).pipe(Effect.scoped),
+        yield* raw(
+          last === "detach"
+            ? {
+                id: 6,
+                method: "Target.detachFromTarget",
+                params: { sessionId: "t3-preview-page-2" },
+              }
+            : {
+                id: 6,
+                method: "Page.stopScreencast",
+                sessionId: "t3-preview-page-2",
+              },
+        );
+        yield* settle;
+        expect(stops()).toHaveLength(1);
+        debuggee.release();
+        yield* settle;
+        yield* TestClock.adjust("1 minute");
+        expect(debuggee.focusEmulation).toEqual([true, false]);
+        yield* raw({
+          id: 7,
+          method: "Target.detachFromTarget",
+          params: { sessionId: "t3-preview-page-2" },
+        });
+        expect(stops()).toHaveLength(1);
+      }).pipe(Effect.scoped),
   );
 
   it.effect("paints a hidden guest only while the screenshot it is taking is pending", () =>

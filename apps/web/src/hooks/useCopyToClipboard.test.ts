@@ -2,7 +2,34 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { COMPOSER_CONTEXT_CLIPBOARD_MIME } from "@t3tools/shared/composerContextClipboard";
 
-import { writeTextToClipboard } from "./useCopyToClipboard";
+import { readTextFromClipboard, writeTextToClipboard } from "./useCopyToClipboard";
+
+describe("readTextFromClipboard", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("distinguishes unavailable, denied and other failed reads without a fallback", async () => {
+    vi.stubGlobal("window", {});
+    vi.stubGlobal("navigator", {});
+    await expect(readTextFromClipboard("terminal input")).rejects.toMatchObject({
+      _tag: "ClipboardReadUnavailableError",
+      target: "terminal input",
+    });
+
+    for (const [cause, tag] of [
+      [new DOMException("Permission denied", "NotAllowedError"), "ClipboardReadDeniedError"],
+      [new Error("read failed"), "ClipboardReadError"],
+    ] as const) {
+      const readText = vi.fn().mockRejectedValue(cause);
+      vi.stubGlobal("navigator", { clipboard: { readText } });
+      await expect(readTextFromClipboard("terminal input")).rejects.toMatchObject({
+        _tag: tag,
+        target: "terminal input",
+        cause,
+      });
+      expect(readText).toHaveBeenCalledTimes(1);
+    }
+  });
+});
 
 describe("writeTextToClipboard", () => {
   it("reserves plain text even when an extra flavor attempts to replace it", async () => {

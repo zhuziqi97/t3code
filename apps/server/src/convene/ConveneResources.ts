@@ -1,5 +1,6 @@
 import {
   ConveneIssueResource,
+  ConveneDocumentResource,
   ConveneResourceFailure,
   ConveneResourceSearchPage,
   type ConveneResourceSearchInput,
@@ -93,8 +94,13 @@ const make = Effect.gen(function* () {
       if (clientProjectId === null) return failure("projectUnavailable");
       const result = yield* platform.request(
         "execution-runner-resources/read",
-        { client_project_id: clientProjectId, uri: input.uri, page: input.page },
-        Schema.Union([ConveneIssueResource, ConveneResourceFailure]),
+        {
+          client_project_id: clientProjectId,
+          uri: input.uri,
+          page: input.page,
+          ...(input.startLine === undefined ? {} : { start_line: input.startLine }),
+        },
+        Schema.Union([ConveneIssueResource, ConveneDocumentResource, ConveneResourceFailure]),
       );
       if (result.status !== "ready") return result;
       const baseUrl = connection.value.baseUrl.replace(/\/$/, "");
@@ -109,7 +115,10 @@ const make = Effect.gen(function* () {
             error.code === "MODULE_NOT_FOUND" ||
             error.code === "ISSUE_NOT_FOUND" ||
             (error.code === "RESOURCE_NOT_FOUND" &&
-              (error.resourceType === "issue" || error.resourceType === "issue_comment"))
+              (error.resourceType === "issue" ||
+                error.resourceType === "issue_comment" ||
+                error.resourceType === "document_node" ||
+                error.resourceType === "module"))
           )
             return Effect.succeed(failure("notFound"));
           if (error.code === "NOT_PAIRED") return Effect.succeed(failure("disconnected"));

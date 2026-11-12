@@ -134,3 +134,36 @@ it.effect("closes an endpoint scope after its channel writer has ended", () =>
     expect(fixture.output.destroyed).toBe(true);
   }),
 );
+it.effect("protects unknown desktop visibility until an explicit hidden report arrives", () =>
+  Effect.gen(function* () {
+    const fixture = yield* setup;
+    fixture.finish();
+    yield* Effect.gen(function* () {
+      const channel = yield* DesktopBrowserChannel.DesktopBrowserChannel;
+      const key = { threadId: "thread-1", tabId: "tab-1" };
+      const send = (event: object) =>
+        Effect.sync(() => fixture.input.write(`${JSON.stringify(event)}\n`));
+
+      expect(channel.isShown(key)).toBe(true);
+      yield* send({ type: "attached", ...key });
+      yield* channel.awaitAttached(key, "5 seconds");
+      expect(channel.isShown(key)).toBe(true);
+
+      yield* send({ type: "shown", ...key, shown: false });
+      yield* send({ type: "attached", threadId: key.threadId, tabId: "sentinel-1" });
+      yield* channel.awaitAttached({ threadId: key.threadId, tabId: "sentinel-1" }, "5 seconds");
+      expect(channel.isShown(key)).toBe(false);
+
+      yield* send({ type: "shown", ...key, shown: true });
+      yield* send({ type: "attached", threadId: key.threadId, tabId: "sentinel-2" });
+      yield* channel.awaitAttached({ threadId: key.threadId, tabId: "sentinel-2" }, "5 seconds");
+      expect(channel.isShown(key)).toBe(true);
+
+      yield* send({ type: "shown", ...key, shown: false });
+      yield* send({ type: "detached", ...key });
+      yield* send({ type: "attached", threadId: key.threadId, tabId: "sentinel-3" });
+      yield* channel.awaitAttached({ threadId: key.threadId, tabId: "sentinel-3" }, "5 seconds");
+      expect(channel.isShown(key)).toBe(true);
+    }).pipe(Effect.provide(layer), Effect.scoped);
+  }),
+);

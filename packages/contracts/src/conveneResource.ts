@@ -54,6 +54,7 @@ export const ConveneResourceReadInput = Schema.Struct({
   threadId: ThreadId,
   uri: Schema.NonEmptyString,
   page: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
+  startLine: Schema.optional(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
 });
 
 export const ConveneResourceComment = Schema.Struct({
@@ -83,6 +84,29 @@ export const ConveneIssueResource = Schema.Struct({
 });
 export type ConveneIssueResource = typeof ConveneIssueResource.Type;
 
+export const ConveneDocumentResource = Schema.Struct({
+  status: Schema.Literal("ready"),
+  resource_uri: Schema.String,
+  web_path: Schema.String,
+  document: Schema.Struct({
+    id: Schema.String,
+    title: Schema.String,
+    version: Schema.Int,
+    mime_type: Schema.NullOr(Schema.String),
+  }),
+  content: Schema.String,
+  slice: Schema.Struct({
+    start_line: Schema.Int,
+    end_line: Schema.NullOr(Schema.Int),
+    returned_lines: Schema.Int,
+    total_lines: Schema.Int,
+    has_more_before: Schema.Boolean,
+    has_more_after: Schema.Boolean,
+    next_start_line: Schema.NullOr(Schema.Int),
+    truncated: Schema.Boolean,
+  }),
+});
+
 export const ConveneResourceFailure = Schema.Struct({
   status: Schema.Literals([
     "unauthorized",
@@ -96,6 +120,7 @@ export const ConveneResourceFailure = Schema.Struct({
 });
 export const ConveneResourceReadResult = Schema.Union([
   Schema.Struct({ ...ConveneIssueResource.fields, web_url: Schema.String }),
+  Schema.Struct({ ...ConveneDocumentResource.fields, web_url: Schema.String }),
   ConveneResourceFailure,
 ]);
 export type ConveneResourceReadResult = typeof ConveneResourceReadResult.Type;

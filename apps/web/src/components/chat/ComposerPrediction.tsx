@@ -12,7 +12,7 @@ import {
 } from "@t3tools/client-runtime/composer-prediction";
 import { runAtomCommand } from "@t3tools/client-runtime/state/runtime";
 import type { ProviderInstanceId, ScopedThreadRef } from "@t3tools/contracts";
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from "react";
 import {
   composerDraftHasUserContent,
   composerTargetKey,
@@ -32,14 +32,6 @@ import { environmentPresentations } from "../../state/presentation";
 import { serverEnvironment } from "../../state/server";
 import { environmentThreadShells } from "../../state/threads";
 import { Button } from "../ui/button";
-import {
-  Dialog,
-  DialogPopup,
-  DialogTitle,
-  DialogPanel,
-  DialogHeader,
-  DialogFooter,
-} from "../ui/dialog";
 
 export function useComposerPrediction(props: {
   readonly threadRef: ScopedThreadRef;
@@ -162,13 +154,13 @@ export function useComposerPrediction(props: {
 
 export function ComposerPrediction(props: {
   readonly view: PredictionView;
-  readonly accept: () => boolean;
   readonly dismiss: () => void;
   readonly shortcut: string | null;
   readonly hint: boolean;
 }) {
   const t = useTranslate();
   const prediction = props.view;
+  if (prediction.status === "suggestion") return null;
   if (prediction.status === "idle")
     return props.hint && props.shortcut ? (
       <span className="block pt-1 text-xs text-muted-foreground">
@@ -181,13 +173,8 @@ export function ComposerPrediction(props: {
       data-composer-prediction={prediction.status}
     >
       <span role="status" className="min-w-0 basis-full sm:flex-1 sm:basis-auto">
-        {prediction.status === "suggestion"
-          ? t("prediction.ready")
-          : t(`prediction.${prediction.status}`)}
+        {t(`prediction.${prediction.status}`)}
       </span>
-      {prediction.status === "suggestion" ? (
-        <PredictionSuggestion text={prediction.text} accept={props.accept} />
-      ) : null}
       <Button
         size="xs"
         variant="ghost"
@@ -197,44 +184,5 @@ export function ComposerPrediction(props: {
         {t(prediction.status === "pending" ? "prediction.cancel" : "prediction.dismiss")}
       </Button>
     </div>
-  );
-}
-
-function PredictionSuggestion(props: { readonly text: string; readonly accept: () => boolean }) {
-  const t = useTranslate();
-  const [expanded, setExpanded] = useState(false);
-  const accepted = useRef(false);
-  return (
-    <>
-      <Button size="xs" variant="ghost" onClick={props.accept}>
-        {t("prediction.accept")}
-      </Button>
-      <Button size="xs" variant="ghost" onClick={() => setExpanded(true)}>
-        {t("prediction.view")}
-      </Button>
-      <Dialog open={expanded} onOpenChange={setExpanded}>
-        <DialogPopup finalFocus={() => !accepted.current}>
-          <DialogHeader>
-            <DialogTitle>{t("prediction.suggestion")}</DialogTitle>
-          </DialogHeader>
-          <DialogPanel>
-            <p className="whitespace-pre-wrap wrap-anywhere">{props.text}</p>
-          </DialogPanel>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setExpanded(false)}>
-              {t("prediction.collapse")}
-            </Button>
-            <Button
-              onClick={() => {
-                accepted.current = true;
-                if (!props.accept()) accepted.current = false;
-              }}
-            >
-              {t("prediction.accept")}
-            </Button>
-          </DialogFooter>
-        </DialogPopup>
-      </Dialog>
-    </>
   );
 }

@@ -1,5 +1,7 @@
 import type {
   ProviderDriverKind,
+  ModelSelection,
+  ProviderInstanceId,
   ProviderOptionDescriptor,
   ProviderOptionSelection,
   ServerProviderModel,
@@ -12,7 +14,7 @@ import {
 } from "@t3tools/shared/model";
 
 import { getDescriptorStringValue } from "@t3tools/client-runtime/model-traits";
-import { getProviderModelCapabilities } from "../../providerModels";
+import { getProviderModelCapabilities, resolveModelForCapabilities } from "../../providerModels";
 type ProviderOptions = ReadonlyArray<ProviderOptionSelection>;
 
 const SAVED_OPTION_LABELS: Readonly<Record<string, string>> = {
@@ -58,9 +60,9 @@ export function getSelectedTraits(
   promptUltrathink: "none" | "prefix" | "body",
   modelOptions: ProviderOptions | null | undefined,
   allowPromptInjectedEffort: boolean,
-  planModeEnabled: boolean,
+  includePlanAgent = false,
 ) {
-  const caps = getProviderModelCapabilities(models, model, provider, planModeEnabled);
+  const caps = getProviderModelCapabilities(models, model, provider, includePlanAgent);
   const modelIsUnavailable =
     provider === "opencode" &&
     model != null &&
@@ -68,7 +70,7 @@ export function getSelectedTraits(
     !models.some((candidate) => candidate.slug === normalizeModelSlug(model, provider));
   const descriptors = modelIsUnavailable
     ? buildUnavailableModelOptionDescriptors(
-        planModeEnabled
+        includePlanAgent
           ? modelOptions
           : modelOptions?.filter((option) => option.id !== "agent" || option.value !== "plan"),
       )
@@ -135,21 +137,23 @@ export function getSelectedTraits(
 
 export function getTraitsSectionVisibility(input: {
   provider: ProviderDriverKind;
+  instanceId?: ProviderInstanceId | undefined;
+  reportedModelSelection?: ModelSelection | null | undefined;
   models: ReadonlyArray<ServerProviderModel>;
   model: string | null | undefined;
   promptUltrathink?: "none" | "prefix" | "body" | undefined;
   modelOptions?: ProviderOptions | null | undefined;
   allowPromptInjectedEffort?: boolean;
-  planModeEnabled: boolean;
+  includePlanAgent?: boolean | undefined;
 }) {
   const selected = getSelectedTraits(
     input.provider,
     input.models,
-    input.model,
+    resolveModelForCapabilities(input),
     input.promptUltrathink ?? "none",
     input.modelOptions,
     input.allowPromptInjectedEffort ?? true,
-    input.planModeEnabled,
+    input.includePlanAgent ?? false,
   );
 
   const showEffort = selected.primarySelectDescriptor !== null;

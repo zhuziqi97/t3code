@@ -625,7 +625,6 @@ describe("instance-scoped model selection", () => {
       model: state.selectedModel,
       models: providers[0]!.models,
       modelOptions: state.modelOptions?.[instanceId],
-      planModeEnabled: false,
     });
 
     expect(state.selectedModel).toBe("gpt-missing");
@@ -833,7 +832,6 @@ describe("instance-scoped model selection", () => {
       model: state.selectedModel,
       models: providers[0]!.models,
       modelOptions: state.modelOptions?.[instanceId],
-      planModeEnabled: false,
     });
 
     expect(
@@ -871,7 +869,6 @@ describe("instance-scoped model selection", () => {
       model: state.selectedModel,
       models: providers[1]!.models,
       modelOptions: state.modelOptions?.[instanceId],
-      planModeEnabled: false,
     });
 
     expect(
@@ -999,7 +996,6 @@ describe("resolveAppModelSelectionState with the opencode plan agent", () => {
   };
   const settings: UnifiedSettings = {
     ...DEFAULT_UNIFIED_SETTINGS,
-    planModeEnabled: false,
     textGenerationModelSelection: createModelSelection(instanceId, model, [
       { id: "agent", value: "plan" },
     ]),
@@ -1067,7 +1063,6 @@ describe("default model settings and new-thread composer parity", () => {
           model,
           models,
           modelOptions,
-          planModeEnabled: settings.planModeEnabled,
         });
       const composerTraits = traits(composer.selectedModel, composer.modelOptions?.[instanceId]);
 
@@ -1182,7 +1177,7 @@ it.each([
     model: state.selectedModel,
     models: [],
     modelOptions: state.modelOptions?.[instanceId],
-    planModeEnabled: false,
+    includePlanAgent: false,
   });
   expect(dispatch.modelOptionsForDispatch).toEqual(selection.options);
 });
@@ -1219,6 +1214,34 @@ it("preserves explicit default semantics through project and draft priority", ()
     settings,
   };
   expect(deriveEffectiveComposerModelState({ ...base, draft: null }).selectedModel).toBe("");
+  const state = deriveEffectiveComposerModelState({ ...base, draft: null });
+  const dispatch = getComposerProviderState({
+    provider: driver,
+    instanceId,
+    reportedModelSelection: { instanceId, model: "native" },
+    model: state.selectedModel,
+    models: [
+      {
+        ...providers[0]!.models[0]!,
+        capabilities: {
+          optionDescriptors: [
+            {
+              id: "vendor/depth",
+              label: "Reasoning",
+              type: "select",
+              currentValue: "high",
+              options: [{ id: "high", label: "High" }],
+            },
+          ],
+        },
+      },
+    ],
+    modelOptions: state.modelOptions?.[instanceId],
+  });
+  expect(dispatch.promptEffort).toBe("high");
+  expect(
+    createModelSelection(instanceId, state.selectedModel, dispatch.modelOptionsForDispatch),
+  ).toEqual(project);
   const explicit = createModelSelection(instanceId, "user-choice");
   expect(
     deriveEffectiveComposerModelState({
@@ -1292,7 +1315,7 @@ it("dispatches a new native default as its concrete model and reasoning choice",
     model: state.selectedModel,
     models: providers[0]!.models,
     modelOptions: state.modelOptions?.[instanceId],
-    planModeEnabled: true,
+    includePlanAgent: true,
   });
   expect(
     createModelSelection(instanceId, state.selectedModel, dispatch.modelOptionsForDispatch),

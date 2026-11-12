@@ -52,6 +52,18 @@ export class ClipboardReadError extends Schema.TaggedError<ClipboardReadError>()
   }
 }
 
+export class ClipboardReadDeniedError extends Schema.TaggedError<ClipboardReadDeniedError>()(
+  "ClipboardReadDeniedError",
+  {
+    target: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {
+  override get message(): string {
+    return `The browser denied clipboard access while reading ${this.target}.`;
+  }
+}
+
 function writeTextWithExecCommand(
   value: string,
   extraFlavors?: Readonly<Record<string, string>>,
@@ -185,6 +197,9 @@ export async function readTextFromClipboard(target = "text"): Promise<string> {
   try {
     return await navigator.clipboard.readText();
   } catch (cause) {
+    if (cause instanceof DOMException && cause.name === "NotAllowedError") {
+      throw new ClipboardReadDeniedError({ target, cause });
+    }
     throw new ClipboardReadError({
       target,
       cause,

@@ -9,6 +9,7 @@ import type {
   ResolvedProviderInstanceEnvironment,
   ProviderInstanceId,
   ServerProvider,
+  ServerProviderInstallation,
   ServerProviderWorkspaceSnapshot,
 } from "@t3tools/contracts";
 import type * as Effect from "effect/Effect";
@@ -39,6 +40,9 @@ export interface ProviderInstance {
   readonly displayName: string | undefined;
   readonly accentColor?: string | undefined;
   readonly enabled: boolean;
+  readonly probeInstallation?: Effect.Effect<
+    Pick<ServerProviderInstallation, "installed" | "version" | "message">
+  >;
   readonly snapshot: ManagedServerProvider;
   readonly snapshotForCwd?: (
     cwd: string,

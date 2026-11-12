@@ -86,6 +86,7 @@ const makeUnsupportedTextGeneration = (): ProviderTextGeneration => {
     generateBranchName: () => unsupported("generateBranchName"),
     generateThreadTitle: () => unsupported("generateThreadTitle"),
     generateReviewGuide: () => unsupported("generateReviewGuide"),
+    generateTranscriptionPostProcessing: () => unsupported("generateTranscriptionPostProcessing"),
   };
 };
 
@@ -835,6 +836,7 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
       displayName,
       accentColor,
       enabled,
+      probeInstallation: catalog.inspectInstallation(effectiveConfig, processEnvironment),
       auth,
       snapshot: {
         ...snapshot,

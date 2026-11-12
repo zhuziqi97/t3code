@@ -13,7 +13,7 @@ import {
 import type { ProviderOptionDescriptor, RuntimeMode } from "@t3tools/contracts";
 import type { EffortDisplay } from "@t3tools/contracts/settings";
 import { getProviderOptionCurrentLabel } from "@t3tools/shared/model";
-import { CheckIcon, ChevronRightIcon, ChevronUpIcon } from "lucide-react";
+import { CheckIcon, ChevronRightIcon, ChevronUpIcon, WorkflowIcon } from "lucide-react";
 import { type KeyboardEvent, type ReactNode, use, useRef, useState } from "react";
 
 import { cn } from "~/lib/utils";
@@ -42,22 +42,22 @@ import {
 type SelectDescriptor = Extract<ProviderOptionDescriptor, { type: "select" }>;
 type BooleanDescriptor = Extract<ProviderOptionDescriptor, { type: "boolean" }>;
 
-/** Codex service tiers and Claude's Fast mode share the footer's speed control. */
+/** Service tiers, Claude's Fast mode, and Ultracode sit in the footer, not the column. */
 function splitSpeed(
-  provider: TraitsSelectionInput["provider"],
   selects: ReadonlyArray<SelectDescriptor>,
   toggles: ReadonlyArray<BooleanDescriptor>,
 ) {
-  const speedSelect =
-    provider === "codex"
-      ? (selects.find((descriptor) => descriptor.id === "serviceTier") ?? null)
-      : null;
+  const speedSelect = selects.find((descriptor) => descriptor.id === "serviceTier") ?? null;
   const fastToggle = toggles.find((descriptor) => descriptor.id === "fastMode") ?? null;
+  const ultracodeToggle = toggles.find((descriptor) => descriptor.id === "ultracode") ?? null;
   return {
     speedSelect,
     fastToggle,
+    ultracodeToggle,
     columnSelects: selects.filter((descriptor) => descriptor !== speedSelect),
-    columnToggles: toggles.filter((descriptor) => descriptor !== fastToggle),
+    columnToggles: toggles.filter(
+      (descriptor) => descriptor !== fastToggle && descriptor !== ultracodeToggle,
+    ),
   };
 }
 
@@ -70,11 +70,10 @@ type ColumnControl =
  * such as an agent's session mode, sit below as one row each.
  */
 function columnControls(
-  provider: TraitsSelectionInput["provider"],
   selects: ReadonlyArray<SelectDescriptor>,
   toggles: ReadonlyArray<BooleanDescriptor>,
 ) {
-  const { columnSelects, columnToggles } = splitSpeed(provider, selects, toggles);
+  const { columnSelects, columnToggles } = splitSpeed(selects, toggles);
   const controls: ReadonlyArray<ColumnControl> = [
     ...columnSelects.map((descriptor) => ({ kind: "select" as const, descriptor })),
     ...columnToggles.map((descriptor) => ({ kind: "boolean" as const, descriptor })),
@@ -83,9 +82,17 @@ function columnControls(
   return { effort, others: controls.filter((control) => control !== effort) };
 }
 
+export function hasComposerEffortControls(traits: TraitsSelectionInput | null): boolean {
+  if (!traits) return false;
+  const visibility = getTraitsSectionVisibility(traits);
+  const controls = columnControls(visibility.selectDescriptors, visibility.booleanDescriptors);
+  return controls.effort !== null || controls.others.length > 0;
+}
+
 /**
  * What the model trigger shows after the model name: the effort word (or bars, per the
- * Appearance setting), a bolt for Fast, and other traits such as a context window.
+ * Appearance setting), a bolt for Fast, a workflow icon for Ultracode, and other traits such as a
+ * context window.
  */
 export function describeComposerEffort(
   traits: TraitsSelectionInput | null,
@@ -113,8 +120,8 @@ export function describeComposerEffort(
   );
   // The same reasoning control the column lists, wherever the agent put it among its options.
   const reasoning =
-    columnControls(traits.provider, visibility.selectDescriptors, visibility.booleanDescriptors)
-      .effort?.descriptor ?? null;
+    columnControls(visibility.selectDescriptors, visibility.booleanDescriptors).effort
+      ?.descriptor ?? null;
   const ultrathink = visibility.ultrathinkPromptControlled && reasoning === primary;
   const glyph =
     reasoning?.type === "select"
@@ -134,7 +141,11 @@ export function describeComposerEffort(
         ? `${formatProviderOptionName(reasoning, i18n.t)} ${reasoning.currentValue === true ? i18n.t("common.on") : i18n.t("common.off")}`
         : ultrathink
           ? "Ultrathink"
-          : getProviderOptionCurrentLabel(reasoning, modelSelection, traits.reportedModelSelection);
+          : (getProviderOptionCurrentLabel(
+              reasoning,
+              modelSelection,
+              traits.reportedModelSelection,
+            ) ?? (reasoning.id === "thinking" ? reasoning.label : null));
   const fast =
     display.speedLabel === i18n.t("chat.traits.choice.fast") ||
     display.speedLabel === i18n.t("chat.traits.choice.ultrafast");
@@ -146,7 +157,8 @@ export function describeComposerEffort(
       modelSelection,
       traits.reportedModelSelection,
     );
-  if (!word && !glyph && !fast && !contextWindow) return { suffix: null, detail: display.label };
+  if (!word && !glyph && !fast && !display.ultracode && !contextWindow)
+    return { suffix: null, detail: display.label };
   return {
     detail: display.label,
     suffix: (
@@ -166,6 +178,9 @@ export function describeComposerEffort(
         ) : null}
         {fast ? (
           <FastBolt ultra={display.speedLabel === i18n.t("chat.traits.choice.ultrafast")} />
+        ) : null}
+        {display.ultracode ? (
+          <WorkflowIcon aria-hidden="true" data-composer-control-icon className="size-3" />
         ) : null}
         {contextWindow ? (
           <span
@@ -255,11 +270,7 @@ function moveBetweenRows(event: KeyboardEvent<HTMLElement>) {
 function EffortLevels(props: { traits: TraitsSelectionInput }) {
   const t = useTranslate();
   const traits = useTraitsSelection(props.traits);
-  const { effort, others } = columnControls(
-    props.traits.provider,
-    traits.selectDescriptors,
-    traits.booleanDescriptors,
-  );
+  const { effort, others } = columnControls(traits.selectDescriptors, traits.booleanDescriptors);
   if (traits.modelIsUnavailable) {
     return (
       <>
@@ -522,18 +533,14 @@ export function ComposerEffortColumn(props: { traits: TraitsSelectionInput | nul
   const visibility = props.traits ? getTraitsSectionVisibility(props.traits) : null;
   const controls =
     props.traits && visibility
-      ? columnControls(
-          props.traits.provider,
-          visibility.selectDescriptors,
-          visibility.booleanDescriptors,
-        )
+      ? columnControls(visibility.selectDescriptors, visibility.booleanDescriptors)
       : null;
   return (
     <>
       {/* Matches the search row's box, so one rule runs across the top of the popup. */}
       <div className="shrink-0 px-3 pt-2.5">
         <div className="flex h-8.25 -translate-y-px items-center gap-2 border-b border-border/70 pb-1.5 text-sm">
-          <span className="text-muted-foreground">
+          <span className="shrink-0 text-muted-foreground">
             {(controls?.effort
               ? formatProviderOptionName(controls.effort.descriptor, t)
               : undefined) ?? (controls?.others.length ? "Options" : t("chat.traits.effort"))}
@@ -595,7 +602,6 @@ function SpeedControl(props: { traits: TraitsSelectionInput }) {
   const t = useTranslate();
   const traits = useTraitsSelection(props.traits);
   const { speedSelect, fastToggle } = splitSpeed(
-    props.traits.provider,
     traits.selectDescriptors,
     traits.booleanDescriptors,
   );
@@ -633,6 +639,27 @@ function SpeedControl(props: { traits: TraitsSelectionInput }) {
               />
             ))
           : null}
+    </div>
+  );
+}
+
+function UltracodeControl(props: { traits: TraitsSelectionInput }) {
+  const traits = useTraitsSelection(props.traits);
+  const { ultracodeToggle } = splitSpeed(traits.selectDescriptors, traits.booleanDescriptors);
+  if (traits.modelIsUnavailable || !ultracodeToggle) return null;
+  const on = ultracodeToggle.currentValue === true;
+  return (
+    <div className="flex rounded-lg bg-input/40 p-0.5">
+      <button
+        type="button"
+        aria-pressed={on}
+        data-checked={on || undefined}
+        className={FOOTER_SEGMENT}
+        onClick={() => traits.changeBoolean(ultracodeToggle.id, !on)}
+      >
+        <WorkflowIcon aria-hidden="true" className="size-3" />
+        {ultracodeToggle.label}
+      </button>
     </div>
   );
 }
@@ -691,6 +718,7 @@ export function ComposerPickerFooter(props: {
   return (
     <div className="flex flex-wrap items-center gap-2 border-t border-border/70 bg-muted/40 px-3 py-2">
       {props.traits ? <SpeedControl traits={props.traits} /> : null}
+      {props.traits ? <UltracodeControl traits={props.traits} /> : null}
       <PermissionsMenu
         runtimeMode={props.runtimeMode}
         options={props.runtimeModeOptions}

@@ -252,7 +252,7 @@ const start = Effect.fn("ConveneConnection.start")(function* (
         yield* broker.configure([...configurations.values()]);
       });
       const cacheUpdates = yield* Queue.unbounded<{
-        values: ReadonlyArray<typeof ConveneProjectConfiguration.Type>;
+        values: ReadonlyArray<ConveneProjectConfiguration>;
         replace: boolean;
         reportId?: string;
       }>();

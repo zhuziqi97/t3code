@@ -532,6 +532,10 @@ export class AcpRegistryCatalog extends Context.Service<
       settings: AcpRegistrySettings,
       environment?: NodeJS.ProcessEnv,
     ) => Effect.Effect<AcpRegistryInspection, AcpRegistryError>;
+    readonly inspectInstallation: (
+      settings: AcpRegistrySettings,
+      environment?: NodeJS.ProcessEnv,
+    ) => Effect.Effect<{ readonly installed: boolean | null; readonly version: string | null }>;
     readonly resolve: (
       settings: AcpRegistrySettings,
       cwd: string,
@@ -1064,18 +1068,39 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
       ),
     );
 
+  const readInstallationFile = Effect.fn("AcpRegistryCatalog.readInstallationFile")(function* (
+    filePath: string,
+    reportErrors: boolean,
+  ) {
+    return yield* fileSystem.readFileString(filePath).pipe(
+      Effect.asSome,
+      Effect.catch((cause) =>
+        !reportErrors || cause.reason._tag === "NotFound"
+          ? Effect.succeedNone
+          : Effect.fail(
+              new AcpRegistryError({
+                reason: "registry_unavailable",
+                detail: "Could not read the cached ACP installation record.",
+                cause,
+              }),
+            ),
+      ),
+    );
+  });
+
   const readPackageReceipt = Effect.fn("AcpRegistryCatalog.readPackageReceipt")(function* (
     agent: AcpRegistryAgent,
     distribution: "npx" | "uvx",
     packageSpec: string,
     managerPath: string,
+    reportErrors = false,
   ) {
-    const receipt = yield* fileSystem
-      .readFileString(yield* packageReceiptPath(agent.id, distribution, managerPath))
-      .pipe(
-        Effect.map(decodePackageInstallReceipt),
-        Effect.orElseSucceed(() => Option.none()),
-      );
+    const contents = yield* readInstallationFile(
+      yield* packageReceiptPath(agent.id, distribution, managerPath),
+      reportErrors,
+    );
+    if (Option.isNone(contents)) return Option.none<AcpRegistryPackageInstallReceipt>();
+    const receipt = decodePackageInstallReceipt(contents.value);
     if (
       Option.isNone(receipt) ||
       receipt.value.agentId !== agent.id ||
@@ -1086,27 +1111,69 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
       receipt.value.binDirectory !== packageBinDirectory(agent, distribution) ||
       path.dirname(receipt.value.executablePath) !== receipt.value.binDirectory
     ) {
+      if (reportErrors)
+        return yield* new AcpRegistryError({
+          reason: "registry_unavailable",
+          detail: "The cached ACP package installation receipt is invalid.",
+        });
       return Option.none<AcpRegistryPackageInstallReceipt>();
     }
-    const executableExists = yield* fileSystem
-      .exists(receipt.value.executablePath)
-      .pipe(Effect.orElseSucceed(() => false));
+    const executableExists = yield* fileSystem.exists(receipt.value.executablePath).pipe(
+      Effect.catch((cause) =>
+        reportErrors && cause.reason._tag !== "NotFound"
+          ? Effect.fail(
+              new AcpRegistryError({
+                reason: "registry_unavailable",
+                detail: "Could not inspect the cached ACP package entry.",
+                cause,
+              }),
+            )
+          : Effect.succeed(false),
+      ),
+    );
     if (!executableExists) return Option.none<AcpRegistryPackageInstallReceipt>();
 
     if (distribution === "npx") {
       const packageIdentity = parseNpxPackageSpec(packageSpec);
       if (receipt.value.packageRoot === undefined || receipt.value.packageVersion === undefined) {
+        if (reportErrors)
+          return yield* new AcpRegistryError({
+            reason: "registry_unavailable",
+            detail: "The cached ACP package installation receipt is invalid.",
+          });
         return Option.none<AcpRegistryPackageInstallReceipt>();
       }
-      const manifest = yield* fileSystem
-        .readFileString(path.join(receipt.value.packageRoot, "package.json"))
-        .pipe(Effect.flatMap(decodeNpmPackageManifest), Effect.option);
+      const manifestContents = yield* readInstallationFile(
+        path.join(receipt.value.packageRoot, "package.json"),
+        reportErrors,
+      );
+      const manifest = Option.isNone(manifestContents)
+        ? Option.none()
+        : yield* decodeNpmPackageManifest(manifestContents.value).pipe(
+            Effect.asSome,
+            Effect.catch((cause) =>
+              reportErrors
+                ? Effect.fail(
+                    new AcpRegistryError({
+                      reason: "registry_unavailable",
+                      detail: "The cached ACP package manifest is invalid.",
+                      cause,
+                    }),
+                  )
+                : Effect.succeedNone,
+            ),
+          );
       if (
         Option.isNone(manifest) ||
         manifest.value.name !== packageIdentity.name ||
         manifest.value.version !== packageIdentity.version ||
         receipt.value.packageVersion !== packageIdentity.version
       ) {
+        if (reportErrors && Option.isSome(manifest))
+          return yield* new AcpRegistryError({
+            reason: "registry_unavailable",
+            detail: "The cached ACP package manifest does not match its receipt.",
+          });
         return Option.none<AcpRegistryPackageInstallReceipt>();
       }
     }
@@ -1456,12 +1523,20 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
   const readInstalledAgent = Effect.fn("AcpRegistryCatalog.readInstalledAgent")(function* (
     agentId: string,
     kind: AcpRegistryDistributionKind,
+    reportErrors = false,
   ) {
-    return yield* fileSystem.readFileString(installedAgentPath(agentId, kind)).pipe(
-      Effect.map(decodeInstalledAgent),
-      Effect.orElseSucceed(() => Option.none<AcpRegistryAgent>()),
-      Effect.map((candidate) => Option.filter(candidate, (agent) => agent.id === agentId)),
+    const contents = yield* readInstallationFile(installedAgentPath(agentId, kind), reportErrors);
+    if (Option.isNone(contents)) return Option.none<AcpRegistryAgent>();
+    const agent = Option.filter(
+      decodeInstalledAgent(contents.value),
+      (agent) => agent.id === agentId,
     );
+    if (reportErrors && Option.isNone(agent))
+      return yield* new AcpRegistryError({
+        reason: "registry_unavailable",
+        detail: "The cached ACP agent installation record is invalid.",
+      });
+    return agent;
   });
   const rememberInstalledAgent = Effect.fn("AcpRegistryCatalog.rememberInstalledAgent")(
     function* (agent: AcpRegistryAgent, kind: AcpRegistryDistributionKind) {
@@ -1506,11 +1581,12 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
     preference: AcpRegistryDistributionPreference,
     environment: NodeJS.ProcessEnv,
     currentAgent?: AcpRegistryAgent,
+    options: { readonly checkPackageManager?: boolean; readonly reportErrors?: boolean } = {},
   ) {
     const kinds: ReadonlyArray<AcpRegistryDistributionKind> =
       preference === "auto" ? ["binary", "npx", "uvx"] : [preference];
     for (const kind of kinds) {
-      const saved = yield* readInstalledAgent(agentId, kind);
+      const saved = yield* readInstalledAgent(agentId, kind, options.reportErrors);
       const agent = Option.getOrUndefined(saved) ?? currentAgent;
       if (agent === undefined) continue;
       const distribution = resolveAcpRegistryDistribution({
@@ -1523,7 +1599,19 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
         const paths = binaryPaths(agent, distribution.binaryTarget!);
         if (
           paths === undefined ||
-          !(yield* fileSystem.exists(paths.executablePath).pipe(Effect.orElseSucceed(() => false)))
+          !(yield* fileSystem.exists(paths.executablePath).pipe(
+            Effect.catch((cause) =>
+              options.reportErrors && cause.reason._tag !== "NotFound"
+                ? Effect.fail(
+                    new AcpRegistryError({
+                      reason: "registry_unavailable",
+                      detail: "Could not inspect the cached ACP binary entry.",
+                      cause,
+                    }),
+                  )
+                : Effect.succeed(false),
+            ),
+          ))
         )
           continue;
         const command = yield* assertExecutableInRoot(paths.installRoot, paths.executablePath).pipe(
@@ -1541,9 +1629,15 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
       }
       const manager = resolveExecutable(packageManagerFor(kind)!, platform, environment);
       if (manager === undefined) continue;
-      const receipt = yield* readPackageReceipt(agent, kind, distribution.packageName!, manager);
+      const receipt = yield* readPackageReceipt(
+        agent,
+        kind,
+        distribution.packageName!,
+        manager,
+        options.reportErrors,
+      );
       if (Option.isNone(receipt)) continue;
-      if (kind === "uvx") {
+      if (kind === "uvx" && options.checkPackageManager !== false) {
         const existing = yield* discoverUvGlobalPackage(agent, distribution.packageName!, manager, {
           ...environment,
           UV_TOOL_DIR: packageInstallRoot(agent, kind),
@@ -1885,6 +1979,34 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
         )
       : Effect.void;
 
+  const inspectInstallation: AcpRegistryCatalog["Service"]["inspectInstallation"] = Effect.fn(
+    "AcpRegistryCatalog.inspectInstallation",
+  )(
+    function* (settings, environment = hostEnvironment) {
+      const command = settings.commandPath.trim();
+      if (command) {
+        const executable = resolveExecutable(command, platform, environment);
+        if (executable === undefined) return { installed: false, version: null };
+        yield* validateLocalExecutable(executable);
+        return { installed: true, version: null };
+      }
+      const agentId = settings.agentId.trim();
+      if (settings.source === "local" || !agentId) return { installed: null, version: null };
+      const installed = yield* findInstallation(
+        agentId,
+        settings.distribution,
+        environment,
+        undefined,
+        {
+          checkPackageManager: false,
+          reportErrors: true,
+        },
+      );
+      return { installed: installed !== undefined, version: installed?.version ?? null };
+    },
+    Effect.orElseSucceed(() => ({ installed: null, version: null })),
+  );
+
   const inspect: AcpRegistryCatalog["Service"]["inspect"] = Effect.fn("AcpRegistryCatalog.inspect")(
     function* (settings, environment) {
       if (settings.source === "local") {
@@ -2190,6 +2312,7 @@ export const makeAcpRegistryCatalog = Effect.fn("AcpRegistryCatalog.make")(funct
     refresh,
     search,
     prepare,
+    inspectInstallation,
     inspect,
     resolve,
     uninstallManagedBinary,

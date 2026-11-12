@@ -9,6 +9,10 @@ import {
 } from "@t3tools/contracts";
 
 import "~/index.css";
+import { scopedThreadKey } from "@t3tools/client-runtime/environment";
+import { useDiffPanelStore } from "../diffPanelStore";
+import { browserMiniPlayerSource, usePreviewMiniPlayerStore } from "../previewMiniPlayerStore";
+import { useRightPanelStore } from "../rightPanelStore";
 
 import { act, render as renderTestUi, type Screen } from "../../test/render";
 
@@ -29,6 +33,8 @@ function deferred<T>() {
 }
 
 const state = vi.hoisted(() => ({
+  serverConfig: { shellThreadFamilies: false },
+  familyLookupFails: false,
   scopes: new Map<string, Set<string>>(),
   threads: [] as {
     environmentId: EnvironmentId;
@@ -36,8 +42,13 @@ const state = vi.hoisted(() => ({
     projectId: ProjectId;
     title: string;
     worktreePath: string | null;
+    lineage: { parentThreadId: ThreadId | null; sideChat?: boolean };
     session: { status: "ready" | "stopped" } | null;
     latestTurn: null;
+  }[],
+  familyThreads: [] as {
+    id: ThreadId;
+    lineage: { parentThreadId: ThreadId | null; sideChat?: boolean };
   }[],
   requests: [] as { action: string; environmentId: string; input: { threadId?: string } }[],
   localEffects: [] as string[],
@@ -74,19 +85,31 @@ vi.mock("../state/use-atom-command", async (original) => ({
       return AsyncResult.success(undefined);
     },
 }));
-
-vi.mock("../state/use-atom-query-runner", async (original) => ({
-  ...(await original<typeof import("../state/use-atom-query-runner")>()),
-  useAtomQueryRunner: () => async (environmentId: string) =>
-    state.sessionLookupFails
-      ? AsyncResult.failure(Cause.fail(new Error("Session lookup failed")))
-      : AsyncResult.success({
-          authenticated: true,
-          scopes: [...(state.scopes.get(environmentId) ?? [])],
-          auth: { serverUpdateScope: "environment:maintain" },
-        }),
+vi.mock("../state/use-atom-query-runner", () => ({
+  useAtomQueryRunner: (family: unknown) => async (environmentId: string) =>
+    family === "threadFamily"
+      ? state.familyLookupFails
+        ? AsyncResult.failure(Cause.fail(new Error("Family lookup failed")))
+        : AsyncResult.success({ threads: state.familyThreads })
+      : state.sessionLookupFails
+        ? AsyncResult.failure(Cause.fail(new Error("Session lookup failed")))
+        : AsyncResult.success({
+            authenticated: true,
+            scopes: [...(state.scopes.get(environmentId) ?? [])],
+            auth: { serverUpdateScope: "environment:maintain" },
+          }),
 }));
-
+vi.mock("../state/orchestration", () => ({
+  orchestrationEnvironment: { threadFamily: "threadFamily" },
+}));
+vi.mock("../state/server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../state/server")>();
+  const { Atom } = await import("effect/reactivity");
+  return {
+    ...actual,
+    environmentServerConfigsAtom: Atom.make(new Map([["secondary", state.serverConfig]])),
+  };
+});
 vi.mock("../state/threads", async (original) => ({
   ...(await original<typeof import("../state/threads")>()),
   threadEnvironment: Object.fromEntries(
@@ -136,7 +159,8 @@ vi.mock("../composerDraftStore", async (original) => ({
   ...(await original<typeof import("../composerDraftStore")>()),
   useComposerDraftStore: (select: (store: unknown) => unknown) =>
     select({
-      clearDraftThread: () => state.localEffects.push("clear-draft"),
+      clearDraftThread: (ref: ScopedThreadRef) =>
+        state.localEffects.push(`clear-draft:${ref.threadId}`),
       clearProjectDraftThreadById: () => state.localEffects.push("clear-project-draft"),
     }),
 }));
@@ -161,10 +185,9 @@ vi.mock("../lib/archivedThreadsState", async (original) => ({
   ...(await original<typeof import("../lib/archivedThreadsState")>()),
   refreshArchivedThreadsForEnvironment: () => state.localEffects.push("refresh-archive"),
 }));
-
-vi.mock("../lib/composerDraftUploads", async (original) => ({
-  ...(await original<typeof import("../lib/composerDraftUploads")>()),
-  releaseComposerDraftUploads: () => state.localEffects.push("release-uploads"),
+vi.mock("../lib/composerDraftUploads", () => ({
+  releaseComposerDraftUploads: (ref: ScopedThreadRef) =>
+    state.localEffects.push(`release-uploads:${ref.threadId}`),
 }));
 
 vi.mock("../localApi", async (original) => ({
@@ -204,6 +227,29 @@ vi.mock("./useSettings", async (original) => ({
 }));
 
 import { useThreadActions } from "./useThreadActions";
+
+function resetThreadPanelState() {
+  useRightPanelStore.setState(useRightPanelStore.getInitialState(), true);
+  useDiffPanelStore.setState(useDiffPanelStore.getInitialState(), true);
+  usePreviewMiniPlayerStore.setState(usePreviewMiniPlayerStore.getInitialState(), true);
+}
+
+function seedThreadPanelState(ref: ScopedThreadRef) {
+  useRightPanelStore.getState().show(ref);
+  useDiffPanelStore.getState().selectGitScope(ref, "branch");
+  usePreviewMiniPlayerStore.getState().open(ref, browserMiniPlayerSource("tab"));
+}
+
+function threadPanelStatePresence(ref: ScopedThreadRef) {
+  const key = scopedThreadKey(ref);
+  return {
+    rightPanel: key in useRightPanelStore.getState().byThreadKey,
+    diffPanel: key in useDiffPanelStore.getState().byThreadKey,
+    miniPlayer: key in usePreviewMiniPlayerStore.getState().byThreadKey,
+  };
+}
+const panelStateKept = { rightPanel: true, diffPanel: true, miniPlayer: true };
+const panelStateCleared = { rightPanel: false, diffPanel: false, miniPlayer: false };
 
 const primary = EnvironmentId.make("primary");
 
@@ -420,9 +466,14 @@ async function setupLifecycle() {
   renderStack = stack;
   stack.defer(async () => {
     await act(() => hookRenderers.splice(0).forEach((renderer) => renderer.unmount()));
+    resetThreadPanelState();
     vi.unstubAllGlobals();
   });
 
+  resetThreadPanelState();
+  state.serverConfig.shellThreadFamilies = false;
+  state.familyLookupFails = false;
+  state.familyThreads = [];
   state.scopes = new Map([
     [primary, new Set([AuthOrchestrationOperateScope])],
     [secondary, new Set<string>()],
@@ -434,6 +485,7 @@ async function setupLifecycle() {
       projectId: ProjectId.make("project"),
       title: "Thread",
       worktreePath: null,
+      lineage: { parentThreadId: null },
       session: null,
       latestTurn: null,
     },
@@ -448,3 +500,83 @@ async function setupLifecycle() {
   renderStack = stack.move();
   return renderStack;
 }
+
+describe("archived thread families", () => {
+  it("names an archived thread in its delete confirmation and preserves it on cancel", async () => {
+    await using _lifecycle = await setupLifecycle();
+    state.threads = [];
+    state.scopes.get(secondary)!.add(AuthOrchestrationOperateScope);
+    state.confirm.mockResolvedValue(false);
+    await (await renderActions()).confirmAndDeleteThread(target, "Archived release notes");
+    expect(state.confirm).toHaveBeenCalledWith(
+      expect.stringContaining('Delete thread "Archived release notes"?'),
+      { variant: "destructive" },
+    );
+    expect(state.requests).toEqual([]);
+  });
+  it("deletes an archived thread only with its own environment's grant", async () => {
+    await using _lifecycle = await setupLifecycle();
+    state.serverConfig.shellThreadFamilies = true;
+    state.familyThreads = [
+      {
+        id: ThreadId.make("side-chat"),
+        lineage: { parentThreadId: target.threadId, sideChat: true },
+      },
+      { id: ThreadId.make("fork"), lineage: { parentThreadId: target.threadId } },
+      {
+        id: ThreadId.make("other-side-chat"),
+        lineage: { parentThreadId: ThreadId.make("other-parent"), sideChat: true },
+      },
+    ];
+    state.threads = [];
+    seedThreadPanelState(target);
+    const actions = await renderActions();
+    await actions.deleteThread(target);
+    expect(state.requests).toEqual([]);
+    expect(threadPanelStatePresence(target)).toEqual(panelStateKept);
+    state.scopes.get(secondary)!.add(AuthOrchestrationOperateScope);
+    expect((await actions.deleteThread(target))._tag).toBe("Success");
+    expect(state.requests).toEqual([
+      expect.objectContaining({ action: "delete", environmentId: secondary }),
+    ]);
+    expect(threadPanelStatePresence(target)).toEqual(panelStateCleared);
+    expect(state.localEffects).toEqual([
+      "release-uploads:thread",
+      "clear-draft:thread",
+      "release-uploads:side-chat",
+      "clear-draft:side-chat",
+      "refresh-archive",
+      "clear-terminal-ui",
+    ]);
+    expect(state.localEffects).not.toContain("clear-draft:fork");
+    expect(state.localEffects).not.toContain("clear-draft:other-side-chat");
+
+    // The family read only finds drafts to clear; it never blocks the delete.
+    state.familyLookupFails = true;
+    state.requests = [];
+    state.localEffects = [];
+    expect((await actions.deleteThread(target))._tag).toBe("Success");
+    expect(state.requests).toEqual([
+      expect.objectContaining({ action: "delete", environmentId: secondary }),
+    ]);
+    expect(state.localEffects).toContain("clear-draft:thread");
+  });
+  it("clears the drafts of the side chats deleted with it", async () => {
+    await using _lifecycle = await setupLifecycle();
+    state.scopes.get(secondary)!.add(AuthOrchestrationOperateScope);
+    const parent = state.threads[0]!;
+    state.threads.push(
+      {
+        ...parent,
+        id: ThreadId.make("side-chat"),
+        lineage: { parentThreadId: parent.id, sideChat: true },
+      },
+      { ...parent, id: ThreadId.make("fork"), lineage: { parentThreadId: parent.id } },
+    );
+    expect((await (await renderActions()).deleteThread(target))._tag).toBe("Success");
+    expect(state.localEffects).toEqual(
+      expect.arrayContaining(["release-uploads:side-chat", "clear-draft:side-chat"]),
+    );
+    expect(state.localEffects).not.toContain("clear-draft:fork");
+  });
+});

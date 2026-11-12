@@ -30,6 +30,7 @@ import {
 import { codexContinuationIdentity } from "./CodexHomeLayout.ts";
 import { withInstanceIdentity } from "@t3tools/provider-core/server/instanceIdentity";
 import { HttpClient } from "effect/http";
+import * as CodexInstallation from "../CodexInstallation.ts";
 const DRIVER = ProviderDriverKind.make("codex");
 
 export const makeManagedCodexProvider = Effect.fn("makeManagedCodexProvider")(function* (
@@ -41,6 +42,7 @@ export const makeManagedCodexProvider = Effect.fn("makeManagedCodexProvider")(fu
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const host = yield* ProviderHost.ProviderHost;
+  const installation = yield* CodexInstallation.CodexInstallation;
   const runtime = yield* makeCodexManagedRuntime({
     instanceId,
     enabled,
@@ -284,6 +286,11 @@ export const makeManagedCodexProvider = Effect.fn("makeManagedCodexProvider")(fu
       protect("generateThreadTitle", nativeGeneration.generateThreadTitle(value)),
     generateReviewGuide: (value) =>
       protect("generateReviewGuide", nativeGeneration.generateReviewGuide(value)),
+    generateTranscriptionPostProcessing: (value) =>
+      protect(
+        "generateTranscriptionPostProcessing",
+        nativeGeneration.generateTranscriptionPostProcessing(value),
+      ),
   };
   return {
     instanceId,
@@ -292,6 +299,7 @@ export const makeManagedCodexProvider = Effect.fn("makeManagedCodexProvider")(fu
     displayName,
     accentColor,
     enabled,
+    probeInstallation: installation.inspectInstallation,
     snapshot,
     orchestrationAdapter,
     textGeneration,

@@ -1,5 +1,6 @@
 import type { ConveneDesktopUpdate, DesktopUpdateState } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
@@ -107,17 +108,19 @@ export const make = Effect.gen(function* () {
     const result = yield* http.get(conveneUrl(source, "downloads/release.json")).pipe(
       Effect.flatMap(HttpClientResponse.schemaBodyJson(ConveneRelease)),
       Effect.flatMap((release) =>
-        Effect.try(() =>
-          resolveConveneRelease(release, {
-            version: environment.appVersion,
-            buildId,
-            baseUrl: source,
-            platform: environment.platform,
-            runtimeInfo: environment.runtimeInfo,
-            packageType,
-            appImage: Option.isSome(config.appImagePath),
-          }),
-        ),
+        Effect.try({
+          try: () =>
+            resolveConveneRelease(release, {
+              version: environment.appVersion,
+              buildId,
+              baseUrl: source,
+              platform: environment.platform,
+              runtimeInfo: environment.runtimeInfo,
+              packageType,
+              appImage: Option.isSome(config.appImagePath),
+            }),
+          catch: (cause) => new Cause.UnknownError(cause),
+        }),
       ),
       Effect.timeout("15 seconds"),
       Effect.exit,

@@ -3,13 +3,14 @@ import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { Spinner } from "~/components/ui/spinner";
 import {
   AuthPreviewOperateScope,
+  AuthFilesystemWriteScope,
   type EditorId,
   type EnvironmentId,
+  type ProjectId,
   type ResolvedKeybindingsConfig,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
 import { filePreviewDelimiter } from "@t3tools/shared/delimitedPreview";
-import { AuthFilesystemWriteScope, type ProjectId } from "@t3tools/contracts";
 import {
   isWorkspaceAudioPreviewPath,
   isWorkspaceImagePreviewPath,
@@ -53,6 +54,7 @@ import { i18n, useTranslate } from "~/i18n";
 
 import { isBrowserPreviewFile, openFileInPreview } from "~/browser/openFileInPreview";
 import { useAssetUrlRefresh, useAssetUrlState } from "~/assets/assetUrls";
+import { FileDownloadStatus, useFileDownload } from "./useFileDownload";
 import { OpenInPicker } from "~/components/chat/OpenInPicker";
 import { MediaVideoPlayer } from "~/components/media/MediaVideoPlayer";
 import { MediaActions, type MediaActionSource } from "~/components/media/MediaActions";
@@ -117,10 +119,10 @@ import {
   isMarkdownPreviewFile,
   resolveFilePreviewPath,
   renderedToggleLabel,
-  setMarkdownTaskChecked,
   shouldShowFileExplorer,
   workspaceAssetResource,
 } from "./filePreviewMode";
+import { setMarkdownTaskChecked } from "@t3tools/shared/markdownTaskList";
 import { changeFileSaveSession, useFileSaveSession } from "./fileSaveSessions";
 import { revisionedQuery } from "~/state/revisionedQuery";
 import {
@@ -657,6 +659,7 @@ function useEditableAfterHighlight(file: FileContents) {
 
 interface EditableFileSurfaceProps {
   environmentId: EnvironmentId;
+  projectId?: ProjectId | undefined;
   cwd: string;
   relativePath: string;
   composerDraftTarget: ScopedThreadRef | DraftId;
@@ -675,6 +678,7 @@ interface FileSelectionOverride {
 
 function EditableFileSurface({
   environmentId,
+  projectId,
   cwd,
   relativePath,
   composerDraftTarget,
@@ -907,6 +911,14 @@ function EditableFileSurface({
                 {annotation.metadata.entries.map((entry) => (
                   <DiffCommentAnnotation
                     key={entry.id}
+                    environmentId={environmentId}
+                    projectId={projectId}
+                    ownerKey={JSON.stringify([
+                      environmentId,
+                      composerDraftTarget,
+                      relativePath,
+                      entry.id,
+                    ])}
                     kind={entry.kind}
                     rangeLabel={formatFileCommentRange(entry.startLine, entry.endLine)}
                     text={entry.text}
@@ -943,7 +955,7 @@ function RenderedMarkdownSurface({
   | "wordWrap"
   | "onPostRender"
 > & {
-  threadRef: ScopedThreadRef;
+  threadRef: ScopedThreadRef | undefined;
   readOnly: boolean;
   workspaceMutationId: string | null;
 }) {
@@ -953,6 +965,7 @@ function RenderedMarkdownSurface({
   return (
     <ScrollArea className="min-h-0 flex-1">
       <FileMarkdownPreview
+        environmentId={environmentId}
         text={contents}
         cwd={cwd}
         relativePath={relativePath}
@@ -1364,7 +1377,7 @@ export default function FilePreviewPanel({
               sizeBytes={attachment.sizeBytes}
               asset={{ environmentId, attachmentId: attachment.id }}
               htmlRender={attachment.htmlRender === true}
-              threadRef={threadRef}
+              threadRef={draft ? undefined : threadRef}
             />
           ) : relativePath && isVideo && absolutePath ? (
             <WorkspaceVideoPreview
@@ -1497,7 +1510,7 @@ export default function FilePreviewPanel({
                 environmentId={environmentId}
                 cwd={cwd}
                 relativePath={relativePath}
-                threadRef={threadRef}
+                threadRef={draft ? undefined : threadRef}
                 contents={file.data.contents}
                 workspaceMutationId={workspaceMutationId}
                 readOnly={file.data.truncated || isHostFile || !canWriteFiles}
@@ -1523,6 +1536,7 @@ export default function FilePreviewPanel({
                 <EditableFileSurface
                   key={`${relativePath}:${resolvedTheme}`}
                   environmentId={environmentId}
+                  projectId={projectId ?? undefined}
                   cwd={cwd}
                   relativePath={relativePath}
                   composerDraftTarget={composerDraftTarget}
@@ -1582,6 +1596,7 @@ export function WorkspaceLargeTextPreview(props: {
   revealRequestId: number;
   wordWrap: boolean;
 }) {
+  const t = useTranslate();
   const resource = {
     _tag: "media-file",
     threadId: props.threadRef.threadId,
@@ -1590,7 +1605,7 @@ export function WorkspaceLargeTextPreview(props: {
   } as const;
   const copyContents = useRef<(() => Promise<string>) | null>(null);
   const { copyToClipboard, isCopied } = useCopyToClipboard({ target: props.name });
-  const [saving, setSaving] = useState(false);
+  const download = useFileDownload();
   const [revision, setRevision] = useState(0);
   const showError = (cause: unknown) => {
     toastManager.add({
@@ -1646,29 +1661,22 @@ export function WorkspaceLargeTextPreview(props: {
           {isCopied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
         </FileSurfaceAction>
         <FileSurfaceAction
-          label={saving ? "Preparing file…" : "Save file"}
-          disabled={saving}
+          label={t(
+            download.state.phase === "downloading"
+              ? "filePreview.downloading"
+              : download.busy
+                ? "filePreview.preparing"
+                : "filePreview.save",
+          )}
+          disabled={download.busy}
           onPress={() => {
-            setSaving(true);
-            void (async () => {
-              const url = await refreshAssetUrl();
-              if (!url) throw new Error("Reconnect to the environment and try again.");
-              const response = await fetch(url);
-              if (!response.ok) throw new Error("The file could not be loaded. Try again.");
-              const downloadUrl = URL.createObjectURL(await response.blob());
-              setTimeout(() => URL.revokeObjectURL(downloadUrl), 30_000);
-              const anchor = document.createElement("a");
-              anchor.href = downloadUrl;
-              anchor.download = props.name.split(/[\\/]/).at(-1) || props.name;
-              anchor.click();
-            })()
-              .catch(showError)
-              .finally(() => setSaving(false));
+            download.start({ name: props.name, prepare: refreshAssetUrl });
           }}
         >
           <DownloadIcon className="size-3.5" />
         </FileSurfaceAction>
       </div>
+      <FileDownloadStatus download={download} />
       <Suspense fallback={<div className="p-6 text-xs text-muted-foreground">Loading…</div>}>
         <LargeTextViewer
           key={`${src}:${revision}`}

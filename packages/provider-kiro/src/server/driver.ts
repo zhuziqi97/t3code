@@ -3,6 +3,8 @@ import { KiroSettings } from "../settings.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
+import type * as FileSystem from "effect/FileSystem";
+import type * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
@@ -17,6 +19,7 @@ import { mergeProviderInstanceEnvironment } from "@t3tools/provider-core/server/
 import { withInstanceIdentity } from "@t3tools/provider-core/server/instanceIdentity";
 import { makeManualOnlyProviderMaintenanceCapabilities } from "@t3tools/provider-core/server/maintenanceResolver";
 import { makeManagedServerProvider } from "@t3tools/provider-core/server/managedProvider";
+import { makeProviderInstallationProbe } from "@t3tools/provider-core/server/snapshotProbe";
 import {
   haveProviderSnapshotSettingsChanged,
   makeProviderSnapshotSettingsSource,
@@ -53,6 +56,7 @@ const unsupportedTextGeneration: ProviderTextGeneration = (() => {
     generateBranchName: () => unsupported("generateBranchName"),
     generateThreadTitle: () => unsupported("generateThreadTitle"),
     generateReviewGuide: () => unsupported("generateReviewGuide"),
+    generateTranscriptionPostProcessing: () => unsupported("generateTranscriptionPostProcessing"),
   };
 })();
 
@@ -60,6 +64,8 @@ export type KiroDriverEnv =
   | KiroAdapterV2DriverEnv
   | ChildProcessSpawner.ChildProcessSpawner
   | SecureRandom.SecureRandom
+  | FileSystem.FileSystem
+  | Path.Path
   | ProviderHost.ProviderHost;
 
 export const KiroDriver: ProviderDriver<KiroSettings, KiroDriverEnv> = {
@@ -146,6 +152,10 @@ export const KiroDriver: ProviderDriver<KiroSettings, KiroDriverEnv> = {
       displayName,
       accentColor,
       enabled,
+      probeInstallation: yield* makeProviderInstallationProbe(
+        effectiveConfig.binaryPath,
+        processEnv,
+      ),
       snapshot,
       orchestrationAdapter,
       textGeneration: unsupportedTextGeneration,

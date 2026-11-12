@@ -502,10 +502,14 @@ export function ComposerAttachmentFileList({
 
 export function ComposerFilePreviewDialog({
   file,
+  environmentId,
+  threadRef,
   onRemove,
   onPreviewFileIdChange,
 }: {
   readonly file: ComposerFileAttachment;
+  readonly environmentId: EnvironmentId;
+  readonly threadRef?: ScopedThreadRef | undefined;
   readonly onRemove: (fileId: string) => void;
   readonly onPreviewFileIdChange: (fileId: string | null) => void;
 }) {
@@ -525,10 +529,12 @@ export function ComposerFilePreviewDialog({
         <DialogTitle className="sr-only">{file.name}</DialogTitle>
         <AttachmentFilePreview
           key={file.id}
+          threadRef={threadRef}
           name={file.name}
           mimeType={file.mimeType}
           sizeBytes={file.sizeBytes}
           file={file.file}
+          environmentId={environmentId}
           origin="Draft"
           {...(file.uploadedAttachmentId && file.uploadEnvironmentId
             ? {

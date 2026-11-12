@@ -12,14 +12,20 @@ import { stackedThreadToast, toastManager } from "../ui/toast";
 import { SettingsRow } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 
-export function CliCommandSettingsRow() {
+const FAILURE_TITLES = {
+  install: "Could not install t3",
+  uninstall: "Could not remove t3",
+  addToPath: "Could not add t3 to PATH",
+} as const;
+
+/** The desktop `t3` command's state, and its actions with a toast on failure. */
+export function useDesktopCliCommand() {
   const t = useTranslate();
   const bridge = getDesktopCliCommandBridge();
   const query = useEnvironmentQuery(bridge ? desktopCliCommandStateAtom : null);
-  const state = query.data;
   const [pending, setPending] = useState(false);
 
-  const change = (action: "install" | "uninstall") => {
+  const run = (action: keyof typeof FAILURE_TITLES) => {
     if (!bridge || pending) return;
     setPending(true);
     void bridge[action]()
@@ -36,7 +42,18 @@ export function CliCommandSettingsRow() {
       .finally(() => setPending(false));
   };
 
-  if (!bridge || !state?.supported) return null;
+  return {
+    state: bridge ? query.data : undefined,
+    busy: pending || query.isPending,
+    run,
+  };
+}
+
+export function CliCommandSettingsRow() {
+  const t = useTranslate();
+  const { state, busy, run } = useDesktopCliCommand();
+
+  if (!state?.supported) return null;
   const installed = state.installedPath !== null;
   const description = state.shadowedBy
     ? t("convene.cli.shadowed", { path: state.shadowedBy })
@@ -51,14 +68,21 @@ export function CliCommandSettingsRow() {
       {...searchableSetting("cli-command", t)}
       description={description}
       control={
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={pending || query.isPending || (!installed && Boolean(state.shadowedBy))}
-          onClick={() => change(installed ? "uninstall" : "install")}
-        >
-          {installed ? t("cli.remove") : t("cli.install")}
-        </Button>
+        <div className="flex gap-2">
+          {state.pathSetup && !state.pathSetup.added ? (
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => run("addToPath")}>
+              Add to PATH
+            </Button>
+          ) : null}
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy || (!installed && Boolean(state.shadowedBy))}
+            onClick={() => run(installed ? "uninstall" : "install")}
+          >
+            {installed ? t("cli.remove") : t("cli.install")}
+          </Button>
+        </div>
       }
     />
   );

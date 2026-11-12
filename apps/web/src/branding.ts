@@ -30,3 +30,5 @@ export const UPSTREAM_VERSION = import.meta.env.UPSTREAM_VERSION || "0.0.0";
 export const CONVENE_BUILD_ID = import.meta.env.CONVENE_BUILD_ID;
 export const CONVENE_SOURCE_COMMIT = import.meta.env.CONVENE_SOURCE_COMMIT;
 export const DESKTOP_DOWNLOAD_URL = "https://t3.codes/download";
+// Redirects to the App Store or Google Play to match the phone that opens it.
+export const MOBILE_APP_URL = "https://t3.codes/mobile";

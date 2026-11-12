@@ -15,6 +15,11 @@ import * as TextGeneration from "./TextGeneration.ts";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import * as Layer from "effect/Layer";
 import { buildThreadTitlePrompt } from "@t3tools/provider-core/server/textGenerationPrompts";
+import * as TextGenerators from "./TextGenerators.ts";
+
+const layerTextGenerators = Layer.mock(TextGenerators.TextGenerators)({
+  runner: () => Effect.undefined,
+});
 
 const makeStubTextGeneration = (
   overrides: Partial<TextGeneration.TextGeneration["Service"]>,
@@ -26,6 +31,8 @@ const makeStubTextGeneration = (
     generateBranchName: () => Effect.die("generateBranchName stub not configured for this test"),
     generateThreadTitle: () => Effect.die("generateThreadTitle stub not configured for this test"),
     generateReviewGuide: () => Effect.die("generateReviewGuide stub not configured for this test"),
+    generateTranscriptionPostProcessing: () =>
+      Effect.die("generateTranscriptionPostProcessing stub not configured for this test"),
     ...overrides,
   });
 
@@ -100,15 +107,18 @@ describe("TextGeneration.make", () => {
         }),
       );
       const generation = yield* TextGeneration.make.pipe(
-        Effect.provide(ServerSettings.layerTest()),
-        Effect.provideService(
-          ProviderInstanceRegistry.ProviderInstanceRegistry,
-          makeStubRegistry([instance]),
-        ),
         Effect.provide(
-          Layer.mock(SourceControlProviderRegistry.SourceControlProviderRegistry)({
-            resolveLink: () => Effect.die("Supplied context must not be fetched again"),
-          }),
+          Layer.mergeAll(
+            ServerSettings.layerTest(),
+            layerTextGenerators,
+            Layer.succeed(
+              ProviderInstanceRegistry.ProviderInstanceRegistry,
+              makeStubRegistry([instance]),
+            ),
+            Layer.mock(SourceControlProviderRegistry.SourceControlProviderRegistry)({
+              resolveLink: () => Effect.die("Supplied context must not be fetched again"),
+            }),
+          ),
         ),
       );
       yield* generation.generateThreadTitle({
@@ -145,15 +155,18 @@ describe("TextGeneration.make", () => {
       );
 
       const tg = yield* TextGeneration.make.pipe(
-        Effect.provide(ServerSettings.layerTest()),
-        Effect.provideService(
-          ProviderInstanceRegistry.ProviderInstanceRegistry,
-          makeStubRegistry([personal, work]),
-        ),
         Effect.provide(
-          Layer.mock(SourceControlProviderRegistry.SourceControlProviderRegistry)({
-            resolveLink: () => Effect.die("No link lookup expected"),
-          }),
+          Layer.mergeAll(
+            ServerSettings.layerTest(),
+            layerTextGenerators,
+            Layer.succeed(
+              ProviderInstanceRegistry.ProviderInstanceRegistry,
+              makeStubRegistry([personal, work]),
+            ),
+            Layer.mock(SourceControlProviderRegistry.SourceControlProviderRegistry)({
+              resolveLink: () => Effect.die("No link lookup expected"),
+            }),
+          ),
         ),
       );
 
@@ -171,15 +184,15 @@ describe("TextGeneration.make", () => {
   it.effect("fails with TextGenerationError when the instance is unknown", () =>
     Effect.gen(function* () {
       const tg = yield* TextGeneration.make.pipe(
-        Effect.provide(ServerSettings.layerTest()),
-        Effect.provideService(
-          ProviderInstanceRegistry.ProviderInstanceRegistry,
-          makeStubRegistry([]),
-        ),
         Effect.provide(
-          Layer.mock(SourceControlProviderRegistry.SourceControlProviderRegistry)({
-            resolveLink: () => Effect.die("No link lookup expected"),
-          }),
+          Layer.mergeAll(
+            ServerSettings.layerTest(),
+            layerTextGenerators,
+            Layer.succeed(ProviderInstanceRegistry.ProviderInstanceRegistry, makeStubRegistry([])),
+            Layer.mock(SourceControlProviderRegistry.SourceControlProviderRegistry)({
+              resolveLink: () => Effect.die("No link lookup expected"),
+            }),
+          ),
         ),
       );
 

@@ -20,23 +20,27 @@ const state = vi.hoisted(() => ({
   complete: vi.fn(),
   command: vi.fn(),
 }));
-vi.mock("../../state/server", async (original) => ({
-  ...(await original<typeof import("../../state/server")>()),
-  serverEnvironment: {
-    providerAuthState: () => "auth",
-    providerInstallState: () => "installation",
-    chatGptHandoffState: () => "handoff",
-    startProviderAuth: state.start,
-    completeProviderAuth: state.complete,
-    refreshProviders: state.command,
-    cancelProviderAuth: state.command,
-    logoutProviderAuth: state.command,
-    startProviderInstall: state.command,
-    cancelProviderInstall: state.command,
-    chatGptReconnectProfile: state.command,
-    chatGptImportProfile: state.command,
-  },
-}));
+vi.mock("../../state/server", async (original) => {
+  const actual = await original<typeof import("../../state/server")>();
+  return {
+    ...actual,
+    serverEnvironment: {
+      ...actual.serverEnvironment,
+      providerAuthState: () => "auth",
+      providerInstallState: () => "installation",
+      chatGptHandoffState: () => "handoff",
+      startProviderAuth: state.start,
+      completeProviderAuth: state.complete,
+      refreshProviders: state.command,
+      cancelProviderAuth: state.command,
+      logoutProviderAuth: state.command,
+      startProviderInstall: state.command,
+      cancelProviderInstall: state.command,
+      chatGptReconnectProfile: state.command,
+      chatGptImportProfile: state.command,
+    },
+  };
+});
 vi.mock("../../state/query", async (original) => ({
   ...(await original<typeof import("../../state/query")>()),
   useEnvironmentQuery: (atom: string | null) => ({

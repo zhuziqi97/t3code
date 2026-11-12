@@ -49,17 +49,21 @@ const fixture = vi.hoisted(() => ({
     truncated: false,
   },
 }));
-vi.mock("~/state/pullRequests", async (original) => ({
-  ...(await original<typeof import("~/state/pullRequests")>()),
-  pullRequestEnvironment: {
-    comment: "post",
-    submitReview: "review",
-    setLabels: "labels",
-    requestReviewers: "reviewers",
-    labelCandidates: () => "labelCandidates",
-    reviewerCandidates: () => "reviewerCandidates",
-  },
-}));
+vi.mock("~/state/pullRequests", async (original) => {
+  const actual = await original<typeof import("~/state/pullRequests")>();
+  return {
+    ...actual,
+    pullRequestEnvironment: {
+      ...actual.pullRequestEnvironment,
+      comment: "post",
+      submitReview: "review",
+      setLabels: "labels",
+      requestReviewers: "reviewers",
+      labelCandidates: () => "labelCandidates",
+      reviewerCandidates: () => "reviewerCandidates",
+    },
+  };
+});
 vi.mock("~/state/use-atom-command", async (original) => ({
   ...(await original<typeof import("~/state/use-atom-command")>()),
   useAtomCommand: (command: keyof typeof fixture) => fixture[command],
@@ -182,6 +186,7 @@ function Comment({ state = "open" }: { state?: "open" | "closed" }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   return (
     <PullRequestCommentForm
+      active
       environmentId={environmentId}
       reference={reference}
       detail={{ ...detail, state }}
@@ -198,6 +203,8 @@ function Review({ approve = false }: { approve?: boolean }) {
   const [pending, setPending] = useState(false);
   return (
     <PullRequestReviewForm
+      active
+      completionScope={null}
       term="pull request"
       environmentId={environmentId}
       reference={reference}
@@ -449,6 +456,7 @@ it("preserves markdown edits and preview mode through locale changes and saves t
   const save = vi.fn();
   await using screen = await render(
     <PullRequestMarkdownEditor
+      completionScope={null}
       value="Original"
       cwd="/repo"
       environmentId={environmentId}
@@ -497,7 +505,12 @@ it("withdraws a team review request using its original id and reports success in
   const pending = deferred();
   fixture.reviewers.mockReturnValue(pending.promise);
   await using _screen = await render(
-    <PullRequestReviewerPicker environmentId={environmentId} reference={reference} allowed />,
+    <PullRequestReviewerPicker
+      environmentId={environmentId}
+      reference={reference}
+      allowed
+      searchable={false}
+    />,
   );
   await click("Request a review");
   await act(async () => document.querySelector<HTMLElement>('[role="option"]')!.click());

@@ -4,6 +4,7 @@ import { workspaceAreaProps } from "../lib/workspaceFocus";
 import { useAtomMount, useAtomValue } from "@effect/atom-react";
 import {
   isAtomCommandInterrupted,
+  executeAtomQuery,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import {
@@ -23,6 +24,8 @@ import {
 } from "lucide-react";
 import {
   AuthPreviewOperateScope,
+  AuthFilesystemReadScope,
+  AuthOrchestrationOperateScope,
   AuthTerminalOperateScope,
   type ContextMenuItem,
   type ProviderInstanceId,
@@ -31,11 +34,14 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import { getTerminalLabel } from "@t3tools/shared/terminalLabels";
+import { isMacPlatform } from "@t3tools/shared/keybindings";
 import * as Schema from "effect/Schema";
+import { AsyncResult } from "effect/reactivity";
 import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   useEffect,
+  useContext,
   useEffectEvent,
   useLayoutEffect,
   useRef,
@@ -48,6 +54,7 @@ import { stackedThreadToast, toastManager } from "~/components/ui/toast";
 import {
   ClipboardApiUnavailableError,
   ClipboardReadError,
+  ClipboardReadDeniedError,
   ClipboardReadUnavailableError,
   ClipboardWriteError,
   readTextFromClipboard,
@@ -86,6 +93,8 @@ import {
 import { readLocalApi } from "~/localApi";
 import { confirmTerminalClose } from "~/lib/terminalCloseConfirm";
 import { useClientSettings } from "../hooks/useSettings";
+import { getFileMetadataQueryAtom } from "../hooks/useFileMetadata";
+import { FileMetadataThreadContext } from "../hooks/FileMetadataThreadProvider";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { attachedTerminalSessionAtom } from "../state/terminalSessions";
 import { appAtomRegistry } from "../rpc/atomRegistry";
@@ -116,6 +125,7 @@ const isClipboardApiUnavailableError = Schema.is(ClipboardApiUnavailableError);
 const isClipboardWriteError = Schema.is(ClipboardWriteError);
 const isClipboardReadUnavailableError = Schema.is(ClipboardReadUnavailableError);
 const isClipboardReadError = Schema.is(ClipboardReadError);
+const isClipboardReadDeniedError = Schema.is(ClipboardReadDeniedError);
 
 interface DrawerLayout {
   viewportHeight: number;
@@ -196,7 +206,7 @@ export function synchronizeTerminalOutput(
   const selection = cells > 0 && compared ? terminal.getSelection() : "";
   writeTerminalOutputUpdate(terminal, update);
   if (!compared || (cells > 0 && terminal.getSelection() !== selection)) {
-    terminal.clearSelection();
+    terminal.clearSelection({ source: "output" });
   }
   return update.cursor;
 }
@@ -574,10 +584,48 @@ function TerminalSessionViewport({
   });
   const [preferredEditor] = usePreferredEditor();
   const canOpenEditor = editorAction.unavailableReason(preferredEditor) === null;
-  const canActivateTerminalLink = useEffectEvent(
-    (text: string) =>
-      isTerminalUrl(text) || editorAction.unavailableReason(readPreferredEditor()) === null,
-  );
+  const canOpenHostEditor = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
+  const canReadFilesystem = useEnvironmentScope(environmentId, AuthFilesystemReadScope);
+  const [linkPath, setLinkPath] = useState<string | null>(null);
+  const metadataThreadRef = useContext(FileMetadataThreadContext);
+  const linkMetadataQuery =
+    linkPath !== null && canOpenHostEditor && canReadFilesystem
+      ? getFileMetadataQueryAtom(
+          environmentId,
+          resolvePathLinkTarget(linkPath, cwd),
+          cwd,
+          metadataThreadRef,
+        )
+      : null;
+  const canActivateTerminalLink = useEffectEvent((text: string) => {
+    if (isTerminalUrl(text)) return true;
+    if (editorAction.unavailableReason(readPreferredEditor()) !== null) return false;
+    if (!readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)) return false;
+    if (text !== linkPath || !linkMetadataQuery) return false;
+    const metadata = AsyncResult.getOrElse(appAtomRegistry.get(linkMetadataQuery), () => null);
+    return metadata?.kind === "file" || metadata?.kind === "directory";
+  });
+  const validateTerminalLink = useEffectEvent(async (text: string) => {
+    if (isTerminalUrl(text)) return true;
+    if (editorAction.unavailableReason(readPreferredEditor()) !== null) return false;
+    if (
+      !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope) ||
+      !readEnvironmentScope(environmentId, AuthFilesystemReadScope)
+    )
+      return false;
+    const query = getFileMetadataQueryAtom(
+      environmentId,
+      resolvePathLinkTarget(text, cwd),
+      cwd,
+      metadataThreadRef,
+    );
+    if (!query) return false;
+    const result = await executeAtomQuery(appAtomRegistry, query, { reportFailure: false });
+    return (
+      result._tag === "Success" &&
+      (result.value?.kind === "file" || result.value?.kind === "directory")
+    );
+  });
   const openTerminalPath = useEffectEvent((target: string) => editorAction.open(target));
   const openPreview = useAtomCommand(previewEnvironment.open, {
     reportFailure: false,
@@ -691,6 +739,18 @@ function TerminalSessionViewport({
     linkActivationScopeRef.current = canOpenEditor;
     terminalRef.current?.refreshLinkActivation();
   }, [canOpenEditor]);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- refreshes the imperative terminal's hovered link after filesystem metadata or editor permissions change
+  useEffect(() => {
+    if (!linkMetadataQuery) {
+      terminalRef.current?.refreshLinkActivation();
+      return;
+    }
+    return appAtomRegistry.subscribe(
+      linkMetadataQuery,
+      () => terminalRef.current?.refreshLinkActivation(),
+      { immediate: true },
+    );
+  }, [linkMetadataQuery]);
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- pushes visibility into the terminal surface before paint and consumes focus requests made while hidden
   useLayoutEffect(() => {
@@ -736,6 +796,8 @@ function TerminalSessionViewport({
         beforeKey: (event) => handleBeforeKey(event),
         onLinkActivate: (text, event) => handleLinkActivate(text, event),
         canActivateLink: (text) => canActivateTerminalLink(text),
+        validateLink: (text) => validateTerminalLink(text),
+        onLinkHover: (text) => setLinkPath(text !== null && !isTerminalUrl(text) ? text : null),
         // Surface listeners start before WASM loading finishes and the terminal handler exists.
         onContextMenu: (event) => {
           if (terminalRef.current) void showTerminalContextMenu(event);
@@ -878,12 +940,20 @@ function TerminalSessionViewport({
               ? "terminal.clipboard.copyFailed"
               : isClipboardReadUnavailableError(error)
                 ? "terminal.clipboard.readUnavailable"
-                : isClipboardReadError(error)
-                  ? "terminal.clipboard.readFailed"
-                  : null;
+                : isClipboardReadDeniedError(error)
+                  ? "terminal.clipboard.readDenied"
+                  : isClipboardReadError(error)
+                    ? "terminal.clipboard.readFailed"
+                    : null;
           writeSystemMessage(
             activeTerminal,
-            clipboardKey ? i18n.t(clipboardKey) : error instanceof Error ? error.message : fallback,
+            clipboardKey
+              ? i18n.t(clipboardKey, {
+                  shortcut: isMacPlatform(navigator.platform ?? "") ? "⌘V" : "Ctrl+Shift+V",
+                })
+              : error instanceof Error
+                ? error.message
+                : fallback,
           );
         }
       };
@@ -915,7 +985,6 @@ function TerminalSessionViewport({
           );
         } catch (error) {
           reportIfCurrent(requestId, error, i18n.t("terminal.clipboardFailed"));
-          return;
         }
         focusIfCurrent(requestId);
       };
@@ -1060,7 +1129,11 @@ function TerminalSessionViewport({
       }
 
       function handleLinkActivate(text: string, event: MouseEvent): void {
-        if (!canActivateTerminalLink(text)) return;
+        if (
+          !isTerminalUrl(text) &&
+          !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)
+        )
+          return;
         const latestTerminal = terminalRef.current;
         if (!latestTerminal) return;
         if (isTerminalUrl(text)) {

@@ -5,8 +5,8 @@ import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { useAtomValue } from "@effect/atom-react";
 import { Atom } from "effect/reactivity";
 import {
-  ProviderDriverKind,
   USAGE_CONTRACT_VERSION,
+  ProviderDriverKind,
   type EnvironmentId,
   type UsageProviderKind,
   type UsageSummaryInput,
@@ -100,7 +100,12 @@ import {
   resolveUsageShortcut,
   type UsageMetric,
 } from "./usageShortcuts";
-import { PROVIDER_ORDER, PROVIDER_PRESENTATION, providersWithUsage } from "./usageProviders";
+import {
+  PROVIDER_ORDER,
+  PROVIDER_PRESENTATION,
+  providersWithUsage,
+  rankProvidersByMetric,
+} from "./usageProviders";
 import {
   readUsagePagePreferences,
   saveUsagePagePreferences,
@@ -572,11 +577,11 @@ export function UsagePage() {
                 hiddenProviders={hiddenProviders}
                 refreshingUsage={refreshingUsage}
                 cursorAccessEnvironments={cursorAccessEnvironments}
-                showChatGptSharing={showChatGptSharing}
                 onCursorEnabled={() => {
                   void refresh();
                   void refreshLimits(false, true);
                 }}
+                showChatGptSharing={showChatGptSharing}
                 onSelectModel={selectUsageModel}
               />
             )}
@@ -625,8 +630,8 @@ function UsageOverview({
   hiddenProviders,
   refreshingUsage,
   cursorAccessEnvironments,
-  showChatGptSharing,
   onCursorEnabled,
+  showChatGptSharing,
   onSelectModel,
 }: {
   readonly merged: MergedUsage;
@@ -640,8 +645,8 @@ function UsageOverview({
   readonly hiddenProviders: ReadonlySet<UsageProviderKind>;
   readonly refreshingUsage: boolean;
   readonly cursorAccessEnvironments: readonly EnvironmentUsageStatus[];
-  readonly showChatGptSharing: boolean;
   readonly onCursorEnabled: () => void;
+  readonly showChatGptSharing: boolean;
   readonly onSelectModel: (key: string) => void;
 }) {
   const t = useTranslate();
@@ -682,17 +687,15 @@ function UsageOverview({
     (peak, model) => Math.max(peak, metric === "tokens" ? model.totalTokens : model.costUsd),
     0,
   );
+  const rankedProviders = rankProvidersByMetric(activeProviders, merged.providers, metric);
   const cursorInsertAt =
-    Math.max(activeProviders.indexOf("codex"), activeProviders.indexOf("claude")) + 1;
-  const summaryRows: ReadonlyArray<
-    | { readonly kind: "usage"; readonly provider: UsageProviderKind }
-    | { readonly kind: "enable"; readonly environment: EnvironmentUsageStatus }
-  > = [
-    ...activeProviders
+    Math.max(rankedProviders.indexOf("codex"), rankedProviders.indexOf("claude")) + 1;
+  const summaryRows = [
+    ...rankedProviders
       .slice(0, cursorInsertAt)
       .map((provider) => ({ kind: "usage" as const, provider })),
     ...cursorAccessEnvironments.map((environment) => ({ kind: "enable" as const, environment })),
-    ...activeProviders
+    ...rankedProviders
       .slice(cursorInsertAt)
       .map((provider) => ({ kind: "usage" as const, provider })),
   ];
@@ -752,7 +755,7 @@ function UsageOverview({
           ) : null}
 
           {summaryRows.map((row) => {
-            if (row.kind === "enable") {
+            if (row.kind === "enable")
               return (
                 <CursorEnableRow
                   key={`enable:${row.environment.environmentId}`}
@@ -762,7 +765,6 @@ function UsageOverview({
                   onEnabled={onCursorEnabled}
                 />
               );
-            }
             const provider = row.provider;
             const totals = merged.providers.find((entry) => entry.provider === provider);
             const share = metric === "cost" ? (totals?.costShare ?? 0) : (totals?.tokenShare ?? 0);
@@ -969,7 +971,7 @@ function UsageOverview({
                       key={key}
                       className="relative border-b border-border/50 text-right whitespace-nowrap text-muted-foreground tabular-nums transition-colors hover:bg-muted/50 has-focus-visible:bg-muted/50"
                     >
-                      <td className="py-2.5 pr-3 text-left text-xs">{index + 1}</td>
+                      <td className="py-2.5 pr-3 pl-2 text-left text-xs">{index + 1}</td>
                       <td className="py-2.5 text-left whitespace-normal">
                         <button
                           type="button"
@@ -1004,7 +1006,7 @@ function UsageOverview({
                       <td className={cn("hidden py-2.5 pl-6 sm:table-cell", rowFigures)}>
                         {share === null ? "" : formatPercent(share)}
                       </td>
-                      <td className={cn("py-2.5 pl-6", rowFigures)}>
+                      <td className={cn("py-2.5 pr-2 pl-6", rowFigures)}>
                         {formatTokens(model.totalTokens)}
                       </td>
                     </tr>
@@ -1056,7 +1058,7 @@ function UsageOverview({
                       key={"hourStart" in period ? period.hourStart : period.day}
                       className="border-b border-border/50 transition-colors hover:bg-muted/50"
                     >
-                      <td className="py-2 text-foreground">
+                      <td className="py-2 pl-2 text-foreground">
                         {"hourStart" in period
                           ? formatHourShort(period.hourStart, shownWindow.timeZone, hour12)
                           : formatDayShort(period.day)}
@@ -1082,7 +1084,7 @@ function UsageOverview({
                       </td>
                       <td
                         className={cn(
-                          "py-2 pl-4 text-right text-muted-foreground tabular-nums",
+                          "py-2 pr-2 pl-4 text-right text-muted-foreground tabular-nums",
                           figureClass(loadingPartial),
                         )}
                       >

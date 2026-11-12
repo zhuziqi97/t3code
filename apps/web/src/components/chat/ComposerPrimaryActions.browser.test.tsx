@@ -2,7 +2,7 @@ import "~/index.css";
 
 import type { ClientSettings } from "@t3tools/contracts/settings";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { page, userEvent } from "vite-plus/test/browser";
+import { userEvent } from "vite-plus/test/browser";
 
 vi.mock("~/hooks/useSettings", async () => {
   const { DEFAULT_CLIENT_SETTINGS } = await import("@t3tools/contracts/settings");
@@ -20,37 +20,6 @@ vi.mock("../SidebarStageBackdrop", () => ({
 import { render } from "../../../test/render";
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
 
-it("opens implementation actions with a mouse while the composer is resting", async () => {
-  const onImplementPlanInNewThread = vi.fn();
-  await using _screen = await render(
-    <ComposerPrimaryActions
-      compact={false}
-      canOperateThread
-      pendingAction={null}
-      isRunning={false}
-      canInterrupt={false}
-      showPlanFollowUpPrompt
-      promptHasText={false}
-      isSendBusy={false}
-      sendDisabledReason={null}
-
-      isEnvironmentUnavailable={false}
-      isPreparingWorktree={false}
-      hasSendableContent={false}
-      preserveComposerFocusOnPointerDown
-      onPreviousPendingQuestion={() => {}}
-      onInterrupt={() => {}}
-      onImplementPlanInNewThread={onImplementPlanInNewThread}
-    />,
-  );
-
-  await userEvent.click(page.getByRole("button", { name: "Implementation actions" }));
-  const item = page.getByRole("menuitem", { name: "Implement in a new thread" });
-  await expect.element(item).toBeVisible();
-  await userEvent.click(item);
-  expect(onImplementPlanInNewThread).toHaveBeenCalledTimes(1);
-});
-
 function actionProps(
   overrides: Partial<React.ComponentProps<typeof ComposerPrimaryActions>> = {},
 ): React.ComponentProps<typeof ComposerPrimaryActions> {
@@ -60,8 +29,6 @@ function actionProps(
     pendingAction: null,
     isRunning: false,
     canInterrupt: false,
-    showPlanFollowUpPrompt: false,
-    promptHasText: false,
     isSendBusy: false,
     sendDisabledReason: null,
 
@@ -70,7 +37,6 @@ function actionProps(
     hasSendableContent: false,
     onPreviousPendingQuestion: () => {},
     onInterrupt: () => {},
-    onImplementPlanInNewThread: () => {},
     ...overrides,
   };
 }
@@ -135,7 +101,6 @@ describe.each([true, false])("composer collapsed=%s", (collapsed) => {
         isRunning: true,
         canInterrupt: true,
         hasSendableContent: true,
-        promptHasText: true,
         followUpBehavior,
         isEditingQueuedMessage: editing,
         onInterrupt,
@@ -211,7 +176,6 @@ it("opens a collapsed composer to confirm compaction without dispatching the dra
   const props = actionProps({
     compact: true,
     hasSendableContent: true,
-    promptHasText: true,
     compactBeforeSendTokens: 12_000,
     onExpandForCompaction: onExpand,
   });
