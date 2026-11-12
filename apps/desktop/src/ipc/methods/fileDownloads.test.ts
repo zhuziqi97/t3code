@@ -32,7 +32,7 @@ const setup = Effect.gen(function* () {
   yield* installFileDownloads().pipe(
     Effect.provide(
       Layer.merge(
-        DesktopIpc.layer({
+        DesktopIpc.layerTest({
           handle: (channel, handler) => {
             handlers.set(channel, handler);
           },

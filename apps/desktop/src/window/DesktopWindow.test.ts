@@ -567,7 +567,10 @@ describe("DesktopWindow", () => {
         window: host.window,
         createCount: yield* Ref.make(0),
         mainWindow: yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none()),
-        copiedTexts,
+        onCopyText: (text) =>
+          Effect.sync(() => {
+            copiedTexts.push(text);
+          }),
         onPopupTemplate: (input) =>
           Queue.offer(menus, { input, focusedContents }).pipe(Effect.asVoid),
       });
