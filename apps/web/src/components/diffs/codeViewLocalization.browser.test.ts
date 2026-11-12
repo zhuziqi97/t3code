@@ -357,7 +357,7 @@ it.each(["file", "file-diff"] as const)(
         root
           .querySelector<HTMLElement>("[data-search-panel]")
           ?.shadowRoot?.querySelector("input[data-search]"),
-      ).not.toBeNull(),
+      ).toBeTruthy(),
     );
     const search = root.querySelector<HTMLElement>("[data-search-panel]")!.shadowRoot!;
     await checkLiveSearchLabels(search, () => preview.setLabels(zh));
