@@ -305,7 +305,7 @@ index b1e7085a5c264cdab3ee9bf6473ef364330b08a4..0dc4cd94a3ced7d85a7ec5b7c8ebd782
    getHostElement(): HTMLDivElement;
    hasQuery(): boolean;
 diff --git a/dist/search/SearchPanelWidget.js b/dist/search/SearchPanelWidget.js
-index 151d80d1a0e5e202342f58d8594e2d2a775b2377..9b64b591fbbaad15bfeb0121a0346f693f0194f2 100644
+index 151d80d1a0e5e202342f58d8594e2d2a775b2377..204231fdafc8c4ab2a61a5a837b8bc3ca3fde9e4 100644
 --- a/dist/search/SearchPanelWidget.js
 +++ b/dist/search/SearchPanelWidget.js
 @@ -20,6 +20,7 @@ var SearchPanelWidget = class {
@@ -357,7 +357,7 @@ index 151d80d1a0e5e202342f58d8594e2d2a775b2377..9b64b591fbbaad15bfeb0121a0346f69
  				size: 14,
  				onClick: () => {
  					const next = !searchParams[key];
-@@ -164,9 +171,9 @@ var SearchPanelWidget = class {
+@@ -164,12 +171,13 @@ var SearchPanelWidget = class {
  			button.ariaPressed = String(searchParams[key]);
  			return button;
  		};
@@ -370,7 +370,11 @@ index 151d80d1a0e5e202342f58d8594e2d2a775b2377..9b64b591fbbaad15bfeb0121a0346f69
  		this.#inputElement = h("input", {
  			type: "text",
  			placeholder: i18n.t("searchPlaceholder"),
-@@ -217,14 +224,14 @@ var SearchPanelWidget = class {
++			ariaLabel: i18n.t("searchPlaceholder"),
+ 			dataset: "search",
+ 			value: defaultQuery,
+ 			oninput: (e) => {
+@@ -217,14 +225,14 @@ var SearchPanelWidget = class {
  		});
  		const prevButton = iconButton({
  			icon: "arrow-up",
@@ -387,7 +391,7 @@ index 151d80d1a0e5e202342f58d8594e2d2a775b2377..9b64b591fbbaad15bfeb0121a0346f69
  			onClick: () => {
  				findNextMatch();
  			}
-@@ -237,7 +244,7 @@ var SearchPanelWidget = class {
+@@ -237,13 +245,14 @@ var SearchPanelWidget = class {
  		});
  		const closeElement = iconButton({
  			icon: "close",
@@ -396,7 +400,14 @@ index 151d80d1a0e5e202342f58d8594e2d2a775b2377..9b64b591fbbaad15bfeb0121a0346f69
  			onClick: close,
  			dataset: { searchClose: "" }
  		});
-@@ -280,17 +287,17 @@ var SearchPanelWidget = class {
+ 		const replaceInputElement = h("input", {
+ 			type: "text",
+ 			placeholder: i18n.t("replacePlaceholder"),
++			ariaLabel: i18n.t("replacePlaceholder"),
+ 			dataset: "replace",
+ 			value: "",
+ 			oninput: (e) => {
+@@ -280,17 +289,17 @@ var SearchPanelWidget = class {
  			},
  			children: [iconButton({
  				icon: "replace",
@@ -417,13 +428,15 @@ index 151d80d1a0e5e202342f58d8594e2d2a775b2377..9b64b591fbbaad15bfeb0121a0346f69
  			dataset: { replaceToggle: "" },
  			onClick: () => {
  				if (gridElement.dataset.mode === "replace") applyMode("find");
-@@ -335,6 +342,17 @@ var SearchPanelWidget = class {
+@@ -335,6 +344,19 @@ var SearchPanelWidget = class {
  			emitState();
  		};
  		this.#applyMode = applyMode;
 +		this.#refreshMessages = () => {
 +			this.#inputElement.placeholder = i18n.t("searchPlaceholder");
++			this.#inputElement.ariaLabel = i18n.t("searchPlaceholder");
 +			replaceInputElement.placeholder = i18n.t("replacePlaceholder");
++			replaceInputElement.ariaLabel = i18n.t("replacePlaceholder");
 +			for (const [button, key] of buttonMessages) {
 +				const label = i18n.t(key);
 +				button.title = label;
@@ -435,7 +448,7 @@ index 151d80d1a0e5e202342f58d8594e2d2a775b2377..9b64b591fbbaad15bfeb0121a0346f69
  		this.#host = h("div", { dataset: "searchPanel" });
  		const shadowRoot = this.#host.attachShadow({ mode: "open" });
  		const spriteContainer = document.createElement("div");
-@@ -360,6 +378,10 @@ var SearchPanelWidget = class {
+@@ -360,6 +382,10 @@ var SearchPanelWidget = class {
  			emitState();
  			queueRender(this.#initializeMatches);
  		};
@@ -446,7 +459,7 @@ index 151d80d1a0e5e202342f58d8594e2d2a775b2377..9b64b591fbbaad15bfeb0121a0346f69
  	}
  	mount() {
  		this.#mount?.();
-@@ -396,6 +418,7 @@ var SearchPanelWidget = class {
+@@ -396,6 +422,7 @@ var SearchPanelWidget = class {
  		this.#close?.();
  	}
  	cleanup() {
