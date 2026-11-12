@@ -1,7 +1,6 @@
 import { i18n, useTranslate } from "../../i18n";
 import type { TFunction } from "i18next";
 import { MousePointer2Icon, PaintbrushIcon, PlusIcon, XIcon } from "lucide-react";
-import { ChevronDown, ChevronUp } from "lucide";
 import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import {

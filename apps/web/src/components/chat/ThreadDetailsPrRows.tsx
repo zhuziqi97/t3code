@@ -127,12 +127,11 @@ export function ThreadDetailsPrRows({
         tone="muted"
         className="w-full active:scale-100"
       >
-        <MorphIcon
-          aria-hidden
-          className="size-4 shrink-0"
-          // Chevrons, not plus and minus: the plus already means "add" in this card.
-          icon={expanded ? ChevronUp : ChevronDown}
-        />
+        {expanded ? (
+          <ChevronUpIcon aria-hidden className="size-4 shrink-0" />
+        ) : (
+          <ChevronDownIcon aria-hidden className="size-4 shrink-0" />
+        )}
         {expanded ? t("chat.timeline.showLess") : t("thread.showMore", { count: rest.length })}
       </ThreadDetailsControl>
     </>

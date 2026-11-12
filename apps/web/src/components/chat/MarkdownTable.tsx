@@ -1,5 +1,4 @@
 import { useTranslate } from "../../i18n";
-import { Check, Copy } from "lucide";
 import { CheckIcon, CopyIcon } from "lucide-react";
 import { useRef, type ComponentProps } from "react";
 

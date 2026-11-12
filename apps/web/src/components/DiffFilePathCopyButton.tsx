@@ -1,5 +1,4 @@
 import { useTranslate } from "../i18n";
-import { Check, Copy } from "lucide";
 import { CheckIcon, CopyIcon } from "lucide-react";
 import { useRef } from "react";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";

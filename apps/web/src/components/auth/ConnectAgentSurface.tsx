@@ -8,7 +8,6 @@ import {
   AuthMcpAuthorizationRequest,
   isRuntimeModeAbove,
   managedRuntimeModeCeilingMessage,
-  parseMcpApprovalCode,
 } from "@t3tools/contracts";
 import { Radio as RadioPrimitive } from "@base-ui/react/radio";
 import { isLoopbackHost } from "@t3tools/shared/preview";
@@ -102,7 +101,7 @@ function runApproval<A>(
         }),
       ),
     ),
-  ).catch((): McpApprovalAnswer<A> => ({ kind: "error", message: UNREACHABLE }));
+  ).catch((): McpApprovalAnswer<A> => ({ kind: "error", message: null }));
 }
 
 /** This environment's own page, approving with a code or this browser's session. */
@@ -123,7 +122,6 @@ export function readAuthorizationRequest(): AuthMcpAuthorizationRequest {
 }
 
 export function ConnectAgentSurface() {
-  const t = useTranslate();
   const [authorization] = useState(readAuthorizationRequest);
   return <McpConsent authorization={authorization} transport={primaryTransport} acceptsCode />;
 }
@@ -137,7 +135,6 @@ export function McpConsent({
   transport,
   acceptsCode = false,
   requireLevelChoice = false,
-  environmentLabel,
   footer,
 }: {
   readonly authorization: AuthMcpAuthorizationRequest;
@@ -147,6 +144,7 @@ export function McpConsent({
   readonly environmentLabel?: string | undefined;
   readonly footer?: ReactNode;
 }) {
+  const t = useTranslate();
   const [loaded, setLoaded] = useState<Loaded>({ status: "loading" });
   const [requestedAccess, setAccess] = useState<AuthMcpClientAccess | null>(null);
   const [pairingCode, setPairingCode] = useState("");
@@ -215,7 +213,7 @@ export function McpConsent({
     setPending(null);
     setErrorMessage(
       answer.kind === "error"
-        ? answer.message
+        ? (answer.message ?? t("agentConnect.unreachable"))
         : answer.kind === "redirect"
           ? UNSAFE_REDIRECT
           : "The sign-in could not continue.",
@@ -253,9 +251,6 @@ export function McpConsent({
     pending === null &&
     access !== null &&
     resolveApprovalDecision({ code: pairingCode, access, details }) !== null;
-  // A code from "Use T3 Code in another app" names its level, so the page does not ask again.
-  const codeAccess = parseMcpApprovalCode(pairingCode)?.access;
-  const approveLevel = codeAccess ?? access;
 
   return (
     <StandalonePage>

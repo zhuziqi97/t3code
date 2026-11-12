@@ -1,7 +1,5 @@
 import { useTranslate } from "../../i18n";
 import { PanelBottomIcon, PanelRightIcon, SquareMenuIcon } from "lucide-react";
-import { Maximize2, Minimize2 } from "lucide";
-import { MorphIcon } from "~/components/MorphIcon";
 import { Maximize2Icon, Minimize2Icon } from "lucide-react";
 import { memo, type ReactNode } from "react";
 

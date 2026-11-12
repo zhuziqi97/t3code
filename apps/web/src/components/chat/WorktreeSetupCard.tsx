@@ -372,7 +372,7 @@ export function WorktreeSetupCard({
           aria-expanded={detailsOpen}
           onClick={() => setDetailsOpen((open) => !open)}
         >
-          <MorphIcon aria-hidden icon={detailsOpen ? ChevronDown : ChevronRight} />
+          {detailsOpen ? <ChevronDownIcon aria-hidden /> : <ChevronRightIcon aria-hidden />}
           {t("common.details")}
         </Button>
         {showTerminal ? (

@@ -1,5 +1,4 @@
 import { useTranslate } from "../../i18n";
-import { Check, Copy } from "lucide";
 import { PlayIcon, WrapTextIcon } from "lucide-react";
 import { CheckIcon, CopyIcon } from "lucide-react";
 import { toHtml } from "hast-util-to-html";

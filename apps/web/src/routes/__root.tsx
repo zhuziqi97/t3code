@@ -273,7 +273,7 @@ function CopyErrorButton({ report }: { report: string }) {
 
   return (
     <Button size="sm" variant="outline" onClick={() => copyToClipboard(report)}>
-      <MorphIcon className={cn(isCopied && "text-success")} icon={isCopied ? Check : Copy} />
+      {isCopied ? <CheckIcon className="text-success" /> : <CopyIcon />}
       {isCopied ? t("errors.copied") : t("errors.copy")}
     </Button>
   );

@@ -12,6 +12,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { i18n, useTranslate } from "~/i18n";
 import { normalizeProviderAccentColor } from "@t3tools/client-runtime/state/provider-instance-display";
 import {
+  formatDuration,
   formatResetsIn,
   type LimitPace,
   paceOf,

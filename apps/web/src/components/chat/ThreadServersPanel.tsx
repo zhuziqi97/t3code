@@ -30,9 +30,7 @@ import { useEnvironment } from "../../state/environments";
 import { previewEnvironment } from "../../state/preview";
 import { useEnvironmentScope } from "../../state/session";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { MorphIcon } from "../MorphIcon";
 
-import { openDiscoveredPort } from "../preview/openDiscoveredPort";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { ThreadDetailsControl } from "./ThreadDetailsControl";
