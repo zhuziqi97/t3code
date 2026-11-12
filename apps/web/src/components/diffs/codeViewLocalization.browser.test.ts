@@ -11,8 +11,8 @@ import {
   buildSearchReplacementText,
   parseDiffFromFile,
   parsePatchFiles,
-} from "@pierre/diffs";
-import { Editor, TextDocument } from "@pierre/diffs/edit";
+} from "../../../node_modules/@pierre/diffs/dist/index.js";
+import { Editor, TextDocument } from "../../../node_modules/@pierre/diffs/dist/edit/index.js";
 import { createI18n } from "@t3tools/client-runtime/i18n";
 import { expect, it, vi } from "vite-plus/test";
 
@@ -302,7 +302,7 @@ async function checkLiveSearchLabels(root: ShadowRoot, updateLabels: () => void)
   press("上一个匹配项");
   expect(root.querySelector("[data-matches]")?.textContent).toBe("1 / 2");
   press("关闭搜索");
-  expect(root.querySelector("[data-search-panel]")).toBeNull();
+  expect(root.host.isConnected).toBe(false);
 }
 
 it.each(["file", "file-diff"] as const)(
@@ -352,8 +352,15 @@ it.each(["file", "file-diff"] as const)(
         ctrlKey: !navigator.platform.includes("Mac"),
       }),
     );
-    await vi.waitFor(() => expect(root.querySelector("input[data-search]")).not.toBeNull());
-    await checkLiveSearchLabels(root, () => preview.setLabels(zh));
+    await vi.waitFor(() =>
+      expect(
+        root
+          .querySelector<HTMLElement>("[data-search-panel]")
+          ?.shadowRoot?.querySelector("input[data-search]"),
+      ).not.toBeNull(),
+    );
+    const search = root.querySelector<HTMLElement>("[data-search-panel]")!.shadowRoot!;
+    await checkLiveSearchLabels(search, () => preview.setLabels(zh));
     expect(preview.editor.getText()).toBe(sourceFile.contents);
   },
 );
@@ -372,7 +379,7 @@ it("updates an open CodeView search through native messages without resetting se
   const fileDiff = parseDiffFromFile(null, sourceFile);
   view.setItems([{ id: "raw", type: "diff", fileDiff }]);
   view.openSearch();
-  const host = view.getContainerElement()!.querySelector("[data-diffs-search]")!;
+  const host = view.getContainerElement()!.querySelector("[data-search-panel-overlay]")!;
   await checkLiveSearchLabels(host.shadowRoot!, () => setLabels(zh));
   expect(fileDiff.additionLines.join("")).toBe(sourceFile.contents);
 });
