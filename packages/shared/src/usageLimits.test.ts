@@ -23,6 +23,7 @@ import {
   paceRemainingPercent,
   usesChatGptSharing,
   resolveNewThreadModelSelection,
+  resetCreditChoices,
 } from "./usageLimits.ts";
 
 const now = Date.parse("2026-09-03T12:00:00.000Z");
@@ -160,6 +161,99 @@ describe("pace", () => {
     expect(paceOf(window, now)).toBe("under");
     expect(paceOf({ ...window, usedPercent: 62 }, now)).toBe("on");
     expect(paceOf({ ...window, usedPercent: 80 }, now)).toBe("ahead");
+  });
+});
+
+describe("reset credit choices", () => {
+  const messages: Record<string, string> = {
+    "usage.limits.noCreditsBanked": "没有已储备的重置次数",
+    "usage.limits.bankedCompact": "已储备 {{count}} 次",
+    "usage.limits.creditsBanked": "已储备 {{count}} 次重置机会",
+    "usage.limits.hoursMinutes": "{{hours}} 小时 {{minutes}} 分钟",
+    "usage.limits.expiresSuffix": " · {{duration}}后到期",
+    "usage.limits.nextExpiresSuffix": " · 下次将于 {{duration}}后到期",
+    "usage.limits.useReset": "使用重置机会",
+    "usage.limits.confirmResetDescription": "使用一次重置机会，无法撤销。",
+    "usage.limits.optionSummary": "{{label}} · 剩余 {{count}} 次",
+    "usage.limits.optionConfirm": "{{label}}：{{description}} 此操作无法撤销。",
+    "usage.limits.use": "使用",
+  };
+  const translate = (key: string, values: Record<string, string | number>) =>
+    (messages[key] ?? key).replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(values[name]));
+  const input = { instanceId: ProviderInstanceId.make("claude"), creditId: "raw/default:credit" };
+  const expiresAt = "2026-09-03T13:30:00.000Z";
+
+  it.each([
+    [0, false, expiresAt, "No reset credits banked", "没有已储备的重置次数"],
+    [
+      1,
+      false,
+      expiresAt,
+      "1 reset credit banked · next expires in 1h 30m",
+      "已储备 1 次重置机会 · 下次将于 1 小时 30 分钟后到期",
+    ],
+    [2, true, expiresAt, "2 banked · expires in 1h 30m", "已储备 2 次 · 1 小时 30 分钟后到期"],
+    [2, false, undefined, "2 reset credits banked", "已储备 2 次重置机会"],
+  ] as const)(
+    "translates %i banked credits with compact=%s and expiry=%s without changing redemption",
+    (availableCount, compact, nextExpiresAt, english, chinese) => {
+      const credits = { availableCount, nextExpiresAt, nextCreditId: "raw/next:credit" };
+      const original = resetCreditChoices(credits, input, now, compact);
+      expect(original[0]).toEqual({
+        key: "next",
+        summary: english,
+        actionLabel: "Use reset",
+        confirmDescription:
+          "This redeems one credit on your account and clears the current rate-limit windows. It cannot be undone.",
+        availableCount,
+        input,
+      });
+      const translated = resetCreditChoices(credits, input, now, compact, translate);
+      expect(translated).toEqual([
+        {
+          ...original[0],
+          summary: chinese,
+          actionLabel: "使用重置机会",
+          confirmDescription: "使用一次重置机会，无法撤销。",
+        },
+      ]);
+      expect(translated[0]?.input).toBe(input);
+    },
+  );
+
+  it.each([false, true])("interpolates raw options with compact=%s", (compact) => {
+    const options = [
+      {
+        creditId: "raw/weekly:α",
+        label: "Weekly / {{raw}}",
+        description: "Provider description: $10 / raw",
+        availableCount: 2,
+        expiresAt,
+      },
+      {
+        creditId: "raw/empty:β",
+        label: "Fable-only",
+        description: "Another native policy",
+        availableCount: 0,
+      },
+    ];
+    const credits = { availableCount: 2, options };
+    const original = resetCreditChoices(credits, input, now, compact);
+    expect(original[0]?.summary).toBe("Weekly / {{raw}} · 2 left · expires in 1h 30m");
+    expect(original[1]?.summary).toBe("Fable-only · 0 left");
+    const translated = resetCreditChoices(credits, input, now, compact, translate);
+    expect(translated).toEqual(
+      options.map((option, index) => ({
+        key: option.creditId,
+        summary: `${option.label} · 剩余 ${option.availableCount} 次${index === 0 ? " · 1 小时 30 分钟后到期" : ""}`,
+        actionLabel: "使用",
+        confirmDescription: `${option.label}：${option.description} 此操作无法撤销。`,
+        availableCount: option.availableCount,
+        input: { ...input, creditId: option.creditId },
+      })),
+    );
+    expect(options[0]?.label).toBe("Weekly / {{raw}}");
+    expect(input.creditId).toBe("raw/default:credit");
   });
 });
 

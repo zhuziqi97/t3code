@@ -713,16 +713,31 @@ export function resetCreditChoices(
   input: ProviderConsumeResetCreditInput,
   now: number,
   compact = false,
+  translate?: UsageLimitTranslate,
 ): ReadonlyArray<ResetCreditChoice> {
-  const expiresIn = (at: string | undefined) => (at ? formatDuration(Date.parse(at) - now) : null);
+  const expiresIn = (at: string | undefined) =>
+    at ? formatDuration(Date.parse(at) - now, translate) : null;
   if (credits.options && "instanceId" in input) {
     return credits.options.map((option) => {
       const expires = expiresIn(option.expiresAt);
+      const summary =
+        translate?.("usage.limits.optionSummary", {
+          label: option.label,
+          count: option.availableCount,
+        }) ?? `${option.label} · ${option.availableCount} left`;
+      const suffix = expires
+        ? (translate?.("usage.limits.expiresSuffix", { duration: expires }) ??
+          ` · expires in ${expires}`)
+        : "";
       return {
         key: option.creditId,
-        summary: `${option.label} · ${option.availableCount} left${expires ? ` · expires in ${expires}` : ""}`,
-        actionLabel: "Use",
-        confirmDescription: `${option.label}: ${option.description} This cannot be undone.`,
+        summary: `${summary}${suffix}`,
+        actionLabel: translate?.("usage.limits.use", {}) ?? "Use",
+        confirmDescription:
+          translate?.("usage.limits.optionConfirm", {
+            label: option.label,
+            description: option.description,
+          }) ?? `${option.label}: ${option.description} This cannot be undone.`,
         availableCount: option.availableCount,
         input: { ...input, creditId: option.creditId },
       };
@@ -730,17 +745,26 @@ export function resetCreditChoices(
   }
   const count = credits.availableCount;
   const expires = expiresIn(credits.nextExpiresAt);
+  const summary =
+    count === 0
+      ? (translate?.("usage.limits.noCreditsBanked", {}) ?? "No reset credits banked")
+      : compact
+        ? (translate?.("usage.limits.bankedCompact", { count }) ?? `${count} banked`)
+        : (translate?.("usage.limits.creditsBanked", { count }) ??
+          `${count} ${count === 1 ? "reset credit" : "reset credits"} banked`);
+  const suffix =
+    count === 0 || !expires
+      ? ""
+      : (translate?.(compact ? "usage.limits.expiresSuffix" : "usage.limits.nextExpiresSuffix", {
+          duration: expires,
+        }) ?? ` · ${compact ? "expires" : "next expires"} in ${expires}`);
   return [
     {
       key: "next",
-      summary:
-        count === 0
-          ? "No reset credits banked"
-          : compact
-            ? `${count} banked${expires ? ` · expires in ${expires}` : ""}`
-            : `${count} ${count === 1 ? "reset credit" : "reset credits"} banked${expires ? ` · next expires in ${expires}` : ""}`,
-      actionLabel: "Use reset",
+      summary: `${summary}${suffix}`,
+      actionLabel: translate?.("usage.limits.useReset", {}) ?? "Use reset",
       confirmDescription:
+        translate?.("usage.limits.confirmResetDescription", {}) ??
         "This redeems one credit on your account and clears the current rate-limit windows. It cannot be undone.",
       availableCount: count,
       input,
