@@ -1277,7 +1277,12 @@ describe("makeManagedServerProvider", () => {
             } satisfies ServerProvider;
           }),
         });
-        yield* Stream.take(provider.streamChanges, 1).pipe(Stream.runDrain);
+        yield* provider.streamChanges.pipe(
+          Stream.filter((snapshot) => snapshot.operation?.state === "completed"),
+          Stream.take(1),
+          Stream.runDrain,
+        );
+        assert.strictEqual(yield* Ref.get(count), 1);
         const refresh = yield* provider.refresh.pipe(Effect.forkChild);
         yield* Deferred.await(started);
         yield* provider.applyUsageLimits({
