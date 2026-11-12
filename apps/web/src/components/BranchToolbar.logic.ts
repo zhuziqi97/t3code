@@ -116,7 +116,8 @@ export function resolveLockedWorkspaceLabel(
   effectiveEnvMode: EnvMode,
   t: TFunction = i18n.t,
 ): string {
-  if (activeWorktreePath) return t("chat.branch.worktree");
+  if (activeWorktreePath)
+    return activeWorktreePath.split(/[\\/]/).findLast(Boolean) ?? t("chat.branch.worktree");
   return effectiveEnvMode === "worktree"
     ? resolveEnvModeLabel("worktree", t)
     : t("chat.branch.localCheckout");

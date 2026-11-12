@@ -560,6 +560,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     ],
   },
   {
+    id: "screen-reader-announcements",
+    title: "Screen reader announcements",
+    to: "/settings/chat",
+    searchTerms: [
+      "accessibility a11y screen reader nvda jaws voiceover orca narrator speech announce read aloud messages activity steps",
+    ],
+  },
+  {
     id: "guest-links",
     title: "Guest links",
     to: "/settings/labs",
@@ -1523,7 +1531,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     },
     to: "/settings/source-control",
     searchTerms: [
-      "repository conventions conventional commits custom instructions change descriptions request titles",
+      "repository conventions conventional commits custom instructions commit messages change pr pull request merge request titles descriptions body style prompt write my own",
       "版本控制写作风格 仓库惯例 约定式提交 自定义指令 变更说明",
     ],
     environmentOnly: true,
@@ -1535,7 +1543,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     },
     to: "/settings/source-control",
     searchTerms: [
-      "repository pr pull request description structure",
+      "repository pr pull request merge request change request description structure",
       "遵循变更请求模板 拉取请求模板 PR 模板",
     ],
     environmentOnly: true,

@@ -37,6 +37,7 @@ export interface MarkdownFileLinkMeta {
   basename: string;
   line?: number;
   column?: number;
+  endLine?: number;
 }
 
 export function shouldOpenMarkdownFileLinkInEditor(
@@ -100,6 +101,7 @@ export function resolveMarkdownFileLinkMeta(
   const source = href ? parseMarkdownFileLink(href) : null;
   return {
     ...buildFileLinkMetaFromTarget(targetPath, cwd),
+    ...(source?.endLine !== undefined ? { endLine: source.endLine } : {}),
     workspaceLookupPath:
       source !== null &&
       !isAbsolutePath(source.path) &&

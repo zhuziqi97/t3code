@@ -88,6 +88,8 @@ export class ProviderRegistry extends Context.Service<
     readonly refreshWorkspaceSnapshot: (input: {
       readonly instanceId: ProviderInstanceId;
       readonly cwd: string;
+      /** Directory the driver scans; the snapshot stays keyed by `cwd`. Defaults to `cwd`. */
+      readonly scanCwd?: string;
       readonly fresh?: boolean;
     }) => Effect.Effect<ReadonlyArray<ServerProvider>>;
 
@@ -980,6 +982,7 @@ export const layer = Layer.effect(
       input: {
         readonly instanceId: ProviderInstanceId;
         readonly cwd: string;
+        readonly scanCwd?: string;
         readonly fresh?: boolean;
       },
       refreshMachine?: Effect.Effect<unknown>,
@@ -1024,7 +1027,7 @@ export const layer = Layer.effect(
           ))
         : Effect.void;
       const runScan = refreshMachineSnapshot.pipe(
-        Effect.andThen(instance.snapshotForCwd(input.cwd)),
+        Effect.andThen(instance.snapshotForCwd(input.scanCwd ?? input.cwd)),
         // Scans fail on error; returned inventory remains valid even when provider health reports an error.
         Effect.flatMap((scopedSnapshot) =>
           instanceRegistry.getInstance(input.instanceId).pipe(
