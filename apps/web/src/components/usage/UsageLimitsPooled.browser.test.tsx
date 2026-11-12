@@ -24,6 +24,8 @@ vi.mock("../../hooks/useSettings", () => ({ usePrimarySettings: () => "24h" }));
 vi.mock("../chat/ProviderInstanceIcon", () => ({ ProviderInstanceIcon: () => null }));
 vi.mock("../settings/RedactedSensitiveText", () => ({ RedactedSensitiveText: () => null }));
 
+import { i18n } from "../../i18n";
+
 import { UsageLimitsPooled } from "./UsageLimitsPooled";
 
 const presentations = (resetsAt: string | undefined, availableCount: number): LimitPresentations =>
@@ -119,56 +121,73 @@ async function expectDismissedInPlace(change: () => Promise<void> | void) {
 it.each([
   {
     label: "success",
+    language: "en",
     result: { _tag: "Success", value: { outcome: "reset" } },
     text: "Reset applied. Your windows have cleared.",
   },
   {
     label: "failure",
+    language: "zh",
     result: { _tag: "Failure", cause: { error: new Error("Codex rejected the credit.") } },
     text: "Codex rejected the credit.",
   },
-])("keeps pending feedback outside the closed popup until $label", async ({ result, text }) => {
-  setup();
-  await page.viewport(1440, 900);
-  await using _screen = await render(initial());
-  let answer!: (result: unknown) => void;
-  consume.mockReturnValue(new Promise((resolve) => (answer = resolve)));
-  await click("Alpha:");
-  await click("Use reset");
-  expect(consume).not.toHaveBeenCalled();
-  await click("Cancel");
-  expect(consume).not.toHaveBeenCalled();
-  await click("Alpha:");
-  await click("Use reset");
-  await click("Use credit");
-  expect(consume).toHaveBeenCalledOnce();
-  await expect.poll(() => document.querySelector('[role="alertdialog"]')).toBeNull();
-  await expect
-    .element(page.getByRole("button", { name: /^Alpha:/ }))
-    .toHaveAttribute("aria-expanded", "false");
-  // Base UI can retain a closed popup while its exit unmount is pending.
-  await vi.waitFor(() => {
-    const popup = document.querySelector('[data-slot="popover-popup"]');
-    if (!popup) return;
-    expect(popup.hasAttribute("data-closed")).toBe(true);
-    expect(getComputedStyle(popup).opacity).toBe("0");
-    const positioner = popup.closest('[data-slot="popover-positioner"]');
-    expect(positioner).not.toBeNull();
-    expect(getComputedStyle(positioner!).pointerEvents).toBe("none");
-  });
-  const status = document.querySelector<HTMLElement>('[role="status"]');
-  await expect.element(status).toBeVisible();
-  expect(status?.closest('[data-slot="popover-popup"], [role="alertdialog"]')).toBeNull();
-  expect(status?.textContent).toBe("Alpha Using reset credit…");
-  await click("Alpha:");
-  const using = Array.from(document.querySelectorAll("button")).find(
-    (node) => node.textContent === "Using…",
-  );
-  expect(using?.disabled).toBe(true);
-  await act(async () => answer(result));
-  expect(status?.textContent).toBe(`Alpha ${text}`);
-  expect(consume).toHaveBeenCalledOnce();
-});
+])(
+  "keeps pending feedback outside the closed popup until $label",
+  async ({ result, text, language }) => {
+    setup();
+    await using locale = new AsyncDisposableStack();
+    const previousLanguage = i18n.language;
+    locale.defer(async () => {
+      await i18n.changeLanguage(previousLanguage);
+    });
+    await i18n.changeLanguage(language);
+    const useReset = language === "zh" ? "使用重置机会" : "Use reset";
+    const useCredit = language === "zh" ? "使用重置机会" : "Use credit";
+    const usingCredit = language === "zh" ? "正在使用重置机会…" : "Using reset credit…";
+    const using = language === "zh" ? "正在使用…" : "Using…";
+    await page.viewport(1440, 900);
+    await using _screen = await render(initial());
+    let answer!: (result: unknown) => void;
+    consume.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    await click(language === "zh" ? "Alpha：" : "Alpha:");
+    await click(useReset);
+    expect(consume).not.toHaveBeenCalled();
+    await click(language === "zh" ? "取消" : "Cancel");
+    expect(consume).not.toHaveBeenCalled();
+    await click(language === "zh" ? "Alpha：" : "Alpha:");
+    await click(useReset);
+    await userEvent.click(
+      page.getByRole("alertdialog").getByRole("button", { name: useCredit, exact: true }),
+    );
+    expect(consume).toHaveBeenCalledOnce();
+    await expect.poll(() => document.querySelector('[role="alertdialog"]')).toBeNull();
+    await expect
+      .element(page.getByRole("button", { name: language === "zh" ? /^Alpha：/ : /^Alpha:/ }))
+      .toHaveAttribute("aria-expanded", "false");
+    // Base UI can retain a closed popup while its exit unmount is pending.
+    await vi.waitFor(() => {
+      const popup = document.querySelector('[data-slot="popover-popup"]');
+      if (!popup) return;
+      expect(popup.hasAttribute("data-closed")).toBe(true);
+      expect(getComputedStyle(popup).opacity).toBe("0");
+      const positioner = popup.closest('[data-slot="popover-positioner"]');
+      expect(positioner).not.toBeNull();
+      expect(getComputedStyle(positioner!).pointerEvents).toBe("none");
+    });
+    const status = document.querySelector<HTMLElement>('[role="status"]');
+    await expect.element(status).toBeVisible();
+    expect(status?.closest('[data-slot="popover-popup"], [role="alertdialog"]')).toBeNull();
+    expect(status?.textContent).toBe(`Alpha ${usingCredit}`);
+    await click(language === "zh" ? "Alpha：" : "Alpha:");
+    const usingButton = Array.from(document.querySelectorAll("button")).find(
+      (node) => node.textContent === using,
+    );
+    expect(usingButton?.disabled).toBe(true);
+    await act(async () => answer(result));
+    expect(status?.textContent).toBe(`Alpha ${text}`);
+    expect(consume).toHaveBeenCalledOnce();
+  },
+);
 
 it("omits an empty reset plate but keeps countdowns and banked credits visible", async () => {
   setup();

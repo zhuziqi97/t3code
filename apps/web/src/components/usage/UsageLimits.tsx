@@ -350,7 +350,7 @@ export function ResetCredits({
   if (credits.availableCount === 0 && status === null) return null;
   return (
     <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-      {resetCreditChoices(credits, input, now).map((choice) => (
+      {resetCreditChoices(credits, input, now, false, t).map((choice) => (
         <div key={choice.key} className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span className="tabular-nums">{choice.summary}</span>
           {choice.availableCount > 0 ? (

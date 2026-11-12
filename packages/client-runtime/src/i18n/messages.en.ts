@@ -164,6 +164,9 @@ export const en = {
   "usage.limits.confirmReset": "Use a reset credit?",
   "usage.limits.confirmResetDescription":
     "This redeems one credit on your account and clears the current rate-limit windows. It cannot be undone.",
+  "usage.limits.optionSummary": "{{label}} · {{count}} left",
+  "usage.limits.optionConfirm": "{{label}}: {{description}} This cannot be undone.",
+  "usage.limits.use": "Use",
   "usage.limits.useCredit": "Use credit",
   "usage.limits.noCreditsBanked": "No reset credits banked",
   "usage.limits.bankedCompact": "{{count}} banked",

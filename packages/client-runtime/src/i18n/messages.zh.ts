@@ -159,6 +159,9 @@ export const zh: Partial<Messages> = {
   "usage.limits.confirmReset": "要使用一次重置机会吗？",
   "usage.limits.confirmResetDescription":
     "这会消耗账户的一次重置机会，并清空当前限额时间窗。此操作无法撤销。",
+  "usage.limits.optionSummary": "{{label}} · 剩余 {{count}} 次",
+  "usage.limits.optionConfirm": "{{label}}：{{description}} 此操作无法撤销。",
+  "usage.limits.use": "使用",
   "usage.limits.useCredit": "使用重置机会",
   "usage.limits.noCreditsBanked": "没有已储备的重置次数",
   "usage.limits.bankedCompact": "已储备 {{count}} 次",

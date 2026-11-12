@@ -158,7 +158,7 @@ function SegmentPopover({
       : account.sourceLabel;
   const choices =
     redeem && account.redeem && account.limits.resetCredits?.availableCount
-      ? resetCreditChoices(account.limits.resetCredits, account.redeem.input, now, true)
+      ? resetCreditChoices(account.limits.resetCredits, account.redeem.input, now, true, t)
       : [];
   return (
     <div className="flex w-72 max-w-[calc(100vw-3rem)] flex-col gap-2.5 text-xs">
