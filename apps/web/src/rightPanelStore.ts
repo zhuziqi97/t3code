@@ -89,7 +89,7 @@ export interface ConveneResourceSurface {
   uri: string;
 }
 
-export function conveneResourceSurface(
+function conveneResourceSurface(
   sourceThreadRef: ScopedThreadRef,
   uri: string,
 ): ConveneResourceSurface {
