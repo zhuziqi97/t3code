@@ -1099,7 +1099,11 @@ const deviceCases = () =>
 it.effect("builds device cases from product-backed worlds and synthetic prior turns", () =>
   Effect.gen(function* () {
     const cases = deviceCases();
-    assert.equal(new Set(cases.map((c) => c.id)).size, 18);
+    assert.equal(new Set(cases.map((c) => c.id)).size, 20);
+    assert.includeMembers(
+      cases.map((c) => c.id),
+      ["I124-DESKTOP-WPS-OFF", "I124-ANDROID-ACCESS-OFF"],
+    );
     const base = buildBase(
       {
         ...template,
@@ -1111,7 +1115,14 @@ it.effect("builds device cases from product-backed worlds and synthetic prior tu
       const sample = makeSample(testCase, base);
       yield* withDevices(sample);
       assert.doesNotThrow(() => buildMessages(sample));
-      assert.isDefined(testCase.setup.world?.devices);
+      assert.isDefined(testCase.setup.world, testCase.id);
+      if (testCase.id === "I124-DESKTOP-WPS-OFF") {
+        assert.isUndefined(testCase.setup.world?.devices);
+        assert.isUndefined(sample.devices);
+      } else {
+        assert.isDefined(testCase.setup.world?.devices);
+        assert.isDefined(sample.devices);
+      }
       assert.isUndefined(testCase.source?.openOn);
       // device_open starts no agent-device session. FAIL-AFTER-hub's earlier Settings check
       // would have opened the app, so its world starts that session. OWN seeds another owner.
