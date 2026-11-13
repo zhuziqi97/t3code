@@ -9,10 +9,9 @@ import {
   UsageProviderKind,
 } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
-import { i18n, useTranslate } from "~/i18n";
+import { useTranslate } from "~/i18n";
 import { normalizeProviderAccentColor } from "@t3tools/client-runtime/state/provider-instance-display";
 import {
-  formatDuration,
   formatResetsIn,
   type LimitPace,
   paceOf,
@@ -314,23 +313,6 @@ export function ResetCreditDialog({
       </AlertDialogPopup>
     </AlertDialog>
   );
-}
-
-export function resetCreditsSummary(
-  credits: ServerProviderResetCredits,
-  now: number,
-  compact = false,
-  t = i18n.t,
-): string {
-  const expiresIn = credits.nextExpiresAt
-    ? formatDuration(Date.parse(credits.nextExpiresAt) - now, t)
-    : null;
-  if (credits.availableCount === 0) return t("usage.limits.noCreditsBanked");
-  if (compact)
-    return `${t("usage.limits.bankedCompact", { count: credits.availableCount })}${expiresIn ? t("usage.limits.expiresSuffix", { duration: expiresIn }) : ""}`;
-  return `${t("usage.limits.creditsBanked", { count: credits.availableCount })}${
-    expiresIn ? t("usage.limits.nextExpiresSuffix", { duration: expiresIn }) : ""
-  }`;
 }
 
 export function ResetCredits({

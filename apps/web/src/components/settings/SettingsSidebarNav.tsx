@@ -1,39 +1,6 @@
 import { useTranslate } from "../../i18n";
-import {
-  lazy,
-  Suspense,
-  useEffect,
-  useRef,
-  useState,
-  type ComponentType,
-  type KeyboardEvent,
-} from "react";
-import {
-  ArchiveIcon,
-  FlaskConicalIcon,
-  BotIcon,
-  createLucideIcon,
-  CalendarClockIcon,
-  FileDiffIcon,
-  FolderTreeIcon,
-  GitBranchIcon,
-  GlobeIcon,
-  InfoIcon,
-  MessageSquareTextIcon,
-  MessagesSquareIcon,
-  PanelsTopLeftIcon,
-  KeyboardIcon,
-  KeyRoundIcon,
-  MicIcon,
-  PaletteIcon,
-  SearchIcon,
-  ServerIcon,
-  Settings2Icon,
-  ShieldCheckIcon,
-  SmartphoneIcon,
-  WrenchIcon,
-  XIcon,
-} from "lucide-react";
+import { lazy, Suspense, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { SearchIcon, XIcon } from "lucide-react";
 import { resolveEventKeys } from "@t3tools/shared/keybindings";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 
