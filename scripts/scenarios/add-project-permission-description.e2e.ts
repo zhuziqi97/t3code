@@ -29,16 +29,13 @@ test(
     const { credential } = decodePairingCredential(stdout);
     await app.open(`/pair#token=${encodeURIComponent(credential)}`);
 
-    await screen.getByRole("button", "Add project").tap();
-    await screen.getByText("Local folder").tap();
+    await screen.getByRole("button", "添加项目").tap();
+    await screen.getByText("本地文件夹").tap();
     const input = screen.getByRole("combobox");
-    const submit = screen.getByRole(
-      "button",
-      /Add \(Enter\)|This connection cannot add projects\./,
-    );
+    const submit = screen.getByRole("button", /添加 \(Enter\)|此连接没有添加项目的权限。/);
     await expect(submit).toBeDisabled();
     expect(await input.getAttribute("aria-describedby")).toBe(await submit.getAttribute("id"));
     await app.screenshot("permission-blocked-folder");
-    await expect(submit).toHaveAccessibleName("This connection cannot add projects.");
+    await expect(submit).toHaveAccessibleName("此连接没有添加项目的权限。");
   },
 );
