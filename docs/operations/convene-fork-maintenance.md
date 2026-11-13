@@ -5,7 +5,13 @@
 Agent 生命周期实施计划：[convene-agent-lifecycle-plan.md](../plan/convene-agent-lifecycle-plan.md)。
 用户明确要求本地 fork 保存计划与合并决定；这些文档随 Convene 分支提交，不提交上游。
 
-当前已发行版本 `0.1.9-1` 固定上游 `v0.1.9`（`24e77473ecf41bc1f7142529c7911c1c1aae1d76`），由[#125](convene://issues/zzq/software-factory/t3code/125)统筹，于2026-11-13独立发布。不将上游最新 main 当作同步目标。
+当前已发行版本 `0.1.9-2` 仍基于固定上游 `v0.1.9`（`24e77473ecf41bc1f7142529c7911c1c1aae1d76`），由[#132](convene://issues/zzq/software-factory/t3code/132)统筹，于2026-11-14独立热发布。
+
+实际制品源码 `434034bcc1683457714d833b4f7e264525266afe`，[完整CI/三平台构建43414831552](https://github.com/zhuziqi97/t3code/actions/runs/43414831552) attempt1成功，build `convene-43414831552-1`。既有publisher一次正式调用发布Linux DEB/AppImage、Windows x64 EXE、macOS arm64 DMG及matching Web；公网manifest、不可变/latest、既有校验文件、Range下载、Web身份和公告详情/列表/通知/8Feed均通过。公告于北京时间07:16:03发布，路径 `/announcements/posts/release-t3code-0-1-9-2/`。回退保留0.1.9-1及build `convene-43345455250-1`。不升级Convene应用、不安装或重启用户客户端，不标人工runtime_verified，不创建PR/tag/GitHub Release；记录提交不替代包内源码。
+
+本版交付缺Git及单项目扫描隔离、文档相对链接、资源右侧多标签和阅读位置恢复，以及手动预测反馈。#131原取消现场原因及真实原生重试链未闭合，继续OPEN；旧Browser CI断连未定因保留，不将新增诊断日志或新成功run称为产品根因修复。#70/#102/#111/#112/#122等既定边界不扩大。
+
+上一版 `0.1.9-1` 固定上游 `v0.1.9`（`24e77473ecf41bc1f7142529c7911c1c1aae1d76`），由[#125](convene://issues/zzq/software-factory/t3code/125)统筹，于2026-11-13独立发布。不将上游最新 main 当作同步目标。
 
 0.1.9-1 的实际制品源码为 `74420ae4c62b5a8db7978392d5d3140e76443e0e`，完整CI及三平台构建为[43345455250](https://github.com/zhuziqi97/t3code/actions/runs/43345455250)，build为 `convene-43345455250-1`。既有publisher一次正式请求发布四包和同源Web，实际公网manifest、不可变/latest文件、校验文件、Range下载、Web身份以及公告详情/列表/通知/8份Feed均通过。Web rollback保留 `convene-42960981607-1`；公告于北京时间12:13:23发布，路径为 `/announcements/posts/release-t3code-0-1-9-1/`。本次未升级Convene应用、安装或重启用户客户端，不把构建检查标为runtime_verified，不创建PR/tag/GitHub Release。后继主线与记录不替代实际制品源码。
 
