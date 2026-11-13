@@ -29,6 +29,7 @@ export const ComposerPredictionResult = Schema.Struct({
   requestId: Schema.String,
   sourceRunId: RunId,
   status: ComposerPredictionStatus,
+  reason: Schema.optionalKey(Schema.Literal("plan_mode")),
   text: Schema.NullOr(Schema.String),
 });
 export type ComposerPredictionResult = typeof ComposerPredictionResult.Type;

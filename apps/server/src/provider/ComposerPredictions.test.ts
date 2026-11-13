@@ -253,6 +253,9 @@ const setup = (policy: Schema.Codec.Encoded<typeof CodexPredictionConfig> = conf
           ],
         };
       },
+      planMode: () => {
+        projection = { ...projection, thread: { ...projection.thread, interactionMode: "plan" } };
+      },
       changeProvider: () => {
         projection = {
           ...projection,
@@ -489,6 +492,16 @@ it.effect("does not let a stale client cancel another client's current source", 
     yield* Deferred.succeed(h.release, undefined);
     assert.equal((yield* Fiber.join(current)).status, "suggestion");
     assert.isFalse(h.interrupted());
+    h.planMode();
+    const planned = yield* h.service.request({
+      ...input,
+      sourceRunId: RunId.make("run-b"),
+      intent: "manual",
+    });
+    assert.equal(planned.status, "not_idle");
+    assert.equal(planned.reason, "plan_mode");
+    assert.equal(h.samples.length, 1);
+    assert.equal(h.requests.length, 1);
   }).pipe(Effect.scoped),
 );
 

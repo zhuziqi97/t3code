@@ -3329,14 +3329,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     event: KeyboardEvent,
     state: { focused: boolean; editorEmpty: boolean },
   ) => {
-    if (
-      routeKind !== "server" ||
-      activePendingProgress ||
-      isComposerApprovalState ||
-      isEditingQueuedMessage ||
-      !prediction.isDraftEmpty()
-    )
-      return false;
+    if (!prediction.isDraftEmpty()) return false;
     const dismissing =
       event.key === "Escape" &&
       !event.altKey &&
@@ -3376,7 +3369,17 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       prediction.dismiss();
       return true;
     }
-    return prediction.request();
+    const blockedReason =
+      routeKind !== "server"
+        ? "thread_required"
+        : activePendingProgress
+          ? "pending_input"
+          : isComposerApprovalState
+            ? "pending_approval"
+            : isEditingQueuedMessage
+              ? "editing_queued_message"
+              : undefined;
+    return prediction.request(blockedReason);
   };
   const predictionControls = (
     <ComposerPrediction

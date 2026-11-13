@@ -139,10 +139,10 @@ const make = Effect.gen(function* () {
         status,
         text,
       });
-      const before = predictionSource(
-        yield* projections.getThreadProjection(input.threadId),
-        input.sourceRunId,
-      );
+      const projection = yield* projections.getThreadProjection(input.threadId);
+      if (projection.thread.interactionMode === "plan")
+        return { ...result("not_idle"), reason: "plan_mode" as const };
+      const before = predictionSource(projection, input.sourceRunId);
       if (!before) return result("not_idle");
       const observed = sources.get(input.threadId);
       const runtime = Option.getOrNull(yield* sessions.get(before.thread.providerSessionId!));
@@ -331,6 +331,13 @@ const make = Effect.gen(function* () {
           status: "error",
           text: null,
         })),
+        Effect.tap((outcome) =>
+          Effect.annotateCurrentSpan({
+            "prediction.intent": input.intent ?? "auto",
+            "prediction.status": outcome.status,
+            ...(outcome.reason ? { "prediction.reason": outcome.reason } : {}),
+          }),
+        ),
       ),
   );
   const cancel = Effect.fn("ComposerPredictions.cancel")(function* (input: {

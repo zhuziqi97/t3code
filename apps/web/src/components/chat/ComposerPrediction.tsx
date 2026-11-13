@@ -160,7 +160,12 @@ export function ComposerPrediction(props: {
 }) {
   const t = useTranslate();
   const prediction = props.view;
-  if (prediction.status === "suggestion") return null;
+  if (prediction.status === "suggestion")
+    return (
+      <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {t("prediction.readyAnnouncement", { text: prediction.text })}
+      </span>
+    );
   if (prediction.status === "idle")
     return props.hint && props.shortcut ? (
       <span className="block pt-1 text-xs text-muted-foreground">
@@ -173,7 +178,11 @@ export function ComposerPrediction(props: {
       data-composer-prediction={prediction.status}
     >
       <span role="status" className="min-w-0 basis-full sm:flex-1 sm:basis-auto">
-        {t(`prediction.${prediction.status}`)}
+        {t(
+          prediction.reason
+            ? `prediction.reason.${prediction.reason}`
+            : `prediction.${prediction.status}`,
+        )}
       </span>
       <Button
         size="xs"

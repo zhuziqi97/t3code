@@ -10,7 +10,20 @@ import type {
 } from "@t3tools/contracts";
 import { threadRuntimeIsActive, type EnvironmentThreadShell } from "./state/models.ts";
 
+type PredictionUnavailableReason =
+  | NonNullable<ComposerPredictionResult["reason"]>
+  | "thread_required"
+  | "pending_input"
+  | "pending_approval"
+  | "editing_queued_message"
+  | "attached_context"
+  | "connection"
+  | "permission"
+  | "provider"
+  | "source_required";
+
 export interface PredictionContext {
+  readonly unavailableReason?: PredictionUnavailableReason;
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
   readonly providerInstanceId: ProviderInstanceId;
@@ -40,7 +53,21 @@ export function threadPredictionContext(
   },
 ): PredictionContext | null {
   if (!thread) return null;
+  const unavailableReason: PredictionUnavailableReason | undefined = !options.connected
+    ? "connection"
+    : !options.permitted
+      ? "permission"
+      : !options.codex ||
+          options.selectedInstanceId !== thread.providerInstanceId ||
+          thread.lineage.relationshipToParent === "subagent"
+        ? "provider"
+        : thread.interactionMode === "plan"
+          ? "plan_mode"
+          : !thread.latestRun || !thread.activeProviderThreadId
+            ? "source_required"
+            : undefined;
   return {
+    ...(unavailableReason ? { unavailableReason } : {}),
     environmentId: thread.environmentId,
     threadId: thread.id,
     providerInstanceId: thread.providerInstanceId,
@@ -57,6 +84,7 @@ export function threadPredictionContext(
     sourceActive: threadRuntimeIsActive(thread.runtime),
     idle:
       !options.blocked &&
+      thread.interactionMode !== "plan" &&
       !threadRuntimeIsActive(thread.runtime) &&
       thread.latestRun?.status === "completed" &&
       !thread.hasPendingApprovals &&
@@ -75,6 +103,7 @@ export type PredictionView =
         | "off"
         | Exclude<ComposerPredictionResult["status"], "suggestion">;
       readonly text: null;
+      readonly reason?: PredictionUnavailableReason;
     }
   | { readonly status: "suggestion"; readonly text: string };
 const IDLE: PredictionView = { status: "idle", text: null };
@@ -256,15 +285,31 @@ export class ComposerPredictionController {
     return text;
   };
 
-  readonly requestManual = (): boolean => {
+  readonly requestManual = (blockedReason?: PredictionUnavailableReason): boolean => {
     const context = this.readContext();
     if (context && !context.draftEmpty) return false;
-    if (!eligible(context)) {
+    if (blockedReason || !eligible(context)) {
       this.invalidate();
+      const reason =
+        context?.mode === "off"
+          ? undefined
+          : (blockedReason ??
+            context?.unavailableReason ??
+            (!context ? "thread_required" : undefined));
       this.publish({
         status:
-          context?.mode === "off" ? "off" : context && !context.idle ? "not_idle" : "unsupported",
+          context?.mode === "off"
+            ? "off"
+            : reason === "plan_mode" ||
+                reason === "pending_input" ||
+                reason === "pending_approval" ||
+                reason === "editing_queued_message"
+              ? "not_idle"
+              : blockedReason || !context?.available
+                ? "unsupported"
+                : "not_idle",
         text: null,
+        ...(reason ? { reason } : {}),
       });
       return true;
     }
@@ -325,7 +370,8 @@ export class ComposerPredictionController {
         context.mode !== previous.mode ||
         context.draftEmpty !== previous.draftEmpty ||
         context.idle !== previous.idle ||
-        context.available !== previous.available)
+        context.available !== previous.available ||
+        context.unavailableReason !== previous.unavailableReason)
     )
       this.publish({ status: "idle", text: null });
     if (
@@ -364,7 +410,11 @@ export class ComposerPredictionController {
         ticket.outcome =
           result.status === "suggestion" && result.text?.trim()
             ? { status: "suggestion", text: result.text }
-            : { status: result.status === "suggestion" ? "empty" : result.status, text: null };
+            : {
+                status: result.status === "suggestion" ? "empty" : result.status,
+                text: null,
+                ...(result.reason ? { reason: result.reason } : {}),
+              };
       } else ticket.outcome = { status: "error", text: null };
       this.publish(ticket.outcome);
     };

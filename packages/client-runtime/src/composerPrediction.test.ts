@@ -427,7 +427,7 @@ it("requests only on manual intent in manual mode and never in off mode", async 
   await s.finish();
   s.change({ mode: "off" });
   s.controller.update();
-  s.controller.requestManual();
+  s.controller.requestManual("pending_input");
   expect(s.controller.getSnapshot().status).toBe("off");
   expect(s.request).toHaveBeenCalledTimes(1);
 });
@@ -457,7 +457,9 @@ it.each(["disabled", "unsupported", "not_selected", "not_idle", "stale"] as cons
   async (status) => {
     const s = setup();
     s.controller.update();
-    await s.finish({ status });
+    await s.finish({ status, ...(status === "not_idle" ? { reason: "plan_mode" as const } : {}) });
+    if (status === "not_idle")
+      expect(s.controller.getSnapshot()).toMatchObject({ reason: "plan_mode" });
     s.controller.dismiss();
     s.controller.requestManual();
     expect(s.controller.getSnapshot().status).toBe(status);
@@ -550,18 +552,34 @@ it("consumes repeated request keys without starting another action", () => {
 });
 
 it.each([
-  [{ mode: "off" as const }, "off"],
-  [{ available: false }, "unsupported"],
-  [{ idle: false }, "not_idle"],
-] as const)("keeps a local explanation visible without requesting: %j", (patch, status) => {
-  const s = setup();
-  s.change(patch);
-  s.controller.update();
-  expect(s.controller.requestManual()).toBe(true);
-  s.controller.update();
-  expect(s.controller.getSnapshot().status).toBe(status);
-  expect(s.request).not.toHaveBeenCalled();
-});
+  [{ mode: "off" as const }, "off", undefined, undefined],
+  [{ available: false }, "unsupported", undefined, undefined],
+  [{ idle: false }, "not_idle", undefined, undefined],
+  [
+    { available: false, idle: false, unavailableReason: "permission" },
+    "unsupported",
+    "permission",
+    undefined,
+  ],
+  [{ idle: false, unavailableReason: "plan_mode" }, "not_idle", "plan_mode", undefined],
+  [{}, "unsupported", "thread_required", "thread_required"],
+  [{}, "not_idle", "pending_input", "pending_input"],
+  [{}, "not_idle", "pending_approval", "pending_approval"],
+  [{}, "not_idle", "editing_queued_message", "editing_queued_message"],
+  [{}, "unsupported", "attached_context", "attached_context"],
+] as const)(
+  "keeps a local explanation visible without requesting: %j",
+  (patch, status, reason, blocked) => {
+    const s = setup();
+    s.change({ mode: "manual", ...patch });
+    s.controller.update();
+    expect(s.controller.requestManual(blocked)).toBe(true);
+    s.controller.update();
+    expect(s.controller.getSnapshot().status).toBe(status);
+    expect(s.controller.getSnapshot()).toMatchObject(reason ? { reason } : {});
+    expect(s.request).not.toHaveBeenCalled();
+  },
+);
 
 it("does not dispatch after a failed cancel until an explicit retry gets an ACK", async () => {
   const s = setup();
