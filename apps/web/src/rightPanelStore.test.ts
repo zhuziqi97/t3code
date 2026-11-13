@@ -1,5 +1,5 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { type EnvironmentId, RunId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, RunId, ThreadId } from "@t3tools/contracts";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { useClosedViewStore } from "./closedViewStore";
@@ -40,7 +40,7 @@ async function reloadRightPanelStore() {
 }
 
 describe("rightPanelStore", () => {
-  it("opens a hosted side chat's panel actions in its parent's panel until unhosted", () => {
+  it("opens a hosted side chat's panel actions in its parent's panel until unhosted", async () => {
     const store = useRightPanelStore.getState();
     const unhost = hostRightPanel(refB, refA);
     store.openFile(refB, "src/app.ts");
@@ -50,11 +50,83 @@ describe("rightPanelStore", () => {
     expect(
       selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refB).surfaces,
     ).toEqual([]);
+    const uri = "convene://docs/owner/project/module/README.md";
+    store.openConveneResource(refB, uri);
+    expect(
+      selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refA),
+    ).toMatchObject({
+      kind: "convene-resource",
+      sourceThreadRef: refB,
+      uri,
+    });
+    expect(
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refB).surfaces,
+    ).toEqual([]);
     unhost();
     store.openFile(refB, "src/app.ts");
     expect(selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refB)?.id).toBe(
       "file:src/app.ts",
     );
+    store.openConveneResource(refB, `${uri}?version_number=2`, refA);
+    const hosted = selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refA)!;
+    expect(hosted).toMatchObject({
+      kind: "convene-resource",
+      sourceThreadRef: refB,
+      uri: `${uri}?version_number=2`,
+    });
+    store.closeSurface(refA, hosted.id);
+    await reopenClosedView(useClosedViewStore.getState().entries[0]!, {
+      workspaceAvailable: false,
+      openPreview: async () => {
+        throw new Error("not a browser");
+      },
+    });
+    expect(selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refA)).toEqual(
+      hosted,
+    );
+    expect(selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refB)?.id).toBe(
+      "file:src/app.ts",
+    );
+  });
+
+  it("keeps complete Convene resource identities and reopens only their metadata", async () => {
+    const store = useRightPanelStore.getState();
+    const uri = "convene://issues/owner/project/module/42";
+    store.openConveneResource(refA, uri);
+    store.openConveneResource(refA, uri);
+    store.openConveneResource(refA, `${uri}/comments/3`);
+    store.openConveneResource(refA, "convene://issues/owner/project/other/42");
+    store.openConveneResource(refB, uri);
+    const remote = scopeThreadRef(EnvironmentId.make("env-2"), refA.threadId);
+    store.openConveneResource(remote, uri);
+    const surfaces = Object.values(useRightPanelStore.getState().byThreadKey).flatMap(
+      (s) => s.surfaces,
+    );
+    expect(surfaces).toHaveLength(5);
+    expect(new Set(surfaces.map((s) => s.id)).size).toBe(5);
+    const target = selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refA)!;
+    store.close(refA);
+    expect(
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA).surfaces,
+    ).toHaveLength(3);
+    store.activateSurface(refA, target.id);
+    store.closeSurface(refA, target.id);
+    const closed = useClosedViewStore.getState().entries[0]!;
+    expect(closed).toMatchObject({ kind: "panel-tab", surface: target });
+    await reopenClosedView(closed, {
+      workspaceAvailable: false,
+      openPreview: async () => {
+        throw new Error("not a browser");
+      },
+    });
+    expect(selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refA)).toEqual(
+      target,
+    );
+    await reloadRightPanelStore();
+    expect(selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refA)).toEqual(
+      target,
+    );
+    expect(Object.keys(target).sort()).toEqual(["id", "kind", "sourceThreadRef", "uri"]);
   });
 
   it("records single and bulk tab closes, newest first", () => {

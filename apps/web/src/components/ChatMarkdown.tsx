@@ -1,5 +1,4 @@
 import { useTranslate } from "../i18n";
-import { useConveneResourceStore } from "./convene/conveneResourceStore";
 import {
   isConveneResourceLink,
   resolveConveneDocumentLink,
@@ -235,6 +234,7 @@ interface ChatMarkdownProps {
   pullRequestPanelRef?: ScopedThreadRef | undefined;
   environmentId?: EnvironmentId | undefined;
   conveneDocumentUri?: string | undefined;
+  convenePanelRef?: ScopedThreadRef | undefined;
   onConveneResourceOpen?: (() => void) | undefined;
   onTaskListChange?: ((input: { markerOffset: number; checked: boolean }) => void) | undefined;
   isStreaming?: boolean;
@@ -487,6 +487,7 @@ function useChatMarkdownState({
   pullRequestPanelRef,
   environmentId: explicitEnvironmentId,
   conveneDocumentUri,
+  convenePanelRef,
   onConveneResourceOpen,
   onTaskListChange,
   isStreaming = false,
@@ -935,6 +936,7 @@ function useChatMarkdownState({
     skills,
     threadRef,
     conveneDocumentUri,
+    convenePanelRef,
     onConveneResourceOpen,
     updateThreadPullRequestLink,
   };
@@ -1085,6 +1087,7 @@ const CHAT_MARKDOWN_COMPONENTS = {
       markdownFileLinkMetaByHref,
       threadRef,
       conveneDocumentUri,
+      convenePanelRef,
       onConveneResourceOpen,
       openMarkdownMedia,
       openChangeRequestLink,
@@ -1116,7 +1119,9 @@ const CHAT_MARKDOWN_COMPONENTS = {
           onClick={(event) => {
             event.preventDefault();
             if (threadRef) {
-              useConveneResourceStore.getState().open(threadRef, conveneHref);
+              useRightPanelStore
+                .getState()
+                .openConveneResource(threadRef, conveneHref, convenePanelRef);
               onConveneResourceOpen?.();
             }
           }}

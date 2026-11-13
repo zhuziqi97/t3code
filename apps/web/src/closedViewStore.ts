@@ -85,6 +85,8 @@ const isClosedViewEntry = (entry: unknown): entry is ClosedViewEntry => {
       );
     case "side-chat":
       return typeof surface.threadId === "string" && surface.id === `side-chat:${surface.threadId}`;
+    case "convene-resource":
+      return isThreadRef(surface.sourceThreadRef) && typeof surface.uri === "string";
     case "pull-request":
       return (
         typeof surface.projectId === "string" &&

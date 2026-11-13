@@ -586,6 +586,11 @@ function surfaceTitle(
   t: TFunction,
 ): string {
   switch (surface.kind) {
+    case "convene-resource":
+      return surface.uri.replace(
+        /^convene:\/\/(?:issues|docs)\/([^/]+\/[^/]+\/[^/]+)\/(.+)$/,
+        "$2 · $1",
+      );
     case "diff":
       return t("panels.diff");
     case "files":
@@ -670,6 +675,8 @@ function SurfaceIcon({
   switch (surface.kind) {
     case "preview":
       return <PreviewFavicon capturedUrl={previewCapturedUrl} url={previewUrl} />;
+    case "convene-resource":
+      return <Files className="size-3 shrink-0" />;
     case "diff":
       return <FileDiff className="size-3 shrink-0" />;
     case "files":
@@ -1021,6 +1028,13 @@ function RightPanelTab(
                 environmentId={props.environmentId}
                 title={title}
               />
+            ) : surface.kind === "convene-resource" ? (
+              <div className="break-all">
+                <p>{surface.uri}</p>
+                <p>
+                  {surface.sourceThreadRef.environmentId} / {surface.sourceThreadRef.threadId}
+                </p>
+              </div>
             ) : (
               title
             )}

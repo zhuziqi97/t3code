@@ -1,5 +1,4 @@
 import { ThreadWorkspaceRecovery } from "./ThreadWorkspaceRecovery";
-import { ConveneResourceViewer } from "./convene/ConveneResourceViewer";
 import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import {
   deriveThreadProviderConfiguration,
@@ -3955,7 +3954,6 @@ export default function ChatView(props: ChatViewProps) {
               </>
             )}
           </ThreadFindCanvas>
-          {activeThreadRef ? <ConveneResourceViewer threadRef={activeThreadRef} /> : null}
         </div>
 
         {embedded ? null : (

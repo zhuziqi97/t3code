@@ -22,6 +22,7 @@ const RIGHT_PANEL_KINDS = [
   "pull-request",
   "pull-requests",
   "side-chat",
+  "convene-resource",
 ] as const;
 export type RightPanelKind = (typeof RIGHT_PANEL_KINDS)[number];
 
@@ -78,7 +79,27 @@ export type RightPanelSurface =
       detailTab?: PullRequestDetailTab;
     }
   | { id: "pull-requests"; kind: "pull-requests" }
-  | { id: `side-chat:${string}`; kind: "side-chat"; threadId: ThreadId };
+  | { id: `side-chat:${string}`; kind: "side-chat"; threadId: ThreadId }
+  | ConveneResourceSurface;
+
+export interface ConveneResourceSurface {
+  id: `convene-resource:${string}`;
+  kind: "convene-resource";
+  sourceThreadRef: ScopedThreadRef;
+  uri: string;
+}
+
+export function conveneResourceSurface(
+  sourceThreadRef: ScopedThreadRef,
+  uri: string,
+): ConveneResourceSurface {
+  return {
+    id: `convene-resource:${JSON.stringify([sourceThreadRef.environmentId, sourceThreadRef.threadId, uri])}`,
+    kind: "convene-resource",
+    sourceThreadRef,
+    uri,
+  };
+}
 
 const RIGHT_PANEL_STORAGE_KEY = "t3code:right-panel-state:v2";
 const RIGHT_PANEL_STORAGE_VERSION = 14;
@@ -125,9 +146,17 @@ interface RightPanelStoreState {
   ) => boolean;
   open: (
     ref: ScopedThreadRef,
-    kind: Exclude<RightPanelKind, "file" | "terminal" | "pull-request" | "side-chat">,
+    kind: Exclude<
+      RightPanelKind,
+      "file" | "terminal" | "pull-request" | "side-chat" | "convene-resource"
+    >,
   ) => void;
   openSideChat: (ref: ScopedThreadRef, threadId: ThreadId) => void;
+  openConveneResource: (
+    sourceThreadRef: ScopedThreadRef,
+    uri: string,
+    hostRef?: ScopedThreadRef,
+  ) => void;
   openDevice: (ref: ScopedThreadRef, target: DeviceTabTarget, automatic?: boolean) => void;
   renameDevice: (ref: ScopedThreadRef, surfaceId: string, title: string) => void;
   openBrowser: (ref: ScopedThreadRef, tabId: string | null) => void;
@@ -191,7 +220,10 @@ interface RightPanelStoreState {
   toggleVisibility: (ref: ScopedThreadRef) => void;
   toggle: (
     ref: ScopedThreadRef,
-    kind: Exclude<RightPanelKind, "file" | "terminal" | "pull-request" | "side-chat">,
+    kind: Exclude<
+      RightPanelKind,
+      "file" | "terminal" | "pull-request" | "side-chat" | "convene-resource"
+    >,
   ) => void;
   setThreadPanelOpen: (
     ref: ScopedThreadRef,
@@ -214,7 +246,10 @@ const DEFAULT_THREAD_PANEL_VISIBILITY: ThreadPanelVisibility = {
 };
 
 const singletonSurface = (
-  kind: Exclude<RightPanelKind, "file" | "preview" | "terminal" | "pull-request" | "side-chat">,
+  kind: Exclude<
+    RightPanelKind,
+    "file" | "preview" | "terminal" | "pull-request" | "side-chat" | "convene-resource"
+  >,
 ): RightPanelSurface => {
   switch (kind) {
     case "diff":
@@ -709,6 +744,15 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
             }
             return upsertSurface(current, singletonSurface(kind));
           }),
+        ),
+      openConveneResource: (sourceThreadRef, uri, hostRef = rightPanelHostRef(sourceThreadRef)) =>
+        set((state) =>
+          userActionOnThread(
+            state,
+            scopedThreadKey(hostRef),
+            (current) => upsertSurface(current, conveneResourceSurface(sourceThreadRef, uri)),
+            false,
+          ),
         ),
       openDevice: (ref, target, automatic = false) =>
         set((state) =>

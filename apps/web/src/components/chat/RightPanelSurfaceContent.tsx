@@ -1,3 +1,4 @@
+import { ConveneResourceViewer } from "../convene/ConveneResourceViewer";
 import type {
   EditorId,
   EnvironmentId,
@@ -83,6 +84,8 @@ export function RightPanelSurfaceContent(props: {
   const { surface, threadRef, visible, onCloseSurface } = props;
   if (surface === null) return null;
   switch (surface.kind) {
+    case "convene-resource":
+      return <ConveneResourceViewer key={surface.id} surface={surface} hostRef={threadRef} />;
     case "preview":
       return (
         <Suspense fallback={null}>

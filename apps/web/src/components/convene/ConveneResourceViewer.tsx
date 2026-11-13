@@ -1,78 +1,61 @@
-import { useStableCallback } from "../../hooks/useStableCallback";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import { useAtomValue } from "@effect/atom-react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import type { ScopedThreadRef } from "@t3tools/contracts";
-import {
-  conveneResourceTransportFailure,
-  createConveneResourceReader,
-  type ConveneResourceReaderState,
-} from "@t3tools/client-runtime/convene-resource-reader";
-import { useEffect, useState } from "react";
-import { AsyncResult } from "effect/reactivity";
+import type { ConveneResourceSurface } from "../../rightPanelStore";
+import { useRightPanelStore } from "../../rightPanelStore";
 import { useTranslate } from "../../i18n";
-import { conveneEnvironment } from "../../state/convene";
-import { useAtomCommand } from "../../state/use-atom-command";
 import { writeTextToClipboard } from "../../hooks/useCopyToClipboard";
 import { readLocalApi } from "../../localApi";
 import ChatMarkdown from "../ChatMarkdown";
 import { Button } from "../ui/button";
 import { useConveneResourceStore } from "./conveneResourceStore";
 
-function ResourceDetail({ threadRef, uri }: { threadRef: ScopedThreadRef; uri: string }) {
+export function ConveneResourceViewer({
+  surface,
+  hostRef,
+}: {
+  surface: ConveneResourceSurface;
+  hostRef: ScopedThreadRef;
+}) {
   const t = useTranslate();
-  const permitted = useAtomValue(
-    conveneEnvironment.readResource.permissionAtom(threadRef.environmentId),
-  );
-  const connection = useAtomValue(
-    conveneEnvironment.status({ environmentId: threadRef.environmentId, input: {} }),
-  );
-  const phase = AsyncResult.isSuccess(connection) ? connection.value.phase : undefined;
-  const changes = useAtomValue(
-    conveneEnvironment.resourceChanges({
-      environmentId: threadRef.environmentId,
-      input: { threadId: threadRef.threadId },
-    }),
-  );
-  const revision = AsyncResult.isSuccess(changes) ? changes.value : 0;
-  const command = useAtomCommand(conveneEnvironment.readResource, { reportFailure: false });
-  const [state, setState] = useState<ConveneResourceReaderState>({
-    uri,
-    pending: true,
-    needsRefresh: false,
-    result: null,
-  });
-  const read = useStableCallback(async (target: string, page: number, startLine?: number) => {
-    const response = await command({
-      environmentId: threadRef.environmentId,
-      input: {
-        threadId: threadRef.threadId,
-        uri: target,
-        page,
-        ...(startLine === undefined ? {} : { startLine }),
-      },
-    });
-    return response._tag === "Success"
-      ? response.value
-      : conveneResourceTransportFailure(target, squashAtomCommandFailure(response));
-  });
-  const [reader] = useState(() => createConveneResourceReader(read, setState));
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- URI and permission pushes invalidate remote reads; cleanup rejects late responses.
+  const { sourceThreadRef: threadRef, uri, id } = surface;
+  const state = useConveneResourceStore((s) => s.sessions[id]?.state);
+  const access = useConveneResourceStore((s) => s.sessions[id]?.access);
+  const load = useConveneResourceStore((s) => s.load);
+  const setScroll = useConveneResourceStore((s) => s.setScroll);
+  const viewport = useRef<HTMLDivElement>(null);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- The mounted tab requests its retained remote reading session, which outlives this view.
   useEffect(() => {
-    if (permitted && phase !== "offline" && phase !== "unpaired") void reader.load(uri);
-    return reader.clear;
-    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Permission notifications invalidate the resource even when its URI is unchanged.
-  }, [reader, uri, permitted, phase, revision]);
-  const result = !permitted
-    ? { status: "unauthorized" as const, resource_uri: uri }
-    : phase === "offline" || phase === "unpaired"
-      ? { status: "disconnected" as const, resource_uri: uri }
-      : state.uri === uri
-        ? state.result
+    const current = useConveneResourceStore.getState().sessions[id];
+    if (current && !current.state.result && !current.state.pending) void load(id);
+  }, [id, load]);
+  const result =
+    access?.status === "ready"
+      ? state?.result
+      : access && access.status !== "loading"
+        ? { status: access.status, resource_uri: uri }
         : null;
   const ready = result?.status === "ready" ? result : null;
   const issue = ready && "issue" in ready ? ready : null;
   const document = ready && "document" in ready ? ready : null;
-  const open = useConveneResourceStore((s) => s.open);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Restore only this resource viewport after its matching loaded window has rendered.
+  useLayoutEffect(() => {
+    const element = viewport.current;
+    if (!element || !state?.result) return;
+    const saved = useConveneResourceStore.getState().sessions[id]?.scrollTop ?? 0;
+    const focused = issue?.focused_comment_number;
+    const comment =
+      focused == null ? null : element.querySelector<HTMLElement>(`#convene-comment-${focused}`);
+    element.scrollTop =
+      saved === 0 && comment
+        ? comment.getBoundingClientRect().top -
+          element.getBoundingClientRect().top +
+          element.scrollTop
+        : saved;
+    setScroll(id, element.scrollTop);
+  }, [id, state?.result, issue?.focused_comment_number, setScroll]);
+  const open = (source: ScopedThreadRef, nextUri: string) =>
+    useRightPanelStore.getState().openConveneResource(source, nextUri, hostRef);
+  if (!state) return <p role="status">{t("convene.resource.loading")}</p>;
   return (
     <>
       <div className="flex flex-wrap gap-2 border-b p-3">
@@ -83,12 +66,7 @@ function ResourceDetail({ threadRef, uri }: { threadRef: ScopedThreadRef; uri: s
         >
           {t("convene.resource.copyLink")}
         </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={state.pending}
-          onClick={() => void reader.load(uri)}
-        >
+        <Button size="sm" variant="outline" disabled={state.pending} onClick={() => void load(id)}>
           {t("convene.resource.refresh")}
         </Button>
         {ready && (
@@ -101,9 +79,15 @@ function ResourceDetail({ threadRef, uri }: { threadRef: ScopedThreadRef; uri: s
           </Button>
         )}
       </div>
-      <div key={uri} className="min-h-0 flex-1 overflow-auto p-4">
+      <div
+        ref={viewport}
+        className="min-h-0 flex-1 overflow-auto p-4"
+        onScroll={(event) => setScroll(id, event.currentTarget.scrollTop)}
+      >
         <p className="mb-4 break-all text-xs text-muted-foreground">{uri}</p>
-        {state.pending && permitted && <p role="status">{t("convene.resource.loading")}</p>}
+        {(state.pending || access?.status === "loading") && (
+          <p role="status">{t("convene.resource.loading")}</p>
+        )}
         {result && result.status !== "ready" && (
           <p role="alert">{t(`convene.resource.${result.status}`)}</p>
         )}
@@ -115,6 +99,7 @@ function ResourceDetail({ threadRef, uri }: { threadRef: ScopedThreadRef; uri: s
               text={document.content}
               cwd={undefined}
               threadRef={threadRef}
+              convenePanelRef={hostRef}
               conveneDocumentUri={document.resource_uri}
             />
             {!state.needsRefresh && document.slice.next_start_line !== null && (
@@ -122,9 +107,7 @@ function ResourceDetail({ threadRef, uri }: { threadRef: ScopedThreadRef; uri: s
                 variant="outline"
                 size="sm"
                 disabled={state.pending}
-                onClick={() =>
-                  void reader.load(uri, 1, document.slice.next_start_line ?? undefined)
-                }
+                onClick={() => void load(id, 1, document.slice.next_start_line ?? undefined)}
               >
                 {t("convene.resource.moreContent")}
               </Button>
@@ -155,7 +138,12 @@ function ResourceDetail({ threadRef, uri }: { threadRef: ScopedThreadRef; uri: s
               </Button>
             )}
             {issue.issue.body !== undefined && (
-              <ChatMarkdown text={issue.issue.body} cwd={undefined} threadRef={threadRef} />
+              <ChatMarkdown
+                text={issue.issue.body}
+                cwd={undefined}
+                threadRef={threadRef}
+                convenePanelRef={hostRef}
+              />
             )}
             {issue.comments.map((comment) => (
               <article
@@ -180,7 +168,12 @@ function ResourceDetail({ threadRef, uri }: { threadRef: ScopedThreadRef; uri: s
                 {comment.is_deleted ? (
                   <p className="mt-2 text-muted-foreground">{t("convene.resource.deleted")}</p>
                 ) : (
-                  <ChatMarkdown text={comment.body ?? ""} cwd={undefined} threadRef={threadRef} />
+                  <ChatMarkdown
+                    text={comment.body ?? ""}
+                    cwd={undefined}
+                    threadRef={threadRef}
+                    convenePanelRef={hostRef}
+                  />
                 )}
               </article>
             ))}
@@ -190,7 +183,7 @@ function ResourceDetail({ threadRef, uri }: { threadRef: ScopedThreadRef; uri: s
                   variant="outline"
                   size="sm"
                   disabled={state.pending}
-                  onClick={() => void reader.load(uri, issue.page + 1)}
+                  onClick={() => void load(id, issue.page + 1)}
                 >
                   {t("convene.resource.moreComments")}
                 </Button>
@@ -199,36 +192,5 @@ function ResourceDetail({ threadRef, uri }: { threadRef: ScopedThreadRef; uri: s
         )}
       </div>
     </>
-  );
-}
-
-/** Mount beside the chat; the narrow overlay keeps the chat and composer mounted. */
-export function ConveneResourceViewer({ threadRef }: { threadRef: ScopedThreadRef }) {
-  const t = useTranslate();
-  const target = useConveneResourceStore((s) => s.target);
-  const close = useConveneResourceStore((s) => s.close);
-  if (
-    !target ||
-    target.threadRef.environmentId !== threadRef.environmentId ||
-    target.threadRef.threadId !== threadRef.threadId
-  )
-    return null;
-  return (
-    <aside
-      aria-label={t("convene.resource.title")}
-      className="absolute inset-0 z-30 flex min-h-0 min-w-0 flex-col border-l bg-background lg:static lg:z-auto lg:w-[45%] lg:max-w-2xl lg:shrink-0"
-    >
-      <header className="flex items-center justify-between border-b p-3">
-        <h2 className="font-semibold">{t("convene.resource.title")}</h2>
-        <Button variant="ghost" size="sm" onClick={close}>
-          {t("convene.resource.back")}
-        </Button>
-      </header>
-      <ResourceDetail
-        key={`${target.threadRef.environmentId}:${target.threadRef.threadId}`}
-        threadRef={target.threadRef}
-        uri={target.uri}
-      />
-    </aside>
   );
 }

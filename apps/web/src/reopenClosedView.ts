@@ -121,6 +121,9 @@ export async function reopenClosedView(
   )
     return false;
   switch (surface.kind) {
+    case "convene-resource":
+      panels.openConveneResource(surface.sourceThreadRef, surface.uri, ref);
+      return true;
     case "preview":
       if (surface.resourceId !== null) return false;
       panels.openBrowser(ref, null);

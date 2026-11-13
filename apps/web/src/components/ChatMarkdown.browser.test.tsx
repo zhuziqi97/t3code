@@ -18,8 +18,7 @@ import { act, render } from "../../test/render";
 import "../index.css";
 
 import { filesystemEnvironment } from "../state/filesystem";
-import { useRightPanelStore } from "../rightPanelStore";
-import { useConveneResourceStore } from "./convene/conveneResourceStore";
+import { selectActiveRightPanelSurface, useRightPanelStore } from "../rightPanelStore";
 import { remarkEnableOrderedListNumbers } from "@t3tools/shared/markdownPipeline";
 import { setMarkdownTaskChecked } from "@t3tools/shared/markdownTaskList";
 import { HostImageUrlContext } from "./chat/hostImageUrl";
@@ -162,7 +161,7 @@ function setup() {
   renderDiagram.mockReset();
   workspaceSearch.mockReset().mockResolvedValue(AsyncResult.success({ entries: [] }));
   filesystemMetadata.mockReset().mockResolvedValue(AsyncResult.success({ entries: [null] }));
-  useConveneResourceStore.getState().close();
+  useRightPanelStore.setState({ byThreadKey: {} });
 }
 
 function renderText(text: string, props: Partial<Parameters<typeof ChatMarkdown>[0]> = {}) {
@@ -654,8 +653,11 @@ describe("ChatMarkdown Convene document links", () => {
       });
       const link = screen.container.querySelector<HTMLAnchorElement>("a")!;
       await act(() => link.click());
-      expect(useConveneResourceStore.getState().target).toEqual({
-        threadRef,
+      expect(
+        selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, threadRef),
+      ).toMatchObject({
+        kind: "convene-resource",
+        sourceThreadRef: threadRef,
         uri: `${moduleUri}/${path}`,
       });
       expect(onConveneResourceOpen).toHaveBeenCalledOnce();
@@ -679,7 +681,9 @@ describe("ChatMarkdown Convene document links", () => {
       await vi.waitFor(() =>
         expect(openFile).toHaveBeenCalledExactlyOnceWith(threadRef, "notes/README.md", undefined),
       );
-      expect(useConveneResourceStore.getState().target).toBeNull();
+      expect(
+        selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, threadRef),
+      ).toBeNull();
       expect(onConveneResourceOpen).not.toHaveBeenCalled();
     },
   );
@@ -706,17 +710,23 @@ describe("ChatMarkdown Convene document links", () => {
     await act(() => fragmentLink!.click());
     expect(scrollIntoView.mock.contexts).toEqual([screen.container.querySelector("h2")]);
     expect(window.location.href).toBe(location);
-    expect(useConveneResourceStore.getState().target).toBeNull();
+    expect(
+      selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, threadRef),
+    ).toBeNull();
     expect(onConveneResourceOpen).not.toHaveBeenCalled();
     await act(() => documentLink!.click());
-    expect(useConveneResourceStore.getState().target).toEqual({ threadRef, uri });
+    expect(
+      selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, threadRef),
+    ).toMatchObject({ kind: "convene-resource", sourceThreadRef: threadRef, uri });
     expect(onConveneResourceOpen).toHaveBeenCalledOnce();
-    useConveneResourceStore.getState().close();
+    useRightPanelStore.setState({ byThreadKey: {} });
     await screen.rerender(<ChatMarkdown text={text} {...props} />);
     const unavailable = screen.container.querySelector<HTMLAnchorElement>("a")!;
     expect(unavailable.getAttribute("aria-disabled")).toBe("true");
     await act(() => unavailable.click());
-    expect(useConveneResourceStore.getState().target).toBeNull();
+    expect(
+      selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, threadRef),
+    ).toBeNull();
     expect(onConveneResourceOpen).toHaveBeenCalledOnce();
   });
 });
