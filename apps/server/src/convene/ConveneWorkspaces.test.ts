@@ -1,16 +1,22 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { EventId, ProjectId } from "@t3tools/contracts";
+import { EventId, ProjectId, GitCommandError } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as PlatformError from "effect/PlatformError";
+import * as Schema from "effect/Schema";
+import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
+import { vi } from "vite-plus/test";
 import * as ServerConfig from "../config.ts";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as Git from "../vcs/GitVcsDriver.ts";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
 import * as ConveneWorkspaces from "./ConveneWorkspaces.ts";
+
+const isGitCommandError = Schema.is(GitCommandError);
 
 const layer = ConveneWorkspaces.layer.pipe(
   Layer.provideMerge(ProjectStore.layer.pipe(Layer.provide(SqlitePersistence.layerMemory))),
@@ -122,15 +128,22 @@ it.effect(
     }).pipe(Effect.provide(layer)),
 );
 
-it.effect(
-  "reports an ordinary folder without inventing a Git repository or a fallback directory",
-  () =>
+it.effect.each([
+  "installed",
+  "missing",
+  "scratch",
+  "spawn-denied",
+  "cwd-missing",
+  "unreadable",
+] as const)(
+  "reports an ordinary folder without inventing a Git repository or a fallback directory: %s",
+  (kind) =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const projects = yield* ProjectStore.ProjectStoreV2;
       const workspaces = yield* ConveneWorkspaces.ConveneWorkspaces;
       const parent = yield* fs.makeTempDirectoryScoped({ prefix: "t3-convene-plain-folder-" });
-      const root = `${parent}/project`;
+      const root = `${parent}/${kind === "scratch" ? "scratch" : "project"}`;
       yield* fs.makeDirectory(root);
       const projectId = ProjectId.make("convene:plain");
       yield* projects.apply({
@@ -146,7 +159,7 @@ it.effect(
         metadata: {},
         payload: {
           projectId,
-          title: "Plain",
+          title: kind === "scratch" ? "No project" : "Plain",
           workspaceRoot: root,
           defaultModelSelection: null,
           scripts: [],
@@ -154,8 +167,47 @@ it.effect(
           updatedAt: "2026-10-09T00:00:00Z",
         },
       });
+      const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+      const spawn = spawner.spawn;
+      using _spawn = vi.spyOn(spawner, "spawn").mockImplementation((command) =>
+        kind === "installed" || kind === "unreadable"
+          ? spawn(command)
+          : Effect.fail(
+              PlatformError.systemError({
+                _tag: kind === "spawn-denied" ? "PermissionDenied" : "NotFound",
+                module: "ChildProcess",
+                method: "spawn",
+                syscall: "spawn git",
+                pathOrDescriptor: kind === "cwd-missing" ? root : "git",
+              }),
+            ),
+      );
+      const access = fs.access;
+      using _access = vi.spyOn(fs, "access").mockImplementation((directory, options) =>
+        kind === "unreadable" && directory === root && options?.readable
+          ? Effect.fail(
+              PlatformError.systemError({
+                _tag: "PermissionDenied",
+                module: "FileSystem",
+                method: "access",
+                pathOrDescriptor: root,
+              }),
+            )
+          : access(directory, options),
+      );
+      if (kind === "spawn-denied" || kind === "cwd-missing" || kind === "unreadable") {
+        const failure = yield* workspaces.list(projectId).pipe(Effect.flip);
+        assert.equal(failure._tag, "ConveneWorkspaceError");
+        const cause = isGitCommandError(failure.cause) ? failure.cause.cause : failure.cause;
+        assert.ok(PlatformError.isPlatformError(cause));
+        assert.equal(cause.reason._tag, kind === "cwd-missing" ? "NotFound" : "PermissionDenied");
+        return;
+      }
       const initial = yield* workspaces.list(projectId);
       assert.equal(initial.length, 1);
+      assert.equal(initial[0]?.key, "root");
+      assert.equal(initial[0]?.branch, null);
+      assert.equal(initial[0]?.available, true);
       assert.equal(initial[0]?.path, root);
       yield* fs.remove(root, { recursive: true });
       assert.equal((yield* workspaces.resolve(projectId, "root"))?.available, false);

@@ -3,6 +3,7 @@ import {
   CONVENE_SUPPORTED_PROTOCOLS,
   ConveneDataControl,
   ConveneIntegrationError,
+  GitCommandError,
   ConveneProjectConfiguration,
   type ConveneStatus,
 } from "@t3tools/contracts";
@@ -21,6 +22,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as PubSub from "effect/PubSub";
 import * as Path from "effect/Path";
+import * as PlatformError from "effect/PlatformError";
 import * as ServerConfig from "../config.ts";
 import * as Queue from "effect/Queue";
 import * as SubscriptionRef from "effect/SubscriptionRef";
@@ -38,6 +40,8 @@ import * as ConveneDataChannel from "./ConveneDataChannel.ts";
 import * as ConveneWeb from "./ConveneWeb.ts";
 import * as ConveneWorkspaces from "./ConveneWorkspaces.ts";
 import * as ConveneConfiguration from "./ConveneConfiguration.ts";
+
+const isGitCommandError = Schema.is(GitCommandError);
 
 const ControlMessage = Schema.Struct({
   TYPE: Schema.Literals([
@@ -156,27 +160,57 @@ const start = Effect.fn("ConveneConnection.start")(function* (
                   },
               UPDATED_AT: project.updatedAt,
             };
-            const locations = yield* workspaces.list(project.projectId);
-            return {
-              project: fields,
-              targets: locations.map((workspace) => ({
-                ...fields,
-                TARGET_ID: `t3:${paired.runnerId}:project:${project.projectId}:${workspace.key}`,
-                NATIVE_WORKSPACE_KEY: workspace.key,
-                PATH: workspace.path,
-                WORKSPACE_DISPLAY_NAME: workspace.displayName,
-                AVAILABILITY: workspace.available ? "AVAILABLE" : "UNAVAILABLE",
-                UNAVAILABLE_REASON: workspace.available
-                  ? null
-                  : {
-                      CODE: "WORKSPACE_UNAVAILABLE",
-                      MESSAGE: "This workspace is unavailable.",
-                    },
-                REPOSITORY: null,
-                BRANCH: workspace.branch,
-                AGENT_TYPE: null,
+            return yield* workspaces.list(project.projectId).pipe(
+              Effect.map((locations) => ({
+                project: fields,
+                targets: locations.map((workspace) => ({
+                  ...fields,
+                  TARGET_ID: `t3:${paired.runnerId}:project:${project.projectId}:${workspace.key}`,
+                  NATIVE_WORKSPACE_KEY: workspace.key,
+                  PATH: workspace.path,
+                  WORKSPACE_DISPLAY_NAME: workspace.displayName,
+                  AVAILABILITY: workspace.available ? "AVAILABLE" : "UNAVAILABLE",
+                  UNAVAILABLE_REASON: workspace.available
+                    ? null
+                    : {
+                        CODE: "WORKSPACE_UNAVAILABLE",
+                        MESSAGE: "This workspace is unavailable.",
+                      },
+                  REPOSITORY: null,
+                  BRANCH: workspace.branch,
+                  AGENT_TYPE: null,
+                })),
               })),
-            };
+              Effect.catchTags({
+                ConveneWorkspaceError: Effect.fn("ConveneConnection.reportWorkspaceFailure")(
+                  function* (error: ConveneWorkspaces.ConveneWorkspaceError) {
+                    const gitError = isGitCommandError(error.cause) ? error.cause : undefined;
+                    const cause = gitError?.cause ?? error.cause;
+                    const reason = PlatformError.isPlatformError(cause)
+                      ? cause.reason._tag
+                      : gitError !== undefined
+                        ? (gitError.reason ?? "GitCommandError")
+                        : "ConveneWorkspaceError";
+                    yield* Effect.logWarning("Convene project workspace scan failed", {
+                      projectId: project.projectId,
+                      directory: project.workspaceRoot,
+                      reason,
+                    });
+                    return {
+                      project: {
+                        ...fields,
+                        AVAILABILITY: "UNAVAILABLE",
+                        UNAVAILABLE_REASON: {
+                          CODE: "WORKSPACE_SCAN_FAILED",
+                          MESSAGE: "The project's workspaces could not be read.",
+                        },
+                      },
+                      targets: [],
+                    };
+                  },
+                ),
+              }),
+            );
           }),
         );
         return {
@@ -195,7 +229,8 @@ const start = Effect.fn("ConveneConnection.start")(function* (
       ) =>
         left.NATIVE_PROJECT_ID === right.NATIVE_PROJECT_ID &&
         left.DISPLAY_NAME === right.DISPLAY_NAME &&
-        left.AVAILABILITY === right.AVAILABILITY;
+        left.AVAILABILITY === right.AVAILABILITY &&
+        left.UNAVAILABLE_REASON?.CODE === right.UNAVAILABLE_REASON?.CODE;
       const sameDirectory = (left: Directory, right: Directory) =>
         left.PROJECTS.length === right.PROJECTS.length &&
         left.TARGETS.length === right.TARGETS.length &&

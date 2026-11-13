@@ -23,6 +23,8 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as Queue from "effect/Queue";
 import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
+import * as PlatformError from "effect/PlatformError";
 import * as TestClock from "effect/testing/TestClock";
 import * as Socket from "effect/socket/Socket";
 import { FetchHttpClient, HttpRouter, HttpServer, HttpServerRequest } from "effect/http";
@@ -45,8 +47,21 @@ const decode = Schema.decodeUnknownEffect(
 
 const decodeReportedTargets = Schema.decodeUnknownEffect(
   Schema.Struct({
+    PROJECTS: Schema.Array(
+      Schema.Struct({
+        NATIVE_PROJECT_ID: Schema.String,
+        AVAILABILITY: Schema.String,
+        UNAVAILABLE_REASON: Schema.NullOr(
+          Schema.Struct({ CODE: Schema.String, MESSAGE: Schema.String }),
+        ),
+      }),
+    ),
     TARGETS: Schema.Array(
-      Schema.Struct({ NATIVE_WORKSPACE_KEY: Schema.String, AVAILABILITY: Schema.String }),
+      Schema.Struct({
+        NATIVE_PROJECT_ID: Schema.String,
+        NATIVE_WORKSPACE_KEY: Schema.String,
+        AVAILABILITY: Schema.String,
+      }),
     ),
   }),
 );
@@ -334,7 +349,13 @@ it.live("keeps heartbeat, changed directories, refresh ACKs, and reconnection in
     let workspaceKey = "root";
     let available = true;
     let title = "Recovery report";
-    let includeProject = true;
+    let includeProject = false;
+    let includeBrokenProject = false;
+    let scanFailure = true;
+    const brokenProjectId = ProjectId.make("unreadable-project");
+    const brokenRoot = yield* (yield* FileSystem.FileSystem).makeTempDirectoryScoped({
+      prefix: "t3-convene-scan-error-",
+    });
     let updatedAt = IsoDateTime.make("2026-10-22T00:00:00.000Z");
     let reverse = false;
     let externalKey: string | null = null;
@@ -493,6 +514,20 @@ it.live("keeps heartbeat, changed directories, refresh ACKs, and reconnection in
                   },
                 ]
               : [],
+          ).pipe(
+            Effect.map((items) =>
+              includeBrokenProject && items[0]
+                ? [
+                    ...items,
+                    {
+                      ...items[0],
+                      projectId: brokenProjectId,
+                      workspaceRoot: brokenRoot,
+                      title: "Unreadable project",
+                    },
+                  ]
+                : items,
+            ),
           ),
       }),
       Layer.mock(EventStore.OrchestrationEventStore)({
@@ -500,37 +535,60 @@ it.live("keeps heartbeat, changed directories, refresh ACKs, and reconnection in
         streamApplicationEvents: () => Stream.fromPubSub(projectChanges),
       }),
       Layer.mock(ConveneWorkspaces.ConveneWorkspaces)({
-        list: () =>
-          Effect.sync(() => {
-            const items = [
-              {
-                projectId,
-                key: workspaceKey,
-                path: process.cwd(),
-                branch: "main",
-                displayName: "Recovery report",
-                available,
-              },
-              {
-                projectId,
-                key: "other",
-                path: process.cwd(),
-                branch: null,
-                displayName: "Other",
-                available: true,
-              },
-            ];
-            if (externalKey !== null)
-              items.push({
-                projectId,
-                key: externalKey,
-                path: `${process.cwd()}/external`,
-                branch: "external",
-                displayName: "External worktree",
-                available: true,
-              });
-            return reverse ? items.toReversed() : items;
-          }),
+        list: (requestedId) =>
+          requestedId === brokenProjectId
+            ? scanFailure
+              ? Effect.fail(
+                  new ConveneWorkspaces.ConveneWorkspaceError({
+                    projectId: brokenProjectId,
+                    cause: PlatformError.systemError({
+                      _tag: "PermissionDenied",
+                      module: "FileSystem",
+                      method: "access",
+                      pathOrDescriptor: brokenRoot,
+                    }),
+                  }),
+                )
+              : Effect.succeed([
+                  {
+                    projectId: brokenProjectId,
+                    key: "root",
+                    path: brokenRoot,
+                    branch: null,
+                    displayName: "Unreadable project",
+                    available: true,
+                  },
+                ])
+            : Effect.sync(() => {
+                const items = [
+                  {
+                    projectId,
+                    key: workspaceKey,
+                    path: process.cwd(),
+                    branch: "main",
+                    displayName: "Recovery report",
+                    available,
+                  },
+                  {
+                    projectId,
+                    key: "other",
+                    path: process.cwd(),
+                    branch: null,
+                    displayName: "Other",
+                    available: true,
+                  },
+                ];
+                if (externalKey !== null)
+                  items.push({
+                    projectId,
+                    key: externalKey,
+                    path: `${process.cwd()}/external`,
+                    branch: "external",
+                    displayName: "External worktree",
+                    available: true,
+                  });
+                return reverse ? items.toReversed() : items;
+              }),
         changes: Stream.fromPubSub(workspaceChanges),
       }),
       Layer.mock(ConveneNative.ConveneNative)({}),
@@ -569,7 +627,9 @@ it.live("keeps heartbeat, changed directories, refresh ACKs, and reconnection in
         Stream.runCollect,
       );
       assert.equal(online.length, 1);
-      yield* Queue.take(reports);
+      const empty = yield* decodeReportedTargets(yield* Queue.take(reports));
+      assert.deepEqual(empty.PROJECTS, []);
+      assert.deepEqual(empty.TARGETS, []);
       yield* Queue.take(heartbeats);
       assert.equal((yield* Queue.take(applied))[0]?.mcp_enabled, true);
       for (let index = 0; index < 60; index++) {
@@ -586,6 +646,7 @@ it.live("keeps heartbeat, changed directories, refresh ACKs, and reconnection in
           configuration.client_project_id,
         );
       }
+      includeProject = true;
       yield* connection.synchronize;
       yield* Queue.take(reports);
       assert.equal(reportCount, 2);
@@ -662,6 +723,34 @@ it.live("keeps heartbeat, changed directories, refresh ACKs, and reconnection in
       yield* TestClock.adjust("15 seconds");
       yield* Queue.take(heartbeats);
       yield* Queue.take(reports);
+      includeBrokenProject = true;
+      yield* connection.synchronize;
+      const isolated = yield* decodeReportedTargets(yield* Queue.take(reports));
+      assert.equal(
+        isolated.PROJECTS.find((p) => p.NATIVE_PROJECT_ID === brokenProjectId)?.AVAILABILITY,
+        "UNAVAILABLE",
+      );
+      assert.equal(
+        isolated.PROJECTS.find((p) => p.NATIVE_PROJECT_ID === brokenProjectId)?.UNAVAILABLE_REASON
+          ?.CODE,
+        "WORKSPACE_SCAN_FAILED",
+      );
+      assert.equal(
+        isolated.PROJECTS.find((p) => p.NATIVE_PROJECT_ID === projectId)?.AVAILABILITY,
+        "AVAILABLE",
+      );
+      assert.equal(isolated.TARGETS.filter((t) => t.NATIVE_PROJECT_ID === projectId).length, 2);
+      assert.isFalse(isolated.TARGETS.some((t) => t.NATIVE_PROJECT_ID === brokenProjectId));
+      assert.equal((yield* connection.status).phase, "online");
+      assert.equal(helloCount, 1);
+      scanFailure = false;
+      yield* connection.synchronize;
+      const recovered = yield* decodeReportedTargets(yield* Queue.take(reports));
+      assert.equal(
+        recovered.TARGETS.find((t) => t.NATIVE_PROJECT_ID === brokenProjectId)?.AVAILABILITY,
+        "AVAILABLE",
+      );
+      assert.equal(helloCount, 1);
       workspaceKey = "rebound-key";
       yield* PubSub.publish(workspaceChanges, undefined);
       yield* Deferred.await(workspaceReported);

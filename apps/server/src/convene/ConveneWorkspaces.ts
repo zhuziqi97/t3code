@@ -5,6 +5,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as PubSub from "effect/PubSub";
@@ -101,7 +102,11 @@ const make = Effect.gen(function* () {
   });
   const directoryExists = (directory: string) =>
     fs.stat(directory).pipe(
-      Effect.map((stat) => stat.type === "Directory"),
+      Effect.flatMap((stat) =>
+        stat.type === "Directory"
+          ? fs.access(directory, { readable: true }).pipe(Effect.as(true))
+          : Effect.succeed(false),
+      ),
       Effect.catchTags({
         PlatformError: (error) =>
           error.reason._tag === "NotFound" ? Effect.succeed(false) : Effect.fail(error),
@@ -131,13 +136,25 @@ const make = Effect.gen(function* () {
             available,
           });
           if (available) {
-            const repository = yield* git.execute({
-              operation: "convene-workspaces.detect",
-              cwd: root,
-              args: ["rev-parse", "--show-toplevel"],
-              allowNonZeroExit: true,
-            });
-            if (repository.exitCode === 0) {
+            const repository = yield* git
+              .execute({
+                operation: "convene-workspaces.detect",
+                cwd: root,
+                args: ["rev-parse", "--show-toplevel"],
+                allowNonZeroExit: true,
+              })
+              .pipe(
+                Effect.catchTags({
+                  GitCommandError: (error) =>
+                    PlatformError.isPlatformError(error.cause) &&
+                    error.cause.reason._tag === "NotFound" &&
+                    error.cause.reason.module === "ChildProcess" &&
+                    error.cause.reason.pathOrDescriptor !== error.cwd
+                      ? Effect.succeed(null)
+                      : Effect.fail(error),
+                }),
+              );
+            if (repository !== null && repository.exitCode === 0) {
               const repositoryRoot = repository.stdout.trim();
               const rootBranch = yield* git.execute({
                 operation: "convene-workspaces.branch",
