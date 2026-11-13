@@ -2898,6 +2898,12 @@ function OpenCommandPaletteDialog(props: {
   };
 
   const submitButtonId = useId();
+  const browseSubmitLabel =
+    isCloneDestinationStep && !canCloneProject
+      ? t("project.clonePermission")
+      : canCreateProject
+        ? `${submitActionLabel} (${addShortcutLabel})`
+        : t("project.addPermission");
   const inputAccessory =
     newProjectFlow !== null ? (
       <CommandPaletteSubmitButton
@@ -2932,14 +2938,8 @@ function OpenCommandPaletteDialog(props: {
             : submitActionLabel
         }
         shortcutLabel={addShortcutLabel}
-        ariaLabel={`${submitActionLabel} (${addShortcutLabel})`}
-        tooltip={
-          isCloneDestinationStep && !canCloneProject
-            ? t("project.clonePermission")
-            : canCreateProject
-              ? `${submitActionLabel} (${addShortcutLabel})`
-              : t("project.addPermission")
-        }
+        ariaLabel={browseSubmitLabel}
+        tooltip={browseSubmitLabel}
         disabled={
           !canCreateProject ||
           !canCreateProjectInEnvironment(browseEnvironment?.connection.phase) ||
