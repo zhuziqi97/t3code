@@ -111,7 +111,12 @@ function ResourceDetail({ threadRef, uri }: { threadRef: ScopedThreadRef; uri: s
         {document && (
           <div className="space-y-5">
             <h2 className="text-lg font-semibold">{document.document.title}</h2>
-            <ChatMarkdown text={document.content} cwd={undefined} threadRef={threadRef} />
+            <ChatMarkdown
+              text={document.content}
+              cwd={undefined}
+              threadRef={threadRef}
+              conveneDocumentUri={document.resource_uri}
+            />
             {!state.needsRefresh && document.slice.next_start_line !== null && (
               <Button
                 variant="outline"

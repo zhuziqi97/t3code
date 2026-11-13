@@ -19,6 +19,7 @@ import "../index.css";
 
 import { filesystemEnvironment } from "../state/filesystem";
 import { useRightPanelStore } from "../rightPanelStore";
+import { useConveneResourceStore } from "./convene/conveneResourceStore";
 import { remarkEnableOrderedListNumbers } from "@t3tools/shared/markdownPipeline";
 import { setMarkdownTaskChecked } from "@t3tools/shared/markdownTaskList";
 import { HostImageUrlContext } from "./chat/hostImageUrl";
@@ -161,6 +162,7 @@ function setup() {
   renderDiagram.mockReset();
   workspaceSearch.mockReset().mockResolvedValue(AsyncResult.success({ entries: [] }));
   filesystemMetadata.mockReset().mockResolvedValue(AsyncResult.success({ entries: [null] }));
+  useConveneResourceStore.getState().close();
 }
 
 function renderText(text: string, props: Partial<Parameters<typeof ChatMarkdown>[0]> = {}) {
@@ -626,6 +628,97 @@ describe("ChatMarkdown in-page links", () => {
       expect(window.location.href).toBe(href);
     },
   );
+});
+
+describe("ChatMarkdown Convene document links", () => {
+  const threadRef = {
+    environmentId: EnvironmentId.make("document-environment"),
+    threadId: ThreadId.make("source-thread"),
+  };
+  const moduleUri = "convene://docs/zzq/software-factory/t3code";
+
+  it.each([
+    { base: `${moduleUri}/README.md`, href: "delivery/phase1.md", path: "delivery/phase1.md" },
+    { base: `${moduleUri}/delivery/phase1.md`, href: "../README.md", path: "README.md" },
+    { base: `${moduleUri}/delivery/phase1.md`, href: "/api/README.md", path: "api/README.md" },
+  ])(
+    "opens $href from the canonical document in its source environment",
+    async ({ base, href, path }) => {
+      setup();
+      const onConveneResourceOpen = vi.fn();
+      await using screen = await renderText(`[阶段一交付与验收边界](${href})`, {
+        cwd: undefined,
+        threadRef,
+        conveneDocumentUri: base,
+        onConveneResourceOpen,
+      });
+      const link = screen.container.querySelector<HTMLAnchorElement>("a")!;
+      await act(() => link.click());
+      expect(useConveneResourceStore.getState().target).toEqual({
+        threadRef,
+        uri: `${moduleUri}/${path}`,
+      });
+      expect(onConveneResourceOpen).toHaveBeenCalledOnce();
+    },
+  );
+
+  it.each([undefined, "convene://issues/zzq/software-factory/t3code/128"])(
+    "keeps local paths outside a canonical document context (%s)",
+    async (conveneDocumentUri) => {
+      setup();
+      const onConveneResourceOpen = vi.fn();
+      await using screen = await renderText("[Guide](notes/README.md)", {
+        threadRef,
+        conveneDocumentUri,
+        onConveneResourceOpen,
+      });
+      using openFile = vi
+        .spyOn(useRightPanelStore.getState(), "openFile")
+        .mockImplementation(() => {});
+      await act(() => screen.container.querySelector<HTMLAnchorElement>("a")!.click());
+      await vi.waitFor(() =>
+        expect(openFile).toHaveBeenCalledExactlyOnceWith(threadRef, "notes/README.md", undefined),
+      );
+      expect(useConveneResourceStore.getState().target).toBeNull();
+      expect(onConveneResourceOpen).not.toHaveBeenCalled();
+    },
+  );
+
+  it("preserves full resource and web links, in-page navigation and missing-thread protection", async () => {
+    setup();
+    const uri = "convene://docs/other/project/module/guide.md?version_number=2";
+    const onConveneResourceOpen = vi.fn();
+    const text = `[Document](${uri}) [Web](https://example.com/guide.md) [Notes](#notes)\n\n## Notes`;
+    const props = {
+      cwd: undefined,
+      conveneDocumentUri: `${moduleUri}/README.md`,
+      onConveneResourceOpen,
+    };
+    await using screen = await renderText(text, { ...props, threadRef });
+    using scrollIntoView = vi
+      .spyOn(HTMLElement.prototype, "scrollIntoView")
+      .mockImplementation(() => {});
+    const [documentLink, webLink, fragmentLink] =
+      screen.container.querySelectorAll<HTMLAnchorElement>("a");
+    expect(webLink!.getAttribute("href")).toBe("https://example.com/guide.md");
+    expect(webLink!.getAttribute("target")).toBe("_blank");
+    const location = window.location.href;
+    await act(() => fragmentLink!.click());
+    expect(scrollIntoView.mock.contexts).toEqual([screen.container.querySelector("h2")]);
+    expect(window.location.href).toBe(location);
+    expect(useConveneResourceStore.getState().target).toBeNull();
+    expect(onConveneResourceOpen).not.toHaveBeenCalled();
+    await act(() => documentLink!.click());
+    expect(useConveneResourceStore.getState().target).toEqual({ threadRef, uri });
+    expect(onConveneResourceOpen).toHaveBeenCalledOnce();
+    useConveneResourceStore.getState().close();
+    await screen.rerender(<ChatMarkdown text={text} {...props} />);
+    const unavailable = screen.container.querySelector<HTMLAnchorElement>("a")!;
+    expect(unavailable.getAttribute("aria-disabled")).toBe("true");
+    await act(() => unavailable.click());
+    expect(useConveneResourceStore.getState().target).toBeNull();
+    expect(onConveneResourceOpen).toHaveBeenCalledOnce();
+  });
 });
 
 describe("ChatMarkdown thread find", () => {

@@ -101,3 +101,27 @@ export function createConveneResourceReader(
 export function isConveneResourceLink(href: string): boolean {
   return href.startsWith("convene://");
 }
+
+export function resolveConveneDocumentLink(href: string, documentUri?: string): string | null {
+  if (
+    !documentUri?.startsWith("convene://docs/") ||
+    !href ||
+    href.startsWith("#") ||
+    href.startsWith("//") ||
+    /^[a-z][a-z\d+.-]*:/i.test(href)
+  )
+    return null;
+  try {
+    const base = new URL(documentUri);
+    const path = /^(\/[^/]+\/[^/]+\/[^/]+)(\/.+)$/.exec(base.pathname);
+    if (!path) return null;
+    const modulePath = path[1]!;
+    // A leading slash is relative to this module, not the URI authority.
+    base.pathname = path[2]!;
+    const resolved = new URL(href, base);
+    resolved.pathname = modulePath + resolved.pathname;
+    return resolved.href;
+  } catch {
+    return null;
+  }
+}

@@ -1,6 +1,9 @@
 import { useTranslate } from "../i18n";
 import { useConveneResourceStore } from "./convene/conveneResourceStore";
-import { isConveneResourceLink } from "@t3tools/client-runtime/convene-resource-reader";
+import {
+  isConveneResourceLink,
+  resolveConveneDocumentLink,
+} from "@t3tools/client-runtime/convene-resource-reader";
 import { clientHostEnvironmentAtom } from "../state/clientHostEnvironment";
 import { buildFileLinkParentSuffixByPath, fileLinkLabel } from "@t3tools/shared/fileLinks";
 import {
@@ -231,6 +234,7 @@ interface ChatMarkdownProps {
   threadRef?: ScopedThreadRef | undefined;
   pullRequestPanelRef?: ScopedThreadRef | undefined;
   environmentId?: EnvironmentId | undefined;
+  conveneDocumentUri?: string | undefined;
   onConveneResourceOpen?: (() => void) | undefined;
   onTaskListChange?: ((input: { markerOffset: number; checked: boolean }) => void) | undefined;
   isStreaming?: boolean;
@@ -482,6 +486,7 @@ function useChatMarkdownState({
   threadRef,
   pullRequestPanelRef,
   environmentId: explicitEnvironmentId,
+  conveneDocumentUri,
   onConveneResourceOpen,
   onTaskListChange,
   isStreaming = false,
@@ -929,6 +934,7 @@ function useChatMarkdownState({
     pullRequestsEnabled,
     skills,
     threadRef,
+    conveneDocumentUri,
     onConveneResourceOpen,
     updateThreadPullRequestLink,
   };
@@ -1078,6 +1084,7 @@ const CHAT_MARKDOWN_COMPONENTS = {
       imageBaseDir,
       markdownFileLinkMetaByHref,
       threadRef,
+      conveneDocumentUri,
       onConveneResourceOpen,
       openMarkdownMedia,
       openChangeRequestLink,
@@ -1093,18 +1100,23 @@ const CHAT_MARKDOWN_COMPONENTS = {
       renderContextReference,
     } = use(ChatMarkdownRendererContext);
     const text = use(ChatMarkdownTextContext);
-    if (href && isConveneResourceLink(href)) {
+    const conveneHref = href
+      ? isConveneResourceLink(href)
+        ? href
+        : resolveConveneDocumentLink(href, conveneDocumentUri)
+      : null;
+    if (conveneHref) {
       const link = (
         <a
           {...props}
-          href={href}
+          href={conveneHref}
           className="text-primary underline underline-offset-2"
           aria-label={t("convene.resource.open")}
           aria-disabled={!threadRef}
           onClick={(event) => {
             event.preventDefault();
             if (threadRef) {
-              useConveneResourceStore.getState().open(threadRef, href);
+              useConveneResourceStore.getState().open(threadRef, conveneHref);
               onConveneResourceOpen?.();
             }
           }}
