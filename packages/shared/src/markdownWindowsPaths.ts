@@ -55,7 +55,7 @@ function keepWindowsProsePathEscape(this: EscapeCompileContext) {
  * destinations themselves. Prose paths end at whitespace: past that, nothing tells a path
  * from a sentence, and `C:\x and \*this\*` must still read `*this*`.
  */
-export function remarkKeepWindowsProsePaths(this: Processor) {
+function attachWindowsProsePaths(this: Processor) {
   (this.data().fromMarkdownExtensions ??= []).push({
     exit: { characterEscape: keepWindowsProsePathEscape },
   });
@@ -66,7 +66,7 @@ export function remarkKeepWindowsProsePaths(this: Processor) {
  * Windows path is a separator, so link, image, and definition destinations that are
  * Windows paths keep the text as written, and so do escapes inside drive paths.
  */
-export function remarkKeepWindowsPaths(this: Processor) {
+function attachWindowsPaths(this: Processor) {
   (this.data().fromMarkdownExtensions ??= []).push({
     exit: {
       resourceDestinationString: keepWindowsPathDestination,
@@ -75,3 +75,6 @@ export function remarkKeepWindowsPaths(this: Processor) {
     },
   });
 }
+
+export const remarkKeepWindowsProsePaths = attachWindowsProsePaths;
+export const remarkKeepWindowsPaths = attachWindowsPaths;

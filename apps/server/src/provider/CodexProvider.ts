@@ -40,7 +40,6 @@ import {
   buildServerProvider,
   COMPACT_SLASH_COMMAND,
   DEFAULT_TIMEOUT_MS,
-  providerModelsFromSettings,
   providerProbeEnvironment,
   spawnAndCollect,
   type ServerProviderDraft,

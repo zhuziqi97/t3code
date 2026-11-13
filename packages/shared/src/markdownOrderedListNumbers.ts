@@ -46,7 +46,7 @@ const enabledProcessors = new WeakSet<object>();
  * Opts a processor in. User messages use it so the sent bubble shows the numbers the composer
  * showed and the agent received; agent replies and files keep CommonMark numbering.
  */
-export function remarkEnableOrderedListNumbers(this: object): undefined {
+function enableOrderedListNumbers(this: object): undefined {
   enabledProcessors.add(this);
 }
 
@@ -55,8 +55,11 @@ export function keepsOrderedListNumbers(processor: object): boolean {
 }
 
 /** Sits before list recovery so offsets still point into the file. */
-export function remarkKeepOrderedListNumbers(this: object): Transformer<Root> {
+function attachOrderedListNumbers(this: object): Transformer<Root> {
   return (tree, file) => {
     if (enabledProcessors.has(this)) keepOrderedListNumbers(tree, String(file));
   };
 }
+
+export const remarkEnableOrderedListNumbers = enableOrderedListNumbers;
+export const remarkKeepOrderedListNumbers = attachOrderedListNumbers;
