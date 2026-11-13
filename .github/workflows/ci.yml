@@ -179,7 +179,7 @@ jobs:
           # Fetch only the indexes these main and universe packages need. The full set is ~42 MB,
           # which a slow mirror can stretch past the wait below.
           sudo sed -i -e 's|http://|https://|g' -e 's/^Components: .*/Components: main universe/' \
-            /etc/apt/blacksmith-ubuntu-mirrors.txt /etc/apt/sources.list.d/ubuntu.sources
+            /etc/apt/sources.list.d/ubuntu.sources
           (
             set +e
             sudo apt-get update -o Acquire::Languages=none \
@@ -323,7 +323,7 @@ jobs:
           # Fetch only the indexes these main and universe packages need. The full set is ~42 MB,
           # which a slow mirror can stretch past the wait below.
           sudo sed -i -e 's|http://|https://|g' -e 's/^Components: .*/Components: main universe/' \
-            /etc/apt/blacksmith-ubuntu-mirrors.txt /etc/apt/sources.list.d/ubuntu.sources
+            /etc/apt/sources.list.d/ubuntu.sources
           (
             set +e
             sudo apt-get update -o Acquire::Languages=none \
