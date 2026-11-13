@@ -52,6 +52,10 @@ export function materializeReplayTranscriptRuntimeInstructions(
           !first.text.startsWith("<runtime_info>")
         )
           return entry;
+        const fileLinkInstructions = instructions.slice(
+          instructions.indexOf(" Link ") + 1,
+          instructions.indexOf("</runtime_info>"),
+        );
         return {
           ...entry,
           frame: {
@@ -61,10 +65,15 @@ export function materializeReplayTranscriptRuntimeInstructions(
               input: [
                 {
                   ...first,
-                  text: first.text.replace(
-                    /<pull_request_linking>[\s\S]*?<\/pull_request_linking>/u,
-                    PULL_REQUEST_LINKING_INSTRUCTIONS,
-                  ),
+                  text: first.text
+                    .replace(
+                      "Link any other file you produce using its absolute path so the user can open it in T3 Code's files viewer.",
+                      fileLinkInstructions,
+                    )
+                    .replace(
+                      /<pull_request_linking>[\s\S]*?<\/pull_request_linking>/u,
+                      PULL_REQUEST_LINKING_INSTRUCTIONS,
+                    ),
                 },
                 ...input.slice(1),
               ],
