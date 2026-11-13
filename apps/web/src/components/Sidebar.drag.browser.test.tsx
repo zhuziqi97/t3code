@@ -39,6 +39,7 @@ it("keeps the title when dragging a search result from a collapsed folder", asyn
   __setClientSettingsForTests({
     ...DEFAULT_CLIENT_SETTINGS,
     boringSidebarEnabled: true,
+    languagePreference: "en",
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
   });
   const router = getRouter(
@@ -49,7 +50,7 @@ it("keeps the title when dragging a search result from a collapsed folder", asyn
     // AppRoot brings its own router.
     router: false,
   });
-  const folder = page.getByRole("button", { name: /^render/ });
+  const folder = page.getByRole("treeitem", { name: /^render/ });
   await expect.element(folder).toHaveAttribute("aria-expanded", "true");
   await userEvent.click(folder);
   await expect.element(page.getByText(second.title, { exact: true })).not.toBeInTheDocument();

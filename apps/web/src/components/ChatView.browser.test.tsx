@@ -76,6 +76,7 @@ it("opens the thread actions menu for an older settled thread the shell leaves o
   using _environment = installFakeEnvironment([thread]);
   __setClientSettingsForTests({
     ...DEFAULT_CLIENT_SETTINGS,
+    languagePreference: "en",
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
   });
 
