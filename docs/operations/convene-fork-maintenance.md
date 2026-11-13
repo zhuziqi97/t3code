@@ -5,9 +5,15 @@
 Agent 生命周期实施计划：[convene-agent-lifecycle-plan.md](../plan/convene-agent-lifecycle-plan.md)。
 用户明确要求本地 fork 保存计划与合并决定；这些文档随 Convene 分支提交，不提交上游。
 
-当前已发行版本 `0.1.8-1` 固定上游 `v0.1.8`（`bf469bb19669671d0df2efda74ed73867a7137c0`），由[#123](convene://issues/zzq/software-factory/t3code/123)统筹，于2026-11-12与Convene6.7.6联合发布。不将上游最新 main 当作同步目标。
+当前已发行版本 `0.1.9-1` 固定上游 `v0.1.9`（`24e77473ecf41bc1f7142529c7911c1c1aae1d76`），由[#125](convene://issues/zzq/software-factory/t3code/125)统筹，于2026-11-13独立发布。不将上游最新 main 当作同步目标。
 
-本次制品源码为`3d0b2f69ba383c9d91e1dd28dd61b6d0fcc4d1b8`，完整CI/三平台构建为[42960981607](https://github.com/zhuziqi97/t3code/actions/runs/42960981607)，build为`convene-42960981607-1`。既有publisher已发布四包及matching Web，公网manifest、8个不可变/latest HEAD、校验文件、4个Range GET及Web身份通过；旧0.1.7-1下载对象及Web回退保留。公告于北京时间12:10:18完成；本次没有安装或退出重启用户客户端，不把CI包标为runtime_verified。main合并保留准备期间两项反向通道诊断修正，后继主线与记录不冒充实际打包源码；没有创建tag或GitHub Release。#70/#112/#102/#122等未解决专项继续独立跟踪。
+0.1.9-1 的实际制品源码为 `74420ae4c62b5a8db7978392d5d3140e76443e0e`，完整CI及三平台构建为[43345455250](https://github.com/zhuziqi97/t3code/actions/runs/43345455250)，build为 `convene-43345455250-1`。既有publisher一次正式请求发布四包和同源Web，实际公网manifest、不可变/latest文件、校验文件、Range下载、Web身份以及公告详情/列表/通知/8份Feed均通过。Web rollback保留 `convene-42960981607-1`；公告于北京时间12:13:23发布，路径为 `/announcements/posts/release-t3code-0-1-9-1/`。本次未升级Convene应用、安装或重启用户客户端，不把构建检查标为runtime_verified，不创建PR/tag/GitHub Release。后继主线与记录不替代实际制品源码。
+
+本版恢复旧紧凑行、完整标题提示和项目树键盘接线，并按同步后审查恢复编辑器专用可用性、额度与新增入口中文、权限拒绝说明；采用固定上游的性能和生命周期修正。#112指定目标读取补验成功，原warm与#70资源保全边界不扩大；#122按用户决定本轮不登录，#102/#111/#122等独立专项继续跟踪。
+
+上一版 `0.1.8-1` 固定上游 `v0.1.8`（`bf469bb19669671d0df2efda74ed73867a7137c0`），由[#123](convene://issues/zzq/software-factory/t3code/123)统筹，于2026-11-12与Convene6.7.6联合发布。不将上游最新 main 当作同步目标。
+
+该版制品源码为`3d0b2f69ba383c9d91e1dd28dd61b6d0fcc4d1b8`，完整CI/三平台构建为[42960981607](https://github.com/zhuziqi97/t3code/actions/runs/42960981607)，build为`convene-42960981607-1`。既有publisher已发布四包及matching Web，公网manifest、8个不可变/latest HEAD、校验文件、4个Range GET及Web身份通过；旧0.1.7-1下载对象及Web回退保留。公告于北京时间12:10:18完成；本次没有安装或退出重启用户客户端，不把CI包标为runtime_verified。main合并保留准备期间两项反向通道诊断修正，后继主线与记录不冒充实际打包源码；没有创建tag或GitHub Release。#70/#112/#102/#122等未解决专项继续独立跟踪。
 具体冲突裁决及各适配的上游状态见 [V2 稳定版合入核查](convene-v010-upstream-review.md)；
 实施由 [T3Code Issue #8](convene://issues/zzq/software-factory/t3code/8) 追踪。
 
