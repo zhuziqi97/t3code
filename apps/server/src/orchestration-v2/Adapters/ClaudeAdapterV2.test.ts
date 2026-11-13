@@ -10402,7 +10402,8 @@ describe("ClaudeAdapterV2 background wake turns", () => {
             ),
           );
 
-          yield* Queue.offer(harness.sdkMessages, emptyRoster);
+          assert.isTrue(yield* harness.hasPendingBackgroundWork);
+          yield* harness.offerAndWait(emptyRoster);
           yield* harness.until(() =>
             providerThreadRosterEvents(harness.events).some(
               (event) =>

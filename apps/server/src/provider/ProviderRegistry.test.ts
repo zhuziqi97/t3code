@@ -2477,7 +2477,7 @@ it.layer(
                 skills: [{ name: "finalize", path: `${directory}/finalize`, enabled: true }],
               }),
             ),
-          orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
+          orchestrationAdapter: capabilitiesAdapter(),
           textGeneration: {} as ProviderInstance["textGeneration"],
         };
         const layerInstanceRegistry = Layer.succeed(
