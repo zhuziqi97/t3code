@@ -42,6 +42,23 @@ export const en = {
   "prediction.off": "Predictions are off. Change the mode in Settings → Chat.",
   "keybindings.command.chat.requestPrediction": "Chat: Request Prediction",
   "prediction.ready": "Suggestion ready · Tab to use as draft",
+  "prediction.readyAnnouncement": "Suggestion available: {{text}}",
+  "prediction.reason.thread_required": "Open a completed conversation to request a prediction.",
+  "prediction.reason.pending_input":
+    "Finish answering the pending question before requesting a prediction.",
+  "prediction.reason.pending_approval":
+    "Resolve the pending approval before requesting a prediction.",
+  "prediction.reason.editing_queued_message":
+    "Finish editing the queued message before requesting a prediction.",
+  "prediction.reason.attached_context":
+    "Predictions require an empty composer without attachments or added context.",
+  "prediction.reason.connection": "Connect to this environment before requesting a prediction.",
+  "prediction.reason.permission":
+    "This connection does not have permission to request predictions.",
+  "prediction.reason.provider":
+    "Predictions require the completed Codex session to remain selected.",
+  "prediction.reason.source_required": "Complete a Codex turn before requesting a prediction.",
+  "prediction.reason.plan_mode": "Predictions are unavailable in Plan mode.",
   "prediction.view": "View full suggestion",
   "prediction.collapse": "Close full suggestion",
   "prediction.empty": "No suggestion was returned.",
