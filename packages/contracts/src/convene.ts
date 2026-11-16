@@ -111,13 +111,48 @@ export const ConveneNativeResult = Schema.Union([
 ]);
 export type ConveneNativeResult = typeof ConveneNativeResult.Type;
 
+const ConveneDataUrl = Schema.NonEmptyString.check(
+  Schema.makeFilter(
+    (value) => {
+      try {
+        const url = new URL(value);
+        return (
+          (url.protocol === "wss:" ||
+            (url.protocol === "ws:" &&
+              ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))) &&
+          !url.username &&
+          !url.password &&
+          !url.search &&
+          !url.hash
+        );
+      } catch {
+        return false;
+      }
+    },
+    { expected: "a WSS data URL, or WS on loopback, without credentials, query or fragment" },
+  ),
+);
+
 export const ConveneDataControl = Schema.Struct({
   TYPE: Schema.Literals(["OPEN_DATA_CHANNEL", "CANCEL_DATA_CHANNEL"]),
-  REQUEST_ID: Schema.String,
-  CONNECTION_ID: Schema.String,
+  REQUEST_ID: Schema.NonEmptyString.check(Schema.isMaxLength(64)),
+  CONNECTION_ID: Schema.String.check(Schema.isUUID()),
   KIND: Schema.optional(Schema.Literals(["HTTP", "WS"])),
-  REPORT_THRESHOLD_MS: Schema.optional(Schema.Number),
-});
+  REPORT_THRESHOLD_MS: Schema.optional(
+    Schema.Number.check(Schema.isFinite(), Schema.isGreaterThanOrEqualTo(0)),
+  ),
+  DATA_URL: Schema.optional(ConveneDataUrl),
+  BIND_TOKEN: Schema.optional(Schema.NonEmptyString),
+}).check(
+  Schema.makeFilter(
+    (control) =>
+      control.TYPE === "CANCEL_DATA_CHANNEL"
+        ? control.DATA_URL === undefined && control.BIND_TOKEN === undefined
+        : (control.DATA_URL === undefined) === (control.BIND_TOKEN === undefined) &&
+          (control.DATA_URL === undefined || control.KIND !== undefined),
+    { expected: "paired cloud fields and an explicit cloud kind on OPEN only" },
+  ),
+);
 export const ConveneDataResult = Schema.Struct({
   TYPE: Schema.Literal("DATA_CHANNEL_RESULT"),
   REQUEST_ID: Schema.String,

@@ -27,7 +27,13 @@ import * as FileSystem from "effect/FileSystem";
 import * as PlatformError from "effect/PlatformError";
 import * as TestClock from "effect/testing/TestClock";
 import * as Socket from "effect/socket/Socket";
-import { FetchHttpClient, HttpRouter, HttpServer, HttpServerRequest } from "effect/http";
+import {
+  FetchHttpClient,
+  HttpRouter,
+  HttpServer,
+  HttpServerRequest,
+  HttpServerResponse,
+} from "effect/http";
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import * as ServerConfig from "../config.ts";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
@@ -144,7 +150,14 @@ it.live("gates a prepared worktree's first MCP lease on its matching control ACK
               for (const frame of yield* pull) {
                 const message = yield* decode(frame);
                 if (message.TYPE === "HELLO")
-                  yield* send({ TYPE: "HELLO_ACK", PAYLOAD: { HEARTBEAT_INTERVAL_SECONDS: 15 } });
+                  yield* send({
+                    TYPE: "HELLO_ACK",
+                    PAYLOAD: {
+                      HEARTBEAT_INTERVAL_SECONDS: 15,
+                      CONNECTION_ID: "10000000-0000-4000-8000-000000000001",
+                      SELECTED_PROTOCOL: { MAJOR: 1, MINOR: 0 },
+                    },
+                  });
                 if (message.TYPE === "TARGETS_REPORT") {
                   reportCount++;
                   yield* Queue.offer(reports, { id: message.MESSAGE_ID, payload: message.PAYLOAD });
@@ -326,13 +339,16 @@ it.live("gates a prepared worktree's first MCP lease on its matching control ACK
   ),
 );
 
-it.live("keeps heartbeat, changed directories, refresh ACKs, and reconnection independent", () =>
+it.live.each([0, 1] as const)("keeps control workers independent on 1.%s", (minor) =>
   Effect.gen(function* () {
     const cacheStarted = yield* Deferred.make<void>();
     const releaseCache = yield* Deferred.make<void>();
     const dataBound = yield* Deferred.make<void>();
-    const dataFailed = yield* Deferred.make<Record<string, unknown>>();
+    const dataResults = yield* Queue.unbounded<Record<string, unknown>>();
+    const cloudBound = yield* Deferred.make<void>();
+    const cloudClosed = yield* Deferred.make<void>();
     let failDataToken = false;
+    let tokenReads = 0;
     const updateSource = yield* Deferred.make<string>();
     const workspaceReported = yield* Deferred.make<void>();
     const workspaceChanges = yield* PubSub.unbounded<void>();
@@ -392,14 +408,36 @@ it.live("keeps heartbeat, changed directories, refresh ACKs, and reconnection in
             Effect.forkScoped,
           );
           let dataChannelRequested = false;
+          const connectionId =
+            helloCount === 0
+              ? "10000000-0000-4000-8000-000000000001"
+              : "20000000-0000-4000-8000-000000000002";
           while (true)
             for (const frame of yield* pull) {
               const message = yield* decode(frame);
-              if (message.TYPE === "DATA_CHANNEL_RESULT")
-                yield* Deferred.succeed(dataFailed, message);
+              if (message.TYPE === "DATA_CHANNEL_RESULT") yield* Queue.offer(dataResults, message);
               if (message.TYPE === "HELLO") {
                 helloCount++;
-                yield* send({ TYPE: "HELLO_ACK", PAYLOAD: { HEARTBEAT_INTERVAL_SECONDS: 15 } });
+                assert.deepEqual(
+                  message.PAYLOAD &&
+                    (message.PAYLOAD as Record<string, unknown>).SUPPORTED_PROTOCOLS,
+                  [{ MAJOR: 1, MAX_MINOR: 1 }],
+                );
+                yield* send({
+                  TYPE: "OPEN_DATA_CHANNEL",
+                  REQUEST_ID: "before-ack",
+                  CONNECTION_ID: connectionId,
+                  KIND: "HTTP",
+                  REPORT_THRESHOLD_MS: 0,
+                });
+                yield* send({
+                  TYPE: "HELLO_ACK",
+                  PAYLOAD: {
+                    HEARTBEAT_INTERVAL_SECONDS: 15,
+                    CONNECTION_ID: connectionId,
+                    SELECTED_PROTOCOL: { MAJOR: 1, MINOR: helloCount === 1 ? minor : 0 },
+                  },
+                });
               }
               if (message.TYPE === "HEARTBEAT") {
                 assert.equal(message.PROTOCOL_VERSION, 1);
@@ -432,7 +470,7 @@ it.live("keeps heartbeat, changed directories, refresh ACKs, and reconnection in
                   yield* send({
                     TYPE: "OPEN_DATA_CHANNEL",
                     REQUEST_ID: "read",
-                    CONNECTION_ID: "control",
+                    CONNECTION_ID: connectionId,
                     KIND: "HTTP",
                   });
                 }
@@ -449,10 +487,33 @@ it.live("keeps heartbeat, changed directories, refresh ACKs, and reconnection in
           while (true)
             for (const frame of yield* pull) {
               if ((yield* decode(frame)).TYPE === "BIND_DATA_CHANNEL") {
-                yield* Deferred.succeed(dataBound, undefined);
+                const message = yield* decode(frame);
+                if (message.REQUEST_ID === "read") yield* Deferred.succeed(dataBound, undefined);
                 return yield* Effect.never;
               }
             }
+        }),
+      ),
+      HttpRouter.add(
+        "GET",
+        "/data",
+        Effect.gen(function* () {
+          const socket = yield* (yield* HttpServerRequest.HttpServerRequest).upgrade;
+          const { pull } = yield* socket.reader;
+          const handshake: Array<Record<string, unknown>> = [];
+          while (handshake.length < 2)
+            for (const frame of yield* pull) handshake.push(yield* decode(frame));
+          assert.deepEqual(handshake[0], { TYPE: "AUTHENTICATE", TOKEN: "one-use-token" });
+          const binding = handshake[1];
+          assert.include(binding, {
+            TYPE: "BIND_DATA_CHANNEL",
+            REQUEST_ID: "cloud",
+            CONNECTION_ID: "10000000-0000-4000-8000-000000000001",
+          });
+          yield* Deferred.succeed(cloudBound, undefined);
+          yield* Effect.exit(pull);
+          yield* Deferred.succeed(cloudClosed, undefined);
+          return HttpServerResponse.empty();
         }),
       ),
     );
@@ -472,16 +533,17 @@ it.live("keeps heartbeat, changed directories, refresh ACKs, and reconnection in
           runnerId: "runner",
           refreshCredential: "credential",
         }),
-        accessToken: Effect.suspend(() =>
-          failDataToken
+        accessToken: Effect.suspend(() => {
+          tokenReads++;
+          return failDataToken
             ? Effect.fail(
                 new ConvenePlatform.ConvenePlatformError({
                   operation: "refresh",
                   cause: new Error("controlled token failure"),
                 }),
               )
-            : Effect.succeed("access"),
-        ),
+            : Effect.succeed("access");
+        }),
         changes: platformChanges,
       }),
       Layer.mock(ConveneMcp.ConveneMcp)({
@@ -602,18 +664,24 @@ it.live("keeps heartbeat, changed directories, refresh ACKs, and reconnection in
     yield* Effect.gen(function* () {
       const connection = yield* ConveneConnection.ConveneConnection;
       yield* Deferred.await(dataBound);
+      yield* Queue.take(heartbeats);
+      assert.include((yield* Queue.clear(dataResults))[0], {
+        REQUEST_ID: "before-ack",
+        OUTCOME: "failed",
+        ERROR_CODE: "INVALID_PARAMS",
+      });
       failDataToken = true;
       yield* Queue.offer(control, {
         TYPE: "OPEN_DATA_CHANNEL",
         REQUEST_ID: "failed-read",
-        CONNECTION_ID: "control",
+        CONNECTION_ID: "10000000-0000-4000-8000-000000000001",
         KIND: "HTTP",
         REPORT_THRESHOLD_MS: 1000,
       });
-      assert.include(yield* Deferred.await(dataFailed), {
+      assert.include(yield* Queue.take(dataResults), {
         TYPE: "DATA_CHANNEL_RESULT",
         REQUEST_ID: "failed-read",
-        CONNECTION_ID: "control",
+        CONNECTION_ID: "10000000-0000-4000-8000-000000000001",
         OUTCOME: "failed",
         STAGE: "token",
       });
@@ -630,8 +698,95 @@ it.live("keeps heartbeat, changed directories, refresh ACKs, and reconnection in
       const empty = yield* decodeReportedTargets(yield* Queue.take(reports));
       assert.deepEqual(empty.PROJECTS, []);
       assert.deepEqual(empty.TARGETS, []);
-      yield* Queue.take(heartbeats);
       assert.equal((yield* Queue.take(applied))[0]?.mcp_enabled, true);
+      const cloudEndpoint = new URL("/data", HttpServer.formatAddress(server.address));
+      cloudEndpoint.protocol = "ws:";
+      cloudEndpoint.hostname = "127.0.0.1";
+      const cloudUrl = cloudEndpoint.toString();
+      const invalid = [
+        { DATA_URL: cloudUrl },
+        { BIND_TOKEN: "one-use-token" },
+        { DATA_URL: null, BIND_TOKEN: "one-use-token" },
+        { DATA_URL: cloudUrl, BIND_TOKEN: null },
+        { DATA_URL: "", BIND_TOKEN: "one-use-token" },
+        { DATA_URL: cloudUrl, BIND_TOKEN: "" },
+        ...[
+          "https://relay.example/data",
+          "ws://relay.example/data",
+          "wss://user@relay.example/data",
+          "wss://relay.example/data?q=1",
+          "wss://relay.example/data#fragment",
+          "not a url",
+        ].map((DATA_URL) => ({ DATA_URL, BIND_TOKEN: "one-use-token" })),
+        { DATA_URL: cloudUrl, BIND_TOKEN: "one-use-token", KIND: undefined },
+        { CONNECTION_ID: "20000000-0000-4000-8000-000000000002" },
+        ...(minor === 0 ? [{ DATA_URL: cloudUrl, BIND_TOKEN: "one-use-token" }] : []),
+      ];
+      const readsBeforeInvalid = tokenReads;
+      for (const [index, fields] of invalid.entries())
+        yield* Queue.offer(control, {
+          TYPE: "OPEN_DATA_CHANNEL",
+          REQUEST_ID: `invalid-${index}`,
+          CONNECTION_ID: "10000000-0000-4000-8000-000000000001",
+          KIND: "HTTP",
+          REPORT_THRESHOLD_MS: 0,
+          ...fields,
+        });
+      yield* Queue.offer(control, {
+        TYPE: "CONFIGURATION_CHANGED",
+        PAYLOAD: { CONFIGURATION: configuration },
+      });
+      yield* Queue.take(applied);
+      yield* TestClock.adjust("15 seconds");
+      yield* Queue.take(heartbeats);
+      const rejected = yield* Queue.clear(dataResults);
+      assert.equal(rejected.length, invalid.length);
+      assert.equal(tokenReads, readsBeforeInvalid);
+      for (const [index, result] of rejected.entries())
+        assert.include(result, {
+          REQUEST_ID: `invalid-${index}`,
+          OUTCOME: "failed",
+          ERROR_CODE: "INVALID_PARAMS",
+        });
+      if (minor === 1) {
+        failDataToken = true;
+        yield* Queue.offer(control, {
+          TYPE: "OPEN_DATA_CHANNEL",
+          REQUEST_ID: "cloud",
+          CONNECTION_ID: "10000000-0000-4000-8000-000000000001",
+          KIND: "HTTP",
+          REPORT_THRESHOLD_MS: 0,
+          DATA_URL: cloudUrl,
+          BIND_TOKEN: "one-use-token",
+        });
+        yield* Effect.raceFirst(
+          Deferred.await(cloudBound),
+          Queue.take(dataResults).pipe(Effect.flatMap((result) => Effect.die(result))),
+        );
+        yield* Queue.offer(control, {
+          TYPE: "CANCEL_DATA_CHANNEL",
+          REQUEST_ID: "cloud",
+          CONNECTION_ID: "20000000-0000-4000-8000-000000000002",
+          REPORT_THRESHOLD_MS: 0,
+        });
+        assert.include(yield* Queue.take(dataResults), {
+          REQUEST_ID: "cloud",
+          OUTCOME: "failed",
+          ERROR_CODE: "INVALID_PARAMS",
+        });
+        assert.isFalse(yield* Deferred.isDone(cloudClosed));
+        yield* Queue.offer(control, {
+          TYPE: "CANCEL_DATA_CHANNEL",
+          REQUEST_ID: "cloud",
+          CONNECTION_ID: "10000000-0000-4000-8000-000000000001",
+        });
+        yield* Deferred.await(cloudClosed);
+        assert.include(yield* Queue.take(dataResults), {
+          REQUEST_ID: "cloud",
+          OUTCOME: "cancelled",
+        });
+        failDataToken = false;
+      }
       for (let index = 0; index < 60; index++) {
         reverse = !reverse;
         updatedAt = IsoDateTime.make("2026-10-23T00:00:00.000Z");
@@ -766,6 +921,24 @@ it.live("keeps heartbeat, changed directories, refresh ACKs, and reconnection in
       yield* Queue.take(reports);
       assert.equal(helloCount, 2);
       assert.equal(reportCount, beforeReconnect + 1);
+      yield* Queue.offer(control, {
+        TYPE: "OPEN_DATA_CHANNEL",
+        REQUEST_ID: "cloud-after-reconnect",
+        CONNECTION_ID: "20000000-0000-4000-8000-000000000002",
+        KIND: "HTTP",
+        REPORT_THRESHOLD_MS: 0,
+        DATA_URL: cloudUrl,
+        BIND_TOKEN: "one-use-token",
+      });
+      assert.include(yield* Queue.take(dataResults), {
+        REQUEST_ID: "before-ack",
+        OUTCOME: "failed",
+      });
+      assert.include(yield* Queue.take(dataResults), {
+        REQUEST_ID: "cloud-after-reconnect",
+        OUTCOME: "failed",
+        ERROR_CODE: "INVALID_PARAMS",
+      });
     }).pipe(
       Effect.provide(
         ConveneConnection.layer.pipe(

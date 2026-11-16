@@ -55,12 +55,28 @@ const ControlMessage = Schema.Struct({
 });
 const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 const decodeMessageType = Schema.decodeUnknownEffect(
-  Schema.fromJsonString(Schema.Struct({ TYPE: Schema.String })),
+  Schema.fromJsonString(
+    Schema.Struct({
+      TYPE: Schema.String,
+      REQUEST_ID: Schema.optional(Schema.Unknown),
+      CONNECTION_ID: Schema.optional(Schema.Unknown),
+      REPORT_THRESHOLD_MS: Schema.optional(Schema.Unknown),
+    }),
+  ),
 );
 const decodeDataControl = Schema.decodeUnknownEffect(Schema.fromJsonString(ConveneDataControl));
 const decodeControlMessage = Schema.decodeUnknownEffect(Schema.fromJsonString(ControlMessage));
 const decodeHelloAck = Schema.decodeUnknownEffect(
-  Schema.Struct({ HEARTBEAT_INTERVAL_SECONDS: Schema.Number }),
+  Schema.Struct({
+    HEARTBEAT_INTERVAL_SECONDS: Schema.Number,
+    CONNECTION_ID: Schema.String.check(Schema.isUUID()),
+    SELECTED_PROTOCOL: Schema.Struct({
+      MAJOR: Schema.Literal(1),
+      MINOR: Schema.Int.check(
+        Schema.isBetween({ minimum: 0, maximum: CONVENE_SUPPORTED_PROTOCOLS[0].MAX_MINOR }),
+      ),
+    }),
+  }),
 );
 const decodeReportAck = Schema.decodeUnknownEffect(
   Schema.Struct({
@@ -312,14 +328,43 @@ const start = Effect.fn("ConveneConnection.start")(function* (
         ),
       );
       const readControl = Effect.gen(function* () {
-        let ready = false;
+        let ack: Effect.Success<ReturnType<typeof decodeHelloAck>> | undefined;
         while (true) {
           for (const frame of yield* pull) {
             if (typeof frame !== "string" && !(frame instanceof Uint8Array)) continue;
             const text = typeof frame === "string" ? frame : new TextDecoder().decode(frame);
             const raw = yield* decodeMessageType(text);
             if (raw.TYPE === "OPEN_DATA_CHANNEL" || raw.TYPE === "CANCEL_DATA_CHANNEL") {
-              const control = yield* decodeDataControl(text);
+              const decoded = yield* decodeDataControl(text).pipe(Effect.option);
+              if (
+                Option.isNone(decoded) ||
+                ack === undefined ||
+                decoded.value.CONNECTION_ID !== ack.CONNECTION_ID ||
+                (decoded.value.DATA_URL !== undefined && ack.SELECTED_PROTOCOL.MINOR < 1)
+              ) {
+                yield* Effect.logWarning("Convene data control rejected", {
+                  code: "INVALID_PARAMS",
+                });
+                if (
+                  typeof raw.REQUEST_ID === "string" &&
+                  typeof raw.CONNECTION_ID === "string" &&
+                  typeof raw.REPORT_THRESHOLD_MS === "number" &&
+                  Number.isFinite(raw.REPORT_THRESHOLD_MS) &&
+                  raw.REPORT_THRESHOLD_MS >= 0
+                )
+                  yield* send({
+                    TYPE: "DATA_CHANNEL_RESULT",
+                    REQUEST_ID: raw.REQUEST_ID,
+                    CONNECTION_ID: raw.CONNECTION_ID,
+                    OUTCOME: "failed",
+                    STAGE: "token",
+                    ELAPSED_MS: 0,
+                    ERROR_CODE: "INVALID_PARAMS",
+                    TIMINGS_MS: {},
+                  });
+                continue;
+              }
+              const control = decoded.value;
               if (control.TYPE === "CANCEL_DATA_CHANNEL") {
                 const fiber = dataChannels.get(control.REQUEST_ID);
                 if (fiber) yield* Fiber.interrupt(fiber).pipe(Effect.forkScoped);
@@ -354,9 +399,8 @@ const start = Effect.fn("ConveneConnection.start")(function* (
                 code: "PROTOCOL_REJECTED",
               });
             }
-            if (message.TYPE === "HELLO_ACK" && !ready) {
-              const ack = yield* decodeHelloAck(message.PAYLOAD);
-              ready = true;
+            if (message.TYPE === "HELLO_ACK" && ack === undefined) {
+              ack = yield* decodeHelloAck(message.PAYLOAD);
               const afterSequence = yield* events.latestApplicationSequence;
               yield* report();
               yield* sendMessage("HEARTBEAT", {}).pipe(

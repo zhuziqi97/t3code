@@ -80,7 +80,7 @@ it.effect("reports token failure to the requesting control owner without exposin
   }),
 );
 
-it.live("relays native WebSocket text, binary and close reason", () =>
+it.live.each(["platform", "cloud"] as const)("relays WebSocket frames through %s", (transport) =>
   Effect.gen(function* () {
     const completed = yield* Deferred.make<void>();
     const results: Array<typeof ConveneDataResult.Type> = [];
@@ -106,7 +106,7 @@ it.live("relays native WebSocket text, binary and close reason", () =>
       ),
       HttpRouter.add(
         "GET",
-        "/api/v1/execution-runners/data",
+        transport === "cloud" ? "/data" : "/api/v1/execution-runners/data",
         Effect.gen(function* () {
           const request = yield* HttpServerRequest.HttpServerRequest;
           const socket = yield* request.upgrade;
@@ -118,14 +118,24 @@ it.live("relays native WebSocket text, binary and close reason", () =>
           while (!accepted)
             for (const frame of yield* reader.pull) {
               const message = yield* decodeJsonRecord(frame);
+              if (message.TYPE === "AUTHENTICATE")
+                assert.equal(
+                  message.TOKEN,
+                  transport === "cloud" ? "one-use-token" : "device-access",
+                );
               if (message.TYPE === "BIND_DATA_CHANNEL")
-                yield* send({ TYPE: "WS_OPEN", PATH: "/native-ws", PROTOCOL: null, ACCESS: "WEB" });
+                yield* send({
+                  TYPE: "WS_OPEN",
+                  PATH: "/native-ws",
+                  PROTOCOL: null,
+                  ACCESS: "WEB",
+                });
               if (message.TYPE === "WS_ACCEPT") accepted = true;
             }
-          yield* writer.writeAll(["native text", bytes, ""]);
+          yield* writer.writeAll(['{"TYPE":"ERROR","MESSAGE":"application text"}', bytes, ""]);
           const frames: Array<string | Uint8Array> = [];
           while (frames.length < 3) frames.push(...(yield* reader.pull));
-          assert.deepEqual(frames, ["native text", bytes, ""]);
+          assert.deepEqual(frames, ['{"TYPE":"ERROR","MESSAGE":"application text"}', bytes, ""]);
           const closed = yield* Effect.flip(reader.pull);
           assert.equal(closed.reason._tag, "SocketCloseError");
           if (closed.reason._tag === "SocketCloseError") {
@@ -148,7 +158,10 @@ it.live("relays native WebSocket text, binary and close reason", () =>
       Layer.mock(ConvenePlatform.ConvenePlatform)({
         changes: yield* PubSub.unbounded<void>(),
         readConnection: Effect.succeedNone,
-        accessToken: Effect.succeed("device-access"),
+        accessToken:
+          transport === "cloud"
+            ? Effect.die("Cloud must not read the device access token")
+            : Effect.succeed("device-access"),
         beginPairing: () => Effect.die("unused"),
         finishPairing: () => Effect.die("unused"),
         disconnect: Effect.void,
@@ -173,20 +186,23 @@ it.live("relays native WebSocket text, binary and close reason", () =>
         CONNECTION_ID: "owned",
         KIND: "WS",
         REPORT_THRESHOLD_MS: 1_000_000,
+        ...(transport === "cloud"
+          ? { DATA_URL: base.replace("http:", "ws:") + "/data", BIND_TOKEN: "one-use-token" }
+          : {}),
       },
       (result) =>
         Effect.sync(() => {
           results.push(result);
         }),
     ).pipe(Effect.provide(dependencies), Effect.forkScoped);
-    yield* Deferred.await(completed);
+    yield* Effect.raceFirst(Deferred.await(completed), Fiber.join(running));
     yield* Fiber.join(running);
     assert.equal(results.length, 1);
     assert.include(results[0], { OUTCOME: "failed", ERROR_CODE: "SocketCloseError:1011" });
   }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
 );
 
-it.live("finishes concurrent Web resource responses including HEAD, 204 and 304", () =>
+it.live.each(["platform", "cloud"] as const)("finishes HTTP resources through %s", (transport) =>
   Effect.gen(function* () {
     const results: Array<typeof ConveneDataResult.Type> = [];
     const releaseCompleted = yield* Deferred.make<void>();
@@ -199,7 +215,7 @@ it.live("finishes concurrent Web resource responses including HEAD, 204 and 304"
     }));
     const route = HttpRouter.add(
       "GET",
-      "/api/v1/execution-runners/data",
+      transport === "cloud" ? "/data" : "/api/v1/execution-runners/data",
       Effect.gen(function* () {
         const request = yield* HttpServerRequest.HttpServerRequest;
         const socket = yield* request.upgrade;
@@ -217,6 +233,11 @@ it.live("finishes concurrent Web resource responses including HEAD, 204 and 304"
               continue;
             }
             const message = yield* decodeJsonRecord(frame);
+            if (message.TYPE === "AUTHENTICATE")
+              assert.equal(
+                message.TOKEN,
+                transport === "cloud" ? "one-use-token" : "device-access",
+              );
             if (message.TYPE === "BIND_DATA_CHANNEL") {
               assert.property(message.TIMINGS_MS, "socket_open");
               scenario = scenarios[Number(message.REQUEST_ID)]!;
@@ -251,7 +272,10 @@ it.live("finishes concurrent Web resource responses including HEAD, 204 and 304"
       Layer.mock(ConvenePlatform.ConvenePlatform)({
         changes: yield* PubSub.unbounded<void>(),
         readConnection: Effect.succeedNone,
-        accessToken: Effect.succeed("device-access"),
+        accessToken:
+          transport === "cloud"
+            ? Effect.die("Cloud must not read the device access token")
+            : Effect.succeed("device-access"),
         beginPairing: () => Effect.die("unused"),
         finishPairing: () => Effect.die("unused"),
         disconnect: Effect.void,
@@ -290,13 +314,23 @@ it.live("finishes concurrent Web resource responses including HEAD, 204 and 304"
                 CONNECTION_ID: "owned",
                 KIND: "HTTP",
                 REPORT_THRESHOLD_MS: scenario.index === 39 ? 1_000_000 : 0,
+                ...(transport === "cloud"
+                  ? {
+                      DATA_URL:
+                        HttpServer.formatAddress(server.address).replace("http:", "ws:") + "/data",
+                      BIND_TOKEN: "one-use-token",
+                    }
+                  : {}),
               },
               (result) =>
                 Effect.sync(() => {
                   results.push(result);
                 }),
             ).pipe(Effect.provide(dependencies), Effect.forkScoped);
-            const actual = yield* Deferred.await(scenario.completed);
+            const actual = yield* Effect.raceFirst(
+              Deferred.await(scenario.completed),
+              Fiber.join(running).pipe(Effect.andThen(Deferred.await(scenario.completed))),
+            );
             assert.deepEqual(
               actual,
               scenario.method === "HEAD" || scenario.status === 204 || scenario.status === 304
@@ -328,6 +362,90 @@ it.live("finishes concurrent Web resource responses including HEAD, 204 and 304"
   }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
 );
 const decodeJson = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
+
+it.live.each(["HTTP", "WS", 4001, 4002] as const)(
+  "rejects cloud %s before invoking native services",
+  (scenario) =>
+    Effect.gen(function* () {
+      const results: Array<typeof ConveneDataResult.Type> = [];
+      const services = yield* Layer.build(
+        HttpRouter.serve(
+          HttpRouter.add(
+            "GET",
+            "/data",
+            Effect.gen(function* () {
+              const socket = yield* (yield* HttpServerRequest.HttpServerRequest).upgrade;
+              const { pull } = yield* socket.reader;
+              const writer = yield* socket.writer;
+              let bound = false;
+              while (!bound)
+                for (const frame of yield* pull)
+                  if ((yield* decodeJsonRecord(frame)).TYPE === "BIND_DATA_CHANNEL") bound = true;
+              if (typeof scenario === "number")
+                yield* writer.write(new Socket.CloseEvent(scenario));
+              else
+                yield* writer.write(
+                  JSON.stringify(
+                    scenario === "WS"
+                      ? { TYPE: "WS_OPEN", PATH: "/ws", PROTOCOL: null, ACCESS: "NATIVE" }
+                      : {
+                          TYPE: "HTTP_OPEN",
+                          METHOD: "POST",
+                          PATH: "/api/convene/native",
+                          HEADERS: [],
+                          ACCESS: "NATIVE",
+                        },
+                  ),
+                );
+              yield* Effect.exit(pull);
+              return HttpServerResponse.empty();
+            }),
+          ),
+          { disableListenLog: true },
+        ).pipe(Layer.provideMerge(NodeHttpServer.layerTest)),
+      );
+      const base = HttpServer.formatAddress(Context.get(services, HttpServer.HttpServer).address);
+      const exit = yield* ConveneDataChannel.open(
+        base,
+        {
+          TYPE: "OPEN_DATA_CHANNEL",
+          REQUEST_ID: "rejected",
+          CONNECTION_ID: "owned",
+          KIND: scenario === "WS" ? "WS" : "HTTP",
+          REPORT_THRESHOLD_MS: 0,
+          DATA_URL: base.replace("http:", "ws:") + "/data",
+          BIND_TOKEN: "one-use-token",
+        },
+        (result) =>
+          Effect.sync(() => {
+            results.push(result);
+          }),
+      ).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            Layer.mock(ConvenePlatform.ConvenePlatform)({
+              changes: yield* PubSub.unbounded<void>(),
+              accessToken: Effect.die("Cloud must not read the device access token"),
+            }),
+            Layer.succeed(ConveneNative.ConveneNative, {
+              handle: () => Effect.die("Cloud cannot invoke NATIVE"),
+            }),
+            Layer.succeed(ConveneWeb.ConveneWeb, {
+              http: () => Effect.die("Invalid cloud input cannot invoke Web"),
+              websocket: () => Effect.die("Invalid cloud input cannot invoke Web"),
+            }),
+          ),
+        ),
+        Effect.scoped,
+        Effect.exit,
+      );
+      assert.isTrue(Exit.isFailure(exit));
+      assert.equal(results.length, 1);
+      assert.include(results[0], { OUTCOME: "failed", STAGE: "request" });
+      if (typeof scenario === "number")
+        assert.equal(results[0]?.ERROR_CODE, `SocketCloseError:${scenario}`);
+    }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+);
 
 it.live(
   "carries native JSON on the bound data socket and returns invalid commands without invoking native state",

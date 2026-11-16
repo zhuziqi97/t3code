@@ -7,6 +7,7 @@ import {
   ConveneWsOpen,
   ConveneHttpEnd,
   ConveneDataResult,
+  ConveneIntegrationError,
 } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as Cause from "effect/Cause";
@@ -54,9 +55,17 @@ export const open = Effect.fn("ConveneDataChannel.open")(function* (
   return yield* Effect.gen(function* () {
     const platform = yield* ConvenePlatform.ConvenePlatform;
     const native = yield* ConveneNative.ConveneNative;
-    const url = new URL(`${baseUrl.replace(/\/$/, "")}/api/v1/execution-runners/data`);
-    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    const token = yield* platform.accessToken;
+    if ((control.DATA_URL === undefined) !== (control.BIND_TOKEN === undefined))
+      return yield* new ConveneIntegrationError({
+        operation: "data-channel",
+        code: "INVALID_PARAMS",
+      });
+    const cloud = control.DATA_URL !== undefined;
+    const url = new URL(
+      control.DATA_URL ?? `${baseUrl.replace(/\/$/, "")}/api/v1/execution-runners/data`,
+    );
+    if (!cloud) url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    const token = cloud ? control.BIND_TOKEN : yield* platform.accessToken;
     yield* mark("token_ready");
     stage = "connect";
     const rawSocket = yield* Effect.acquireRelease(
@@ -153,6 +162,11 @@ export const open = Effect.fn("ConveneDataChannel.open")(function* (
       return;
     }
     const request = yield* decodeHttpOpen(first);
+    if (cloud && request.ACCESS !== "WEB")
+      return yield* new ConveneIntegrationError({
+        operation: "data-channel",
+        code: "INVALID_PARAMS",
+      });
     const bodyStream = Stream.fromIterable(frames.slice(1)).pipe(
       Stream.concat(Stream.fromPull(Effect.succeed(pull))),
       Stream.mapEffect((frame) =>
