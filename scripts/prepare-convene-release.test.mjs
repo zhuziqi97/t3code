@@ -52,7 +52,7 @@ NodeTest.test(
     NodeAssert.equal(linux.product, "T3 Code for Convene");
     NodeAssert.equal(linux.source_commit, input.commit);
     NodeAssert.equal(linux.github_run_id, input.runId);
-    NodeAssert.deepEqual(linux.integration_protocols, [{ major: 1, max_minor: 0 }]);
+    NodeAssert.deepEqual(linux.integration_protocols, [{ major: 1, max_minor: 1 }]);
     NodeAssert.deepEqual(
       linux.packages.map((p) => p.format),
       ["deb", "appimage"],
