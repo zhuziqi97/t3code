@@ -108,11 +108,19 @@ it("opens the executing environment and worktree in a fresh outer-page URL", asy
   ]);
 });
 
-it("keeps the mounted origin instead of swapping LAN for the configured public origin", async () => {
-  state.mountedPath = "/clients/runner/web";
-  await useBrowserEditorAction(environmentId, workspace).open("/work/tree", false);
-  expect(new URL(state.open.mock.calls[0]![0]).origin).toBe("https://lan.example");
-});
+it.each([
+  "/clients/runner/web",
+  "/client-web/session",
+  "/cloud/clients/runner",
+  "/convene/client-web/session",
+])(
+  "keeps the mounted origin for %s instead of the configured public origin",
+  async (mountedPath) => {
+    state.mountedPath = mountedPath;
+    await useBrowserEditorAction(environmentId, workspace).open("/work/tree", false);
+    expect(new URL(state.open.mock.calls[0]![0]).origin).toBe("https://lan.example");
+  },
+);
 
 it.each([AuthFilesystemWriteScope, AuthTerminalOperateScope])(
   "checks %s again on a retained action",

@@ -16,6 +16,7 @@ export function conveneIdeLink(input: {
   workspacePath: string;
   file?: IdeFile;
   mountedOrigin?: string;
+  mountedBasePath?: string;
 }): string | null {
   const { status, configuration } = input;
   if (
@@ -35,9 +36,11 @@ export function conveneIdeLink(input: {
   );
   if (!workspace) return null;
   // Mounted clients keep the entry they are already using, including LAN versus public access.
+  const base = new URL(input.mountedOrigin ?? status.baseUrl);
+  const mountRoot = input.mountedBasePath?.match(/^(.*)\/(?:clients|client-web)\//)?.[1];
   const url = new URL(
-    `/clients/${encodeURIComponent(status.runnerId)}/ide`,
-    input.mountedOrigin ?? status.baseUrl,
+    `${mountRoot ?? base.pathname.replace(/\/+$/, "")}/clients/${encodeURIComponent(status.runnerId)}/ide`,
+    base,
   );
   url.searchParams.set("projectId", input.projectId);
   url.searchParams.set("workspaceKey", workspace.native_workspace_key);

@@ -37,9 +37,30 @@ const configuration: ConveneProjectConfiguration = {
   mcp_capabilities: { forge_enabled: false, issue_enabled: false, code_graph_enabled: false },
 };
 
-it.each(["http://192.168.1.126:5000", "http://frps.ziqi.ac.cn:11004"])(
-  "keeps the active mounted entry %s and uses only native location metadata",
-  (mountedOrigin) => {
+it.each([
+  {
+    mountedOrigin: "http://192.168.1.126:5000",
+    mountedBasePath: "/clients/runner",
+    expectedPath: "/clients/runner/ide",
+  },
+  {
+    mountedOrigin: "http://frps.ziqi.ac.cn:11004",
+    mountedBasePath: "/client-web/session",
+    expectedPath: "/clients/runner/ide",
+  },
+  {
+    mountedOrigin: "http://127.0.0.1:16832",
+    mountedBasePath: "/cloud/clients/runner",
+    expectedPath: "/cloud/clients/runner/ide",
+  },
+  {
+    mountedOrigin: "https://public.example",
+    mountedBasePath: "/convene/client-web/session",
+    expectedPath: "/convene/clients/runner/ide",
+  },
+])(
+  "keeps the active mounted entry $mountedOrigin at $mountedBasePath and native location metadata",
+  ({ mountedOrigin, mountedBasePath, expectedPath }) => {
     const link = new URL(
       conveneIdeLink({
         status,
@@ -47,15 +68,16 @@ it.each(["http://192.168.1.126:5000", "http://frps.ziqi.ac.cn:11004"])(
         projectId,
         workspacePath: "/work/project/",
         mountedOrigin,
-        file: { relativePath: "docs/a b.md", line: 3, column: 2 },
+        mountedBasePath,
+        file: { relativePath: "docs/中文 a%3A?草稿#.md", line: 3, column: 2 },
       })!,
     );
     expect(link.origin).toBe(mountedOrigin);
-    expect(link.pathname).toBe("/clients/runner/ide");
+    expect(link.pathname).toBe(expectedPath);
     expect([...link.searchParams]).toEqual([
       ["projectId", projectId],
       ["workspaceKey", "native-worktree-key"],
-      ["file", "docs/a b.md"],
+      ["file", "docs/中文 a%3A?草稿#.md"],
       ["line", "3"],
       ["column", "2"],
     ]);
@@ -64,12 +86,21 @@ it.each(["http://192.168.1.126:5000", "http://frps.ziqi.ac.cn:11004"])(
   },
 );
 
-it("uses the selected environment's platform for direct clients, independent of MCP or module bindings", () => {
-  expect(
-    new URL(conveneIdeLink({ status, configuration, projectId, workspacePath: "/work/project" })!)
-      .origin,
-  ).toBe(status.baseUrl);
-});
+it.each(["", "/convene", "/convene/"])(
+  "uses the selected environment's platform root %s for direct clients, independent of MCP or module bindings",
+  (root) => {
+    const url = new URL(
+      conveneIdeLink({
+        status: { ...status, baseUrl: status.baseUrl + root },
+        configuration,
+        projectId,
+        workspacePath: "/work/project",
+      })!,
+    );
+    expect(url.origin).toBe(status.baseUrl);
+    expect(url.pathname).toBe(root ? "/convene/clients/runner/ide" : "/clients/runner/ide");
+  },
+);
 
 it("does not reuse another runner, project or unavailable worktree", () => {
   const input = { status, configuration, projectId, workspacePath: "/work/project" };

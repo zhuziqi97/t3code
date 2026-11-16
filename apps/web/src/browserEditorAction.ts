@@ -72,9 +72,7 @@ export function useBrowserEditorAction(
           configuration: project.data.configuration,
           projectId,
           workspacePath,
-          ...(pageBase.startsWith("/clients/") || pageBase.startsWith("/client-web/")
-            ? { mountedOrigin: window.location.origin }
-            : {}),
+          ...(pageBase ? { mountedOrigin: window.location.origin, mountedBasePath: pageBase } : {}),
         }
       : null;
   const href = canWrite && canOperateTerminal && linkInput ? conveneIdeLink(linkInput) : null;
