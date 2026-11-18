@@ -447,7 +447,11 @@ jobs:
       - name: Test
         env:
           DEBUG: vitest:browser:api,vitest:browser:playwright
-        run: vp run --filter @t3tools/web test --reporter=verbose
+        run: |
+          # Give each half of the suite its own Vitest browser connection.
+          for shard in 1/2 2/2; do
+            vp run --filter @t3tools/web test --reporter=verbose --shard "$shard"
+          done
 
   # apps/server sets `fileParallelism: false`, so its test files run strictly
   # one at a time. Sharding spreads them over separate runners instead of
