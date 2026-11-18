@@ -2985,10 +2985,10 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
           }
           stateData ??= yield* request({ type: "get_state" }, null);
           if (discoveredModels === null) yield* discoverModels();
-          contextWindow = rememberModelContextWindow(recordField(stateData, "model"));
+          const stateModel = recordField(stateData, "model");
+          contextWindow = rememberModelContextWindow(stateModel);
           // Capture each baseline before applying selections so our own choices cannot become Pi defaults.
           if (baselineModel === null && appliedModel === null) {
-            const stateModel = recordField(stateData, "model");
             const provider = recordString(stateModel, "provider");
             const modelId = recordString(stateModel, "id");
             if (provider !== undefined && modelId !== undefined) {
@@ -3014,7 +3014,7 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
           }
           lastNativeThreadId = nativeId;
           const createdAt = yield* DateTime.now;
-          const providerThread: OrchestrationV2ProviderThread =
+          const registeredThread: OrchestrationV2ProviderThread =
             existing !== undefined
               ? {
                   ...existing,
@@ -3046,6 +3046,17 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
                   pendingBackgroundTasks: [],
                   createdAt,
                   updatedAt: createdAt,
+                };
+          const reportedSelection = readNativeModelSelection(stateModel);
+          const providerThread =
+            reportedSelection === undefined
+              ? registeredThread
+              : {
+                  ...registeredThread,
+                  nativeMetadata: {
+                    ...registeredThread.nativeMetadata,
+                    modelSelection: reportedSelection,
+                  },
                 };
           if (
             threadState !== null &&

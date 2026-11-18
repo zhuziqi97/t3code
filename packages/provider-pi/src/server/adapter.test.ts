@@ -1168,6 +1168,7 @@ describe("PiAdapterV2", () => {
         fake.queueState({
           model: { provider: "native", id: "configured-default", contextWindow: 272000 },
           thinkingLevel: "high",
+          sessionFile: "/fake/startup-session.jsonl",
         });
         fake.queueState({
           model: { provider: "saved", id: "old-model", contextWindow: 128000 },
@@ -1193,6 +1194,10 @@ describe("PiAdapterV2", () => {
           reset ? modelSelection("saved/old-model") : undefined,
         );
         yield* fake.takeRequest("prompt");
+        assert.equal(
+          fake.allRequests().find((request) => request.type === "switch_session")?.sessionPath,
+          oldThread.nativeThreadRef?.nativeId,
+        );
         const switches = fake.allRequests().filter((request) => request.type === "set_model");
         assert.deepStrictEqual(
           switches.map((request) => ({ provider: request.provider, modelId: request.modelId })),
@@ -2601,6 +2606,7 @@ describe("PiAdapterV2", () => {
         modelSelection: modelSelection("default"),
         runtimePolicy,
       });
+      fake.reloadExtensions("/fake/other-session.jsonl");
       fake.deferNextLifecycle("switch_session");
       const resumed = yield* runtime.resumeThread({ providerThread }).pipe(Effect.forkChild);
       const request = yield* fake.takeRequest("switch_session");
