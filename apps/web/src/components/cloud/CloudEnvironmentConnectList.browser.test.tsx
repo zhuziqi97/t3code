@@ -549,21 +549,16 @@ const wslEnvironmentId = EnvironmentId.make("wsl-ubuntu");
 const laptopEnvironmentId = EnvironmentId.make("laptop");
 
 function setupWsl(discoveredEnvironments: Array<Discovery.RelayDiscoveredEnvironment>) {
-  setup();
-  publish({
-    environments: new Map(
-      discoveredEnvironments.map((entry) => [entry.environment.environmentId, entry]),
-    ),
-    listed: true,
-    refreshing: false,
-    offline: false,
-    error: Option.none(),
-  });
+  const environment = setup();
+  discovery.listEnvironments.mockResolvedValue(
+    new Map(discoveredEnvironments.map((entry) => [entry.environment.environmentId, entry])),
+  );
+  return environment;
 }
 
 describe("CloudEnvironmentConnectRows", () => {
   it("does not offer a T3 Connect route for the desktop's own WSL backend", async () => {
-    setupWsl([
+    using _environment = setupWsl([
       discovered(primaryEnvironmentId, "This PC"),
       discovered(wslEnvironmentId, "Ubuntu (WSL)"),
       discovered(laptopEnvironmentId, "Laptop"),
@@ -584,7 +579,7 @@ describe("CloudEnvironmentConnectRows", () => {
   });
 
   it("shows the empty state when the desktop's own WSL backend is the only saved environment", async () => {
-    setupWsl([
+    using _environment = setupWsl([
       discovered(primaryEnvironmentId, "This PC"),
       discovered(wslEnvironmentId, "Ubuntu (WSL)"),
     ]);

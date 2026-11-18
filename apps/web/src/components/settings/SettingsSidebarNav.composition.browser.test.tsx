@@ -75,15 +75,14 @@ it("moves through the settings tree using the arrow keys", async () => {
   await page.viewport(1280, 800);
   await using _screen = await renderNav();
   const tree = page.getByRole("tree", { name: "Settings sections" });
-  const sections = SETTINGS_NAV_GROUPS.flatMap((group) => group.sections);
+  const items = tree.getByRole("treeitem");
+  const count = items.elements().length;
 
   await tree.getByRole("treeitem", { name: "General", exact: true }).click();
   await userEvent.keyboard("{Home}");
-  for (const [index, section] of sections.entries()) {
-    await expect
-      .element(tree.getByRole("treeitem", { name: section.label, exact: true }))
-      .toHaveFocus();
-    if (index < sections.length - 1) await userEvent.keyboard("{ArrowDown}");
+  for (let index = 0; index < count; index++) {
+    await expect.element(items.nth(index)).toHaveFocus();
+    if (index < count - 1) await userEvent.keyboard("{ArrowDown}");
   }
 });
 

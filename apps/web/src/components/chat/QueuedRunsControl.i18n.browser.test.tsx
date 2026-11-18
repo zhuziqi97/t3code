@@ -19,7 +19,7 @@ vi.mock("@t3tools/client-runtime/state/thread-workflows", async (original) => ({
 
 vi.mock("../../state/entities", async (original) => ({
   ...(await original<typeof import("../../state/entities")>()),
-  useThreadProjection: () => state.projection,
+  useQuietThreadProjection: () => state.projection,
 }));
 
 vi.mock("../../state/threads", async (original) => ({

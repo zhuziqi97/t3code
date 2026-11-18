@@ -573,11 +573,12 @@ describe("archived thread families", () => {
   });
 
   it("stops before delete and local cleanup when permission is revoked during session stop", async () => {
+    await using _lifecycle = await setupLifecycle();
     state.scopes.get(secondary)!.add(AuthOrchestrationOperateScope);
     state.threads[0]!.session = { status: "ready" };
     state.afterRequest = () => state.scopes.get(secondary)!.clear();
     seedThreadPanelState(target);
-    expect((await useThreadActions().deleteThread(target))._tag).toBe("Failure");
+    expect((await (await renderActions()).deleteThread(target))._tag).toBe("Failure");
     expect(state.requests.map((request) => request.action)).toEqual(["stopSession"]);
     expect(state.localEffects).toEqual([]);
     expect(threadPanelStatePresence(target)).toEqual(panelStateKept);
@@ -587,11 +588,12 @@ describe("archived thread families", () => {
     { reason: "without source-control permission", sessionLookupFails: false },
     { reason: "when the permission lookup fails", sessionLookupFails: true },
   ])("deletes a worktree thread and keeps its worktree $reason", async ({ sessionLookupFails }) => {
+    await using _lifecycle = await setupLifecycle();
     state.scopes.get(secondary)!.add(AuthOrchestrationOperateScope);
     state.threads[0]!.worktreePath = "/worktrees/thread";
     state.sessionLookupFails = sessionLookupFails;
     seedThreadPanelState(target);
-    expect((await useThreadActions().deleteThread(target))._tag).toBe("Success");
+    expect((await (await renderActions()).deleteThread(target))._tag).toBe("Success");
     expect(state.confirm).not.toHaveBeenCalled();
     expect(state.requests.map((request) => request.action)).toEqual(["stopSession", "delete"]);
     expect(state.localEffects).toContain("clear-terminal-ui");
@@ -599,6 +601,7 @@ describe("archived thread families", () => {
   });
 
   it("offers to delete the worktree that only its side chats share", async () => {
+    await using _lifecycle = await setupLifecycle();
     state.scopes
       .get(secondary)!
       .add(AuthOrchestrationOperateScope)
@@ -614,7 +617,7 @@ describe("archived thread families", () => {
         sideChat: true,
       },
     });
-    expect((await useThreadActions().deleteThread(target))._tag).toBe("Success");
+    expect((await (await renderActions()).deleteThread(target))._tag).toBe("Success");
     expect(state.confirm).toHaveBeenCalledOnce();
     expect(state.requests.map((request) => request.action)).toEqual([
       "stopSession",

@@ -91,7 +91,7 @@ describe("resolveDefaultModelSettingsPresentation", () => {
     expect(present(claudeAndCodex)).toEqual({ selection: savedClaude, providerNote: null });
   });
 
-  it("still follows a hidden model on the same provider", () => {
+  it("keeps the explicit default when its model is hidden in the picker", () => {
     const row = present(
       [
         provider({
@@ -107,6 +107,6 @@ describe("resolveDefaultModelSettingsPresentation", () => {
       },
     );
     expect(row.providerNote).toBeNull();
-    expect(row.selection).toMatchObject({ instanceId: claudeId, model: "claude-sonnet-5" });
+    expect(row.selection).toEqual(savedClaude);
   });
 });

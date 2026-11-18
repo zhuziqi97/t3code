@@ -1,3 +1,4 @@
+import { page } from "vite-plus/test/browser";
 import "~/index.css";
 import { act, render as renderTestUi, type Screen } from "../../../test/render";
 import { type ReactNode } from "react";
@@ -132,12 +133,7 @@ it("preserves a retention draft and submits days under the original cleanup key"
   await using _lifecycle = await setupLifecycle();
 
   await render();
-  await type(
-    container.querySelector<HTMLInputElement>(
-      'input[aria-label="Delete old rotated logs in days"]',
-    )!,
-    "21",
-  );
+  await page.getByRole("textbox", { name: "Delete old rotated logs in days" }).fill("21");
   await switchLanguage("zh");
   const input = container.querySelector<HTMLInputElement>(
     'input[aria-label="清理旧轮转日志（天）"]',
@@ -145,7 +141,10 @@ it("preserves a retention draft and submits days under the original cleanup key"
   expect(input.value).toBe("21");
   expect(state.update).not.toHaveBeenCalled();
   await act(async () => input.blur());
-  expect(state.update).toHaveBeenCalledExactlyOnceWith({ storageCleanup: { logsAfterDays: 21 } });
+  expect(state.update).toHaveBeenCalledExactlyOnceWith(
+    { storageCleanup: { logsAfterDays: 21 } },
+    { onFailed: expect.any(Function) },
+  );
 });
 
 it("uses translated project modes without translating their stored values or inheritance keys", async () => {

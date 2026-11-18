@@ -29,7 +29,7 @@ import { selectThreadDiffPanelSelection, useDiffPanelStore } from "~/diffPanelSt
 import { __setClientSettingsForTests } from "~/hooks/useSettings";
 import { environmentContextRecord } from "~/lib/composerContextRecords";
 import { startWorkspaceFocus } from "~/lib/workspaceFocus";
-import { usePromptStashStore } from "~/promptStashStore";
+import { PROMPT_STASH_STORAGE_KEY, usePromptStashStore } from "~/promptStashStore";
 import { useRightPanelStore } from "~/rightPanelStore";
 import { getRouter } from "~/router";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
@@ -112,7 +112,22 @@ vi.mock(import("~/rpc/requestLatencyState"), async (original) => ({
   trackRpcRequestSent: () => {},
 }));
 
+function isolatePromptStash() {
+  const { entries } = usePromptStashStore.getState();
+  const saved = localStorage.getItem(PROMPT_STASH_STORAGE_KEY);
+  usePromptStashStore.setState({ entries: [] });
+  localStorage.removeItem(PROMPT_STASH_STORAGE_KEY);
+  return {
+    [Symbol.dispose]() {
+      usePromptStashStore.setState({ entries });
+      if (saved === null) localStorage.removeItem(PROMPT_STASH_STORAGE_KEY);
+      else localStorage.setItem(PROMPT_STASH_STORAGE_KEY, saved);
+    },
+  };
+}
+
 it("a machine chip stashed in one thread restores with its machine in another", async () => {
+  using _stash = isolatePromptStash();
   const other = threadWithHistory("thread-stash-restore", 1);
   const asking = threadWithQuestion("thread-stash-question", "Which file should change?");
   using _environment = installFakeEnvironment([other, asking]);
@@ -157,7 +172,7 @@ it("a machine chip stashed in one thread restores with its machine in another", 
 
   await router.navigate({ to: `/${ENVIRONMENT_ID}/${other.id}` });
   await expect.element(page.getByText("Answer 0 for thread-stash-restore.")).toBeVisible();
-  await pressStashShortcut();
+  await userEvent.keyboard("{ControlOrMeta>}s{/ControlOrMeta}");
 
   await vi.waitFor(() => expect(editor.element().textContent).toContain("Deploy on"));
   expect(
@@ -170,6 +185,7 @@ it("a machine chip stashed in one thread restores with its machine in another", 
 });
 
 it("a question that opens while a stashed file is checked keeps a machine stash", async () => {
+  using _stash = isolatePromptStash();
   const thread = threadWithHistory("thread-stash-late-question", 1);
   const asking = threadWithQuestion("thread-stash-late-question", "Which file should change?");
   const [request] = asking.runtimeRequests ?? [];
@@ -221,7 +237,6 @@ it("a question that opens while a stashed file is checked keeps a machine stash"
     expect(document.body.textContent).toContain("Stashed machines can't go in an answer"),
   );
   expect(usePromptStashStore.getState().entries).toHaveLength(1);
-  usePromptStashStore.getState().takeEntry("stash-late-question");
 });
 
 it("a new draft does not load its reserved thread before the server lists it", async () => {
@@ -391,6 +406,7 @@ it("retains each thread's diff selection when returning from another thread or S
 });
 
 it("a stashed prompt ending in a file chip restores with the chip", async () => {
+  using _stash = isolatePromptStash();
   using _environment = installFakeEnvironment([]);
   __setClientSettingsForTests({
     ...DEFAULT_CLIENT_SETTINGS,
@@ -417,6 +433,7 @@ it("a stashed prompt ending in a file chip restores with the chip", async () => 
   await userEvent.click(editor);
   await userEvent.keyboard("{ControlOrMeta>}s{/ControlOrMeta}");
   await expect.element(chip).not.toBeInTheDocument();
+  expect(usePromptStashStore.getState().entries).toHaveLength(1);
   await userEvent.keyboard("{ControlOrMeta>}s{/ControlOrMeta}");
 
   await vi.waitFor(() => expect(editor.element().textContent).toContain("Check"));

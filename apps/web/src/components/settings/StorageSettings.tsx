@@ -211,6 +211,29 @@ function RetentionControl({
               aria-label={t("storage.retentionDays", { label })}
               size={new Intl.NumberFormat().format(draft ?? value ?? minimum).length}
               className="field-sizing-content w-auto min-w-[1ch] grow-0 text-right"
+              // Any typed or pasted edit replaces a held age: NumberField commits it on blur itself,
+              // and text it cannot parse yet must not leave the held age to be saved.
+              onChange={() => setHeld(false)}
+              onPaste={() => setHeld(false)}
+              onKeyDown={(event) => {
+                if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+                if (event.key === "Enter") {
+                  // Blurring lets NumberField parse the visible text and commit it once. It
+                  // skips an unedited value, so an untouched draft is committed here.
+                  const input = event.currentTarget;
+                  const shown =
+                    draft !== null && input.value === new Intl.NumberFormat().format(draft);
+                  if (enabling === "draft" && shown) commit(draft);
+                  input.blur();
+                } else if (event.key === "Escape" && (held || typeof enabling === "string")) {
+                  // An unhandled Escape closes the settings page.
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setDraft(pending?.days ?? value);
+                  setHeld(false);
+                  setEnabling((current) => (typeof current === "string" ? null : current));
+                }
+              }}
             />
             <span aria-hidden="true" className="self-center pr-2 text-xs">
               {t("storage.days", { count: draft ?? value })}

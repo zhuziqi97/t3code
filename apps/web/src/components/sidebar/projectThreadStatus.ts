@@ -1,6 +1,10 @@
 import type { TFunction } from "i18next";
 import type { SidebarThreadSummary } from "../../types";
-import { resolveSidebarThreadStatus, resolveThreadStatusPill } from "../Sidebar.logic";
+import {
+  hasUnseenRunEnd,
+  resolveSidebarThreadStatus,
+  resolveThreadStatusPill,
+} from "../Sidebar.logic";
 import type { ThreadStatusPill } from "../Sidebar.logic";
 
 type Input = Parameters<typeof resolveThreadStatusPill>[0]["thread"];
@@ -37,7 +41,13 @@ export function resolveProjectThreadStatus(thread: Input): ProjectThreadStatus |
     };
   }
   const status = resolveThreadStatusPill({ thread });
-  if (status?.label === "Completed" && thread.latestRun?.status !== "completed") {
+  const runStatus = thread.latestRun?.status;
+  if (
+    (status?.label === "Completed" && runStatus !== "completed") ||
+    (status === null &&
+      (runStatus === "interrupted" || runStatus === "cancelled") &&
+      hasUnseenRunEnd(thread))
+  ) {
     return {
       label: thread.latestRun?.status === "rolled_back" ? "Rolled back" : "Stopped",
       colorClass: "text-sidebar-muted-foreground",

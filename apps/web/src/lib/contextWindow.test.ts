@@ -158,22 +158,25 @@ describe("V2 context window presentation", () => {
   });
 
   it("ignores a retired provider thread's compaction after a provider switch", () => {
-    const activeProviderThread = {
-      id: ProviderThreadId.make("acp-thread"),
-      contextUsage: null,
-      updatedAt: DateTime.makeUnsafe("2026-10-19T12:10:00.000Z"),
-    };
-    const retired = compactionEntry(ProviderThreadId.make("pi-thread"));
-    const current = compactionEntry(ProviderThreadId.make("acp-thread"));
-    expect(deriveLatestContextWindowSnapshot([retired], null, activeProviderThread)).toBeNull();
-    expect(
-      deriveLatestContextWindowSnapshot([current], null, activeProviderThread)?.usedTokens,
-    ).toBe(2_000);
-    // Items without a provider thread predate the split and stay visible.
-    expect(
-      deriveLatestContextWindowSnapshot([compactionEntry(null)], null, activeProviderThread)
-        ?.usedTokens,
-    ).toBe(2_000);
+    const base = makeThreadProjectionFixture();
+    const activeProviderThreadId = ProviderThreadId.make("acp-thread");
+    const snapshotFor = (providerThreadIds: ReadonlyArray<ProviderThreadId>) =>
+      deriveThreadContextWindowSnapshot({
+        ...base,
+        thread: { ...base.thread, activeProviderThreadId },
+        visibleTurnItems: providerThreadIds.map((providerThreadId, position) => {
+          const { item } = compactionEntry(providerThreadId);
+          return {
+            item,
+            position,
+            visibility: "local",
+            sourceThreadId: base.thread.id,
+            sourceItemId: item.id,
+          };
+        }),
+      });
+    expect(snapshotFor([ProviderThreadId.make("pi-thread")])).toBeNull();
+    expect(snapshotFor([activeProviderThreadId])?.usedTokens).toBe(2_000);
   });
 });
 

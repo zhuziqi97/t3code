@@ -202,7 +202,7 @@ export function ProviderModelsSection({
     builtInModels.length > 0 && builtInModels.every((model) => hiddenModels.includes(model.slug));
 
   const handleAdd = async () => {
-    if (!canManageCustomModels || driverKind === "antigravity" || isSaving) return;
+    if (!canManageCustomModels || isSaving) return;
     const normalized = normalizeCustomModelSlug(input);
     if (!normalized) {
       setError("provider.models.emptySlug");

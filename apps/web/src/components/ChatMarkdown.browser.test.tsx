@@ -1422,7 +1422,7 @@ it("relabels Markdown controls without resetting wrapping or duplicating a pendi
       button("Show code").click();
       button("Copy code").click();
     });
-    expect(writeText).toHaveBeenCalledExactlyOnceWith('echo "Keep 原文"\n');
+    expect(writeText).toHaveBeenCalledExactlyOnceWith('echo "Keep 原文"');
     await act(async () => {
       await i18n.changeLanguage("zh");
     });

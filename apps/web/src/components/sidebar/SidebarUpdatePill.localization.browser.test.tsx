@@ -178,6 +178,7 @@ it("confirms the current language and exact downloaded version, cancels safely, 
   });
   expect(testState.confirm).toHaveBeenCalledExactlyOnceWith(
     "安装更新 1.1.1-nightly.2 并重启 T3 Code？\n\n正在运行的任务将被中断。请确认已准备好后再继续。",
+    { initialFocus: "confirm" },
   );
   expect(testState.install).not.toHaveBeenCalled();
   const pending = deferred<boolean>();

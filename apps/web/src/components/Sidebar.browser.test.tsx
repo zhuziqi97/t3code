@@ -441,14 +441,10 @@ describe("sidebar settled pagination", () => {
     stack.defer(() => style.remove());
     const focusController = createWorkspaceFocusController(document);
     stack.defer(() => focusController.dispose());
-    let loading = false;
     const originalShelf = vi.mocked(shelfHooks.useOlderSettledShelf).getMockImplementation()!;
     using _shelf = vi.spyOn(shelfHooks, "useOlderSettledShelf").mockImplementation((input) => ({
       ...originalShelf(input),
-      loading,
-      retry: () => {
-        loading = true;
-      },
+      loading: input.expanded && input.visibleCount > 10,
     }));
     const activeProject = project("active");
     const threads = Array.from({ length: 70 }, (_, index) =>
@@ -499,11 +495,10 @@ describe("sidebar settled pagination", () => {
         <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
       </SidebarProvider>,
     );
-    const shelf = screen.container.querySelector<HTMLElement>(
-      '[data-sidebar-row="shelf:settled"]',
-    )!;
-    if (shelf.getAttribute("aria-expanded") === "false") await act(() => shelf.click());
-    const more = screen.getByRole("button", { name: "Show 25 more", exact: true });
+    const shelf = screen.getByRole("button", { name: "Settled (70)", exact: true });
+    await expect.element(shelf).toBeVisible();
+    if (shelf.element().getAttribute("aria-expanded") === "false") await shelf.click();
+    const more = screen.getByRole("button", { name: /^Show 25 more/ });
     await expect.element(more).toBeInTheDocument();
     const moreButton = more.element() as HTMLButtonElement;
     const viewport = moreButton.closest<HTMLElement>('[data-slot="scroll-area-viewport"]')!;
@@ -512,17 +507,15 @@ describe("sidebar settled pagination", () => {
     moreButton.scrollIntoView({ block: "nearest" });
     const before = viewport.scrollTop;
     expect(before).toBeGreaterThan(0);
+    const loadedRows = screen.container.querySelectorAll("[data-thread-item]").length;
     moreButton.focus({ preventScroll: true });
     await act(() => moreButton.click());
-    await expect
-      .element(screen.getByRole("button", { name: "Loading", exact: true }))
-      .toBeInTheDocument();
-    await expect
-      .element(screen.getByRole("button", { name: "Loading", exact: true }))
-      .toHaveFocus();
+    expect(screen.container.querySelectorAll("[data-thread-item]")).toHaveLength(loadedRows + 25);
+    const loading = screen.getByRole("button", { name: "Loading", exact: true });
+    await expect.element(loading).toHaveFocus();
+    expect(loading.element()).toHaveAttribute("aria-disabled", "true");
     expect(viewport.scrollTop).toBe(before);
-    const loadedRows = screen.container.querySelectorAll("[data-thread-item]").length;
     await act(() => moreButton.click());
-    expect(screen.container.querySelectorAll("[data-thread-item]")).toHaveLength(loadedRows);
+    expect(screen.container.querySelectorAll("[data-thread-item]")).toHaveLength(loadedRows + 25);
   });
 });

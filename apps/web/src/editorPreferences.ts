@@ -67,7 +67,11 @@ export function usePreferredEditor(_availableEditors?: ReadonlyArray<EditorId>) 
 }
 
 export function readPreferredEditor(): ClientEditorId {
-  return getLocalStorageItem(LAST_EDITOR_KEY, ClientEditorId) ?? "browser";
+  try {
+    return getLocalStorageItem(LAST_EDITOR_KEY, ClientEditorId) ?? "browser";
+  } catch {
+    return "browser";
+  }
 }
 
 export function useEditorAction(
