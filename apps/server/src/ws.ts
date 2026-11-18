@@ -107,9 +107,7 @@ import {
   type PullRequestRef,
   WS_METHODS,
   WsRpcGroup,
-  WsCoreRpcGroup,
   WsServerRefreshProvidersRpc,
-  WsOrchestrationRpcGroup,
 } from "@t3tools/contracts";
 import {
   HttpRouter,
@@ -721,13 +719,28 @@ const PROVIDER_STATUS_DEBOUNCE_MS = 200;
 
 // Middleware added later wraps middleware added earlier, so instrumentation wraps authorization.
 const ServerWsRpcGroup = WsRpcGroup.middleware(RpcInstrumentation);
-const CoreServerWsRpcGroup = WsCoreRpcGroup.middleware(RpcInstrumentation).omit(
+const SharedHandlersWsRpcGroup = ServerWsRpcGroup.omit(
   WS_METHODS.threadWorkspaceInspect,
   WS_METHODS.threadWorkspaceRecover,
   WS_METHODS.serverDiscoverProviderInstallations,
   WS_METHODS.serverRefreshProviders,
 );
-const OrchestrationServerWsRpcGroup = WsOrchestrationRpcGroup.middleware(RpcInstrumentation);
+
+// Keep each handler group's inferred requirements within TypeScript's instantiation limit.
+type SharedHandlersWsRpc = RpcGroup.Rpcs<typeof SharedHandlersWsRpcGroup>;
+const SPLIT_WS_RPC_PREFIXES = ["server", "pullRequests", "provider", "orchestration"] as const;
+type SplitWsRpc = Extract<
+  SharedHandlersWsRpc,
+  { readonly _tag: `${(typeof SPLIT_WS_RPC_PREFIXES)[number]}.${string}` }
+>;
+type OtherWsRpc = Exclude<SharedHandlersWsRpc, SplitWsRpc>;
+const isSplitWsRpc = (rpc: SharedHandlersWsRpc): rpc is SplitWsRpc =>
+  SPLIT_WS_RPC_PREFIXES.some((prefix) => rpc._tag.startsWith(`${prefix}.`));
+const isOtherWsRpc = (rpc: SharedHandlersWsRpc): rpc is OtherWsRpc => !isSplitWsRpc(rpc);
+const sharedHandlersWsRpcs = Array.from(SharedHandlersWsRpcGroup.requests.values());
+const SplitWsRpcGroup = RpcGroup.make(...sharedHandlersWsRpcs.filter(isSplitWsRpc));
+const OtherWsRpcGroup = RpcGroup.make(...sharedHandlersWsRpcs.filter(isOtherWsRpc));
+
 const layerWorkspaceInspectRpc = ServerWsRpcGroup.toLayerHandler(
   WS_METHODS.threadWorkspaceInspect,
   Effect.map(
@@ -749,12 +762,6 @@ const layerProviderInstallationsRpc = ServerWsRpcGroup.toLayerHandler(
     (service) => () => service.discover.pipe(Effect.map((installations) => ({ installations }))),
   ),
 );
-
-// Replaying each intervening event costs a shell refetch; past this gap a
-// single O(active-threads) snapshot is cheaper and bounded.
-const SHELL_RESUME_MAX_GAP = 1_000;
-// Row counts do not bound large tool payloads; sum stored JSON bytes in SQL and snapshot above budget.
-const ORCHESTRATION_REPLAY_PAYLOAD_BUDGET_BYTES = 8 * 1024 * 1024;
 
 function toAuthAccessStreamEvent(
   change: Exclude<
@@ -872,36 +879,6 @@ function readClientAnalyticsProps(request: HttpServerRequest.HttpServerRequest) 
     ...(isClientConnectionMethod(connectionMethod) ? { connectionMethod } : {}),
   };
 }
-
-const canReplayPersistedRange = Effect.fnUntraced(function* (
-  afterSequence: number,
-  headSequence: number,
-  maxGap: number,
-) {
-  const applicationEvents = yield* OrchestrationEventStore.OrchestrationEventStore;
-
-  const replayGap = headSequence - afterSequence;
-  if (replayGap < 0 || replayGap > maxGap) {
-    return false;
-  }
-  if (afterSequence < (yield* applicationEvents.prunedThroughSequence)) return false;
-  const stats = yield* applicationEvents.getReplayStats({
-    afterSequence,
-    throughSequence: headSequence,
-  });
-  if (stats.rawPayloadBytes > ORCHESTRATION_REPLAY_PAYLOAD_BUDGET_BYTES) {
-    yield* Effect.logDebug("orchestration replay replaced by snapshot", {
-      afterSequence,
-      headSequence,
-      replayGap,
-      eventCount: stats.eventCount,
-      payloadBytes: stats.rawPayloadBytes,
-      payloadBudgetBytes: ORCHESTRATION_REPLAY_PAYLOAD_BUDGET_BYTES,
-    });
-    return false;
-  }
-  return true;
-});
 
 const enrichProjectShells = Effect.fn("ws.orchestrationV2.enrichProjectShells")(
   (projects: ReadonlyArray<OrchestrationProjectShell>) =>
@@ -3605,64 +3582,12 @@ const makeWsRpcLayer = (
               Stream.concat(Stream.make(latest), changes),
             ),
           ),
-      } satisfies RpcGroup.HandlersFrom<
-        | RpcGroup.Rpcs<typeof CoreServerWsRpcGroup | typeof OrchestrationServerWsRpcGroup>
-        | typeof WsServerRefreshProvidersRpc
-      >;
-      const {
-        [WS_METHODS.serverRefreshProviders]: refreshProviders,
-        [ORCHESTRATION_V2_WS_METHODS.forceStopThread]: forceStopThread,
-        [ORCHESTRATION_V2_WS_METHODS.getNativeChildWork]: getNativeChildWork,
-        [ORCHESTRATION_V2_WS_METHODS.getOlderSettledThreads]: getOlderSettledThreads,
-        [ORCHESTRATION_V2_WS_METHODS.getThreadFamily]: getThreadFamily,
-        [ORCHESTRATION_V2_WS_METHODS.getThreadLinkMetadata]: getThreadLinkMetadata,
-        [ORCHESTRATION_V2_WS_METHODS.getThreadTitles]: getThreadTitles,
-        [ORCHESTRATION_V2_WS_METHODS.getWorktreeThreadIds]: getWorktreeThreadIds,
-        [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: dispatchCommand,
-        [ORCHESTRATION_V2_WS_METHODS.getWorkflowScript]: getWorkflowScript,
-        [ORCHESTRATION_V2_WS_METHODS.stopWorkflow]: stopWorkflow,
-        [ORCHESTRATION_V2_WS_METHODS.getTurnItem]: getTurnItem,
-        [ORCHESTRATION_V2_WS_METHODS.getTurnDiff]: getTurnDiff,
-        [ORCHESTRATION_V2_WS_METHODS.getFullThreadDiff]: getFullThreadDiff,
-        [ORCHESTRATION_V2_WS_METHODS.searchThreads]: searchThreads,
-        [ORCHESTRATION_V2_WS_METHODS.searchThread]: searchThread,
-        [ORCHESTRATION_V2_WS_METHODS.searchThreadStream]: searchThreadStream,
-        [ORCHESTRATION_V2_WS_METHODS.getArchivedShellSnapshot]: getArchivedShellSnapshot,
-        [ORCHESTRATION_V2_WS_METHODS.getThreadProjection]: getThreadProjection,
-        [ORCHESTRATION_V2_WS_METHODS.launchThread]: launchThread,
-        [ORCHESTRATION_V2_WS_METHODS.subscribeShell]: subscribeShell,
-        [ORCHESTRATION_V2_WS_METHODS.subscribeThread]: subscribeThread,
-        [ORCHESTRATION_V2_WS_METHODS.subscribeCommandOutput]: subscribeCommandOutput,
-        [ORCHESTRATION_V2_WS_METHODS.subscribePromptSuggestion]: subscribePromptSuggestion,
-        ...core
-      } = handlers;
-      const orchestration = {
-        [ORCHESTRATION_V2_WS_METHODS.forceStopThread]: forceStopThread,
-        [ORCHESTRATION_V2_WS_METHODS.getNativeChildWork]: getNativeChildWork,
-        [ORCHESTRATION_V2_WS_METHODS.getOlderSettledThreads]: getOlderSettledThreads,
-        [ORCHESTRATION_V2_WS_METHODS.getThreadFamily]: getThreadFamily,
-        [ORCHESTRATION_V2_WS_METHODS.getThreadLinkMetadata]: getThreadLinkMetadata,
-        [ORCHESTRATION_V2_WS_METHODS.getThreadTitles]: getThreadTitles,
-        [ORCHESTRATION_V2_WS_METHODS.getWorktreeThreadIds]: getWorktreeThreadIds,
-        [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: dispatchCommand,
-        [ORCHESTRATION_V2_WS_METHODS.getWorkflowScript]: getWorkflowScript,
-        [ORCHESTRATION_V2_WS_METHODS.stopWorkflow]: stopWorkflow,
-        [ORCHESTRATION_V2_WS_METHODS.getTurnItem]: getTurnItem,
-        [ORCHESTRATION_V2_WS_METHODS.getTurnDiff]: getTurnDiff,
-        [ORCHESTRATION_V2_WS_METHODS.getFullThreadDiff]: getFullThreadDiff,
-        [ORCHESTRATION_V2_WS_METHODS.searchThreads]: searchThreads,
-        [ORCHESTRATION_V2_WS_METHODS.searchThread]: searchThread,
-        [ORCHESTRATION_V2_WS_METHODS.searchThreadStream]: searchThreadStream,
-        [ORCHESTRATION_V2_WS_METHODS.getArchivedShellSnapshot]: getArchivedShellSnapshot,
-        [ORCHESTRATION_V2_WS_METHODS.getThreadProjection]: getThreadProjection,
-        [ORCHESTRATION_V2_WS_METHODS.launchThread]: launchThread,
-        [ORCHESTRATION_V2_WS_METHODS.subscribeShell]: subscribeShell,
-        [ORCHESTRATION_V2_WS_METHODS.subscribeThread]: subscribeThread,
-        [ORCHESTRATION_V2_WS_METHODS.subscribeCommandOutput]: subscribeCommandOutput,
-        [ORCHESTRATION_V2_WS_METHODS.subscribePromptSuggestion]: subscribePromptSuggestion,
-      };
-      const coreLayer = CoreServerWsRpcGroup.toLayer(core);
-      const orchestrationLayer = OrchestrationServerWsRpcGroup.toLayer(orchestration);
+      } satisfies RpcGroup.HandlersFrom<SharedHandlersWsRpc | typeof WsServerRefreshProvidersRpc>;
+      const splitHandlers: Pick<typeof handlers, SplitWsRpc["_tag"]> = handlers;
+      const otherHandlers: Pick<typeof handlers, OtherWsRpc["_tag"]> = handlers;
+      const splitLayer = SplitWsRpcGroup.toLayer(splitHandlers);
+      const otherLayer = OtherWsRpcGroup.toLayer(otherHandlers);
+      const refreshProviders = handlers[WS_METHODS.serverRefreshProviders];
       const refreshProvidersLayer = ServerWsRpcGroup.toLayerHandler(
         WS_METHODS.serverRefreshProviders,
         refreshProviders,
@@ -3672,8 +3597,8 @@ const makeWsRpcLayer = (
         layerWorkspaceRecoverRpc,
         layerProviderInstallationsRpc,
         refreshProvidersLayer,
-        coreLayer,
-        orchestrationLayer,
+        splitLayer,
+        otherLayer,
       );
     }),
   );

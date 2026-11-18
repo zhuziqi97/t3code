@@ -455,9 +455,10 @@ describe("thread execution presentation", () => {
     expect(threadRuntimeHasInterruptibleRun(runtime)).toBe(false);
   });
 
-  function promotedQueueProjection() {
+  const cancelledAfterResponse = DateTime.makeUnsafe("2026-10-26T03:05:40.000Z");
+
+  function promotedQueueProjection(promotedAt = DateTime.makeUnsafe("2026-10-26T03:04:44.236Z")) {
     const completedAt = DateTime.makeUnsafe("2026-10-26T03:05:36.145Z");
-    const promotedAt = DateTime.makeUnsafe("2026-10-26T03:04:44.236Z");
     const completed = { ...run("response", 1, "completed"), completedAt };
     const promoted = {
       ...run("promoted-queue", 2, "cancelled"),
@@ -530,7 +531,7 @@ describe("thread execution presentation", () => {
   });
 
   it("still presents an unstarted queue cancellation when its message was not promoted", () => {
-    const projection = promotedQueueProjection();
+    const projection = promotedQueueProjection(cancelledAfterResponse);
     const queuedInput = {
       ...projection.turnItems[0],
       runId: RunId.make("promoted-queue"),
@@ -553,7 +554,7 @@ describe("thread execution presentation", () => {
     const cancelled = {
       ...run("cancelled-queue", 3, "cancelled"),
       startedAt: null,
-      completedAt: now,
+      completedAt: cancelledAfterResponse,
     };
 
     expect(

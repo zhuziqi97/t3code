@@ -2164,7 +2164,7 @@ export class RpcScopeAuthorization extends RpcMiddleware.Service<RpcScopeAuthori
   { error: EnvironmentAuthorizationError },
 ) {}
 
-export const WsCoreRpcGroup = RpcGroup.make(
+const WsCoreRpcGroup = RpcGroup.make(
   Rpc.make(WS_METHODS.threadWorkspaceInspect, {
     payload: ThreadWorkspaceInput,
     success: ThreadWorkspaceState,
@@ -2427,7 +2427,7 @@ export const WsCoreRpcGroup = RpcGroup.make(
 ).middleware(RpcScopeAuthorization);
 
 // Separate handler groups keep server layer inference below the compiler limit.
-export const WsOrchestrationRpcGroup = RpcGroup.make(
+const WsOrchestrationRpcGroup = RpcGroup.make(
   WsOrchestrationV2DispatchCommandRpc,
   WsOrchestrationV2GetWorkflowScriptRpc,
   WsOrchestrationV2GetNativeChildWorkRpc,
