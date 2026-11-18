@@ -1149,6 +1149,7 @@ describe("AcpRegistrySupport", () => {
       version,
     });
     let agent = makeBinaryAgent("1.2.3");
+    const archives: Array<string> = [];
     return Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const cacheDir = yield* fileSystem.makeTempDirectoryScoped({
@@ -1162,20 +1163,42 @@ describe("AcpRegistrySupport", () => {
       yield* resolver.prepare({ agentId: agent.id });
 
       agent = makeBinaryAgent("1.2.4");
-      yield* TestClock.adjust("6 minutes");
-      yield* resolver.search({ query: "example" });
+      yield* resolver.refresh();
 
       expect(yield* resolver.inspect(settings())).toMatchObject({
         status: "ready",
         distribution: "binary",
+        version: "1.2.3",
+        latestVersion: "1.2.4",
       });
       const resolved = yield* resolver.resolve(settings(), "/workspace", {});
       expect(resolved.spawn.command).toContain(
-        "/tools/example-agent/1.2.4/linux-x86_64/bin/example-agent",
+        "/tools/example-agent/1.2.3/linux-x86_64/bin/example-agent",
       );
       expect(yield* fileSystem.readFileString(resolved.spawn.command)).toBe(
+        "#!/bin/sh\necho 1.2.3\n",
+      );
+      expect(archives).toEqual(["https://registry.test/example-agent-1.2.3.bin"]);
+
+      expect(yield* resolver.prepare({ agentId: agent.id })).toMatchObject({
+        prepared: true,
+        version: "1.2.4",
+      });
+      expect(yield* resolver.inspect(settings())).toMatchObject({
+        status: "ready",
+        version: "1.2.4",
+      });
+      const updated = yield* resolver.resolve(settings(), "/workspace", {});
+      expect(updated.spawn.command).toContain(
+        "/tools/example-agent/1.2.4/linux-x86_64/bin/example-agent",
+      );
+      expect(yield* fileSystem.readFileString(updated.spawn.command)).toBe(
         "#!/bin/sh\necho 1.2.4\n",
       );
+      expect(archives).toEqual([
+        "https://registry.test/example-agent-1.2.3.bin",
+        "https://registry.test/example-agent-1.2.4.bin",
+      ]);
 
       expect(yield* resolver.uninstallManagedBinary({ agentId: agent.id })).toMatchObject({
         removed: true,
@@ -1184,8 +1207,9 @@ describe("AcpRegistrySupport", () => {
     }).pipe(
       Effect.scoped,
       Effect.provide(
-        layerResolver((request) =>
-          Effect.succeed(
+        layerResolver((request) => {
+          if (request.url !== registryUrl) archives.push(request.url);
+          return Effect.succeed(
             HttpClientResponse.fromWeb(
               request,
               new Response(
@@ -1194,8 +1218,8 @@ describe("AcpRegistrySupport", () => {
                   : `#!/bin/sh\necho ${agent.version}\n`,
               ),
             ),
-          ),
-        ),
+          );
+        }),
       ),
     );
   });
@@ -1950,25 +1974,38 @@ describe("AcpRegistrySupport", () => {
       const cacheDir = yield* fileSystem.makeTempDirectoryScoped({
         prefix: "t3-acp-registry-offline-",
       });
+      const toolchain = yield* makeFakeNpmToolchain(cacheDir);
       yield* fileSystem.makeDirectory(`${cacheDir}/acp-registry`, { recursive: true });
       yield* fileSystem.writeFileString(`${cacheDir}/acp-registry/registry.json`, "{not json");
       const options = { cacheDir, toolsDir: `${cacheDir}/tools`, registryUrl };
       const resolver = yield* AcpRegistrySupport.makeAcpRegistryCatalog(options);
 
-      const offline = yield* resolver.inspect(settings()).pipe(Effect.flip);
+      const offline = yield* resolver.inspect(settings(), toolchain.environment).pipe(Effect.flip);
       expect(offline.reason).toBe("registry_unavailable");
 
       online = true;
       const concurrent = yield* Effect.all(
-        [resolver.inspect(settings()), resolver.inspect(settings())],
+        [
+          resolver.inspect(settings(), toolchain.environment),
+          resolver.inspect(settings(), toolchain.environment),
+        ],
         { concurrency: "unbounded" },
       );
-      expect(concurrent).toMatchObject([{ status: "ready" }, { status: "ready" }]);
+      const recovered = {
+        status: "unprepared",
+        agentId: agent.id,
+        distribution: "npx",
+        version: null,
+        latestVersion: agent.version,
+        registryCheck: { error: null },
+      };
+      expect(concurrent).toMatchObject([recovered, recovered]);
       expect(requests).toBe(2);
 
       const restarted = yield* AcpRegistrySupport.makeAcpRegistryCatalog(options);
-      expect(yield* restarted.inspect(settings())).toMatchObject({ status: "ready" });
+      expect(yield* restarted.inspect(settings(), toolchain.environment)).toMatchObject(recovered);
       expect(requests).toBe(2);
+      expect(yield* fileSystem.readFileString(toolchain.logPath)).toBe("");
     }).pipe(
       Effect.scoped,
       Effect.provide(
