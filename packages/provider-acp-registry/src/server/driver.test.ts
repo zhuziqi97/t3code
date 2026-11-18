@@ -609,8 +609,9 @@ it.layer(driverLayer, { excludeTestServices: true })("AcpRegistryDriver", (it) =
         }),
       );
       expect(yield* instance.snapshot.getSnapshot).toMatchObject({
-        installed: false,
-        message: "Checking ACP Registry agent readiness...",
+        installed: null,
+        status: "checking",
+        auth: { status: "unknown" },
       });
     }),
   );
