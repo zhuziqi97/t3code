@@ -238,6 +238,7 @@ const shouldRetainMissingProviderModels = (provider: ServerProvider): boolean =>
   const isAntigravity = provider.driver === ProviderDriverKind.make("antigravity");
   const isCodex = provider.driver === ProviderDriverKind.make("codex");
   const isOpenCode = provider.driver === ProviderDriverKind.make("opencode");
+  if (isOpenCode && provider.metadata?.models?.state === "ready") return false;
   if (!isAntigravity && !isCodex && !isOpenCode) {
     // Any other driver must report ready only after a completed model listing, or opt out above:
     // a ready list is authoritative, and warning/error probes keep the old models.

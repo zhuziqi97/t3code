@@ -11663,8 +11663,9 @@ it.effect.each([["SQL", layerTest]] as const)(
       const store = yield* ProjectionStore.ProjectionStoreV2;
       const threadId = yield* addRolledBackRecoveryCandidate("promoted-shell");
       const original = (yield* store.getThreadProjection(threadId)).runs[0]!;
+      const completedAt = DateTime.makeUnsafe("2026-10-26T03:04:42.000Z");
       const promotedAt = DateTime.makeUnsafe("2026-10-26T03:04:44.236Z");
-      const completedAt = DateTime.makeUnsafe("2026-10-26T03:05:36.145Z");
+      const cancelledAt = DateTime.makeUnsafe("2026-10-26T03:05:36.145Z");
       const completed = { ...original, status: "completed" as const, completedAt };
       const queued = {
         ...original,
@@ -11758,19 +11759,20 @@ it.effect.each([["SQL", layerTest]] as const)(
         userMessageId: MessageId.make("message:promoted-shell:cancelled"),
         rootNodeId: NodeId.make("node:promoted-shell:cancelled"),
         ordinal: 3,
+        completedAt: cancelledAt,
       };
       yield* store.apply({
         id: EventId.make("event:promoted-shell:cancelled"),
         type: "run.created",
         threadId,
-        occurredAt: completedAt,
+        occurredAt: cancelledAt,
         payload: cancelled,
       });
       yield* store.apply({
         id: EventId.make("event:promoted-shell:cancelled-input"),
         type: "turn-item.updated",
         threadId,
-        occurredAt: completedAt,
+        occurredAt: cancelledAt,
         payload: {
           ...input,
           id: TurnItemId.make("item:promoted-shell:cancelled-input"),

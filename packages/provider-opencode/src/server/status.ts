@@ -956,6 +956,8 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
                 : "OpenCode is available, but it did not report any connected upstream providers.",
       },
     }),
+    // An empty connected list is authoritative after a successful inventory read.
+    ...(connectedCount === 0 ? { metadata: { models: { state: "ready" as const } } } : {}),
     ...installedVersion,
   };
 });

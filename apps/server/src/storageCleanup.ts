@@ -695,7 +695,8 @@ const make = Effect.gen(function* () {
         );
       if (result === null) return null;
       if (result.exitCode === 0 || result.exitCode === allowedExitCode) return result;
-      if (isNonRepositoryGitStderr(result.stderr)) return null;
+      if (isNonRepositoryGitStderr(result.stderr) && !(yield* fs.exists(path.join(cwd, ".git"))))
+        return null;
       return yield* failure(
         result.stderr.trim().split(/\r?\n/)[0]?.slice(0, 1000) || "command failed",
       );

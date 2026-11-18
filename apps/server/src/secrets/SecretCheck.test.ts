@@ -26,6 +26,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
 import * as ServerConfig from "../config.ts";
+import { CodexProviderCapabilitiesV2 } from "../orchestration-v2/Adapters/CodexAdapterV2.ts";
 import * as ModelManifest from "../provider/ModelManifest.ts";
 import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
 import * as ProviderInstanceRegistryMutator from "../provider/ProviderInstanceRegistryMutator.ts";
@@ -138,7 +139,9 @@ const setup = Effect.fn("SecretCheckTest.setup")(function* (
             streamChanges: Stream.empty,
             applyUsageLimits: () => Effect.void,
           },
-          orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
+          orchestrationAdapter: {
+            getCapabilities: () => Effect.succeed(CodexProviderCapabilitiesV2),
+          } as unknown as ProviderInstance["orchestrationAdapter"],
           textGeneration: {} as ProviderInstance["textGeneration"],
         } satisfies ProviderInstance;
       }),

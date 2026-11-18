@@ -246,7 +246,7 @@ const decodeCodexBackgroundTerminalTerminateResponse = Schema.decodeUnknownEffec
 const decodeCodexBackgroundTerminalsListResponse = Schema.decodeUnknownEffect(
   CodexBackgroundTerminalsListResponse,
 );
-export function codexSupportsNativePredictions(userAgent: string): boolean {
+function codexSupportsNativePredictions(userAgent: string): boolean {
   const version = /\/(\d+)\.(\d+)\.(\d+)([-\w.]*)/.exec(userAgent);
   return (
     version !== null &&
@@ -567,37 +567,35 @@ export function codexDynamicToolOutput(
   return item.success === false ? { success: false } : undefined;
 }
 
-export const projectCodexDynamicToolItem = Effect.fn("CodexAdapterV2.projectDynamicToolItem")(
-  function* (
-    item: CodexDynamicToolItem,
-  ): Effect.fn.Return<CodexDynamicToolProjection, never, Digest.Digest> {
-    const output =
-      item.type === "mcpToolCall" ? codexMcpToolOutput(item) : codexDynamicToolOutput(item);
-    const toolName =
-      item.type === "mcpToolCall"
-        ? `${item.server}.${item.tool}`
-        : [trimText(item.namespace), item.tool].filter(Boolean).join(".");
-    const presentation: McpToolPresentation =
-      item.type === "mcpToolCall" ? yield* mcpToolPresentation(item) : {};
-    const title =
-      dynamicToolTitle(toolName, item.arguments, presentation.title) ?? presentation.title;
-    const toolSurface = presentation.toolSurface ?? dynamicToolSurface(toolName, item.arguments);
-    const toolSource =
-      toolSurface === "computer" && presentation.toolSource?.kind !== "computer"
-        ? COMPUTER_USE_TOOL_SOURCE
-        : presentation.toolSource;
-    const projection: CodexDynamicToolProjection = {
-      ...presentation,
-      ...(toolSurface ? { toolSurface } : {}),
-      ...(toolSource ? { toolSource } : {}),
-      toolName,
-      ...(title ? { title } : {}),
-      input: item.arguments,
-      status: codexItemStatus(item.status).turnItem,
-    };
-    return output === undefined ? projection : { ...projection, output };
-  },
-);
+const projectCodexDynamicToolItem = Effect.fn("CodexAdapterV2.projectDynamicToolItem")(function* (
+  item: CodexDynamicToolItem,
+): Effect.fn.Return<CodexDynamicToolProjection, never, Digest.Digest> {
+  const output =
+    item.type === "mcpToolCall" ? codexMcpToolOutput(item) : codexDynamicToolOutput(item);
+  const toolName =
+    item.type === "mcpToolCall"
+      ? `${item.server}.${item.tool}`
+      : [trimText(item.namespace), item.tool].filter(Boolean).join(".");
+  const presentation: McpToolPresentation =
+    item.type === "mcpToolCall" ? yield* mcpToolPresentation(item) : {};
+  const title =
+    dynamicToolTitle(toolName, item.arguments, presentation.title) ?? presentation.title;
+  const toolSurface = presentation.toolSurface ?? dynamicToolSurface(toolName, item.arguments);
+  const toolSource =
+    toolSurface === "computer" && presentation.toolSource?.kind !== "computer"
+      ? COMPUTER_USE_TOOL_SOURCE
+      : presentation.toolSource;
+  const projection: CodexDynamicToolProjection = {
+    ...presentation,
+    ...(toolSurface ? { toolSurface } : {}),
+    ...(toolSource ? { toolSource } : {}),
+    toolName,
+    ...(title ? { title } : {}),
+    input: item.arguments,
+    status: codexItemStatus(item.status).turnItem,
+  };
+  return output === undefined ? projection : { ...projection, output };
+});
 
 function codexNativeItemRef(nativeItemId: string) {
   return {
@@ -1530,7 +1528,7 @@ const CODEX_T3_MCP_TOOL_TIMEOUT_SEC = 65 * 60;
 const CODEX_T3_DIRECT_MCP_SERVER = "t3-code-direct";
 const CODEX_DIRECT_ONLY_T3_TOOLS = ["t3_thread_wait", "delegate_task"];
 
-export function codexThreadRuntimeParams(input: {
+function codexThreadRuntimeParams(input: {
   readonly threadId?: ThreadId | null;
   readonly mcpSession: McpProviderSession.McpProviderSessionConfig | undefined;
   readonly modelSelection?: { readonly model: string | null };

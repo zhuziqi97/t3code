@@ -950,7 +950,7 @@ it.live.each([
           markDisconnected: () => Effect.void,
           awaitInvalidation: () => Effect.never,
         }),
-        Layer.mock(AnalyticsService.AnalyticsService)({ recordOwners: () => Effect.void }),
+        AnalyticsService.layer,
         Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
           namedProjectsRoot: process.cwd(),
         }),
@@ -1508,6 +1508,7 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
           }),
       }),
     );
+    const cancelledSubscriptions = new Set<RpcMessage.RequestId>();
     const server = yield* RpcServer.makeNoSerialization(
       RpcGroup.make(WsSubscribeServerConfigRpc, WsServerRefreshProvidersRpc),
       {
@@ -1520,7 +1521,10 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
             : response._tag === "Exit"
               ? response.exit._tag === "Success"
                 ? Queue.offer(responses, response.exit.value)
-                : Queue.failCause(responses, response.exit.cause)
+                : cancelledSubscriptions.has(response.requestId) &&
+                    Cause.hasInterruptsOnly(response.exit.cause)
+                  ? Effect.void
+                  : Queue.failCause(responses, response.exit.cause)
               : Effect.void,
       },
     ).pipe(
@@ -1641,6 +1645,7 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
         skills: provider.skills,
       },
     ]);
+    cancelledSubscriptions.add(configRequest);
     yield* server.write(0, { _tag: "Interrupt", requestId: configRequest, interruptors: [] });
 
     // A client that takes digests and deltas, against a catalog of over 200 KB.
@@ -1731,6 +1736,7 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
     assert.deepEqual(yield* Queue.take(responses), { providers: [] });
 
     // The cwd snapshot brings the lists the digest stands for, under the same digest.
+    refreshCwd = "/b";
     yield* server.write(0, {
       _tag: "Request",
       id: RpcMessage.RequestId("refresh-machine-catalog"),
@@ -1756,6 +1762,7 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
       enabled: true,
     });
     assert.lengthOf(loaded.providers[0]?.workspaceSnapshots ?? [], 1);
+    cancelledSubscriptions.add(lightRequest);
     yield* server.write(0, { _tag: "Interrupt", requestId: lightRequest, interruptors: [] });
   }).pipe(
     Effect.provide(

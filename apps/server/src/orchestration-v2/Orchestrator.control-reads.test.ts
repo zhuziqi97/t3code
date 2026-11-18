@@ -2626,6 +2626,7 @@ it.effect(
           commandId: CommandId.make(`${threadId}:handoff`),
           threadId,
           worktreePath: "/repo/worktree",
+          conveneWorkspaceHandoff: true,
         });
         if (userStopped === "after") {
           const { runs } = yield* projections.getThreadRecords(threadId, ["runs"]);

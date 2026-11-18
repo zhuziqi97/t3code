@@ -253,7 +253,7 @@ describe("effect-codex-app-server client", () => {
     }),
   );
 
-  it.effect("a dying notification handler leaves no request waiting on a live app-server", () =>
+  it.live("a dying notification handler leaves no request waiting on a live app-server", () =>
     Effect.gen(function* () {
       const handle = yield* makeHandle();
       const client = yield* Layer.build(CodexClient.layerChildProcess(handle)).pipe(
@@ -308,7 +308,7 @@ describe("effect-codex-app-server client", () => {
       );
       // Retiring the transport closes the app-server's stdin, so it does not live on unread.
       assert.equal(yield* handle.exitCode, 0);
-    }),
+    }).pipe(Effect.provide(NodeServices.layer)),
   );
 });
 

@@ -164,7 +164,7 @@ function presentedUsageLimitRun(
   );
 }
 
-export function presentedLatestRun(
+function presentedLatestRun(
   projection: ThreadStructure,
 ): OrchestrationV2ThreadProjection["runs"][number] | null {
   return (

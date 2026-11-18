@@ -240,7 +240,7 @@ export function withClaudeReportedModels(
   return { models };
 }
 
-export function resolveClaudeCatalogModel(
+function resolveClaudeCatalogModel(
   catalog: ClaudeModelCatalog,
   slugOrAlias: string | null | undefined,
 ): ClaudeCatalogModel | undefined {

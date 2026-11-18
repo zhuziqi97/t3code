@@ -22,7 +22,7 @@ function skipLeadingCodexContext(text: string): number {
       if (openingTag === undefined) continue;
       const closingTag = `</${tag}>`;
       const closingOffset = text.indexOf(closingTag, offset + openingTag.length);
-      if (closingOffset === -1) return text.length;
+      if (closingOffset === -1) return offset;
       offset = closingOffset + closingTag.length;
       skipWhitespace();
       removedContext = true;

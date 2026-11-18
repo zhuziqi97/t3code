@@ -392,7 +392,7 @@ const make = Effect.gen(function* () {
                   message.text !== thread.messages[index]?.text,
               )
             ) {
-              return null;
+              return false;
             }
             yield* repairTitle(threadId, input.projectId, source, thread.title).pipe(
               Effect.tapError((cause) =>

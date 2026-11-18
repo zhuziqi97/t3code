@@ -48,16 +48,11 @@ import {
 import { HttpClient, HttpClientResponse } from "effect/http";
 import { ChildProcessSpawner } from "effect/process";
 import * as HostProcess from "@t3tools/shared/HostProcess";
-import { WindowsShellEnvironment } from "@t3tools/shared/shell";
 import { deepMerge } from "@t3tools/shared/Struct";
 import { createModelCapabilities } from "@t3tools/shared/model";
 import { applyServerSettingsPatch } from "@t3tools/shared/serverSettings";
 
-import {
-  checkCodexProviderStatus,
-  mapCodexModelCapabilities,
-  type CodexAppServerProviderSnapshot,
-} from "./CodexProvider.ts";
+import { checkCodexProviderStatus, type CodexAppServerProviderSnapshot } from "./CodexProvider.ts";
 import { BUNDLED_CLAUDE_MODEL_CATALOG } from "./ClaudeModelCatalog.ts";
 import { checkClaudeProviderStatus } from "./ClaudeProvider.ts";
 import * as BackgroundPolicy from "../background/BackgroundPolicy.ts";
@@ -247,7 +242,7 @@ const makeWorkspaceRescanHarness = Effect.gen(function* () {
           yield* Queue.offer(scans, { cwd, result });
           return yield* Deferred.await(result);
         }),
-      orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
+      orchestrationAdapter: capabilitiesAdapter(),
       textGeneration: {} as ProviderInstance["textGeneration"],
     };
     return { instance, rescans, reports };
@@ -566,7 +561,7 @@ const buildRegistryOverSnapshot = Effect.fn("buildRegistryOverSnapshot")(functio
       streamChanges: Stream.empty,
       applyUsageLimits: () => Effect.void,
     },
-    orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
+    orchestrationAdapter: capabilitiesAdapter(),
     textGeneration: {} as ProviderInstance["textGeneration"],
   } satisfies ProviderInstance;
   const layerInstanceRegistry = Layer.succeed(ProviderInstanceRegistry.ProviderInstanceRegistry, {
@@ -1648,6 +1643,7 @@ it.layer(
       } satisfies ServerProvider;
       const loggedOutProvider = {
         ...previousProvider,
+        metadata: { models: { state: "ready" } },
         status: "warning",
         auth: { status: "unknown" },
         checkedAt: "2026-07-17T00:02:00.000Z",
@@ -2034,10 +2030,10 @@ it.layer(
                   auth,
                   version,
                 });
-                // Boot reads the probe state from the cache, not the pending snapshot, and never persists the pending one.
+                // Boot reuses cached metadata while probe status stays pending.
                 assert.deepStrictEqual(
                   probeFields((yield* registry.getProviders)[0]!),
-                  probeFields(cachedProvider),
+                  probeFields({ ...pendingProvider, version: cachedProvider.version }),
                 );
                 assert.deepStrictEqual(
                   probeFields((yield* readProviderStatusCache(filePath))!),
@@ -2115,7 +2111,7 @@ it.layer(
               streamChanges: Stream.empty,
               applyUsageLimits: () => Effect.void,
             },
-            orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
+            orchestrationAdapter: capabilitiesAdapter(),
             textGeneration: {} as ProviderInstance["textGeneration"],
           } satisfies ProviderInstance;
           const layerInstanceRegistry = Layer.succeed(
@@ -2144,7 +2140,7 @@ it.layer(
               assert.strictEqual((yield* registry.getProviders)[0]?.status, failedProvider.status);
               assert.strictEqual(
                 (yield* readProviderStatusCache(filePath))?.status,
-                failedProvider.status,
+                hasCache ? cachedProvider.status : failedProvider.status,
               );
             }).pipe(
               Effect.provide(
@@ -2433,7 +2429,7 @@ it.layer(
                     : Effect.void,
                 ),
               ),
-              orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
+              orchestrationAdapter: capabilitiesAdapter(),
               textGeneration: {} as ProviderInstance["textGeneration"],
             } satisfies ProviderInstance;
             const takeMaintenanceReads = Ref.getAndSet(maintenanceReads, []);
@@ -3050,6 +3046,153 @@ it.layer(
             );
           }
         }).pipe(Effect.provide(runtimeServices));
+      }),
+    );
+
+    it.effect("rescans a requested cwd whose snapshot is still current", () =>
+      Effect.gen(function* () {
+        const h = yield* makeWorkspaceRescanHarness;
+        yield* h.seed("/barrier");
+        yield* h.seed("/workspace");
+        assert.deepEqual(yield* h.skillsOf("/workspace"), ["initial"]);
+        yield* Queue.offer(h.first.rescans, "/workspace");
+        const complete = yield* h.nextScan("/workspace");
+        yield* complete("hook");
+        yield* h.drainRescans;
+        assert.deepEqual(yield* h.skillsOf("/workspace"), ["hook"]);
+        // Clients that fetched the old skills are told to fetch again.
+        const scannedAt = (yield* h.registry.getProviders)[0]?.workspaceSnapshots?.find(
+          (snapshot) => snapshot.cwd === "/workspace",
+        )?.checkedAt;
+        assert.isString(scannedAt);
+        assert.equal(yield* h.rescannedAtOf, scannedAt);
+      }),
+    );
+
+    it.effect("stamps a rescan whose awaited scan already published the change", () =>
+      Effect.gen(function* () {
+        const h = yield* makeWorkspaceRescanHarness;
+        yield* h.seed("/barrier");
+        yield* h.seed("/workspace");
+        const ordinary = yield* h.refresh("/workspace", true).pipe(Effect.forkChild);
+        const completeOrdinary = yield* h.nextScan("/workspace");
+        yield* Queue.offer(h.first.rescans, "/workspace");
+        yield* Queue.take(h.first.reports);
+        // Let the consumer reach its wait on the running scan.
+        yield* TestClock.adjust(0);
+        yield* completeOrdinary("hook");
+        yield* Fiber.join(ordinary);
+        const completeRescan = yield* h.nextScan("/workspace");
+        yield* completeRescan("hook");
+        yield* h.drainRescans;
+        assert.isString(yield* h.rescannedAtOf);
+      }),
+    );
+
+    it.effect("leaves workspaceRescannedAt unset when a rescan changes nothing", () =>
+      Effect.gen(function* () {
+        const h = yield* makeWorkspaceRescanHarness;
+        yield* h.seed("/barrier");
+        yield* h.seed("/workspace");
+        yield* Queue.offer(h.first.rescans, "/workspace");
+        const complete = yield* h.nextScan("/workspace");
+        yield* complete("initial");
+        yield* h.drainRescans;
+        assert.deepEqual(yield* h.skillsOf("/workspace"), ["initial"]);
+        assert.equal(yield* h.rescannedAtOf, undefined);
+      }),
+    );
+
+    it.effect("starts no scan for a reported cwd nobody requested", () =>
+      Effect.gen(function* () {
+        const h = yield* makeWorkspaceRescanHarness;
+        yield* h.seed("/barrier");
+        yield* Queue.offer(h.first.rescans, "/unrequested");
+        // The next scan being the barrier's shows the report started none.
+        yield* h.drainRescans;
+        assert.deepEqual(yield* h.skillsOf("/unrequested"), undefined);
+      }),
+    );
+
+    it.effect("rescans after an initial scan in flight when the hook report arrives", () =>
+      Effect.gen(function* () {
+        const h = yield* makeWorkspaceRescanHarness;
+        yield* h.seed("/barrier");
+        const initial = yield* h.refresh("/workspace").pipe(Effect.forkChild);
+        const completeInitial = yield* h.nextScan("/workspace");
+        yield* Queue.offer(h.first.rescans, "/workspace");
+        yield* Queue.take(h.first.reports);
+        // Let the consumer reach its wait on the running scan.
+        yield* TestClock.adjust(0);
+        yield* completeInitial("initial");
+        // The requesting client's reply is its only copy of the scan, so the rescan must not
+        // supersede it.
+        const reply = yield* Fiber.join(initial);
+        assert.deepEqual(
+          reply[0]?.workspaceSnapshots
+            ?.find((s) => s.cwd === "/workspace")
+            ?.skills?.map((s) => s.name),
+          ["initial"],
+        );
+        const completeRescan = yield* h.nextScan("/workspace");
+        yield* completeRescan("hook");
+        yield* h.drainRescans;
+        assert.deepEqual(yield* h.skillsOf("/workspace"), ["hook"]);
+      }),
+    );
+
+    it.effect("lets a fresh refresh started while a rescan waits keep its own result", () =>
+      Effect.gen(function* () {
+        const h = yield* makeWorkspaceRescanHarness;
+        yield* h.seed("/barrier");
+        const initial = yield* h.refresh("/workspace").pipe(Effect.forkChild);
+        const completeInitial = yield* h.nextScan("/workspace");
+        yield* Queue.offer(h.first.rescans, "/workspace");
+        yield* Queue.take(h.first.reports);
+        // Let the consumer reach its wait on the running scan.
+        yield* TestClock.adjust(0);
+        const fresh = yield* h.refresh("/workspace", true).pipe(Effect.forkChild);
+        const completeFresh = yield* h.nextScan("/workspace");
+        yield* completeInitial("initial");
+        yield* completeFresh("fresh");
+        yield* Fiber.join(initial);
+        const reply = yield* Fiber.join(fresh);
+        assert.deepEqual(
+          reply[0]?.workspaceSnapshots
+            ?.find((s) => s.cwd === "/workspace")
+            ?.skills?.map((s) => s.name),
+          ["fresh"],
+        );
+        // The rescan joins the fresh scan, so the next scan started is the barrier's.
+        yield* h.drainRescans;
+        assert.deepEqual(yield* h.skillsOf("/workspace"), ["fresh"]);
+      }),
+    );
+
+    it.effect("ignores a queued rescan from a replaced instance", () =>
+      Effect.gen(function* () {
+        const h = yield* makeWorkspaceRescanHarness;
+        yield* h.seed("/workspace");
+        const replacement = yield* h.makeInstance;
+        const rebuilt = yield* h.registry.streamChanges.pipe(
+          Stream.filter((providers) => providers[0]?.workspaceSnapshots === undefined),
+          Stream.runHead,
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* Ref.set(h.instances, [replacement.instance]);
+        yield* PubSub.publish(h.changes, undefined);
+        yield* Fiber.join(rebuilt);
+        yield* h.seed("/workspace");
+        yield* h.seed("/barrier");
+        // The forwarder pulls the second report only after queueing the first.
+        yield* Queue.offerAll(h.first.rescans, ["/workspace", "/workspace"]);
+        yield* Queue.take(h.first.reports);
+        yield* Queue.take(h.first.reports);
+        yield* Queue.offer(replacement.rescans, "/barrier");
+        // A scan started for the stale report would come before the barrier's.
+        const completeBarrier = yield* h.nextScan("/barrier");
+        yield* completeBarrier("barrier");
+        assert.deepEqual(yield* h.skillsOf("/workspace"), ["initial"]);
       }),
     );
 
