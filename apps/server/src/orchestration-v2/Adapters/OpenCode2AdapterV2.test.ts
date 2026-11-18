@@ -7989,24 +7989,27 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
         });
         yield* Effect.addFinalizer(() => mcpSessions.clear(threadId));
         const server = "t3-code-thread_opencode2-adapter";
-        const { runtime, thread } = yield* resumed([
-          out("mcp.add", {
-            server,
-            "location[directory]": WORK,
-            config: {
-              type: "remote",
-              url: "http://127.0.0.1:3773/mcp",
-              headers: { Authorization: "Bearer thread-credential" },
-              oauth: false,
-            },
-          }),
-          reply("mcp.add", null),
-          out("session.prompt", { sessionID: SESSION, text: "<any>" }),
-          promptAccepted,
-          event("session.execution.succeeded", { sessionID: SESSION }),
-          out("mcp.remove", { server, "location[directory]": WORK }),
-          reply("mcp.remove", null),
-        ]);
+        const { runtime, thread } = yield* resumed(
+          [
+            out("mcp.add", {
+              server,
+              "location[directory]": WORK,
+              config: {
+                type: "remote",
+                url: "http://127.0.0.1:3773/mcp",
+                headers: { Authorization: "Bearer thread-credential" },
+                oauth: false,
+              },
+            }),
+            reply("mcp.add", null),
+            out("session.prompt", { sessionID: SESSION, text: "<any>" }),
+            promptAccepted,
+            event("session.execution.succeeded", { sessionID: SESSION }),
+            out("mcp.remove", { server, "location[directory]": WORK }),
+            reply("mcp.remove", null),
+          ],
+          { version: "2.2.6" },
+        );
         const terminal = yield* terminalOf(runtime).pipe(Effect.forkScoped);
         yield* runtime.startTurn(turnInput(thread));
         assert.equal((yield* Fiber.join(terminal))?.status, "completed");
@@ -8089,7 +8092,7 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
             ...prompt,
             ...remove(builtin),
           ],
-          { permissions },
+          { version: "2.2.6", permissions },
         );
         for (const [index, token] of ["first", "first", "replacement", undefined].entries()) {
           yield* setGrant(token);
@@ -8165,7 +8168,10 @@ it.layer(McpProviderSessions.layer)("OpenCode2 adapter", (it) => {
             out("mcp.remove", { server: project, "location[directory]": WORK }),
             reply("mcp.remove", null),
           ],
-          { permissions: [...t3Rules, { action: `${project}_*`, resource: "*", effect: "allow" }] },
+          {
+            version: "2.2.6",
+            permissions: [...t3Rules, { action: `${project}_*`, resource: "*", effect: "allow" }],
+          },
         );
         const terminal = yield* terminalOf(runtime).pipe(Effect.forkScoped);
         yield* runtime.startTurn(turnInput(thread));

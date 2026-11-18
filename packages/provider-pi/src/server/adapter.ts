@@ -2997,7 +2997,6 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
           }
           if (baselineThinking === null && appliedThinking === null) {
             baselineThinking = recordString(stateData, "thinkingLevel") ?? null;
-            appliedThinking = baselineThinking;
           }
           // switch_session accepts a file path, not Pi's display session UUID.
           const nativeId = recordString(stateData, "sessionFile");
@@ -3099,6 +3098,7 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
       ) {
         const thinking = getModelSelectionStringOptionValue(modelSelection, "thinking");
         let reportedModel: unknown;
+        let currentThinking = appliedThinking;
         // pi.setModel and /preset can change the model without an RPC event.
         // Confirm cached selections against Pi before skipping them.
         const modelCached =
@@ -3109,7 +3109,7 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
           const stateModel = recordField(state, "model");
           const piModel = `${recordString(stateModel, "provider")}/${recordString(stateModel, "id")}`;
           modelDrifted = modelCached && piModel !== appliedModel;
-          appliedThinking = recordString(state, "thinkingLevel") ?? null;
+          currentThinking = recordString(state, "thinkingLevel") ?? null;
         }
         if (modelSelection.model === null || modelSelection.model === PI_INHERIT_MODEL_SLUG) {
           // Returning to "Pi default" after an explicit pick has to replay the
@@ -3122,6 +3122,7 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
             const restoredModel = yield* request({ type: "set_model", ...baselineModel });
             reportedModel = restoredModel;
             appliedThinking = null;
+            currentThinking = null;
             restoreThinkingPending = baselineThinking !== null;
             contextWindow = rememberModelContextWindow(restoredModel);
             appliedModel = null;
@@ -3162,6 +3163,7 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
           reportedModel = selectedModel;
           // Pi resets thinking to the target model's configured default on set_model.
           appliedThinking = null;
+          currentThinking = null;
           restoreThinkingPending = false;
           contextWindow = rememberModelContextWindow(selectedModel);
           appliedModel = modelSelection.model;
@@ -3182,7 +3184,7 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
           yield* request({ type: "set_thinking_level", level: baselineThinking });
           appliedThinking = null;
         }
-        if (thinking !== undefined && thinking !== appliedThinking) {
+        if (thinking !== undefined && thinking !== currentThinking) {
           yield* request({ type: "set_thinking_level", level: thinking });
           appliedThinking = thinking;
           restoreThinkingPending = false;
