@@ -152,7 +152,7 @@ it.effect.each([false, true])(
             selectedStorageBackend: Effect.succeedNone,
           } as unknown as ElectronSafeStorage.ElectronSafeStorage["Service"]),
           Effect.provideService(PreviewPasskeys.PreviewPasskeys, {
-            configure: Effect.void,
+            configure: record("passkeys"),
           } as PreviewPasskeys.PreviewPasskeys["Service"]),
           Effect.provideService(DesktopApplicationMenu.DesktopApplicationMenu, {
             configure: record("menu"),
@@ -268,13 +268,19 @@ it.effect.each([false, true])(
         ),
         Effect.forkScoped,
       );
+      // If an assertion fails, unblock shutdown before the scoped app fiber is interrupted.
+      yield* Effect.addFinalizer(() =>
+        Deferred.succeed(releaseStops, undefined).pipe(
+          Effect.andThen(Deferred.succeed(releaseHistory, undefined)),
+        ),
+      );
       yield* Deferred.await(registrationStarted);
       yield* Deferred.await(windowStarted);
       yield* Deferred.await(tokenRequested);
       // The backend spawns before menus, and its token is minted without waiting for the renderer.
       assert.deepEqual(
         events.filter((event) => event !== "token"),
-        ["identity", "ready", "identity", "backend", "menu", "window"],
+        ["identity", "ready", "identity", "backend", "passkeys", "menu", "window"],
       );
       assert.isAbove(events.indexOf("token"), events.indexOf("backend"));
       assert.isFalse(yield* Deferred.isDone(registrationStopped));
