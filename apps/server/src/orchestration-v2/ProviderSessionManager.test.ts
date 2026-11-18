@@ -699,6 +699,7 @@ function layerTest(input: {
               ? {}
               : { normalizeThreadLoadModelSelection: input.normalizeThreadLoadModelSelection }),
             ...(input.archive === undefined ? {} : { archive: input.archive }),
+            ...(input.unloads === undefined ? {} : { unloads: input.unloads }),
             ...(input.capabilities === undefined ? {} : { capabilities: input.capabilities }),
             ...(input.extensionStatuses === undefined
               ? {}
