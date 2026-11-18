@@ -397,8 +397,6 @@ const startup = Effect.gen(function* () {
     });
   }
   yield* appIdentity.configure;
-  yield* previewPasskeys.configure;
-  yield* applicationMenu.configure;
   yield* tray.configure(() => {
     void runOpen(desktopWindow.activate).catch((cause) =>
       runOpen(logStartupError("failed to reopen the main window", { cause })),
