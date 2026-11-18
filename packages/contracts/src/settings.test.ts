@@ -863,15 +863,15 @@ describe("ClientSettings pull request merge methods", () => {
     expect(decodeClientSettings({}).pullRequestMergeMethodOverrides).toEqual({});
     expect(
       decodeClientSettingsPatch({
-        pullRequestMergeMethodOverrides: { project: "squash" },
+        pullRequestMergeMethodOverrides: { project: "squash", linkedProject: "fast-forward" },
       }).pullRequestMergeMethodOverrides,
-    ).toEqual({ project: "squash" });
+    ).toEqual({ project: "squash", linkedProject: "fast-forward" });
   });
 
   it("rejects unsupported project merge methods", () => {
     expect(() =>
       decodeClientSettingsPatch({
-        pullRequestMergeMethodOverrides: { project: "fast-forward" },
+        pullRequestMergeMethodOverrides: { project: "cherry-pick" },
       }),
     ).toThrow();
   });

@@ -58,7 +58,9 @@ describe("orchestrator MCP contracts", () => {
       next: "Completion wakes this thread. Continue independent work; otherwise end your turn. If the user asks for progress, read status once. Do not poll or repeat the task.",
     };
     expect(decodeDelegateTaskResult(running)).toEqual(running);
-    expect(() => decodeDelegateTaskResult({ ...running, next: "Poll until done." })).toThrow();
+    const linkedNext = "Completion will wake this thread.";
+    expect(decodeDelegateTaskResult({ ...running, next: linkedNext }).next).toBe(linkedNext);
+    expect(() => decodeDelegateTaskResult({ ...running, next: 42 })).toThrow();
     const pendingApproval = {
       requestId: "request-approval-1",
       kind: "command",
