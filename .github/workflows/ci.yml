@@ -389,11 +389,15 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    name: Test Web
+    name: Test Web ${{ matrix.shard }}
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.test_web != 'false' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     outputs:
       source_sha: ${{ steps.source.outputs.source_sha }}
     steps:
@@ -447,11 +451,7 @@ jobs:
       - name: Test
         env:
           DEBUG: vitest:browser:api,vitest:browser:playwright
-        run: |
-          # Give each half of the suite its own Vitest browser connection.
-          for shard in 1/2 2/2; do
-            vp run --filter @t3tools/web test --reporter=verbose --shard "$shard"
-          done
+        run: vp run --filter @t3tools/web test --reporter=verbose --shard ${{ matrix.shard }}/${{ strategy.job-total }}
 
   # apps/server sets `fileParallelism: false`, so its test files run strictly
   # one at a time. Sharding spreads them over separate runners instead of
