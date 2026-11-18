@@ -1483,7 +1483,7 @@ it.effect.each(["activity", "release", "detach"])(
   "waits for rendering activity before native capture and releases on %s while it is still pending",
   (end) =>
     Effect.gen(function* () {
-      const host = yield* DesktopBrowserHost.make;
+      const host = yield* makeDrawnHost;
       const debuggee = makeDebuggee();
       const activityStarted = yield* Deferred.make<void>();
       const paintable = yield* Deferred.make<void>();
