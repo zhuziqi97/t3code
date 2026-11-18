@@ -5,7 +5,10 @@ import {
   type ProviderTextDeltaUpdate,
 } from "./ProviderTextDeltaCoalescer.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+// @effect-diagnostics-next-line nodeBuiltinImport:off -- NodeHttpServer needs a server factory for the loopback fixture.
+import * as NodeHttp from "node:http";
 import {
   CommandId,
   CheckpointId,
@@ -31,7 +34,6 @@ import {
   RunId,
   ThreadId,
   TurnItemId,
-  type ServerProviderModel,
 } from "@t3tools/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as CodexClient from "effect-codex-app-server/client";
@@ -61,6 +63,14 @@ import * as Exit from "effect/Exit";
 import * as Cause from "effect/Cause";
 import * as PlatformError from "effect/PlatformError";
 import { TestClock } from "effect/testing";
+import {
+  FetchHttpClient,
+  HttpBody,
+  HttpClient,
+  HttpServer,
+  HttpServerRequest,
+  HttpServerResponse,
+} from "effect/http";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import * as Scope from "effect/Scope";
 import * as HostProcess from "@t3tools/shared/HostProcess";
@@ -1648,7 +1658,6 @@ describe("CodexAdapterV2 post-settle continuation", () => {
             scenario: `manual-resume-${mode}`,
             entries: [
               ...preamble.map((entry) =>
-                mode === "native" &&
                 entry.type === "expect_outbound" &&
                 Predicate.isObject(entry.frame) &&
                 Predicate.isObject(entry.frame.params) &&
@@ -1659,7 +1668,20 @@ describe("CodexAdapterV2 post-settle continuation", () => {
                         ...entry.frame,
                         params: {
                           ...entry.frame.params,
-                          input: [],
+                          ...(mode === "native" ? { input: [] } : {}),
+                          approvalPolicy: {
+                            granular: {
+                              mcp_elicitations: true,
+                              request_permissions: false,
+                              rules: false,
+                              sandbox_approval: false,
+                              skill_approval: false,
+                            },
+                          },
+                          collaborationMode: {
+                            mode: "default",
+                            settings: { model: "gpt-5.4", reasoning_effort: "medium" },
+                          },
                         },
                       },
                     }
@@ -3720,7 +3742,6 @@ describe("CodexAdapterV2 post-settle continuation", () => {
               params: {
                 threadId: nativeThreadId,
                 excludeTurns: true,
-                config: CodexAdapterV2.CODEX_THREAD_CONFIG,
               },
             },
           },
@@ -3738,7 +3759,6 @@ describe("CodexAdapterV2 post-settle continuation", () => {
               params: {
                 threadId: nativeThreadId,
                 excludeTurns: true,
-                config: CodexAdapterV2.CODEX_THREAD_CONFIG,
               },
             },
           },
@@ -3756,7 +3776,6 @@ describe("CodexAdapterV2 post-settle continuation", () => {
               params: {
                 threadId: nativeThreadId,
                 excludeTurns: true,
-                config: CodexAdapterV2.CODEX_THREAD_CONFIG,
               },
             },
           },
@@ -3797,7 +3816,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
       assert.equal(resumed.nativeThreadRef?.nativeId, nativeThreadId);
       assert.equal(resumed.status, "idle");
       assert.equal(DateTime.toEpochMillis(resumed.updatedAt), 1782622450000);
-      assert.deepEqual(resumeThreadEnvs, [harness.threadId, undefined, explicitThreadId]);
+      assert.deepEqual(resumeThreadEnvs, [undefined, undefined, undefined]);
     }).pipe(
       Effect.provide(
         Layer.mergeAll(
@@ -3836,9 +3855,6 @@ describe("CodexAdapterV2 post-settle continuation", () => {
       const params = {
         threadId: nativeThreadId,
         excludeTurns: true,
-        cwd: CODEX_TEST_RUNTIME_POLICY.cwd,
-        model: CODEX_TEST_MODEL_SELECTION.model,
-        config: CodexAdapterV2.CODEX_THREAD_CONFIG,
       };
       const entries: Array<CodexReplay.CodexAppServerReplayEntry> = [
         ...codexReplayPreamble({
@@ -8079,59 +8095,260 @@ describe("CodexAdapterV2 post-settle continuation", () => {
     ],
   });
 
-  it.effect("resumes an unloaded native thread and retries an MCP resource read", () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const scenario = "mcp-resource-thread-recovery";
-        const nativeThreadId = `native-${scenario}`;
-        const preamble = codexReplayPreamble({
-          nativeThreadId,
-          nativeTurnId: "unused-turn",
-          prompt: "unused-prompt",
-        }).slice(0, 5);
+  it.effect.each(["current", "rotated during resume"] as const)(
+    "retries an unloaded MCP resource read only with current configuration (%s)",
+    (configuration) =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const scenario = `mcp-resource-thread-recovery-${configuration.replaceAll(" ", "-")}`;
+          const nativeThreadId = `native-${scenario}`;
+          const sessions = yield* McpProviderSessions.McpProviderSessions;
+          const httpClient = yield* HttpClient.HttpClient;
+          const endpoint = `${HttpServer.formatAddress((yield* HttpServer.HttpServer).address)}/mcp`;
+          const mcpSession = {
+            environmentId: EnvironmentId.make("fixture-environment"),
+            threadId: ThreadId.make(`thread-${scenario}`),
+            providerSessionId: "fixture-mcp-session",
+            providerInstanceId: CodexAdapterV2.CODEX_DEFAULT_INSTANCE_ID,
+            endpoint,
+            authorizationHeader: "Bearer fixture-original",
+            browserToolsAvailable: false,
+          };
+          yield* sessions.set(mcpSession);
+          const preamble = codexReplayPreamble({
+            nativeThreadId,
+            nativeTurnId: "unused-turn",
+            prompt: "unused-prompt",
+          }).slice(0, 5);
 
-        const resourceResult = {
-          contents: [
-            {
-              uri: MCP_APP_RESOURCE,
-              mimeType: "text/html;profile=mcp-app",
-              text: MCP_APP_HTML,
-              _meta: { ui: { csp: { connectDomains: ["https://api.weather.test"] } } },
+          const resourceResult = {
+            contents: [
+              {
+                uri: MCP_APP_RESOURCE,
+                mimeType: "text/html;profile=mcp-app",
+                text: MCP_APP_HTML,
+                _meta: { ui: { csp: { connectDomains: ["https://api.weather.test"] } } },
+              },
+            ],
+          };
+          const mcpRequest = {
+            jsonrpc: "2.0",
+            id: 1,
+            method: "resources/read",
+            params: { uri: MCP_APP_RESOURCE },
+          };
+          const readResource = (url: string, authorization: string) =>
+            httpClient.post(url, {
+              headers: { authorization },
+              body: HttpBody.jsonUnsafe(mcpRequest),
+            });
+          yield* Layer.build(
+            HttpServer.serve(
+              Effect.gen(function* () {
+                const request = yield* HttpServerRequest.HttpServerRequest;
+                const current = yield* sessions.read(mcpSession.threadId);
+                if (request.headers.authorization !== current?.authorizationHeader)
+                  return HttpServerResponse.empty({ status: 401 });
+                assert.deepEqual(yield* request.json, mcpRequest);
+                return HttpServerResponse.jsonUnsafe({
+                  jsonrpc: "2.0",
+                  id: mcpRequest.id,
+                  result: resourceResult,
+                });
+              }),
+            ),
+          );
+
+          const transcript = makeCodexReplayTranscript({
+            scenario,
+            entries: [
+              ...preamble,
+              {
+                type: "expect_outbound",
+                label: "initial MCP resource read",
+                frame: {
+                  id: 3,
+                  method: "mcpServer/resource/read",
+                  params: {
+                    threadId: nativeThreadId,
+                    server: "t3-code",
+                    uri: MCP_APP_RESOURCE,
+                  },
+                },
+              },
+              {
+                type: "emit_inbound",
+                label: "native thread is unloaded",
+                frame: {
+                  id: 3,
+                  error: {
+                    code: -32600,
+                    message: `thread not found: ${nativeThreadId}`,
+                  },
+                },
+              },
+              {
+                type: "expect_outbound",
+                label: "resume unloaded native thread",
+                frame: {
+                  id: 4,
+                  method: "thread/resume",
+                  params: {
+                    threadId: nativeThreadId,
+                    excludeTurns: true,
+                    config: CodexAdapterV2.CODEX_THREAD_CONFIG,
+                  },
+                },
+              },
+              {
+                type: "emit_inbound",
+                label: "native thread resumed",
+                frame: {
+                  id: 4,
+                  result: {
+                    thread: { id: nativeThreadId, updatedAt: 1782622450 },
+                  },
+                },
+              },
+              {
+                type: "expect_outbound",
+                label: "retry MCP resource read",
+                frame: {
+                  id: 5,
+                  method: "mcpServer/resource/read",
+                  params: {
+                    threadId: nativeThreadId,
+                    server: "t3-code",
+                    uri: MCP_APP_RESOURCE,
+                  },
+                },
+              },
+              {
+                type: "emit_inbound",
+                label: "MCP resource read succeeds",
+                frame: { id: 5, result: resourceResult },
+              },
+            ],
+          });
+
+          const methods: Array<string> = [];
+          let nativeMcp: { readonly url: string; readonly http_headers: { Authorization: string } };
+          const harness = yield* makeCodexReplayHarness(
+            transcript,
+            undefined,
+            (method, params) =>
+              Effect.sync(() => {
+                methods.push(method);
+                if (method === "thread/resume") {
+                  const { config } = params as { config: Record<string, typeof nativeMcp> };
+                  nativeMcp = config["mcp_servers.t3-code"]!;
+                  assert.equal(nativeMcp.url, endpoint);
+                }
+              }),
+            undefined,
+            (entry) => {
+              if (entry.label === "native thread is unloaded")
+                return sessions.set({
+                  ...mcpSession,
+                  authorizationHeader: "Bearer fixture-current",
+                });
+              if (
+                entry.label === "native thread resumed" &&
+                configuration === "rotated during resume"
+              )
+                return sessions.set({
+                  ...mcpSession,
+                  authorizationHeader: "Bearer fixture-rotated",
+                });
+              if (entry.label !== "MCP resource read succeeds" || configuration !== "current")
+                return Effect.void;
+              return Effect.gen(function* () {
+                const response = yield* readResource(
+                  nativeMcp.url,
+                  nativeMcp.http_headers.Authorization,
+                );
+                assert.equal(response.status, 200);
+                assert.deepEqual(yield* response.json, {
+                  jsonrpc: "2.0",
+                  id: mcpRequest.id,
+                  result: resourceResult,
+                });
+              }).pipe(Effect.orDie);
             },
-          ],
-        };
+          );
+          const mcpApps = harness.runtime.mcpApps;
+          assert.ok(mcpApps, "Codex runtime should expose MCP apps");
 
-        const transcript = makeCodexReplayTranscript({
+          const result = yield* Effect.result(
+            mcpApps.readResource({
+              providerThread: harness.providerThread,
+              server: "t3-code",
+              uri: MCP_APP_RESOURCE,
+            }),
+          );
+          if (configuration === "current") {
+            assert.equal(result._tag, "Success");
+            if (result._tag === "Success") assert.deepEqual(result.success, resourceResult);
+            assert.equal(
+              (yield* readResource(endpoint, mcpSession.authorizationHeader)).status,
+              401,
+            );
+            assert.isTrue(yield* harness.runtime.isThreadLoaded!(harness.providerThread));
+          } else {
+            assert.equal(
+              result._tag,
+              "Failure",
+              "rotation before the resume ACK must block the read",
+            );
+            assert.deepEqual(methods.slice(2), ["mcpServer/resource/read", "thread/resume"]);
+          }
+        }).pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              IdAllocator.layer,
+              McpProviderSessions.layer,
+              NodeServices.layer,
+              NodeCrypto.layer,
+              NodeHttpServer.layer(NodeHttp.createServer, { host: "127.0.0.1", port: 0 }),
+              FetchHttpClient.layer,
+            ),
+          ),
+        ),
+      ),
+  );
+
+  it.effect("does not rebuild a warm Idle thread to apply a different MCP configuration", () =>
+    Effect.gen(function* () {
+      const scenario = "warm-idle-mcp-rotation";
+      const nativeThreadId = `native-${scenario}`;
+      const sessions = yield* McpProviderSessions.McpProviderSessions;
+      const mcpSession = {
+        environmentId: EnvironmentId.make("fixture-environment"),
+        threadId: ThreadId.make(`thread-${scenario}`),
+        providerSessionId: "fixture-mcp-session",
+        providerInstanceId: CodexAdapterV2.CODEX_DEFAULT_INSTANCE_ID,
+        endpoint: "http://127.0.0.1:43123/mcp",
+        authorizationHeader: "Bearer fixture-original",
+        browserToolsAvailable: false,
+      };
+      yield* sessions.set(mcpSession);
+      const methods: Array<string> = [];
+      const harness = yield* makeCodexReplayHarness(
+        makeCodexReplayTranscript({
           scenario,
           entries: [
-            ...preamble,
+            ...codexReplayPreamble({
+              nativeThreadId,
+              nativeTurnId: "unused-turn",
+              prompt: "unused-prompt",
+            }).slice(0, 5),
             {
               type: "expect_outbound",
-              label: "initial MCP resource read",
-              frame: {
-                id: 3,
-                method: "mcpServer/resource/read",
-                params: {
-                  threadId: nativeThreadId,
-                  server: "weather",
-                  uri: MCP_APP_RESOURCE,
-                },
-              },
+              frame: { id: 3, method: "thread/unsubscribe", params: { threadId: nativeThreadId } },
             },
-            {
-              type: "emit_inbound",
-              label: "native thread is unloaded",
-              frame: {
-                id: 3,
-                error: {
-                  code: -32600,
-                  message: `thread not found: ${nativeThreadId}`,
-                },
-              },
-            },
+            { type: "emit_inbound", frame: { id: 3, result: { status: "unsubscribed" } } },
             {
               type: "expect_outbound",
-              label: "resume unloaded native thread",
               frame: {
                 id: 4,
                 method: "thread/resume",
@@ -8144,54 +8361,45 @@ describe("CodexAdapterV2 post-settle continuation", () => {
             },
             {
               type: "emit_inbound",
-              label: "native thread resumed",
               frame: {
-                id: 4,
-                result: {
-                  thread: { id: nativeThreadId, updatedAt: 1782622450 },
-                },
-              },
-            },
-            {
-              type: "expect_outbound",
-              label: "retry MCP resource read",
-              frame: {
-                id: 5,
-                method: "mcpServer/resource/read",
-                params: {
-                  threadId: nativeThreadId,
-                  server: "weather",
-                  uri: MCP_APP_RESOURCE,
-                },
+                method: "thread/status/changed",
+                params: { threadId: nativeThreadId, status: { type: "notLoaded" } },
               },
             },
             {
               type: "emit_inbound",
-              label: "MCP resource read succeeds",
-              frame: { id: 5, result: resourceResult },
+              frame: {
+                id: 4,
+                result: {
+                  thread: { id: nativeThreadId, updatedAt: 1782622450, status: { type: "idle" } },
+                },
+              },
             },
           ],
-        });
-
-        const harness = yield* makeCodexReplayHarness(transcript);
-        const mcpApps = harness.runtime.mcpApps;
-        assert.ok(mcpApps, "Codex runtime should expose MCP apps");
-
-        const result = yield* mcpApps.readResource({
-          providerThread: harness.providerThread,
-          server: "weather",
-          uri: MCP_APP_RESOURCE,
-        });
-
-        assert.deepEqual(result, resourceResult);
-      }).pipe(
-        Effect.provide(
-          Layer.mergeAll(
-            IdAllocator.layer,
-            McpProviderSessions.layer,
-            NodeServices.layer,
-            NodeCrypto.layer,
-          ),
+        }),
+        undefined,
+        (method) => Effect.sync(() => methods.push(method)).pipe(Effect.asVoid),
+      );
+      yield* harness.runtime.unloadThread!({ providerThread: harness.providerThread });
+      yield* sessions.set({ ...mcpSession, authorizationHeader: "Bearer fixture-rotated" });
+      const resumed = yield* Effect.result(
+        harness.runtime.resumeThread({ providerThread: harness.providerThread }),
+      );
+      assert.equal(resumed._tag, "Failure", "the rebuild also shuts down untracked stdio MCP");
+      if (resumed._tag === "Failure") {
+        assert.equal(resumed.failure._tag, "ProviderAdapterResumeThreadError");
+        if (resumed.failure._tag === "ProviderAdapterResumeThreadError")
+          assert.isTrue(resumed.failure.preserveNativeThread);
+      }
+      assert.deepEqual(methods, ["initialize", "thread/start", "thread/unsubscribe"]);
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.mergeAll(
+          IdAllocator.layer,
+          McpProviderSessions.layer,
+          NodeServices.layer,
+          NodeCrypto.layer,
         ),
       ),
     ),

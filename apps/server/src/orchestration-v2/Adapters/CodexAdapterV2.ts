@@ -387,11 +387,13 @@ function isCodexActiveWriterError(error: unknown): boolean {
   );
 }
 
-function isCodexThreadNotFoundError(error: unknown): boolean {
+function isCodexThreadNotFoundError(error: unknown, threadId?: string): boolean {
   return (
     isCodexAppServerRequestError(error) &&
     error.code === -32600 &&
-    error.errorMessage.startsWith("thread not found:")
+    (threadId === undefined
+      ? error.errorMessage.startsWith("thread not found:")
+      : error.errorMessage === `thread not found: ${threadId}`)
   );
 }
 
@@ -7615,33 +7617,21 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           );
         });
 
-        // Codex refuses to resume a session archived elsewhere until it is unarchived, and
-        // one it is still unloading after thread/unsubscribe until it emits thread/closed.
-        const resumeNativeThread = Effect.fn("CodexAdapterV2.resumeNativeThread")(function* (
+        const resumeUnloadedThread = Effect.fn("CodexAdapterV2.resumeUnloadedThread")(function* (
+          providerThread: OrchestrationV2ProviderThread,
           threadId: string,
-          params: Record<string, unknown>,
+          observed: ReturnType<typeof nativeConnections.get>,
         ) {
-          const resume = client.raw.request("thread/resume", { threadId, ...params });
-          return yield* resume.pipe(
-            Effect.catchTags({
-              CodexAppServerRequestError: (cause) => {
-                if (/\bsession \S+ is archived\b|\bcodex unarchive\b/i.test(cause.errorMessage)) {
-                  return client.raw
-                    .request("thread/unarchive", { threadId })
-                    .pipe(Effect.andThen(resume));
-                }
-                if (/\bthread \S+ is closing\b/i.test(cause.errorMessage)) {
-                  const closing = threadClosings.get(threadId);
-                  return (
-                    closing === undefined
-                      ? Effect.void
-                      : Deferred.await(closing).pipe(Effect.timeoutOption("10 seconds"))
-                  ).pipe(Effect.andThen(resume));
-                }
-                return Effect.fail(cause);
-              },
+          yield* nativeThreadTransitions.withLock(
+            threadId,
+            Effect.sync(() => {
+              if (observed && nativeConnections.get(threadId) === observed) {
+                observed.state = "notLoaded";
+                observed.consumed = undefined;
+              }
             }),
           );
+          return yield* runtime.resumeThread({ providerThread });
         });
 
         const startNativeTurn = Effect.fn("CodexAdapterV2.startNativeTurn")(
@@ -7966,29 +7956,32 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
             payload: cause,
           });
         // Codex unloads idle threads; MCP requests against one fail until it is resumed.
-        const withLoadedThread = <A, E, R>(
+        const withLoadedThread = Effect.fn("CodexAdapterV2.withLoadedThread")(function* <A, E, R>(
           providerThread: OrchestrationV2ProviderThread,
           threadId: string,
           request: Effect.Effect<A, E, R>,
-        ) =>
-          request.pipe(
-            Effect.catchIf(isCodexThreadNotFoundError, () =>
-              readMcpSession(providerThread.appThreadId).pipe(
-                Effect.flatMap((mcpSession) =>
-                  resumeNativeThread(threadId, {
-                    excludeTurns: true,
-                    ...codexThreadRuntimeParams({
-                      threadId: providerThread.appThreadId,
-                      mcpSession,
-                      modelSelection: input.modelSelection,
-                      runtimePolicy: input.runtimePolicy,
-                    }),
-                  }),
+        ) {
+          const connection = nativeConnections.get(threadId);
+          const mcpSession = yield* readMcpSession(providerThread.appThreadId);
+          if (
+            connection &&
+            (connection.state === "unconfirmed" ||
+              (connection.consumed !== undefined &&
+                !sameCodexMcpConfiguration(connection.consumed.mcp, mcpSession)))
+          ) {
+            yield* runtime.resumeThread({ providerThread });
+            return yield* request;
+          }
+          return yield* request.pipe(
+            Effect.catchIf(
+              (cause) => isCodexThreadNotFoundError(cause, threadId),
+              () =>
+                resumeUnloadedThread(providerThread, threadId, connection).pipe(
+                  Effect.andThen(request),
                 ),
-                Effect.andThen(request),
-              ),
             ),
           );
+        });
         const mcpApps: ProviderAdapter.ProviderAdapterV2McpApps = {
           listTools: Effect.fn("CodexAdapterV2.listTools")(
             function* (toolsInput) {
@@ -8239,7 +8232,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                     connection.state !== "notLoaded" &&
                     !connection.resetObserved &&
                     sameCodexMcpConfiguration(connection.consumed.mcp, mcpSession);
-                  let coldBeforeResume =
+                  const coldBeforeResume =
                     previous === undefined ||
                     connection.state === "closed" ||
                     connection.state === "notLoaded";
@@ -8277,37 +8270,40 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                         ),
                       ),
                     );
-                  if (
-                    previous !== undefined &&
-                    connection.state !== "closed" &&
-                    connection.state !== "notLoaded" &&
-                    !reuseConfiguration
-                  ) {
-                    if (yield* hasPendingBackgroundWorkForThread(threadInput.providerThread)) {
-                      return yield* preserve(
-                        "background_work",
-                        "The native Codex thread still has background work and a different MCP configuration. T3 did not close the native conversation or its background resources.",
-                      );
-                    }
-                  }
-                  if (!coldBeforeResume) connection.resetObserved = false;
+                  // A configuration override can make Codex shut down even an idle cache entry.
+                  if (!coldBeforeResume && !reuseConfiguration)
+                    return yield* preserve(
+                      "mcp_configuration_unconfirmed",
+                      "Codex still has this conversation loaded. Wait for it to unload normally before retrying with the current MCP configuration.",
+                    );
+                  if (mcpSession && mcpSession.providerInstanceId !== adapterOptions.instanceId)
+                    return yield* preserve(
+                      "mcp_configuration_changed",
+                      "This thread's current MCP configuration belongs to another provider. Switch back to Codex before continuing.",
+                    );
                   // Model/cwd are applied by turn/start; resume must preserve unchanged MCP resources.
                   const resume = (reuseConfiguration: boolean) =>
-                    client.raw.request("thread/resume", {
-                      threadId: nativeThreadId,
-                      excludeTurns: true,
-                      ...(reuseConfiguration
-                        ? {}
-                        : codexThreadRuntimeParams({
-                            threadId: appThreadId,
-                            mcpSession,
-                            ...(threadInput.modelSelection === undefined
-                              ? {}
-                              : { modelSelection: threadInput.modelSelection }),
-                            ...(threadInput.runtimePolicy === undefined
-                              ? {}
-                              : { runtimePolicy: threadInput.runtimePolicy }),
-                          })),
+                    Effect.suspend(() => {
+                      if (!reuseConfiguration) {
+                        connection.state = "unconfirmed";
+                        connection.resetObserved = false;
+                      }
+                      return client.raw.request("thread/resume", {
+                        threadId: nativeThreadId,
+                        excludeTurns: true,
+                        ...(reuseConfiguration
+                          ? {}
+                          : codexThreadRuntimeParams({
+                              threadId: appThreadId,
+                              mcpSession,
+                              ...(threadInput.modelSelection === undefined
+                                ? {}
+                                : { modelSelection: threadInput.modelSelection }),
+                              ...(threadInput.runtimePolicy === undefined
+                                ? {}
+                                : { runtimePolicy: threadInput.runtimePolicy }),
+                            })),
+                      });
                     });
                   const response = yield* resume(reuseConfiguration).pipe(
                     Effect.catchTags({
@@ -8318,9 +8314,13 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                             yield* Deferred.await(closing).pipe(Effect.timeoutOption("10 seconds"));
                           }
                           if (connection.state !== "closed") return yield* cause;
-                          reuseConfiguration = false;
-                          coldBeforeResume = true;
                           mcpSession = yield* readMcpSession(appThreadId);
+                          if (
+                            mcpSession &&
+                            mcpSession.providerInstanceId !== adapterOptions.instanceId
+                          )
+                            return yield* cause;
+                          reuseConfiguration = false;
                           return yield* resume(false);
                         }
                         if (
@@ -8356,25 +8356,12 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                       "Codex returned a different native thread during resume. The original native conversation was preserved; no new turn was started.",
                     );
                   threadClosings.delete(nativeThreadId);
-                  if (connection) {
-                    if (reuseConfiguration && connection.resetObserved) {
-                      yield* rememberNativeConnection(nativeThreadId);
-                      return yield* preserve(
-                        "reset_during_rejoin",
-                        "Codex reset the native thread during resume. The original native conversation was preserved; no new turn was started.",
-                      );
-                    }
-                    if (
-                      !reuseConfiguration &&
-                      !coldBeforeResume &&
-                      !(connection.resetObserved && response.thread.status?.type === "idle")
-                    ) {
-                      connection.state = "subscribed";
-                      return yield* preserve(
-                        "mcp_configuration_unconfirmed",
-                        "Codex did not confirm the current MCP configuration. T3 kept the original native conversation and did not close its background resources. No new turn was started.",
-                      );
-                    }
+                  if (reuseConfiguration && connection.resetObserved) {
+                    yield* rememberNativeConnection(nativeThreadId);
+                    return yield* preserve(
+                      "reset_during_rejoin",
+                      "Codex reset the native thread during resume. The original native conversation was preserved; no new turn was started.",
+                    );
                   }
                   if (reuseConfiguration) {
                     connection.state = "subscribed";
@@ -9194,6 +9181,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                   runtimeRequests: [],
                 };
               }
+              const observed = nativeConnections.get(threadId);
               const { historyMode, loaded } = yield* ensureInitialized.pipe(
                 Effect.andThen(readCodexThreadHistoryMetadata(client.raw, threadId)),
               );
@@ -9206,15 +9194,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               }
               // thread/revert requires the thread loaded in this app-server; resume after restart or idle release.
               if (!loaded) {
-                yield* resumeNativeThread(threadId, {
-                  excludeTurns: true,
-                  ...codexThreadRuntimeParams({
-                    threadId: threadInput.providerThread.appThreadId,
-                    mcpSession: yield* readMcpSession(threadInput.providerThread.appThreadId),
-                    modelSelection: input.modelSelection,
-                    runtimePolicy: input.runtimePolicy,
-                  }),
-                });
+                yield* resumeUnloadedThread(threadInput.providerThread, threadId, observed);
               }
               const response = yield* ensureInitialized.pipe(
                 Effect.andThen(revertCodexThread(client, threadId, numTurns)),
