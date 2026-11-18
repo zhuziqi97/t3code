@@ -71,7 +71,7 @@ jobs:
       - name: Install dependencies
         run: vp install --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts... --frozen-lockfile
       - name: Install Linux build libraries
-        run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev pkg-config
+        run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev pkg-config libatomic1 patchelf
       - name: Align candidate version
         id: candidate
         run: |
@@ -107,8 +107,6 @@ jobs:
           toolchain: stable
           targets: x86_64-unknown-linux-gnu
       - name: Build Linux CLI for the Windows WSL backend
-        env:
-          VP_NODE_VERSION: "26.12.1"
         run: |
           set -euo pipefail
           cargo build --manifest-path native/resource-monitor/Cargo.toml --locked --release --target x86_64-unknown-linux-gnu
