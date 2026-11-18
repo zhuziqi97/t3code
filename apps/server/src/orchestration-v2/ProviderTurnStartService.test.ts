@@ -244,7 +244,7 @@ function startWithMissingWorktree(
 
   const start = Effect.gen(function* () {
     return yield* (yield* ProviderTurnStart.ProviderTurnStartServiceV2)
-      .start({ threadId, runId })
+      .start({ threadId, runId, willRetry: true })
       .pipe(Effect.result);
   }).pipe(Effect.provide(layer), Effect.runPromise);
   return {
@@ -2809,8 +2809,20 @@ effectIt.effect.each([
       const order: Array<string> = [];
       const releaseRestore = yield* Deferred.make<void>();
       const restoreEntered = yield* Deferred.make<void>();
+      let filesRestored = false;
       const fileSystem = FileSystem.makeNoop({
         exists: () => Effect.succeed(true),
+        stat: (candidate) =>
+          !filesRestored && (missing as ReadonlyArray<string>).includes(candidate)
+            ? Effect.fail(
+                PlatformError.systemError({
+                  _tag: "NotFound",
+                  module: "FileSystem",
+                  method: "stat",
+                  pathOrDescriptor: candidate,
+                }),
+              )
+            : Effect.succeed({ type: "Directory" } as never),
         realPath: (candidate) =>
           (missing as ReadonlyArray<string>).includes(candidate)
             ? Effect.fail(
@@ -2841,7 +2853,12 @@ effectIt.effect.each([
         restorePath,
         Deferred.succeed(restoreEntered, undefined).pipe(
           Effect.andThen(Deferred.await(releaseRestore)),
-          Effect.andThen(Effect.sync(() => order.push("checkpoint files restored"))),
+          Effect.andThen(
+            Effect.sync(() => {
+              filesRestored = true;
+              order.push("checkpoint files restored");
+            }),
+          ),
         ),
       ).pipe(Effect.forkChild({ startImmediately: true }));
       yield* Deferred.await(restoreEntered);
