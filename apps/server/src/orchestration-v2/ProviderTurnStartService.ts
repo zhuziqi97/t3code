@@ -1592,6 +1592,22 @@ export const layer: Layer.Layer<
         ) {
           return yield* loadFromProvider(Effect.fail(resumed.failure));
         }
+        if (manualResume && session.driver === "codex") {
+          return yield* loadFromProvider(
+            Effect.fail(
+              new ProviderAdapter.ProviderAdapterResumeThreadError({
+                driver: session.driver,
+                providerSessionId,
+                providerThreadId: providerThread.id,
+                preserveNativeThread: true,
+                detail: uncertainDelivery
+                  ? "Delivery of earlier context is uncertain. Review the original conversation in Codex before continuing."
+                  : "Codex could not safely continue the stopped conversation. The original conversation was kept.",
+                ...(Result.isFailure(resumed) ? { cause: resumed.failure } : {}),
+              }),
+            ),
+          );
+        }
 
         yield* Effect.logWarning("Recovering provider context in a fresh native session", {
           driver: session.driver,

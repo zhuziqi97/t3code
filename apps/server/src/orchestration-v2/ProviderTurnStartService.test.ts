@@ -2228,6 +2228,52 @@ effectIt.effect("sends new steering text when restarting a manual continuation",
   }),
 );
 
+effectIt.effect("keeps the stopped Codex conversation when context delivery is uncertain", () =>
+  Effect.gen(function* () {
+    const harness = makeLocalCommandHarness({
+      text: "",
+      manualContinuation: true,
+      sideChat: { contextRun: "delivered", unsentResume: true, acceptedResume: true },
+    });
+    const projection = harness.projection();
+    const run = projection.runs.find((run) => run.manualContinuationOfRunId !== undefined)!;
+    const retainedNativeId = "side-chat-native";
+    const providerThread = projection.providerThreads.find(
+      (thread) => thread.id === run.providerThreadId,
+    )!;
+    const session = yield* harness.open();
+    const ensureThread = vi.fn(() => Effect.succeed(providerThread));
+    harness.open.mockReturnValue(Effect.succeed({ ...(session as object), ensureThread } as never));
+    harness.setProjection({
+      ...projection,
+      providerThreads: projection.providerThreads.map((thread) =>
+        thread.id === providerThread.id
+          ? {
+              ...thread,
+              nativeThreadRef: {
+                driver: thread.driver,
+                nativeId: retainedNativeId,
+                strength: "strong",
+              },
+            }
+          : thread,
+      ),
+      contextHandoffs: projection.contextHandoffs.map((handoff) => ({
+        ...handoff,
+        delivery: { nativeThreadId: retainedNativeId, status: "pending", itemIds: [] },
+      })),
+    });
+    yield* Effect.exit(harness.start);
+    expect(ensureThread).not.toHaveBeenCalled();
+    expect(harness.startRootRun).not.toHaveBeenCalled();
+    expect(harness.settledRuns).toEqual(["failed"]);
+    expect(
+      harness.projection().providerThreads.find((thread) => thread.id === providerThread.id)
+        ?.nativeThreadRef?.nativeId,
+    ).toBe(retainedNativeId);
+  }),
+);
+
 effectIt.effect("refuses unsupported resume instead of manufacturing a user prompt", () =>
   Effect.gen(function* () {
     const harness = makeLocalCommandHarness({
