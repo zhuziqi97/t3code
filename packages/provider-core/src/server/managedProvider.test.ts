@@ -1085,30 +1085,24 @@ describe("makeManagedServerProvider", () => {
     () =>
       Effect.scoped(
         Effect.gen(function* () {
-          const settingsChanges = yield* PubSub.unbounded<
-            TestSettings & { readonly revision: number }
-          >();
+          const settings = { enabled: true };
+          const applySettings = yield* Deferred.make<void>();
+          const settingsApplied = yield* Deferred.make<void>();
           const checkCalls = yield* Ref.make(0);
-          const seenRevisions: Array<number> = [];
           const releaseInitialCheck = yield* Deferred.make<void>();
-          const markerApplied = yield* Deferred.make<void>();
           const unauthenticatedSnapshot: ServerProvider = {
             ...refreshedSnapshot,
             status: "error",
             auth: { status: "unauthenticated" },
             message: "Codex CLI is not authenticated. Run `codex login` and try again.",
           };
-          const provider = yield* makeManagedServerProvider<
-            TestSettings & { readonly revision: number }
-          >({
+          const provider = yield* makeManagedServerProvider<TestSettings>({
             resolveMaintenance: () => Effect.succeed(maintenanceCapabilities),
-            getSettings: Effect.succeed({ enabled: true, revision: 0 }),
-            streamSettings: Stream.fromPubSub(settingsChanges),
-            haveSettingsChanged: (previous, next) => {
-              seenRevisions.push(next.revision);
-              if (next.revision === 2) Deferred.doneUnsafe(markerApplied, Effect.void);
-              return previous.enabled !== next.enabled;
-            },
+            getSettings: Effect.succeed(settings),
+            streamSettings: Stream.unwrap(
+              Deferred.await(applySettings).pipe(Effect.as(Stream.make(settings, settings))),
+            ).pipe(Stream.ensuring(Deferred.succeed(settingsApplied, undefined))),
+            haveSettingsChanged: (previous, next) => previous.enabled !== next.enabled,
             initialSnapshot: () => Effect.succeed(initialSnapshot),
             // The credential is fixed (e.g. `codex login`) after the first, failed probe.
             checkProvider: Deferred.await(releaseInitialCheck).pipe(
@@ -1118,24 +1112,20 @@ describe("makeManagedServerProvider", () => {
             refreshInterval: "1 hour",
           });
           const initialProbe = yield* provider.streamChanges.pipe(
+            Stream.filter((snapshot) => snapshot.operation?.state === "failed"),
             Stream.take(1),
             Stream.runDrain,
-            Effect.forkChild,
+            Effect.forkChild({ startImmediately: true }),
           );
-          yield* Effect.yieldNow;
           yield* Deferred.succeed(releaseInitialCheck, undefined);
           yield* Fiber.join(initialProbe);
-          assert.deepStrictEqual(yield* provider.getSnapshot, unauthenticatedSnapshot);
+          assert.deepStrictEqual(yield* snapshotContentsEffect(provider), unauthenticatedSnapshot);
 
-          // A settings apply that does not touch this provider's settings, then a marker:
-          // the consumer is sequential, so the first apply has finished once the marker is seen.
-          yield* PubSub.publish(settingsChanges, { enabled: true, revision: 1 });
-          yield* PubSub.publish(settingsChanges, { enabled: true, revision: 2 });
-          yield* Deferred.await(markerApplied);
+          yield* Deferred.succeed(applySettings, undefined);
+          yield* Deferred.await(settingsApplied);
 
-          assert.deepStrictEqual(seenRevisions, [1, 2]);
-          assert.isAtLeast(yield* Ref.get(checkCalls), 2);
-          assert.deepStrictEqual((yield* provider.getSnapshot).auth, refreshedSnapshot.auth);
+          assert.strictEqual(yield* Ref.get(checkCalls), 2);
+          assert.deepStrictEqual(yield* snapshotContentsEffect(provider), refreshedSnapshot);
         }),
       ).pipe(Effect.provide(layerAlwaysRunTest)),
   );
