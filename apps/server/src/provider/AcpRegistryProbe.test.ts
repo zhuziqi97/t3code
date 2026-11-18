@@ -108,6 +108,7 @@ describe("ACP Registry probe", () => {
         {
           id: "effort",
           label: "Effort",
+          category: "thought_level",
           type: "select",
           options: [{ id: "high", label: "High" }],
           currentValue: "high",
@@ -116,6 +117,7 @@ describe("ACP Registry probe", () => {
         {
           id: "mode",
           label: "Mode",
+          category: "mode",
           type: "select",
           options: [{ id: "ask", label: "Ask" }],
           currentValue: "ask",

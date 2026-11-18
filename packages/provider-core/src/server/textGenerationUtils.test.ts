@@ -29,6 +29,8 @@ describe("sanitizeThreadTitle", () => {
     { raw: '"Open in" menu ignores Finder', expected: '"Open in" menu ignores Finder' },
     { raw: 'Rename "foo" to "bar"', expected: 'Rename "foo" to "bar"' },
     { raw: '"Open in" ignores "Finder"', expected: '"Open in" ignores "Finder"' },
+    { raw: '  """   """  ', expected: "New thread" },
+    { raw: `'"'`, expected: '"' },
   ])("unwraps only a quote pair around the whole title: $raw", ({ raw, expected }) => {
     expect(sanitizeThreadTitle(raw)).toBe(expected);
   });

@@ -60,17 +60,15 @@ export function sanitizeThreadTitle(raw: string): string {
   // Unwrap a JSON-formatted title before truncation can cut off the closing brace.
   const decoded = decodeJsonThreadTitle(raw);
   const title = Option.isSome(decoded) ? decoded.value.title : raw;
-  const normalized = title
-    .trim()
-    .split(/\r?\n/g)[0]
-    ?.trim()
+  const firstLine = title.trim().split(/\r?\n/g)[0]?.trim() ?? "";
+  if (!firstLine || /^((['"`])\2*)\s*\1$/.test(firstLine)) {
+    return "New thread";
+  }
+
+  const normalized = firstLine
     .replace(/^(['"`])((?:(?!\1).)*)\1$/, "$2")
     .trim()
     .replace(/\s+/g, " ");
-
-  if (!normalized || normalized.trim().length === 0) {
-    return "New thread";
-  }
 
   if (normalized.length <= MAX_THREAD_TITLE_CHARS) {
     return normalized;
