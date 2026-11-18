@@ -113,11 +113,6 @@ vi.mock("./settings-environment-filter", () => ({
     projectGroups: [],
   }),
 }));
-vi.mock("../../lib/modelOptions", () => ({
-  buildModelOptions: () => [],
-  resolveDefaultableModelSelection: () => null,
-  resolveNewTaskModelSelection: () => null,
-}));
 vi.mock("../../state/session", () => ({
   readEnvironmentScope: () => true,
   usePreparedConnection: () => ({ _tag: "None" }),
@@ -204,7 +199,7 @@ function button(label: string) {
 describe("scheduled task batched edits", () => {
   it("submits the selected interval when saved before React commits", async () => {
     await act(async () => {
-      button("Interval").click();
+      button("Every interval").click();
       button("Save changes").click();
     });
     expect(mocks.alert).not.toHaveBeenCalled();
@@ -219,7 +214,7 @@ describe("scheduled task batched edits", () => {
   });
   it("retains the interval when enabled changes before React commits", async () => {
     act(() => {
-      button("Interval").click();
+      button("Every interval").click();
       button("Toggle enabled").click();
     });
     expect(appAtomRegistry.get(scheduledTaskEditorSessionAtom)?.current?.draft.schedule.mode).toBe(
@@ -253,7 +248,7 @@ describe("scheduled task batched edits", () => {
     act(() => startScheduledTaskEditor({ ...editor, draft: { ...editor.draft, task: null } }));
     act(() => {
       button("Select Target").click();
-      button("Interval").click();
+      button("Every interval").click();
       button("Select Project").click();
     });
     expect(appAtomRegistry.get(scheduledTaskEditorSessionAtom)?.current).toMatchObject({
