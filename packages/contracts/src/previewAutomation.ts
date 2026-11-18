@@ -811,9 +811,10 @@ export class PreviewAutomationTimeoutError extends Schema.TaggedError<PreviewAut
   },
 ) {
   override get message(): string {
+    const captureDeadline = this.pendingStages === undefined ? "" : ` after ${this.timeoutMs}ms`;
     const summary =
       this.remoteTag === "PreviewAutomationTimeoutError"
-        ? `Preview automation host timed out while executing ${this.operation}.`
+        ? `Preview automation host timed out while executing ${this.operation}${captureDeadline}.`
         : `Preview automation timed out waiting for the host response to ${this.operation} after ${this.timeoutMs}ms.`;
     const stages = this.pendingStages?.length
       ? ` Waiting for: ${this.pendingStages.join(", ")}.`
