@@ -555,6 +555,15 @@ const CODEX_TEST_RUNTIME_POLICY = ProviderAdapter.ProviderAdapterV2RuntimePolicy
   interactionMode: "default",
   cwd: "/workspace",
 });
+const CODEX_TEST_FULL_ACCESS_APPROVAL = {
+  granular: {
+    mcp_elicitations: true,
+    request_permissions: false,
+    rules: false,
+    sandbox_approval: false,
+    skill_approval: false,
+  },
+} as const;
 const T3_THREAD_ENV_KEY = "shell_environment_policy.set.T3CODE_THREAD_ID";
 const threadEnvOf = (params: unknown) =>
   Predicate.hasProperty(params, "config") && Predicate.hasProperty(params.config, T3_THREAD_ENV_KEY)
@@ -745,7 +754,7 @@ function codexReplayPreamble(input: {
           input: [{ type: "text", text: input.sentPrompt ?? input.prompt }],
           cwd: "/workspace",
           model: "gpt-5.4",
-          approvalPolicy: "never",
+          approvalPolicy: CODEX_TEST_FULL_ACCESS_APPROVAL,
           approvalsReviewer: "user",
           sandboxPolicy: { type: "dangerFullAccess" },
           ...input.turnPolicy,
@@ -755,7 +764,7 @@ function codexReplayPreamble(input: {
             mode: "default",
             settings: {
               model: "gpt-5.4",
-              ...(input.effort === undefined ? {} : { reasoning_effort: input.effort }),
+              reasoning_effort: input.effort ?? "medium",
             },
           },
         },
@@ -1658,6 +1667,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
             scenario: `manual-resume-${mode}`,
             entries: [
               ...preamble.map((entry) =>
+                mode === "native" &&
                 entry.type === "expect_outbound" &&
                 Predicate.isObject(entry.frame) &&
                 Predicate.isObject(entry.frame.params) &&
@@ -1668,20 +1678,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
                         ...entry.frame,
                         params: {
                           ...entry.frame.params,
-                          ...(mode === "native" ? { input: [] } : {}),
-                          approvalPolicy: {
-                            granular: {
-                              mcp_elicitations: true,
-                              request_permissions: false,
-                              rules: false,
-                              sandbox_approval: false,
-                              skill_approval: false,
-                            },
-                          },
-                          collaborationMode: {
-                            mode: "default",
-                            settings: { model: "gpt-5.4", reasoning_effort: "medium" },
-                          },
+                          input: [],
                         },
                       },
                     }
@@ -1803,9 +1800,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
       Effect.gen(function* () {
         const nativeThreadId = "reused-turn-thread";
         const nativeTurnId = "reused-turn";
-        const preamble = withConfigReadBeforeTurnStart(
-          codexReplayPreamble({ nativeThreadId, nativeTurnId, prompt: "work" }),
-        );
+        const preamble = codexReplayPreamble({ nativeThreadId, nativeTurnId, prompt: "work" });
         const retry = codexReplayPreamble({
           nativeThreadId,
           nativeTurnId: "retry-turn",
@@ -3043,7 +3038,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
           sandboxPolicy: { type: "readOnly" },
         },
         "full-access": {
-          approvalPolicy: "never",
+          approvalPolicy: CODEX_TEST_FULL_ACCESS_APPROVAL,
           approvalsReviewer: "user",
           sandboxPolicy: { type: "dangerFullAccess" },
         },
@@ -3064,7 +3059,10 @@ describe("CodexAdapterV2 post-settle continuation", () => {
               model: "gpt-5.4",
               ...turnPolicies[turnModes[index]!],
               summary: "auto",
-              collaborationMode: { mode: "default", settings: { model: "gpt-5.4" } },
+              collaborationMode: {
+                mode: "default",
+                settings: { model: "gpt-5.4", reasoning_effort: "medium" },
+              },
             },
           },
         },
@@ -4148,11 +4146,14 @@ describe("CodexAdapterV2 post-settle continuation", () => {
                   input: [],
                   cwd: "/workspace",
                   model: "gpt-5.4",
-                  approvalPolicy: "never",
+                  approvalPolicy: CODEX_TEST_FULL_ACCESS_APPROVAL,
                   approvalsReviewer: "user",
                   sandboxPolicy: { type: "dangerFullAccess" },
                   summary: "auto",
-                  collaborationMode: { mode: "default", settings: { model: "gpt-5.4" } },
+                  collaborationMode: {
+                    mode: "default",
+                    settings: { model: "gpt-5.4", reasoning_effort: "medium" },
+                  },
                 },
               },
             });
@@ -4516,9 +4517,6 @@ describe("CodexAdapterV2 post-settle continuation", () => {
                 params: {
                   threadId: nativeThreadId,
                   excludeTurns: true,
-                  cwd: CODEX_TEST_RUNTIME_POLICY.cwd,
-                  model: CODEX_TEST_MODEL_SELECTION.model,
-                  config: CodexAdapterV2.CODEX_THREAD_CONFIG,
                 },
               },
             },
@@ -9056,11 +9054,14 @@ describe("CodexAdapterV2 post-settle continuation", () => {
                 input: [],
                 cwd: "/workspace",
                 model: "gpt-5.4",
-                approvalPolicy: "never",
+                approvalPolicy: CODEX_TEST_FULL_ACCESS_APPROVAL,
                 approvalsReviewer: "user",
                 sandboxPolicy: { type: "dangerFullAccess" },
                 summary: "auto",
-                collaborationMode: { mode: "default", settings: { model: "gpt-5.4" } },
+                collaborationMode: {
+                  mode: "default",
+                  settings: { model: "gpt-5.4", reasoning_effort: "medium" },
+                },
               },
             },
           },
@@ -9202,11 +9203,14 @@ describe("CodexAdapterV2 post-settle continuation", () => {
                   input: [],
                   cwd: "/workspace",
                   model: "gpt-5.4",
-                  approvalPolicy: "never",
+                  approvalPolicy: CODEX_TEST_FULL_ACCESS_APPROVAL,
                   approvalsReviewer: "user",
                   sandboxPolicy: { type: "dangerFullAccess" },
                   summary: "auto",
-                  collaborationMode: { mode: "default", settings: { model: "gpt-5.4" } },
+                  collaborationMode: {
+                    mode: "default",
+                    settings: { model: "gpt-5.4", reasoning_effort: "medium" },
+                  },
                 },
               },
             },
@@ -11191,6 +11195,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
               runtimePolicy: CODEX_TEST_RUNTIME_POLICY,
               modelSelection: CODEX_TEST_MODEL_SELECTION,
               hasT3Mcp: true,
+              resolvedReasoningEffort: "medium",
             }),
             (params): CodexReplay.CodexAppServerReplayEntry => ({
               type: "expect_outbound",

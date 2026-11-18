@@ -342,7 +342,10 @@ it.live("retains subprocess diagnostics and exit code in the provider probe fail
   }).pipe(Effect.provide(NodeServices.layer)),
 );
 
-const startProbe = Effect.fn("startProbe")(function* (hang: ReadonlyArray<string>) {
+const startProbe = Effect.fn("startProbe")(function* (
+  hang: ReadonlyArray<string>,
+  requiresOpenaiAuth = false,
+) {
   const fs = yield* FileSystem.FileSystem;
   const homePath = yield* fs.makeTempDirectoryScoped();
   yield* fs.writeFileString(
@@ -361,8 +364,23 @@ const startProbe = Effect.fn("startProbe")(function* (hang: ReadonlyArray<string
   const reply = (id: string | number, result: unknown) =>
     Queue.offer(output, new TextEncoder().encode(`${JSON.stringify({ id, result })}\n`));
   let modelRequests = 0;
-  const spawner = ChildProcessSpawner.make(() =>
+  const spawner = ChildProcessSpawner.make((command) =>
     Effect.gen(function* () {
+      if (ChildProcess.isStandardCommand(command) && command.command === "pgrep") {
+        return ChildProcessSpawner.makeHandle({
+          pid: ChildProcessSpawner.ProcessId(2),
+          exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(1)),
+          isRunning: Effect.succeed(false),
+          kill: () => Effect.void,
+          unref: Effect.succeed(Effect.void),
+          stdin: Sink.drain,
+          stdout: Stream.empty,
+          stderr: Stream.empty,
+          all: Stream.empty,
+          getInputFd: () => Sink.drain,
+          getOutputFd: () => Stream.empty,
+        });
+      }
       yield* Effect.addFinalizer(() => Deferred.succeed(stopped, undefined));
       return ChildProcessSpawner.makeHandle({
         pid: ChildProcessSpawner.ProcessId(1),
@@ -432,7 +450,9 @@ const startProbe = Effect.fn("startProbe")(function* (hang: ReadonlyArray<string
   return {
     fiber,
     requested,
-    authenticate: requested("account/read").pipe(Effect.flatMap((id) => reply(id, account))),
+    authenticate: requested("account/read").pipe(
+      Effect.flatMap((id) => reply(id, { ...account, requiresOpenaiAuth })),
+    ),
     finishSkills: requested("skills/list").pipe(Effect.flatMap((id) => reply(id, { data: [] }))),
     stopped,
   };
@@ -476,14 +496,14 @@ it.layer(NodeServices.layer)("Codex probe budget", (it) => {
     "starts discovery budgets after account readiness and waits for the skills response",
     () =>
       Effect.gen(function* () {
-        const probe = yield* startProbe(["skills/list", "account/rateLimits/read"]);
+        const probe = yield* startProbe(["skills/list", "account/rateLimits/read"], true);
         yield* probe.requested("account/read");
         yield* TestClock.adjust("20 seconds");
         yield* probe.authenticate;
         yield* probe.requested("skills/list");
         yield* probe.requested("account/rateLimits/read");
         yield* probe.requested("model/list/2");
-        yield* TestClock.adjust("3 seconds");
+        yield* TestClock.adjust("20 seconds");
         assert.isFalse(yield* Deferred.isDone(probe.stopped));
         yield* probe.finishSkills;
         const provider = yield* Fiber.join(probe.fiber);

@@ -9196,8 +9196,24 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               if (!loaded) {
                 yield* resumeUnloadedThread(threadInput.providerThread, threadId, observed);
               }
-              const response = yield* ensureInitialized.pipe(
-                Effect.andThen(revertCodexThread(client, threadId, numTurns)),
+              const response = yield* nativeThreadTransitions.withLock(
+                threadId,
+                Effect.gen(function* () {
+                  const connection = nativeConnections.get(threadId);
+                  const configurationConfirmed =
+                    connection?.consumed !== undefined && !connection.resetObserved;
+                  const response = yield* revertCodexThread(client, threadId, numTurns);
+                  // Native revert reloads its existing configuration and keeps subscriptions.
+                  if (
+                    configurationConfirmed &&
+                    (connection.state === "subscribed" || connection.state === "unsubscribed") &&
+                    response.thread.id === threadId &&
+                    response.thread.status.type === "idle"
+                  ) {
+                    yield* rememberNativeConnection(threadId, connection.consumed);
+                  }
+                  return response;
+                }),
               );
               turnTokenUsageByThread.delete(threadId);
               return {

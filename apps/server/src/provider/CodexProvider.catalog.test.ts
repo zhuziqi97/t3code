@@ -39,16 +39,16 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
   } else if (method === "skills/list") {
     write({ id, result: { data: [] } });
   } else if (method === "config/read") {
-    if (params.cwd) {
-      if (process.env.FAKE_DEFAULT_MODEL === "error") write({ id, error: { code: -32601, message: "unsupported" } });
-      else write({ id, result: { config: { model: process.env.FAKE_DEFAULT_MODEL || null }, origins: {}, layers: null } });
-      return;
-    }
     fs.writeFileSync(path.join(process.env.CODEX_HOME, "config-request.json"), JSON.stringify(params));
+    const model = process.env.FAKE_DEFAULT_MODEL;
     const tier = process.env.FAKE_SERVICE_TIER;
     if (tier === "hang") return;
-    if (tier === "error") write({ id, error: { code: -32601, message: "unsupported" } });
-    else write({ id, result: { config: tier === "missing" ? {} : { service_tier: tier }, origins: {}, layers: null } });
+    if (tier === "error" || model === "error") {
+      write({ id, error: { code: -32601, message: "unsupported" } });
+    } else {
+      const config = { model: model || null, ...(tier === "missing" ? {} : { service_tier: tier }) };
+      write({ id, result: { config, origins: {}, layers: null } });
+    }
   } else if (method === "model/list") {
     write({ id, result: { data: JSON.parse(fs.readFileSync(cachePath, "utf8")).models, nextCursor: null } });
   } else {
@@ -105,7 +105,7 @@ const probeCatalog = Effect.fn("probeCatalog")(function* (
     },
   );
   const configRequest = yield* fs.readFileString(path.join(dir, "config-request.json"));
-  assert.deepStrictEqual(JSON.parse(configRequest), { includeLayers: false });
+  assert.deepStrictEqual(JSON.parse(configRequest), { cwd: process.cwd(), includeLayers: false });
   assert.equal(provider.status, "ready");
   return provider;
 });
@@ -143,7 +143,7 @@ it.layer(NodeServices.layer, { excludeTestServices: true })("Codex catalog disco
     }).pipe(Effect.scoped),
   );
 
-  it.effect("displays the inherited global Fast tier on every discovered model", () =>
+  it.effect("displays the effective Fast tier on every discovered model", () =>
     Effect.gen(function* () {
       for (const tier of ["fast", "priority"]) {
         const provider = yield* probeCatalog(false, tier);
@@ -172,7 +172,7 @@ it.layer(NodeServices.layer, { excludeTestServices: true })("Codex catalog disco
   );
 
   it.effect(
-    "preserves the catalog when global tier config is missing, unknown, failing, or stalled",
+    "preserves the catalog when effective config is missing, unknown, failing, or stalled",
     () =>
       Effect.gen(function* () {
         const baseline = yield* probeCatalog(false, "missing");
@@ -182,7 +182,11 @@ it.layer(NodeServices.layer, { excludeTestServices: true })("Codex catalog disco
         assert.equal(getProviderOptionCurrentLabel(serviceTier), "Standard");
         for (const config of ["unsupported", "error", "hang"]) {
           const provider = yield* probeCatalog(false, config);
-          assert.deepStrictEqual(provider.models, baseline.models, config);
+          const expected =
+            config === "unsupported"
+              ? baseline.models
+              : baseline.models.map((model) => ({ ...model, isDefault: false }));
+          assert.deepStrictEqual(provider.models, expected, config);
         }
       }).pipe(Effect.scoped, Effect.timeout("8 seconds")),
   );
