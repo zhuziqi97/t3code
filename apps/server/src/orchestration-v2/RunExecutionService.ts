@@ -610,6 +610,7 @@ export class RunExecutionStartError extends Schema.TaggedError<RunExecutionStart
 }
 
 const isProviderEventStreamError = Schema.is(ProviderAdapter.ProviderAdapterEventStreamError);
+const isProviderTurnStartError = Schema.is(ProviderAdapter.ProviderAdapterTurnStartError);
 
 export class RunExecutionIngestError extends Schema.TaggedError<RunExecutionIngestError>()(
   "RunExecutionIngestError",
@@ -2314,7 +2315,7 @@ export const layer: Layer.Layer<
               Effect.flatMap((providerThread) => {
                 const failure = Cause.squash(cause);
                 const missingClaudeConversation =
-                  Schema.is(ProviderAdapter.ProviderAdapterTurnStartError)(failure) &&
+                  isProviderTurnStartError(failure) &&
                   failure.driver === "claudeAgent" &&
                   failure.nativeConversationMissing === true;
                 return Ref.get(latestTurnItemOrdinal).pipe(

@@ -8,7 +8,6 @@ import {
   isProviderNativeSubagentThread,
   MessageId,
   type ModelSelection,
-  type OrchestrationV2StoredEvent,
   OrchestratorMcpDelegateTaskResult,
   OrchestratorMcpThreadInterruptResult,
   OrchestratorMcpThreadSendResult,

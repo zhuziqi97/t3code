@@ -30,12 +30,9 @@ export const layer = Layer.effect(
     const read = yield* makeCursorAccountUsageReader;
     return CursorAccountReader.of({
       read: Effect.fn("CursorAccountReader.read")(function (credentialSource, sinceMs, untilMs) {
-        return read(
-          credentialSource,
-          sinceMs,
-          untilMs,
-          keychain.accessToken,
-        ).pipe(Effect.provideContext(context));
+        return read(credentialSource, sinceMs, untilMs, keychain.accessToken).pipe(
+          Effect.provideContext(context),
+        );
       }),
     });
   }),

@@ -89,7 +89,11 @@ function LanguageSettings() {
             <ListChoiceRow
               key={option.preference}
               label={option.preference === "system" ? gt("System default") : option.label}
-              description={option.preference === "system" ? gt("Follow the device language.") : option.description}
+              description={
+                option.preference === "system"
+                  ? gt("Follow the device language.")
+                  : option.description
+              }
               selected={selected === option.preference}
               separated={index > 0}
               disabled={!preferencesReady}

@@ -1,10 +1,6 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import {
-  AcpRegistryOperationError,
-  ProviderInstanceId,
-  type ServerProvider,
-} from "@t3tools/contracts";
+import { AcpRegistryOperationError, ProviderInstanceId } from "@t3tools/contracts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";

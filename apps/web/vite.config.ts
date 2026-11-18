@@ -352,7 +352,7 @@ const configuredAllowedHosts = (process.env.T3CODE_DEV_ALLOWED_HOSTS ?? "")
   .filter((entry) => entry.length > 0);
 const allowedHosts = [".ts.net", ...configuredAllowedHosts];
 
-export default defineConfig(({ command }) => {
+export default defineConfig(() => {
   return {
     run: {
       tasks: {

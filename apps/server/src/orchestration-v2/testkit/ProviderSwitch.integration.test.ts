@@ -14,7 +14,6 @@ import {
   type OrchestrationV2ProviderThread,
   type OrchestrationV2ProviderTurnTokenUsage,
   type OrchestrationV2ThreadProjection,
-  type OrchestrationV2TurnItem,
   ProjectId,
   ProviderInstanceId,
   ProviderSessionId,

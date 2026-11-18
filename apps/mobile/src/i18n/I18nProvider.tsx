@@ -34,7 +34,7 @@ export function I18nProvider(props: { readonly children: ReactNode }) {
   // GT suspends while a locale's catalog loads. Deferring the switch keeps the current language
   // on screen until then, instead of GT's full-screen spinner.
   const locale = useDeferredValue(
-    resolveLanguage(useLanguagePreference(), [Intl.DateTimeFormat().resolvedOptions().locale]),
+    resolveLanguage(useLanguagePreference(), [new Intl.DateTimeFormat().resolvedOptions().locale]),
   );
   return (
     <GTProvider locale={locale} fallback={<View className="flex-1 bg-screen" />}>

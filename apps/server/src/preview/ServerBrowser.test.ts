@@ -127,7 +127,7 @@ function makeSession(
       if (method === "Page.getNavigationHistory") return { currentIndex: 0, entries: [{}] };
       if (method === "Page.getLayoutMetrics") return { cssVisualViewport: { pageX: 0, pageY: 0 } };
       if (method === "Page.captureScreenshot") {
-          // A snapshot sizes its screenshot from the PNG header; viewers get JPEG frames as-is.
+        // A snapshot sizes its screenshot from the PNG header; viewers get JPEG frames as-is.
         return { data: (input as { format: string }).format === "png" ? PNG_HEADER : "ZnJhbWU=" };
       }
       // Snapshots shrink their screenshot in the page; the header stands in for the result.
@@ -1685,8 +1685,8 @@ it.effect("keeps a tab's zoom when its viewer resizes", () =>
         "Emulation.setDeviceMetricsOverride",
         expect.objectContaining({ deviceScaleFactor: 3 }),
       );
-      }),
-    ).pipe(Effect.provide(layer)),
+    }),
+  ).pipe(Effect.provide(layer)),
 );
 
 it.live(

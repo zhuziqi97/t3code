@@ -3,7 +3,6 @@ import { lazy, Suspense, useEffect, useRef, useState, type KeyboardEvent } from 
 import { SearchIcon, XIcon } from "lucide-react";
 import { resolveEventKeys } from "@t3tools/shared/keybindings";
 import { useLocation, useNavigate } from "@tanstack/react-router";
-import { T, useGT, useMessages } from "gt-react";
 
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";

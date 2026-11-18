@@ -97,7 +97,7 @@ function useResolvedSettingsScope(rawSearch: SettingsScopeSearch, singleEnvironm
 
 export type SettingsScopeContextValue = ReturnType<typeof useResolvedSettingsScope> & {
   singleEnvironment: boolean;
-      deviceOnly: boolean;
+  deviceOnly: boolean;
   search: SettingsScopeSearch;
   selectScope: (next: SettingsScopeSearch) => void;
 };

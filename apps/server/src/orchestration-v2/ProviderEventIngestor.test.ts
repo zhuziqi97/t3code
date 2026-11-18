@@ -264,8 +264,8 @@ it.effect("takes a hub's reset for an unreset usage_limit, then refreshes the sn
         generateTranscriptionPostProcessing: () => Effect.die("unused"),
       },
       snapshot: {
-          startRefresh: () => Effect.die("unused"),
-          cancelRefresh: () => Effect.die("unused"),
+        startRefresh: () => Effect.die("unused"),
+        cancelRefresh: () => Effect.die("unused"),
         refreshUsage: Deferred.succeed(refreshed, undefined).pipe(Effect.asVoid),
         getSnapshot: Effect.succeed({
           auth: { status: "authenticated", endpoint: "http://hub.test:8317" },

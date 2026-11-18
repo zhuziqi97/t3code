@@ -313,8 +313,10 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         rejected.problems.filter((problem) => problem.startsWith("Group/other writable:")).length,
         3,
       );
-      const { default: hook } = yield* Effect.promise(() => import("./linux-after-pack.ts"));
-      yield* Effect.promise(() => hook({ appOutDir, electronPlatformName: "linux" }));
+      const { removeSharedWriteAccess } = yield* Effect.promise(
+        () => import("./linux-after-pack.ts"),
+      );
+      yield* Effect.promise(() => removeSharedWriteAccess(appOutDir));
       yield* pack();
       yield* validateLinuxDebArtifact(archive);
       yield* fs.chmod(path.join(appOutDir, "t3code-convene"), 0o644);
@@ -345,8 +347,13 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         "resources/private.json": 0o600,
       };
       for (const [name, mode] of Object.entries(modes)) {
-        yield* fs.writeFileString(path.join(appOutDir, name), "fixture");
-        yield* fs.chmod(path.join(appOutDir, name), mode);
+        const payloadPath = path.join(appOutDir, name);
+        if (name === "t3code-convene") {
+          yield* fs.copyFile(process.execPath, payloadPath);
+        } else {
+          yield* fs.writeFileString(payloadPath, "fixture");
+        }
+        yield* fs.chmod(payloadPath, mode);
       }
       yield* fs.chmod(path.join(appOutDir, "resources"), 0o775);
       yield* fs.symlink("data.pak", path.join(appOutDir, "resources/current.pak"));
@@ -377,8 +384,12 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           path.join(import.meta.dirname, ".."),
         ),
       );
-      if (typeof hook === "function")
-        yield* Effect.promise(() => hook({ appOutDir, electronPlatformName: "linux" }));
+      if (typeof hook !== "function") throw new Error("Expected the Linux afterPack hook");
+      const deb = { name: "deb", options: { depends: ["libsecret-1-0"] } };
+      yield* Effect.promise(() =>
+        hook({ appOutDir, electronPlatformName: "linux", targets: [{ name: "AppImage" }, deb] }),
+      );
+      assert.match(deb.options.depends[1] ?? "", /^libc6 \(>= \d+\.\d+\)$/);
       for (const [name, mode] of Object.entries(modes)) {
         const info = yield* Effect.promise(() => NodeFSP.stat(path.join(appOutDir, name)));
         assert.equal(info.mode & 0o7777, mode & ~0o022, name);
@@ -808,7 +819,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         undefined,
       );
 
-      assert.nestedPropertyVal(linux, "linux.desktop.entry.StartupWMClass", "com.t3tools.T3Code");
+      assert.nestedPropertyVal(linux, "linux.desktop.entry.StartupWMClass", "t3code-convene");
     }),
   );
 
@@ -828,7 +839,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     }).pipe(
       Effect.provide(
         ConfigProvider.layer(
-          ConfigProvider.fromEnv({ env: { GITHUB_REPOSITORY: "pingdotgg/t3code" } }),
+          ConfigProvider.fromEnv({ env: { T3CODE_DESKTOP_UPDATE_REPOSITORY: "zhuziqi97/t3code" } }),
         ),
       ),
     ),

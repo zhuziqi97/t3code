@@ -164,11 +164,12 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
 
   const activeInstanceId = props.activeInstanceId;
   const selectedInstanceOptions = props.modelOptionsByInstance.get(activeInstanceId) ?? [];
-  const selectedModel = resolveModelPickerSelectedModel({
-    driverKind: activeEntry?.driverKind,
-    model: props.model,
-    options: selectedInstanceOptions,
-  }) ?? (props.model ? retainedModelWhileProviderLocked(activeEntry, props.model) : undefined);
+  const selectedModel =
+    resolveModelPickerSelectedModel({
+      driverKind: activeEntry?.driverKind,
+      model: props.model,
+      options: selectedInstanceOptions,
+    }) ?? (props.model ? retainedModelWhileProviderLocked(activeEntry, props.model) : undefined);
   const reportedModel =
     props.model == null || props.model === "" ? props.reportedModelSelection : undefined;
   const reportedName =

@@ -378,7 +378,7 @@ function BrowserViewportSetting({ disabled }: { readonly disabled: boolean }) {
     <SettingsRow
       {...searchableSetting("browser-default-viewport")}
       devicePreference
-        description={t("integrations.viewport.description")}
+      description={t("integrations.viewport.description")}
       resetAction={
         !disabled && viewport._tag !== DEFAULT_BROWSER_VIEWPORT._tag ? (
           <SettingResetButton
@@ -492,7 +492,7 @@ function BrowserZoomSetting({ disabled }: { readonly disabled: boolean }) {
     <SettingsRow
       {...searchableSetting("browser-default-zoom")}
       devicePreference
-        description={t("integrations.zoom.description")}
+      description={t("integrations.zoom.description")}
       resetAction={
         !disabled && zoomFactor !== DEFAULT_PREVIEW_ZOOM_FACTOR ? (
           <SettingResetButton
@@ -541,7 +541,7 @@ function BrowserAppearanceSetting({ disabled }: { readonly disabled: boolean }) 
     <SettingsRow
       {...searchableSetting("browser-default-appearance")}
       devicePreference
-        description={t("integrations.appearance.description")}
+      description={t("integrations.appearance.description")}
       resetAction={
         !disabled && appearance !== DEFAULT_PREVIEW_APPEARANCE ? (
           <SettingResetButton
@@ -630,7 +630,7 @@ function BrowserRecordingFrameRateSetting({ disabled }: { readonly disabled: boo
     <SettingsRow
       {...searchableSetting("browser-recording-frame-rate")}
       devicePreference
-        description={t("integrations.recording.rate-description")}
+      description={t("integrations.recording.rate-description")}
       resetAction={
         !disabled && frameRate !== DEFAULT_BROWSER_RECORDING_FRAME_RATE ? (
           <SettingResetButton
@@ -686,7 +686,7 @@ function BrowserLinkTargetSetting({ disabled }: { readonly disabled: boolean }) 
     <SettingsRow
       {...searchableSetting("browser-link-target")}
       devicePreference
-        description={t("integrations.links.description")}
+      description={t("integrations.links.description")}
       resetAction={
         !disabled && linkTarget !== DEFAULT_BROWSER_LINK_TARGET ? (
           <SettingResetButton
@@ -793,7 +793,7 @@ function BrowserSearchEngineSetting() {
         <SettingsRow
           title={t("integrations.search.customUrl")}
           devicePreference
-        description={t("integrations.search.customHint")}
+          description={t("integrations.search.customHint")}
           status={
             isValidSearchUrlTemplate(customUrl) ? undefined : t("integrations.search.invalidUrl")
           }
@@ -1126,7 +1126,7 @@ function BrowserAutoShowFloatingPreviewSetting({ disabled }: { readonly disabled
     <SettingsRow
       {...searchableSetting("browser-auto-show-floating-preview")}
       devicePreference
-        description={t("integrations.floating.description")}
+      description={t("integrations.floating.description")}
       resetAction={
         !disabled && autoShow !== DEFAULT_BROWSER_AUTO_SHOW_FLOATING_PREVIEW ? (
           <SettingResetButton

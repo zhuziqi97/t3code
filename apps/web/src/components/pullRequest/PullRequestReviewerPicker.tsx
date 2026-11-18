@@ -1,4 +1,4 @@
-import { i18n, useTranslate } from "~/i18n";
+import { useTranslate } from "~/i18n";
 import { useAtomCommand } from "~/state/use-atom-command";
 import type {
   EnvironmentId,

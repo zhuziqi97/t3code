@@ -656,10 +656,12 @@ export const layerWithOptions = (
                       });
                       yield* mcpSessions.set({
                         ...credential.config,
-                        hasPendingWake: projectionStore.getThreadRecords(threadId, ["runs", "subagents"]).pipe(
-                          Effect.map(delegatedTaskWillWake),
-                          Effect.orElseSucceed(() => false),
-                        ),
+                        hasPendingWake: projectionStore
+                          .getThreadRecords(threadId, ["runs", "subagents"])
+                          .pipe(
+                            Effect.map(delegatedTaskWillWake),
+                            Effect.orElseSucceed(() => false),
+                          ),
                       });
                       return reserve(credential.config.providerSessionId);
                     }),
@@ -3133,28 +3135,30 @@ export const layerWithOptions = (
                       (mcpCredentialId) =>
                         Effect.gen(function* () {
                           yield* agentScope.clear(input.threadId);
-                          const runtime = yield* installationGate.execute(
-                            input.modelSelection.instanceId,
-                            adapter.openSession({
-                              threadId: input.threadId,
-                              providerSessionId: input.providerSessionId,
-                              modelSelection: input.modelSelection,
-                              runtimePolicy: input.runtimePolicy,
-                              promptSuggestions: Effect.succeed(false),
-                              ...(input.resumeFromSession === undefined
-                                ? {}
-                                : { resumeFromSession: input.resumeFromSession }),
-                              ...(input.initialNativeThreadId === undefined
-                                ? {}
-                                : { initialNativeThreadId: input.initialNativeThreadId }),
-                              ...(input.initialProviderItemIdentityVersion === undefined
-                                ? {}
-                                : {
-                                    initialProviderItemIdentityVersion:
-                                      input.initialProviderItemIdentityVersion,
-                                  }),
-                            }),
-                          ).pipe(
+                          const runtime = yield* installationGate
+                            .execute(
+                              input.modelSelection.instanceId,
+                              adapter.openSession({
+                                threadId: input.threadId,
+                                providerSessionId: input.providerSessionId,
+                                modelSelection: input.modelSelection,
+                                runtimePolicy: input.runtimePolicy,
+                                promptSuggestions: Effect.succeed(false),
+                                ...(input.resumeFromSession === undefined
+                                  ? {}
+                                  : { resumeFromSession: input.resumeFromSession }),
+                                ...(input.initialNativeThreadId === undefined
+                                  ? {}
+                                  : { initialNativeThreadId: input.initialNativeThreadId }),
+                                ...(input.initialProviderItemIdentityVersion === undefined
+                                  ? {}
+                                  : {
+                                      initialProviderItemIdentityVersion:
+                                        input.initialProviderItemIdentityVersion,
+                                    }),
+                              }),
+                            )
+                            .pipe(
                               Effect.provideService(Scope.Scope, sessionScope),
                               Effect.mapError(
                                 (cause) =>

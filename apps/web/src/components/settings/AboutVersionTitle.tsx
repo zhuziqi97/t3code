@@ -1,4 +1,3 @@
-import { useRef } from "react";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { InlineButton } from "../ui/button";
 import { stackedThreadToast, toastManager } from "../ui/toast";
@@ -13,7 +12,6 @@ import { useTranslate } from "../../i18n";
 
 export function AboutVersionTitle() {
   const t = useTranslate();
-  const copyButtonRef = useRef<HTMLButtonElement>(null);
   const { copyToClipboard } = useCopyToClipboard<void>({
     target: "version",
     onError: (error) => {

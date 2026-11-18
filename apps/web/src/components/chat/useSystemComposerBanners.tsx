@@ -218,7 +218,9 @@ export function useSystemComposerBanners(input: SystemComposerBannersInput) {
                   )
                 }
               >
-            {environmentReconnecting ? t("convene.connection.retryNow") : t("convene.connection.reconnect")}
+                {environmentReconnecting
+                  ? t("convene.connection.retryNow")
+                  : t("convene.connection.reconnect")}
               </Button>
             ) : null}
             {disconnectAction}
