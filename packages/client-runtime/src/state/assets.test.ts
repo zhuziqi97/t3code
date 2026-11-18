@@ -172,7 +172,7 @@ describe("createAssetEnvironmentAtoms", () => {
                 });
           },
         } as unknown as WsRpcProtocolClient;
-        const session = { client } as RpcSession;
+        const session = { client } as RpcSession.RpcSession;
         supervisors.set(
           environmentId,
           EnvironmentSupervisor.EnvironmentSupervisor.of({
@@ -396,7 +396,7 @@ const makeAssetUrlHarness = Effect.fn("TestAssetUrl.makeHarness")(function* (
   >();
   const sessions = new Map<
     EnvironmentId,
-    SubscriptionRef.SubscriptionRef<Option.Option<RpcSession>>
+    SubscriptionRef.SubscriptionRef<Option.Option<RpcSession.RpcSession>>
   >();
   const makeSession = (environmentId: EnvironmentId) =>
     ({
