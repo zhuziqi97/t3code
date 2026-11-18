@@ -329,6 +329,8 @@ it.effect("names the click target that matched nothing when the server browser t
   Effect.gen(function* () {
     const broker = yield* makeBroker;
     const clientId = SERVER_BROWSER_AUTOMATION_CLIENT_ID;
+    const selector = ".definitely-no-such-t3-target";
+    const reason = `No element matches "${selector}" after the timeout; take a fresh snapshot and use its locator.`;
     const requests = requestsFrom(yield* broker.connect(makeHost({ clientId })));
     yield* Stream.runForEach(requests, (request) =>
       broker.respond({
@@ -338,8 +340,8 @@ it.effect("names the click target that matched nothing when the server browser t
         ok: false,
         error: {
           _tag: "PreviewAutomationTimeoutError",
-          message: "No element matches the target.",
-          detail: { reason: 'No element matches ".definitely-no-such-t3-target".' },
+          message: reason,
+          detail: { reason },
         },
       }),
     ).pipe(Effect.forkScoped);
@@ -349,13 +351,13 @@ it.effect("names the click target that matched nothing when the server browser t
       .invoke<void>({
         scope,
         operation: "click",
-        input: { selector: ".definitely-no-such-t3-target", timeoutMs: 15_000 },
+        input: { selector, timeoutMs: 15_000 },
       })
       .pipe(Effect.flip);
 
     expect(error._tag).toBe("PreviewAutomationTimeoutError");
     expect(error.message).toBe(
-      'Preview automation click timed out after 15000ms. No element matches ".definitely-no-such-t3-target".',
+      `Preview automation host timed out while executing click. ${reason}`,
     );
   }),
 );
@@ -419,11 +421,11 @@ it.effect("reports the capture deadline and pending stage instead of the request
       ).pipe(Effect.forkScoped);
       yield* Deferred.await(connected);
       const error = yield* broker
-        .invoke<void>({ scope, operation: "snapshot", input: {} })
+        .invoke<void>({ scope, operation: "snapshot", input: {}, timeoutMs: 15_000 })
         .pipe(Effect.flip);
       expect(error).toMatchObject({ timeoutMs: 10_000, pendingStages: ["screenshot"] });
       expect(error.message).toBe(
-        "Preview automation snapshot timed out after 10000ms. Waiting for: screenshot.",
+        "Preview automation host timed out while executing snapshot after 10000ms. Waiting for: screenshot.",
       );
     }),
   ),
