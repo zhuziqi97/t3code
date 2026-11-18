@@ -4,7 +4,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { type EnvironmentId, TRIAGE_PROMPT_FILE_NAME } from "@t3tools/contracts";
+import type { EnvironmentId } from "@t3tools/contracts";
 import { useRouter } from "@tanstack/react-router";
 import { CONVENE_DESKTOP_IDENTITY } from "@t3tools/shared/conveneDesktopIdentity";
 import { i18n } from "../i18n";
@@ -27,9 +27,6 @@ const copyTriageCliCommand = () =>
       title: i18n.t("triage.copyFailed", { command: TRIAGE_CLI_COMMAND }),
     }),
   );
-
-/** A draft is a triage draft while its message still links the playbook file. */
-export const isTriagePrompt = (prompt: string) => prompt.includes(`[${TRIAGE_PROMPT_FILE_NAME}](`);
 
 /**
  * In-app `t3 triage`: the server writes the session files and starts cloning

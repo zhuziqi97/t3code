@@ -17,7 +17,9 @@ import {
   CircleCheckIcon,
   CircleDashedIcon,
   CircleDotIcon,
+  CircleSlashIcon,
   CircleXIcon,
+  OctagonXIcon,
   UserCheckIcon,
   UserRoundIcon,
   UserRoundXIcon,
@@ -246,12 +248,12 @@ const CHECK_STATUS_PRESENTATION = {
   },
   cancelled: {
     labelKey: "pullRequest.check.cancelled",
-    Icon: CircleXIcon,
-    toneClassName: "text-destructive",
+    Icon: OctagonXIcon,
+    toneClassName: "text-muted-foreground/70",
   },
   skipped: {
     labelKey: "pullRequest.check.skipped",
-    Icon: CircleDashedIcon,
+    Icon: CircleSlashIcon,
     toneClassName: "text-muted-foreground/70",
   },
   neutral: {

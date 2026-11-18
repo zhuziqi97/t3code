@@ -17,6 +17,7 @@ const props = {
   onBack: vi.fn(),
   onForward: vi.fn(),
   onRefresh: vi.fn(),
+  onStopLoading: vi.fn(),
   onSubmit: submit,
 };
 const render = async () =>

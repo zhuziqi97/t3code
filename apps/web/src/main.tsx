@@ -8,7 +8,8 @@ import { hasCloudPublicConfig } from "./cloud/publicConfig";
 import { isElectron } from "./env";
 import { startAppServices } from "./appInit";
 import { AppRoot } from "./AppRoot";
-import { chunkLoadRecovery, clearChunkReloadGuard } from "./lib/chunkReloadGuard";
+import { whenLocaleReady } from "./i18n/runtime";
+import { chunkLoadRecovery } from "./lib/chunkReloadGuard";
 
 const router = startAppServices();
 
@@ -26,14 +27,12 @@ const managedAuthShellModule =
 
 export const startup = Promise.all([
   managedAuthShellModule?.then((module) => module.default) ?? null,
-  router.load(),
+  // Chained so settings have usually hydrated; English resolves without a chunk load.
+  router.load().then(whenLocaleReady),
 ])
   .then(([ManagedAuthShell]) => {
-    // Route chunk failures resolve router.load() and surface later through the error boundary. Skip the
-    // paint when a reload is on its way, and only re-arm the guard after a boot
-    // that fetched every chunk it asked for.
+    // Route chunk failures resolve router.load() and surface through the error boundary.
     if (chunkLoadRecovery.reloading) return;
-    if (!chunkLoadRecovery.failed) clearChunkReloadGuard();
     ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       <React.StrictMode>
         {ManagedAuthShell && clerkPublishableKey ? (

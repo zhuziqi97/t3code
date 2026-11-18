@@ -14,6 +14,7 @@ import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FiberHandle from "effect/FiberHandle";
+import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
 import * as Result from "effect/Result";
 import * as Stream from "effect/Stream";
@@ -34,6 +35,7 @@ import {
 import {
   buildServerProvider,
   isCommandMissingCause,
+  resolveProviderProbeTimeoutMs,
   type ServerProviderDraft,
 } from "@t3tools/provider-core/server/snapshotProbe";
 import { resolveUsageLimitsAfterProbe } from "@t3tools/provider-core/server/usageLimits";
@@ -161,6 +163,7 @@ interface AntigravityProviderState {
 }
 
 interface AntigravityProviderOptions {
+  readonly environment?: NodeJS.ProcessEnv;
   readonly stampIdentity: (snapshot: ServerProviderDraft) => Effect.Effect<ServerProvider>;
   readonly probe: Effect.Effect<
     EffectAcpSchema.InitializeResponse,
@@ -279,8 +282,14 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
   const checkProvider = Effect.fn("checkAntigravityProvider")(function* () {
     if (!settings.enabled) return yield* getSnapshot;
     const before = yield* SubscriptionRef.get(metadata);
-    const result = yield* options.probe.pipe(Effect.result);
-    const initialized = Result.isSuccess(result) ? result.success : undefined;
+    const timeoutMs = resolveProviderProbeTimeoutMs("antigravity", 0, options.environment);
+    const probe =
+      timeoutMs > 0
+        ? options.probe.pipe(Effect.timeoutOption(timeoutMs))
+        : options.probe.pipe(Effect.asSome);
+    const result = yield* probe.pipe(Effect.result);
+    const initialized =
+      Result.isSuccess(result) && Option.isSome(result.success) ? result.success.value : undefined;
     const failure = Result.isFailure(result) ? result.failure : undefined;
     const missingInstallation = failure !== undefined && isMissingInstallation(failure);
     const errorMessage =
@@ -292,7 +301,7 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
             ? "Antigravity ACP runtime is not installed or its executable could not be found."
             : failure
               ? "Antigravity could not complete its local health check."
-              : "Antigravity could not complete its local initialization.";
+              : `Antigravity did not respond to its local health check within ${timeoutMs / 1_000} seconds.`;
     const supportsTextGeneration =
       initialized !== undefined ? yield* options.supportsTextGeneration : false;
     if (initialized !== undefined) {

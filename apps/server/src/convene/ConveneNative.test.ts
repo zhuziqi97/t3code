@@ -21,6 +21,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
+import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import * as ProviderRegistryMock from "../provider/testUtils/providerRegistryMock.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
@@ -66,6 +67,7 @@ const orchestration = ProviderReplayHarness.layerWithRegistry(
   { databaseLayer: database, runEffectWorker: false },
 );
 const layer = ConveneNative.layer.pipe(
+  Layer.provide(ProjectionStore.layer.pipe(Layer.provide(database))),
   Layer.provideMerge(
     ConveneWorkspaces.layer.pipe(
       Layer.provide(ProjectStore.layer.pipe(Layer.provide(database))),

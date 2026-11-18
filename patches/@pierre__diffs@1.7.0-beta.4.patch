@@ -1,0 +1,369 @@
+diff --git a/dist/editor/editor.js b/dist/editor/editor.js
+index b4c280390b52434f63fbe7916d81b150d9006fb4..cb7fb89a22c8adac9ea951b8767b5fd446347746 100644
+--- a/dist/editor/editor.js
++++ b/dist/editor/editor.js
+@@ -95,6 +95,7 @@ var Editor = class {
+ 	#deletionsColumn;
+ 	#overlayElement;
+ 	#overlayElements;
++	#fontProbeElement;
+ 	#caretElements;
+ 	#caretHighlightElements;
+ 	#primaryCaretElement;
+@@ -584,6 +585,7 @@ var Editor = class {
+ 		this.#contentHasFocus = false;
+ 		this.#overlayElement?.remove();
+ 		this.#overlayElement = void 0;
++		this.#fontProbeElement = void 0;
+ 		this.#resizeObserver?.disconnect();
+ 		this.#resizeObserver = void 0;
+ 		this.#fontRemeasureScheduled = false;
+@@ -1022,6 +1024,19 @@ var Editor = class {
+ 		this.#tokenizer?.applyStyle();
+ 		this.#spriteElement = createSpriteElement();
+ 		this.#overlayElement = h("div", { dataset: "editorOverlay" });
++		// Resizes when the inherited code font changes, so the observer can re-measure.
++		this.#fontProbeElement = h("span", {
++			ariaHidden: "true",
++			style: {
++				position: "absolute",
++				top: "0",
++				left: "0",
++				visibility: "hidden",
++				pointerEvents: "none",
++				whiteSpace: "pre"
++			},
++			textContent: "0"
++		}, this.#overlayElement);
+ 		const replacementFocusTargetIsContent = (event) => {
+ 			const target = event.composedPath()[0];
+ 			return target instanceof Node && this.#contentElement?.contains(target) === true;
+@@ -1130,6 +1145,7 @@ var Editor = class {
+ 		this.#editorEventDisposes = [
+ 			addEventListener(contentEl, "focus", () => {
+ 				this.#contentHasFocus = true;
++				this.#retainSearchPanelFocus = false;
+ 				onFocus?.();
+ 				if (!this.#isContentMouseDown && !this.#isComposing && this.#focusRequest == null && this.#selections !== void 0 && this.#selections.length > 0) this.#setWindowSelection(this.#selections.at(-1));
+ 			}, { passive: true }),
+@@ -1397,6 +1413,7 @@ var Editor = class {
+ 		this.#resizeObserver = new ResizeObserver(this.#handleLayoutResize);
+ 		this.#resizeObserver.observe(contentEl);
+ 		this.#resizeObserver.observe(contentEl.parentElement);
++		if (this.#fontProbeElement !== void 0) this.#resizeObserver.observe(this.#fontProbeElement);
+ 		this.#computeContentOffset(contentEl);
+ 	}
+ 	#handleCustomPasteEvent = async () => {
+@@ -1852,7 +1869,9 @@ var Editor = class {
+ 		const change = textDocument.applyEdits(edits, true, selections, nextSelections, true);
+ 		if (change !== void 0) this.#applyChange(change, nextSelections);
+ 	}
+-	#handleLayoutResize = () => {
++	#handleLayoutResize = (entries) => {
++		const contentElement = this.#contentElement;
++		const metricsChanged = contentElement !== void 0 && entries.some((entry) => entry.target === this.#fontProbeElement) && this.#metrics.init(contentElement);
+ 		const lineAnnotations = this.#lineAnnotations?.length ?? 0;
+ 		const prevGutterWidth = this.#gutterWidthCache;
+ 		const prevContentWidth = this.#contentWidthCache;
+@@ -1860,12 +1879,12 @@ var Editor = class {
+ 		this.#contentWidthCache = void 0;
+ 		const gutterWidthChanged = this.#getGutterWidth() !== prevGutterWidth;
+ 		const contentWidthChanged = this.#getContentWidth() !== prevContentWidth;
+-		if (!gutterWidthChanged && !contentWidthChanged) return;
++		if (!gutterWidthChanged && !contentWidthChanged && !metricsChanged) return;
+ 		this.#lastAccessedCharX = void 0;
+ 		this.#metrics.clearTextWidthCache();
+-		if (contentWidthChanged) {
++		if (contentWidthChanged || metricsChanged) {
+ 			this.#wrapLineOffsetsCache.clear();
+-			if (this.#isWrap || lineAnnotations > 0) this.#lineYCache.clear();
++			if (metricsChanged || this.#isWrap || lineAnnotations > 0) this.#lineYCache.clear();
+ 		}
+ 		if (this.#selections !== void 0 || this.#matches !== void 0 || this.#markerRenderer !== void 0) {
+ 			this.#updateSelections(this.#selections ?? []);
+@@ -3369,7 +3388,8 @@ var Editor = class {
+ 		});
+ 		this.#searchPanel = searchPanel;
+ 		this.#retainSearchPanelFocus = false;
+ 		searchPanel.mount();
++		searchPanel.getHostElement().dataset.searchPanelOverlay = "";
+ 	}
+ 	#searchWithNavigationTarget(textDocument, searchParams) {
+ 		const viewport = this.#getSearchViewportBounds();
+diff --git a/dist/editor/textMeasure.d.ts b/dist/editor/textMeasure.d.ts
+index 89e938d89eca77d351aeed65f3c5495383effd97..cde1d6ba89a97bbb1614754a48f8994388c186bd 100644
+--- a/dist/editor/textMeasure.d.ts
++++ b/dist/editor/textMeasure.d.ts
+@@ -9,8 +9,8 @@ declare class Metrics {
+   lineHeight: number;
+   /** Padding top of the root element. */
+   paddingTop: number;
+-  /** initialize the metrics */
+-  init(root: HTMLElement): void;
++  /** (re)read the metrics from root, returning true when they changed */
++  init(root: HTMLElement): boolean;
+   /**
+    * Re-measure the '0' character width against the font that is loaded right
+    * now, returning true when measurement-dependent UI should refresh.
+diff --git a/dist/editor/textMeasure.js b/dist/editor/textMeasure.js
+index 96d4fb137ea683b66381b1ce6e47e8708a89366c..13f2564897a5bf53a8f311300003b3ea875c73a5 100644
+--- a/dist/editor/textMeasure.js
++++ b/dist/editor/textMeasure.js
+@@ -16,9 +16,10 @@ var Metrics = class {
+ 	lineHeight = 20;
+ 	/** Padding top of the root element. */
+ 	paddingTop = 0;
+-	/** initialize the metrics */
++	/** (re)read the metrics from root, returning true when they changed */
+ 	init(root) {
+-		if (this.#root === root && this.#canvasCtx !== void 0 && this.ch !== -1) return;
++		const previousLineHeight = this.lineHeight;
++		let fontChanged = false;
+ 		this.#root = root;
+ 		this.#canvas ??= h("canvas", { style: { display: "none" } });
+ 		this.#canvasCtx ??= this.#canvas.getContext("2d") ?? void 0;
+@@ -37,9 +38,11 @@ var Metrics = class {
+ 			this.#setCanvasFont(font);
+ 			this.ch = this.canvasMeasureTextWidth("0");
+ 			this.clearTextWidthCache();
++			fontChanged = true;
+ 		}
+ 		const nextTabSize = parseInt(tabSize, 10);
+ 		if (!Number.isNaN(nextTabSize)) this.tabSize = nextTabSize;
++		return fontChanged || this.lineHeight !== previousLineHeight;
+ 	}
+ 	/**
+ 	* Re-measure the '0' character width against the font that is loaded right
+diff --git a/package.json b/package.json
+index d1fa4d5d79ba70b6cd990b0ac9df5206fe55b58d..8762624a075174f5d9f35224cf091596d951a1a7 100644
+--- a/package.json
++++ b/package.json
+@@ -60,6 +60,18 @@
+     "./worker/worker-portable.js": {
+       "types": "./dist/worker/worker-portable.d.ts",
+       "import": "./dist/worker/worker-portable.js"
++    },
++    "./types": {
++      "types": "./dist/types.d.ts",
++      "import": "./dist/types.js"
++    },
++    "./utils/getFiletypeFromFileName": {
++      "types": "./dist/utils/getFiletypeFromFileName.d.ts",
++      "import": "./dist/utils/getFiletypeFromFileName.js"
++    },
++    "./utils/parsePatchFiles": {
++      "types": "./dist/utils/parsePatchFiles.d.ts",
++      "import": "./dist/utils/parsePatchFiles.js"
+     }
+   },
+   "publishConfig": {
+diff --git a/dist/constants.d.ts b/dist/constants.d.ts
+--- a/dist/constants.d.ts
++++ b/dist/constants.d.ts
+@@ -42,6 +42,9 @@
+   unknownUnmodifiedLines: string;
+   /** Button that expands an entire collapsed region at once. */
+   expandAll: string;
++  expandUp: string;
++  expandDown: string;
++  expandBoth: string;
+   /** Marker shown after a final line that has no trailing newline. */
+   noNewlineAtEndOfFile: string;
+   /** Merge conflict button that keeps the current (ours) side. */
+diff --git a/dist/constants.js b/dist/constants.js
+--- a/dist/constants.js
++++ b/dist/constants.js
+@@ -44,6 +44,9 @@
+ 	unknownUnmodifiedLines: "More unchanged context may be available",
+ 	/** Button that expands an entire collapsed region at once. */
+ 	expandAll: "Expand all",
++	expandUp: "Expand context upward",
++	expandDown: "Expand context downward",
++	expandBoth: "Expand context in both directions",
+ 	/** Marker shown after a final line that has no trailing newline. */
+ 	noNewlineAtEndOfFile: "No newline at end of file",
+ 	/** Merge conflict button that keeps the current (ours) side. */
+diff --git a/dist/search/SearchPanelWidget.d.ts b/dist/search/SearchPanelWidget.d.ts
+--- a/dist/search/SearchPanelWidget.d.ts
++++ b/dist/search/SearchPanelWidget.d.ts
+@@ -30,6 +30,7 @@
+ declare class SearchPanelWidget<TMatch = MatchRange> {
+   #private;
+   constructor(options: SearchPanelOptions<TMatch>);
++  onMessagesChange(): void;
+   mount(): void;
+   getHostElement(): HTMLDivElement;
+   getBounds(): DOMRect;
+diff --git a/dist/search/SearchPanelWidget.js b/dist/search/SearchPanelWidget.js
+--- a/dist/search/SearchPanelWidget.js
++++ b/dist/search/SearchPanelWidget.js
+@@ -21,6 +21,7 @@
+ 	#setQuery;
+ 	#hasReplaceHandlers;
+ 	#close;
++	#refreshMessages;
+ 	constructor(options) {
+ 		const { containerElement, unsafeCSS, defaultQuery, defaults, mode = "find", search, isSameMatch = Object.is, scrollToMatch, replace, onQueryChange, onUpdate, onStateChange, onClose } = options;
+ 		let replaceHandlers = replace;
+@@ -140,21 +141,27 @@
+ 			this.cleanup();
+ 		};
+ 		this.#close = close;
+-		const iconButton = (opts) => h("button", {
+-			type: "button",
+-			title: opts.label,
+-			ariaLabel: opts.label,
+-			dataset: {
+-				searchIcon: "",
+-				...opts.dataset
+-			},
+-			innerHTML: getEditorIconSvg(opts.icon, opts.size ?? 16),
+-			onclick: opts.onClick
+-		});
+-		const makeToggle = (icon, title, key) => {
++		const buttonMessages = new Map();
++		const iconButton = (opts) => {
++			const label = i18n.t(opts.messageKey);
++			const button = h("button", {
++				type: "button",
++				title: label,
++				ariaLabel: label,
++				dataset: {
++					searchIcon: "",
++					...opts.dataset
++				},
++				innerHTML: getEditorIconSvg(opts.icon, opts.size ?? 16),
++				onclick: opts.onClick
++			});
++			buttonMessages.set(button, opts.messageKey);
++			return button;
++		};
++		const makeToggle = (icon, messageKey, key) => {
+ 			const button = iconButton({
+ 				icon,
+-				label: title,
++				messageKey,
+ 				size: 14,
+ 				onClick: () => {
+ 					const next = !searchParams[key];
+@@ -165,12 +172,13 @@
+ 			button.ariaPressed = String(searchParams[key]);
+ 			return button;
+ 		};
+-		const caseSensitiveToggle = makeToggle("case", i18n.t("matchCase"), "caseSensitive");
+-		const wholeWordToggle = makeToggle("whole-word", i18n.t("wholeWord"), "wholeWord");
+-		const regexToggle = makeToggle("regex", i18n.t("regularExpression"), "regex");
++		const caseSensitiveToggle = makeToggle("case", "matchCase", "caseSensitive");
++		const wholeWordToggle = makeToggle("whole-word", "wholeWord", "wholeWord");
++		const regexToggle = makeToggle("regex", "regularExpression", "regex");
+ 		this.#inputElement = h("input", {
+ 			type: "text",
+ 			placeholder: i18n.t("searchPlaceholder"),
++			ariaLabel: i18n.t("searchPlaceholder"),
+ 			dataset: "search",
+ 			value: defaultQuery,
+ 			oninput: (e) => {
+@@ -218,14 +226,14 @@
+ 		});
+ 		const prevButton = iconButton({
+ 			icon: "arrow-up",
+-			label: i18n.t("previousMatch"),
++			messageKey: "previousMatch",
+ 			onClick: () => {
+ 				findNextMatch(true);
+ 			}
+ 		});
+ 		const nextButton = iconButton({
+ 			icon: "arrow-down",
+-			label: i18n.t("nextMatch"),
++			messageKey: "nextMatch",
+ 			onClick: () => {
+ 				findNextMatch();
+ 			}
+@@ -238,13 +246,14 @@
+ 		});
+ 		const closeElement = iconButton({
+ 			icon: "close",
+-			label: i18n.t("closeSearch"),
++			messageKey: "closeSearch",
+ 			onClick: close,
+ 			dataset: { searchClose: "" }
+ 		});
+ 		const replaceInputElement = h("input", {
+ 			type: "text",
+ 			placeholder: i18n.t("replacePlaceholder"),
++			ariaLabel: i18n.t("replacePlaceholder"),
+ 			dataset: "replace",
+ 			value: "",
+ 			oninput: (e) => {
+@@ -281,17 +290,17 @@
+ 			},
+ 			children: [iconButton({
+ 				icon: "replace",
+-				label: i18n.t("replaceMatch"),
++				messageKey: "replaceMatch",
+ 				onClick: replaceCurrentMatch
+ 			}), iconButton({
+ 				icon: "replace-all",
+-				label: i18n.t("replaceAllMatches"),
++				messageKey: "replaceAllMatches",
+ 				onClick: replaceAllMatches
+ 			})]
+ 		});
+ 		const replaceToggleElement = iconButton({
+ 			icon: "chevron",
+-			label: i18n.t("toggleReplace"),
++			messageKey: "toggleReplace",
+ 			dataset: { replaceToggle: "" },
+ 			onClick: () => {
+ 				if (gridElement.dataset.mode === "replace") applyMode("find");
+@@ -339,6 +348,19 @@
+ 			emitState();
+ 		};
+ 		this.#applyMode = applyMode;
++		this.#refreshMessages = () => {
++			this.#inputElement.placeholder = i18n.t("searchPlaceholder");
++			this.#inputElement.ariaLabel = i18n.t("searchPlaceholder");
++			replaceInputElement.placeholder = i18n.t("replacePlaceholder");
++			replaceInputElement.ariaLabel = i18n.t("replacePlaceholder");
++			for (const [button, key] of buttonMessages) {
++				const label = i18n.t(key);
++				button.title = label;
++				button.ariaLabel = label;
++			}
++			if (matches.all.length === 0) matchResultElement.textContent = i18n.t("noSearchResults");
++			else updateCurrentMatch(matches.current);
++		};
+ 		this.#host = h("div", { dataset: "searchPanel" });
+ 		const shadowRoot = this.#host.attachShadow({ mode: "open" });
+ 		const spriteContainer = document.createElement("div");
+@@ -365,6 +387,10 @@
+ 			emitState();
+ 			queueRender(this.#initializeMatches);
+ 		};
++		i18n.subscribe(this);
++	}
++	onMessagesChange() {
++		this.#refreshMessages();
+ 	}
+ 	mount() {
+ 		this.#mount?.();
+@@ -404,6 +430,7 @@
+ 		this.#close?.();
+ 	}
+ 	cleanup() {
++		i18n.unsubscribe(this);
+ 		this.#closed = true;
+ 		dequeueRender(this.#initializeMatches);
+ 		this.#host.remove();
+diff --git a/dist/utils/createSeparator.js b/dist/utils/createSeparator.js
+--- a/dist/utils/createSeparator.js
++++ b/dist/utils/createSeparator.js
+@@ -10,6 +10,7 @@
+ 		})],
+ 		properties: {
+ 			role: "button",
++			"aria-label": i18n.t(type === "both" ? "expandBoth" : type === "up" ? "expandUp" : "expandDown"),
+ 			"data-expand-button": "",
+ 			"data-expand-both": type === "both" ? "" : void 0,
+ 			"data-expand-up": type === "up" ? "" : void 0,

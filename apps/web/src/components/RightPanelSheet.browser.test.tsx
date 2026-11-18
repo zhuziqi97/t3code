@@ -1,3 +1,4 @@
+import { page } from "vite-plus/test/browser";
 import "~/index.css";
 import { act, fakeTimers, render as renderTestUi, type Screen } from "../../test/render";
 import { useState } from "react";
@@ -143,3 +144,13 @@ async function setupLifecycle() {
   renderStack = stack.move();
   return renderStack;
 }
+it("names the open right-panel dialog", async () => {
+  await using _screen = await renderTestUi(
+    <RightPanelSheet open animationDurationMs={0} onClose={() => {}}>
+      <div>Panel content</div>
+    </RightPanelSheet>,
+  );
+  const dialog = page.getByRole("dialog");
+  await expect.element(dialog).toBeVisible();
+  await expect.element(dialog).not.toHaveAccessibleName("");
+});

@@ -123,6 +123,7 @@ it("keeps custom names and option values while translating validation and saving
       entry={entry}
       builtInModels={[]}
       onSave={onSave}
+      onDraftChange={vi.fn()}
       onCancel={vi.fn()}
     />,
   );

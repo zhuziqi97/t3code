@@ -23,6 +23,10 @@ export const zh: Partial<Messages> = {
 
   "chat.workspace.conversation": "会话",
   "chat.workspace.messageInput": "消息输入",
+  "chat.reply.action": "回复此响应",
+  "chat.reply.replyingTo": "正在回复",
+  "chat.reply.replyingToAgents": "正在回复 {{agents}}",
+  "chat.reply.cancel": "取消回复",
   "chat.banner.fullTitle": "显示完整标题：{{title}}",
   "chat.banner.titleDetails": "显示标题详情",
   "chat.banner.namedDetails": "显示详情：{{title}}",
@@ -753,6 +757,7 @@ export const zh: Partial<Messages> = {
   "convene.connection.disconnectDescription":
     "断开连接将取消此环境的配对，并移除其 Convene 关联与 MCP 配置。本地项目和会话仍然保留。",
   "convene.connection.reconnect": "重新连接",
+  "convene.connection.retryNow": "立即重试",
   "convene.connection.disconnect": "断开 Convene 连接",
   "convene.connection.localDisconnect": "仅解除本地配对",
   "convene.connection.localDisconnectDescription":
@@ -3246,6 +3251,7 @@ export const zh: Partial<Messages> = {
   "chat.draft.open": "打开草稿",
   "chat.approval.submitFailed": "提交审批决定失败。",
   "chat.upload.waitOrRemove": "请等待附件上传完成，或移除上传失败的附件。",
+  "chat.input.answerChanged": "准备附件时答案已修改。请检查后重新发送。",
   "chat.input.submitFailed": "提交输入失败。",
   "chat.input.dismissFailed": "忽略问题失败。",
   "chat.plan.followUpFailed": "发送计划后续消息失败。",
@@ -3581,8 +3587,10 @@ export const zh: Partial<Messages> = {
   "chat.error.chatgptHint": "请查看 ChatGPT 的用量设置以继续。",
   "chat.error.dismiss": "关闭错误提示",
   "chat.pullRequest.conflictsWith": "合并冲突于",
+  "chat.pullRequest.resolveCurrentHint": "在当前会话中解决冲突",
   "chat.pullRequest.resolveHint": "检出此分支，并在新会话中解决冲突",
   "chat.pullRequest.markReadyHint": "将此 Pull Request 标为可供审阅",
+  "chat.pullRequest.fixCurrentChecksHint": "在当前会话中修复未通过的检查",
   "chat.pullRequest.fixChecksHint": "在新会话中修复未通过的检查",
   "chat.pullRequest.watchingHint":
     "正在跟进：检查完成、出现新评论或分支冲突时，智能体会唤醒。点击停止跟进。",
@@ -3683,6 +3691,7 @@ export const zh: Partial<Messages> = {
   "chat.model.legacy": "旧版模型",
   "chat.model.noFavorites": "暂无收藏的模型",
   "chat.model.noneFound": "未找到模型",
+  "chat.model.scanningProject": "正在查找项目模型…",
   "chat.provider.settings": "智能体提供方设置",
   "chat.model.new": "新模型",
   "chat.model.newShort": "新增",

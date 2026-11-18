@@ -25,6 +25,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as EventStore from "../persistence/OrchestrationEventStore.ts";
+import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import * as EffectWorker from "../orchestration-v2/EffectWorker.ts";
@@ -150,6 +151,7 @@ it.live.each(["codex", "claudeAgent"] as const)(
         skills: [],
       };
       const nativeLayer = ConveneNative.layer.pipe(
+        Layer.provide(ProjectionStore.layer.pipe(Layer.provide(database))),
         Layer.provideMerge(
           ConveneWorkspaces.layer.pipe(
             Layer.provide(ProjectStore.layer.pipe(Layer.provide(database))),
@@ -375,6 +377,7 @@ it.live.each([
       skills: [],
     };
     const nativeLayer = ConveneNative.layer.pipe(
+      Layer.provide(ProjectionStore.layer.pipe(Layer.provide(database))),
       Layer.provideMerge(
         ConveneWorkspaces.layer.pipe(
           Layer.provide(ProjectStore.layer.pipe(Layer.provide(database))),

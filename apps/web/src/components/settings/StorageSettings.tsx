@@ -109,6 +109,8 @@ export function WorktreesDirectoryRow() {
   );
 }
 
+type SaveOptions = Parameters<ReturnType<typeof useUpdateScopedSettings>>[1];
+
 function RetentionControl({
   label,
   value,
@@ -117,20 +119,66 @@ function RetentionControl({
 }: {
   label: string;
   value: number | null;
-  onChange: (value: number | null) => void;
+  onChange: (value: number | null, onFailed: () => void) => void;
   minimum?: number;
 }) {
   const t = useTranslate();
   const [draft, setDraft] = useState(value);
   const [savedValue, setSavedValue] = useState(value);
+  // Saving an age can start a cleanup sweep, so turning a rule on only opens a draft.
+  // While its first save is in flight this holds that submission.
+  const [enabling, setEnabling] = useState<"draft" | "edited" | { days: number } | null>(null);
+  // Holds an age until Enter or focus leaves the row: one edited before focus moved to the
+  // switch, so switching off never saves it first, or one stepped toward a rule's first age,
+  // so raising it from 8 never saves a shorter age on the way.
+  const [held, setHeld] = useState(false);
+  // Hides a saved rule's age once it is switched off, so no blur can save it after null.
+  const [switchedOff, setSwitchedOff] = useState(false);
   if (savedValue !== value) {
     setSavedValue(value);
     setDraft(value);
+    setEnabling(null);
+    setHeld(false);
+    setSwitchedOff(false);
   }
+  const pending = typeof enabling === "object" ? enabling : null;
+  const on = (value !== null && !switchedOff) || enabling !== null;
+  const row = useRef<HTMLDivElement>(null);
+
+  const commit = (next: number) => {
+    const days = Math.min(3650, Math.max(minimum, Math.round(next)));
+    setDraft(days);
+    setHeld(false);
+    if (days === pending?.days) return;
+    if (value !== null) {
+      onChange(days, () => {});
+      return;
+    }
+    const submission = { days };
+    setEnabling(submission);
+    onChange(days, () => setEnabling((current) => (current === submission ? null : current)));
+  };
+
+  const switchOff = () => {
+    setDraft(value);
+    setHeld(false);
+    setEnabling(null);
+    if (value === null && pending === null) return;
+    setSwitchedOff(true);
+    onChange(null, () => setSwitchedOff(false));
+  };
 
   return (
-    <div className="flex items-center gap-3">
-      {value !== null ? (
+    <div
+      ref={row}
+      className="flex items-center gap-3"
+      onBlur={(event) => {
+        if (event.currentTarget.contains(event.relatedTarget)) return;
+        if (held && draft !== null) commit(draft);
+        else setEnabling((current) => (typeof current === "string" ? null : current));
+      }}
+    >
+      {on ? (
         <NumberField
           value={draft}
           min={minimum}
@@ -138,21 +186,30 @@ function RetentionControl({
           step={1}
           size="sm"
           className="w-auto"
-          onValueChange={setDraft}
-          onValueCommitted={(next) => {
+          onValueChange={(next) => {
+            setDraft(next);
+            setEnabling((current) => (current === "draft" ? "edited" : current));
+          }}
+          onValueCommitted={(next, { reason, event }) => {
             if (next === null) setDraft(value);
-            else {
-              const days = Math.min(3650, Math.max(minimum, Math.round(next)));
-              setDraft(days);
-              onChange(days);
-            }
+            else if (
+              reason === "input-blur"
+                ? event instanceof FocusEvent &&
+                  event.relatedTarget instanceof Node &&
+                  row.current?.contains(event.relatedTarget)
+                : value === null
+            ) {
+              setDraft(next);
+              setHeld(true);
+            } else commit(next);
           }}
         >
           <NumberFieldGroup>
             <NumberFieldDecrement aria-label={t("storage.decrease", { label })} />
             <NumberFieldInput
+              autoFocus={value === null}
               aria-label={t("storage.retentionDays", { label })}
-              size={new Intl.NumberFormat().format(draft ?? value).length}
+              size={new Intl.NumberFormat().format(draft ?? value ?? minimum).length}
               className="field-sizing-content w-auto min-w-[1ch] grow-0 text-right"
             />
             <span aria-hidden="true" className="self-center pr-2 text-xs">
@@ -166,8 +223,15 @@ function RetentionControl({
       )}
       <Switch
         aria-label={label}
-        checked={value !== null}
-        onCheckedChange={(enabled) => onChange(enabled ? 8 : null)}
+        checked={on}
+        // Keeps focus in the age field, so switching off never commits an edited age first.
+        onMouseDown={(event) => event.preventDefault()}
+        onCheckedChange={(enabled) => {
+          if (enabled) {
+            setDraft(8);
+            setEnabling("draft");
+          } else switchOff();
+        }}
       />
     </div>
   );
@@ -491,12 +555,12 @@ export function WorktreeCleanupSection() {
   // A policy locks these through worktreeCleanup, which also reaches each project's own rules.
   const lockablePath = (key: keyof WorktreeCleanupRules) =>
     isProjectScope ? ["worktreeCleanup"] : ["worktreeCleanup", `storageCleanup.${key}`];
-  const update = (patch: Partial<StorageCleanupSettings>) =>
-    updateSettings({ storageCleanup: patch });
-  const updateWorktree = (patch: Partial<WorktreeCleanupRules>) =>
+  const update = (patch: Partial<StorageCleanupSettings>, options?: SaveOptions) =>
+    updateSettings({ storageCleanup: patch }, options);
+  const updateWorktree = (patch: Partial<WorktreeCleanupRules>, options?: SaveOptions) =>
     isProjectScope
-      ? updateSettings({ worktreeCleanup: { mode: "custom", rules: patch } })
-      : update(patch);
+      ? updateSettings({ worktreeCleanup: { mode: "custom", rules: patch } }, options)
+      : update(patch, options);
 
   if (
     isProjectScope &&
@@ -607,7 +671,9 @@ export function WorktreeCleanupSection() {
                 <RetentionControl
                   label={t("storage.inactive")}
                   value={settings.worktreeAfterDays}
-                  onChange={(worktreeAfterDays) => updateWorktree({ worktreeAfterDays })}
+                  onChange={(worktreeAfterDays, onFailed) =>
+                    updateWorktree({ worktreeAfterDays }, { onFailed })
+                  }
                 />
               }
             />
@@ -639,8 +705,8 @@ export function WorktreeCleanupSection() {
                         label="Delete settled worktrees"
                         value={settings.worktreeSettledAfterDays}
                         minimum={0}
-                        onChange={(worktreeSettledAfterDays) =>
-                          updateWorktree({ worktreeSettledAfterDays })
+                        onChange={(worktreeSettledAfterDays, onFailed) =>
+                          updateWorktree({ worktreeSettledAfterDays }, { onFailed })
                         }
                       />
                     }
@@ -743,8 +809,8 @@ export function StorageCleanupSections() {
       ? "Mixed across selected machines"
       : undefined;
   if (scope.kind === "project" || scope.kind === "checkout") return null;
-  const update = (patch: Partial<StorageCleanupSettings>) =>
-    updateSettings({ storageCleanup: patch });
+  const update = (patch: Partial<StorageCleanupSettings>, options: SaveOptions) =>
+    updateSettings({ storageCleanup: patch }, options);
   const databaseStorageNotice = (
     <DatabaseStorageNotice
       environments={connectedEnvironments.filter(
@@ -783,7 +849,9 @@ export function StorageCleanupSections() {
               <RetentionControl
                 label={t("storage.browserArtifacts")}
                 value={settings.browserArtifactsAfterDays}
-                onChange={(browserArtifactsAfterDays) => update({ browserArtifactsAfterDays })}
+                onChange={(browserArtifactsAfterDays, onFailed) =>
+                  update({ browserArtifactsAfterDays }, { onFailed })
+                }
               />
             }
           />
@@ -799,7 +867,7 @@ export function StorageCleanupSections() {
               <RetentionControl
                 label={t("storage.logs")}
                 value={settings.logsAfterDays}
-                onChange={(logsAfterDays) => update({ logsAfterDays })}
+                onChange={(logsAfterDays, onFailed) => update({ logsAfterDays }, { onFailed })}
               />
             }
           />

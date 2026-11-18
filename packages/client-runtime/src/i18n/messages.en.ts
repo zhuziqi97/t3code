@@ -19,6 +19,10 @@ export const en = {
 
   "chat.workspace.conversation": "Conversation",
   "chat.workspace.messageInput": "Message input",
+  "chat.reply.action": "Reply to this response",
+  "chat.reply.replyingTo": "Replying to",
+  "chat.reply.replyingToAgents": "Replying to {{agents}}",
+  "chat.reply.cancel": "Cancel reply",
   "chat.banner.fullTitle": "Show full title: {{title}}",
   "chat.banner.titleDetails": "Show title details",
   "chat.banner.namedDetails": "Show details: {{title}}",
@@ -786,6 +790,7 @@ export const en = {
   "convene.connection.disconnectDescription":
     "Disconnect unpairs this environment and removes its Convene associations and MCP configuration. Local projects and sessions remain available.",
   "convene.connection.reconnect": "Reconnect",
+  "convene.connection.retryNow": "Retry now",
   "convene.connection.disconnect": "Disconnect Convene",
   "convene.connection.localDisconnect": "Unpair locally",
   "convene.connection.localDisconnectDescription":
@@ -3444,6 +3449,8 @@ export const en = {
   "chat.draft.open": "Open draft",
   "chat.approval.submitFailed": "Failed to submit approval decision.",
   "chat.upload.waitOrRemove": "Wait for attachments to finish uploading, or remove failed uploads.",
+  "chat.input.answerChanged":
+    "Answer changed while preparing attachments. Review it and send again.",
   "chat.input.submitFailed": "Failed to submit user input.",
   "chat.input.dismissFailed": "Failed to dismiss the question.",
   "chat.plan.followUpFailed": "Failed to send plan follow-up.",
@@ -3795,8 +3802,10 @@ export const en = {
   "chat.error.chatgptHint": "Review your usage settings in ChatGPT to continue.",
   "chat.error.dismiss": "Dismiss error",
   "chat.pullRequest.conflictsWith": "Merge conflicts with",
+  "chat.pullRequest.resolveCurrentHint": "Resolve the conflicts in this thread",
   "chat.pullRequest.resolveHint": "Check the branch out and resolve the conflicts in a new thread",
   "chat.pullRequest.markReadyHint": "Mark this pull request as ready for review",
+  "chat.pullRequest.fixCurrentChecksHint": "Fix the failing checks in this thread",
   "chat.pullRequest.fixChecksHint": "Fix the failing checks in a new thread",
   "chat.pullRequest.watchingHint":
     "Watching: the agent wakes when checks finish, someone comments, or the branch conflicts. Click to stop.",
@@ -3900,6 +3909,7 @@ export const en = {
   "chat.model.legacy": "Legacy models",
   "chat.model.noFavorites": "No favorites yet",
   "chat.model.noneFound": "No models found",
+  "chat.model.scanningProject": "Searching project models...",
   "chat.provider.settings": "Provider settings",
   "chat.model.new": "New model",
   "chat.model.newShort": "New",

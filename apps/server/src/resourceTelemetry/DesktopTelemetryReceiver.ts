@@ -190,6 +190,8 @@ export class DesktopTelemetryReceiver extends Context.Service<
     readonly setConveneUpdateSource: (
       baseUrl: string | null,
     ) => Effect.Effect<void, DesktopTelemetryControlError>;
+    /** Tells the desktop parent that the server accepts requests, so it can skip readiness polling. */
+    readonly announceServerReady: Effect.Effect<void, DesktopTelemetryControlError>;
     /** Asks the desktop app supervising this server to update itself. The
         desktop answers with desktopUpdateStatus reports carrying the same
         requestId. */
@@ -726,6 +728,9 @@ export const make = Effect.fn("resourceTelemetry.desktopTelemetryReceiver.make")
     setConveneUpdateSource: Effect.fn("DesktopTelemetryReceiver.setConveneUpdateSource")(
       (baseUrl) => sendControlMessage({ version: 1, type: "conveneUpdateSource", baseUrl }),
     ),
+    announceServerReady: sendControlMessage({ version: 1, type: "serverReady" }).pipe(
+      Effect.withSpan("DesktopTelemetryReceiver.announceServerReady"),
+    ),
     requestDesktopUpdate: Effect.fn("DesktopTelemetryReceiver.requestDesktopUpdate")(
       function (requestId, trackSwitch) {
         return sendControlMessage({
@@ -796,11 +801,10 @@ export const layerTest = (
       setDiagnosticsDemand: Effect.fn("DesktopTelemetryReceiver.setDiagnosticsDemand")(
         () => Effect.void,
       ),
-      setConveneUpdateSource: Effect.fn("DesktopTelemetryReceiver.setDiagnosticsDemand")(
-        function () {
-          return Effect.void;
-        },
+      setConveneUpdateSource: Effect.fn("DesktopTelemetryReceiver.setConveneUpdateSource")(
+        () => Effect.void,
       ),
+      announceServerReady: Effect.void,
       requestDesktopUpdate: Effect.fn("DesktopTelemetryReceiver.requestDesktopUpdate")(function () {
         return Effect.void;
       }),

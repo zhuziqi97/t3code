@@ -99,6 +99,7 @@ it("keeps queue state and provider commands intact while switching Chinese and E
           onCancelEdit={() => {}}
           timestampFormat="locale"
           onOpenThread={() => {}}
+          onImageExpand={() => {}}
         />,
       ),
     );

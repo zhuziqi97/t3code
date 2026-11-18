@@ -206,6 +206,7 @@ export function ServerUpdatesAction({
             i18n.t("server.update.confirmMany", {
               servers: desktopTargets.map((target) => target.serverLabel).join(", "),
             }),
+            { initialFocus: "confirm" },
           )) ?? true;
         if (!confirmed) return;
       }
@@ -287,24 +288,19 @@ export function ServerUpdateAction({
   const canUpdate = useAtomValue(sessionStateAtom, canUpdateServer);
   const updatesDenial = managedUpdatesDenial(useManagedPolicy(environmentId));
   const update = useServerUpdate();
+  const updatesInstall =
+    installation?.kind === "npm-global" || installation?.kind === "t3-launcher";
   const { copyToClipboard } = useCopyToClipboard<{ command: string }>({
-    target: t(
-      installation?.kind === "npm-global"
-        ? "server.update.command"
-        : "server.update.relaunchCommand",
-    ),
+    target: t(updatesInstall ? "server.update.command" : "server.update.relaunchCommand"),
     onCopy: ({ command }) => {
       toastManager.add({
         type: "success",
         title: i18n.t(
-          installation?.kind === "npm-global"
-            ? "server.update.commandCopied"
-            : "server.update.relaunchCopied",
+          updatesInstall ? "server.update.commandCopied" : "server.update.relaunchCopied",
         ),
-        description:
-          installation?.kind === "npm-global"
-            ? i18n.t("server.update.commandGuidance", { command, server: serverLabel })
-            : i18n.t("server.update.relaunchGuidance", { command, server: serverLabel }),
+        description: updatesInstall
+          ? i18n.t("server.update.commandGuidance", { command, server: serverLabel })
+          : i18n.t("server.update.relaunchGuidance", { command, server: serverLabel }),
       });
     },
     onError: (error) => {
@@ -314,17 +310,13 @@ export function ServerUpdateAction({
         description: isClipboardApiUnavailable(error)
           ? i18n.t("server.update.clipboardUnavailable", {
               target: i18n.t(
-                installation?.kind === "npm-global"
-                  ? "server.update.command"
-                  : "server.update.relaunchCommand",
+                updatesInstall ? "server.update.command" : "server.update.relaunchCommand",
               ),
             })
           : isClipboardWriteError(error)
             ? i18n.t("server.update.clipboardFailed", {
                 target: i18n.t(
-                  installation?.kind === "npm-global"
-                    ? "server.update.command"
-                    : "server.update.relaunchCommand",
+                  updatesInstall ? "server.update.command" : "server.update.relaunchCommand",
                 ),
               })
             : error.message,
@@ -341,8 +333,9 @@ export function ServerUpdateAction({
     }
     if (isDesktopAppUpdate) {
       const confirmed =
-        (await requestConfirmDialog(i18n.t("server.update.confirm", { server: serverLabel }))) ??
-        true;
+        (await requestConfirmDialog(i18n.t("server.update.confirm", { server: serverLabel }), {
+          initialFocus: "confirm",
+        })) ?? true;
       if (!confirmed) {
         return;
       }
@@ -383,7 +376,7 @@ export function ServerUpdateAction({
     selfUpdate === null ? manualServerUpdateCommand(targetVersion, installation) : null;
   const actionLabel =
     manualCommand !== null
-      ? installation?.kind === "npm-global"
+      ? updatesInstall
         ? t("server.update.copyCommand")
         : t("server.update.copyRelaunch")
       : (label ?? t("connections.update"));

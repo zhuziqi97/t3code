@@ -1,5 +1,6 @@
 import {
   ConveneNativeRequest,
+  isListedThreadLineage,
   type ConveneNativeResult,
   type ProjectId,
   type ThreadId,
@@ -11,6 +12,9 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
+import * as DateTime from "effect/DateTime";
+
+import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
@@ -50,6 +54,7 @@ const supportedDrivers = new Set(["codex", "claudeAgent"]);
 
 const make = Effect.gen(function* () {
   const projects = yield* ProjectStore.ProjectStoreV2;
+  const projectionStore = yield* ProjectionStore.ProjectionStoreV2;
   const threads = yield* ThreadManagement.ThreadManagementService;
   const providers = yield* ProviderRegistry.ProviderRegistry;
   const fs = yield* FileSystem.FileSystem;
@@ -120,10 +125,17 @@ const make = Effect.gen(function* () {
         };
       }
       if (input.operation === "LIST") {
-        const listed = yield* threads.listProjectThreads({
+        const snapshot = yield* projectionStore.getShellSnapshot({
+          location: "active",
           projectId: input.projectId,
-          includeSubagents: false,
         });
+        const listed = snapshot.threads
+          .filter((thread) => isListedThreadLineage(thread.lineage))
+          .toSorted(
+            (left, right) =>
+              DateTime.toEpochMillis(right.updatedAt) - DateTime.toEpochMillis(left.updatedAt) ||
+              right.id.localeCompare(left.id),
+          );
         const matching = yield* Effect.filter(listed, (thread) =>
           workspaces
             .threadKey(input.projectId, thread.id)

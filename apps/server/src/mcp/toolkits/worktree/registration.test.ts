@@ -21,6 +21,8 @@ import { ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as EnvironmentTheme from "../../../environmentTheme.ts";
+import * as PullRequestService from "../../../pullRequest/PullRequestService.ts";
 import * as Schema from "effect/Schema";
 import { HttpBody, HttpClient, HttpRouter } from "effect/http";
 
@@ -67,6 +69,8 @@ const layerStubServices = Layer.mergeAll(
   Layer.mock(SecretRequests.SecretRequests)({}),
   Layer.mock(ProjectService.ProjectService)({}),
   Layer.mock(PullRequestReviewGuideService.PullRequestReviewGuideService)({}),
+  Layer.mock(EnvironmentTheme.EnvironmentThemeService)({}),
+  Layer.mock(PullRequestService.PullRequestService)({}),
   Layer.mock(ProjectCloneTracker.ProjectCloneTracker)({}),
   ServerSettings.layerTest({}),
   Layer.mock(GitWorkflowService.GitWorkflowService)({}),

@@ -57,9 +57,10 @@ async function renderEditor() {
       driverOption={providerClients.get(driver)}
       liveProvider={liveProvider}
       mode="editor"
-      onUpdate={(next) => {
+      onUpdate={async (next) => {
         instance = JSON.parse(JSON.stringify(next)) as ProviderInstanceConfig;
-        renderEditor();
+        await renderEditor();
+        return true;
       }}
       hiddenModels={[]}
       favoriteModels={[]}

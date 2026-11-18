@@ -78,7 +78,7 @@ const makePiSpawner = Effect.fnUntraced(function* (
               ? {
                   commands: [
                     personalSkill,
-                    ...(cwd === "/machine"
+                    ...(cwd?.endsWith("/pi-status-probe")
                       ? []
                       : [
                           {
@@ -183,16 +183,20 @@ it.layer(layerTest)("PiDriver workspace discovery", (it) => {
       assert.equal(workspaceLaunch!.options.env?.PI_CODING_AGENT_DIR, "/isolated-pi");
       // Discovery processes are stopped as soon as they answer, so neither may start Pi's
       // network refresh at launch.
-      for (const cwd of ["/machine", "/first"]) {
+      assert.isFalse(launches.some((launch) => launch.options.cwd === "/machine"));
+      for (const isLaunch of [
+        (cwd: string | undefined) => cwd?.endsWith("/pi-status-probe") === true,
+        (cwd: string | undefined) => cwd === "/first",
+      ]) {
         const discovery = launches.find(
-          (launch) => launch.options.cwd === cwd && launch.args.includes("--mode"),
+          (launch) => isLaunch(launch.options.cwd) && launch.args.includes("--mode"),
         );
         assert.deepEqual(
           discovery?.args.filter((arg) => arg === "--offline"),
           ["--offline"],
         );
       }
-    }).pipe(Effect.scoped),
+    }),
   );
 
   it.effect("does not run a disabled provider's workspace probe", () =>
@@ -230,7 +234,7 @@ it.layer(layerTest)("PiDriver workspace discovery", (it) => {
         assert.deepEqual(yield* instance.probeInstallation!, { installed, version: null });
         assert.deepEqual(yield* instance.snapshot.getSnapshot, before);
       }
-    }).pipe(Effect.scoped),
+    }),
   );
 
   it.effect.each([true, false])(
@@ -269,7 +273,7 @@ it.layer(layerTest)("PiDriver workspace discovery", (it) => {
             ["test/other", []],
           ],
         );
-      }).pipe(Effect.scoped),
+      }),
   );
 
   it.effect(
@@ -289,6 +293,6 @@ it.layer(layerTest)("PiDriver workspace discovery", (it) => {
           (yield* instance.snapshot.getSnapshot).skills.map((skill) => skill.name),
           ["personal"],
         );
-      }).pipe(Effect.scoped),
+      }),
   );
 });

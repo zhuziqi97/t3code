@@ -28,9 +28,9 @@ const conveneBuildInfo = NodeFS.existsSync(buildInfoUrl)
     })
   : null;
 const repoEnv = loadRepoEnv();
-const cliBuildChannel = /^[^-+]+-(?:nightly|preview)\./.test(packageJson.version)
-  ? "nightly"
-  : "latest";
+const serverManifestPath = NodePath.join(import.meta.dirname, "package.json");
+const buildVersion = process.env.APP_VERSION?.trim() || resolveConveneVersion(packageJson.version);
+const cliBuildChannel = /^[^-+]+-(?:nightly|preview)\./.test(buildVersion) ? "nightly" : "latest";
 // Official release workflows set the telemetry channel; local builds and forks use "dev".
 const TELEMETRY_CHANNELS = ["stable", "nightly", "preview", "dev"];
 const telemetryChannel = process.env.T3CODE_TELEMETRY_CHANNEL?.trim() || "dev";
@@ -98,6 +98,19 @@ export default mergeConfig(
       },
     },
     pack: {
+      plugins: [
+        {
+          // Every server module reads its version from this manifest import.
+          name: "t3code:build-version",
+          load(id) {
+            if (NodePath.resolve(id) !== serverManifestPath) return;
+            return {
+              code: JSON.stringify({ ...packageJson, version: buildVersion }),
+              moduleType: "json",
+            };
+          },
+        },
+      ],
       // SEA embeds one entry; expose the history worker as a hidden subcommand.
       entry: packBootstrap
         ? ["src/bin.ts"]
@@ -125,6 +138,8 @@ export default mergeConfig(
             },
           }
         : {}),
+      // jsonc-parser's UMD main requires its own files at runtime, which the bundle cannot follow.
+      alias: { "jsonc-parser": "jsonc-parser/lib/esm/main.js" },
       deps: {
         // alwaysBundle=false has no opinion; neverBundle must retain transitive native acceleration.
         alwaysBundle: shouldBundleCliDependency,
@@ -132,17 +147,13 @@ export default mergeConfig(
           (packBootstrap && id === "./binMain.ts") || isExternalCliDependency(id),
         onlyBundle: false,
       },
-      // Its UMD factory hides relative requires from the bundler; use the shipped ESM graph.
-      alias: { "jsonc-parser": "jsonc-parser/lib/esm/main.js" },
       banner: {
         js: "#!/usr/bin/env node\n",
       },
       define: {
         __CONVENE_BUILD_ID__: JSON.stringify(conveneBuildInfo?.build_id ?? null),
         __CONVENE_SOURCE_COMMIT__: JSON.stringify(conveneBuildInfo?.source_commit ?? null),
-        __T3CODE_CONVENE_VERSION__: JSON.stringify(
-          process.env.APP_VERSION?.trim() || resolveConveneVersion(packageJson.version),
-        ),
+        __T3CODE_CONVENE_VERSION__: JSON.stringify(buildVersion),
         __T3CODE_BUILD_CHANNEL__: JSON.stringify(cliBuildChannel),
         __T3CODE_TELEMETRY_CHANNEL__: JSON.stringify(telemetryChannel),
         __T3CODE_BUILD_RELAY_URL__: JSON.stringify(repoEnv.T3CODE_RELAY_URL?.trim() ?? ""),

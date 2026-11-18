@@ -15,6 +15,7 @@ import {
   Dialog,
   DialogClose,
   DialogDescription,
+  DialogAction,
   DialogFooter,
   DialogHeader,
   DialogPanel,
@@ -214,7 +215,7 @@ function QuitStep({
         <Button variant="outline" onClick={onCancel}>
           {t("integrations.cancel")}
         </Button>
-        <Button onClick={onRechecked}>{t("integrations.import.quit-confirm")}</Button>
+        <DialogAction onClick={onRechecked}>{t("integrations.import.quit-confirm")}</DialogAction>
       </DialogFooter>
     </>
   );
@@ -618,7 +619,7 @@ function BlockedStep({
         <Button variant="outline" onClick={onClose}>
           {t("integrations.close")}
         </Button>
-        {onRetry ? <Button onClick={onRetry}>{t("integrations.retry")}</Button> : null}
+        {onRetry ? <DialogAction onClick={onRetry}>{t("integrations.retry")}</DialogAction> : null}
       </DialogFooter>
     </>
   );

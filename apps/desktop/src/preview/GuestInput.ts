@@ -100,10 +100,42 @@ interface ScreenshotClip {
   readonly scale: number;
 }
 
+const pendingGuestCaptures = new WeakMap<Electron.WebContents, Promise<Electron.NativeImage>>();
+
+export const isGuestCapturePending = (webContents: Electron.WebContents): boolean =>
+  pendingGuestCaptures.has(webContents);
+
+/** An Electron capture keeps its turn until the native promise settles. */
+export const captureGuestPage = (
+  webContents: Electron.WebContents,
+  options: {
+    readonly signal?: AbortSignal;
+    readonly canStart?: () => boolean;
+    readonly captureOptions?: Parameters<Electron.WebContents["capturePage"]>[1];
+  } = {},
+): Promise<Electron.NativeImage> => {
+  const start = async () => {
+    options.signal?.throwIfAborted();
+    if (options.canStart?.() === false) {
+      throw new Error("The page this screenshot was for has moved on.");
+    }
+    return options.captureOptions === undefined
+      ? webContents.capturePage()
+      : webContents.capturePage(undefined, options.captureOptions);
+  };
+  const previous = pendingGuestCaptures.get(webContents);
+  const pending = previous === undefined ? start() : previous.then(start, start);
+  pendingGuestCaptures.set(webContents, pending);
+  return pending.finally(() => {
+    if (pendingGuestCaptures.get(webContents) === pending) pendingGuestCaptures.delete(webContents);
+  });
+};
+
 const captureScreenshot = async (
   webContents: Electron.WebContents,
   debuggee: Electron.Debugger,
   params: Record<string, unknown>,
+  canStart?: () => boolean,
 ) => {
   const clip = params["clip"] as ScreenshotClip | undefined;
   const metrics = clip
@@ -117,7 +149,10 @@ const captureScreenshot = async (
     : undefined;
   // CDP waits forever for a hidden webview's surface. A native capturer marks
   // only the guest page visible while copying pixels; its window stays hidden.
-  let image = await webContents.capturePage(undefined, { stayHidden: false, stayAwake: true });
+  let image = await captureGuestPage(webContents, {
+    ...(canStart === undefined ? {} : { canStart }),
+    captureOptions: { stayHidden: false, stayAwake: true },
+  });
   if (image.isEmpty()) throw new Error("The desktop browser returned an empty screenshot.");
   if (clip && metrics) {
     const viewport = metrics.cssVisualViewport;
@@ -228,8 +263,11 @@ export const sendPageCommand = async (
   method: string,
   params: Record<string, unknown>,
   sessionId?: string,
+  canStartCapture?: () => boolean,
 ): Promise<unknown> => {
-  if (method === "Page.captureScreenshot") return captureScreenshot(webContents, debuggee, params);
+  if (method === "Page.captureScreenshot") {
+    return captureScreenshot(webContents, debuggee, params, canStartCapture);
+  }
   if (method === "Input.dispatchMouseEvent" || method === "Input.dispatchTouchEvent") {
     return sendPointerCommand(webContents, debuggee, method, params, sessionId);
   }
@@ -238,6 +276,10 @@ export const sendPageCommand = async (
   if (method === "Page.reload") {
     if (params["ignoreCache"] === true) webContents.reloadIgnoringCache();
     else webContents.reload();
+    return {};
+  }
+  if (method === "Page.stopLoading") {
+    webContents.stop();
     return {};
   }
   if (!FOCUS_ROUTED_INPUT.has(method) || webContents.focusedFrame) {

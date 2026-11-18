@@ -2,7 +2,7 @@ import * as NodeVM from "node:vm";
 
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { sendPageCommand, toKeyboardInputEvents } from "./GuestInput.ts";
+import { captureGuestPage, sendPageCommand, toKeyboardInputEvents } from "./GuestInput.ts";
 
 const makeGuest = ({
   focused,
@@ -37,11 +37,59 @@ const makeGuest = ({
 };
 
 describe("preview guest input", () => {
+  it("keeps the screenshot slot after the caller is cancelled and drops a cancelled waiter", async () => {
+    const firstCapture = Promise.withResolvers<Electron.NativeImage>();
+    const image = {
+      isEmpty: () => false,
+      toPNG: () => Buffer.from("frame"),
+    } as Electron.NativeImage;
+    const capturePage = vi.fn().mockReturnValueOnce(firstCapture.promise).mockResolvedValue(image);
+    const guest = { capturePage } as unknown as Electron.WebContents;
+    const caller = new AbortController();
+    const first = captureGuestPage(guest, { signal: caller.signal });
+    caller.abort();
+    const queued = new AbortController();
+    const abandoned = captureGuestPage(guest, { signal: queued.signal });
+    const rejected = expect(abandoned).rejects.toMatchObject({ name: "AbortError" });
+    queued.abort();
+    const next = sendPageCommand(guest, {} as Electron.Debugger, "Page.captureScreenshot", {});
+    expect(capturePage).toHaveBeenCalledTimes(1);
+    firstCapture.resolve(image);
+    await first;
+    await rejected;
+    await expect(next).resolves.toEqual({ data: Buffer.from("frame").toString("base64") });
+    expect(capturePage).toHaveBeenCalledTimes(2);
+  });
+
   it("types into an unfocused guest's own page, not the app's focused field", async () => {
     const guest = makeGuest({ focused: false });
     await guest.send("Input.insertText", { text: "pairing-code" });
     expect(guest.webContents.insertText).toHaveBeenCalledWith("pairing-code");
     expect(guest.sendCommand).not.toHaveBeenCalledWith("Input.insertText", expect.anything());
+  });
+
+  it("stops the guest navigation without stopping its embedder", async () => {
+    let guestLoading = true;
+    let hostLoading = true;
+    const guest = {
+      stop: () => {
+        guestLoading = false;
+      },
+    };
+    const debuggee = {
+      sendCommand: async () => {
+        hostLoading = false;
+        return {};
+      },
+    };
+    await sendPageCommand(
+      guest as unknown as Electron.WebContents,
+      debuggee as unknown as Electron.Debugger,
+      "Page.stopLoading",
+      {},
+    );
+    expect(guestLoading).toBe(false);
+    expect(hostLoading).toBe(true);
   });
 
   it.each([

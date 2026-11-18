@@ -106,10 +106,10 @@ interface HarnessOptions {
   readonly dispatchGate?: Effect.Effect<void>;
   readonly bindingFails?: boolean;
   readonly bindingGate?: Effect.Effect<void>;
+  readonly continuation?: "queued" | "fails" | "dies";
   readonly threadAttachedOnRecheck?: boolean;
   readonly threadArchivedOnRecheck?: boolean;
   readonly threadReadFailsOnRecheck?: boolean;
-  readonly continuation?: "queued" | "fails" | "dies";
   readonly projectMissing?: boolean;
   readonly projectReadFails?: boolean;
   readonly existingBranchWorktreePath?: string | null;
@@ -426,6 +426,10 @@ describe("t3_worktree_handoff", () => {
       );
       yield* Deferred.await(started);
       expect(harness.sendToThread).not.toHaveBeenCalled();
+      expect(harness.dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({ conveneWorkspaceHandoff: true }),
+      );
+      expect(harness.dispatch.mock.calls[0]?.[0]).not.toHaveProperty("continuation");
       yield* Deferred.succeed(acknowledged, undefined);
       expect((yield* Fiber.join(running)).continuation.status).toBe("scheduled");
       expect(harness.sendToThread).toHaveBeenCalledTimes(1);
@@ -670,7 +674,7 @@ describe("t3_worktree_handoff", () => {
     });
   });
 
-  it.effect("queues the continuation even when interrupted during the binding dispatch", () =>
+  it.effect("runs the setup script even when interrupted during the binding dispatch", () =>
     Effect.gen(function* () {
       const gate = yield* Deferred.make<void>();
       const harness = makeHarness({ dispatchGate: Deferred.await(gate) });
@@ -689,7 +693,6 @@ describe("t3_worktree_handoff", () => {
       yield* Fiber.join(interruption);
 
       expect(harness.dispatch).toHaveBeenCalledTimes(1);
-      expect(harness.sendToThread).toHaveBeenCalledTimes(1);
       expect(harness.runForThread).toHaveBeenCalledTimes(1);
     }),
   );

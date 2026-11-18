@@ -4,6 +4,7 @@ import { createThreadVisitTracker } from "@t3tools/client-runtime/state/thread-v
 import { type ScopedThreadRef } from "@t3tools/contracts";
 import { Atom } from "effect/reactivity";
 
+import { environmentCatalog } from "../connection/catalog";
 import { getDocumentActivity, subscribeDocumentActivity } from "../lib/documentActivity";
 import { useUiStateStore } from "../uiStateStore";
 import { environmentThreadShells, threadEnvironment } from "../state/threads";
@@ -21,6 +22,7 @@ const threadVisitTracker = createThreadVisitTracker({
         ? get(environmentThreadShells.threadShellAtom(ref))
         : null;
     }),
+  sessionGenerationAtom: environmentCatalog.sessionGenerationAtom,
   visit: threadEnvironment.visit,
   markLocalVisit: (ref, visitedAt) =>
     useUiStateStore.getState().markThreadVisited(scopedThreadKey(ref), visitedAt),

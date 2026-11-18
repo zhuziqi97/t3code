@@ -14,7 +14,11 @@ import {
 } from "@t3tools/shared/model";
 
 import { getDescriptorStringValue } from "@t3tools/client-runtime/model-traits";
-import { getProviderModelCapabilities, resolveModelForCapabilities } from "../../providerModels";
+import {
+  getProviderModelCapabilities,
+  keepsUnavailableModelOptions,
+  resolveModelForCapabilities,
+} from "../../providerModels";
 type ProviderOptions = ReadonlyArray<ProviderOptionSelection>;
 
 const SAVED_OPTION_LABELS: Readonly<Record<string, string>> = {
@@ -64,9 +68,7 @@ export function getSelectedTraits(
 ) {
   const caps = getProviderModelCapabilities(models, model, provider, includePlanAgent);
   const modelIsUnavailable =
-    provider === "opencode" &&
-    model != null &&
-    model !== "" &&
+    keepsUnavailableModelOptions(provider, model) &&
     !models.some((candidate) => candidate.slug === normalizeModelSlug(model, provider));
   const descriptors = modelIsUnavailable
     ? buildUnavailableModelOptionDescriptors(

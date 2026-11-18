@@ -1,6 +1,5 @@
 import {
   DEFAULT_TEXT_GENERATION_MODEL,
-  ANTIGRAVITY_DEFAULT_MODEL,
   type ModelSelection,
   type ProjectId,
   ProviderDriverKind,
@@ -19,6 +18,7 @@ import {
 import { type ClientSettings, UnifiedSettings } from "@t3tools/contracts/settings";
 import { resolveModelPreferences } from "@t3tools/shared/serverSettings";
 import * as Equal from "effect/Equal";
+import { hasRuntimeModelCatalog, isRuntimeModelDefaultAlias } from "./providerModels";
 import { ModelEsque } from "./components/chat/providerIconUtils";
 import {
   type ProviderInstanceEntry,
@@ -68,11 +68,10 @@ function appendUnavailableDynamicModelSelection(
   selectedModel: string | null | undefined,
   hiddenModels: ReadonlyArray<string>,
 ): AppModelOption[] {
-  if (provider !== "opencode" && provider !== "antigravity") return options;
-  if (rawModels.length === 0) return options;
+  if (!hasRuntimeModelCatalog(provider)) return options;
   const slug = normalizeCustomModelSlug(selectedModel);
   if (!slug) return options;
-  if (provider === "antigravity" && slug === ANTIGRAVITY_DEFAULT_MODEL) return options;
+  if (isRuntimeModelDefaultAlias(provider, slug)) return options;
 
   if (resolveSelectableModel(provider, slug, rawModels) !== null) return options;
   if (hiddenModels.includes(slug)) return options;
@@ -143,8 +142,8 @@ export function getAppModelOptionsForInstance(
       name: selectedModel,
       isCustom: false,
       ...(entry.models.length > 0 &&
-      selectedModel !== ANTIGRAVITY_DEFAULT_MODEL &&
-      (entry.driverKind === "opencode" || entry.driverKind === "antigravity")
+      !isRuntimeModelDefaultAlias(entry.driverKind, selectedModel) &&
+      hasRuntimeModelCatalog(entry.driverKind)
         ? { isUnavailable: true }
         : {}),
     });
@@ -161,7 +160,7 @@ export function getAppModelOptionsForInstance(
 
 export function resolveAppModelSelectionForInstance(
   instanceId: ProviderInstanceId,
-  settings: UnifiedSettings,
+  _settings: UnifiedSettings,
   providers: ReadonlyArray<ServerProvider>,
   selectedModel: string | null | undefined,
   _resolutionOptions?: { readonly preserveUnavailableSelection?: boolean },
@@ -237,6 +236,42 @@ export function getCustomModelOptionsByInstance(
     );
   }
   return out;
+}
+
+function getTextGenerationModelOptionsForInstance(
+  settings: UnifiedSettings,
+  entry: ProviderInstanceEntry,
+  selectedModel?: string | null,
+): AppModelOption[] {
+  const unsupported = new Set(
+    entry.models
+      .filter((model) => model.supportsTextGeneration === false)
+      .map((model) => model.slug),
+  );
+  // Filter after custom entries are rebuilt so a display-name override cannot restore a model.
+  return getAppModelOptionsForInstance(settings, entry, selectedModel).filter(
+    (option) => !unsupported.has(option.slug),
+  );
+}
+
+export function getTextGenerationModelOptionsByInstance(
+  settings: UnifiedSettings,
+  providers: ReadonlyArray<ServerProvider>,
+  selectedInstanceId?: ProviderInstanceId | null,
+  selectedModel?: string | null,
+): ReadonlyMap<ProviderInstanceId, ReadonlyArray<ModelEsque>> {
+  return new Map(
+    deriveProviderInstanceEntries(
+      providers.filter((provider) => provider.supportsTextGeneration !== false),
+    ).map((entry) => [
+      entry.instanceId,
+      getTextGenerationModelOptionsForInstance(
+        settings,
+        entry,
+        entry.instanceId === selectedInstanceId ? selectedModel : null,
+      ),
+    ]),
+  );
 }
 
 export function selectsPlanAgent(options: ModelSelection["options"]): boolean {

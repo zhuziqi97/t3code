@@ -148,6 +148,13 @@ export function getDesktopUpdateButtonTooltip(
   ) {
     return translate("update.notAppliedRetry", { version: state.notAppliedVersion });
   }
+  if (
+    (state.status === "available" || state.status === "error") &&
+    state.errorContext === "download" &&
+    state.availableVersion
+  ) {
+    return translate("update.downloadFailed", { version: state.availableVersion });
+  }
   if (state.status === "available") {
     return state.availableVersion
       ? translate("update.availableVersion", { version: state.availableVersion })
@@ -166,9 +173,6 @@ export function getDesktopUpdateButtonTooltip(
       : translate("update.downloaded");
   }
   if (state.status === "error") {
-    if (state.errorContext === "download" && state.availableVersion) {
-      return translate("update.downloadFailed", { version: state.availableVersion });
-    }
     if (state.errorContext === "install" && state.downloadedVersion) {
       return translate("update.installFailed", { version: state.downloadedVersion });
     }

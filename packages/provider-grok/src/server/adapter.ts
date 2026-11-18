@@ -35,6 +35,7 @@ import {
   makeGrokAcpRuntime,
   resolveGrokAcpBaseModelId,
 } from "./acpSupport.ts";
+import { grokReasoningOptionsFromModel } from "./status.ts";
 import {
   extractGrokPlanMarkdownFromToolCallData,
   extractXAiAcpBackgroundToolMutation,
@@ -117,7 +118,45 @@ const GrokProviderCapabilitiesV2 = {
     ...AcpProviderCapabilitiesV2.checkpointing,
     providerCanReadConversationSnapshot: true,
   },
+  turns: {
+    ...AcpProviderCapabilitiesV2.turns,
+    // `_x.ai/interject` lets the running tool finish; the model reads the message at its next step.
+    supportsActiveSteering: true,
+    activeSteeringInterruptsTools: false,
+    // Cancelling a Grok prompt kills its running foreground tool.
+    supportsSteeringByInterruptRestart: false,
+  },
 } satisfies OrchestrationV2ProviderCapabilities;
+
+const XAI_INTERJECT_METHOD = "_x.ai/interject";
+const isXAiInterjectQueued = Schema.is(
+  Schema.Struct({ result: Schema.Struct({ status: Schema.Literal("queued") }) }),
+);
+
+/** A queued interjection joins the running prompt, so its acceptance is the delivery. */
+const grokSteering: NonNullable<AcpAdapterV2Flavor["steering"]> = {
+  send: (runtime, sessionId, text, images) =>
+    runtime
+      .request(XAI_INTERJECT_METHOD, {
+        sessionId,
+        text,
+        ...(images.length === 0 ? {} : { content: images }),
+      })
+      .pipe(
+        Effect.flatMap((result) =>
+          isXAiInterjectQueued(result)
+            ? Effect.undefined
+            : Effect.fail(
+                new EffectAcpErrors.AcpRequestError({
+                  code: -32603,
+                  errorMessage: "Grok did not queue the interjection.",
+                  method: XAI_INTERJECT_METHOD,
+                  data: result,
+                }),
+              ),
+        ),
+      ),
+};
 
 export interface GrokAdapterV2Options {
   readonly instanceId: Parameters<typeof makeAcpAdapterV2>[0]["instanceId"];
@@ -224,6 +263,13 @@ export function grokLaunchRuntimeMode(
     : "approval-required";
 }
 
+/** The capability id the composer stores Grok's reasoning effort under. */
+const GROK_REASONING_EFFORT_OPTION_ID = "reasoningEffort";
+
+// Protocol 1 sends the effort as `session/set_model` metadata on every call: that response
+// carries no config options, so there is no live effort to compare against. Newer protocols
+// write the `thought_level` config option after the model switch. An effort the model does
+// not offer, or that Grok refuses, is skipped with a warning and Grok's default applies.
 export function makeGrokAcpAdapterFlavor(
   options: GrokAdapterV2Options,
   homeDirectory: string,
@@ -242,6 +288,7 @@ export function makeGrokAcpAdapterFlavor(
     supportsImagePrompts: true,
     supportsCompaction: true,
     modelOptionIds: ["reasoningEffort"],
+    steering: grokSteering,
     // Grok expands only a leading `/name`, while the `$` picker inserts `$name` from the
     // `grok inspect` catalog. Ask that catalog again so other `$` text is left alone.
     rewriteUserText: (text, turnInput) => {

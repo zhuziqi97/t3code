@@ -1,5 +1,6 @@
 import {
-  ProviderDriverKind,
+  DEFAULT_MODEL_BY_PROVIDER,
+  type ProviderDriverKind,
   type ModelSelection,
   type ProviderInstanceId,
   type ModelCapabilities,
@@ -21,6 +22,42 @@ export function resolveModelForCapabilities(input: {
     (input.instanceId !== undefined && input.reportedModelSelection?.instanceId === input.instanceId
       ? input.reportedModelSelection.model
       : null)
+  );
+}
+
+const RUNTIME_MODEL_CATALOG_DRIVERS: ReadonlySet<string> = new Set([
+  "opencode",
+  "antigravity",
+  "cursor",
+  "pi",
+  "acpRegistry",
+]);
+
+// These drivers discover models at runtime, so a refresh can briefly omit a model the user chose.
+export function hasRuntimeModelCatalog(provider: ProviderDriverKind): boolean {
+  return RUNTIME_MODEL_CATALOG_DRIVERS.has(provider);
+}
+
+// These markers follow the session's current model rather than naming an unavailable model.
+export function isRuntimeModelDefaultAlias(
+  provider: ProviderDriverKind,
+  model: string | null | undefined,
+): boolean {
+  return (
+    (provider === "antigravity" || provider === "acpRegistry") &&
+    model === DEFAULT_MODEL_BY_PROVIDER[provider]
+  );
+}
+
+// Antigravity lists its default model only as an alias, which a slug lookup would call missing.
+export function keepsUnavailableModelOptions(
+  provider: ProviderDriverKind,
+  model: string | null | undefined,
+): boolean {
+  return (
+    provider !== "antigravity" &&
+    !isRuntimeModelDefaultAlias(provider, model) &&
+    hasRuntimeModelCatalog(provider)
   );
 }
 

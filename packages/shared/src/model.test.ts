@@ -14,6 +14,8 @@ import {
   toCustomModelSetting,
   modelSelectionsEqual,
   resolveNativeDefaultModelSelection,
+  pickModelSelection,
+  withImplicitFastModeDefault,
 } from "./model.ts";
 
 const codexCaps: ModelCapabilities = createModelCapabilities({
@@ -214,6 +216,27 @@ describe("descriptor helpers", () => {
       }),
     ).toBe(false);
     expect(modelSelectionsEqual(left, { ...reordered, model: "gpt-5.5" })).toBe(false);
+  });
+
+  it("keeps the options when the current model is picked again", () => {
+    const codex = ProviderInstanceId.make("codex");
+    const current = createModelSelection(codex, "gpt-5.4", [
+      { id: "reasoningEffort", value: "high" },
+    ]);
+
+    expect(pickModelSelection(current, codex, "gpt-5.4")).toBe(current);
+    expect(pickModelSelection(current, codex, "gpt-5.5")).toEqual({
+      instanceId: "codex",
+      model: "gpt-5.5",
+    });
+    expect(pickModelSelection(current, ProviderInstanceId.make("codex_work"), "gpt-5.4")).toEqual({
+      instanceId: "codex_work",
+      model: "gpt-5.4",
+    });
+    expect(pickModelSelection(null, codex, "gpt-5.4")).toEqual({
+      instanceId: "codex",
+      model: "gpt-5.4",
+    });
   });
 });
 
@@ -418,4 +441,20 @@ it("an explicit name equal to the raw ID overrides a native display name", () =>
       ["native-id"],
     )[0]?.name,
   ).toBe("Native label");
+});
+
+describe("withImplicitFastModeDefault", () => {
+  // regression: #2981 a remembered Fast mode choice must survive the implicit default on new chats
+  it("injects fastMode false only when the model exposes fastMode and no selection exists", () => {
+    const caps = createModelCapabilities({
+      optionDescriptors: [{ id: "fastMode", label: "Fast", type: "boolean", currentValue: true }],
+    });
+
+    expect(withImplicitFastModeDefault(caps, undefined)).toEqual([
+      { id: "fastMode", value: false },
+    ]);
+    expect(withImplicitFastModeDefault(caps, [{ id: "fastMode", value: true }])).toEqual([
+      { id: "fastMode", value: true },
+    ]);
+  });
 });

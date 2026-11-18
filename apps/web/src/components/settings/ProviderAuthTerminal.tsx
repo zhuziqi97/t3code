@@ -45,6 +45,8 @@ export default function ProviderAuthTerminal({
       },
       font: { size: 13 },
       onData: (data) => respond({ type: "terminal", data }),
+      onBinary: (data) => respond({ type: "terminal", data, binary: true }),
+      onReply: (data) => respond({ type: "terminal", data }),
       onResize: (cols, rows) => respond({ type: "terminal", data: "", size: { cols, rows } }),
       onSelectionChange: () => {},
       beforeKey: (event) => event.key !== "Tab",

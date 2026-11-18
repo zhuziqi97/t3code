@@ -1,10 +1,11 @@
-import type { CustomModelSetting } from "@t3tools/contracts";
 import {
   officialAcpRegistryIconUrlForAgentId,
   ProviderDriverKind,
   resolveOfficialAcpRegistryIconUrl,
   TextGenerationError,
   type AcpRegistryOperationError,
+  type AcpRegistryProbeModel,
+  type CustomModelSetting,
   type ServerProvider,
   type ServerProviderModel,
 } from "@t3tools/contracts";
@@ -95,7 +96,10 @@ const makeUnsupportedTextGeneration = (): ProviderTextGeneration => {
 
 function modelsFromDiscovery(
   discovery:
-    | Pick<AcpRegistryLiveConfiguration, "models" | "currentModelId" | "configOptions">
+    | Pick<
+        AcpRegistryLiveConfiguration,
+        "models" | "currentModelId" | "configOptions" | "modelOptionIds"
+      >
     | undefined,
   customModels: ReadonlyArray<CustomModelSetting>,
 ): ReadonlyArray<ServerProviderModel> {
@@ -104,6 +108,17 @@ function modelsFromDiscovery(
     discovery === undefined || discovery.configOptions.length === 0
       ? EMPTY_CAPABILITIES
       : createModelCapabilities({ optionDescriptors: discovery.configOptions });
+  const modelOptionIds = new Set(discovery?.modelOptionIds ?? []);
+  const shared = (discovery?.configOptions ?? []).filter(
+    (descriptor) => !modelOptionIds.has(descriptor.id),
+  );
+  const capabilitiesFor = ({ id, reasoningEffort }: AcpRegistryProbeModel) => {
+    if (id === discovery?.currentModelId) return capabilities;
+    const optionDescriptors = [...shared, ...(reasoningEffort == null ? [] : [reasoningEffort])];
+    return optionDescriptors.length === 0
+      ? EMPTY_CAPABILITIES
+      : createModelCapabilities({ optionDescriptors });
+  };
   const builtInModels: ReadonlyArray<ServerProviderModel> =
     discovered.length === 0
       ? [
@@ -119,7 +134,7 @@ function modelsFromDiscovery(
           name: model.name,
           isCustom: false,
           ...(model.id === discovery?.currentModelId ? { isDefault: true } : {}),
-          capabilities: model.id === discovery?.currentModelId ? capabilities : EMPTY_CAPABILITIES,
+          capabilities: capabilitiesFor(model),
         }));
   return providerModelsFromSettings(builtInModels, customModels, EMPTY_CAPABILITIES);
 }
@@ -270,37 +285,6 @@ function withInstallationFacts(provider: ServerProvider, facts: ServerProvider):
   };
 }
 
-export function applyAcpRegistryLiveConfiguration(
-  provider: ServerProvider,
-  configuration: AcpRegistryLiveConfiguration,
-  customModels: ReadonlyArray<string>,
-): ServerProvider {
-  const { message: _staleProbeMessage, ...snapshot } = provider;
-  // session/load may omit models (Kimi returns `{}`); keep the probed list
-  // and apply any live option descriptors to it.
-  const probedModels = provider.models.filter((model) => !model.isCustom);
-  const discovery =
-    configuration.models.length > 0
-      ? configuration
-      : {
-          ...configuration,
-          models: probedModels.map((model) => ({
-            id: model.slug,
-            name: model.name,
-            description: null,
-          })),
-          currentModelId: probedModels.find((model) => model.isDefault)?.slug ?? null,
-        };
-  return {
-    ...snapshot,
-    status: provider.enabled ? "ready" : provider.status,
-    models:
-      configuration.models.length === 0 && configuration.configOptions.length === 0
-        ? provider.models
-        : modelsFromDiscovery(discovery, customModels),
-  };
-}
-
 function applyAcpRegistryUrlAuthAction(
   provider: ServerProvider,
   action: Option.Option<NonNullable<ServerProvider["auth"]["action"]>>,
@@ -363,7 +347,10 @@ export function buildCheckedAcpRegistrySnapshot(
       ? { documentationUrl: input.inspection.documentationUrl }
       : {}),
     installed: readiness.installed,
-    version: readiness.version,
+    version:
+      input.settings.source === "local"
+        ? (input.probe?.probe.agentVersion ?? readiness.version)
+        : readiness.version,
     // Failed discovery is a warning: an installed agent may still run real turns.
     status: probeFailed ? "warning" : readiness.status,
     auth: input.probe
@@ -506,7 +493,7 @@ export const checkAcpRegistryProviderReadiness = Effect.fn(
   return inspected._tag === "Success" && inspected.success.status === "ready"
     ? {
         ...snapshot,
-        message: "Checking ACP authentication, models, and commands in the background...",
+        message: "Discover models in provider settings to check the agent catalog.",
       }
     : snapshot;
 });
@@ -616,6 +603,7 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
             }),
           );
     });
+    const reportedLocalVersion = yield* Ref.make<string | null>(null);
     const updateChecksEnabled = host.settings.get.pipe(
       Effect.map((settings) => settings.enableProviderUpdateChecks),
       Effect.orElseSucceed(() => false),
@@ -628,6 +616,15 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
         }),
       ),
       Effect.provideService(AcpRegistrySupport.AcpRegistryCatalog, catalog),
+      Effect.flatMap((provider) =>
+        Ref.get(reportedLocalVersion).pipe(
+          Effect.map((version) =>
+            provider.installed && provider.version === null && version !== null
+              ? { ...provider, version }
+              : provider,
+          ),
+        ),
+      ),
       Effect.flatMap(withLiveRuntimeState),
     );
     const enrichProvider = updateChecksEnabled.pipe(
@@ -664,6 +661,9 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
         };
       }
       const enriched = yield* enrichProvider;
+      if (effectiveConfig.source === "local" && enriched.status === "ready") {
+        yield* Ref.set(reportedLocalVersion, enriched.version);
+      }
       if (enriched.status === "ready") {
         yield* Ref.update(enrichmentCache, (current) =>
           current.generation === cacheState.generation

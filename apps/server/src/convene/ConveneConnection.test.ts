@@ -190,6 +190,7 @@ it.live("gates a prepared worktree's first MCP lease on its matching control ACK
             {
               projectId,
               title: "First MCP",
+              hasCustomTitle: true,
               workspaceRoot: process.cwd(),
               defaultModelSelection: null,
               defaultThreadEnvMode: null,
@@ -561,6 +562,7 @@ it.live.each([0, 1] as const)("keeps control workers independent on 1.%s", (mino
                   {
                     projectId,
                     title,
+                    hasCustomTitle: true,
                     workspaceRoot: process.cwd(),
                     defaultModelSelection: null,
                     defaultThreadEnvMode: null,

@@ -1,18 +1,34 @@
-import { AcpRegistryOperationError, ProviderInstanceId } from "@t3tools/contracts";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import {
+  AcpRegistryOperationError,
+  ProviderInstanceId,
+  type ServerProvider,
+} from "@t3tools/contracts";
+import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
+import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
+import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
+import * as TestProviderHost from "@t3tools/provider-testing/TestProviderHost";
+import { toCustomModelSetting } from "@t3tools/shared/model";
 import { AcpRegistrySettings } from "../settings.ts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
+import * as AcpRegistryRuntimeCoordinator from "./AcpRegistryRuntimeCoordinator.ts";
 import * as AcpRegistrySupport from "./AcpRegistrySupport.ts";
 import {
+  AcpRegistryDriver,
   applyAcpRegistryAvailableCommands,
-  applyAcpRegistryLiveConfiguration,
   buildCheckedAcpRegistrySnapshot,
   checkAcpRegistryProviderReadiness,
   checkAcpRegistryProviderStatus,
 } from "./driver.ts";
+import { acpRegistryAdvertisesModelCatalog, acpRegistryProbeResult } from "./probe.ts";
 
 const decodeSettings = Schema.decodeSync(AcpRegistrySettings);
 it("reads legacy ACP model strings and preserves named capability overrides", () => {
@@ -125,6 +141,63 @@ describe("acpRegistrySnapshotReadiness", () => {
     expect(snapshot.versionAdvisory).toMatchObject({ status: "unknown", latestVersion: null });
   });
 
+  it("keeps the custom model display name and options saved by the Settings editor", () => {
+    const fastMode = { id: "fast", label: "Fast mode", type: "boolean" } as const;
+    const snapshot = buildCheckedAcpRegistrySnapshot({
+      ...identity,
+      settings: decodeSettings({
+        agentId: "test-agent",
+        customModels: [
+          toCustomModelSetting({
+            slug: "gateway/my-model",
+            name: "My model",
+            capabilities: { optionDescriptors: [fastMode] },
+          }),
+        ],
+      }),
+      checkedAt: "2026-08-13T10:00:00.000Z",
+      inspection: { status: "ready", agentId: "test-agent", version: "1.0.0", distribution: "npx" },
+    });
+    const model = snapshot.models.find((entry) => entry.slug === "gateway/my-model");
+    expect(model?.name).toBe("My model");
+    expect(model?.capabilities?.optionDescriptors).toEqual([fastMode]);
+  });
+
+  it("shows the version reported by a local ACP agent", () => {
+    const probe = acpRegistryProbeResult(identity.instanceId, {
+      sessionId: "test-session",
+      initializeResult: {
+        protocolVersion: 1,
+        agentInfo: { name: "Example agent", version: "1.5.9" },
+      },
+      sessionSetupResult: {},
+      modelConfigId: undefined,
+    });
+    const snapshot = buildCheckedAcpRegistrySnapshot({
+      ...identity,
+      settings: decodeSettings({ source: "local", commandPath: "example" }),
+      checkedAt: "2026-08-13T10:00:00.000Z",
+      inspection: { status: "ready", agentId: "example", version: null, distribution: "local" },
+      probe: { probe, slashCommands: [], skills: [] },
+    });
+    expect(snapshot.version).toBe("1.5.9");
+    const withoutVersion = acpRegistryProbeResult(identity.instanceId, {
+      sessionId: "test-session",
+      initializeResult: { protocolVersion: 1 },
+      sessionSetupResult: {},
+      modelConfigId: undefined,
+    });
+    expect(
+      buildCheckedAcpRegistrySnapshot({
+        ...identity,
+        settings: decodeSettings({ source: "local", commandPath: "example" }),
+        checkedAt: "2026-08-13T10:00:00.000Z",
+        inspection: { status: "ready", agentId: "example", version: null, distribution: "local" },
+        probe: { probe: withoutVersion, slashCommands: [], skills: [] },
+      }).version,
+    ).toBeNull();
+  });
+
   it("treats a live empty command advertisement as an authoritative replacement", () => {
     const provider = buildCheckedAcpRegistrySnapshot({
       ...identity,
@@ -199,95 +272,6 @@ describe("acpRegistrySnapshotReadiness", () => {
     });
     expect(snapshot.auth.status).toBe("unknown");
     expect(snapshot.setup?.canAuthenticate).toBe(true);
-    expect(
-      applyAcpRegistryLiveConfiguration(
-        snapshot,
-        { models: [], currentModelId: null, configOptions: [] },
-        [],
-      ).auth.status,
-    ).toBe("unknown");
-  });
-
-  it("overlays live configuration without dropping probe-owned session capabilities", () => {
-    const provider = buildCheckedAcpRegistrySnapshot({
-      ...identity,
-      settings: decodeSettings({ agentId: "test-agent" }),
-      checkedAt: "2026-08-13T10:00:00.000Z",
-      inspection: {
-        status: "ready",
-        agentId: "test-agent",
-        version: "1.0.0",
-        distribution: "npx",
-      },
-      probe: {
-        probe: {
-          instanceId: identity.instanceId,
-          ready: true,
-          icon: null,
-          authMethods: [],
-          models: [{ id: "probe-model", name: "Probe model", description: null }],
-          currentModelId: "probe-model",
-          configOptions: [],
-          sessionManagement: {
-            canList: true,
-            canLoad: true,
-            canResume: true,
-            canLogout: true,
-            canDelete: true,
-            canConfigureProviders: true,
-          },
-        },
-        slashCommands: [],
-        skills: [],
-      },
-    });
-
-    expect(
-      applyAcpRegistryLiveConfiguration(
-        provider,
-        {
-          models: [{ id: "live-model", name: "Live model", description: null }],
-          currentModelId: "live-model",
-          configOptions: [],
-        },
-        [],
-      ),
-    ).toMatchObject({
-      auth: { status: "unknown", canLogout: true },
-      nativeSessions: { canList: true, canLoad: true, canResume: true },
-      models: [{ slug: "live-model", isDefault: true }],
-    });
-
-    expect(
-      applyAcpRegistryLiveConfiguration(
-        provider,
-        { models: [], currentModelId: null, configOptions: [] },
-        [],
-      ).models,
-    ).toEqual(provider.models);
-
-    const liveOptions = [
-      {
-        id: "effort",
-        label: "Effort",
-        type: "select" as const,
-        options: [{ id: "high", label: "High" }],
-        currentValue: "high",
-      },
-    ];
-    expect(
-      applyAcpRegistryLiveConfiguration(
-        provider,
-        { models: [], currentModelId: null, configOptions: liveOptions },
-        [],
-      ).models,
-    ).toMatchObject([
-      {
-        slug: "probe-model",
-        isDefault: true,
-        capabilities: { optionDescriptors: [{ id: "effort", currentValue: "high" }] },
-      },
-    ]);
   });
 
   it("projects discovery without claiming authentication when no login methods are advertised", () => {
@@ -486,7 +470,7 @@ describe("acpRegistrySnapshotReadiness", () => {
     }),
   );
 
-  it.effect("publishes concrete local readiness before background ACP discovery", () =>
+  it.effect("publishes local readiness before explicit model discovery", () =>
     Effect.gen(function* () {
       const snapshot = yield* checkAcpRegistryProviderReadiness({
         ...identity,
@@ -509,8 +493,171 @@ describe("acpRegistrySnapshotReadiness", () => {
         status: "ready",
         version: "1.0.0",
         auth: { status: "unknown" },
-        message: "Checking ACP authentication, models, and commands in the background...",
+        message: "Discover models in provider settings to check the agent catalog.",
       });
+    }),
+  );
+});
+
+describe("acpRegistryAdvertisesModelCatalog", () => {
+  it("counts choices inside option groups and available model state", () => {
+    expect(
+      acpRegistryAdvertisesModelCatalog([
+        {
+          id: "model",
+          name: "Model",
+          type: "select" as const,
+          category: "model" as const,
+          currentValue: "auto",
+          options: [
+            {
+              groupId: "qwen",
+              name: "Qwen",
+              options: [
+                { value: "auto", name: "Auto" },
+                { value: "qmodel", name: "Qwen3.8-Max" },
+              ],
+            },
+          ],
+        },
+      ]),
+    ).toBe(true);
+    expect(
+      acpRegistryAdvertisesModelCatalog([
+        {
+          id: "model",
+          name: "Model",
+          type: "select" as const,
+          category: "model" as const,
+          currentValue: "smodel",
+          options: [{ value: "smodel", name: "Sonus" }],
+        },
+      ]),
+    ).toBe(false);
+    expect(acpRegistryAdvertisesModelCatalog(undefined)).toBe(false);
+    expect(
+      acpRegistryAdvertisesModelCatalog(undefined, {
+        availableModels: [
+          { modelId: "auto", name: "Auto", description: null },
+          { modelId: "qmodel", name: "Qwen", description: null },
+        ],
+        currentModelId: "auto",
+      }),
+    ).toBe(true);
+  });
+});
+
+const fakeAgentSource = `
+import { readFileSync } from "node:fs";
+import { createInterface } from "node:readline";
+const send = (message) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...message }) + "\\n");
+createInterface({ input: process.stdin }).on("line", (line) => {
+  const { id, method } = JSON.parse(line);
+  if (id === undefined) return;
+  if (method === "initialize") {
+    send({
+      id,
+      result: { protocolVersion: 1, agentCapabilities: {}, authMethods: [], agentInfo: { name: "fake", version: "1.5.9" } },
+    });
+  } else if (method === "session/new") {
+    const modelIds = JSON.parse(readFileSync(process.argv[2], "utf8"));
+    send({
+      id,
+      result: {
+        sessionId: "probe-session",
+        models: {
+          currentModelId: modelIds[0],
+          availableModels: modelIds.map((modelId) => ({ modelId, name: modelId })),
+        },
+      },
+    });
+    send({
+      method: "session/update",
+      params: {
+        sessionId: "probe-session",
+        update: { sessionUpdate: "available_commands_update", availableCommands: [] },
+      },
+    });
+  } else {
+    send({ id, result: {} });
+  }
+});
+`;
+
+const driverLayer = TestProviderHost.layer({ runBackgroundWork: false }).pipe(
+  Layer.provideMerge(AcpRegistryRuntimeCoordinator.layer),
+  Layer.provideMerge(IdAllocator.layer),
+  Layer.provideMerge(McpProviderSessions.layer),
+  Layer.provideMerge(
+    Layer.succeed(
+      ProviderEventLoggers.ProviderEventLoggers,
+      ProviderEventLoggers.NoOpProviderEventLoggers,
+    ),
+  ),
+  Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+);
+
+it.layer(driverLayer, { excludeTestServices: true })("AcpRegistryDriver", (it) => {
+  it.effect("creates without inspecting the agent, which may fetch the registry", () =>
+    Effect.gen(function* () {
+      const instance = yield* AcpRegistryDriver.create({
+        instanceId: identity.instanceId,
+        displayName: identity.displayName,
+        enabled: true,
+        environment: [],
+        config: decodeSettings({ agentId: "test-agent" }),
+      }).pipe(
+        Effect.provideService(AcpRegistrySupport.AcpRegistryCatalog, {
+          ...catalogWithInspection({ status: "unconfigured" }),
+          inspect: () => Effect.die("inspected during creation"),
+        }),
+      );
+      expect(yield* instance.snapshot.getSnapshot).toMatchObject({
+        installed: false,
+        message: "Checking ACP Registry agent readiness...",
+      });
+    }),
+  );
+
+  it.effect("keeps a local agent's reported version through the next readiness check", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "acp-driver-" });
+      const agentPath = path.join(directory, "agent.mjs");
+      const modelsPath = path.join(directory, "models.json");
+      yield* fileSystem.writeFileString(agentPath, fakeAgentSource);
+      yield* fileSystem.writeFileString(modelsPath, JSON.stringify(["model-a", "model-b"]));
+
+      const instance = yield* AcpRegistryDriver.create({
+        instanceId: identity.instanceId,
+        displayName: identity.displayName,
+        enabled: true,
+        environment: [],
+        config: decodeSettings({ source: "local", commandPath: "agent" }),
+      }).pipe(
+        Effect.provideService(AcpRegistrySupport.AcpRegistryCatalog, {
+          ...catalogWithInspection({
+            status: "ready",
+            agentId: "agent",
+            version: null,
+            distribution: "local",
+          }),
+          resolve: () =>
+            Effect.succeed({
+              distribution: "local" as const,
+              spawn: { command: process.execPath, args: [agentPath, modelsPath] },
+            }),
+        }),
+      );
+      const ready = yield* instance.snapshot.refresh;
+      expect(ready.version).toBeNull();
+      expect(instance.refreshModels).toBeDefined();
+      yield* instance.refreshModels!();
+
+      yield* instance.invalidateCaches ?? Effect.void;
+      const next = yield* instance.snapshot.refresh;
+      expect(next.version).toBe("1.5.9");
     }),
   );
 });
@@ -538,6 +685,7 @@ it("uses discovery configuration only as a preview for its current model", () =>
             currentValue: true,
           },
         ],
+        modelOptionIds: ["vendor/depth"],
         sessionManagement: noSessionManagement,
       },
       slashCommands: [],

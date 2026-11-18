@@ -3,6 +3,7 @@ import { i18n } from "../i18n";
 import type {
   GitRunStackedActionResult,
   GitStackedAction,
+  ReviewDiffPreviewSource,
   VcsStatusResult,
 } from "@t3tools/contracts";
 import { isTemporaryWorktreeBranch } from "@t3tools/shared/git";
@@ -178,6 +179,71 @@ export function buildMenuItems(
       dialogAction: "create_pr",
     },
   ];
+}
+
+export function getMenuActionDisabledReason(
+  {
+    item,
+    gitStatus,
+    isBusy,
+    hasPrimaryRemote,
+  }: {
+    item: GitActionMenuItem;
+    gitStatus: VcsStatusResult | null;
+    isBusy: boolean;
+    hasPrimaryRemote: boolean;
+  },
+  t: TFunction = i18n.t,
+): string | null {
+  if (!item.disabled) return null;
+  if (isBusy) return t("git.busy");
+  if (!gitStatus) return t("git.statusUnavailable");
+
+  const hasBranch = gitStatus.refName !== null;
+  const hasChanges = gitStatus.hasWorkingTreeChanges;
+  const isAhead = gitStatus.aheadCount > 0;
+  const isBehind = gitStatus.behindCount > 0;
+  const terminology = changeRequestTerminologyFor(gitStatus);
+
+  if (item.id === "commit") {
+    if (!hasChanges) {
+      return t("git.clean");
+    }
+    return t("git.commitUnavailable");
+  }
+
+  if (item.id === "push") {
+    if (!hasBranch) {
+      return t("git.detachedPush");
+    }
+    if (hasChanges) {
+      return t("git.dirtyPush");
+    }
+    if (isBehind) {
+      return t("git.behindPush");
+    }
+    if (!gitStatus.hasUpstream && !hasPrimaryRemote) {
+      return 'Add an "origin" remote before pushing.';
+    }
+    if (!isAhead) {
+      return t("git.noCommits");
+    }
+    return t("git.pushUnavailable");
+  }
+
+  if (!hasBranch) {
+    return t("git.detachedCreate", { request: terminology.singular });
+  }
+  if (!gitStatus.hasUpstream && !hasPrimaryRemote) {
+    return t("git.noRemoteCreate", { request: terminology.singular });
+  }
+  if ((gitStatus.aheadOfDefaultCount ?? gitStatus.aheadCount) <= 0) {
+    return t("git.noCommitsCreate", { request: terminology.singular });
+  }
+  if (isBehind) {
+    return t("git.behindCreate", { request: terminology.singular });
+  }
+  return t("git.createUnavailable", { request: terminology.singular });
 }
 
 export function hasUsableGitMenuContent(input: {
@@ -396,13 +462,19 @@ export function resolveDefaultBranchActionDialogCopy(
   };
 }
 
-/** Clean trees cannot create feature branches because the server derives names from uncommitted changes. */
+/** The server names a feature branch from the commit it makes, so the action must commit changes. */
 export function resolveFeatureBranchUnavailableReason(input: {
+  action: DefaultBranchConfirmableAction;
   branchName: string;
   hasWorkingTreeChanges: boolean;
 }): string | null {
-  if (input.hasWorkingTreeChanges) return null;
-  return `There are no changes to commit, so a feature branch can't be named. Create a branch yourself or continue on ${input.branchName}.`;
+  if (!input.hasWorkingTreeChanges) {
+    return `There are no changes to commit, so a feature branch can't be named. Create a branch yourself or continue on ${input.branchName}.`;
+  }
+  if (input.action === "push" || input.action === "create_pr") {
+    return `This action doesn't commit your changes, so a feature branch can't be named. Create a branch yourself or continue on ${input.branchName}.`;
+  }
+  return null;
 }
 
 export function resolveThreadBranchUpdate(
@@ -466,9 +538,21 @@ export type ChangesLineTotals = {
 
 // `branchChanges ?? workingTree` treats `{0,0}` as present, so a zero branch total hid a dirty
 // working tree and the Changes row read +0 while Diff still showed the work.
+// The Diff panel's branch comparison wins when it has file stats, so a remembered base or
+// hidden whitespace reads the same in the row as in the panel.
 export function resolveChangesTotals(
   status: VcsStatusResult | null | undefined,
+  branchPreview?: ReviewDiffPreviewSource | null,
 ): ChangesLineTotals | null {
+  if (branchPreview?.files) {
+    let insertions = 0;
+    let deletions = 0;
+    for (const file of branchPreview.files) {
+      insertions += file.additions;
+      deletions += file.deletions;
+    }
+    return { insertions, deletions, baseRef: branchPreview.baseRef };
+  }
   if (!status) return null;
   const branch = status.branchChanges;
   const tree = { ...status.workingTree, baseRef: null };

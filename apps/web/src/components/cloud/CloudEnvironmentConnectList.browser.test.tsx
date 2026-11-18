@@ -1,3 +1,4 @@
+import { BearerConnectionTarget } from "@t3tools/client-runtime/connection";
 import "~/index.css";
 import { act, render } from "../../../test/render";
 import { changeLanguage } from "../../i18n";
@@ -363,6 +364,13 @@ describe("cloud onboarding discovery", () => {
         savedEnvironments={[
           {
             environmentId: newMachineId,
+            entry: {
+              target: new BearerConnectionTarget({
+                environmentId: newMachineId,
+                label: "Work laptop",
+                connectionId: "work-laptop",
+              }),
+            },
             connection: { phase: "connected", error: null, traceId: null },
             relayManaged: true,
           },
@@ -504,3 +512,90 @@ async function setupLifecycle() {
 
   return stack.move();
 }
+
+function discovered(
+  environmentId: EnvironmentId,
+  label: string,
+): Discovery.RelayDiscoveredEnvironment {
+  return {
+    environment: {
+      environmentId,
+      label,
+      endpoint: {
+        httpBaseUrl: `https://${environmentId}.relay.test`,
+        wsBaseUrl: `wss://${environmentId}.relay.test`,
+        providerKind: "t3_relay",
+      },
+      linkedAt: "2026-10-01T00:00:00.000Z",
+    },
+    availability: "online",
+    status: Option.none(),
+    error: Option.none(),
+  };
+}
+
+function saved(environmentId: EnvironmentId, label: string, connectionId: string) {
+  return {
+    environmentId,
+    entry: { target: new BearerConnectionTarget({ environmentId, label, connectionId }) },
+    connection: { phase: "connected", error: null, traceId: null },
+    relayManaged: false,
+    serverConfig: null,
+  } as const;
+}
+
+const primaryEnvironmentId = EnvironmentId.make("primary");
+const wslEnvironmentId = EnvironmentId.make("wsl-ubuntu");
+const laptopEnvironmentId = EnvironmentId.make("laptop");
+
+function setupWsl(discoveredEnvironments: Array<Discovery.RelayDiscoveredEnvironment>) {
+  setup();
+  publish({
+    environments: new Map(
+      discoveredEnvironments.map((entry) => [entry.environment.environmentId, entry]),
+    ),
+    listed: true,
+    refreshing: false,
+    offline: false,
+    error: Option.none(),
+  });
+}
+
+describe("CloudEnvironmentConnectRows", () => {
+  it("does not offer a T3 Connect route for the desktop's own WSL backend", async () => {
+    setupWsl([
+      discovered(primaryEnvironmentId, "This PC"),
+      discovered(wslEnvironmentId, "Ubuntu (WSL)"),
+      discovered(laptopEnvironmentId, "Laptop"),
+    ]);
+    await using screen = await render(
+      <CloudEnvironmentConnectRows
+        primaryEnvironmentId={primaryEnvironmentId}
+        savedEnvironments={[
+          saved(wslEnvironmentId, "Ubuntu (WSL)", "local:wsl:Ubuntu"),
+          saved(laptopEnvironmentId, "Laptop", "lan-laptop"),
+        ]}
+      />,
+    );
+
+    await expect.element(screen.getByText("Laptop")).toBeInTheDocument();
+    await expect.element(screen.getByText("Ubuntu (WSL)")).not.toBeInTheDocument();
+    await expect.element(screen.getByRole("button", { name: "Add route" })).toBeInTheDocument();
+  });
+
+  it("shows the empty state when the desktop's own WSL backend is the only saved environment", async () => {
+    setupWsl([
+      discovered(primaryEnvironmentId, "This PC"),
+      discovered(wslEnvironmentId, "Ubuntu (WSL)"),
+    ]);
+    await using screen = await render(
+      <CloudEnvironmentConnectRows
+        primaryEnvironmentId={primaryEnvironmentId}
+        savedEnvironments={[saved(wslEnvironmentId, "Ubuntu (WSL)", "local:wsl:Ubuntu")]}
+        empty={<p>No environments</p>}
+      />,
+    );
+
+    await expect.element(screen.getByText("No environments")).toBeInTheDocument();
+  });
+});

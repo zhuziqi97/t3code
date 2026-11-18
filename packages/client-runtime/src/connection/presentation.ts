@@ -21,6 +21,11 @@ export interface EnvironmentConnectionPresentation {
   readonly phase: EnvironmentConnectionPhase;
   readonly error: string | null;
   readonly traceId: string | null;
+  /**
+   * Set while reconnecting because the host has not approved this device yet. `error` then
+   * says where to approve it and shows the code, and is not a failure.
+   */
+  readonly awaitingApproval?: true;
 }
 
 /**
@@ -260,6 +265,17 @@ export function formatConnectionErrorMessage(message: string, t?: TFunction): st
 export function presentConnectionState(
   state: SupervisorConnectionState,
 ): EnvironmentConnectionPresentation {
+  if (
+    (state.phase === "connecting" || state.phase === "backoff") &&
+    state.lastFailure?.reason === "approval-pending"
+  ) {
+    return {
+      phase: "reconnecting",
+      error: state.lastFailure.message,
+      traceId: state.lastFailure.traceId ?? null,
+      awaitingApproval: true,
+    };
+  }
   switch (state.phase) {
     case "available":
       return { phase: "available", error: null, traceId: null };
@@ -301,6 +317,9 @@ export function connectionStatusText(
     case "connecting":
       return t?.("connections.connectingDetailed") ?? "Connecting...";
     case "reconnecting":
+      if (connection.awaitingApproval) {
+        return connection.error ?? "Waiting for approval on the host";
+      }
       return error
         ? (t?.("connections.statusReconnectingReason", { error }) ??
             `Failed to connect. Reconnecting... Reason: ${error}`)
@@ -321,6 +340,9 @@ export function connectionStatusTitle(
   connection: EnvironmentConnectionPresentation,
   t?: TFunction,
 ): string {
+  if (connection.awaitingApproval) {
+    return "Waiting for approval";
+  }
   if (connection.phase === "reconnecting" && connection.error) {
     return t?.("connections.reconnectingTitle") ?? "Failed to connect. Reconnecting...";
   }

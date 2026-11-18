@@ -3,6 +3,9 @@ import { ProviderDriverKind, ProviderInstanceId } from "@t3tools/contracts";
 
 import { resolveProviderCatalog, type ModelManifestData } from "./ModelManifest.ts";
 import {
+  BUNDLED_CLAUDE_MODEL_CATALOG,
+  capClaudeCatalogEffort,
+  type ClaudeModelCatalog,
   formatClaudeVersionUpgradeMessage,
   getClaudeCatalogModelCapabilities,
   normalizeClaudeCatalogEffort,
@@ -15,6 +18,7 @@ import {
   resolveClaudeUpdateRequiredModels,
   scopeClaudeModelCatalog,
   withClaudeReportedModels,
+  withClaudeCodeModelRoutes,
 } from "./ClaudeModelCatalog.ts";
 
 const manifest = (): ModelManifestData => ({
@@ -134,6 +138,13 @@ describe("Claude model catalog", () => {
       formatClaudeVersionUpgradeMessage(catalog, "3.1.9"),
       "Claude Code v3.1.9 is too old for Claude Synthetic Next. Upgrade to v3.2.0 or newer to access it.",
     );
+    // Claude Code before 2.1.321 does not know claude-fable-5-2 and runs it with a 200K window.
+    assert.notInclude(
+      resolveClaudeModelsForVersion(BUNDLED_CLAUDE_MODEL_CATALOG, "2.1.320").map(
+        (model) => model.slug,
+      ),
+      "claude-fable-5-2",
+    );
   });
 
   it("resolves aliases and declarative adapter mappings", () => {
@@ -250,6 +261,287 @@ describe("native default identity", () => {
     assert.deepEqual(
       result.models.slice(0, 2).map((entry) => entry.model.slug),
       ["opus", "sonnet"],
+    );
+  });
+
+  it("passes explicit Claude and cloud backend IDs through and leaves the native default unset", () => {
+    const apiModel = (model: string | null) =>
+      resolveClaudeCatalogApiModelId(BUNDLED_CLAUDE_MODEL_CATALOG, {
+        instanceId: ProviderInstanceId.make("claudeAgent"),
+        model,
+      });
+    for (const id of ["claude-haiku-4-5", "haiku", "us.anthropic.claude-opus-4-6-v1"]) {
+      assert.strictEqual(apiModel(id), id);
+    }
+    assert.strictEqual(apiModel(null), undefined);
+  });
+
+  it("uses a native Bedrock alias for the matching official model only", () => {
+    const routes = [
+      { value: "haiku", resolvedModel: "us.anthropic.claude-haiku-4-5-20251001-v1:0" },
+    ];
+    const catalog = withClaudeCodeModelRoutes(BUNDLED_CLAUDE_MODEL_CATALOG, routes);
+    const selection = {
+      instanceId: ProviderInstanceId.make("claudeAgent"),
+      model: "claude-haiku-4-5",
+    };
+    assert.strictEqual(resolveClaudeCatalogApiModelId(catalog, selection), "haiku");
+    assert.strictEqual(
+      resolveClaudeCatalogApiModelId(catalog, { ...selection, model: "claude-sonnet-4-5" }),
+      "claude-sonnet-4-5",
+    );
+    assert.strictEqual(
+      resolveClaudeCatalogApiModelId(catalog, { ...selection, model: null }),
+      undefined,
+    );
+    assert.strictEqual(
+      catalog.models.find((entry) => entry.apiModel === "haiku")?.model.slug,
+      selection.model,
+    );
+    assert.strictEqual(
+      resolveClaudeCatalogApiModelId(
+        scopeClaudeModelCatalog(catalog, [selection.model]),
+        selection,
+      ),
+      selection.model,
+    );
+  });
+
+  it("marks effort options that would run above the cap without changing ids or defaults", () => {
+    const effortModel = (slug: string) => ({
+      slug,
+      name: slug,
+      isCustom: false,
+      capabilities: {
+        optionDescriptors: [
+          {
+            id: "effort",
+            label: "Reasoning",
+            type: "select" as const,
+            options: [
+              { id: "medium", label: "Medium" },
+              { id: "high", label: "High", isDefault: true },
+              { id: "xhigh", label: "Extra High" },
+              { id: "max", label: "Max" },
+              { id: "ultracode", label: "Ultracode" },
+              { id: "ultrathink", label: "Ultrathink" },
+            ],
+          },
+        ],
+      },
+    });
+    const models = [effortModel("claude-plain"), effortModel("claude-remapped")];
+    const catalog: ClaudeModelCatalog = {
+      models: [
+        {
+          model: models[0]!,
+          runtime: { effortMap: { ultracode: "xhigh", ultrathink: null } },
+          compatibility: {},
+        },
+        {
+          model: models[1]!,
+          runtime: { effortMap: { max: "high", xhigh: "max", ultrathink: null } },
+          compatibility: {},
+        },
+      ],
+    };
+    const options = (cap: "high" | "xhigh") =>
+      capClaudeCatalogEffort(catalog, models, [{ maxEffortLevel: cap }]).map((model) => {
+        const effort = model.capabilities?.optionDescriptors?.[0];
+        return effort?.type === "select" ? effort.options : undefined;
+      });
+
+    assert.deepStrictEqual(options("high"), [
+      [
+        { id: "medium", label: "Medium" },
+        { id: "high", label: "High", isDefault: true },
+        { id: "xhigh", label: "Extra High (capped to High)" },
+        { id: "max", label: "Max (capped to High)" },
+        { id: "ultracode", label: "Ultracode (capped to High)" },
+        { id: "ultrathink", label: "Ultrathink" },
+      ],
+      [
+        { id: "medium", label: "Medium" },
+        { id: "high", label: "High", isDefault: true },
+        { id: "xhigh", label: "Extra High (capped to High)" },
+        { id: "max", label: "Max" },
+        { id: "ultracode", label: "Ultracode" },
+        { id: "ultrathink", label: "Ultrathink" },
+      ],
+    ]);
+    // An effortMap that sends Extra High as max stays unmarked under an xhigh cap: the CLI runs
+    // it at xhigh, which is what the label says.
+    assert.deepStrictEqual(
+      options("xhigh").map((model) => model?.map((option) => option.label)),
+      [
+        ["Medium", "High", "Extra High", "Max (capped to Extra High)", "Ultracode", "Ultrathink"],
+        ["Medium", "High", "Extra High", "Max", "Ultracode", "Ultrathink"],
+      ],
+    );
+
+    // A per-model cap applies without a top-level one and leaves other models uncapped.
+    assert.deepStrictEqual(
+      capClaudeCatalogEffort(catalog, models, [
+        { modelMaxEffortLevels: new Map([["claude-plain", "high"]]) },
+      ]).map((model) => {
+        const effort = model.capabilities?.optionDescriptors?.[0];
+        return effort?.type === "select" ? effort.options.map((option) => option.label) : [];
+      }),
+      [
+        [
+          "Medium",
+          "High",
+          "Extra High (capped to High)",
+          "Max (capped to High)",
+          "Ultracode (capped to High)",
+          "Ultrathink",
+        ],
+        ["Medium", "High", "Extra High", "Max", "Ultracode", "Ultrathink"],
+      ],
+    );
+
+    // Without an Extra High option (Opus 4.6), the CLI clamps an xhigh cap down to High.
+    const noXhigh = {
+      slug: "claude-no-xhigh",
+      name: "claude-no-xhigh",
+      isCustom: false,
+      capabilities: {
+        optionDescriptors: [
+          {
+            id: "effort",
+            label: "Reasoning",
+            type: "select" as const,
+            options: [
+              { id: "low", label: "Low" },
+              { id: "medium", label: "Medium" },
+              { id: "high", label: "High", isDefault: true },
+              { id: "max", label: "Max" },
+            ],
+          },
+        ],
+      },
+    };
+    const [capped] = capClaudeCatalogEffort(
+      { models: [] },
+      [noXhigh],
+      [{ maxEffortLevel: "xhigh" }],
+    );
+    const cappedEffort = capped?.capabilities?.optionDescriptors?.[0];
+    assert.deepStrictEqual(
+      cappedEffort?.type === "select" ? cappedEffort.options.map((option) => option.label) : [],
+      ["Low", "Medium", "High", "Max (capped to High)"],
+    );
+  });
+
+  it("leaves custom model effort labels alone under a cap", () => {
+    const custom = {
+      slug: "claude-custom-copy",
+      name: "Copy",
+      isCustom: true,
+      capabilities: {
+        optionDescriptors: [
+          {
+            id: "effort",
+            label: "Reasoning",
+            type: "select" as const,
+            options: [
+              { id: "high", label: "High", isDefault: true },
+              { id: "max", label: "Max (capped to High)" },
+            ],
+          },
+        ],
+      },
+    };
+
+    assert.deepStrictEqual(
+      capClaudeCatalogEffort({ models: [] }, [custom], [{ maxEffortLevel: "high" }]),
+      [custom],
+    );
+  });
+
+  it("resolves maxEffortLevel per settings source and per model key like Claude Code", () => {
+    const opus = {
+      slug: "claude-opus-5-5",
+      name: "Opus 5.5",
+      isCustom: false,
+      aliases: ["opus", "opus-5.5", "claude-opus-5.5"],
+      capabilities: {
+        optionDescriptors: [
+          {
+            id: "effort",
+            label: "Reasoning",
+            type: "select" as const,
+            options: [
+              { id: "low", label: "Low" },
+              { id: "medium", label: "Medium" },
+              { id: "high", label: "High", isDefault: true },
+              { id: "max", label: "Max" },
+            ],
+          },
+        ],
+      },
+    };
+    const catalog: ClaudeModelCatalog = {
+      models: [
+        { model: opus, runtime: {}, compatibility: {} },
+        {
+          model: {
+            slug: "claude-opus-5",
+            name: "Opus 5",
+            isCustom: false,
+            capabilities: { optionDescriptors: [] },
+          },
+          runtime: {},
+          compatibility: {},
+        },
+      ],
+    };
+    const maxLabel = (sources: Parameters<typeof capClaudeCatalogEffort>[2]) => {
+      const effort = capClaudeCatalogEffort(catalog, [opus], sources)[0]?.capabilities
+        ?.optionDescriptors?.[0];
+      return effort?.type === "select" ? effort.options.at(-1)?.label : undefined;
+    };
+    const perModel = (entries: Record<string, "low" | "medium" | "high" | "max">) => ({
+      modelMaxEffortLevels: new Map(Object.entries(entries)),
+    });
+
+    // Claude Code matches family aliases and [1m] spellings case-insensitively.
+    assert.strictEqual(maxLabel([perModel({ Opus: "medium" })]), "Max (capped to Medium)");
+    assert.strictEqual(
+      maxLabel([perModel({ "claude-opus-5-5[1M]": "medium" })]),
+      "Max (capped to Medium)",
+    );
+    assert.strictEqual(maxLabel([perModel({ " OPUS[1m] ": "medium" })]), "Max (capped to Medium)");
+    // Other keys name the most specific model id they contain, so dated and provider-prefixed ids
+    // match while the catalog's dotted aliases and a less specific model id do not.
+    for (const key of [
+      "claude-opus-5-5-20260101",
+      "CLAUDE-OPUS-5-5-20260101[1m]",
+      "us.anthropic.claude-opus-5-5-v1:0",
+      "claude-opus-5-5-latest",
+    ]) {
+      assert.strictEqual(maxLabel([perModel({ [key]: "medium" })]), "Max (capped to Medium)", key);
+    }
+    for (const key of ["claude-opus-5.5", "opus-5.5", "opus-5-5", "opus [1m]", "claude-opus-5"]) {
+      assert.strictEqual(maxLabel([perModel({ [key]: "medium" })]), "Max", key);
+    }
+    // Keys naming the same model keep the lowest cap, and a `max` key does not exempt it.
+    assert.strictEqual(
+      maxLabel([perModel({ opus: "max", "claude-opus-5-5": "low" })]),
+      "Max (capped to Low)",
+    );
+    // A per-model `max` only exempts the model from its own source's top-level cap.
+    assert.strictEqual(
+      maxLabel([{ maxEffortLevel: "medium", ...perModel({ opus: "max" }) }]),
+      "Max",
+    );
+    assert.strictEqual(
+      maxLabel([perModel({ opus: "max" }), { maxEffortLevel: "high" }]),
+      "Max (capped to High)",
+    );
+    assert.strictEqual(
+      maxLabel([{ maxEffortLevel: "medium" }, perModel({ opus: "high" })]),
+      "Max (capped to Medium)",
     );
   });
 });

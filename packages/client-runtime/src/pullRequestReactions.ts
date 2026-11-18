@@ -1,7 +1,22 @@
 import type { MessageKey } from "@t3tools/client-runtime/i18n";
 import type { TFunction } from "i18next";
 import { en } from "./i18n/messages.en.ts";
-import type { PullRequestReaction, PullRequestReactionContent } from "@t3tools/contracts";
+import type {
+  PullRequestComment,
+  PullRequestDetail,
+  PullRequestReaction,
+  PullRequestReactionContent,
+} from "@t3tools/contracts";
+
+export function canReactPullRequestComment(
+  detail: Pick<PullRequestDetail, "provider" | "capabilities">,
+  comment: Pick<PullRequestComment, "kind">,
+): boolean {
+  return (
+    detail.capabilities.reactions === true &&
+    !(detail.provider === "gitcafe" && comment.kind === "review")
+  );
+}
 
 export const PULL_REQUEST_REACTION_ORDER: ReadonlyArray<PullRequestReactionContent> = [
   "thumbs-up",

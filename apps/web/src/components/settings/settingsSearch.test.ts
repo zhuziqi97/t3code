@@ -1,3 +1,4 @@
+import { SETTINGS_NAV_GROUPS } from "./settingsSections";
 import { searchableSetting } from "./settingsSearch";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import {
@@ -15,7 +16,6 @@ import {
   isSettingsSearchScopeAvailable,
   movedSettingsPath,
   searchSettings,
-  SETTINGS_NAV_GROUPS,
   SETTINGS_SEARCH_ITEMS,
   sourceControlHostSearchItems,
   sourceControlHostSettingsSearchId,
@@ -124,8 +124,17 @@ describe("searchSettings", () => {
   });
 
   it("hides the Secrets page from nav and search while the secrets feature is disabled", () => {
-    expect(SETTINGS_NAV_GROUPS.flatMap((group) => group.paths)).not.toContain("/settings/secrets");
+    expect(
+      SETTINGS_NAV_GROUPS.flatMap((group) => group.sections.map((section) => section.path)),
+    ).not.toContain("/settings/secrets");
     expect(searchSettings("1password").map((item) => item.to)).not.toContain("/settings/secrets");
+  });
+
+  it("finds the Scheduled tasks page", () => {
+    expect(searchSettings("scheduled tasks")[0]).toMatchObject({
+      id: "scheduled-tasks",
+      to: "/settings/scheduled-tasks",
+    });
   });
 
   it("matches normalized title substrings", () => {

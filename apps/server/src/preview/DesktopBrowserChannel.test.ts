@@ -167,3 +167,32 @@ it.effect("protects unknown desktop visibility until an explicit hidden report a
     }).pipe(Effect.provide(layer), Effect.scoped);
   }),
 );
+
+it.live("closes a tab's relay connection when the desktop detaches the tab", () =>
+  Effect.gen(function* () {
+    const fixture = yield* setup;
+    fixture.finish();
+    yield* Effect.gen(function* () {
+      const channel = yield* DesktopBrowserChannel.DesktopBrowserChannel;
+      const key = { threadId: "thread-1", tabId: "tab-1" };
+      const send = (event: object) =>
+        Effect.sync(() => fixture.input.write(`${JSON.stringify(event)}\n`));
+
+      yield* send({ type: "attached", ...key });
+      yield* channel.awaitAttached(key, "5 seconds");
+      const url = yield* channel.endpoint(key);
+      const socket = new WebSocket(url);
+      yield* Effect.addFinalizer(() => Effect.sync(() => socket.close()));
+      const closed = new Promise<void>((resolve) =>
+        socket.addEventListener("close", () => resolve()),
+      );
+      yield* Effect.promise(
+        () => new Promise<void>((resolve) => socket.addEventListener("open", () => resolve())),
+      );
+
+      // Playwright waits on this socket for CDP replies; it must learn the tab is gone.
+      yield* send({ type: "detached", ...key });
+      yield* Effect.promise(() => closed).pipe(Effect.timeout("2 seconds"));
+    }).pipe(Effect.scoped, Effect.provide(layer));
+  }),
+);

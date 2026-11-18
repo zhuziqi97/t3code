@@ -4,6 +4,7 @@ import { page, userEvent } from "vite-plus/test/browser";
 import { act, render } from "../../../test/render";
 import { SidebarProvider } from "../ui/sidebar";
 import { SettingsSidebarNav } from "./SettingsSidebarNav";
+import { SETTINGS_NAV_GROUPS } from "./settingsSections";
 
 vi.mock("./useAvailableSettingsSearchItems", () => ({
   useAvailableSettingsSearchItems: () => [
@@ -43,13 +44,17 @@ it("ignores composing keys in the search", async () => {
   );
 });
 
-it("opens search from the physical Slash and F keys on non-US layouts", async () => {
-  await using _screen = await render(
+function renderNav() {
+  return render(
     <SidebarProvider defaultOpen>
       <SettingsSidebarNav pathname="/settings/general" />
     </SidebarProvider>,
     { router: "/settings/general" },
   );
+}
+
+it("opens search from the physical Slash and F keys on non-US layouts", async () => {
+  await using _screen = await renderNav();
   const search = page.getByRole("combobox", { name: "Search settings" });
 
   for (const { init, opens } of [
@@ -64,4 +69,31 @@ it("opens search from the physical Slash and F keys on non-US layouts", async ()
     expect(event.defaultPrevented, JSON.stringify(init)).toBe(opens);
     if (opens) await expect.element(search).toHaveFocus();
   }
+});
+
+it("moves through the settings tree using the arrow keys", async () => {
+  await page.viewport(1280, 800);
+  await using _screen = await renderNav();
+  const tree = page.getByRole("tree", { name: "Settings sections" });
+  const sections = SETTINGS_NAV_GROUPS.flatMap((group) => group.sections);
+
+  await tree.getByRole("treeitem", { name: "General", exact: true }).click();
+  await userEvent.keyboard("{Home}");
+  for (const [index, section] of sections.entries()) {
+    await expect
+      .element(tree.getByRole("treeitem", { name: section.label, exact: true }))
+      .toHaveFocus();
+    if (index < sections.length - 1) await userEvent.keyboard("{ArrowDown}");
+  }
+});
+
+it.each([1280, 390])("labels the settings tree groups at %ipx wide", async (width) => {
+  await page.viewport(width, 800);
+  await using _screen = await renderNav();
+
+  const tree = page.getByRole("tree", { name: "Settings sections" });
+  for (const name of ["Agents", "Code", "Connections"]) {
+    await expect.element(tree.getByRole("group", { name })).toBeInTheDocument();
+  }
+  expect(tree.getByRole("group").elements()).toHaveLength(SETTINGS_NAV_GROUPS.length);
 });

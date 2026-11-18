@@ -143,6 +143,31 @@ describe("resolveProjectSettings", () => {
     },
   );
 
+  it.each([
+    ["hidden", ["gpt-5.6-terra", "gpt-5.6-sol"], []],
+    ["visible", ["gpt-5.6-terra"], []],
+    ["custom", ["gpt-5.6-sol"], ["gpt-5.6-sol"]],
+  ] as const)(
+    "keeps the configured %s project default model ID",
+    (_visibility, hiddenModels, customModels) => {
+      const codex = ProviderInstanceId.make("codex");
+      const settings = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
+        defaultModelSelection: createModelSelection(codex, "gpt-6.1-sol"),
+        providerInstances: {
+          [codex]: { driver: ProviderDriverKind.make("codex"), config: { customModels } },
+        },
+        providerModelPreferences: { [codex]: { hiddenModels, modelOrder: [] } },
+        projectSettingsOverrides: {
+          [projectId]: { defaultModelSelection: createModelSelection(codex, "gpt-5.6-sol") },
+        },
+      });
+      const resolved = resolveProjectSettings(settings, projectId);
+      expect(resolved.settings.defaultModelSelection?.model).toBe("gpt-5.6-sol");
+      expect(resolved.sources.defaultModelSelection).toBe("project");
+      expect(resolved.overrides.defaultModelSelection?.model).toBe("gpt-5.6-sol");
+    },
+  );
+
   it("moves text generation off an instance the project turned off", () => {
     const codex = ProviderInstanceId.make("codex");
     const settings = {

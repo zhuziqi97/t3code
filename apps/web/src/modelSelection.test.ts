@@ -13,7 +13,7 @@ import {
 } from "@t3tools/contracts/settings";
 import { describe, expect, it } from "vite-plus/test";
 import { createModelSelection } from "@t3tools/shared/model";
-import { deriveEffectiveComposerModelState } from "./composerDraftStore";
+import { deriveEffectiveComposerModelState as deriveComposerModelState } from "./composerDraftStore";
 import { getComposerProviderState } from "./components/chat/composerProviderState";
 import { deriveProviderInstanceEntries } from "./providerInstances";
 import {
@@ -78,6 +78,14 @@ function settingsWithProviderInstances(): UnifiedSettings {
       },
     },
   };
+}
+
+type ComposerStateInput = Parameters<typeof deriveComposerModelState>[0];
+
+function deriveEffectiveComposerModelState(
+  input: Omit<ComposerStateInput, "threadStarted"> & { threadStarted?: boolean },
+) {
+  return deriveComposerModelState({ ...input, threadStarted: input.threadStarted ?? false });
 }
 
 describe("scoped default model selections", () => {
@@ -1424,4 +1432,64 @@ it("keeps old null threads while resolving late new-draft defaults per instance 
       isNewThread: true,
     }).selectedModel,
   ).toBe("other/default");
+});
+
+it("keeps a thread's stored options while the draft holds options for another provider", () => {
+  const codex = ProviderInstanceId.make("codex");
+  const claude = ProviderInstanceId.make("claudeAgent");
+  const providers = [
+    provider({ instanceId: "codex", models: ["gpt-5.5", "gpt-5.4"] }),
+    provider({
+      provider: ProviderDriverKind.make("claudeAgent"),
+      instanceId: "claudeAgent",
+      models: ["claude-opus-5-5"],
+    }),
+  ];
+  const stored = createModelSelection(codex, "gpt-5.5", [
+    { id: "reasoningEffort", value: "high" },
+    { id: "fastMode", value: true },
+  ]);
+  const claudePick = createModelSelection(claude, "claude-opus-5-5", [
+    { id: "effort", value: "max" },
+  ]);
+  const optionsFor = (
+    draftSelections: Record<string, ReturnType<typeof createModelSelection>>,
+    threadModelSelection = stored,
+  ) =>
+    deriveEffectiveComposerModelState({
+      threadStarted: true,
+      draft: {
+        activeProvider: codex,
+        modelSelectionByProvider: draftSelections,
+        modelSelectionExplicit: true,
+      },
+      providers,
+      selectedProvider: ProviderDriverKind.make("codex"),
+      selectedInstanceId: codex,
+      requestedInstanceId: claude,
+      threadModelSelection,
+      projectModelSelection: null,
+      settings: DEFAULT_UNIFIED_SETTINGS,
+    }).modelOptions;
+
+  expect(
+    optionsFor({ [claude]: claudePick, [codex]: createModelSelection(codex, "gpt-5.5") }),
+  ).toEqual({ [claude]: claudePick.options, [codex]: stored.options });
+  // Claude turned off after an unsent pick: the composer is back on the thread's instance.
+  expect(optionsFor({ [claude]: claudePick })?.[codex]).toEqual(stored.options);
+  const fastOff = createModelSelection(codex, "gpt-5.5", [
+    { id: "reasoningEffort", value: "high" },
+    { id: "fastMode", value: false },
+  ]);
+  expect(optionsFor({ [claude]: claudePick, [codex]: fastOff })?.[codex]).toEqual(fastOff.options);
+  // A stored alias of the shown model still counts as that model.
+  const storedAlias = createModelSelection(codex, "gpt-5-codex", stored.options);
+  expect(optionsFor({ [claude]: claudePick }, storedAlias)?.[codex]).toEqual(stored.options);
+  const storedOtherModel = createModelSelection(codex, "gpt-5.4", stored.options);
+  expect(
+    optionsFor(
+      { [claude]: claudePick, [codex]: createModelSelection(codex, "gpt-5.5") },
+      storedOtherModel,
+    )?.[codex],
+  ).toBeUndefined();
 });

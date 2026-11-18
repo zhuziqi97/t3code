@@ -1,4 +1,11 @@
 import type { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import type * as Effect from "effect/Effect";
+
+/**
+ * Sent by MCP clients that cannot defer tools themselves. The T3 MCP server then
+ * lists only a core set plus `tool_search`, which lists the rest on demand.
+ */
+export const MCP_TOOL_EXPOSURE_HEADER = "t3-tool-exposure";
 
 export interface McpHttpContribution {
   readonly endpoint: string;
@@ -17,6 +24,8 @@ export interface McpProviderSessionConfig {
   readonly capabilities?: ReadonlySet<string>;
   readonly agentDeviceEnvironment?: Readonly<Record<string, string>>;
   readonly additionalServers?: Readonly<Record<string, McpHttpContribution>>;
+  /** True while a delegated task this thread started will wake it with its result. */
+  readonly hasPendingWake?: Effect.Effect<boolean>;
 }
 
 export function withAgentDeviceEnvironment(

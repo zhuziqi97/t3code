@@ -138,6 +138,12 @@ describe("parsePersistedState", () => {
     });
   });
 
+  it("keeps a persisted fast-forward merge method", () => {
+    expect(
+      parsePersistedState({ pullRequestMergeMethod: "fast-forward" }).pullRequestMergeMethod,
+    ).toBe("fast-forward");
+  });
+
   it.each([undefined, 1])("ignores changed-file expansion version %s", (version) => {
     const parsed = parsePersistedState({
       ...(version === undefined ? {} : { threadChangedFilesExpansionVersion: version }),
@@ -272,6 +278,21 @@ describe("uiStateStore persistence", () => {
     const restored = parsePersistedState(persisted);
     expect(restored.sidebarProjectScopeKey).toBe("target-project");
     expect(restored.sidebarProjectScopeKeys).toEqual(["visible-project"]);
+  });
+
+  it("keeps legacy projects omitted from the expanded list collapsed across a save and reload", () => {
+    const projectAKey = legacyProjectCwdPreferenceKey("/repo/a");
+    const projectBKey = legacyProjectCwdPreferenceKey("/repo/b");
+    const migrated = parsePersistedState({ expandedProjectCwds: ["/repo/a"] });
+    expect(resolveProjectExpanded(migrated.projectExpandedById, [projectBKey])).toBe(false);
+
+    persistState({ ...migrated, pullRequestMergeMethod: "squash" });
+    const reloaded = parsePersistedState(
+      JSON.parse(localStorageStub.getItem(PERSISTED_STATE_KEY) ?? "{}") as PersistedUiState,
+    );
+
+    expect(resolveProjectExpanded(reloaded.projectExpandedById, [projectAKey])).toBe(true);
+    expect(resolveProjectExpanded(reloaded.projectExpandedById, [projectBKey])).toBe(false);
   });
 
   it("restores the old new-thread target without hiding the other projects", () => {

@@ -10,7 +10,9 @@ import {
 
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
+import { I18nProvider, useGT, useLanguagePreference } from "../../i18n/I18nProvider";
 import { ListChoiceRow } from "../../components/ui/ListChoiceRow";
+import { SettingsRow } from "./components/SettingsRow";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { SettingsSection } from "./components/SettingsSection";
 
@@ -32,7 +34,39 @@ const LANGUAGE_OPTIONS: ReadonlyArray<{
   })),
 ];
 
+export function LanguageSettingsSection() {
+  return (
+    <I18nProvider>
+      <LanguageRow />
+    </I18nProvider>
+  );
+}
+
+function LanguageRow() {
+  const gt = useGT();
+  const language = useLanguagePreference();
+  return (
+    <SettingsSection>
+      <SettingsRow
+        icon="globe"
+        label={gt("Language")}
+        value={language === "system" ? gt("System default") : LANGUAGE_LABELS[language]}
+        target="SettingsLanguage"
+      />
+    </SettingsSection>
+  );
+}
+
 export function SettingsLanguageRouteScreen() {
+  return (
+    <I18nProvider>
+      <LanguageSettings />
+    </I18nProvider>
+  );
+}
+
+function LanguageSettings() {
+  const gt = useGT();
   const insets = useSafeAreaInsets();
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
@@ -42,7 +76,7 @@ export function SettingsLanguageRouteScreen() {
     : null;
 
   return (
-    <SettingsScreen title="Language">
+    <SettingsScreen title={gt("Language")}>
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
@@ -50,12 +84,12 @@ export function SettingsLanguageRouteScreen() {
         contentContainerClassName="gap-3 px-5 pt-4"
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
       >
-        <SettingsSection title="Language">
+        <SettingsSection title={gt("Language")}>
           {LANGUAGE_OPTIONS.map((option, index) => (
             <ListChoiceRow
               key={option.preference}
-              label={option.label}
-              description={option.description}
+              label={option.preference === "system" ? gt("System default") : option.label}
+              description={option.preference === "system" ? gt("Follow the device language.") : option.description}
               selected={selected === option.preference}
               separated={index > 0}
               disabled={!preferencesReady}

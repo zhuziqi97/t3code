@@ -7,6 +7,8 @@ import {
   EnvironmentId,
 } from "@t3tools/contracts";
 import { mapAtomCommandResult } from "@t3tools/client-runtime/state/runtime";
+import { parseFileUrlHref, splitFilePathPosition } from "@t3tools/shared/fileLinks";
+import { safeDecodeURIComponent } from "@t3tools/shared/markdownLinks";
 import * as Cause from "effect/Cause";
 import * as Schema from "effect/Schema";
 import { AsyncResult } from "effect/reactivity";
@@ -15,7 +17,6 @@ import { shellEnvironment } from "./state/shell";
 import { useAtomCommand } from "./state/use-atom-command";
 import { readEnvironmentScope, useEnvironmentScope } from "./state/session";
 
-import { splitFilePathPosition } from "@t3tools/shared/fileLinks";
 import { useBrowserEditorAction, type EditorWorkspace } from "./browserEditorAction";
 import {
   openRemoteEditorUrl,
@@ -157,12 +158,17 @@ export function useEditorAction(
         return AsyncResult.failure(Cause.fail(new Error(i18n.t("chat.editor.nativeUnavailable"))));
       return AsyncResult.success(editor);
     }
+    const uri = /^file:\/\//iu.test(targetPath) ? parseFileUrlHref(targetPath) : null;
+    const { line, column } = uri ? splitFilePathPosition("", uri.hash) : {};
+    const path = uri ? safeDecodeURIComponent(uri.path) : targetPath;
     const result = await openInEditor({
       environmentId,
       input: {
-        cwd: editor === "file-manager" ? splitFilePathPosition(targetPath).path : targetPath,
+        cwd: editor === "file-manager" ? splitFilePathPosition(path).path : path,
+        ...(uri && editor !== "file-manager" ? { position: { line, column } } : {}),
         editor,
         ...(options.reveal ? { reveal: true } : {}),
+        ...(workspace?.workspacePath ? { projectRoot: workspace.workspacePath } : {}),
       },
     });
     return mapAtomCommandResult(result, () => editor);

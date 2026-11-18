@@ -3,6 +3,7 @@ import { lazy, Suspense, useEffect, useRef, useState, type KeyboardEvent } from 
 import { SearchIcon, XIcon } from "lucide-react";
 import { resolveEventKeys } from "@t3tools/shared/keybindings";
 import { useLocation, useNavigate } from "@tanstack/react-router";
+import { T, useGT, useMessages } from "gt-react";
 
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
@@ -27,7 +28,7 @@ import {
 } from "./settingsSearch";
 import { validateSettingsScopeSearch } from "./settingsScope";
 import { useAvailableSettingsSearchItems } from "./useAvailableSettingsSearchItems";
-import { useSettingsSectionNavigation } from "./useSettingsSectionNavigation";
+import { handleSettingsSectionKeyDown } from "./settingsSectionNavigation";
 import { workspaceAreaProps } from "../../lib/workspaceFocus";
 
 import { SETTINGS_NAV_GROUPS, SETTINGS_SECTIONS_BY_PATH } from "./settingsSections";
@@ -69,11 +70,8 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
   const navPaths = SETTINGS_NAV_GROUPS.flatMap((group) =>
     group.sections.map((section) => section.path),
   );
-  const sectionNavigation = useSettingsSectionNavigation(
-    navPaths.find((to) => activePath === to || activePath.startsWith(`${to}/`)) ??
-      navPaths[0] ??
-      "",
-  );
+  const tabbableSection =
+    navPaths.find((to) => activePath === to || activePath.startsWith(`${to}/`)) ?? navPaths[0];
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   // Below md the nav is an icon rail; searching expands it over the page.
@@ -307,7 +305,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
                   <SidebarMenu className="md:hidden">
                     <SidebarMenuItem>
                       <SidebarMenuButton
-                        aria-label="Search settings"
+                        aria-label={t("search.label")}
                         onClick={() => setCompactSearchOpen(true)}
                       >
                         <SearchIcon />
@@ -316,7 +314,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
                   </SidebarMenu>
                 )}
                 <div
-                  {...sectionNavigation.containerProps}
+                  onKeyDown={handleSettingsSectionKeyDown}
                   role="tree"
                   aria-label="Settings sections"
                   className="flex flex-col gap-4"
@@ -352,7 +350,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
                                 <SidebarMenuButton
                                   data-settings-section={to}
                                   role="treeitem"
-                                  tabIndex={sectionNavigation.tabIndexFor(to)}
+                                  tabIndex={to === tabbableSection ? 0 : -1}
                                   aria-selected={isActive}
                                   aria-current={isActive ? "page" : undefined}
                                   isActive={isActive}

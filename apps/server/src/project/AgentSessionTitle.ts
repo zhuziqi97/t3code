@@ -69,8 +69,10 @@ export function deriveImportedThreadTitle(
   text: string,
   source: "codex" | "claudeAgent" | "pi",
 ): string | null {
-  const visibleText =
-    source === "codex" ? text.slice(skipLeadingCodexContext(text)) : text.trimStart();
+  const request = source === "codex" ? text.slice(skipLeadingCodexContext(text)) : text;
+  const visibleText = request
+    .replace(/^\s*<wake(?:\s[^>]*)?>([\s\S]*?)(?:<\/wake>|$)/, "$1")
+    .trimStart();
   const lineEnd = visibleText.indexOf("\n");
   const firstLine = visibleText
     .slice(0, lineEnd === -1 ? visibleText.length : lineEnd)

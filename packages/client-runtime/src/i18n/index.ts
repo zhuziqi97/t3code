@@ -1,4 +1,5 @@
 export {
+  DEFAULT_LANGUAGE,
   LANGUAGE_LABELS,
   SUPPORTED_LANGUAGES,
   isLanguagePreference,

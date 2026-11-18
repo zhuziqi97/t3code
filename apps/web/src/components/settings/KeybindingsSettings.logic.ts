@@ -419,8 +419,12 @@ function englishCommandLabel(command: KeybindingCommand): string {
   if (usagePeriod) return `Usage: Period: ${usagePeriod.label}`;
   if (command === "view.reopenClosed") return "Reopen Closed Tab";
   if (command === "preview.focusUrl") return "Preview: Focus URL";
-
-  return String(command).split(".").map(titleCaseCommandSegment).join(": ");
+  if (command === "preview.find") return "Preview: Find on Page";
+  const raw = String(command);
+  if (raw.startsWith("script.") && raw.endsWith(".run")) {
+    return `Run Script: ${titleCaseCommandSegment(raw.slice("script.".length, -".run".length))}`;
+  }
+  return raw.split(".").map(titleCaseCommandSegment).join(": ");
 }
 
 function titleCaseCommandSegment(segment: string): string {
