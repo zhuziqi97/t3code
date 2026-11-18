@@ -2772,17 +2772,32 @@ export const make = Effect.fn("AcpSessionRuntime.make")(function* (
       }
       return {} satisfies EffectAcpSchema.SetSessionModeResponse;
     }),
-    setSessionModel: (modelId, meta) =>
-      getStartedState.pipe(
-        Effect.flatMap((started) => {
-          const payload = {
-            sessionId: started.sessionId,
-            modelId,
-            ...(meta === undefined ? {} : { _meta: meta }),
-          };
-          return runLoggedRequest("session/set_model", payload, acp.agent.setSessionModel(payload));
-        }),
-      ),
+    setSessionModel: Effect.fn("AcpSessionRuntime.setSessionModel")(function* (modelId, meta) {
+      const started = yield* getStartedState;
+      const payload = {
+        sessionId: started.sessionId,
+        modelId,
+        ...(meta === undefined ? {} : { _meta: meta }),
+      };
+      const before = yield* SubscriptionRef.get(configOptionsRef);
+      const previousModel = findModelConfigOption(before);
+      const response = yield* runLoggedRequest(
+        "session/set_model",
+        payload,
+        acp.agent.setSessionModel(payload),
+      );
+      // Grok v1 acknowledges before its model option update. Keep any newer native configuration.
+      if (previousModel !== undefined && previousModel.currentValue !== modelId) {
+        yield* SubscriptionRef.update(configOptionsRef, (current) =>
+          current === before
+            ? current.map((option) =>
+                option === previousModel ? { ...previousModel, currentValue: modelId } : option,
+              )
+            : current,
+        );
+      }
+      return response;
+    }),
     setConfigOption,
     setModel: (model) =>
       getStartedState.pipe(

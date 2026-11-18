@@ -16,6 +16,8 @@ import {
 } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { resolveSelfInvocation } from "@t3tools/shared/nodeRuntime";
+import * as Cause from "effect/Cause";
+import * as Exit from "effect/Exit";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -43,7 +45,7 @@ const layerTest = Layer.mergeAll(
 
 const DEFAULT_GROK_SETTINGS = Schema.decodeSync(GrokSettings)({});
 const instanceId = ProviderInstanceId.make("grok");
-const select = (model: string, reasoningEffort?: string): ModelSelection => ({
+const select = (model: string | null, reasoningEffort?: string): ModelSelection => ({
   instanceId,
   model,
   ...(reasoningEffort === undefined
@@ -150,6 +152,10 @@ const writesPerSelection = (
       modelSelection: first,
       runtimePolicy,
     });
+    assert.strictEqual(
+      providerThread.nativeMetadata?.modelSelection?.model,
+      first.model ?? "grok-4.6",
+    );
     const now = yield* DateTime.now;
     for (const [index, modelSelection] of rest.entries()) {
       const ordinal = index + 1;
@@ -261,6 +267,26 @@ describe("Grok reasoning effort", () => {
         [["set_config_option model=grok-4.6-fast", "set_config_option reasoning_effort=low"]],
       );
     }),
+  );
+  it.live.each(["1", "2"])(
+    "protocol %s leaves the native default alone and surfaces a real model rejection",
+    (protocol) =>
+      Effect.gen(function* () {
+        const environment = { T3_GROK_MOCK_PROTOCOL: protocol };
+        assert.deepEqual(yield* writesPerSelection([select(null)], environment), [[]]);
+
+        const rejected = yield* writesPerSelection(
+          [select("grok-unavailable", "low")],
+          environment,
+        ).pipe(Effect.exit);
+        assert.isTrue(Exit.isFailure(rejected));
+        if (Exit.isFailure(rejected)) {
+          assert.include(
+            Cause.pretty(rejected.cause),
+            'did not accept the model "grok-unavailable"',
+          );
+        }
+      }),
   );
 });
 
