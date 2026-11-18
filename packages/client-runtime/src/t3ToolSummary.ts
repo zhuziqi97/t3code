@@ -381,10 +381,10 @@ export function summarizeT3ToolCalls(
       label = phrase("Updated", "update", repeated("environment preferences"));
       break;
     case "theme-read":
-      label = phrase("Checked", "check", `themes ${times}`);
+      label = phrase("Checked", "check", repeated("themes"));
       break;
     case "theme-set":
-      label = phrase("Set", "set", `the theme ${times}`);
+      label = phrase("Set", "set", repeated("the theme"));
       break;
     case "environment-links":
       label = phrase("Listed", "list", repeated("linked environments"));

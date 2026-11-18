@@ -2466,7 +2466,9 @@ describe("OpenCodeAdapterV2", () => {
                 create: async () => ({
                   data: { id: "ses_replacement", time: { created: 1, updated: 1 } },
                 }),
-                get: async () => ({ data: { id: root, time: { created: 1, updated: 1 } } }),
+                get: async () => ({
+                  data: { id: root, directory: "/workspace", time: { created: 1, updated: 1 } },
+                }),
                 messages: async () => ({
                   data: [
                     {
