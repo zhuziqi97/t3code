@@ -3165,7 +3165,7 @@ describe("PreviewManager", () => {
     ),
   );
 
-  effectIt.effect("shows picture-in-picture and keeps capturing after stalled captures", () =>
+  effectIt.effect("shows picture-in-picture and resumes after stalled captures", () =>
     withManager((manager) =>
       Effect.gen(function* () {
         const image = {
@@ -3195,11 +3195,22 @@ describe("PreviewManager", () => {
           expect(pictureInPictureWindow.showInactive).toHaveBeenCalledOnce();
           yield* Fiber.join(open);
 
+          yield* TestClock.adjust(500);
+          expect(capturePage).toHaveBeenCalledTimes(1);
           expect(send).not.toHaveBeenCalled();
+
+          stalledInitial.resolve(image);
+          yield* TestClock.adjust(500);
+          expect(capturePage).toHaveBeenCalledTimes(2);
+
+          yield* TestClock.adjust(1_000);
+          expect(capturePage).toHaveBeenCalledTimes(2);
+          expect(send).not.toHaveBeenCalled();
+
+          stalledLoop.resolve(image);
           yield* TestClock.adjust(500);
           expect(send).toHaveBeenCalled();
         } finally {
-          // Release stalled native calls after a failing assertion against unchanged base.
           stalledInitial.resolve(image);
           stalledLoop.resolve(image);
         }
