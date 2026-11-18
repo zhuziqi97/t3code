@@ -22,9 +22,11 @@ export function ProjectThreadPageControls(props: {
       {(remaining > 0 || props.loading || props.failed) && (
         <button
           type="button"
-          disabled={props.loading}
-          onClick={props.onMore}
-          className={buttonClass}
+          aria-disabled={props.loading}
+          onClick={() => {
+            if (!props.loading) props.onMore();
+          }}
+          className={`${buttonClass} aria-disabled:cursor-default`}
         >
           <ProjectStatusIndicator status={status} compact />
           {props.loading

@@ -97,6 +97,7 @@ export function SettingsScopeSentence() {
           environment: <EnvironmentScopeMenu {...props} />,
         }}
       />
+      <CheckoutScopeMenu {...props} />
     </p>
   );
 }
@@ -316,22 +317,23 @@ function EnvironmentScopeMenu({
 }
 
 function CheckoutScopeMenu({ value, groups, onChange }: SettingsScopeMenuProps) {
+  const t = useTranslate();
   const group = groups.find((candidate) => candidate.projectKey === value.project);
   const checkouts = group ? settingsScopeCheckoutChoices(group, value) : [];
   if (checkouts.length === 0) return null;
   const selected = checkouts.find((member) => member.physicalProjectKey === value.checkout);
   return (
     <span className="flex min-w-0 items-center gap-1.5">
-      <span className="shrink-0">in</span>
+      <span className="shrink-0">{t("scope.checkoutIn")}</span>
       <ScopeMenu
-        ariaLabel="Checkout scope"
+        ariaLabel={t("scope.checkoutScope")}
         icon={<FolderIcon aria-hidden className="size-3.5 shrink-0" />}
         label={
           selected
             ? settingsScopeCheckoutLabel(selected, checkouts)
             : value.checkout
-              ? "Unavailable checkout"
-              : "All checkouts"
+              ? t("scope.unavailableCheckout")
+              : t("scope.allCheckouts")
         }
         value={value.checkout ?? ALL_CHECKOUTS_VALUE}
         onChange={(next) =>
@@ -342,8 +344,8 @@ function CheckoutScopeMenu({ value, groups, onChange }: SettingsScopeMenuProps) 
             ),
           )
         }
-        searchLabel="Search checkouts"
-        allOption={{ value: ALL_CHECKOUTS_VALUE, label: "All checkouts" }}
+        searchLabel={t("scope.searchCheckouts")}
+        allOption={{ value: ALL_CHECKOUTS_VALUE, label: t("scope.allCheckouts") }}
         options={checkouts.map((member) => ({
           value: member.physicalProjectKey,
           label: fileBasename(member.workspaceRoot),

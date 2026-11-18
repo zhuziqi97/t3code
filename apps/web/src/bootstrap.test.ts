@@ -108,7 +108,12 @@ describe("app startup failures", () => {
     "recovers a failed main preload once before main runs, reloaded=%s",
     async (reloaded) => {
       const storage = new Map<string, string>();
-      if (reloaded) storage.set("t3code:chunk-load-reloaded", "1");
+      if (reloaded) {
+        storage.set(
+          "t3code:chunk-load-reloaded",
+          import.meta.env.CONVENE_BUILD_ID || import.meta.env.APP_VERSION,
+        );
+      }
       const reload = vi.fn();
       vi.stubGlobal(
         "window",

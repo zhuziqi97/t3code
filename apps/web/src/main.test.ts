@@ -20,6 +20,7 @@ async function bootThenFailLazyChunk(sessionStorage: Map<string, string>) {
   vi.stubGlobal("window", page);
   vi.stubGlobal("document", { getElementById: () => ({}) });
   try {
+    await import("./bootstrap");
     const { startup } = await import("./main");
     await startup;
     page.dispatchEvent(new Event("vite:preloadError", { cancelable: true }));

@@ -95,7 +95,12 @@ it.each(["en", "zh"] as const)(
       .element(screen.getByRole("heading", { name: "General destination" }))
       .toBeVisible();
     expect(router.state.location.search).toEqual({ machine: "remote-server" });
-    await screen.getByRole("button", { name: "Search settings", exact: true }).click();
+    await screen
+      .getByRole("button", {
+        name: nextLanguage === "en" ? "Search settings" : "搜索设置",
+        exact: true,
+      })
+      .click();
     const search = screen.getByRole("combobox");
     await expect.element(search).toBeVisible();
     const searchElement = search.element();

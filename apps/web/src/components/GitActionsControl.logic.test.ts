@@ -87,7 +87,7 @@ describe("when: ref is clean, up to date, and has no open PR", () => {
       buildMenuItems(dirtyFeature, false).find((item) => item.id === "pr")?.disabled,
       false,
     );
-    assert.equal(pushDisabledReason(dirtyFeature), "No local commits to push.");
+    assert.equal(pushDisabledReason(dirtyFeature), "Commit or stash local changes before pushing.");
   });
 
   it("offers the actions menu only when something in it is usable", () => {
@@ -152,7 +152,7 @@ describe("when: local changes are behind upstream", () => {
     assert.deepEqual(resolveQuickAction(behind, false), commit);
     assert.equal(
       pushDisabledReason({ ...behind, aheadCount: 1 }),
-      "Branch is behind upstream. Pull/rebase before pushing.",
+      "Commit or stash local changes before pushing.",
     );
     assert.deepEqual(
       resolveQuickAction(

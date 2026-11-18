@@ -80,7 +80,7 @@ it("a model picked for an existing thread reaches the server before any message 
   await userEvent.keyboard("{Escape}");
   await router.navigate({ href: `/${ENVIRONMENT_ID}/${aliasThread.id}` });
   await expect.element(page.getByText("Answer 0 for thread-model-alias.")).toBeVisible();
-  await page.getByRole("button", { name: "GPT-5.4", exact: true }).click();
+  await page.getByRole("button", { name: "gpt-5-codex", exact: true }).click();
   await page.getByRole("option", { name: /GPT-5\.4/ }).click();
   await vi.waitFor(() =>
     expect(modelSets().at(-1)).toEqual(

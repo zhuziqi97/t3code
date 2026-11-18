@@ -1,3 +1,4 @@
+import { page } from "vite-plus/test/browser";
 import "~/index.css";
 import { act, render as renderTestUi, type Screen } from "../../../test/render";
 import { type ReactNode } from "react";
@@ -104,7 +105,7 @@ vi.mock("../../state/device", async (original) => ({
 vi.mock("./useScopedSettings", async (original) => ({
   ...(await original<typeof import("./useScopedSettings")>()),
   useScopedSettings: () => ({ enableDeviceSupport: false, enableAgentDeviceAccess: false }),
-  useUpdateScopedSettings: () => vi.fn(),
+  useUpdateScopedSettings: () => state.update,
   useScopedSettingsMixed: () => false,
 }));
 vi.mock("./SettingsScopeContext", async (original) => ({
@@ -209,7 +210,7 @@ it("keeps an uncommitted viewport width through a locale switch and saves native
   const input = container.querySelector<HTMLInputElement>(
     'input[aria-label="Default viewport width"]',
   )!;
-  await type(input, "1440");
+  await page.getByRole("textbox", { name: "Default viewport width" }).fill("1440");
   await language("zh");
   expect(container.querySelector('input[aria-label="默认视口宽度"]')).toBe(input);
   expect(input.value).toBe("1440");

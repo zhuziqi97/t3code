@@ -120,7 +120,11 @@ it("uses browser by default, remembers explicit editors and keeps system open an
   await menu.activate("open-editor", BASE_TARGET);
   expect(state.native).toHaveBeenCalledExactlyOnceWith({
     environmentId: BASE_TARGET.environmentId,
-    input: { cwd: "/workspace/project/src/index.ts", editor: "vscode" },
+    input: {
+      cwd: "/workspace/project/src/index.ts",
+      editor: "vscode",
+      projectRoot: "/workspace/project",
+    },
   });
 
   await menu.activate("open", BASE_TARGET);

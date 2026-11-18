@@ -78,7 +78,7 @@ it("keeps a custom model draft and submits its original ID after switching langu
   expect(onToggleFavorite).toHaveBeenCalledExactlyOnceWith("raw/builtin-model");
   await click(button("添加"));
   expect(onChange).toHaveBeenCalledExactlyOnceWith([
-    { slug: "vendor/custom-model", capabilities: null },
+    { slug: "vendor/custom-model", name: "vendor/custom-model", capabilities: null },
   ]);
 });
 

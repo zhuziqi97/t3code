@@ -102,6 +102,6 @@ it("translates an actual unavailable Open VSX response and preserves unknown net
 it("translates the size guard without changing its measured size or limit", () => {
   const message = describeOversizedThemeFile(100 * 1024 * 1024)!;
   expect(translateThemeError(message, translate)).toBe(
-    "该文件大小为 100.0 MB。主题文件通常只有几 KB，因此未读取此文件（上限为 256 KB）。",
+    "该文件大小为 100 MB。主题文件通常只有几 KB，因此未读取此文件（上限为 256 KB）。",
   );
 });

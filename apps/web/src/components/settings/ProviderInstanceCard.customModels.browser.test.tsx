@@ -142,6 +142,7 @@ describe("Antigravity custom models in settings and selectors", () => {
     instance = { driver, config: { customModels: [] } };
     await act(async () => renderEditor());
     await addModel(nativeId);
+    await click(`Edit ${nativeId}`);
     const nameInput = container.querySelector<HTMLInputElement>(
       `#provider-instance-${instanceId}-custom-model-name`,
     )!;

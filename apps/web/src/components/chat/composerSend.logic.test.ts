@@ -272,6 +272,7 @@ it.each([
       feedbackUploadsInFlightRef: { current: new Set() },
       queuedRunEdit: { isEditing: false },
       readPendingEnvironmentChange: () => null,
+      refreshBeforeSend: () => null,
       pendingApprovals: [],
       respondingRequestIds: new Set(),
       activePendingProgress: null,
@@ -280,6 +281,7 @@ it.each([
       keepFullHistory: false,
       composerRef: {
         current: {
+          hasPendingAttachments: () => false,
           getSendContext: () => ({
             providerAvailable: true,
             multipleModelSelections: null,

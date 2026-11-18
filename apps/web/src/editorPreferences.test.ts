@@ -146,7 +146,7 @@ it("reads the latest explicit selection at invocation without replacing it", asy
   expect(await open("/work/tree/main.ts:8:2")).toMatchObject({ _tag: "Success", value: "vscode" });
   expect(state.run).toHaveBeenCalledExactlyOnceWith({
     environmentId: secondary,
-    input: { cwd: "/work/tree/main.ts:8:2", editor: "vscode" },
+    input: { cwd: "/work/tree/main.ts:8:2", editor: "vscode", projectRoot: "/work/tree" },
   });
   state.getPreference.mockReturnValue("browser");
   expect(await open("/work/tree")).toMatchObject({ _tag: "Success", value: "browser" });
@@ -210,7 +210,12 @@ it("reveals the actual file instead of treating its line and column as part of t
   });
   expect(state.run).toHaveBeenCalledExactlyOnceWith({
     environmentId: secondary,
-    input: { cwd: "/work/tree/main.ts", editor: "file-manager", reveal: true },
+    input: {
+      cwd: "/work/tree/main.ts",
+      editor: "file-manager",
+      reveal: true,
+      projectRoot: "/work/tree",
+    },
   });
 });
 

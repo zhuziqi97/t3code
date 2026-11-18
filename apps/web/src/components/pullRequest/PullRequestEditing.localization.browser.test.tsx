@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { act, fakeTimers, render } from "../../../test/render";
 import * as Cause from "effect/Cause";
 import { expect, it, vi } from "vite-plus/test";
+import { userEvent } from "vite-plus/test/browser";
 import "~/index.css";
 
 import { changeLanguage } from "~/i18n";
@@ -488,6 +489,8 @@ it("keeps a label query and reports the raw named mutation in the settled langua
   await act(async () => candidate.click());
   await act(async () => changeLanguage("zh"));
   expect(document.querySelector<HTMLInputElement>('[aria-label="搜索标签"]')!.value).toBe("bug");
+  expect(fixture.labels).not.toHaveBeenCalled();
+  await userEvent.keyboard("{Escape}");
   await act(async () =>
     pending.finish({ _tag: "Failure", cause: Cause.fail(new Error("Raw label failure")) }),
   );
@@ -500,7 +503,7 @@ it("keeps a label query and reports the raw named mutation in the settled langua
   );
 });
 
-it("withdraws a team review request using its original id and reports success in the new language", async () => {
+it("withdraws a team review request using its original id and reports failure in the new language", async () => {
   await using _locale = await setup();
   const pending = deferred();
   fixture.reviewers.mockReturnValue(pending.promise);
@@ -516,13 +519,16 @@ it("withdraws a team review request using its original id and reports success in
   await act(async () => document.querySelector<HTMLElement>('[role="option"]')!.click());
   await act(async () => changeLanguage("zh"));
   expect(document.body.textContent).toContain("团队");
-  await act(async () => pending.finish({ _tag: "Success" }));
+  expect(fixture.reviewers).not.toHaveBeenCalled();
+  await userEvent.keyboard("{Escape}");
+  await act(async () =>
+    pending.finish({ _tag: "Failure", cause: Cause.fail(new Error("Raw reviewer failure")) }),
+  );
   expect(fixture.reviewers).toHaveBeenCalledExactlyOnceWith({
     environmentId,
     input: { ...reference, reviewers: [{ id: "team-raw", kind: "team" }], requested: false },
   });
-  expect(fixture.toast).toHaveBeenCalledExactlyOnceWith({
-    type: "success",
-    title: "已撤回向 acme/原文 发出的审阅请求",
-  });
+  expect(fixture.toast).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ type: "error", title: "无法撤回向 acme/原文 发出的审阅请求" }),
+  );
 });

@@ -220,15 +220,17 @@ describe("remote editor links", () => {
     await renderPicker();
 
     expect(primaryButton().disabled).toBe(true);
-    expect((await pressOpenFavorite()).defaultPrevented).toBe(false);
+    expect((await pressOpenFavorite()).defaultPrevented).toBe(true);
+    expect(primaryButton().title).toBe("This editor is unavailable on the target machine.");
     await click(byLabel("Choose editor"));
     await vi.waitFor(() =>
       expect(menuItems().map((item) => item.textContent)).toEqual([
-        "Open from a computer to edit on Test host",
+        "Browser editor: Browser editor needs a project workspace.",
       ]),
     );
     expect(menuItems()[0]!.getAttribute("aria-disabled")).toBe("true");
     expect(state.openUrl).not.toHaveBeenCalled();
+    expect(state.run).not.toHaveBeenCalled();
   });
 });
 

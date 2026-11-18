@@ -12,7 +12,6 @@ import {
 } from "@t3tools/client-runtime/source-control-clients";
 import { DEFAULT_KEYBINDINGS } from "@t3tools/shared/keybindings";
 import * as Schema from "effect/Schema";
-import { msg } from "gt-react";
 import { TYPOGRAPHY_ADVANCED_STORAGE_KEY } from "../../appearanceFonts";
 import { writeLocalStorageValue } from "../../hooks/useLocalStorage";
 import { commandLabel } from "./KeybindingsSettings.logic";
@@ -748,14 +747,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [
       "In-app notifications 应用内通知",
       "notification toast popup completion input approval failure",
-    ],
-  },
-  {
-    id: "language",
-    title: msg("Language"),
-    to: "/settings/general",
-    searchTerms: [
-      "locale translation english deutsch german español spanish français french português portuguese brasil brazilian chinese 中文 japanese 日本語 korean 한국어 russian русский sprache idioma langue 语言 言語 언어 язык",
     ],
   },
   {
@@ -1769,7 +1760,9 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/general",
     // Includes the native names so someone searching in their own language
     // finds the row before it is translated.
-    searchTerms: ["Language 语言", "language locale translation english chinese 语言 中文"],
+    searchTerms: [
+      "locale translation english deutsch german español spanish français french português portuguese brasil brazilian chinese 中文 japanese 日本語 korean 한국어 russian русский sprache idioma langue 语言 言語 언어 язык",
+    ],
   },
   {
     id: "desktop-updates",

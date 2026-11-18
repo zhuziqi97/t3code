@@ -260,6 +260,7 @@ function setup() {
             return { matches: [{ params: state.active }] };
           },
           navigate: state.navigate,
+          subscribe: () => () => undefined,
         } as unknown as AnyRouter),
       );
     }
