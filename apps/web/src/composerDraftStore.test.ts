@@ -2836,6 +2836,10 @@ describe("prediction draft revisions", () => {
   it("remembers edits after text is deleted back to an empty draft", () => {
     const ref = scopeThreadRef(TEST_ENVIRONMENT_ID, ThreadId.make("prediction-revision"));
     const before = useComposerDraftStore.getState().getComposerDraftRevision(ref);
+    const store = useComposerDraftStore.getState();
+    store.setModelSelection(ref, modelSelection(CODEX_DRIVER, "gpt-5.4"));
+    store.setModelSelection(ref, modelSelection(CODEX_DRIVER, "gpt-5.5"));
+    expect(useComposerDraftStore.getState().getComposerDraftRevision(ref)).toBe(before);
     useComposerDraftStore.getState().setPrompt(ref, "typed");
     useComposerDraftStore.getState().setPrompt(ref, "");
     expect(useComposerDraftStore.getState().getComposerDraftRevision(ref)).toBe(before + 2);

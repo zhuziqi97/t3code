@@ -253,6 +253,31 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       }).pipe(Effect.provide(layerKeybindings())),
   );
 
+  it.effect.each([
+    { key: "alt+enter", when: "composerFocus", expected: "!terminalFocus && !previewFocus" },
+    { key: "alt+p", when: "composerFocus", expected: "composerFocus" },
+  ])("upgrades only the persisted prediction default for $key", ({ key, when, expected }) =>
+    Effect.gen(function* () {
+      const { keybindingsConfigPath } = yield* ServerConfig.ServerConfig;
+      const keybindings = yield* Keybindings.Keybindings;
+      const rule = { key, when, command: "chat.requestPrediction" } as const;
+      yield* writeKeybindingsConfig(keybindingsConfigPath, [rule]);
+      yield* keybindings.syncDefaultKeybindingsOnStartup;
+      const persisted = yield* readKeybindingsConfig(keybindingsConfigPath);
+      assert.deepStrictEqual(
+        persisted.filter((entry) => entry.command === "chat.requestPrediction"),
+        [{ ...rule, when: expected }],
+      );
+      yield* writeKeybindingsConfig(keybindingsConfigPath, [rule]);
+      yield* keybindings.syncDefaultKeybindingsOnStartup;
+      const customized = yield* readKeybindingsConfig(keybindingsConfigPath);
+      assert.deepStrictEqual(
+        customized.filter((entry) => entry.command === "chat.requestPrediction"),
+        [rule],
+      );
+    }).pipe(Effect.provide(layerKeybindings())),
+  );
+
   it.effect("adds a late default to an existing command once", () =>
     Effect.gen(function* () {
       const { keybindingsConfigPath } = yield* ServerConfig.ServerConfig;

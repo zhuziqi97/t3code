@@ -94,6 +94,13 @@ function isSameKeybindingRule(left: KeybindingRule, right: KeybindingRule): bool
   return keybindingRuleIdentity(left) === keybindingRuleIdentity(right);
 }
 
+const PREDICTION_FOCUS_MIGRATION = "chat.requestPrediction:chat-focus";
+const OLD_PREDICTION_DEFAULT: KeybindingRule = {
+  key: "alt+enter",
+  command: "chat.requestPrediction",
+  when: "composerFocus",
+};
+
 const LATE_DEFAULT_KEYBINDINGS: ReadonlyArray<{
   readonly id: string;
   readonly alongside: KeybindingRule;
@@ -471,18 +478,18 @@ const make = Effect.gen(function* () {
   const syncDefaultKeybindingsOnStartup = upsertSemaphore.withPermits(1)(
     Effect.gen(function* () {
       const appliedMigrationIds = yield* readAppliedMigrationIds;
+      const migratePredictionFocus = !appliedMigrationIds.has(PREDICTION_FOCUS_MIGRATION);
       const pendingLateDefaults = LATE_DEFAULT_KEYBINDINGS.filter(
         (late) => !appliedMigrationIds.has(late.id),
       );
       const configExists = yield* readConfigExists;
       if (!configExists) {
         yield* writeConfigAtomically(DEFAULT_KEYBINDINGS);
-        if (pendingLateDefaults.length > 0) {
-          yield* recordAppliedMigrations([
-            ...appliedMigrationIds,
-            ...LATE_DEFAULT_KEYBINDINGS.map((late) => late.id),
-          ]);
-        }
+        yield* recordAppliedMigrations([
+          ...appliedMigrationIds,
+          PREDICTION_FOCUS_MIGRATION,
+          ...LATE_DEFAULT_KEYBINDINGS.map((late) => late.id),
+        ]);
         yield* Cache.invalidate(resolvedConfigCache, resolvedConfigCacheKey);
         return;
       }
@@ -499,7 +506,21 @@ const make = Effect.gen(function* () {
         yield* Cache.invalidate(resolvedConfigCache, resolvedConfigCacheKey);
         return;
       }
-      const customConfig = runtimeConfig.keybindings;
+      const previousPredictionIndex = migratePredictionFocus
+        ? runtimeConfig.keybindings.findIndex((entry) =>
+            isSameKeybindingRule(entry, OLD_PREDICTION_DEFAULT),
+          )
+        : -1;
+      const currentPredictionDefault = DEFAULT_KEYBINDINGS.find(
+        (entry) => entry.command === OLD_PREDICTION_DEFAULT.command,
+      );
+      const replacePredictionDefault = previousPredictionIndex !== -1 && currentPredictionDefault;
+      const customConfig = replacePredictionDefault
+        ? [
+            currentPredictionDefault,
+            ...runtimeConfig.keybindings.filter((_, index) => index !== previousPredictionIndex),
+          ]
+        : runtimeConfig.keybindings;
       const existingCommands = new Set(customConfig.map((entry) => entry.command));
       const missingDefaults: KeybindingRule[] = [];
       const shortcutConflictWarnings: Array<{
@@ -569,15 +590,16 @@ const make = Effect.gen(function* () {
           commands: skippedDefaults.map((rule) => rule.command),
         });
       }
-      if (defaultsToAppend.length > 0) {
+      if (defaultsToAppend.length > 0 || replacePredictionDefault) {
         yield* writeConfigAtomically([...defaultsToAppend, ...customConfig]);
       }
       const settledLateDefaults = pendingLateDefaults.filter(
         (late) => !skippedDefaults.includes(late.rule),
       );
-      if (settledLateDefaults.length > 0) {
+      if (settledLateDefaults.length > 0 || migratePredictionFocus) {
         yield* recordAppliedMigrations([
           ...appliedMigrationIds,
+          PREDICTION_FOCUS_MIGRATION,
           ...settledLateDefaults.map((late) => late.id),
         ]);
       }

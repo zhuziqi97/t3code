@@ -624,7 +624,6 @@ it.effect("rejects a native response belonging to another source turn", () =>
 it.effect.each([
   "changeSession",
   "changeProvider",
-  "changeModel",
   "changeNativeModel",
   "changeAccount",
   "changeRuntime",
@@ -637,6 +636,29 @@ it.effect.each([
     h[change]();
     yield* Deferred.succeed(h.release, undefined);
     assert.equal((yield* Fiber.join(pending)).status, "stale");
+  }).pipe(Effect.scoped),
+);
+
+it.effect("keeps sampling and reuses the suggestion after choosing the next model", () =>
+  Effect.gen(function* () {
+    const h = yield* setup();
+    h.hold();
+    const pending = yield* h.service.request(input).pipe(Effect.forkChild);
+    yield* Deferred.await(h.arrived);
+    h.changeModel();
+    yield* Deferred.succeed(h.release, undefined);
+    const first = yield* Fiber.join(pending);
+    assert.equal(first.status, "suggestion");
+
+    const again = yield* h.service.request({
+      ...input,
+      intent: "manual",
+      requestId: "after-model-pick",
+    });
+    assert.equal(again.status, "suggestion");
+    assert.equal(again.text, first.text);
+    assert.equal(h.draws(), 1);
+    assert.equal(h.samples.length, 1);
   }).pipe(Effect.scoped),
 );
 

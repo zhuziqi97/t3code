@@ -147,11 +147,7 @@ import { useDictationSubmissionShortcut } from "../../speech/useDictationSubmiss
 import { useEnvironmentSpeechInput } from "../../speech/useEnvironmentSpeechInput";
 import { ComposerSpeechButton, ComposerSpeechRecordingPill } from "./ComposerSpeechButton";
 import type { AssistantCitationSourceAnchor } from "~/lib/assistantTextSelection";
-import {
-  resolveShortcutCommand,
-  shortcutLabelForCommand,
-  type ShortcutMatchContext,
-} from "../../keybindings";
+import { shortcutLabelForCommand, type ShortcutMatchContext } from "../../keybindings";
 import {
   type TerminalContextDraft,
   type TerminalContextSelection,
@@ -325,6 +321,7 @@ export interface ChatComposerHandle {
   toggleModelPicker: () => void;
   openControl: (command: KeybindingCommand) => void;
   isModelPickerOpen: () => boolean;
+  requestPrediction: (event: KeyboardEvent) => boolean;
   isCaretAtStart: () => boolean;
   compactContext: () => void;
   readSnapshot: () => {
@@ -3074,6 +3071,61 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   };
   const openModelPickerStable = useStableCallback(openModelPicker);
 
+  const prediction = useComposerPrediction({
+    threadRef: routeThreadRef,
+    draftTarget: composerDraftTarget,
+    selectedInstanceId,
+    codex: selectedProvider === "codex",
+    blocked:
+      routeKind !== "server" ||
+      isEditingQueuedMessage ||
+      isSendBusy ||
+      isPreparingWorktree ||
+      isCompacting ||
+      pendingApprovals.length > 0 ||
+      incomingPendingUserInputs.length > 0 ||
+      multipleModelSelections !== null ||
+      preparingComposerImages.length > 0 ||
+      questionAttachmentTarget !== null,
+  });
+  const requestPredictionStable = useStableCallback((event: KeyboardEvent) => {
+    const context = getShortcutContext(event.target);
+    if (
+      context.terminalFocus ||
+      context.previewFocus ||
+      (!context.modelPickerOpen &&
+        ((context.editableFocus && !context.composerFocus) ||
+          (event.target instanceof Element &&
+            event.target.closest("[data-model-picker-content]") !== null)))
+    )
+      return false;
+    const action = predictionShortcutAction({
+      matched: true,
+      repeat: event.repeat,
+      isComposing: event.isComposing,
+      keyCode: event.keyCode,
+      defaultPrevented: event.defaultPrevented,
+      focused: true,
+      editorEmpty:
+        prediction.isDraftEmpty() &&
+        (composerEditorRef.current?.readSnapshot().value.length ?? 0) === 0,
+      menuActive: composerMenuOpen || composerSuggestionsVisible || isStashMenuOpen,
+    });
+    if (action === "pass") return false;
+    if (action === "ignore") return true;
+    const blockedReason =
+      routeKind !== "server"
+        ? "thread_required"
+        : activePendingProgress
+          ? "pending_input"
+          : isComposerApprovalState
+            ? "pending_approval"
+            : isEditingQueuedMessage
+              ? "editing_queued_message"
+              : undefined;
+    return prediction.request(blockedReason);
+  });
+
   useImperativeHandle(
     composerRef,
     () => ({
@@ -3182,6 +3234,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       },
       compactContext: compactThreadContextStable,
       isModelPickerOpen: () => isComposerModelPickerOpen,
+      requestPrediction: requestPredictionStable,
       isCaretAtStart: () => {
         const range = composerEditorRef.current?.readSelectionRange();
         return range !== undefined && range.start === 0 && range.end === 0;
@@ -3329,6 +3382,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       projectSelectionRequired,
       applyPromptReplacementStable,
       isComposerModelPickerOpen,
+      requestPredictionStable,
       openModelPickerStable,
       readComposerSnapshotStable,
       resetComposerTrigger,
@@ -3446,23 +3500,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       ? t("chat.primary.compactSend")
       : t("chat.primary.send");
 
-  const prediction = useComposerPrediction({
-    threadRef: routeThreadRef,
-    draftTarget: composerDraftTarget,
-    selectedInstanceId,
-    codex: selectedProvider === "codex",
-    blocked:
-      routeKind !== "server" ||
-      isEditingQueuedMessage ||
-      isSendBusy ||
-      isPreparingWorktree ||
-      isCompacting ||
-      pendingApprovals.length > 0 ||
-      incomingPendingUserInputs.length > 0 ||
-      multipleModelSelections !== null ||
-      preparingComposerImages.length > 0 ||
-      questionAttachmentTarget !== null,
-  });
   const acceptPrediction = () => {
     if (composerEditorRef.current?.readSnapshot().value !== "") return false;
     const text = prediction.accept();
@@ -3490,27 +3527,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     state: { focused: boolean; editorEmpty: boolean },
   ) => {
     if (!prediction.isDraftEmpty()) return false;
-    const dismissing =
-      event.key === "Escape" &&
-      !event.altKey &&
-      !event.metaKey &&
-      !event.ctrlKey &&
-      !event.shiftKey &&
-      prediction.view.status !== "idle";
-    const acceptsTab =
-      event.key === "Tab" &&
-      !event.altKey &&
-      !event.metaKey &&
-      !event.ctrlKey &&
-      !event.shiftKey &&
-      prediction.view.status === "suggestion";
-    if (acceptsTab) return false;
     const action = predictionShortcutAction({
       matched:
-        dismissing ||
-        resolveShortcutCommand(event, keybindings, {
-          context: predictionShortcutContext,
-        }) === "chat.requestPrediction",
+        event.key === "Escape" &&
+        !event.altKey &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.shiftKey &&
+        prediction.view.status !== "idle",
       repeat: event.repeat,
       isComposing: event.isComposing,
       keyCode: event.keyCode,
@@ -3524,22 +3548,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         isComposerModelPickerOpen,
     });
     if (action === "pass") return false;
-    if (action === "ignore") return true;
-    if (dismissing) {
-      prediction.dismiss();
-      return true;
-    }
-    const blockedReason =
-      routeKind !== "server"
-        ? "thread_required"
-        : activePendingProgress
-          ? "pending_input"
-          : isComposerApprovalState
-            ? "pending_approval"
-            : isEditingQueuedMessage
-              ? "editing_queued_message"
-              : undefined;
-    return prediction.request(blockedReason);
+    if (action === "request") prediction.dismiss();
+    return true;
   };
   const predictionControls = (
     <ComposerPrediction

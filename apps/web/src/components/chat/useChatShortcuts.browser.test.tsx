@@ -1,3 +1,4 @@
+import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
 import type { KeybindingCommand, ResolvedKeybindingsConfig } from "@t3tools/contracts";
 import { useEffect, useState } from "react";
 import { expect, it } from "vite-plus/test";
@@ -244,4 +245,64 @@ it("runs right panel commands from inside a side chat pane, but not thread comma
   await userEvent.keyboard("q");
 
   expect(ran).toEqual(["toggle", "close", "toggle"]);
+});
+
+it("routes prediction once from the message pane or picker and leaves terminal input alone", async () => {
+  const handled: string[] = [];
+
+  function PredictionChat() {
+    useChatShortcuts({
+      enabled: true,
+      keybindings: DEFAULT_RESOLVED_KEYBINDINGS,
+      scriptKeybindings: [],
+      getShortcutContext: (target) => ({
+        ...shortcutContext,
+        terminalFocus: target instanceof HTMLElement && target.dataset.zone === "terminal",
+        modelPickerOpen: target instanceof HTMLElement && target.dataset.zone === "picker",
+      }),
+      threadFindActive: false,
+      composerRef: {
+        current: {
+          requestPrediction: (event: KeyboardEvent) => {
+            if (event.isComposing || event.keyCode === 229) return false;
+            if (!event.repeat && event.target instanceof HTMLElement) {
+              handled.push(event.target.dataset.zone ?? "");
+            }
+            return true;
+          },
+        } as Partial<ChatComposerHandle> as ChatComposerHandle,
+      },
+      branchToolbarRef: { current: null },
+      closeThreadFind: () => {},
+      commands: {},
+      fallback: () => undefined,
+    });
+
+    return (
+      <>
+        <button type="button" data-zone="messages">
+          Message area
+        </button>
+        <input data-zone="picker" aria-label="Model search" />
+        <input data-zone="terminal" aria-label="Terminal" />
+      </>
+    );
+  }
+
+  await using screen = await render(<PredictionChat />, options);
+  await screen.getByRole("button", { name: "Message area" }).click();
+  await userEvent.keyboard("{Alt>}{Enter}{/Alt}");
+  await screen.getByRole("textbox", { name: "Model search" }).click();
+  await userEvent.keyboard("{Alt>}{Enter}{/Alt}");
+  document.activeElement?.dispatchEvent(
+    new KeyboardEvent("keydown", {
+      key: "Enter",
+      altKey: true,
+      bubbles: true,
+      isComposing: true,
+    }),
+  );
+  await screen.getByRole("textbox", { name: "Terminal" }).click();
+  await userEvent.keyboard("{Alt>}{Enter}{/Alt}");
+  expect(handled).toEqual(["messages", "picker"]);
 });

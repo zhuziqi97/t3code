@@ -68,7 +68,7 @@ export function predictionSource(projection: OrchestrationV2ThreadProjection, so
       thread.providerSessionId,
       thread.nativeThreadRef.nativeId,
       turn.nativeTurnRef.nativeId,
-      projection.thread.modelSelection,
+      thread.providerInstanceId,
     ]),
   };
 }

@@ -15,6 +15,7 @@ export function composerShortcutCommands(
   branchToolbarRef: { readonly current: BranchToolbarHandle | null },
 ): ChatShortcutCommands {
   return {
+    "chat.requestPrediction": ({ event }) => composerRef.current?.requestPrediction(event) ?? false,
     "modelPicker.toggle": ({ event }) => {
       if (!event.repeat) composerRef.current?.toggleModelPicker();
     },

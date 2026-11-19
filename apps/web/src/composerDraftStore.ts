@@ -92,6 +92,7 @@ import {
 import { create } from "zustand";
 import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
+import { shallow } from "zustand/shallow";
 import { draftModelSelectionApplies } from "./lib/chatThreadActions";
 import { createDeferredStorage, createMemoryStorage } from "./lib/storage";
 import {
@@ -4462,9 +4463,14 @@ composerDraftStore.subscribe((state, previous) => {
     ...Object.keys(state.draftsByThreadKey),
     ...Object.keys(previous.draftsByThreadKey),
   ])) {
-    if (state.draftsByThreadKey[key] !== previous.draftsByThreadKey[key]) {
-      draftRevisions.set(key, (draftRevisions.get(key) ?? 0) + 1);
-    }
+    const before = previous.draftsByThreadKey[key];
+    const after = state.draftsByThreadKey[key];
+    if (before === after) continue;
+    const changed =
+      before && after
+        ? !shallow(composerDraftContent(before), composerDraftContent(after))
+        : Boolean((before ?? after)?.prompt.length) || composerDraftHasUserContent(before ?? after);
+    if (changed) draftRevisions.set(key, (draftRevisions.get(key) ?? 0) + 1);
   }
 });
 composerDraftLoadedState = partializeComposerDraftStoreState(composerDraftStore.getState());
