@@ -8,9 +8,12 @@ import {
   type EnvironmentId,
   type ProviderDriverKind,
   type ResolvedKeybindingsConfig,
+  type ServerProvider,
   MODEL_PICKER_JUMP_KEYBINDING_COMMANDS,
 } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
+import { Atom } from "effect/reactivity";
+import { resolveProvidersForCwd } from "@t3tools/client-runtime/providerSkills";
 import { formatProviderUpdateRequiredNotice } from "@t3tools/client-runtime/providerUpdateRequiredModels";
 import { useNavigate } from "@tanstack/react-router";
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
@@ -45,7 +48,7 @@ import {
 import { getDisplayModelName, type ModelEsque } from "./providerIconUtils";
 import { isCommandPaletteOpen } from "../../commandPaletteBus";
 import { registerModelPickerContent } from "../../modelPickerVisibility";
-import { primaryServerKeybindingsAtom } from "../../state/server";
+import { primaryServerKeybindingsAtom, providersIgnoringCheckedAtAtom } from "../../state/server";
 import {
   modelPickerJumpCommandForIndex,
   modelPickerJumpIndexFromCommand,
@@ -69,6 +72,26 @@ import {
 } from "../../providerInstances";
 import { providerModelKey, sortProviderModelItems } from "../../modelOrdering";
 import { hasRuntimeModelCatalog } from "../../providerModels";
+
+const noEnvironmentProvidersAtom = Atom.make<ReadonlyArray<ServerProvider>>([]);
+
+export function antigravityModelSearchMiss(input: {
+  query: string;
+  providerModels: ServerProvider["models"];
+  sessionModels: ServerProvider["models"];
+  hiddenModels: ReadonlyArray<string>;
+}) {
+  const query = input.query.trim().toLowerCase();
+  if (!query) return null;
+  const model = input.providerModels.find(
+    (model) => model.slug.toLowerCase() === query || model.name.toLowerCase() === query,
+  );
+  if (!model) return null;
+  if (!input.sessionModels.some((candidate) => candidate.slug === model.slug)) {
+    return "chat.model.absentFromSession";
+  }
+  return input.hiddenModels.includes(model.slug) ? "chat.model.hidden" : null;
+}
 
 type ModelPickerItem = {
   slug: string;
@@ -350,6 +373,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
   onOpenProviderSetup?: (instanceId: ProviderInstanceId) => void;
   getModelDisabledReason?: (instanceId: ProviderInstanceId, model: string) => string | null;
   onInstanceModelChange: (instanceId: ProviderInstanceId, model: string) => void;
+  onBrowseCodexCatalog?: (instanceId: ProviderInstanceId) => void;
   /** The owning popup moves focus here when it opens (its `initialFocus`). */
   searchInputRef: RefObject<HTMLInputElement | null>;
   /** Sits beside an effort column: fills the shared row, and stacks above it on narrow screens. */
@@ -379,7 +403,14 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- publishes this picker's mount to global keydown handlers
   useLayoutEffect(() => registerModelPickerContent(), []);
   const highlightedModelKeyRef = useRef<string | null>(null);
-  const { favorites } = useEnvironmentModelPreferences(props.environmentId);
+  const { favorites, providerModelPreferences } = useEnvironmentModelPreferences(
+    props.environmentId,
+  );
+  const environmentProviders = useAtomValue(
+    props.environmentId
+      ? providersIgnoringCheckedAtAtom(props.environmentId)
+      : noEnvironmentProvidersAtom,
+  );
   const activeEntry = props.instanceEntries.find(
     (entry) => entry.instanceId === props.activeInstanceId,
   );
@@ -475,6 +506,9 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
 
   const handleSelectInstance = (instanceId: ProviderInstanceId | "favorites") => {
     setSelectedInstanceId(instanceId);
+    if (instanceId !== "favorites" && entryByInstanceId.get(instanceId)?.driverKind === "codex") {
+      props.onBrowseCodexCatalog?.(instanceId);
+    }
     // Focusing the search on touch raises the on-screen keyboard on every provider tap.
     if (window.matchMedia("(pointer: coarse)").matches) return;
     window.requestAnimationFrame(() => {
@@ -742,6 +776,23 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
 
   const selectedEntry =
     selectedInstanceId === "favorites" ? undefined : entryByInstanceId.get(selectedInstanceId);
+  const searchedEntry = selectedEntry ?? activeEntry;
+  const missingModelReason = (() => {
+    if (!isSearching || filteredModels.length > 0 || searchedEntry?.driverKind !== "antigravity") {
+      return null;
+    }
+    const provider = environmentProviders.find(
+      (provider) => provider.instanceId === searchedEntry.instanceId,
+    );
+    if (!provider) return null;
+    const workspaceModels = resolveProvidersForCwd([provider], props.workspaceCwd)[0]?.models;
+    return antigravityModelSearchMiss({
+      query: searchQuery,
+      providerModels: workspaceModels ?? provider.models,
+      sessionModels: searchedEntry.snapshot.models,
+      hiddenModels: providerModelPreferences[searchedEntry.instanceId]?.hiddenModels ?? [],
+    });
+  })();
   const providerSetupEntries =
     !isSearching && canOpenProviderSetup
       ? instanceEntries.filter(
@@ -1128,7 +1179,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                   ? t("chat.model.noFavorites")
                   : workspaceModelsScanning
                     ? t("chat.model.scanningProject")
-                    : t("chat.model.noneFound")
+                    : t(missingModelReason ?? "chat.model.noneFound")
               }
               onRequestClose={onRequestClose}
               onOpenProviderSetup={onOpenProviderSetup}

@@ -19,6 +19,7 @@ import {
   resolveNewTaskModelSelection,
   resolveSelectableModelSelection,
   newTaskModelProviders,
+  serverConfigForCwd,
   withStoredThreadModelOptions,
   type ModelOption,
 } from "./modelOptions";
@@ -26,6 +27,57 @@ import {
 const buildModelOptions = buildAllModelOptions;
 
 describe("mobile model options", () => {
+  it("uses each thread's native choices without replacing the global catalog or saved default", () => {
+    const instanceId = ProviderInstanceId.make("antigravity");
+    const selection = { instanceId, model: null };
+    const config = {
+      providers: [
+        {
+          instanceId,
+          driver: "antigravity",
+          enabled: true,
+          installed: true,
+          auth: { status: "authenticated" },
+          models: [
+            { slug: "global-model", name: "Global Model", isCustom: false, capabilities: null },
+          ],
+        },
+      ],
+    } as unknown as ServerConfig;
+    const optionsFor = (model: string, name: string) =>
+      buildModelOptions(
+        serverConfigForCwd(config, null, {
+          modelSelection: { instanceId, model },
+          models: [{ id: model, name }],
+          optionDescriptors: [
+            {
+              id: "effort",
+              label: "Effort",
+              type: "select",
+              options: [{ id: "max", label: "Max" }],
+            },
+          ],
+        }),
+        selection,
+        instanceId,
+        null,
+      );
+    expect(optionsFor("session-one", "First Session")).toMatchObject([
+      {
+        label: "First Session",
+        selection: { instanceId, model: "session-one" },
+        capabilities: { optionDescriptors: [{ id: "effort", options: [{ id: "max" }] }] },
+      },
+    ]);
+    expect(optionsFor("session-two", "Second Session").map((option) => option.label)).toEqual([
+      "Second Session",
+    ]);
+    expect(
+      buildModelOptions(config, selection, instanceId, null).map((option) => option.label),
+    ).toEqual(["Global Model"]);
+    expect(selection.model).toBeNull();
+  });
+
   it("distinguishes same-name OpenCode models without changing their routing", () => {
     const sources = [
       { id: "anthropic", label: "Anthropic" },

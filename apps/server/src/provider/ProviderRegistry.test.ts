@@ -2380,6 +2380,7 @@ it.layer(
             } as const satisfies ServerProvider;
             const invalidations = yield* Ref.make(0);
             const probes = yield* Ref.make(0);
+            const models = yield* Ref.make<ServerProvider["models"]>([]);
             const maintenanceReads = yield* Ref.make<ReadonlyArray<boolean | "afterUpdate">>([]);
             const instance = {
               instanceId,
@@ -2402,7 +2403,14 @@ it.layer(
                   ),
                 ...snapshotState(
                   provider,
-                  Ref.update(probes, (count) => count + 1).pipe(Effect.as(provider)),
+                  Effect.gen(function* () {
+                    yield* Ref.update(probes, (count) => count + 1);
+                    return {
+                      ...provider,
+                      checkedAt: DateTime.formatIso(yield* DateTime.now),
+                      models: yield* Ref.get(models),
+                    };
+                  }),
                 ),
 
                 startRefresh: () => Effect.succeed(provider),
@@ -2433,7 +2441,7 @@ it.layer(
               textGeneration: {} as ProviderInstance["textGeneration"],
             } satisfies ProviderInstance;
             const takeMaintenanceReads = Ref.getAndSet(maintenanceReads, []);
-            return { instance, invalidations, probes, takeMaintenanceReads };
+            return { instance, invalidations, probes, models, takeMaintenanceReads };
           });
         const first = yield* makeInstance("codex_first");
         const second = yield* makeInstance("codex_second");
@@ -2503,17 +2511,50 @@ it.layer(
           yield* registry.invalidateModelCaches({ ...workspace, fresh: true });
           assert.deepStrictEqual(yield* first.takeMaintenanceReads, [false]);
 
-          // An opened model picker probes only when the manifest differs from what the last pass saw.
+          const newModel = {
+            slug: "gpt-6.2-astra",
+            name: "GPT-6.2 Astra",
+            isCustom: false,
+            capabilities: createModelCapabilities({
+              optionDescriptors: [
+                {
+                  id: "reasoningEffort",
+                  type: "select",
+                  label: "Reasoning effort",
+                  options: [{ id: "max", label: "Max" }],
+                },
+              ],
+            }),
+          };
+          yield* Ref.set(first.models, [newModel]);
+          const forcedBefore = yield* Ref.get(forceRefreshCalls);
+          const firstProbeCount = yield* Ref.get(first.probes);
+          const secondProbeCount = yield* Ref.get(second.probes);
+          yield* registry.refreshModelCatalog(first.instance.instanceId);
+          assert.strictEqual(yield* Ref.get(first.probes), firstProbeCount);
+          yield* TestClock.adjust("1 minute");
+          yield* registry.refreshModelCatalog(first.instance.instanceId);
+          const providers = yield* registry.getProviders;
+          assert.deepStrictEqual(
+            providers.find((provider) => provider.instanceId === first.instance.instanceId)?.models,
+            [newModel],
+          );
+          yield* registry.refreshModelCatalog(first.instance.instanceId);
+          assert.strictEqual(yield* Ref.get(first.probes), firstProbeCount + 1);
+          assert.strictEqual(yield* Ref.get(second.probes), secondProbeCount);
+          assert.strictEqual(yield* Ref.get(forceRefreshCalls), forcedBefore);
+
+          // A picker that omits the instance still follows the manifest refresh path.
           const probesBefore = yield* Ref.get(second.probes);
-          yield* registry.refreshModelCatalog;
+          yield* registry.refreshModelCatalog();
           assert.strictEqual(yield* Ref.get(second.probes), probesBefore);
           assert.strictEqual(yield* readCachedVersion("codex_second-package", "3.0.0"), "2.0.0");
           yield* Ref.set(manifest, {
             ...ModelManifest.BUNDLED_MODEL_MANIFEST,
             updatedAt: "2999-01-01T00:00:00Z",
           });
-          yield* registry.refreshModelCatalog;
-          yield* registry.refreshModelCatalog;
+          yield* registry.refreshModelCatalog();
+          yield* registry.refreshModelCatalog();
           assert.strictEqual(yield* Ref.get(second.probes), probesBefore + 1);
           // A changed manifest also rechecks latest CLI versions.
           assert.strictEqual(yield* readCachedVersion("codex_second-package", "3.0.0"), "3.0.0");

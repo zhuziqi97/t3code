@@ -2457,7 +2457,7 @@ const makeWsRpcLayer = (
           /* Request instrumentation already owns the span; keep this helper in that context. */
           Effect.fnUntraced(function* (input) {
             if (input.modelCatalogOnly === true) {
-              yield* providerRegistry.refreshModelCatalog;
+              yield* providerRegistry.refreshModelCatalog(input.instanceId);
               return { providers: [] };
             }
             if (input.refreshModels) {

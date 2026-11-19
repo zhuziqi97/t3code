@@ -84,7 +84,10 @@ import { ChatGptSharingStatus } from "./ChatGptSharingStatus";
 import { environmentCatalog } from "../../connection/catalog";
 import { useEnvironmentQuery } from "../../state/query";
 import { scopedThreadKey } from "../../lib/scopedEntities";
-import { useThreadReportedModelSelection } from "../../state/entities";
+import {
+  useThreadProviderConfiguration,
+  useThreadReportedModelSelection,
+} from "../../state/entities";
 import {
   setComposerDraftText,
   updateComposerDraftSettings,
@@ -323,6 +326,7 @@ type ThreadSettingsSessionValue = {
   readonly setSearchQuery: (query: string) => void;
   readonly setShowLegacy: (showLegacy: boolean) => void;
   readonly toggleProvider: (providerKey: string) => void;
+  readonly catalogInstanceId: ProviderInstanceId | undefined;
   /** The provider whose catalog for this folder the picker keeps fresh. */
   readonly workspaceScan: { readonly instanceId: ProviderInstanceId; readonly cwd: string } | null;
 };
@@ -615,6 +619,7 @@ function ThreadSettingsSessionProvider(
   const value = {
     environmentId,
     providerInstanceId: props.providerInstanceId,
+    catalogInstanceId: scannedInstanceId,
     providerGroups,
     manageHidden,
     setManageHidden,
@@ -955,18 +960,25 @@ function ThreadSettingsMainContent(props: {
   });
   const refreshProviderCatalog = createProviderCatalogRefreshRunner(refreshProvidersCommand);
   const registry = use(RegistryContext);
-  const refreshModelCatalog = useEffectEvent(() => {
-    const environmentId = session.environmentId;
-    if (!environmentId) return;
-    // An older server drops the field and probes every provider.
-    const config = registry.get(environmentServerConfigsAtom).get(environmentId);
-    if (config?.environment.capabilities.modelCatalogRefresh !== true) return;
-    void refreshProvidersCommand({ environmentId, input: { modelCatalogOnly: true } });
-  });
+  const refreshModelCatalog = useEffectEvent(
+    (environmentId: EnvironmentId | null, catalogInstanceId: ProviderInstanceId | undefined) => {
+      if (!environmentId) return;
+      // An older server drops the field and probes every provider.
+      const config = registry.get(environmentServerConfigsAtom).get(environmentId);
+      if (config?.environment.capabilities.modelCatalogRefresh !== true) return;
+      const instanceId = config.providers.find(
+        (provider) => provider.instanceId === catalogInstanceId && provider.driver === "codex",
+      )?.instanceId;
+      void refreshProvidersCommand({
+        environmentId,
+        input: { modelCatalogOnly: true, ...(instanceId !== undefined ? { instanceId } : {}) },
+      });
+    },
+  );
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- asks the server for newly released models when the model list opens
   useEffect(() => {
-    refreshModelCatalog();
-  }, []);
+    refreshModelCatalog(session.environmentId, session.catalogInstanceId);
+  }, [session.environmentId, session.catalogInstanceId]);
   const [isRefreshingProviders, setIsRefreshingProviders] = useState(false);
   const refreshProviders = () => {
     if (!session.environmentId || isRefreshingProviders) return;
@@ -1386,6 +1398,7 @@ export function ExistingThreadSettingsRouteScreen({
   // Streamed text would otherwise re-render the whole model picker on every delta.
   const structure = useQuietThreadStructure(selectedThreadDetailRef);
   const reportedModelSelection = useThreadReportedModelSelection(selectedThreadDetailRef);
+  const configuration = useThreadProviderConfiguration(selectedThreadDetailRef);
   const threadKey = scopedThreadKey(route.params.environmentId, route.params.threadId);
   const draftSettings = useComposerDraftSettings(threadKey);
   const queuedRunEdit = useQueuedRunEdit(threadKey);
@@ -1400,6 +1413,7 @@ export function ExistingThreadSettingsRouteScreen({
   const serverConfig = serverConfigForCwd(
     selectedEnvironmentRuntime?.serverConfig ?? null,
     selectedThreadCwd,
+    configuration,
   );
   const modelSelection = draftSettings.modelSelection ?? selectedThread.modelSelection;
   const lockedProviderInstanceId = threadAllowsProviderSwitch({
@@ -1414,12 +1428,16 @@ export function ExistingThreadSettingsRouteScreen({
     lockedProviderInstanceId,
     selectedThread.projectId,
   );
-  const currentModelOption =
-    modelOptions.find(
-      (option) =>
-        option.selection.instanceId === modelSelection.instanceId &&
-        option.selection.model === modelSelection.model,
-    ) ?? null;
+  const displayedModel =
+    modelSelection.model ??
+    (reportedModelSelection?.instanceId === modelSelection.instanceId
+      ? reportedModelSelection.model
+      : null);
+  const currentModelOption = modelOptions.find(
+    (option) =>
+      option.selection.instanceId === modelSelection.instanceId &&
+      option.selection.model === displayedModel,
+  );
   const updateModelSelection = (selection: ModelSelection) =>
     selectThreadModel(route.params, selection);
 

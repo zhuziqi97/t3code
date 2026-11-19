@@ -700,8 +700,8 @@ export const WsServerRefreshProvidersRpc = Rpc.make(WS_METHODS.serverRefreshProv
     /** Bypass model caches; explicit rediscovery may open sessions, background refreshes must not. */
     refreshModels: Schema.optional(Schema.Boolean),
     /**
-     * A model picker opened: refetch a model manifest older than a few minutes and probe providers
-     * only when it changed. The other fields are ignored and the config stream carries the result.
+     * A model picker opened. With a Codex instance, refresh its stale native catalog.
+     * Without an instance, check the public model manifest for changes. The config stream carries the result.
      */
     modelCatalogOnly: Schema.optional(Schema.Boolean),
     /** Read secret references again; unlocking a vault can prompt on the host, so only explicit user refreshes ask. */

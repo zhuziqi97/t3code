@@ -9,6 +9,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { deriveProviderInstanceEntries } from "../../providerInstances";
 import {
   adjacentModelPickerProvider,
+  antigravityModelSearchMiss,
   resolveModelPickerSelectedModel,
   shouldIncludeModelPickerOption,
   shouldOfferModelPickerSetup,
@@ -31,6 +32,26 @@ function entry(status: ServerProvider["status"], driver = "opencode") {
     },
   ])[0]!;
 }
+
+it.each([
+  ["model-id", false, false, "chat.model.absentFromSession"],
+  ["Model Name", true, true, "chat.model.hidden"],
+  ["model-id", true, false, null],
+  ["model", false, false, null],
+] as const)(
+  "explains only a known Antigravity model search miss for %s",
+  (query, inSession, hidden, expected) => {
+    const model = { slug: "model-id", name: "Model Name", isCustom: false, capabilities: null };
+    expect(
+      antigravityModelSearchMiss({
+        query,
+        providerModels: [model],
+        sessionModels: inSession ? [model] : [],
+        hiddenModels: hidden ? [model.slug] : [],
+      }),
+    ).toBe(expected);
+  },
+);
 
 describe("shouldIncludeModelPickerOption", () => {
   it.each(["ready", "error"] as const)(

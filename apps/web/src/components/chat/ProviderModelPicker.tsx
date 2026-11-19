@@ -139,17 +139,26 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   const refreshProviders = useAtomCommand(serverEnvironment.refreshProviders, {
     reportFailure: false,
   });
-  const refreshModelCatalog = useEffectEvent(() => {
+  const refreshModelCatalog = (instanceId?: ProviderInstanceId) => {
     const environmentId = props.environmentId;
     if (environmentId === null) return;
     // An older server drops the field and probes every provider.
     const config = registry.get(serverEnvironment.configValueAtom(environmentId));
     if (config?.environment.capabilities.modelCatalogRefresh !== true) return;
-    void refreshProviders({ environmentId, input: { modelCatalogOnly: true } });
+    void refreshProviders({
+      environmentId,
+      input: { modelCatalogOnly: true, ...(instanceId !== undefined ? { instanceId } : {}) },
+    });
+  };
+  const refreshOpenedCatalog = useEffectEvent(() => {
+    const activeEntry = props.instanceEntries.find(
+      (entry) => entry.instanceId === props.activeInstanceId,
+    );
+    refreshModelCatalog(activeEntry?.driverKind === "codex" ? activeEntry.instanceId : undefined);
   });
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- asks the server for newly released models on every open; a parent, a keybinding or the palette can open the picker, so no one handler sees them all
   useEffect(() => {
-    if (isMenuOpen) refreshModelCatalog();
+    if (isMenuOpen) refreshOpenedCatalog();
   }, [isMenuOpen]);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -322,6 +331,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
           ? t("chat.model.disabled")
           : (props.getModelDisabledReason?.(instanceId, model) ?? null)
       }
+      onBrowseCodexCatalog={refreshModelCatalog}
       onInstanceModelChange={handleInstanceModelChange}
       {...(docked
         ? {

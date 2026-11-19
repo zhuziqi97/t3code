@@ -3689,6 +3689,8 @@ export const zh: Partial<Messages> = {
   "chat.editor.remoteUnavailable": "此环境没有可用的 SSH 主机。",
   "chat.editor.nativeUnavailable": "目标机器上此编辑器不可用。",
   "chat.editor.nativeDenied": "此连接没有打开该环境原生编辑器的权限。",
+  "chat.model.absentFromSession": "当前会话未提供此模型。",
+  "chat.model.hidden": "此模型已在模型设置中隐藏。",
   "chat.model.notReady": "未就绪",
   "chat.model.favorites": "收藏",
   "chat.model.search": "搜索模型…",

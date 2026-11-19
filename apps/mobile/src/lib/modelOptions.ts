@@ -7,6 +7,7 @@ import {
 import type {
   ModelCapabilities,
   ModelSelection,
+  OrchestrationV2ProviderThreadNativeMetadata,
   ProjectId,
   RuntimeMode,
   ServerConfig as T3ServerConfig,
@@ -25,6 +26,7 @@ import {
 } from "@t3tools/shared/model";
 import { resolveModelShortName } from "@t3tools/client-runtime/provider-clients";
 import { resolveProvidersForCwd } from "@t3tools/client-runtime/providerSkills";
+import { applyThreadProviderConfiguration } from "@t3tools/client-runtime/state/thread-execution";
 
 export type ModelOption = {
   readonly key: string;
@@ -166,9 +168,13 @@ function normalizeSelectionOptions(
 export function serverConfigForCwd<C extends T3ServerConfig | null | undefined>(
   config: C,
   cwd: string | null,
+  sessionConfiguration: OrchestrationV2ProviderThreadNativeMetadata | null = null,
 ): C {
   if (!config) return config;
-  const providers = resolveProvidersForCwd(config.providers, cwd);
+  const providers = applyThreadProviderConfiguration(
+    resolveProvidersForCwd(config.providers, cwd),
+    sessionConfiguration,
+  );
   return providers === config.providers ? config : { ...config, providers };
 }
 

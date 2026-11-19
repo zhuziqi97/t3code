@@ -53,6 +53,8 @@ import {
 } from "@t3tools/provider-core/server/maintenanceResolver";
 import type { ProviderSnapshotSource } from "./builtInProviderCatalog.ts";
 
+const CODEX_CATALOG_ON_DEMAND_MAX_AGE = Duration.toMillis(Duration.minutes(1));
+
 export type ProviderMaintenanceActionKind = "update";
 
 export class ProviderRegistry extends Context.Service<
@@ -116,10 +118,10 @@ export class ProviderRegistry extends Context.Service<
     }) => Effect.Effect<void>;
 
     /**
-     * For an opened model picker: refetch a model manifest older than a few
-     * minutes. When it changed, recheck latest CLI versions and probe providers.
+     * Refresh the opened Codex instance's native catalog when stale. Without
+     * an instance, check the public model manifest for changes.
      */
-    readonly refreshModelCatalog: Effect.Effect<void>;
+    readonly refreshModelCatalog: (instanceId?: ProviderInstanceId) => Effect.Effect<void>;
 
     readonly getProviderMaintenanceCapabilitiesForInstance: (
       instanceId: ProviderInstanceId,
@@ -1304,7 +1306,24 @@ export const layer = Layer.effect(
       );
     });
 
-    const refreshModelCatalog = Effect.fn("ProviderRegistry.refreshModelCatalog")(function* () {
+    const refreshModelCatalog = Effect.fn("ProviderRegistry.refreshModelCatalog")(function* (
+      instanceId?: ProviderInstanceId,
+    ) {
+      if (instanceId !== undefined) {
+        const instance = yield* instanceRegistry.getInstance(instanceId);
+        if (instance?.driverKind !== "codex" || !instance.enabled) return;
+        const { updatedAt: previousManifest } = yield* manifestService.current;
+        const { updatedAt } = yield* manifestService.refreshOnDemand;
+        const { checkedAt } = yield* instance.snapshot.getSnapshot;
+        const now = DateTime.toEpochMillis(yield* DateTime.now);
+        if (
+          updatedAt === previousManifest &&
+          now - Date.parse(checkedAt) < CODEX_CATALOG_ON_DEMAND_MAX_AGE
+        )
+          return;
+        yield* refreshOneSource(instance);
+        return;
+      }
       const { updatedAt } = yield* manifestService.refreshOnDemand;
       // The first pass can be one that started before the fetch, so allow one more.
       for (let pass = 0; pass < 2; pass++) {
@@ -1389,10 +1408,11 @@ export const layer = Layer.effect(
         refreshWorkspaceSnapshot(input).pipe(Effect.catchCause(recoverRefreshFailure)),
       refreshAfterUpdate,
       invalidateModelCaches,
-      refreshModelCatalog: refreshModelCatalog().pipe(
-        Effect.catchCause(recoverRefreshFailure),
-        Effect.asVoid,
-      ),
+      refreshModelCatalog: (instanceId) =>
+        refreshModelCatalog(instanceId).pipe(
+          Effect.catchCause(recoverRefreshFailure),
+          Effect.asVoid,
+        ),
       getProviderMaintenanceCapabilitiesForInstance,
       setProviderMaintenanceActionState,
       get streamChanges() {

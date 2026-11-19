@@ -3907,6 +3907,8 @@ export const en = {
   "chat.editor.remoteUnavailable": "No SSH host is available for this environment.",
   "chat.editor.nativeUnavailable": "This editor is unavailable on the target machine.",
   "chat.editor.nativeDenied": "This connection cannot open an editor on this environment.",
+  "chat.model.absentFromSession": "This model isn’t available in the current session.",
+  "chat.model.hidden": "This model is hidden in model settings.",
   "chat.model.notReady": "Not ready",
   "chat.model.favorites": "Favorites",
   "chat.model.search": "Search models...",
