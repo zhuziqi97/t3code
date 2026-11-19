@@ -223,6 +223,70 @@ it("opens on the active provider when every favorite belongs to a disabled provi
   await expect.element(page.getByRole("option", { name: /Codex model/ })).toBeVisible();
 });
 
+it.each([false, true])(
+  "lists a newly available Antigravity model without searching (locked: %s)",
+  async (locked) => {
+    const instanceId = ProviderInstanceId.make("antigravity");
+    const driver = ProviderDriverKind.make("antigravity");
+    const models = [
+      { slug: "gemini-4-carbon", name: "Gemini 4 Carbon", isCustom: false, capabilities: null },
+      { slug: "gemini-4-neon", name: "Gemini 4 Neon", isCustom: false, capabilities: null },
+    ];
+    const entries = deriveProviderInstanceEntries([
+      {
+        instanceId,
+        driver,
+        enabled: true,
+        installed: true,
+        version: null,
+        status: "ready",
+        auth: { status: "authenticated" },
+        checkedAt: "2026-01-01T00:00:00.000Z",
+        models,
+        slashCommands: [],
+        skills: [],
+      },
+    ]);
+    __setClientSettingsForTests({
+      ...DEFAULT_CLIENT_SETTINGS,
+      favorites: [{ provider: instanceId, model: "gemini-4-carbon" }],
+    });
+    using _settings = {
+      [Symbol.dispose]: () => __setClientSettingsForTests(DEFAULT_CLIENT_SETTINGS),
+    };
+
+    function Picker() {
+      const [model, setModel] = useState("gemini-4-carbon");
+      return (
+        <>
+          <output aria-label="Selected model">{model}</output>
+          <ProviderModelPicker
+            environmentId={null}
+            activeInstanceId={instanceId}
+            model={model}
+            lockedProvider={locked ? driver : null}
+            instanceEntries={entries}
+            modelOptionsByInstance={new Map([[instanceId, models]])}
+            triggerAriaLabel="Choose model"
+            onInstanceModelChange={(_, selected) => setModel(selected)}
+          />
+        </>
+      );
+    }
+
+    await using screen = await render(<Picker />);
+    await screen.getByRole("button", { name: "Choose model" }).click();
+    const search = page.getByPlaceholder("Search models...");
+    await expect.element(search).toHaveValue("");
+    const newModel = page.getByRole("option", { name: /Gemini 4 Neon/ });
+    await expect.element(newModel).toBeVisible();
+    await newModel.click();
+    await expect
+      .element(screen.getByRole("status", { name: "Selected model" }))
+      .toHaveTextContent("gemini-4-neon");
+  },
+);
+
 it("keeps the touch keyboard down while choosing a provider", async () => {
   const entries = deriveProviderInstanceEntries(
     ["Codex", "Claude"].map((name) => ({

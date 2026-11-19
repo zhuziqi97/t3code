@@ -457,7 +457,8 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       if (
         props.lockedProvider !== null ||
         activeInstanceHasSelectableUnavailableModel ||
-        activeInstanceNeedsSetup
+        activeInstanceNeedsSetup ||
+        (activeEntry?.driverKind === "antigravity" && isProviderInstancePickerReady(activeEntry))
       ) {
         return props.activeInstanceId;
       }
