@@ -92,7 +92,6 @@ import {
 import { create } from "zustand";
 import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
-import { shallow } from "zustand/shallow";
 import { draftModelSelectionApplies } from "./lib/chatThreadActions";
 import { createDeferredStorage, createMemoryStorage } from "./lib/storage";
 import {
@@ -4466,11 +4465,15 @@ composerDraftStore.subscribe((state, previous) => {
     const before = previous.draftsByThreadKey[key];
     const after = state.draftsByThreadKey[key];
     if (before === after) continue;
-    const changed =
-      before && after
-        ? !shallow(composerDraftContent(before), composerDraftContent(after))
-        : Boolean((before ?? after)?.prompt.length) || composerDraftHasUserContent(before ?? after);
-    if (changed) draftRevisions.set(key, (draftRevisions.get(key) ?? 0) + 1);
+    // Empty drafts can be rewritten by model picks without changing the prediction input.
+    if (
+      !before?.prompt.length &&
+      !after?.prompt.length &&
+      !composerDraftHasUserContent(before) &&
+      !composerDraftHasUserContent(after)
+    )
+      continue;
+    draftRevisions.set(key, (draftRevisions.get(key) ?? 0) + 1);
   }
 });
 composerDraftLoadedState = partializeComposerDraftStoreState(composerDraftStore.getState());

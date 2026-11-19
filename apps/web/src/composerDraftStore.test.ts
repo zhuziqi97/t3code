@@ -2839,6 +2839,18 @@ describe("prediction draft revisions", () => {
     const store = useComposerDraftStore.getState();
     store.setModelSelection(ref, modelSelection(CODEX_DRIVER, "gpt-5.4"));
     store.setModelSelection(ref, modelSelection(CODEX_DRIVER, "gpt-5.5"));
+    const key = threadKeyFor(ref.threadId, ref.environmentId);
+    useComposerDraftStore.setState((state) => ({
+      draftsByThreadKey: {
+        ...state.draftsByThreadKey,
+        [key]: {
+          ...state.draftsByThreadKey[key]!,
+          files: [],
+          images: [],
+          persistedAttachments: [],
+        },
+      },
+    }));
     expect(useComposerDraftStore.getState().getComposerDraftRevision(ref)).toBe(before);
     useComposerDraftStore.getState().setPrompt(ref, "typed");
     useComposerDraftStore.getState().setPrompt(ref, "");
