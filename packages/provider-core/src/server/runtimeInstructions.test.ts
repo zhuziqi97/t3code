@@ -14,12 +14,12 @@ describe("buildRuntimeInstructions", () => {
     assert.notInclude(instructions, "<pull_request_linking>");
   });
 
-  it("links PRs the agent creates, takes over, or pushes to, and no others", () => {
+  it("links PRs the agent creates, takes over, or pushes to, and keeps issue linking on demand", () => {
     const instructions = buildRuntimeInstructions({ harness: "Codex" });
 
     assert.include(instructions, "Link each PR you create, take over, or push to");
     assert.include(instructions, "every stack layer");
-    assert.include(instructions, "link_issue");
+    assert.notInclude(instructions, "link_issue");
     assert.include(instructions, "Skip PRs you only read or review");
     assert.include(instructions, "If linking fails, say so.");
     assert.notInclude(instructions, "git log -1");
