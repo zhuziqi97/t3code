@@ -1,9 +1,11 @@
-import { i18n, useTranslate } from "~/i18n";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { useAtomCommand } from "~/state/use-atom-command";
 import type { EnvironmentId, PullRequestDetailView, PullRequestRef } from "@t3tools/contracts";
 import { SendIcon } from "lucide-react";
+import { msg, T, useGT } from "gt-react";
 import { useEffect, useState, type RefObject } from "react";
+
+import { m } from "~/i18n/messages";
 
 import { TextFieldSpeechControls, useTextFieldSpeech } from "~/speech/useTextFieldSpeech";
 import { pullRequestEnvironment } from "~/state/pullRequests";
@@ -17,6 +19,8 @@ import {
 } from "./PullRequestMarkdownTextarea";
 import { pullRequestReviewKey } from "./pullRequestReviewStore";
 import { useInlineActionConfirm } from "./useInlineActionConfirm";
+
+import { changeRequestTermKind } from "./changeRequestTerm";
 
 export function PullRequestCommentForm({
   environmentId,
@@ -43,11 +47,7 @@ export function PullRequestCommentForm({
   onCommented: () => void;
   onClose: () => void;
 }) {
-  const t = useTranslate();
-  const terminology = sourceControlClients.get(detail.provider).changeRequest;
-  const request = t(`sourceControl.requestTerm.${terminology.singular}`, {
-    defaultValue: terminology.singular,
-  });
+  const gt = useGT();
   const [body, setBody] = useState("");
   const [submitting, setSubmitting] = useState<"comment" | "close" | "reopen" | null>(null);
   const locked = submitting !== null || actionPending;
@@ -102,7 +102,7 @@ export function PullRequestCommentForm({
     });
     if (result._tag === "Failure") {
       setSubmitting(null);
-      toastManager.add({ type: "error", title: i18n.t("pullRequest.flow.comment.postFailed") });
+      toastManager.add({ type: "error", title: m(msg("Could not post the comment")) });
       return;
     }
     setBody("");
@@ -125,8 +125,13 @@ export function PullRequestCommentForm({
         readOnly={speech.freezesEditor}
         value={body}
         rows={3}
-        placeholder={t("pullRequest.flow.comment.placeholder")}
-        aria-label={t("pullRequest.flow.comment.label", { request })}
+        placeholder={gt("Leave a comment")}
+        aria-label={gt(
+          "Comment on this {term, select, mr {merge request} cr {change request} other {pull request}}",
+          {
+            term: changeRequestTermKind(sourceControlClients.get(detail.provider).changeRequest),
+          },
+        )}
         onValueChange={setBody}
         onKeyDown={(event) => {
           if (event.nativeEvent.isComposing || event.keyCode === 229) return;
@@ -162,20 +167,20 @@ export function PullRequestCommentForm({
               // The longest label holds the width, so the confirming click lands on the button.
               <span className="inline-grid">
                 <span aria-hidden className="invisible col-start-1 row-start-1">
-                  {t("pullRequest.flow.comment.close")}
+                  <T>Close with comment</T>
                 </span>
                 <span className="col-start-1 row-start-1">
                   {submitting === "close"
-                    ? t("pullRequest.flow.comment.closing")
+                    ? gt("Closing...")
                     : inlineConfirm.isArmed("close")
-                      ? "Confirm close?"
-                      : t("pullRequest.flow.comment.close")}
+                      ? gt("Confirm close?")
+                      : gt("Close with comment")}
                 </span>
               </span>
             ) : submitting === "reopen" ? (
-              t("pullRequest.flow.comment.reopening")
+              gt("Reopening...")
             ) : (
-              t("pullRequest.flow.comment.reopen")
+              gt("Reopen with comment")
             )}
           </Button>
         )}
@@ -187,8 +192,8 @@ export function PullRequestCommentForm({
         >
           <SendIcon className="size-3.5" />
           {submitting === "comment"
-            ? t("pullRequest.flow.comment.posting")
-            : t("pullRequest.flow.comment")}
+            ? gt("Posting...")
+            : gt("Comment", { $context: "verb, submit button" })}
         </Button>
       </div>
     </div>

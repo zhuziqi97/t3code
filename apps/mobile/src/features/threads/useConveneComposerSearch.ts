@@ -121,7 +121,7 @@ export function useConveneComposerSearch(input: {
               {
                 type: "convene-guideline",
                 id: "convene:guideline",
-                label: "Convene",
+                label: t("settings.sections.convene"),
                 description: t("convene.composer.guideline"),
                 target,
               },
@@ -133,8 +133,8 @@ export function useConveneComposerSearch(input: {
             id: `convene:${resource.resource_uri}`,
             label:
               resource.kind === "issue"
-                ? `Convene #${resource.number}`
-                : `Convene · ${resource.relative_path}`,
+                ? `${t("settings.sections.convene")} #${resource.number}`
+                : `${t("settings.sections.convene")} · ${resource.relative_path}`,
             description: `${resource.module_path} · ${resource.title}${resource.kind === "issue" ? ` · ${t(resource.state === "OPEN" ? "convene.resource.issueStateOpen" : "convene.resource.issueStateClosed")}` : ""}`,
             target,
           }));

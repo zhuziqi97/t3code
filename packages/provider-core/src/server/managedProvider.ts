@@ -84,6 +84,14 @@ function withUsageLimits(
 
 const FAILED_CHECK_RECHECK_DELAY = "30 seconds";
 
+/**
+ * True inside a `checkProvider` whose failure over a ready provider is discarded for a recheck.
+ * A provider that also records check results in its own state must leave that failure out of it.
+ */
+export const DeferringFailedCheck = Context.Reference<boolean>("t3/provider/DeferringFailedCheck", {
+  defaultValue: () => false,
+});
+
 export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(function* <
   Settings,
 >(input: {
@@ -251,6 +259,7 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
 
     const usageBeforeProbe = (yield* Ref.get(snapshotStateRef)).snapshot.usageLimits;
     const probedSnapshot = yield* input.checkProvider.pipe(
+      Effect.provideService(DeferringFailedCheck, options?.deferFailure === true),
       Effect.provideService(ProviderSnapshotProgress, { publish: publishProgress }),
     );
     // One failed periodic check over a ready provider is often transient; recheck before showing it.

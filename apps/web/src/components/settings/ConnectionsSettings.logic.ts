@@ -1,12 +1,13 @@
-import type { TFunction } from "i18next";
-import { i18n } from "../../i18n";
-
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import * as DateTime from "effect/DateTime";
+import { msg } from "gt-react";
 
 import { resolveDesktopPairingUrl, resolveHostedPairingUrl } from "./pairingUrls";
 import { getPairingTokenFromUrl, setPairingTokenOnUrl } from "@t3tools/shared/remote";
 import { readHostedPairingRequest } from "../../hostedPairing";
+import { m, type MessageResolver } from "../../i18n/messages";
 import {
+  isLoopbackHostname,
   type ServerClientSessionRecord,
   type ServerPairingLinkRecord,
 } from "~/environments/primary";
@@ -31,10 +32,6 @@ import {
   getDesktopUpdateDownloadedVersion,
   resolveDesktopUpdateButtonAction,
 } from "../desktopUpdate.logic";
-const accessTimestampFormatters = {
-  en: new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }),
-  zh: new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short" }),
-};
 
 /** Keep terminal:read with terminal:operate to avoid creating unseen shells on every script run. */
 export function togglePairingScopeSelection(
@@ -72,10 +69,11 @@ export function isQrShareableEndpoint(endpoint: AdvertisedEndpoint): boolean {
  * means unchecked. */
 export function missingTailscaleEndpointDescription(
   state: Pick<DesktopServerExposureState, "mode" | "tailscaleServeEnabled"> | null,
+  resolve: MessageResolver = m,
 ): string {
   return state && state.mode !== "network-accessible" && !state.tailscaleServeEnabled
-    ? "Turn on Network access to detect Tailscale."
-    : "Start Tailscale to set up HTTPS access through MagicDNS.";
+    ? resolve(msg("Turn on Network access to detect Tailscale."))
+    : resolve(msg("Start Tailscale to set up HTTPS access through MagicDNS."));
 }
 
 export function resolveTailscaleServeBaseUrl(
@@ -106,12 +104,15 @@ export function isWslSettingsRowVisible(input: {
  * Once client/server versions match, this passive Version label follows the sidebar update action,
  * including retryable failures. Rechecks retain downloaded-update labels; `state` is null outside desktop.
  */
-export function resolveLocalVersionStatusLabel(state: DesktopUpdateState | null): string {
-  if (!state) return "Up to date";
+export function resolveLocalVersionStatusLabel(
+  state: DesktopUpdateState | null,
+  resolve: MessageResolver = m,
+): string {
+  if (!state) return resolve(msg("Up to date"));
   if (state.status === "downloading") {
     return state.availableVersion
-      ? `Downloading update ${state.availableVersion}`
-      : "Downloading update";
+      ? resolve(msg("Downloading update {version}", { version: state.availableVersion }))
+      : resolve(msg("Downloading update"));
   }
   const action = resolveDesktopUpdateButtonAction(state);
   if (
@@ -120,14 +121,16 @@ export function resolveLocalVersionStatusLabel(state: DesktopUpdateState | null)
     (state.status === "checking" && state.downloadedVersion !== null)
   ) {
     const version = getDesktopUpdateDownloadedVersion(state);
-    return version ? `Update ${version} downloaded` : "Update downloaded";
+    return version
+      ? resolve(msg("Update {version} downloaded", { version }))
+      : resolve(msg("Update downloaded"));
   }
   if (action === "download") {
     return state.availableVersion
-      ? `Update ${state.availableVersion} available`
-      : "Update available";
+      ? resolve(msg("Update {version} available", { version: state.availableVersion }))
+      : resolve(msg("Update available"));
   }
-  return "Up to date";
+  return resolve(msg("Up to date"));
 }
 
 export type QrEndpointOption = {
@@ -169,22 +172,30 @@ export async function applyWslEnableSelection(input: {
   return await bridge.setWslBackendEnabled(true);
 }
 
-export function formatAccessTimestamp(value: string, _t: TFunction = i18n.t): string {
+const accessTimestampFormatter = new Intl.DateTimeFormat(undefined, {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
+export function formatAccessTimestamp(value: string): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
     return value;
   }
-  return accessTimestampFormatters[i18n.resolvedLanguage === "zh" ? "zh" : "en"].format(parsed);
+  return accessTimestampFormatter.format(parsed);
 }
 
-export function parseManualDesktopSshTarget(input: {
-  readonly host: string;
-  readonly username: string;
-  readonly port: string;
-}): DesktopSshEnvironmentTarget {
+export function parseManualDesktopSshTarget(
+  input: {
+    readonly host: string;
+    readonly username: string;
+    readonly port: string;
+  },
+  resolve: MessageResolver = m,
+): DesktopSshEnvironmentTarget {
   const rawHost = input.host.trim();
   if (rawHost.length === 0) {
-    throw new Error(i18n.t("connections.sshRequired"));
+    throw new Error(resolve(msg("SSH host or alias is required.")));
   }
 
   let hostname = rawHost;
@@ -220,11 +231,11 @@ export function parseManualDesktopSshTarget(input: {
   }
 
   if (hostname.length === 0) {
-    throw new Error(i18n.t("connections.sshRequired"));
+    throw new Error(resolve(msg("SSH host or alias is required.")));
   }
 
   if (port !== null && (!Number.isInteger(port) || port <= 0 || port > 65_535)) {
-    throw new Error(i18n.t("connections.sshPort"));
+    throw new Error(resolve(msg("SSH port must be between 1 and 65535.")));
   }
 
   return {
@@ -266,10 +277,13 @@ export function parsePairingUrlFields(
   }
 }
 
-export function parseRemotePairingFields(input: {
-  readonly host: string;
-  readonly pairingCode: string;
-}): {
+export function parseRemotePairingFields(
+  input: {
+    readonly host: string;
+    readonly pairingCode: string;
+  },
+  resolve: MessageResolver = m,
+): {
   readonly host: string;
   readonly pairingCode: string;
 } {
@@ -279,17 +293,21 @@ export function parseRemotePairingFields(input: {
   const host = input.host.trim();
   const pairingCode = input.pairingCode.trim();
   if (!host) {
-    throw new Error(i18n.t("connections.hostRequired"));
+    throw new Error(resolve(msg("Enter a backend host.")));
   }
   if (!pairingCode) {
-    throw new Error(i18n.t("connections.codeRequired"));
+    throw new Error(resolve(msg("Enter a pairing code.")));
   }
   return { host, pairingCode };
 }
 
-export function formatDesktopSshConnectionError(error: unknown): string {
-  const fallback = i18n.t("connections.sshFailed");
-  const rawMessage = error instanceof Error ? error.message : fallback;
+export function formatDesktopSshConnectionError(
+  error: unknown,
+  resolve: MessageResolver = m,
+): string {
+  const fallback = resolve(msg("Failed to connect SSH host."));
+  const rawMessage =
+    error instanceof Error ? (thrownErrorMessage(error, m) ?? error.message) : fallback;
   const withoutIpcPrefix = rawMessage.replace(
     /^Error invoking remote method 'desktop:ensure-ssh-environment':\s*/u,
     "",
@@ -307,11 +325,21 @@ export function sortDesktopPairingLinks(links: ReadonlyArray<ServerPairingLinkRe
 export function summarizeAuthorizedClients(
   sessions: ReadonlyArray<ServerClientSessionRecord>,
   links: ReadonlyArray<ServerPairingLinkRecord>,
-  t: TFunction = i18n.t,
+  resolve: MessageResolver = m,
 ): string {
   const parts = [
-    t("connections.clientCount", { count: sessions.length }),
-    links.length > 0 ? t("connections.linkCount", { count: links.length }) : null,
+    resolve(
+      msg("{count, plural, one {{count} client} other {{count} clients}}", {
+        count: sessions.length,
+      }),
+    ),
+    links.length > 0
+      ? resolve(
+          msg("{count, plural, one {{count} pairing link} other {{count} pairing links}}", {
+            count: links.length,
+          }),
+        )
+      : null,
   ];
   return parts.filter((part): part is string => part !== null).join(" · ");
 }
@@ -421,8 +449,15 @@ export function resolveAdvertisedEndpointPairingUrl(
   return resolveDesktopPairingUrl(endpoint.httpBaseUrl, credential);
 }
 
-export function resolveCurrentOriginPairingUrl(credential: string): string {
-  const url = new URL("/pair", window.location.href);
+export function resolveCurrentOriginPairingUrl(
+  credential: string,
+  currentHref: string = window.location.href,
+): string | null {
+  const url = new URL("/pair", currentHref);
+  // The packaged desktop window loads from t3code://app, which no other device can open.
+  if ((url.protocol !== "http:" && url.protocol !== "https:") || isLoopbackHostname(url.hostname)) {
+    return null;
+  }
   return setPairingTokenOnUrl(url, credential).toString();
 }
 
@@ -438,20 +473,20 @@ export function isHostedAppPairingUrl(value: string): boolean {
 export function endpointShareHint(
   endpoint: AdvertisedEndpoint,
   url: string,
-  t: TFunction = i18n.t,
+  resolve: MessageResolver = m,
 ): string {
   if (isHostedAppPairingUrl(url)) {
-    return t("connections.hostedHint");
+    return resolve(msg("Opens the hosted app, no install needed"));
   }
   switch (endpoint.reachability) {
     case "lan":
-      return t("connections.lanHint");
+      return resolve(msg("Devices on the same network"));
     case "private-network":
-      return t("connections.privateHint");
+      return resolve(msg("Devices on your private network"));
     case "public":
-      return t("connections.publicHint");
+      return resolve(msg("Reachable from anywhere"));
     case "loopback":
-      return t("connections.loopbackHint");
+      return resolve(msg("Clients on this machine"));
   }
 }
 
@@ -475,22 +510,28 @@ export function resolveAccessEnvironmentId(input: {
 }
 
 /** A short name for a T3 Connect device: its label, or what it runs on. */
-export function connectDeviceName({
-  client,
-}: {
-  readonly client?: AuthClientMetadata | undefined;
-}): string {
-  return client?.label ?? client?.os ?? client?.browser ?? "this device";
+export function connectDeviceName(
+  {
+    client,
+  }: {
+    readonly client?: AuthClientMetadata | undefined;
+  },
+  resolve: MessageResolver = m,
+): string {
+  return client?.label ?? client?.os ?? client?.browser ?? resolve(msg("this device"));
 }
 
 /** How a T3 Connect device describes itself. It can say anything, so the code is what to trust. */
-export function describeConnectDeviceClient({
-  client,
-}: {
-  readonly client?: AuthClientMetadata | undefined;
-}): string {
+export function describeConnectDeviceClient(
+  {
+    client,
+  }: {
+    readonly client?: AuthClientMetadata | undefined;
+  },
+  resolve: MessageResolver = m,
+): string {
   const bits = [client?.label, client?.os, client?.browser, client?.ipAddress].filter(
     (value): value is string => typeof value === "string" && value.length > 0,
   );
-  return bits.length > 0 ? [...new Set(bits)].join(" · ") : "Unknown device";
+  return bits.length > 0 ? [...new Set(bits)].join(" · ") : resolve(msg("Unknown device"));
 }

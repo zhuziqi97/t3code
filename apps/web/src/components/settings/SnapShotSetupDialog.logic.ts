@@ -1,6 +1,7 @@
-import { i18n } from "../../i18n";
-import type { TFunction } from "i18next";
 import type { DesktopSnapShotState } from "@t3tools/contracts";
+import { msg } from "gt-react";
+
+import { m, type MessageResolver } from "../../i18n/messages";
 
 export type CaptureSetupStep = "access" | "shortcut";
 
@@ -53,7 +54,7 @@ export function captureSetupMacPermissionsReady(
 
 export function captureSetupCheckMessage(
   state: DesktopSnapShotState,
-  t: TFunction = i18n.t,
+  resolve: MessageResolver = m,
 ): string {
   const backend = captureSetupBackend(state);
   const gnome = backend === "gnome";
@@ -63,13 +64,15 @@ export function captureSetupCheckMessage(
     (backend === "kde" && state.kdeHelper?.status === "error") ||
     (backend === "hyprland" && state.hyprlandHelper?.status === "error")
   )
-    return t("snapshots.setup.check-error");
-  if (captureSetupBackend(state) === "picker") return t("snapshots.setup.picker-ready");
+    return resolve(msg("Still unable to check access. See Advanced for help."));
+  if (captureSetupBackend(state) === "picker") {
+    return resolve(msg("Ready. You'll choose a window each time."));
+  }
   if (gnome && state.gnomeExtension?.status === "restart-required")
-    return t("snapshots.setup.wait-login");
+    return resolve(msg("Still waiting for you to sign out and back in."));
   return captureSetupAccessReady(state)
-    ? t("snapshots.setup.ready-shortcut")
-    : t("snapshots.setup.not-ready");
+    ? resolve(msg("Ready. Continue to choose your shortcut."))
+    : resolve(msg("Not ready yet. Finish the step above."));
 }
 
 export function captureSetupShortcutReady(state: DesktopSnapShotState, unsaved: boolean): boolean {

@@ -1,6 +1,5 @@
 import { i18n } from "../../i18n";
 import { isListedThreadLineage, isWebhookDedupeTemplate } from "@t3tools/contracts";
-import type { TFunction } from "i18next";
 import {
   EnvironmentId,
   MAX_WEBHOOK_DELIVERY_AGE_MINUTES,
@@ -26,6 +25,8 @@ import {
   type WebhookFilterDraft,
 } from "@t3tools/client-runtime/scheduled-task-webhook";
 import { scheduleTimeZoneLabel } from "@t3tools/client-runtime/scheduled-task-time-zone";
+import { msg } from "gt-react";
+import { m, type MessageResolver } from "../../i18n/messages";
 
 import {
   resolveProjectSettings,
@@ -35,7 +36,7 @@ import type { ProviderInstanceEntry } from "../../providerInstances";
 
 import type { ResolvedSettingsScope } from "./settingsScope";
 
-export const WEEKDAY_LABELS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
+const WEEKDAY_LABELS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 
 const ONCE_FORMATTER = new Intl.DateTimeFormat(undefined, {
   dateStyle: "medium",
@@ -149,87 +150,77 @@ export function toDateTimeLocalValue(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-export function scheduleDraftErrors(draft: DraftState, translate?: TFunction) {
+export function scheduleDraftErrors(draft: DraftState, resolve: MessageResolver = m) {
+  const invalidRunTime = (description: string) => [
+    { title: resolve(msg("Invalid run time")), description },
+  ];
   if (draft.scheduleMode === "once") {
     const runAt = new Date(draft.runAt);
-    if (Number.isNaN(runAt.getTime()))
-      return [
-        {
-          title: translate?.("scheduled.invalidRunTime") ?? "Invalid run time",
-          description: translate?.("scheduled.pickDateTime") ?? "Pick a date and time.",
-        },
-      ];
+    if (Number.isNaN(runAt.getTime())) return invalidRunTime(resolve(msg("Pick a date and time.")));
     // A time skipped by a daylight saving change parses to a different clock time.
     if (toDateTimeLocalValue(runAt) !== draft.runAt)
-      return [
-        {
-          title: translate?.("scheduled.invalidRunTime") ?? "Invalid run time",
-          description:
-            translate?.("scheduled.timeDoesNotExist") ??
-            "That time does not exist in your time zone.",
-        },
-      ];
+      return invalidRunTime(resolve(msg("That time does not exist in your time zone.")));
     return [];
   }
   if (draft.scheduleMode === "fixed" && !draft.timeOfDay)
-    return [{ title: "Invalid run time", description: "Pick a time." }];
+    return invalidRunTime(resolve(msg("Pick a time.")));
   if (draft.scheduleMode !== "webhook") return [];
   if (parseMaxDeliveryAge(draft.maxDeliveryAgeMinutes) === undefined)
     return [
       {
-        title: translate?.("scheduled.invalidAgeLimit") ?? "Invalid age limit",
-        description:
-          translate?.("scheduled.enterAgeLimit", { max: MAX_WEBHOOK_DELIVERY_AGE_MINUTES }) ??
-          `Enter whole minutes from 1 to ${MAX_WEBHOOK_DELIVERY_AGE_MINUTES}, or leave it blank.`,
+        title: resolve(msg("Invalid age limit")),
+        description: resolve(
+          msg("Enter whole minutes from 1 to {max}, or leave it blank.", {
+            max: MAX_WEBHOOK_DELIVERY_AGE_MINUTES,
+          }),
+        ),
       },
     ];
   const errors: Array<{ title: string; description: string }> = [];
-  for (const [label, value] of [
-    [translate?.("scheduled.replayKey") ?? "Replay key", draft.replayKey],
-    [translate?.("scheduled.coalesceKey") ?? "Coalesce key", draft.coalesceKey],
+  for (const [description, value] of [
+    [msg("Duplicate request key must contain a valid request placeholder."), draft.replayKey],
+    [msg("Coalesce key must contain a valid request placeholder."), draft.coalesceKey],
   ] as const) {
     if (value.trim() && !isWebhookDedupeTemplate(value.trim()))
       errors.push({
-        title: translate?.("scheduled.invalidWebhookSettings") ?? "Invalid webhook settings",
-        description:
-          translate?.("scheduled.invalidRequestPlaceholder", { label }) ??
-          `${label} must contain a valid request placeholder.`,
+        title: resolve(msg("Invalid webhook settings")),
+        description: resolve(description),
       });
   }
   const window = draft.coalesceWindowSeconds.trim();
   if (window && (!Number.isInteger(Number(window)) || Number(window) < 10 || Number(window) > 3600))
     errors.push({
-      title: translate?.("scheduled.invalidWebhookSettings") ?? "Invalid webhook settings",
-      description:
-        translate?.("scheduled.invalidCoalesceWindow") ??
-        "Coalesce window must be whole seconds from 10 to 3600.",
+      title: resolve(msg("Invalid webhook settings")),
+      description: resolve(msg("Coalesce window must be whole seconds from 10 to 3600.")),
     });
   return errors;
 }
+
+const WEBHOOK_DELIVERY_LABELS: Record<string, string> = {
+  dispatch_failed: msg("Run failed"),
+  duplicate: msg("Duplicate", { $context: "webhook delivery outcome" }),
+  coalesced: msg("Coalesced"),
+  filtered: msg("Filtered", { $context: "webhook delivery outcome" }),
+  rejected_signature: msg("Bad signature"),
+  disabled: msg("Task paused"),
+  rate_limited: msg("Rate limited"),
+  expired: msg("Too old"),
+};
 
 export function webhookDeliveryLabel(
   delivery: {
     readonly outcome: string;
     readonly pendingWindow?: boolean | undefined;
   },
-  translate?: TFunction,
+  resolve: MessageResolver = m,
 ) {
-  if (delivery.outcome === "accepted")
+  if (delivery.outcome === "accepted") {
     return delivery.pendingWindow
-      ? (translate?.("scheduled.delivery.openedWindow") ?? "Opened window")
-      : (translate?.("scheduled.delivery.ran") ?? "Ran");
-  const labels: Record<string, string> = {
-    dispatch_failed: "Run failed",
-    duplicate: "Duplicate",
-    coalesced: "Coalesced",
-    filtered: "Filtered",
-    rejected_signature: "Bad signature",
-    disabled: "Task paused",
-    rate_limited: "Rate limited",
-    expired: "Too old",
-  };
-  const label = labels[delivery.outcome] ?? delivery.outcome.replaceAll("_", " ");
-  return translate?.(`scheduled.delivery.${delivery.outcome}`, { defaultValue: label }) ?? label;
+      ? resolve(msg("Opened window"))
+      : resolve(msg("Ran", { $context: "webhook delivery outcome" }));
+  }
+  const label = WEBHOOK_DELIVERY_LABELS[delivery.outcome];
+  return label ? resolve(label) : delivery.outcome.replaceAll("_", " ");
 }
 
 export function scheduleFromDraft(draft: DraftState): ScheduledTaskUpsertSchedule | null {
@@ -325,7 +316,7 @@ export function taskToDraft(task: ScheduledTask): DraftState {
     threadId: task.threadId ?? "",
     threadMode: scheduledTaskThreadMode(task),
     workspaceMode: task.workspaceStrategy.type,
-    baseRef: task.workspaceStrategy.type === "worktree" ? task.workspaceStrategy.baseRef : "main",
+    baseRef: task.workspaceStrategy.type === "worktree" ? task.workspaceStrategy.baseRef : "",
     startFromOrigin:
       task.workspaceStrategy.type === "worktree"
         ? (task.workspaceStrategy.startFromOrigin ?? false)

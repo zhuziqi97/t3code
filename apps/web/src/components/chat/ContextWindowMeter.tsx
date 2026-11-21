@@ -1,3 +1,4 @@
+import { useLocale, useMessages } from "gt-react";
 import { useTranslate } from "../../i18n";
 import { Button } from "../ui/button";
 import {
@@ -21,6 +22,8 @@ export function ContextWindowMeter(props: {
   compactDisabledReason?: string | null | undefined;
 }) {
   const t = useTranslate();
+  const messages = useMessages();
+  const locale = useLocale();
   const { usage, modelDisplayName, onCompact, compactDisabled, compactDisabledReason } = props;
   const usedPercentage = formatContextWindowPercentage(usage?.usedPercentage ?? null);
   const normalizedPercentage = Math.max(0, Math.min(100, usage?.usedPercentage ?? 0));
@@ -97,7 +100,12 @@ export function ContextWindowMeter(props: {
           ) : null}
           {usage?.compactsAutomatically ? (
             <div className="mt-1 text-pretty text-secondary-label text-2xs font-medium">
-              {formatContextWindowCompactionMessage(modelDisplayName, usage?.autoCompactThreshold)}
+              {formatContextWindowCompactionMessage(
+                modelDisplayName,
+                usage?.autoCompactThreshold,
+                messages,
+                locale,
+              )}
             </div>
           ) : null}
           {onCompact ? (

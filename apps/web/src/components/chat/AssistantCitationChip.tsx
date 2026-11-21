@@ -6,6 +6,7 @@ import {
   serializeAssistantCitation,
 } from "@t3tools/shared/assistantCitations";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { useGT } from "gt-react";
 import { PencilIcon, QuoteIcon } from "lucide-react";
 import {
   useEffect,
@@ -123,6 +124,7 @@ export function AssistantCitationEmbed({
   leading: boolean;
   trailing: boolean;
 }) {
+  const gt = useGT();
   const wholeResponse = citation.prefix === "" && citation.suffix === "";
   const { comment, ...quoted } = citation;
   return (
@@ -130,7 +132,7 @@ export function AssistantCitationEmbed({
       citation={citation}
       copyMarkdown={serializeAssistantCitation(citation)}
       cardCopyMarkdown={serializeAssistantCitation(quoted)}
-      label={`Go to quoted response: ${assistantCitationLabel(quoted)}`}
+      label={gt("Go to quoted response: {label}", { label: assistantCitationLabel(quoted) })}
       comment={comment}
       leading={leading}
       trailing={trailing}
@@ -163,11 +165,12 @@ export function ResponseReplyCard({
   leading: boolean;
   trailing: boolean;
 }) {
+  const gt = useGT();
   return (
     <ResponseCard
       citation={record.citation}
       copyMarkdown={copyMarkdown}
-      label={`Go to the response this replies to: ${record.label}`}
+      label={gt("Go to the response this replies to: {label}", { label: record.label })}
       title={record.subagents?.map((subagent) => subagent.title).join(", ")}
       preview={flat(record.citation.text)}
       leading={leading}

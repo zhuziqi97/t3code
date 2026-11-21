@@ -1,3 +1,4 @@
+import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
 import { pipe } from "effect/Function";
 import {
   isAtomCommandInterrupted,
@@ -8,6 +9,8 @@ import { useNavigation } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
 import { CONVENE_DESKTOP_IDENTITY } from "@t3tools/shared/conveneDesktopIdentity";
 import { i18n } from "../../i18n";
+import { useGT } from "gt-react-native";
+import { m } from "../../i18n/messages";
 
 import * as Dialog from "../../components/ui/Dialog";
 import { projectEnvironment } from "../../state/projects";
@@ -28,6 +31,7 @@ const CLI_COMMAND = `${CONVENE_DESKTOP_IDENTITY.executableName} triage`;
  */
 export function useStartTriage() {
   const navigation = useNavigation();
+  const gt = useGT();
   const selectDetail = useSelectWorkspaceDetail();
   const prepare = usePrepareTriage();
   const openScratch = useAtomCommand(projectEnvironment.openScratch, { reportFailure: false });
@@ -44,11 +48,11 @@ export function useStartTriage() {
               Dialog.alert(i18n.t("triage.copyFailed", { command: CLI_COMMAND })),
             ),
         },
-        { text: "OK", style: "cancel" },
+        { text: gt("OK"), style: "cancel" },
       ],
     );
   const errorMessage = (error: unknown, fallback: string) =>
-    error instanceof Error ? error.message : fallback;
+    error instanceof Error ? (errorDisplayMessage(error, m) ?? error.message) : fallback;
 
   const activeRoute = () => {
     const state = navigation.getState();

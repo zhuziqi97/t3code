@@ -1,3 +1,4 @@
+import { resolveChineseMessage } from "../../test/gtCatalog";
 import { buildDraftActionMenuItems } from "./threadActionMenu.logic";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -75,6 +76,11 @@ describe("buildThreadActionMenuItems", () => {
     expect(items.find((item) => item.id === "archive")?.disabled).toBe(true);
     expect(items.find((item) => item.id === "turn-into-project")?.disabled).toBe(true);
   });
+
+  it("disables only rename where no inline title editor exists", () => {
+    const items = buildThreadActionMenuItems({ ...baseState, canRename: false });
+    expect(items.filter((item) => item.disabled).map((item) => item.id)).toEqual(["rename"]);
+  });
 });
 
 describe("buildDraftActionMenuItems", () => {
@@ -100,8 +106,7 @@ describe("buildDraftActionMenuItems", () => {
 
 describe("localized thread menus", () => {
   it("keeps the same native menu actions and grants while showing Chinese labels", async () => {
-    const { createI18n } = await import("@t3tools/client-runtime/i18n");
-    const t = createI18n().getFixedT("zh");
+    const t = resolveChineseMessage;
     const state = {
       ...baseState,
       canOperate: false,

@@ -1,5 +1,7 @@
 import type { TFunction } from "i18next";
 import { i18n, useTranslate } from "../../i18n";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { m } from "~/i18n/messages";
 import {
   isAtomCommandInterrupted,
   settlePromise,
@@ -13,6 +15,7 @@ import {
   type ProviderInstanceId,
   type ServerProvider,
 } from "@t3tools/contracts";
+import { useGT, useMessages } from "gt-react";
 import { useRef, useState } from "react";
 import { Trash2Icon } from "lucide-react";
 
@@ -112,9 +115,13 @@ function ProviderSetupActions({
   readonly authMethod: AntigravityAuthMethod;
 }) {
   const t = useTranslate();
+  const gt = useGT();
   const target = { environmentId, input: { instanceId } };
-  const authQuery = useEnvironmentQuery(serverEnvironment.providerAuthState(target));
-  const installQuery = useEnvironmentQuery(serverEnvironment.providerInstallState(target));
+  const authQuery = useEnvironmentQuery(serverEnvironment.providerAuthState(target), useMessages());
+  const installQuery = useEnvironmentQuery(
+    serverEnvironment.providerInstallState(target),
+    useMessages(),
+  );
   const auth = authQuery.data;
   const installation = installQuery.data;
   const commandOptions = { reportFailure: false, reportDefect: false };
@@ -178,7 +185,7 @@ function ProviderSetupActions({
     pendingRef.current = false;
     setPendingLabel(null);
     if (settled._tag === "Failure") {
-      setError("Provider setup failed. Try again.");
+      setError(gt("Provider setup failed. Try again."));
       return false;
     }
     const result = settled.value;
@@ -186,7 +193,9 @@ function ProviderSetupActions({
       if (!isAtomCommandInterrupted(result)) {
         const failure = squashAtomCommandFailure(result);
         setError(
-          failure instanceof Error ? failure.message : { key: "provider.setup.setupFailed" },
+          failure instanceof Error
+            ? (thrownErrorMessage(failure, m) ?? failure.message)
+            : gt("Provider setup failed."),
         );
       }
       return false;

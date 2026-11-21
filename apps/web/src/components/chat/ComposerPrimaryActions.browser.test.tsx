@@ -174,14 +174,14 @@ describe.each([true, false])("composer collapsed=%s", (collapsed) => {
   });
 });
 
-it("opens a collapsed composer to confirm compaction without dispatching the draft", async () => {
-  const onExpand = vi.fn();
+it("can keep the full history without dispatching the draft", async () => {
+  const onKeepHistory = vi.fn();
   const onSubmit = vi.fn();
   const props = actionProps({
     compact: true,
     hasSendableContent: true,
     compactBeforeSendTokens: 12_000,
-    onExpandForCompaction: onExpand,
+    onToggleKeepFullHistory: onKeepHistory,
   });
   await using screen = await render(
     <form
@@ -194,9 +194,9 @@ it("opens a collapsed composer to confirm compaction without dispatching the dra
     </form>,
   );
   await userEvent.click(
-    screen.getByRole("button", { name: "Open composer to compact and send", exact: true }),
+    screen.getByRole("button", { name: /Compact .* tokens of history before sending/ }),
   );
-  expect(onExpand).toHaveBeenCalledOnce();
+  expect(onKeepHistory).toHaveBeenCalledOnce();
   expect(onSubmit).not.toHaveBeenCalled();
   await screen.rerender(
     <form
@@ -210,5 +210,5 @@ it("opens a collapsed composer to confirm compaction without dispatching the dra
   );
   await userEvent.click(screen.getByRole("button", { name: "Submit message", exact: true }));
   expect(onSubmit).toHaveBeenCalledOnce();
-  expect(onExpand).toHaveBeenCalledOnce();
+  expect(onKeepHistory).toHaveBeenCalledOnce();
 });

@@ -1,3 +1,4 @@
+import { useMessages } from "gt-react";
 import { useState } from "react";
 import { Trans } from "react-i18next";
 import { useTranslate } from "~/i18n";
@@ -62,7 +63,8 @@ export function PreviewUnreachable({ url, code, description, onReload, move }: P
   const [showDetails, setShowDetails] = useState(false);
   const t = useTranslate();
   const host = safeHost(url) ?? url;
-  const friendly = describePreviewError(description, t);
+  const m = useMessages();
+  const friendly = describePreviewError(description, m);
   const errorLabel = description.length > 0 ? description : `ERR_${Math.abs(code) || "FAILED"}`;
 
   return (

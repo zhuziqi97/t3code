@@ -1,3 +1,4 @@
+import { msg } from "gt-react";
 import { useTranslate } from "../../i18n";
 import { useAtomValue } from "@effect/atom-react";
 import { type ConvenePairing, type EnvironmentId } from "@t3tools/contracts";
@@ -141,7 +142,11 @@ function ConveneConnectionPanelContent({ environmentId }: { environmentId: Envir
     try {
       const didCopy = await writeTextToClipboard(
         kind === "code" ? pairing.value.user_code : pairing.value.verification_uri,
-        t(kind === "code" ? "convene.connection.copyCode" : "convene.connection.copyLink"),
+        {
+          target: kind,
+          unavailableMessage: msg("Clipboard API is unavailable."),
+          failureMessage: msg("Failed to copy to the clipboard."),
+        },
       );
       if (didCopy) setCopied(kind);
       else setCopyError(t("convene.connection.copyFailed"));

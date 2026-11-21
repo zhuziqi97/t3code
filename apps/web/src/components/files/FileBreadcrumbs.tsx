@@ -2,6 +2,7 @@ import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { Spinner } from "~/components/ui/spinner";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { ArrowLeftIcon, ChevronRightIcon } from "lucide-react";
+import { T, useMessages } from "gt-react";
 import { useState } from "react";
 import { useTranslate } from "~/i18n";
 
@@ -86,11 +87,13 @@ function BreadcrumbMenuContent(props: {
   readonly workspaceMutationId: string | null;
 }) {
   const t = useTranslate();
+  const messages = useMessages();
   const entriesQuery = useProjectEntriesQuery(
     props.environmentId,
     props.cwd,
     props.directoryPath,
     props.workspaceMutationId,
+    messages,
   );
   const { resolvedTheme } = useTheme();
   const entries = entriesQuery.data?.entries ?? [];
@@ -204,7 +207,7 @@ function BreadcrumbMenuContent(props: {
           <MenuSeparator />
           <MenuItem closeOnClick={false} onClick={entriesQuery.refresh}>
             <RefreshIcon refreshing={entriesQuery.isPending} />
-            Refresh failed. Retry
+            <T>Refresh failed. Retry</T>
           </MenuItem>
         </>
       ) : null}

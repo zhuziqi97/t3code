@@ -1,5 +1,7 @@
 import { useTranslate } from "../../i18n";
 
+import { msg } from "gt-react";
+import { m } from "~/i18n/messages";
 import {
   ConnectionBlockedError,
   ConnectionTransientError,
@@ -234,7 +236,7 @@ export function useComposerContextImport(input: {
       (pendingThreadImportsRef.current.get(importTargetKey) ?? 0) > 0 &&
       countReservedAttachments() >= PROVIDER_SEND_TURN_MAX_ATTACHMENTS
     ) {
-      fail("The attachment limit has been reached.");
+      fail(m(msg("The attachment limit has been reached.")));
       return;
     }
     if (record.kind === "image") {
@@ -249,6 +251,7 @@ export function useComposerContextImport(input: {
             sizeBytes: file.size,
             previewUrl: URL.createObjectURL(file),
             file,
+            ...(record.source ? { source: record.source } : {}),
           },
         ],
         {

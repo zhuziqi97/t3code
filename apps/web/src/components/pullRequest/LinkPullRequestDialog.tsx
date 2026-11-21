@@ -1,4 +1,4 @@
-import { useTranslate } from "../../i18n";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import {
   pullRequestLinkProject,
@@ -6,7 +6,9 @@ import {
 } from "@t3tools/client-runtime/pull-request-link-input";
 import { useAtomValue } from "@effect/atom-react";
 import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import { msg, T, useGT } from "gt-react";
 import { useRef, useState } from "react";
+import { m } from "~/i18n/messages";
 
 import { useProjects, useThreadShell } from "~/state/entities";
 import { usePullRequestLinking } from "~/hooks/usePullRequestLinking";
@@ -64,7 +66,7 @@ function LinkPullRequestDialog({
   projectId,
   onOpenChange,
 }: LinkPullRequestDialogProps) {
-  const t = useTranslate();
+  const gt = useGT();
   const inputRef = useRef<HTMLInputElement>(null);
   const [reference, setReference] = useState("");
   const [dirty, setDirty] = useState(false);
@@ -92,7 +94,6 @@ function LinkPullRequestDialog({
     reference,
     project: ownProject,
     hasProject: (reference) => linking.canLink(reference.url),
-    translate: t,
   });
 
   const submit = async () => {
@@ -106,7 +107,7 @@ function LinkPullRequestDialog({
     setPending(false);
     if (result._tag === "Failure") {
       const error = squashAtomCommandFailure(result);
-      setSubmitError(error instanceof Error ? error.message : t("pullRequest.linkDialog.failed"));
+      setSubmitError(thrownErrorMessage(error, m) ?? m(msg("Could not link the pull request.")));
       return;
     }
     onOpenChange(false);
@@ -115,9 +116,9 @@ function LinkPullRequestDialog({
   const validation = !dirty
     ? null
     : reference.trim().length === 0
-      ? t("pullRequest.linkDialog.required")
+      ? gt("Paste a pull request URL or enter 123 / #123.")
       : resolved === null
-        ? t("pullRequest.linkDialog.invalid")
+        ? gt("Use a pull request URL, 123, or #123.")
         : "error" in resolved
           ? resolved.error
           : null;
@@ -126,13 +127,20 @@ function LinkPullRequestDialog({
     <Dialog open={open} onOpenChange={(next) => (pending ? undefined : onOpenChange(next))}>
       <DialogPopup className="max-w-xl" initialFocus={inputRef}>
         <DialogHeader>
-          <DialogTitle>{t("pullRequest.linked.linkPullRequest")}</DialogTitle>
-          <DialogDescription>{t("pullRequest.linkDialog.description")}</DialogDescription>
+          <DialogTitle>
+            <T>Link pull request</T>
+          </DialogTitle>
+          <DialogDescription>
+            <T>
+              Attach a pull request to this thread by its URL, or by its number for this thread's
+              repository.
+            </T>
+          </DialogDescription>
         </DialogHeader>
         <DialogPanel>
           <Input
             ref={inputRef}
-            placeholder={t("pullRequest.linkDialog.placeholder")}
+            placeholder={gt("Pull request URL or #42")}
             value={reference}
             onChange={(event) => {
               setDirty(true);
@@ -161,7 +169,7 @@ function LinkPullRequestDialog({
             onClick={() => onOpenChange(false)}
             disabled={pending}
           >
-            {t("common.cancel")}
+            <T>Cancel</T>
           </Button>
           <Button
             type="button"
@@ -169,7 +177,7 @@ function LinkPullRequestDialog({
             onClick={() => void submit()}
             disabled={pending || resolved === null || "error" in resolved}
           >
-            {pending ? t("pullRequest.linkDialog.linking") : t("pullRequest.linkDialog.link")}
+            {pending ? gt("Linking...") : gt("Link", { $context: "verb, button" })}
           </Button>
         </DialogFooter>
       </DialogPopup>

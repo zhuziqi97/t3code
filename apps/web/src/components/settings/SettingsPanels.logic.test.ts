@@ -1,5 +1,5 @@
+import { m } from "../../i18n/messages";
 import { getChangedTypographySettingLabels } from "./SettingsPanels.logic";
-import { i18n } from "../../i18n";
 import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts";
 
 import * as Duration from "effect/Duration";
@@ -16,9 +16,7 @@ import {
   hasChangedBackgroundActivitySettings,
   syncAutoSettleDaysField,
 } from "./SettingsPanels.logic";
-import { createI18n } from "@t3tools/client-runtime/i18n";
-const translations = createI18n();
-const t = translations.getFixedT("en");
+const t = m;
 
 describe("typography settings restore", () => {
   it("detects family and size changes by font row", () => {
@@ -109,9 +107,7 @@ describe("background activity settings restore", () => {
 
 describe("getChangedBrowserSettingLabels", () => {
   it("reports nothing for the defaults", () => {
-    expect(getChangedBrowserSettingLabels(DEFAULT_UNIFIED_SETTINGS, i18n.getFixedT("en"))).toEqual(
-      [],
-    );
+    expect(getChangedBrowserSettingLabels(DEFAULT_UNIFIED_SETTINGS, m)).toEqual([]);
   });
 
   it("treats a structurally equal viewport as unchanged", () => {
@@ -121,7 +117,7 @@ describe("getChangedBrowserSettingLabels", () => {
           ...DEFAULT_UNIFIED_SETTINGS,
           browserDefaultViewport: { ...DEFAULT_UNIFIED_SETTINGS.browserDefaultViewport },
         },
-        i18n.getFixedT("en"),
+        m,
       ),
     ).toEqual([]);
   });
@@ -150,7 +146,7 @@ describe("getChangedBrowserSettingLabels", () => {
           pullRequestLinksOpenInApp: false,
           browserAutoShowFloatingPreview: !DEFAULT_UNIFIED_SETTINGS.browserAutoShowFloatingPreview,
         },
-        i18n.getFixedT("en"),
+        m,
       ),
     ).toEqual([
       "Browser viewport",

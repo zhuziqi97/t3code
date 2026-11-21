@@ -206,7 +206,7 @@ function Review({ approve = false }: { approve?: boolean }) {
     <PullRequestReviewForm
       active
       completionScope={null}
-      term="pull request"
+      term="pr"
       environmentId={environmentId}
       reference={reference}
       verdicts={approve ? ["approve"] : ["request-changes"]}

@@ -1,16 +1,6 @@
 import type { BrowserImportFailureReason, BrowserImportSource } from "@t3tools/contracts";
-import { DEFAULT_BROWSER_PROFILE_ID, INCOGNITO_BROWSER_PROFILE_ID } from "@t3tools/contracts";
 import type { TFunction } from "i18next";
 import { i18n } from "../../i18n";
-
-export function browserProfileDisplayName(
-  profile: { readonly id: string; readonly name: string },
-  t: TFunction,
-): string {
-  if (profile.id === DEFAULT_BROWSER_PROFILE_ID) return t("integrations.profiles.default");
-  if (profile.id === INCOGNITO_BROWSER_PROFILE_ID) return t("integrations.profiles.incognito");
-  return profile.name;
-}
 
 export interface WizardTargetProfile {
   readonly id: string;

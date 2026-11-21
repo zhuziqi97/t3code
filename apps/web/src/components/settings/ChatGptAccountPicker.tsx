@@ -1,4 +1,5 @@
 import { useTranslate } from "../../i18n";
+import { T } from "gt-react";
 import { useState } from "react";
 import type { ProviderAuthMethod } from "@t3tools/contracts";
 import { RadioGroup, Radio } from "../ui/radio-group";
@@ -87,7 +88,7 @@ export function ChatGptAccountPicker({
               disabled={disabled || !canRemove}
               onClick={() => onRemove(selectedMethodId)}
             >
-              Remove connection
+              <T>Remove connection</T>
             </Button>
           ) : null}
           <ChatGptConnectionButton disabled={disabled} onClick={() => onSelect(selectedMethodId)} />

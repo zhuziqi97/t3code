@@ -1,3 +1,4 @@
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { useRef, useSyncExternalStore, use } from "react";
 import { useSyncExternalStoreWithSelector } from "use-sync-external-store/with-selector";
 import { RegistryContext, useAtomValue } from "@effect/atom-react";
@@ -54,6 +55,8 @@ import { primaryServerSettingsAtom, serverEnvironment } from "~/state/server";
 import { useEnvironments, usePrimaryEnvironment } from "~/state/environments";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { useTheme } from "./useTheme";
+import { msg } from "gt-react";
+import { m } from "~/i18n/messages";
 import {
   environmentSession,
   environmentSessionStatesAtom,
@@ -474,8 +477,8 @@ export function useUpdateEnvironmentModelPreferences(environmentId: EnvironmentI
     } catch {
       toastManager.add({
         type: "error",
-        title: "Model preferences not saved",
-        description: "Could not load saved model preferences. Try again.",
+        title: m(msg("Model preferences not saved")),
+        description: m(msg("Could not load saved model preferences. Try again.")),
       });
       return;
     }
@@ -501,8 +504,8 @@ export function useToggleEnvironmentModelFavorite(environmentId: EnvironmentId |
       } catch {
         toastManager.add({
           type: "error",
-          title: "Favorites not saved",
-          description: "Could not load saved model preferences. Try again.",
+          title: m(msg("Favorites not saved")),
+          description: m(msg("Could not load saved model preferences. Try again.")),
         });
         return;
       }
@@ -630,7 +633,9 @@ function useUpdateSettingsTarget(environmentId: EnvironmentId | null) {
         title: i18n.t("settings.save.notSaved"),
         description: i18n.t("settings.save.failedOn", {
           environment: label,
-          message: error instanceof Error ? error.message : i18n.t("settings.save.failed"),
+          message:
+            (error instanceof Error ? thrownErrorMessage(error, m) : null) ??
+            i18n.t("settings.save.failed"),
         }),
       });
     }
@@ -745,7 +750,9 @@ function useUpdateSettingsTarget(environmentId: EnvironmentId | null) {
               return [
                 i18n.t("settings.save.failedOn", {
                   environment: label,
-                  message: error instanceof Error ? error.message : i18n.t("settings.save.failed"),
+                  message:
+                    (error instanceof Error ? thrownErrorMessage(error, m) : null) ??
+                    i18n.t("settings.save.failed"),
                 }),
               ];
             });

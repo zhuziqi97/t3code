@@ -22,7 +22,8 @@ import {
 } from "effect/http";
 import * as Socket from "effect/socket/Socket";
 
-import { authenticateMediaRequest } from "../auth/http.ts";
+import { authenticateMediaRequest, failEnvironmentInternal } from "../auth/http.ts";
+import * as SessionStore from "../auth/SessionStore.ts";
 import { assetResponseHeaders } from "../http.ts";
 import * as PreviewBrowser from "./PreviewBrowser.ts";
 import * as PreviewBrowserHost from "./PreviewBrowserHost.ts";
@@ -82,7 +83,8 @@ const makeHandler = Effect.fnUntraced(function* (browser: ServerBrowser.ServerBr
   if (threadId.length === 0 || tabId.length === 0) {
     return HttpServerResponse.text("Not Found", { status: 404 });
   }
-  return yield* Effect.scoped(
+  const sessions = yield* SessionStore.SessionStore;
+  const stream = Effect.scoped(
     Effect.gen(function* () {
       const incoming = NodeHttpServerRequest.toIncomingMessage(request);
       // JPEGs are already compressed. Disabling deflate also keeps all
@@ -242,11 +244,23 @@ const makeHandler = Effect.fnUntraced(function* (browser: ServerBrowser.ServerBr
           ),
         }),
       );
-      return yield* Effect.raceFirst(prepare, Effect.forever(receiveInput));
+      return yield* Effect.raceFirst(prepare, Effect.forever(receiveInput)).pipe(
+        Effect.onInterrupt(() => Effect.sync(() => transport.destroy())),
+      );
     }),
   ).pipe(
     // A dropped socket is a normal end of viewing.
     Effect.orElseSucceed(() => HttpServerResponse.empty()),
+  );
+  return yield* Effect.raceFirst(
+    stream,
+    sessions.awaitInvalidation(session.sessionId).pipe(
+      Effect.as(HttpServerResponse.empty()),
+      Effect.catchTags({
+        SessionCredentialVerificationError: (error) =>
+          failEnvironmentInternal("internal_error", error),
+      }),
+    ),
   );
 });
 

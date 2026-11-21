@@ -1,10 +1,11 @@
-import { codexFeedbackMessage } from "./threadFeedback.ts";
+import { resolveChineseMessage } from "../i18n/gtCatalog.test-utils.ts";
 import { describe, expect, it } from "vite-plus/test";
 import { MessageId } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
 
 import {
+  codexFeedbackMessage,
   codexFeedbackNotice,
   submitCodexFeedback,
   type CodexFeedbackSubmission,
@@ -136,9 +137,8 @@ describe("submitCodexFeedback", () => {
   });
 });
 
-it("localizes feedback notices while retaining commands, ids and raw errors", async () => {
-  const { createI18n } = await import("../i18n/index.ts");
-  const { t } = createI18n({ lng: "zh" });
+it("localizes feedback notices while retaining commands, ids and raw errors", () => {
+  const t = resolveChineseMessage;
   const submission = {
     id: MessageId.make("message:feedback"),
     command: "/feedback user reason 原文",
@@ -147,12 +147,12 @@ it("localizes feedback notices while retaining commands, ids and raw errors", as
     feedbackId: "provider-thread-id",
   };
   expect(codexFeedbackNotice(submission, t)).toEqual({
-    title: "反馈已发送至 OpenAI",
+    title: "已向 OpenAI 发送反馈",
     description: "会话 ID：provider-thread-id",
   });
   expect(codexFeedbackMessage(submission, "user", t).text).toBe(submission.command);
   expect(codexFeedbackMessage(submission, "assistant", t).text).toBe(
-    "反馈已发送至 OpenAI。\n\n会话 ID：`provider-thread-id`",
+    "已向 OpenAI 发送反馈。\n\n会话 ID：`provider-thread-id`",
   );
   const failed = {
     ...submission,

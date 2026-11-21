@@ -1,18 +1,22 @@
 import { i18n } from "~/i18n";
 import type { TFunction } from "i18next";
+import {
+  managedNightlyDeniedMessage,
+  managedUpdatesDenial,
+} from "@t3tools/client-runtime/contract-labels";
 import type { ServerUpdateState } from "@t3tools/client-runtime/state/server";
 import {
   type DesktopUpdateState,
   type DesktopUpdateChannel,
   type EnvironmentId,
-  managedNightlyDeniedMessage,
-  managedUpdatesDenial,
   type ServerConfig,
   type ServerSelfUpdateCapability,
 } from "@t3tools/contracts";
 import { cliReleaseChannelOf, desktopUpdateChannelOf } from "@t3tools/shared/cliRelease";
 import { compareSemverVersions } from "@t3tools/shared/semver";
+import { msg } from "gt-react";
 
+import { m, type MessageResolver } from "~/i18n/messages";
 import {
   resolveServerSelfUpdateCapability,
   resolveVersionMismatch,
@@ -181,6 +185,7 @@ export function collectServerUpdateTargets(
     const managedDenial = managedMachineUpdateDenial(
       config,
       selfUpdate === "desktop-managed" ? undefined : targetVersion,
+      m,
     );
     if (managedDenial !== undefined) {
       skip(managedDenial);
@@ -320,15 +325,16 @@ export function localSwitchBlockReason(
 function managedMachineUpdateDenial(
   config: NonNullable<UpdateEverythingMachine["serverConfig"]>,
   targetVersion: string | undefined,
+  resolve: MessageResolver,
 ): string | undefined {
   const policy = config.managedPolicy;
   return (
-    managedUpdatesDenial(policy) ??
+    managedUpdatesDenial(policy, resolve) ??
     (policy !== undefined &&
     policy.limits?.updates?.allowNightly === false &&
     targetVersion !== undefined &&
     cliReleaseChannelOf(targetVersion) !== "stable"
-      ? managedNightlyDeniedMessage(policy.organization)
+      ? managedNightlyDeniedMessage(policy.organization, resolve)
       : undefined)
   );
 }
@@ -374,7 +380,7 @@ export function collectChannelSwitchTargets(
         !("skip" in move) &&
         move.selfUpdate === "desktop-managed" &&
         unavailableReason(machine, t) === null &&
-        managedMachineUpdateDenial(config, release.version) === undefined
+        managedMachineUpdateDenial(config, release.version, m) === undefined
       ) {
         targets.push({ ...target(move.selfUpdate, serverVersion), trackOnly: true });
       }
@@ -385,7 +391,7 @@ export function collectChannelSwitchTargets(
       skip(unavailable ?? (t ? t("update.skip.notConnected") : "not connected"));
       continue;
     }
-    const managedDenial = managedMachineUpdateDenial(config, release.version);
+    const managedDenial = managedMachineUpdateDenial(config, release.version, m);
     if (managedDenial !== undefined) {
       skip(managedDenial);
       continue;
@@ -547,11 +553,13 @@ export function closeFinishedUpdateRun(run: UpdateEverythingRun): UpdateEverythi
 
 const UPDATE_SLOW_AFTER_MS = 3 * 60 * 1000;
 
-export function formatUpdateElapsed(ms: number): string {
+export function formatUpdateElapsed(ms: number, resolve: MessageResolver = m): string {
   const minutes = Math.floor(ms / 60_000);
-  if (minutes < 1) return "<1m";
-  if (minutes < 60) return `${minutes}m`;
-  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+  if (minutes < 1) return resolve(msg("<1m"));
+  if (minutes < 60) return resolve(msg("{minutes}m", { minutes }));
+  return resolve(
+    msg("{hours}h {minutes}m", { hours: Math.floor(minutes / 60), minutes: minutes % 60 }),
+  );
 }
 
 export interface UpdateRunMachineView {
@@ -642,6 +650,7 @@ export function describeUpdateCapsule(
   };
 }
 
+/** `msg()` strings: resolve them with `m` or `useMessages()` where they show. */
 export const RUN_STATUS_LABELS: Record<UpdateRunMachineStatus, string> = {
   providers: "update.run.status.providers",
   waiting: "update.run.status.waiting",
@@ -805,7 +814,9 @@ export function describeUpdateEverything(
     rows.set(environmentId, { ...row, ...change });
   };
   if (plan.localVersion) {
-    if (plan.localMachines.length === 0) update(null, "This app", { app: "this-app" });
+    if (plan.localMachines.length === 0) {
+      update(null, m(msg("This app")), { app: "this-app" });
+    }
     for (const machine of plan.localMachines) {
       update(machine.environmentId, machine.label, { app: "this-app" });
     }

@@ -1,4 +1,5 @@
 import { useTranslate } from "../../i18n";
+
 import {
   WorkspaceBreadcrumb,
   WorkspaceBreadcrumbItem,

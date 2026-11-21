@@ -1,6 +1,7 @@
 import { claimThreadOpen } from "@t3tools/client-runtime/state/thread-search";
 import { EnvironmentId, type ScopedThreadRef, ThreadId } from "@t3tools/contracts";
-import { AsyncResult, Atom } from "effect/reactivity";
+import * as Effect from "effect/Effect";
+import { Atom } from "effect/reactivity";
 import { expect, it, vi } from "vite-plus/test";
 
 import { fakeTimers, render } from "../../../test/render";
@@ -57,7 +58,7 @@ it("records the next thread at once after switching threads in the active window
   using _focus = vi.spyOn(document, "hasFocus").mockReturnValue(true);
   using _visible = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
   mocks.visitRun.mockReset();
-  mocks.visitRun.mockResolvedValue(AsyncResult.success(undefined));
+  mocks.visitRun.mockReturnValue(Effect.void);
   setShell(threadA, "2026-01-02T00:00:00.000Z");
   setShell(threadB, "2026-01-03T00:00:00.000Z");
   using _timers = fakeTimers();

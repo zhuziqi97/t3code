@@ -1,3 +1,4 @@
+import { useMessages } from "gt-react-native";
 import { useAtomValue } from "@effect/atom-react";
 import {
   runAcpRegistryUpdate,
@@ -55,6 +56,7 @@ function AcpRegistryUpdateAction({
   readonly disabled: boolean;
 }) {
   const t = useTranslate();
+  const messages = useMessages();
   const canPrepare = useAtomValue(
     serverEnvironment.prepareAcpRegistryAgent.permissionAtom(environmentId),
   );
@@ -81,6 +83,7 @@ function AcpRegistryUpdateAction({
       state,
       { prepare, refresh },
       setState,
+      messages,
     );
     pendingRef.current = false;
   }

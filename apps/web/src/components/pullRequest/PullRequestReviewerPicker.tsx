@@ -18,7 +18,10 @@ import {
   toggleSelection,
 } from "@t3tools/client-runtime/pull-request-selection";
 import { CheckIcon, UserPlusIcon } from "lucide-react";
+import { msg, useMessages } from "gt-react";
 import { useState } from "react";
+
+import { type MessageResolver } from "~/i18n/messages";
 
 import { pullRequestEnvironment } from "~/state/pullRequests";
 import { useEnvironmentQuery } from "~/state/query";
@@ -30,15 +33,28 @@ import { PullRequestCandidatePicker } from "./PullRequestCandidatePicker";
 import { PullRequestActorLabel } from "./pullRequestPresentation";
 import { readableFailure } from "./pullRequestDetail.logic";
 
-const TRUNCATED_LABELS: Record<ReviewerTruncation, (error: string | null) => string> = {
-  unsearchable: () =>
-    "This repository has more people with access than are listed here. Ask for the rest on the host.",
-  searchable: () =>
-    "This repository has more people with access than are listed here. Search to find them.",
-  "search-failed": (error) =>
-    `Only the people already listed are matched: the host search failed. ${error ?? ""}`,
-  "search-truncated": () =>
-    "More people match than the host returned. Keep typing to narrow it down.",
+const TRUNCATED_LABELS: Record<
+  ReviewerTruncation,
+  (error: string | null, resolve: MessageResolver) => string
+> = {
+  unsearchable: (_error, resolve) =>
+    resolve(
+      msg(
+        "This repository has more people with access than are listed here. Ask for the rest on the host.",
+      ),
+    ),
+  searchable: (_error, resolve) =>
+    resolve(
+      msg("This repository has more people with access than are listed here. Search to find them."),
+    ),
+  "search-failed": (error, resolve) =>
+    resolve(
+      msg("Only the people already listed are matched: the host search failed. {error}", {
+        error: error ?? "",
+      }),
+    ),
+  "search-truncated": (_error, resolve) =>
+    resolve(msg("More people match than the host returned. Keep typing to narrow it down.")),
 };
 
 export function PullRequestReviewerPicker({
@@ -53,12 +69,14 @@ export function PullRequestReviewerPicker({
   searchable: boolean;
 }) {
   const t = useTranslate();
+  const resolve = useMessages();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState(emptySelection<PullRequestReviewerCandidate>);
 
   const candidatesQuery = useEnvironmentQuery(
     open ? pullRequestEnvironment.reviewerCandidates({ environmentId, input: reference }) : null,
+    resolve,
   );
   // Past the first page the host is asked, since what was loaded cannot answer for the rest.
   const debouncedQuery = useDebouncedValue(query.trim(), 250);
@@ -158,7 +176,7 @@ export function PullRequestReviewerPicker({
       noMatchLabel={t("pullRequest.flow.reviewers.noMatch")}
       errorLabel={t("pullRequest.flow.reviewers.failed")}
       truncated={truncation !== null}
-      truncatedLabel={truncation === null ? "" : TRUNCATED_LABELS[truncation](searchError)}
+      truncatedLabel={truncation === null ? "" : TRUNCATED_LABELS[truncation](searchError, resolve)}
       candidateKey={(candidate) => `${candidate.kind}:${candidate.id}`}
       onSelect={(candidate) =>
         setDraft((current) =>

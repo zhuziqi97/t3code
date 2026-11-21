@@ -63,7 +63,7 @@ const make = Effect.gen(function* () {
           return session.token;
         if (session) yield* auth.revokeSession(session.sessionId);
         session = yield* auth.issueSession({
-          subject: "convene-web",
+          subject: EnvironmentAuth.CONVENE_WEB_SESSION_SUBJECT,
           label: "Convene Web",
           scopes: AuthStandardClientScopes,
           ttl: Duration.hours(12),

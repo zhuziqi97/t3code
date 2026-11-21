@@ -17,6 +17,7 @@ import { makeComponentLogger } from "../app/DesktopObservability.ts";
 import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronDialog from "../electron/ElectronDialog.ts";
 import * as ElectronMenu from "../electron/ElectronMenu.ts";
+import { applyLanguage } from "../i18n/messages.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
 import * as DesktopUpdates from "../updates/DesktopUpdates.ts";
@@ -216,6 +217,7 @@ export const make = Effect.gen(function* () {
     const systemLocale = yield* electronApp.systemLocale;
     const language = resolveLanguage(settings.languagePreference, [systemLocale]);
     if (language === menuLanguage) return;
+    yield* applyLanguage(language);
     const t = i18n.getFixedT(language);
     const checkForUpdatesClick = () => {
       runMenuEffect(

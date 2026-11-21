@@ -35,6 +35,8 @@ import type { SnoozePresetSetting } from "@t3tools/contracts/settings";
 import { canSnooze } from "@t3tools/client-runtime/state/thread-settled";
 import { threadChipCopyTarget } from "@t3tools/client-runtime/thread-reference";
 import type { MenuAction } from "@react-native-menu/menu";
+import { useNavigation } from "@react-navigation/native";
+import { T, useGT, useMessages } from "gt-react-native";
 import { memo, useCallback, useMemo, useState, type ComponentProps } from "react";
 import { Platform, Pressable, Text as RNText, useWindowDimensions, View } from "react-native";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
@@ -73,6 +75,7 @@ import { ThreadSwipeable } from "../home/thread-swipe-actions";
 import { buildThreadTitleRegenerationMenuItems } from "./thread-title-regeneration-menu";
 import { canTurnThreadIntoProject, turnThreadIntoProject } from "./turnThreadIntoProject";
 import { threadCanArchive } from "../home/threadArchive";
+import { useCanShareWithGuest } from "./useCanShareWithGuest";
 import {
   THREAD_LIST_V2_SETTLED_PAGE_COUNT,
   resolveThreadListV2SnoozeGateExpiryMs,
@@ -165,6 +168,7 @@ function ThreadListV2Duration(props: {
   readonly startedAt: string | null;
   readonly leadingSpace: boolean;
 }) {
+  const messages = useMessages();
   const startedAtMs = Date.parse(props.startedAt ?? "");
   const nowMs = useVisibleSecondClock(Number.isFinite(startedAtMs));
   if (!Number.isFinite(startedAtMs)) return null;
@@ -172,7 +176,10 @@ function ThreadListV2Duration(props: {
     <>
       {props.leadingSpace ? " " : null}
       <RNText style={TABULAR_DURATION_STYLE}>
-        {formatWorkingDurationLabel(toServerClock(props.environmentId, nowMs) - startedAtMs)}
+        {formatWorkingDurationLabel(
+          toServerClock(props.environmentId, nowMs) - startedAtMs,
+          messages,
+        )}
       </RNText>
     </>
   );
@@ -281,9 +288,10 @@ function ThreadListV2ShelfHeader(
 ) {
   const t = useTranslate();
   const label = t(SHELF_LABEL[props.kind]);
+  const gt = useGT();
   return (
     <ThreadListV2Section
-      label={props.expanded ? label : `${label} (${props.count})`}
+      label={props.expanded ? label : gt("{label} ({count})", { label, count: props.count })}
       pane={props.pane}
       tone={props.kind === "snoozed" ? "snoozed" : "default"}
       disclosure={{
@@ -504,7 +512,7 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
                   : "text-adaptive-amber-700-300",
               )}
             >
-              Draft
+              <T>Draft</T>
             </Text>
           </View>
         ) : null}
@@ -519,7 +527,7 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
                 : rowAppearance.tertiaryForegroundClassName,
             )}
           >
-            Sends on reconnect
+            <T>Sends on reconnect</T>
           </Text>
         </View>
       ) : null}
@@ -715,6 +723,8 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   );
   const titleLineHeight =
     Platform.OS === "android" ? androidTitleLineHeight : titleTypography.lineHeight * fontScale;
+  const gt = useGT();
+  const m = useMessages();
   const {
     thread,
     variant,
@@ -763,7 +773,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       })
     : null;
   const pr = useThreadPr(thread);
-  const prBadgeLabel = pr ? resolveThreadPrBadgeAction(pr).accessibilityLabel : null;
+  const prBadgeLabel = pr ? resolveThreadPrBadgeAction(pr, m).accessibilityLabel : null;
   const handleOpenPullRequests = useCallback(() => {
     if (pr) onOpenThreadPullRequests(thread, pr);
   }, [onOpenThreadPullRequests, pr, thread]);
@@ -791,21 +801,27 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         };
   const recede = shouldRecedeThreadRow({ status, selected });
   const isRegeneratingTitle = thread.titleRegeneration != null;
-  const timeLabel = props.timeLabel;
-  const rowAccessibilityLabel = threadListV2RowAccessibilityLabel({
-    title: thread.title,
-    variant,
-    woke: showsWoke,
-    // Working and waiting rows show only an icon and a duration, so name them for speech.
-    statusLabel:
-      statusLabel &&
-      (statusLabel.label ?? t(status === "waiting" ? "thread.waiting" : "thread.working")),
-    timeLabel,
-    snoozeWakeLabel: snoozedRow ? props.snoozeWakeLabelText : undefined,
-    providerNameLabel,
-    hasQueuedMessages: props.hasQueuedMessages === true,
-    regeneratingTitle: isRegeneratingTitle,
-  });
+  // List items keep marked text so they stay the same objects across a language switch.
+  const timeLabel = props.timeLabel && m(props.timeLabel);
+  const snoozeWakeLabelText =
+    props.snoozeWakeLabelText === undefined ? undefined : m(props.snoozeWakeLabelText);
+  const rowAccessibilityLabel = threadListV2RowAccessibilityLabel(
+    {
+      title: thread.title,
+      variant,
+      woke: showsWoke,
+      // Working and waiting rows show only an icon and a duration, so name them for speech.
+      statusLabel:
+        statusLabel &&
+        (statusLabel.label ?? t(status === "waiting" ? "thread.waiting" : "thread.working")),
+      timeLabel,
+      snoozeWakeLabel: snoozedRow ? snoozeWakeLabelText : undefined,
+      providerNameLabel,
+      hasQueuedMessages: props.hasQueuedMessages === true,
+      regeneratingTitle: isRegeneratingTitle,
+    },
+    m,
+  );
 
   const visitThread = useAtomCommand(threadEnvironment.visit, { reportFailure: false });
   const markThreadUnread = useAtomCommand(threadEnvironment.markUnread, { reportFailure: false });
@@ -830,6 +846,8 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
 
   const handleDelete = useCallback(() => onDeleteThread(thread), [onDeleteThread, thread]);
   const handleRename = useCallback(() => onRenameThread(thread), [onRenameThread, thread]);
+  const canShareWithGuest = useCanShareWithGuest(thread.environmentId);
+  const navigation = useNavigation();
   const handleRegenerateTitle = useCallback(
     () => onRegenerateThreadTitle(thread),
     [onRegenerateThreadTitle, thread],
@@ -998,67 +1016,85 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         : []),
       { id: "copy-thread", title: t("chat.copy.thread"), image: "text.bubble" },
       { id: "copy-thread-id", title: t("chat.copy.threadId"), image: "doc.on.doc" },
+      ...(canShareWithGuest
+        ? [{ id: "share-guest", title: gt("Share with guest"), image: "person.badge.plus" }]
+        : []),
     ];
     if (snoozedRow) {
-      return layoutThreadListV2RowMenuActions({
-        nested,
-        direct: [...direct, { id: "unsnooze", title: t("thread.wake"), image: "clock" }],
-        reorder: [],
-        pin: [],
-        secondary: [...titleMenuItems, ...autoSettleMenuItems, archive, remove],
-      });
+      return layoutThreadListV2RowMenuActions(
+        {
+          nested,
+          direct: [...direct, { id: "unsnooze", title: t("thread.wake"), image: "clock" }],
+          reorder: [],
+          pin: [],
+          secondary: [...titleMenuItems, ...autoSettleMenuItems, archive, remove],
+        },
+        m,
+      );
     }
     if (!props.settlementSupported) {
-      return layoutThreadListV2RowMenuActions({
-        nested,
-        direct: [...direct, archive],
-        reorder: reorderMenuItems,
-        pin: pinMenuItems,
-        secondary: [...titleMenuItems, remove],
-      });
+      return layoutThreadListV2RowMenuActions(
+        {
+          nested,
+          direct: [...direct, archive],
+          reorder: reorderMenuItems,
+          pin: pinMenuItems,
+          secondary: [...titleMenuItems, remove],
+        },
+        m,
+      );
     }
     if (canUnsettle) {
-      return layoutThreadListV2RowMenuActions({
+      return layoutThreadListV2RowMenuActions(
+        {
+          nested,
+          direct: [
+            ...direct,
+            { id: "unsettle", title: t("thread.settle.undo"), image: "arrow.uturn.backward" },
+          ],
+          reorder: reorderMenuItems.filter(
+            (action) => action.id !== "move-up" && action.id !== "move-down",
+          ),
+          pin: pinMenuItems,
+          secondary: [...titleMenuItems, ...autoSettleMenuItems, archive, remove],
+        },
+        m,
+      );
+    }
+    return layoutThreadListV2RowMenuActions(
+      {
         nested,
         direct: [
           ...direct,
-          { id: "unsettle", title: t("thread.settle.undo"), image: "arrow.uturn.backward" },
+          { id: "settle", title: t("thread.settle.short"), image: "checkmark" },
+          ...(swipeActions.secondary === "snooze"
+            ? [
+                {
+                  id: "snooze",
+                  title: t("thread.snooze.short"),
+                  image: "clock",
+                  subactions: snoozePresetActions,
+                },
+              ]
+            : []),
         ],
-        reorder: reorderMenuItems.filter(
-          (action) => action.id !== "move-up" && action.id !== "move-down",
-        ),
+        reorder: reorderMenuItems,
         pin: pinMenuItems,
         secondary: [...titleMenuItems, ...autoSettleMenuItems, archive, remove],
-      });
-    }
-    return layoutThreadListV2RowMenuActions({
-      nested,
-      direct: [
-        ...direct,
-        { id: "settle", title: t("thread.settle.short"), image: "checkmark" },
-        ...(swipeActions.secondary === "snooze"
-          ? [
-              {
-                id: "snooze",
-                title: t("thread.snooze.short"),
-                image: "clock",
-                subactions: snoozePresetActions,
-              },
-            ]
-          : []),
-      ],
-      reorder: reorderMenuItems,
-      pin: pinMenuItems,
-      secondary: [...titleMenuItems, ...autoSettleMenuItems, archive, remove],
-    });
+      },
+      m,
+    );
   }, [
     autoSettleMenuItems,
+    canShareWithGuest,
     canUnsettle,
     pinMenuItems,
     props.settlementSupported,
     reorderMenuItems,
     snoozePresetActions,
     snoozedRow,
+    gt,
+    m,
     swipeActions.secondary,
     thread.branch,
     titleMenuItems,
@@ -1091,13 +1127,20 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         const target = threadChipCopyTarget(
           { environmentId: thread.environmentId, threadId: thread.id },
           thread.title,
+          m,
         );
         void copyThreadReference(target).then((didCopy) => {
-          if (!didCopy) Dialog.alert(target.failureTitle, "Try copying this thread again.");
+          if (!didCopy) Dialog.alert(target.failureTitle, gt("Try copying this thread again."));
         });
       }
       if (nativeEvent.event === "copy-thread-id") {
         copyTextWithHaptic(thread.id, { target: "thread-id" });
+      }
+      if (nativeEvent.event === "share-guest") {
+        navigation.navigate("ThreadGuestShare", {
+          environmentId: thread.environmentId,
+          threadId: thread.id,
+        });
       }
       if (nativeEvent.event === "delete") handleDelete();
       if (nativeEvent.event === "snooze:custom") {
@@ -1118,8 +1161,11 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       }
     },
     [
+      gt,
+      m,
       onNewThreadOnBranch,
       thread,
+      navigation,
       handleArchive,
       handleDelete,
       handleRegenerateTitle,
@@ -1644,9 +1690,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
             )}
             style={{ fontFamily: MONO_FONT }}
           >
-            {snoozedRow && props.snoozeWakeLabelText !== undefined
-              ? props.snoozeWakeLabelText
-              : timeLabel}
+            {snoozedRow && snoozeWakeLabelText !== undefined ? snoozeWakeLabelText : timeLabel}
           </Text>
         </View>
       </RowPressable>

@@ -1,4 +1,6 @@
-import { i18n } from "../../i18n";
+import { msg } from "gt-react";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { m } from "~/i18n/messages";
 import type {
   KeybindingCommand,
   ProjectId,
@@ -80,7 +82,7 @@ export function useProjectScriptEditing(input: {
         Cause.fail(
           new EnvironmentAuthorizationError({
             requiredScope: AuthSettingsWriteScope,
-            message: i18n.t("chat.keybindings.denied"),
+            message: m(msg("This connection cannot change keyboard shortcuts.")),
           }),
         ),
       );
@@ -125,8 +127,16 @@ export function useProjectScriptEditing(input: {
           new EnvironmentAuthorizationError({
             requiredScope: AuthSettingsWriteScope,
             message: isDeletingScript
-              ? i18n.t("project.actions.deletedShortcutKept")
-              : i18n.t("project.actions.savedShortcutDenied"),
+              ? m(
+                  msg(
+                    "The script was deleted, but its keyboard shortcut could not be removed because permission changed.",
+                  ),
+                )
+              : m(
+                  msg(
+                    "The script was saved, but this connection can no longer change keyboard shortcuts.",
+                  ),
+                ),
           }),
         ),
       );
@@ -214,7 +224,7 @@ export function useProjectScriptEditing(input: {
     }
     const existingScript = scripts.find((script) => script.id === scriptId);
     if (!existingScript) {
-      return AsyncResult.failure(Cause.fail(new Error(i18n.t("project.actions.notFound"))));
+      return AsyncResult.failure(Cause.fail(new Error(m(msg("Script not found.")))));
     }
 
     const updatedScript = buildProjectScript(existingScript.id, input);
@@ -252,15 +262,20 @@ export function useProjectScriptEditing(input: {
     if (result._tag === "Success") {
       toastManager.add({
         type: "success",
-        title: i18n.t("project.actions.deleted", { name: deletedName ?? i18n.t("common.unknown") }),
+        title: m(
+          msg('Deleted action "{name}"', {
+            name:
+              deletedName ?? m(msg("Unknown", { $context: "fallback name of a deleted action" })),
+          }),
+        ),
       });
     } else if (!isAtomCommandInterrupted(result)) {
       const error = squashAtomCommandFailure(result);
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: i18n.t("project.actions.deleteFailed"),
-          description: error instanceof Error ? error.message : i18n.t("common.unexpectedError"),
+          title: m(msg("Could not delete action")),
+          description: thrownErrorMessage(error, m) ?? m(msg("An unexpected error occurred.")),
         }),
       );
     }

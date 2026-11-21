@@ -3,6 +3,8 @@ import type { TFunction } from "i18next";
 import { i18n } from "../i18n";
 import type { DesktopUpdateActionResult, DesktopUpdateState } from "@t3tools/contracts";
 
+import { m, type MessageResolver } from "../i18n/messages";
+
 export type DesktopUpdateButtonAction = "download" | "open-download" | "install" | "none";
 
 const DEFAULT_DESKTOP_RELEASE_REPOSITORY = "pingdotgg/t3code";
@@ -217,6 +219,7 @@ export function getDesktopUpdateDisabledReason(
   state: Pick<DesktopUpdateState, "enabled" | "status" | "message"> | null,
   translate: TFunction = i18n.t,
   managedDenial?: string,
+  _resolve: MessageResolver = m,
 ): string | null {
   if (managedDenial !== undefined) return managedDenial;
   if (!state || (state.enabled && state.status !== "disabled")) return null;
@@ -230,6 +233,7 @@ export function getDesktopUpdateIdleTooltip(
   state: Pick<DesktopUpdateState, "enabled" | "status" | "message"> | null,
   translate: TFunction = i18n.t,
   managedDenial?: string,
+  _resolve: MessageResolver = m,
 ) {
   const disabledReason = getDesktopUpdateDisabledReason(state, translate, managedDenial);
   return disabledReason

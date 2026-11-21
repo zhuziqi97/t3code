@@ -1,6 +1,7 @@
 import { useTranslate } from "../../i18n";
 
 import { PlusIcon, XIcon } from "lucide-react";
+import { T, useGT, useMessages } from "gt-react";
 import { useState, type SetStateAction } from "react";
 import type { ProviderDriverKind, ServerProviderModel } from "@t3tools/contracts";
 import type { CustomModelDefinition } from "@t3tools/shared/model";
@@ -49,13 +50,23 @@ export function CustomModelEditor({
   onDraftChange,
 }: CustomModelEditorProps) {
   const t = useTranslate();
+  const gt = useGT();
+  const m = useMessages();
   const [draft, setDraft] = useState<CustomModelDraft>(() => draftFromDefinition(entry));
   const [error, setError] = useState<CustomModelDraft | null>(null);
   const updateDraft = (next: SetStateAction<CustomModelDraft>) => {
     onDraftChange();
     setDraft(next);
   };
-  const presets = driverKind ? (DESCRIPTOR_PRESETS_BY_KIND[driverKind] ?? []) : [];
+  const presets = (driverKind ? (DESCRIPTOR_PRESETS_BY_KIND[driverKind] ?? []) : []).map(
+    (preset) => ({
+      ...preset,
+      label: m(preset.label),
+      ...(preset.choices
+        ? { choices: preset.choices.map((choice) => ({ ...choice, label: m(choice.label) })) }
+        : {}),
+    }),
+  );
   const startFromCandidates = builtInModels.filter(
     (model) => (model.capabilities?.optionDescriptors?.length ?? 0) > 0,
   );
@@ -131,7 +142,7 @@ export function CustomModelEditor({
   };
 
   const handleSave = () => {
-    const problem = validateDraft(draft);
+    const problem = validateDraft(draft, m);
     if (problem) {
       setError(draft);
       return;
@@ -216,7 +227,7 @@ export function CustomModelEditor({
     >
       <div className="flex flex-wrap items-center gap-2">
         <span className="w-14 shrink-0 text-2xs text-muted-foreground">
-          {t("provider.modelEditor.optionPosition", { index: index + 1 })}
+          {gt("Option {number}", { number: index + 1 })}
         </span>
         {presets.length > 0 ? (
           <Select
@@ -285,14 +296,18 @@ export function CustomModelEditor({
             </SelectValue>
           </SelectTrigger>
           <SelectPopup align="end" alignItemWithTrigger={false}>
-            <SelectItem value="select">{t("provider.modelEditor.choices")}</SelectItem>
-            <SelectItem value="boolean">{t("provider.modelEditor.toggle")}</SelectItem>
+            <SelectItem value="select">
+              <T>Choices</T>
+            </SelectItem>
+            <SelectItem value="boolean">
+              {gt("Toggle", { $context: "noun, on/off option type" })}
+            </SelectItem>
           </SelectPopup>
         </Select>
         <Button
           size="icon-micro"
           variant="ghost-muted"
-          aria-label={t("provider.modelEditor.removeOption", { index: index + 1 })}
+          aria-label={gt("Remove option {number}", { number: index + 1 })}
           onClick={() => removeDescriptor(descriptor.key)}
         >
           <XIcon className="size-3" />
@@ -404,7 +419,7 @@ export function CustomModelEditor({
         </div>
       </div>
 
-      {error ? <p className="text-xs text-destructive">{validateDraft(error, t)}</p> : null}
+      {error ? <p className="text-xs text-destructive">{validateDraft(error, m)}</p> : null}
 
       <div className="flex gap-2">
         <Button size="sm" variant="outline" onClick={handleSave}>

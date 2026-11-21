@@ -1,15 +1,15 @@
 import {
   type LinkedPrompt,
-  parseNewThreadLink,
-  parseThreadLinkPrompt,
   promptLinkAppPath,
   promptLinkDeepLink,
 } from "@t3tools/shared/promptLinks";
-import type { TFunction } from "i18next";
-import { useTranslate } from "../../i18n";
+import { parseNewThreadLink, parseThreadLinkPrompt } from "@t3tools/shared/promptLinksCopy";
 import { useLocation } from "@tanstack/react-router";
 import * as Schema from "effect/Schema";
+import { msg, T, useGT, useMessages } from "gt-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+
+import type { MessageResolver } from "../../i18n/messages";
 
 import { DESKTOP_DOWNLOAD_URL } from "~/branding";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
@@ -33,39 +33,47 @@ interface LinkSummary {
 
 function summarize(
   appPath: string,
-  t: TFunction,
+  resolve: MessageResolver,
 ): { ok: true; value: LinkSummary } | { ok: false; error: string } {
-  const promptHeader = {
-    title: t("promptLink.openPrompt"),
-    description: t("promptLink.draftDescription"),
+  const PROMPT_HEADER = {
+    title: resolve(msg("Open this prompt")),
+    description: resolve(msg("It opens as a draft. Nothing runs until you press Send.")),
   };
   const url = new URL(appPath, window.location.origin);
   if (url.pathname !== "/new") {
-    const prompt = parseThreadLinkPrompt(url.search);
+    const prompt = parseThreadLinkPrompt(url.search, resolve);
     if (!prompt.ok) return prompt;
     return {
       ok: true,
       value:
         prompt.value === null
           ? {
-              title: t("promptLink.openThread"),
-              description: t("promptLink.threadDescription"),
+              title: resolve(msg("Open this thread")),
+              description: resolve(
+                msg("It opens in T3 Code if you're connected to the machine it runs on."),
+              ),
               prompt: null,
               details: [],
             }
-          : { ...promptHeader, prompt: prompt.value, details: [t("promptLink.existingThread")] },
+          : {
+              ...PROMPT_HEADER,
+              prompt: prompt.value,
+              details: [resolve(msg("Opens one of your threads."))],
+            },
     };
   }
-  const link = parseNewThreadLink(url.search);
+  const link = parseNewThreadLink(url.search, resolve);
   if (!link.ok) return link;
   if (link.value.kind === "pull-request") {
     const { owner, name, number } = link.value.pullRequest;
     return {
       ok: true,
       value: {
-        ...promptHeader,
+        ...PROMPT_HEADER,
         prompt: link.value.prompt,
-        details: [t("promptLink.pullRequest", { pullRequest: `${owner}/${name}#${number}` })],
+        details: [
+          resolve(msg("Pull request {pullRequest}", { pullRequest: `${owner}/${name}#${number}` })),
+        ],
       },
     };
   }
@@ -73,14 +81,18 @@ function summarize(
   return {
     ok: true,
     value: {
-      ...promptHeader,
+      ...PROMPT_HEADER,
       prompt: link.value.prompt,
       details: [
         repository
-          ? t("promptLink.repository", { repository: `${repository.owner}/${repository.name}` })
-          : t("project.none"),
+          ? resolve(
+              msg("Repository {repository}", {
+                repository: `${repository.owner}/${repository.name}`,
+              }),
+            )
+          : resolve(msg("No project")),
         ...(provider
-          ? [t("promptLink.model", { model: model ? `${provider} ${model}` : provider })]
+          ? [resolve(msg("Model {model}", { model: model ? `${provider} ${model}` : provider }))]
           : []),
       ],
     },
@@ -126,8 +138,9 @@ function HostedPromptLinkLanding({
   readonly openInAppRemembered: boolean;
   readonly onChoose: (choice: "app" | "browser", remember: boolean) => void;
 }) {
-  const t = useTranslate();
-  const summary = summarize(appPath, t);
+  const gt = useGT();
+  const m = useMessages();
+  const summary = summarize(appPath, m);
   const [remember, setRemember] = useState(false);
   const deepLink = promptLinkDeepLink(appPath);
   const onPhone = /android|iphone|ipad/i.test(navigator.userAgent);
@@ -143,7 +156,7 @@ function HostedPromptLinkLanding({
   if (!summary.ok) {
     return (
       <StandalonePage>
-        <StandalonePageHeader title={t("promptLink.openFailed")} description={summary.error} />
+        <StandalonePageHeader title={gt("Could not open the link")} description={summary.error} />
       </StandalonePage>
     );
   }
@@ -154,9 +167,14 @@ function HostedPromptLinkLanding({
       <StandalonePageHeader title={title} description={description} />
       {prompt !== null && prompt.hiddenCharacters > 0 ? (
         <Alert className="mt-5" variant="error">
-          <AlertTitle>{t("promptLink.hiddenCharactersWarning")}</AlertTitle>
+          <AlertTitle>
+            <T>This prompt had hidden characters, it may be malicious</T>
+          </AlertTitle>
           <AlertDescription>
-            {t("promptLink.hiddenCharactersRemoved", { count: prompt.hiddenCharacters })}
+            {gt(
+              "{count, plural, one {T3 Code removed {count} hidden character. Read the prompt before you send it.} other {T3 Code removed {count} hidden characters. Read the prompt before you send it.}}",
+              { count: prompt.hiddenCharacters },
+            )}
           </AlertDescription>
         </Alert>
       ) : null}
@@ -170,20 +188,20 @@ function HostedPromptLinkLanding({
       ) : null}
       <div className="mt-6 flex flex-wrap gap-2">
         <Button render={<a href={deepLink} />} onClick={() => onChoose("app", remember)}>
-          {onPhone ? t("promptLink.openApp") : t("promptLink.openDesktop")}
+          {onPhone ? gt("Open in app") : gt("Open in desktop app")}
         </Button>
         {canContinue ? (
           <Button variant="outline" onClick={() => onChoose("browser", remember)}>
-            {t("promptLink.continueHere")}
+            <T>Continue here</T>
           </Button>
         ) : null}
         <Button variant="ghost" render={<a href={DESKTOP_DOWNLOAD_URL} />}>
-          {t("promptLink.getApp")}
+          <T>Get T3 Code</T>
         </Button>
       </div>
       <label className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
         <Checkbox checked={remember} onCheckedChange={(checked) => setRemember(checked === true)} />
-        {t("promptLink.rememberChoice")}
+        <T>Remember my choice</T>
       </label>
     </StandalonePage>
   );

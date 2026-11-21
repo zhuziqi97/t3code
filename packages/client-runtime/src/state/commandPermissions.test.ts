@@ -33,7 +33,7 @@ import * as Layer from "effect/Layer";
 import { Atom, AtomRegistry, AsyncResult } from "effect/reactivity";
 import { EnvironmentRegistry } from "../connection/registry.ts";
 import { createCommandPermissions } from "./commandPermissions.ts";
-import { createEnvironmentRpcCommand } from "./runtime.ts";
+import { createEnvironmentRpcCommand, runAtomCommand } from "./runtime.ts";
 import { AVAILABLE_CONNECTION_STATE, BearerConnectionTarget } from "../connection/model.ts";
 import { createPeerLinkEnvironmentAtoms } from "./peerLinks.ts";
 
@@ -100,17 +100,32 @@ describe("command permissions", () => {
       expect(registry.get(command.permissionAtom(env))).toBe(true);
       expect(registry.get(command.permissionAtom(other))).toBe(false);
       expect(
-        (await command.run(registry, { environmentId: other, input: { agentId: "agent" } }))._tag,
+        (
+          await runAtomCommand(registry, command, {
+            environmentId: other,
+            input: { agentId: "agent" },
+          })
+        )._tag,
       ).toBe("Failure");
       expect(installations).toBe(0);
       registry.set(sessions(env), AsyncResult.success(grant(false)));
       expect(
-        (await command.run(registry, { environmentId: env, input: { agentId: "agent" } }))._tag,
+        (
+          await runAtomCommand(registry, command, {
+            environmentId: env,
+            input: { agentId: "agent" },
+          })
+        )._tag,
       ).toBe("Failure");
       expect(installations).toBe(0);
       registry.set(sessions(env), AsyncResult.success(managed));
       expect(
-        (await command.run(registry, { environmentId: env, input: { agentId: "agent" } }))._tag,
+        (
+          await runAtomCommand(registry, command, {
+            environmentId: env,
+            input: { agentId: "agent" },
+          })
+        )._tag,
       ).toBe("Success");
       expect(installations).toBe(1);
     } finally {
@@ -266,6 +281,31 @@ describe("command permissions", () => {
       }),
   );
 
+  it.effect("requires the destination settings grant to connect or bind an issue tracker", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const registry = yield* setup;
+        const connect = createCommandPermissions(runtime, WS_METHODS.issueTrackersConnect);
+        const bind = createCommandPermissions(runtime, WS_METHODS.issueTrackersBindProject);
+        registry.set(sessions(env), AsyncResult.success(grant(true)));
+        expect(registry.get(connect.permissionAtom(env))).toBe(false);
+        expect(registry.get(bind.permissionAtom(env))).toBe(false);
+        registry.set(
+          sessions(env),
+          AsyncResult.success({
+            ...grant(false),
+            scopes: [AuthSettingsWriteScope],
+            permissions: [AuthSettingsWriteScope],
+          }),
+        );
+        expect(registry.get(connect.permissionAtom(env))).toBe(true);
+        expect(registry.get(bind.permissionAtom(env))).toBe(true);
+        yield* connect.authorize(registry, env);
+        yield* bind.authorize(registry, env);
+      }),
+    ),
+  );
+
   it.effect.each([WS_METHODS.scheduledTasksDelete, ORCHESTRATION_V2_WS_METHODS.stopWorkflow])(
     "uses the target grant for both availability and execution of %s",
     (method) =>
@@ -335,9 +375,10 @@ describe("command permissions", () => {
     });
     const target = { environmentId: env, input: { id: ScheduledTaskId.make("task") } };
     try {
-      const first = command.run(registry, target);
+      const quiet = { reportFailure: false, reportDefect: false };
+      const first = runAtomCommand(registry, command, target, quiet);
       await entered;
-      const second = command.run(registry, target);
+      const second = runAtomCommand(registry, command, target, quiet);
       registry.set(sessions(env), AsyncResult.success(grant(false)));
       release();
       expect((await first)._tag).toBe("Success");
@@ -619,10 +660,10 @@ it.effect(
       setAccess(false);
       expect(yield* readLinks).toEqual({ links: [] });
       const linkInput = { url: peer.urls[0]!, pairingCode: "test-code", access: peer.access };
-      const link = Effect.promise(() =>
+      const link = Effect.exit(
         peerLinks.link.run(registry, { environmentId: env, input: linkInput }),
       );
-      const unlink = Effect.promise(() =>
+      const unlink = Effect.exit(
         peerLinks.unlink.run(registry, {
           environmentId: env,
           input: { environmentId: peer.environmentId },
@@ -780,10 +821,12 @@ it("rechecks destination operate permission for native prediction request and ca
     expect(registry.get(cancel.permissionAtom(other))).toBe(false);
     registry.set(sessions(env), AsyncResult.success(grant(false)));
     registry.set(sessions(other), AsyncResult.success(grant(true)));
-    expect((await request.run(registry, { environmentId: env, input }))._tag).toBe("Failure");
+    expect((await runAtomCommand(registry, request, { environmentId: env, input }))._tag).toBe(
+      "Failure",
+    );
     expect(
       (
-        await cancel.run(registry, {
+        await runAtomCommand(registry, cancel, {
           environmentId: env,
           input: { threadId: input.threadId, requestId: input.requestId },
         })
@@ -792,10 +835,12 @@ it("rechecks destination operate permission for native prediction request and ca
     expect(requests).toBe(0);
     expect(cancellations).toBe(0);
     registry.set(sessions(env), AsyncResult.success(grant(true)));
-    expect((await request.run(registry, { environmentId: env, input }))._tag).toBe("Success");
+    expect((await runAtomCommand(registry, request, { environmentId: env, input }))._tag).toBe(
+      "Success",
+    );
     expect(
       (
-        await cancel.run(registry, {
+        await runAtomCommand(registry, cancel, {
           environmentId: env,
           input: { threadId: input.threadId, requestId: input.requestId },
         })

@@ -1,5 +1,6 @@
 // No T3 imports inside the string; resolve Pi and typebox from the user's Pi install.
 import { T3_CODE_ORCHESTRATION_INSTRUCTIONS } from "@t3tools/provider-core/server/orchestrationInstructions";
+import { PULL_REQUEST_LINKING_INSTRUCTIONS } from "@t3tools/provider-core/server/runtimeInstructions";
 
 export const PI_T3_MCP_EXTENSION_FILENAME = "pi-t3-mcp-extension.ts";
 
@@ -26,6 +27,7 @@ const RUNTIME_MODE_ENV = ${JSON.stringify(T3_PI_RUNTIME_MODE_ENV)};
 const EXTENSION_PATH_ENV = ${JSON.stringify(T3_PI_MCP_EXTENSION_PATH_ENV)};
 const SERVERS_ENV = ${JSON.stringify(T3_PI_MCP_SERVERS_ENV)};
 const ORCHESTRATION_INSTRUCTIONS = ${JSON.stringify(T3_CODE_ORCHESTRATION_INSTRUCTIONS.trim())};
+const PULL_REQUEST_LINKING_INSTRUCTIONS = ${JSON.stringify(PULL_REQUEST_LINKING_INSTRUCTIONS)};
 const SERVICE_TIER_COMMAND = ${JSON.stringify(PI_T3_SERVICE_TIER_COMMAND)};
 const PROTOCOL = "2025-06-18";
 const READ_ONLY_TOOLS = new Set(["read", "grep", "find", "ls"]);
@@ -411,7 +413,18 @@ export default async function t3McpExtension(pi: ExtensionAPI) {
   // bridge as the credential owner: mcp.json overrides native registrations.
   const supportsExposure = "registerMcpServer" in pi && typeof pi.registerMcpServer === "function";
   const directTools = new Set(["orchestrator_capabilities", "delegate_task", "task_status"]);
+  const ALIAS_PREFIX = "mcp__t3_code__";
   let deferOptionalTools = supportsExposure;
+  const isDeferred = (name: string) => deferOptionalTools && !directTools.has(name);
+  // An alias follows its public tool: gone when --exclude-tools removed it,
+  // off while a direct one is off.
+  const followsPublicTool = (
+    name: string,
+    registered: ReadonlySet<string>,
+    active: ReadonlyArray<string>,
+  ) =>
+    registered.has("mcp__t3-code__" + name) &&
+    (isDeferred(name) || active.includes("mcp__t3-code__" + name));
   const contributions = JSON.parse(env(SERVERS_ENV) ?? "{}") as Record<string, { endpoint: string; authorizationHeader: string }>;
   const servers = Object.entries({
     "t3-code": { endpoint, authorizationHeader: token.startsWith("Bearer ") ? token : "Bearer " + token },
@@ -429,22 +442,31 @@ export default async function t3McpExtension(pi: ExtensionAPI) {
     readOnlyMcpTools.clear();
     for (const server of servers) {
       const prefix = "mcp__" + server.name + "__";
-      const prefixes = supportsExposure && server.name === "t3-code" ? [prefix, "mcp__t3_code__"] : [prefix];
+      const prefixes = supportsExposure && server.name === "t3-code" ? [prefix, ALIAS_PREFIX] : [prefix];
       for (const tool of server.catalog) {
         const name = tool.name;
         for (const toolPrefix of prefixes) {
-          if (tool.annotations?.readOnlyHint === true) readOnlyMcpTools.add(\`\${toolPrefix}\${name}\`);
-          const exposure = toolPrefix !== prefix ? "hidden" :
-            deferOptionalTools && !(server.name === "t3-code" && directTools.has(name)) ? "deferred" : "direct";
+        const toolName = \`\${toolPrefix}\${name}\`;
+        if (tool.annotations?.readOnlyHint === true) readOnlyMcpTools.add(toolName);
+        const isAlias = toolPrefix === ALIAS_PREFIX;
+        const exposure = isAlias ? "model-only" : deferOptionalTools && !(server.name === "t3-code" && directTools.has(name)) ? "deferred" : "direct";
           pi.registerTool({
-            name: \`\${toolPrefix}\${name}\`,
+          name: toolName,
             label: name,
             description: tool.description ?? name,
             parameters: jsonSchemaToTypebox(tool.inputSchema),
             ...(supportsExposure ? { outputSchema: mcpOutputSchema(tool) } : {}),
             ...(supportsExposure ? { exposure } : {}),
+          ...(isAlias ? { prepareLoadout: () => ({ hiddenDeclarations: [toolName] }) } : {}),
             async execute(_toolCallId, params, signal) {
-              const result = await server.client.callTool(
+            // Another extension may switch the public tool off after reconciliation.
+            if (
+              isAlias &&
+              !followsPublicTool(name, new Set(pi.getAllTools().map((tool) => tool.name)), pi.getActiveTools())
+            ) {
+              return { content: [{ type: "text", text: \`Tool \${toolName} not found\` }], details: {}, isError: true };
+            }
+            const result = await server.client.callTool(
                 name,
                 (params ?? {}) as Record<string, unknown>,
                 signal,
@@ -497,7 +519,6 @@ export default async function t3McpExtension(pi: ExtensionAPI) {
     const exposureChanged = deferOptionalTools !== hasToolSearch;
     deferOptionalTools = hasToolSearch;
     if (exposureChanged) registerTools();
-    const active = pi.getActiveTools();
     // Completion gateways can silently drop calls to undeclared tools named
     // in history or guidance. Eagerly load T3 schemas, including after tree
     // restores, while retaining deferred exposure for Pi's allowlist rules.
@@ -506,8 +527,18 @@ export default async function t3McpExtension(pi: ExtensionAPI) {
       ...(hasToolSearch ? ["tool_search"] : []),
       ...(ctx.model?.api === "openai-completions" ? servers.flatMap((server) => server.catalog.map((tool) => "mcp__" + server.name + "__" + tool.name)) : []),
     ];
-    const missing = required.filter((name) => !active.includes(name));
-    if (missing.length > 0) pi.setActiveTools([...active, ...missing]);
+    const current = pi.getActiveTools();
+    const missing = required.filter((name) => !current.includes(name));
+    if (missing.length > 0) pi.setActiveTools([...current, ...missing]);
+    // An alias is callable only while active.
+    const registered = new Set(pi.getAllTools().map((tool) => tool.name));
+    const loaded = pi.getActiveTools();
+    const aliases = (servers.find((server) => server.name === "t3-code")?.catalog ?? [])
+      .filter((tool) => registered.has(ALIAS_PREFIX + tool.name) && followsPublicTool(tool.name, registered, loaded))
+      .map((tool) => ALIAS_PREFIX + tool.name);
+    const kept = loaded.filter((name) => !name.startsWith(ALIAS_PREFIX) || aliases.includes(name));
+    const added = aliases.filter((name) => !loaded.includes(name));
+    if (added.length > 0 || kept.length !== loaded.length) pi.setActiveTools([...kept, ...added]);
   };
 
   // Tree navigation restores its saved loadout after session_start.
@@ -527,13 +558,14 @@ export default async function t3McpExtension(pi: ExtensionAPI) {
   // Keep guidance in the system prompt so leading slash commands still expand.
   pi.on("before_agent_start", (event, ctx) => {
     reconcileDiscovery(ctx);
+    const instructions = ORCHESTRATION_INSTRUCTIONS + "\\n\\n" + PULL_REQUEST_LINKING_INSTRUCTIONS;
     const sections = event.systemPromptOptions?.sections;
     if (sections && typeof sections === "object" && event.systemPromptOptions?.forceSystemPrompt === undefined) {
       // A full prompt override bypasses Pi's later section rendering.
-      sections.t3_code_orchestration = ORCHESTRATION_INSTRUCTIONS;
+      sections.t3_code_orchestration = instructions;
       return undefined;
     }
-    return { systemPrompt: event.systemPrompt + "\\n\\n" + ORCHESTRATION_INSTRUCTIONS };
+    return { systemPrompt: event.systemPrompt + "\\n\\n" + instructions };
   });
 }
 `;

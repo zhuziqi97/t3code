@@ -1,11 +1,14 @@
-import type { TFunction } from "i18next";
 import { useTranslate } from "../../i18n";
 
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { m as resolveMessage } from "~/i18n/messages";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 
 import { Radio as RadioPrimitive } from "@base-ui/react/radio";
 import { CheckIcon, ChevronDownIcon } from "lucide-react";
 import { useState } from "react";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
+import type { MessageResolver } from "../../i18n/messages";
 import {
   deriveAvailableInstanceId,
   deriveInstanceId,
@@ -78,14 +81,14 @@ const EMPTY_CONFIG_DRAFT: Record<string, unknown> = {};
 function validateInstanceId(
   id: string,
   existing: ReadonlySet<string>,
-  t: TFunction,
+  resolve: MessageResolver,
 ): string | null {
-  if (id.length === 0) return t("provider.add.idRequired");
-  if (id.length > 64) return t("provider.add.idTooLong");
+  if (id.length === 0) return resolve(msg("Instance ID is required."));
+  if (id.length > 64) return resolve(msg("Instance ID must be 64 characters or fewer."));
   if (!INSTANCE_ID_PATTERN.test(id)) {
-    return t("provider.add.idCharacters");
+    return resolve(msg("Use only letters, numbers, and dashes in the instance ID."));
   }
-  if (existing.has(id)) return t("provider.add.idExists", { id });
+  if (existing.has(id)) return resolve(msg("An instance named ''{id}'' already exists.", { id }));
   return null;
 }
 
@@ -163,6 +166,8 @@ export function AddProviderInstanceDialog({
   showMoreProviders: initialShowMoreProviders = false,
 }: AddProviderInstanceDialogProps) {
   const t = useTranslate();
+  const gt = useGT();
+  const m = useMessages();
   const settings = useEnvironmentSettings(environmentId);
   const secretSources = useSecretSources(environmentId);
   const persistProviderInstance = usePersistEnvironmentProviderInstanceMutation(environmentId);
@@ -235,7 +240,7 @@ export function AddProviderInstanceDialog({
       existingIds,
     );
   const driverSettingsFields = deriveProviderSettingsFields(driverOption);
-  const instanceIdError = validateInstanceId(instanceId, existingIds, t);
+  const instanceIdError = validateInstanceId(instanceId, existingIds, m);
   const showInstanceIdError = hasAttemptedSubmit && instanceIdError !== null;
   const identityStep = 1;
   const previewLabel =
@@ -372,7 +377,7 @@ export function AddProviderInstanceDialog({
     }));
     setIdentityByDriver((existing) =>
       updateProviderIdentityDraft(existing, ACP_REGISTRY_DRIVER_KIND, {
-        label: "Local ACP",
+        label: gt("Local ACP"),
         instanceIdOverride: null,
       }),
     );
@@ -381,7 +386,7 @@ export function AddProviderInstanceDialog({
   };
 
   // A policy that owns this driver's launch settings also rules out ChatGPT's own runtime.
-  const driverLocks = managedInstanceLocks(managedPolicy, driver);
+  const driverLocks = managedInstanceLocks(managedPolicy, driver, m);
 
   const handleSave = async () => {
     if (!readEnvironmentScope(environmentId, AuthProvidersManageScope)) return;
@@ -416,8 +421,11 @@ export function AddProviderInstanceDialog({
       setIsSaving(false);
       toastManager.add({
         type: "error",
-        title: t("provider.add.failed"),
-        description: error instanceof Error ? error.message : t("provider.add.updateFailed"),
+        title: gt("Could not add provider instance"),
+        description:
+          error instanceof Error
+            ? (thrownErrorMessage(error, resolveMessage) ?? error.message)
+            : gt("The settings update failed."),
       });
       return;
     }
@@ -430,8 +438,11 @@ export function AddProviderInstanceDialog({
     }
     toastManager.add({
       type: "success",
-      title: t("provider.add.added"),
-      description: t("provider.add.success", { provider: driverOption.label, id: instanceId }),
+      title: gt("Provider instance added"),
+      description: gt("{provider} instance ''{instanceId}'' was added.", {
+        provider: driverOption.label,
+        instanceId,
+      }),
     });
     onOpenChange(false);
   };
@@ -451,8 +462,12 @@ export function AddProviderInstanceDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <WizardPopup size="wide">
         <WizardHeader
-          title={t("provider.add.title")}
-          description={t("provider.add.description", { environment: environmentLabel })}
+          title={gt("Add provider")}
+          description={
+            <T>
+              Add an account or configure a provider on <Var>{environmentLabel}</Var>.
+            </T>
+          }
         >
           {isAcpRegistry ? (
             <AddProviderInstanceWizardSteps
@@ -504,7 +519,7 @@ export function AddProviderInstanceDialog({
                 <Collapsible open={showMoreProviders} onOpenChange={setShowMoreProviders}>
                   <div className="flex pt-2">
                     <CollapsibleTrigger render={<Button variant="ghost-muted" size="xs" />}>
-                      {showMoreProviders ? "Show less" : "Show more"}
+                      {showMoreProviders ? gt("Show less") : gt("Show more")}
                       <ChevronDownIcon
                         aria-hidden
                         className={cn("transition-transform", showMoreProviders && "rotate-180")}
@@ -519,7 +534,7 @@ export function AddProviderInstanceDialog({
                         value={driver}
                         disabled={isPreparingRegistryAgent}
                         onValueChange={selectDriver}
-                        aria-label="More providers"
+                        aria-label={gt("More providers")}
                       />
                       {!acpRegistryAllowed ? null : (
                         <div className="flex items-center gap-3 text-xs text-muted-foreground">

@@ -21,6 +21,8 @@ import {
 import symbolsFontUrl from "./fonts/SymbolsNerdFontMono-Regular.woff2?url";
 import { isMonospaceFamily } from "../../appearanceFonts";
 import { observeResize } from "../../lib/observeResize";
+import { msg } from "gt-react";
+import { m } from "../../i18n/messages";
 
 const DEFAULT_TERMINAL_FONT_SIZE = 12;
 const MIN_TERMINAL_FONT_SIZE = 6;
@@ -702,7 +704,7 @@ export class GhosttyTerminalSurface {
 
     const input = document.createElement("textarea");
     input.className = "t3-ghostty-input";
-    input.setAttribute("aria-label", options.accessibleLabels?.input ?? "Terminal input");
+    input.setAttribute("aria-label", options.accessibleLabels?.input ?? m(msg("Terminal input")));
     input.autocapitalize = "off";
     input.autocomplete = "off";
     input.spellcheck = false;
@@ -715,7 +717,7 @@ export class GhosttyTerminalSurface {
     scrollbar.setAttribute("role", "scrollbar");
     scrollbar.setAttribute(
       "aria-label",
-      options.accessibleLabels?.scrollback ?? "Terminal scrollback",
+      options.accessibleLabels?.scrollback ?? m(msg("Terminal scrollback")),
     );
     scrollbar.setAttribute("aria-orientation", "vertical");
     scrollbar.tabIndex = 0;

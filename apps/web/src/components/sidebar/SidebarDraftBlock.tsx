@@ -4,6 +4,7 @@ import type { ContextMenuSource } from "@t3tools/contracts";
 import { contextMenuSourceOf } from "../../contextMenuSource";
 import { assistantCitationsToPlainText } from "@t3tools/shared/assistantCitations";
 import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
+import { useGT } from "gt-react";
 import { SquarePenIcon, XIcon } from "lucide-react";
 import {
   memo,
@@ -42,6 +43,7 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
 }) {
   const t = useTranslate();
   const { composer, draftId, onContextMenu, onDiscard, onNavigate } = props;
+  const gt = useGT();
   const promptPreview =
     assistantCitationsToPlainText(
       replaceComposerContextReferences(composer.prompt, (occurrence) => occurrence.label),
@@ -59,10 +61,12 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
   const preview =
     promptPreview.length > 0
       ? promptPreview
-      : `${attachmentCount} attachment${attachmentCount === 1 ? "" : "s"}`;
+      : gt("{count, plural, one {{count} attachment} other {{count} attachments}}", {
+          count: attachmentCount,
+        });
   const accessibility = resolveSidebarRowAccessibility({
     title: preview,
-    statusLabel: "Unsent draft",
+    statusLabel: gt("Unsent draft"),
     projectDisplayName: props.projectDisplayName,
     isActive: props.isActive,
   });

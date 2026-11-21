@@ -1,5 +1,6 @@
 import { useTranslate } from "../../i18n";
 import type { EnvironmentId, SecretReference, UnifiedSettings } from "@t3tools/contracts";
+import { useGT } from "gt-react";
 import { useId, useState } from "react";
 
 import { useUpdateEnvironmentSettings } from "../../hooks/useSettings";
@@ -33,6 +34,7 @@ export function AddUsageLimitSourceDialog({
   readonly sources: UnifiedSettings["usageLimitSources"];
 }) {
   const t = useTranslate();
+  const gt = useGT();
   const formId = useId();
   const updateSettings = useUpdateEnvironmentSettings(environmentId);
   const [label, setLabel] = useState("");
@@ -107,7 +109,7 @@ export function AddUsageLimitSourceDialog({
               <Label htmlFor="usage-source-key">{t("usageSettings.key")}</Label>
               <SecretSourceInput
                 id="usage-source-key"
-                aria-label="Management key"
+                aria-label={gt("Management key")}
                 value={keyDraft}
                 sources={secretSources}
                 environmentId={environmentId}

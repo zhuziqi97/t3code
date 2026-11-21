@@ -1,4 +1,5 @@
 import { useTranslate } from "../../i18n";
+import { useMessages } from "gt-react";
 import { CheckIcon, ChevronDownIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -36,11 +37,16 @@ export function ComposerCodeBlockLanguagePicker(props: {
   onChange: (language: string) => void;
 }) {
   const t = useTranslate();
+  const messages = useMessages();
   const [query, setQuery] = useState("");
   const current = codeLanguageEntry(props.language)?.id ?? props.language;
-  const items: CodeBlockLanguage[] = CODE_BLOCK_LANGUAGES.some((entry) => entry.id === current)
-    ? [...CODE_BLOCK_LANGUAGES]
-    : [{ id: current, label: current }, ...CODE_BLOCK_LANGUAGES];
+  const languages = CODE_BLOCK_LANGUAGES.map((entry) => ({
+    ...entry,
+    label: messages(entry.label),
+  }));
+  const items: CodeBlockLanguage[] = languages.some((entry) => entry.id === current)
+    ? languages
+    : [{ id: current, label: current }, ...languages];
   const needle = query.trim().toLowerCase();
   const filteredItems = needle
     ? items.filter(
@@ -77,7 +83,7 @@ export function ComposerCodeBlockLanguagePicker(props: {
           }
         >
           <LanguageIcon language={current} theme={props.theme} />
-          <span className="max-w-40 truncate">{codeLanguageLabel(props.language)}</span>
+          <span className="max-w-40 truncate">{codeLanguageLabel(props.language, messages)}</span>
           <ChevronDownIcon className="opacity-60" />
         </ComboboxTrigger>
         <ComboboxPopup align="start" className="w-56">

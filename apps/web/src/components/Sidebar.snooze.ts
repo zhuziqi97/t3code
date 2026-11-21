@@ -9,6 +9,7 @@ import {
   type SnoozePreset,
 } from "@t3tools/client-runtime/state/thread-settled";
 
+import { m, type MessageResolver } from "../i18n/messages";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { serverEnvironment } from "../state/server";
 import { parseTimestampDate, formatShortTimestamp } from "../timestampFormat";
@@ -35,8 +36,8 @@ export function snoozeWakeLabel(
 
 const DAY_MS = 24 * 60 * 60 * 1_000;
 
-function timeOfDayLabel(date: Date, timestampFormat: TimestampFormat, t: TFunction): string {
-  return formatShortTimestamp(date.toISOString(), timestampFormat, t);
+function timeOfDayLabel(date: Date, timestampFormat: TimestampFormat): string {
+  return formatShortTimestamp(date.toISOString(), timestampFormat);
 }
 
 /** The snooze menu for a thread, from its environment's presets, read when the menu opens. */
@@ -55,12 +56,14 @@ export function pickSnoozePreset(
   id: string,
   timestampFormat: TimestampFormat,
   environmentId: EnvironmentId,
+  resolve: MessageResolver = m,
 ): SnoozePreset | undefined {
   const picked = pickSharedSnoozePreset({
     shown,
     id,
     now: new Date(),
     ...snoozeOptions(timestampFormat, environmentId),
+    resolve,
   });
   if (!picked) {
     toastManager.add({
@@ -83,7 +86,7 @@ function snoozeOptions(
   return {
     t,
     ...(presets ? { presets } : {}),
-    formatTime: (date: Date) => formatShortTimestamp(date.toISOString(), timestampFormat, t),
+    formatTime: (date: Date) => formatShortTimestamp(date.toISOString(), timestampFormat),
     formatWeekday: (date: Date) =>
       date.toLocaleDateString(i18n.resolvedLanguage === "zh" ? "zh-CN" : undefined, {
         weekday: "short",
@@ -99,7 +102,7 @@ export function snoozeWakeDescription(
 ): string {
   const wake = parseTimestampDate(snoozedUntil);
   if (wake === null) return "";
-  const time = timeOfDayLabel(wake, timestampFormat, t);
+  const time = timeOfDayLabel(wake, timestampFormat);
   const startOfToday = new Date(now);
   startOfToday.setHours(0, 0, 0, 0);
   const dayDelta = Math.floor((wake.getTime() - startOfToday.getTime()) / DAY_MS);

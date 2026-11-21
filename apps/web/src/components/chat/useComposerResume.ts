@@ -1,5 +1,6 @@
-import { useTranslate } from "../../i18n";
-
+import { msg } from "gt-react";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { m } from "~/i18n/messages";
 import {
   type EnvironmentId,
   type ProviderInteractionMode,
@@ -55,7 +56,6 @@ interface ComposerResumeInput {
  * in its queue. Shares the per-route send lock with the composer's send paths.
  */
 export function useComposerResume(input: ComposerResumeInput) {
-  const t = useTranslate();
   const {
     environmentId,
     routeThreadKey,
@@ -149,7 +149,10 @@ export function useComposerResume(input: ComposerResumeInput) {
     if (result._tag === "Failure") {
       if (!isAtomCommandInterrupted(result)) {
         const error = squashAtomCommandFailure(result);
-        setThreadError(threadId, error instanceof Error ? error.message : t("chat.resume.failed"));
+        setThreadError(
+          threadId,
+          thrownErrorMessage(error, m) ?? m(msg("Could not resume thread.")),
+        );
       }
     } else {
       clearUsageLimitsFor(routeThreadKey);

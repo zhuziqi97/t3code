@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 
 import { act, render } from "../../../test/render";
-import { changeLanguage } from "../../i18n";
 import {
   CUSTOM_THEMES_STORAGE_KEY,
   getCustomThemes,
@@ -13,7 +12,7 @@ import {
   themeColorToHex,
   THEME_FILE_VERSION,
 } from "../../themePalette";
-import type { OpenVsxThemeExtension } from "../../openVsxThemes";
+import { importOpenVsxThemeExtension, type OpenVsxThemeExtension } from "../../openVsxThemes";
 import { ThemeImportDialog } from "./ThemeImportDialog";
 
 const searchOpenVsxThemes = vi.hoisted(() => vi.fn());
@@ -66,40 +65,6 @@ describe("ThemeImportDialog", () => {
   });
 });
 
-it("retranslates theme import controls while preserving the JSON draft and selection", async () => {
-  searchOpenVsxThemes.mockReset();
-  searchOpenVsxThemes.mockResolvedValue([]);
-  await changeLanguage("en");
-  await using language = new AsyncDisposableStack();
-  language.defer(() => changeLanguage("en").then(() => {}));
-  const imported = vi.fn(() => true);
-  const importedMany = vi.fn();
-  await using _screen = await render(
-    <ThemeImportDialog
-      open
-      onOpenChange={() => {}}
-      onImported={imported}
-      onImportedMany={importedMany}
-    />,
-  );
-  const draft = '{"name":"Raw 用户主题","version":1}';
-  await page.getByRole("textbox", { name: "Theme JSON" }).fill(draft);
-  const editor = document.querySelector<HTMLTextAreaElement>("#theme-json-editor")!;
-  editor.setSelectionRange(9, 17);
-  await act(() => changeLanguage("zh"));
-  await expect.element(page.getByRole("heading", { name: "添加主题", exact: true })).toBeVisible();
-  await expect.element(page.getByRole("button", { name: "添加主题", exact: true })).toBeEnabled();
-  await expect.element(page.getByRole("button", { name: "取消", exact: true })).toBeVisible();
-  expect(document.querySelector("#theme-json-editor")).toBe(editor);
-  expect(editor.value).toBe(draft);
-  expect([editor.selectionStart, editor.selectionEnd]).toEqual([9, 17]);
-  expect(imported).not.toHaveBeenCalled();
-  expect(importedMany).not.toHaveBeenCalled();
-  await act(() => changeLanguage("en"));
-  await expect.element(page.getByRole("button", { name: "Add theme", exact: true })).toBeEnabled();
-  expect(editor.value).toBe(draft);
-  expect([editor.selectionStart, editor.selectionEnd]).toEqual([9, 17]);
-});
 const theme = (name: string, accent = "#3b82f6", css?: string) => ({
   version: THEME_FILE_VERSION,
   name,
@@ -256,4 +221,37 @@ describe("ThemeImportDialog JSONC imports", () => {
       "#fdf6e3",
     ]);
   });
+});
+
+it("does not install a pending community theme after leaving Appearance", async () => {
+  using _themes = isolateThemes();
+  searchOpenVsxThemes.mockReset();
+  searchOpenVsxThemes.mockResolvedValue([extension]);
+  const download = Promise.withResolvers<ReturnType<typeof parseThemeFile>[]>();
+  vi.mocked(importOpenVsxThemeExtension).mockReset();
+  vi.mocked(importOpenVsxThemeExtension).mockReturnValue(download.promise);
+  await using screen = await render(
+    <ThemeImportDialog
+      open
+      onOpenChange={() => {}}
+      onImported={() => true}
+      onImportedMany={() => {}}
+    />,
+  );
+  await userEvent.fill(page.getByLabelText("Search Open VSX themes"), "night");
+  await page.getByRole("button", { name: "Install Nightfall" }).click();
+  await screen.unmount();
+  await act(async () => {
+    download.resolve([
+      {
+        ...parseThemeFile(theme("Nightfall")),
+        collection: { id: extension.collectionId, label: extension.name },
+      },
+    ]);
+    await download.promise;
+  });
+  expect(
+    getCustomThemes(),
+    "expect leaving Appearance to cancel its pending theme installation",
+  ).toEqual([]);
 });

@@ -1,6 +1,7 @@
+import { i18n } from "../../i18n";
 import type { TFunction } from "i18next";
-import { i18n, useTranslate } from "../../i18n";
-import { formatConnectionErrorMessage } from "@t3tools/client-runtime/connection";
+import { useTranslate } from "../../i18n";
+import { managedCapabilityDenial } from "@t3tools/client-runtime/contract-labels";
 import { SessionPermissions } from "./SessionPermissions";
 import {
   ChevronRightIcon,
@@ -15,21 +16,23 @@ import {
   type EnvironmentId,
   connectReachabilityHelpUrl,
   formatConnectReachable,
-  managedCapabilityDenial,
   resolveEnvironmentMachineKind,
 } from "@t3tools/contracts";
 import {
   connectionRoutes,
   hasSavedBearerRoute,
+  connectionErrorText,
   connectionStatusText,
   environmentMcpUrl,
 } from "@t3tools/client-runtime/connection";
 import * as Option from "effect/Option";
+import { msg, T, useGT, useMessages } from "gt-react";
+import { m, type MessageResolver } from "../../i18n/messages";
 
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { cn } from "../../lib/utils";
 import { SettingsRow } from "./settingsLayout";
-import { searchableSetting } from "./settingsSearch";
+import { useSearchableSetting } from "./settingsSearch";
 import { EnvironmentIconMenu } from "./EnvironmentIconPicker";
 import { EnvironmentRoutesList } from "./EnvironmentRoutesList";
 import {
@@ -51,7 +54,6 @@ import {
   supportsDesktopAppUpdate,
 } from "~/versionSkew";
 import { hasCloudPublicConfig } from "~/cloud/publicConfig";
-import { isElectron } from "~/env";
 import { useT3ConnectTurnOn } from "~/cloud/useT3ConnectTurnOn";
 import { useCloudLinkController } from "~/cloud/useCloudLinkController";
 import { useManagedTunnelUsage } from "~/cloud/managedRelayState";
@@ -83,6 +85,7 @@ type SavedBackendListRowProps = {
 
 function savedBackendStatus(
   environment: EnvironmentPresentation,
+  resolve: MessageResolver = m,
   t: TFunction = i18n.t,
 ): {
   readonly text: string;
@@ -91,6 +94,7 @@ function savedBackendStatus(
   if (!environment.entry.enabled && environment.connection.phase !== "unsupported")
     return { text: t("connections.off"), tone: "muted" };
   const { connection } = environment;
+  const error = connectionErrorText(connection, resolve);
   switch (connection.phase) {
     case "connected":
       return { text: t("connections.connected"), tone: "muted" };
@@ -98,25 +102,21 @@ function savedBackendStatus(
       return { text: t("connections.connecting"), tone: "muted" };
     case "reconnecting":
       if (connection.awaitingApproval) {
-        return { text: connection.error ?? "Waiting for approval", tone: "muted" };
+        return { text: error ?? resolve(msg("Waiting for approval")), tone: "muted" };
       }
       return {
-        text: connection.error
-          ? t("connections.reconnectingReason", {
-              error: formatConnectionErrorMessage(connection.error, t),
-            })
-          : t("connections.reconnecting"),
+        text: error
+          ? resolve(msg("Reconnecting: {error}", { error }))
+          : resolve(msg("Reconnecting")),
         tone: "error",
       };
     case "unsupported":
       return { text: t("connections.unsupported"), tone: "muted" };
     case "error":
       return {
-        text: connection.error
-          ? t("connections.connectionFailedReason", {
-              error: formatConnectionErrorMessage(connection.error, t),
-            })
-          : t("connections.connectionFailed"),
+        text: error
+          ? resolve(msg("Connection failed: {error}", { error }))
+          : resolve(msg("Connection failed")),
         tone: "error",
       };
     case "offline":
@@ -134,6 +134,8 @@ export function SavedBackendListRow({
   onAddRoute,
 }: SavedBackendListRowProps) {
   const t = useTranslate();
+  const messages = useMessages();
+  const gt = useGT();
   const [routesOpen, setRoutesOpen] = useState(false);
   const [permissionsOpen, setPermissionsOpen] = useState(false);
   const [diagnosisOpen, setDiagnosisOpen] = useState(false);
@@ -145,13 +147,10 @@ export function SavedBackendListRow({
   const isRemoving = removingEnvironmentId === environmentId;
   const errorTraceId = environment.connection.traceId;
   const { copyToClipboard: copyTraceIdToClipboard } = useCopyToClipboard<{ traceId: string }>({
-    target: t("connections.traceId"),
-    onCopy: ({ traceId }) => {
-      toastManager.add({
-        type: "success",
-        title: t("connections.traceCopied"),
-        description: traceId,
-      });
+    target: {
+      target: "trace ID",
+      unavailableMessage: msg("Clipboard API is unavailable while copying trace ID."),
+      failureMessage: msg("Failed to copy trace ID to the clipboard."),
     },
     onError: (error) => {
       toastManager.add(
@@ -167,7 +166,11 @@ export function SavedBackendListRow({
     copyTraceIdToClipboard(traceId, { traceId });
   };
   const { copyToClipboard: copyMcpUrl } = useCopyToClipboard<{ url: string }>({
-    target: "MCP URL",
+    target: {
+      target: "MCP URL",
+      unavailableMessage: msg("Clipboard API is unavailable while copying MCP URL."),
+      failureMessage: msg("Failed to copy MCP URL to the clipboard."),
+    },
     onCopy: ({ url }) => {
       toastManager.add({
         type: "success",
@@ -187,11 +190,11 @@ export function SavedBackendListRow({
       );
     },
   });
-  const versionMismatch = resolveServerConfigVersionMismatch(environment.serverConfig);
+  const versionMismatch = resolveServerConfigVersionMismatch(environment.serverConfig, messages);
   const serverUpdateState = useAtomValue(serverEnvironment.updateStateAtom(environmentId));
   const resumingServerUpdate =
     serverUpdateState.status === "running" && serverUpdateState.stage === "resuming";
-  const status = savedBackendStatus(environment, t);
+  const status = savedBackendStatus(environment, undefined, t);
   const serverVersion = environment.serverConfig?.environment.serverVersion ?? null;
   // Discovery empties its map on every refresh, so hold the last descriptor
   // seen or the glyph would blink back to the generic one each time.
@@ -232,7 +235,7 @@ export function SavedBackendListRow({
   );
   const routeCount = connectionRoutes(environment.entry).length;
   const subtitleText = [
-    environmentTransportLabel(environment, connectedTarget, t),
+    environmentTransportLabel(environment, connectedTarget),
     diagnosis ? null : resumingServerUpdate ? t("connections.restartingStatus") : status.text,
     enabled && versionMismatch ? serverVersion : null,
   ]
@@ -247,15 +250,17 @@ export function SavedBackendListRow({
 
   const statusTooltip = `${
     unsupported
-      ? environment.connection.error
-        ? formatConnectionErrorMessage(environment.connection.error, t)
-        : connectionStatusText(environment.connection, t)
+      ? (connectionErrorText(environment.connection, messages) ??
+        connectionStatusText(environment.connection, messages))
       : enabled
-        ? connectionStatusText(environment.connection, t)
+        ? connectionStatusText(environment.connection, undefined, t)
         : t("connections.switchedOff")
   }${
     versionMismatch
-      ? `\n${t("connections.updateAvailable", { from: versionMismatch.serverVersion, to: versionMismatch.clientVersion })}`
+      ? `\n${gt("Update available: {serverVersion} → {clientVersion}", {
+          serverVersion: versionMismatch.serverVersion,
+          clientVersion: versionMismatch.clientVersion,
+        })}`
       : ""
   }`;
 
@@ -385,7 +390,10 @@ export function SavedBackendListRow({
       serverUpdateState.status !== "running" ? (
         <OutdatedServerUpdateAction
           environmentId={environmentId}
-          serverLabel={t("connections.serverLabel", { label: environment.label })}
+          serverLabel={gt("{label} server", {
+            label: environment.label,
+            $context: "names a T3 server inside sentences such as {serverLabel} updated",
+          })}
           fromVersion={lastDescriptor?.serverVersion}
           targetVersion={APP_VERSION}
           label={
@@ -398,7 +406,10 @@ export function SavedBackendListRow({
       {showUpdateAction ? (
         <ServerUpdateAction
           environmentId={environmentId}
-          serverLabel={t("connections.serverLabel", { label: environment.label })}
+          serverLabel={gt("{label} server", {
+            label: environment.label,
+            $context: "names a T3 server inside sentences such as {serverLabel} updated",
+          })}
           selfUpdate={resolveServerSelfUpdateCapability(environment.serverConfig)}
           installation={environment.serverConfig?.environment.capabilities.serverInstallation}
           desktopAppUpdate={supportsDesktopAppUpdate(environment.serverConfig)}
@@ -418,7 +429,11 @@ export function SavedBackendListRow({
               size="sm"
               checked={enabled}
               disabled={isRemoving || blocked}
-              aria-label={`${enabled ? t("connections.switchOff") : t("connections.switchOn")} ${environment.label}`}
+              aria-label={
+                enabled
+                  ? gt("Switch off {label}", { label: environment.label })
+                  : gt("Switch on {label}", { label: environment.label })
+              }
               onCheckedChange={(checked) => onSetEnabled(environmentId, checked)}
             />
           }
@@ -487,11 +502,10 @@ function CloudLinkSwitch({
   readonly onCheckedChange?: (enabled: boolean) => void;
   readonly ariaLabel?: string;
 }) {
-  const t = useTranslate();
-  const label = ariaLabel ?? t("connections.enableConnect");
+  const gt = useGT();
   const control = (
     <Switch
-      aria-label={label}
+      aria-label={ariaLabel ?? gt("Enable T3 Connect")}
       checked={checked}
       disabled={disabled}
       {...(onCheckedChange ? { onCheckedChange } : {})}
@@ -532,10 +546,12 @@ function T3ConnectTunnelUsage({ tunnelLimit }: { readonly tunnelLimit: number | 
         action={
           // At the cap the alert below carries the same actions.
           !openAccountPage || showLimitAlert ? null : usage.upgrade ? (
-            <InlineButton onClick={() => openAccountPage("t3-chat")}>Get more tunnels</InlineButton>
+            <InlineButton onClick={() => openAccountPage("t3-chat")}>
+              <T>Get more tunnels</T>
+            </InlineButton>
           ) : usage.used >= usage.limit ? (
             <InlineButton onClick={() => openAccountPage("t3-connect")}>
-              Manage tunnels
+              <T>Manage tunnels</T>
             </InlineButton>
           ) : null
         }
@@ -571,6 +587,8 @@ function ConfiguredCloudLinkRow({
   readonly connectDeviceApproval: ConnectDeviceApprovalControl | null;
 }) {
   const t = useTranslate();
+  const setting = useSearchableSetting();
+  const gt = useGT();
   const updateEnvironmentSettings = useUpdateEnvironmentSettings(environmentId);
   const {
     isSignedIn,
@@ -582,14 +600,20 @@ function ConfiguredCloudLinkRow({
     holdWebhooksWhileOffline,
     operationError,
     tunnelLimit,
+    needsRelayConfiguration,
     reconcileCloudState,
   } = useCloudLinkController(environmentId);
   const { openAuthPrompt } = useT3ConnectAuthPrompt();
   // The server unlinks and refuses relay changes under such a policy; unlinking stays possible.
-  const connectDenial = managedCapabilityDenial(useManagedPolicy(environmentId), "connect");
+  const messages = useMessages();
+  const connectDenial = managedCapabilityDenial(
+    useManagedPolicy(environmentId),
+    "connect",
+    messages,
+  );
   const turnOn = useT3ConnectTurnOn(environmentId);
-  // Turning on links from this desktop's own backend only; turning off works from anywhere.
-  const showSwitch = isElectron && (turnOn.kind !== "on-host" || managedTunnelActive);
+  // Turning on needs relay configuration permission; turning off works from anywhere.
+  const showSwitch = turnOn.kind !== "on-host" || managedTunnelActive;
   const [isUpdating, setIsUpdating] = useState(false);
   const [isUpdatingPreference, setIsUpdatingPreference] = useState(false);
 
@@ -601,13 +625,24 @@ function ConfiguredCloudLinkRow({
     cloudLinkState.data === null ||
     cloudLinkState.isPending ||
     isBusy;
+  const configureReason = gt(
+    "This connection needs the relay configuration permission to configure T3 Connect.",
+  );
+  const tunnelNeedsConfigure = needsRelayConfiguration({
+    managedTunnel: !managedTunnelActive,
+    publish: publishAgentActivity,
+  });
+  const publishNeedsConfigure = needsRelayConfiguration({
+    managedTunnel: managedTunnelActive,
+    publish: !publishAgentActivity,
+  });
   // `isSignedIn` is undefined until Clerk loads. Signed out, one row shows a
   // sign-in button instead of its switch; the onboarding dialog that opens after
   // a fresh sign-in offers both linking and publishing.
   const signedOut = isSignedIn === false;
   const signInButton = (
     <Button size="sm" variant="outline" onClick={openAuthPrompt}>
-      Sign in
+      <T>Sign in</T>
     </Button>
   );
   const refreshLinkState = useEffectEvent(cloudLinkState.refresh);
@@ -624,7 +659,7 @@ function ConfiguredCloudLinkRow({
       formatConnectReachable(reachability)
     ) : reachability?.status === "unreachable" ? (
       <span className="block text-destructive">
-        {[reachability.reason, reachability.hint, `Fix: ${reachability.fix}`]
+        {[reachability.reason, reachability.hint, gt("Fix: {fix}", { fix: reachability.fix })]
           .filter(Boolean)
           .join(" ")}{" "}
         <a
@@ -633,7 +668,7 @@ function ConfiguredCloudLinkRow({
           rel="noreferrer"
           className="underline underline-offset-2"
         >
-          More info
+          <T>More info</T>
         </a>
       </span>
     ) : null;
@@ -699,23 +734,31 @@ function ConfiguredCloudLinkRow({
     <>
       {showSwitch ? (
         <SettingsRow
-          title={searchableSetting("t3-connect", t).title}
+          title={setting("t3-connect").title}
           description={
             connectDenial !== undefined && !managedTunnelActive
               ? connectDenial
               : signedOut
-                ? "Sign in to make this environment available to your other devices through T3 Connect."
+                ? gt(
+                    "Sign in to make this environment available to your other devices through T3 Connect.",
+                  )
                 : linkRevoked
-                  ? "This environment was removed from T3 Connect. Turn it on to link it again."
+                  ? gt("This environment was removed from T3 Connect. Turn it on to link it again.")
                   : managedTunnelActive
                     ? reachability?.status === "unreachable"
-                      ? "T3 Connect is on, but other devices cannot reach this environment."
+                      ? gt("T3 Connect is on, but other devices cannot reach this environment.")
                       : reachability?.status === "reachable"
-                        ? "This environment is available to your other devices through T3 Connect."
-                        : "T3 Connect is on. Reachability has not been checked yet."
+                        ? gt(
+                            "This environment is available to your other devices through T3 Connect.",
+                          )
+                        : gt("T3 Connect is on. Reachability has not been checked yet.")
                     : managedTunnelOutOfSync
-                      ? "T3 Connect is out of sync. This environment is linked only to publish agent activity, so other devices cannot connect. Turn T3 Connect on to repair it."
-                      : "Make this environment available to your other devices through T3 Connect."
+                      ? gt(
+                          "T3 Connect is out of sync. This environment is linked only to publish agent activity, so other devices cannot connect. Turn T3 Connect on to repair it.",
+                        )
+                      : gt(
+                          "Make this environment available to your other devices through T3 Connect.",
+                        )
           }
           status={operationError ?? cloudLinkState.error ?? reachabilityStatus}
           managed={managedTunnelActive ? undefined : connectDenial}
@@ -725,8 +768,8 @@ function ConfiguredCloudLinkRow({
             ) : (
               <CloudLinkSwitch
                 checked={managedTunnelActive}
-                disabled={switchDisabled}
-                disabledReason={disabledReason}
+                disabled={switchDisabled || tunnelNeedsConfigure}
+                disabledReason={disabledReason ?? (tunnelNeedsConfigure ? configureReason : null)}
                 onCheckedChange={(enabled) => void updateManagedTunnel(enabled)}
               />
             )
@@ -738,21 +781,23 @@ function ConfiguredCloudLinkRow({
         </SettingsRow>
       ) : linkRevoked ? (
         <SettingsRow
-          title={searchableSetting("t3-connect").title}
-          description="This environment was removed from T3 Connect. Run `t3 connect link` on the host to link it again."
+          title={setting("t3-connect").title}
+          description={gt(
+            "This environment was removed from T3 Connect. Run `t3 connect link` on the host to link it again.",
+          )}
         />
-      ) : isElectron ? (
+      ) : (
         <SettingsRow
-          title={searchableSetting("t3-connect").title}
-          description="Run `t3 connect link` on the host, then restart T3 Code there."
+          title={setting("t3-connect").title}
+          description={gt("Run `t3 connect link` on the host, then restart T3 Code there.")}
         />
-      ) : null}
+      )}
       {signedOut && showSwitch ? null : (
         <SettingsRow
-          title={searchableSetting("publish-agent-activity", t).title}
+          title={setting("publish-agent-activity").title}
           description={
             signedOut
-              ? "Sign in to send activity to mobile notifications and Live Activities."
+              ? gt("Sign in to send activity to mobile notifications and Live Activities.")
               : t("connections.activityHint")
           }
           managed={connectDenial}
@@ -763,8 +808,8 @@ function ConfiguredCloudLinkRow({
               <CloudLinkSwitch
                 ariaLabel={t("connections.activityLabel")}
                 checked={publishAgentActivity}
-                disabled={switchDisabled}
-                disabledReason={disabledReason}
+                disabled={switchDisabled || publishNeedsConfigure}
+                disabledReason={disabledReason ?? (publishNeedsConfigure ? configureReason : null)}
                 onCheckedChange={(enabled) => void updatePublishAgentActivity(enabled)}
               />
             )
@@ -773,8 +818,10 @@ function ConfiguredCloudLinkRow({
       )}
       {managedTunnelActive && !signedOut ? (
         <SettingsRow
-          title={searchableSetting("hold-webhooks-while-offline", t).title}
-          description={t("connections.webhooksHint")}
+          title={setting("hold-webhooks-while-offline").title}
+          description={gt(
+            "Keep webhook requests for up to 24 hours while this environment is offline, then deliver them. Off: T3 Connect only forwards requests and stores nothing.",
+          )}
           managed={connectDenial}
           control={
             <CloudLinkSwitch
@@ -789,18 +836,20 @@ function ConfiguredCloudLinkRow({
       ) : null}
       {managedTunnelActive && connectDeviceApproval ? (
         <SettingsRow
-          title={searchableSetting("connect-device-approval").title}
-          description="Devices that sign in to your T3 Connect account wait until someone already connected here approves them."
+          title={setting("connect-device-approval").title}
+          description={gt(
+            "Devices that sign in to your T3 Connect account wait until someone already connected here approves them.",
+          )}
           managed={connectDenial}
           control={
             <CloudLinkSwitch
-              ariaLabel="Require approval for new T3 Connect devices"
+              ariaLabel={gt("Require approval for new T3 Connect devices")}
               checked={connectDeviceApproval.required}
               disabled={!connectDeviceApproval.canManage}
               disabledReason={
                 connectDeviceApproval.canManage
                   ? null
-                  : "Your session does not have permission to manage access."
+                  : gt("Your session does not have permission to manage access.")
               }
               onCheckedChange={(enabled) =>
                 updateEnvironmentSettings({ requireConnectDeviceApproval: enabled })

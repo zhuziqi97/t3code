@@ -1,3 +1,8 @@
+const WELCOME_PRODUCT_NAME = "T3 Code for Convene";
+const LANGUAGE_PICKER_LABEL = "语言 / Language";
+const CONVENE_NAME = "Convene";
+
+import { T, useGT } from "gt-react";
 import {
   LANGUAGE_LABELS,
   SUPPORTED_LANGUAGES,
@@ -293,7 +298,7 @@ export function WelcomePage({
           <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col px-6 pt-12 pb-8 sm:pt-20">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-                T3 Code for Convene
+                {WELCOME_PRODUCT_NAME}
               </h1>
               <Select
                 value={language}
@@ -310,7 +315,7 @@ export function WelcomePage({
                   );
                 }}
               >
-                <SelectTrigger size="sm" aria-label="语言 / Language">
+                <SelectTrigger size="sm" aria-label={LANGUAGE_PICKER_LABEL}>
                   <SelectValue>{LANGUAGE_LABELS[language]}</SelectValue>
                 </SelectTrigger>
                 <SelectPopup align="end" alignItemWithTrigger={false}>
@@ -338,7 +343,7 @@ export function WelcomePage({
                 isPrimary={isPrimary}
                 onImportSourceEnabled={() => scans[0]?.refresh()}
               />
-              <WelcomeSection title="Convene">
+              <WelcomeSection title={CONVENE_NAME}>
                 <Suspense fallback={<p role="status">{t("convene.wizard.loading")}</p>}>
                   <ConveneConnectionPanel environmentId={environmentId} />
                 </Suspense>
@@ -1045,19 +1050,20 @@ function ProjectsSection({
 }
 
 function PhoneSection({ environmentId }: { readonly environmentId: EnvironmentId }) {
+  const gt = useGT();
   const [open, setOpen] = useState(false);
   return (
-    <WelcomeSection title="Phone">
+    <WelcomeSection title={gt("Phone")}>
       <Collapsible open={open} onOpenChange={setOpen}>
         <div className="flex min-h-10 items-center gap-3 py-1">
           <RowIcon>
             <SmartphoneIcon className="size-4" />
           </RowIcon>
           <span className="min-w-0 flex-1 text-sm font-medium text-foreground">
-            Use T3 Code on your phone
+            <T>Use T3 Code on your phone</T>
           </span>
           <CollapsibleTrigger render={<Button variant="ghost-muted" size="xs" />}>
-            {open ? "Hide" : "Set up"}
+            {open ? gt("Hide") : gt("Set up")}
             <ChevronDownIcon className={cn("size-3.5", open && "rotate-180")} />
           </CollapsibleTrigger>
         </div>
@@ -1065,7 +1071,9 @@ function PhoneSection({ environmentId }: { readonly environmentId: EnvironmentId
           <div className="flex items-center gap-8 pt-2 pb-3 pl-8">
             <ol className="min-w-0 flex-1 space-y-5">
               <PhoneStep step={1}>
-                <p className="text-sm text-foreground">Scan with your phone to get the app.</p>
+                <p className="text-sm text-foreground">
+                  <T>Scan with your phone to get the app.</T>
+                </p>
               </PhoneStep>
               <PhoneStep step={2}>
                 <PhoneConnectLink environmentId={environmentId} />
@@ -1078,7 +1086,7 @@ function PhoneSection({ environmentId }: { readonly environmentId: EnvironmentId
                 size={124}
                 level="M"
                 marginSize={2}
-                title="T3 Code app for iPhone and Android"
+                title={gt("T3 Code app for iPhone and Android")}
               />
             </div>
           </div>
@@ -1099,6 +1107,7 @@ function PhoneStep({ step, children }: { readonly step: number; readonly childre
 
 function PhoneConnectLink({ environmentId }: { readonly environmentId: EnvironmentId }) {
   const { isLoaded, isSignedIn, userId } = useAuth({ treatPendingAsSignedOut: false });
+  const gt = useGT();
   const loadFailed = useClerkLoadFailed();
   const { openAuthPrompt } = useT3ConnectAuthPrompt();
   const linkState = useCloudLinkState(environmentId);
@@ -1125,13 +1134,19 @@ function PhoneConnectLink({ environmentId }: { readonly environmentId: Environme
     </Button>
   );
   if (isSignedIn && link === null && linkState.isPending) {
-    return <p className="text-sm text-muted-foreground">Checking T3 Connect…</p>;
+    return (
+      <p className="text-sm text-muted-foreground">
+        <T>Checking T3 Connect…</T>
+      </p>
+    );
   }
   if (isSignedIn && linkState.error !== null) {
     return (
       <>
-        <p className="text-sm text-foreground">Could not check T3 Connect.</p>
-        {settingsLink("Check T3 Connect")}
+        <p className="text-sm text-foreground">
+          <T>Could not check T3 Connect.</T>
+        </p>
+        {settingsLink(gt("Check T3 Connect"))}
       </>
     );
   }
@@ -1139,14 +1154,14 @@ function PhoneConnectLink({ environmentId }: { readonly environmentId: Environme
     return (
       <p className="flex gap-1.5 text-sm text-foreground">
         <CheckIcon className="mt-0.5 size-4 shrink-0 text-success-foreground" />
-        Your phone can reach this computer. Sign in to the app with the same account.
+        <T>Your phone can reach this computer. Sign in to the app with the same account.</T>
       </p>
     );
   }
   if (isSignedIn && shared && reachability === undefined) {
     return (
       <p className="text-sm text-foreground">
-        T3 Connect is on for this computer. Sign in to the app with the same account.
+        <T>T3 Connect is on for this computer. Sign in to the app with the same account.</T>
       </p>
     );
   }
@@ -1156,25 +1171,25 @@ function PhoneConnectLink({ environmentId }: { readonly environmentId: Environme
       <>
         <p className="text-sm text-foreground">
           {shared
-            ? "T3 Connect is on, but the app cannot reach this computer."
-            : "Signed in. Share this computer so the app can reach it."}
+            ? gt("T3 Connect is on, but the app cannot reach this computer.")
+            : gt("Signed in. Share this computer so the app can reach it.")}
         </p>
-        {settingsLink(shared ? "Check T3 Connect" : "Set up T3 Connect")}
+        {settingsLink(shared ? gt("Check T3 Connect") : gt("Set up T3 Connect"))}
       </>
     );
   }
   return (
     <>
       <p className="text-sm text-foreground">
-        Sign in to T3 Connect here, then in the app with the same account.
+        <T>Sign in to T3 Connect here, then in the app with the same account.</T>
       </p>
       {loadFailed ? (
         <Button variant="outline" size="xs" onClick={retryClerkLoad}>
-          Retry sign-in
+          <T>Retry sign-in</T>
         </Button>
       ) : (
         <Button variant="outline" size="xs" disabled={!isLoaded} onClick={openAuthPrompt}>
-          Sign in to T3 Connect
+          <T>Sign in to T3 Connect</T>
         </Button>
       )}
     </>
@@ -2029,7 +2044,7 @@ function ImportRowMeta({
   readonly lastActiveAt: string | null;
 }) {
   const t = useTranslate();
-  const relative = lastActiveAt === null ? null : formatRelativeTime(lastActiveAt, t);
+  const relative = lastActiveAt === null ? null : formatRelativeTime(lastActiveAt);
   const age =
     relative === null ? "" : relative.suffix === null ? t("time.justNow") : relative.value;
   return (

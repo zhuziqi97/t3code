@@ -1,5 +1,5 @@
-import { useTranslate } from "../../i18n";
 import { proposedPlanTitle, stripDisplayedPlanMarkdown } from "@t3tools/shared/proposedPlanText";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { memo, useState, useId } from "react";
 import { findRevealRef } from "./markdownFindContext";
 import {
@@ -54,7 +54,8 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
   workspaceRoot: string | undefined;
   findActive?: boolean;
 }) {
-  const t = useTranslate();
+  const gt = useGT();
+  const messages = useMessages();
   const [expanded, setExpanded] = useState(false);
   const canWriteFiles = useEnvironmentScope(environmentId, AuthFilesystemWriteScope);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
@@ -64,23 +65,28 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
     reportFailure: false,
   });
   const { copyToClipboard, isCopied } = useCopyToClipboard({
-    target: "plan",
+    target: {
+      target: "plan",
+      unavailableMessage: msg("Clipboard API is unavailable while copying plan."),
+      failureMessage: msg("Failed to copy plan to the clipboard."),
+    },
     onError: (error) => {
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: t("chat.plan.copyFailed"),
-          description: error instanceof Error ? error.message : t("chat.plan.copyError"),
+          title: gt("Could not copy plan"),
+          description:
+            error instanceof Error ? error.message : gt("An error occurred while copying."),
         }),
       );
     },
   });
-  const title = proposedPlanTitle(planMarkdown) ?? t("chat.plan.proposed");
+  const title = proposedPlanTitle(planMarkdown) ?? gt("Proposed plan");
   const lineCount = planMarkdown.split("\n").length;
   const canCollapse = planMarkdown.length > 900 || lineCount > 20;
   const displayedPlanMarkdown = stripDisplayedPlanMarkdown(planMarkdown);
   const collapsedPreview = canCollapse
-    ? buildCollapsedProposedPlanPreviewMarkdown(planMarkdown, { maxLines: 10 })
+    ? buildCollapsedProposedPlanPreviewMarkdown(planMarkdown, { maxLines: 10 }, messages)
     : null;
   const isCollapsed = canCollapse && !expanded;
   // Mount clipped plans during find to count hidden matches without revealing them.
@@ -103,8 +109,8 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: t("chat.plan.workspaceMissing"),
-          description: t("chat.plan.noWorkspace"),
+          title: gt("Workspace path is unavailable"),
+          description: gt("This thread does not have a workspace path to save into."),
         }),
       );
       return;
@@ -120,7 +126,7 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
     if (!relativePath) {
       toastManager.add({
         type: "warning",
-        title: t("chat.plan.enterPath"),
+        title: gt("Enter a workspace path"),
       });
       return;
     }
@@ -141,7 +147,7 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
         setIsSaveDialogOpen(false);
         toastManager.add({
           type: "success",
-          title: t("chat.plan.saved"),
+          title: gt("Plan saved to workspace"),
           description: result.value.relativePath,
         });
         return;
@@ -151,8 +157,9 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: t("chat.plan.saveFailed"),
-            description: error instanceof Error ? error.message : t("chat.plan.saveError"),
+            title: gt("Could not save plan"),
+            description:
+              error instanceof Error ? error.message : gt("An error occurred while saving."),
           }),
         );
       }
@@ -163,7 +170,7 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
     <div className="rounded-2xl border border-border/80 bg-card/70 p-4 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
-          <Badge variant="secondary">{t("chat.mode.plan")}</Badge>
+          <Badge variant="secondary">{gt("Plan", { $context: "badge, noun" })}</Badge>
           {}
           <h3 data-thread-find-text="true" className="truncate text-sm font-medium text-foreground">
             {title}
@@ -171,20 +178,22 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
         </div>
         <Menu>
           <MenuTrigger
-            render={<Button aria-label={t("chat.plan.actions")} size="icon-xs" variant="outline" />}
+            render={<Button aria-label={gt("Plan actions")} size="icon-xs" variant="outline" />}
           >
             <EllipsisIcon aria-hidden="true" className="size-4" />
           </MenuTrigger>
           <MenuPopup align="end">
             <MenuItem onClick={handleCopyPlan}>
-              {isCopied ? "Copied!" : t("chat.plan.copy")}
+              {isCopied ? gt("Copied!") : gt("Copy to clipboard")}
             </MenuItem>
-            <MenuItem onClick={handleDownload}>{t("chat.plan.download")}</MenuItem>
+            <MenuItem onClick={handleDownload}>
+              <T>Download as markdown</T>
+            </MenuItem>
             <MenuItem
               onClick={openSaveDialog}
               disabled={!canWriteFiles || !workspaceRoot || isSavingToWorkspace}
             >
-              {t("chat.plan.save")}
+              <T>Save to workspace</T>
             </MenuItem>
           </MenuPopup>
         </Menu>
@@ -227,7 +236,7 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
               data-scroll-anchor-ignore
               onClick={() => setExpanded((value) => !value)}
             >
-              {expanded ? t("chat.plan.collapse") : t("chat.plan.expand")}
+              {expanded ? gt("Collapse plan") : gt("Expand plan")}
             </Button>
           </div>
         ) : null}
@@ -274,22 +283,36 @@ function SavePlanToWorkspaceForm({
   onCancel: () => void;
   onSave: (path: string) => void;
 }) {
-  const t = useTranslate();
+  const gt = useGT();
   const [savePath, setSavePath] = useState(initialPath);
   const savePathInputId = useId();
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{t("chat.plan.saveTitle")}</DialogTitle>
+        <DialogTitle>
+          <T>Save plan to workspace</T>
+        </DialogTitle>
         <DialogDescription>
-          {t("chat.plan.relativePrefix")}{" "}
-          <code>{workspaceRoot ?? t("chat.plan.workspaceFallback")}</code>
-          {t("chat.plan.relativeSuffix")}
+          {workspaceRoot !== undefined ? (
+            <T>
+              Enter a path relative to{" "}
+              <code>
+                <Var>{workspaceRoot}</Var>
+              </code>
+              .
+            </T>
+          ) : (
+            <T>
+              Enter a path relative to <code>the workspace</code>.
+            </T>
+          )}
         </DialogDescription>
       </DialogHeader>
       <DialogPanel>
         <label htmlFor={savePathInputId} className="grid gap-1.5">
-          <span className="text-xs font-medium text-foreground">{t("chat.plan.path")}</span>
+          <span className="text-xs font-medium text-foreground">
+            <T>Workspace path</T>
+          </span>
           <Input
             id={savePathInputId}
             value={savePath}
@@ -302,10 +325,10 @@ function SavePlanToWorkspaceForm({
       </DialogPanel>
       <DialogFooter>
         <Button variant="outline" size="sm" onClick={onCancel} disabled={saving}>
-          Cancel
+          <T>Cancel</T>
         </Button>
         <Button size="sm" onClick={() => onSave(savePath)} disabled={!canWriteFiles || saving}>
-          {saving ? "Saving..." : "Save"}
+          {saving ? gt("Saving...") : gt("Save")}
         </Button>
       </DialogFooter>
     </>

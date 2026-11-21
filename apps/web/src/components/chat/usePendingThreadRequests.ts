@@ -1,4 +1,6 @@
-import { i18n } from "../../i18n";
+import { msg } from "gt-react";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { m } from "~/i18n/messages";
 import type { ThreadStructure } from "@t3tools/client-runtime/state/shell";
 import {
   AuthOrchestrationOperateScope,
@@ -378,7 +380,7 @@ export function usePendingThreadRequests(input: {
       const error = squashAtomCommandFailure(result);
       setThreadError(
         activeThreadId,
-        error instanceof Error ? error.message : i18n.t("chat.approval.submitFailed"),
+        thrownErrorMessage(error, m) ?? m(msg("Failed to submit approval decision.")),
       );
     }
     setRespondingRequestIds((existing) => existing.filter((id) => id !== requestId));
@@ -435,12 +437,18 @@ export function usePendingThreadRequests(input: {
             useComposerDraftStore.getState().getComposerDraft(target),
           )
         ) {
-          setThreadError(activeThreadId, i18n.t("chat.input.answerChanged"));
+          setThreadError(
+            activeThreadId,
+            m(msg("Answer changed while preparing attachments. Review it and send again.")),
+          );
           return;
         }
         const uploaded = getUploadedAttachments({ environmentId, images: attachments });
         if (!uploaded) {
-          setThreadError(activeThreadId, i18n.t("chat.upload.waitOrRemove"));
+          setThreadError(
+            activeThreadId,
+            m(msg("Wait for attachments to finish uploading, or remove failed uploads.")),
+          );
           return;
         }
         attachmentsByQuestionId.set(question.id, uploaded as UserInputAttachments[string]);
@@ -456,7 +464,10 @@ export function usePendingThreadRequests(input: {
             ),
         )
       ) {
-        setThreadError(activeThreadId, i18n.t("chat.input.answerChanged"));
+        setThreadError(
+          activeThreadId,
+          m(msg("Answer changed while preparing attachments. Review it and send again.")),
+        );
         return;
       }
       const result = await respondToThreadUserInput({
@@ -474,7 +485,7 @@ export function usePendingThreadRequests(input: {
         const error = squashAtomCommandFailure(result);
         setThreadError(
           activeThreadId,
-          error instanceof Error ? error.message : i18n.t("chat.input.submitFailed"),
+          thrownErrorMessage(error, m) ?? m(msg("Failed to submit user input.")),
         );
       }
       return result;
@@ -499,7 +510,7 @@ export function usePendingThreadRequests(input: {
       const error = squashAtomCommandFailure(result);
       setThreadError(
         activeThreadId,
-        error instanceof Error ? error.message : i18n.t("chat.input.dismissFailed"),
+        thrownErrorMessage(error, m) ?? m(msg("Failed to dismiss the question.")),
       );
     }
     setRespondingUserInputRequestIds((existing) => existing.filter((id) => id !== requestId));
@@ -537,8 +548,8 @@ export function usePendingThreadRequests(input: {
       });
       toastManager.add({
         type: "info",
-        title: "Your typed text was set aside",
-        description: "It will be back in the composer once the question is answered.",
+        title: m(msg("Your typed text was set aside")),
+        description: m(msg("It will be back in the composer once the question is answered.")),
         data: { threadRef: activeThreadId ? { environmentId, threadId: activeThreadId } : null },
       });
       if (activeThreadId) {

@@ -190,7 +190,10 @@ const resolveOpenInOptions = (platform: string, availableEditors: ReadonlyArray<
   const availableEditorSet = new Set(availableEditors);
   return baseOptions
     .filter((option) => availableEditorSet.has(option.value))
-    .map((option) => ({ ...option, label: editorLabelForPlatform(option.value, platform) }));
+    .map((option) => ({
+      ...option,
+      label: editorLabelForPlatform(option.value, platform),
+    }));
 };
 
 function getOpenInIconClass(kind: OpenInOption["kind"]) {

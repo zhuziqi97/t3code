@@ -1,6 +1,6 @@
 import type { TFunction } from "i18next";
-import { i18n, useTranslate } from "../i18n";
 import { pipe } from "effect/Function";
+import { changeRequestTermKind, type ChangeRequestTermKind } from "./pullRequest/changeRequestTerm";
 import {
   scopeProjectRef,
   scopedThreadKey,
@@ -19,7 +19,9 @@ import {
   type ThreadPullRequestLink,
   type VcsStatusResult,
 } from "@t3tools/contracts";
+import { msg, T, useGT, useMessages } from "gt-react";
 import { FolderGit2Icon, TerminalIcon } from "lucide-react";
+import { m, type MessageResolver } from "../i18n/messages";
 import { useEnvironment, usePrimaryEnvironmentId } from "../state/environments";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useProject } from "../state/entities";
@@ -61,22 +63,6 @@ import {
 } from "./pullRequest/pullRequestIcons";
 import { resolvePullRequestState } from "./pullRequest/pullRequestPresentation";
 
-export function localizedStatusLabel(label: string, t: TFunction): string {
-  const keys: Record<string, string> = {
-    Working: "thread.working",
-    Connecting: "thread.connecting",
-    Completed: "thread.completed",
-    "Pending Approval": "thread.pendingApproval",
-    "Awaiting Input": "thread.awaitingInput",
-    "Guest Request": "thread.request",
-    Failed: "thread.failed",
-    Waiting: "thread.waiting",
-    "Plan Ready": "thread.planReady",
-    "Terminal process running": "thread.terminalRunning",
-  };
-  return keys[label] ? t(keys[label]!) : label;
-}
-
 export interface PrStatusIndicator {
   label: string;
   colorClass: string;
@@ -88,7 +74,7 @@ export interface PrStatusIndicator {
 }
 
 export interface TerminalStatusIndicator {
-  label: "Terminal process running";
+  label: string;
   colorClass: string;
   pulse: boolean;
 }
@@ -145,6 +131,7 @@ export function useThreadDisplayedPullRequest(
   branchPr: ThreadPr = null,
   branchSourceControlProvider?: VcsStatusResult["sourceControlProvider"],
 ) {
+  const m = useMessages();
   const supportsLinks = useSupportsMultiplePullRequests(environmentId);
   const linkedStatus = useLinkedThreadPullRequest(
     environmentId,
@@ -164,6 +151,7 @@ export function useThreadDisplayedPullRequest(
     status: prStatusIndicator(
       pr,
       linkedStatus?.sourceControlProvider ?? branchSourceControlProvider,
+      m,
     ),
     number: currentLink?.number ?? pr?.number,
     url: currentLink?.url ?? pr?.url,
@@ -173,6 +161,11 @@ export function useThreadDisplayedPullRequest(
 function linkedPullRequestReference(fallback: ThreadLinkedPullRequest) {
   const host = sourceControlClients.parseChangeRequestUrl(fallback.url)?.link.host;
   return { ...fallback, ...(host === undefined ? {} : { host }) };
+}
+
+function changeRequestTerminologyForUrl(url: string | undefined) {
+  const host = url === undefined ? null : sourceControlClients.findByChangeRequestUrl(url);
+  return (host ?? sourceControlClients.get(undefined)).changeRequest;
 }
 
 export function linkedPullRequestSnapshotStatus(
@@ -210,6 +203,142 @@ export interface ThreadPullRequestBadgePresentation {
   readonly text: string | number;
 }
 
+type PullRequestBadgeState = ThreadPullRequestBadge["state"];
+
+function stackBadgeLabel(
+  state: PullRequestBadgeState,
+  count: number,
+  term: ChangeRequestTermKind,
+  resolve: MessageResolver,
+): string {
+  switch (state) {
+    case "open":
+      return resolve(
+        msg(
+          "{count, plural, one {Stack of {count} {term, select, mr {merge requests} cr {change requests} other {pull requests}}, open} other {Stack of {count} {term, select, mr {merge requests} cr {change requests} other {pull requests}}, open}}",
+          { count, term },
+        ),
+      );
+    case "draft":
+      return resolve(
+        msg(
+          "{count, plural, one {Stack of {count} {term, select, mr {merge requests} cr {change requests} other {pull requests}}, draft} other {Stack of {count} {term, select, mr {merge requests} cr {change requests} other {pull requests}}, draft}}",
+          { count, term },
+        ),
+      );
+    case "closed":
+      return resolve(
+        msg(
+          "{count, plural, one {Stack of {count} {term, select, mr {merge requests} cr {change requests} other {pull requests}}, closed} other {Stack of {count} {term, select, mr {merge requests} cr {change requests} other {pull requests}}, closed}}",
+          { count, term },
+        ),
+      );
+    case "merged":
+      return resolve(
+        msg(
+          "{count, plural, one {Stack of {count} {term, select, mr {merge requests} cr {change requests} other {pull requests}}, merged} other {Stack of {count} {term, select, mr {merge requests} cr {change requests} other {pull requests}}, merged}}",
+          { count, term },
+        ),
+      );
+  }
+}
+
+function moreLinkedBadgeLabel(
+  state: PullRequestBadgeState,
+  tooltip: string,
+  others: number,
+  resolve: MessageResolver,
+): string {
+  switch (state) {
+    case "open":
+      return resolve(
+        msg(
+          "{others, plural, one {{tooltip}, and {others} more linked; overall open} other {{tooltip}, and {others} more linked; overall open}}",
+          { tooltip, others },
+        ),
+      );
+    case "draft":
+      return resolve(
+        msg(
+          "{others, plural, one {{tooltip}, and {others} more linked; overall draft} other {{tooltip}, and {others} more linked; overall draft}}",
+          { tooltip, others },
+        ),
+      );
+    case "closed":
+      return resolve(
+        msg(
+          "{others, plural, one {{tooltip}, and {others} more linked; overall closed} other {{tooltip}, and {others} more linked; overall closed}}",
+          { tooltip, others },
+        ),
+      );
+    case "merged":
+      return resolve(
+        msg(
+          "{others, plural, one {{tooltip}, and {others} more linked; overall merged} other {{tooltip}, and {others} more linked; overall merged}}",
+          { tooltip, others },
+        ),
+      );
+  }
+}
+
+function prStatusLabels(
+  state: PullRequestBadgeState,
+  term: ChangeRequestTermKind,
+  number: number,
+  resolve: MessageResolver,
+): { readonly label: string; readonly tooltipLead: string } {
+  switch (state) {
+    case "open":
+      return {
+        label: resolve(
+          msg("{term, select, mr {MR} cr {change request} other {PR}} open", { term }),
+        ),
+        tooltipLead: resolve(
+          msg("{term, select, mr {MR} cr {change request} other {PR}} #{number} - Open", {
+            term,
+            number,
+          }),
+        ),
+      };
+    case "draft":
+      return {
+        label: resolve(
+          msg("{term, select, mr {MR} cr {change request} other {PR}} draft", { term }),
+        ),
+        tooltipLead: resolve(
+          msg("{term, select, mr {MR} cr {change request} other {PR}} #{number} - Draft", {
+            term,
+            number,
+          }),
+        ),
+      };
+    case "closed":
+      return {
+        label: resolve(
+          msg("{term, select, mr {MR} cr {change request} other {PR}} closed", { term }),
+        ),
+        tooltipLead: resolve(
+          msg("{term, select, mr {MR} cr {change request} other {PR}} #{number} - Closed", {
+            term,
+            number,
+          }),
+        ),
+      };
+    case "merged":
+      return {
+        label: resolve(
+          msg("{term, select, mr {MR} cr {change request} other {PR}} merged", { term }),
+        ),
+        tooltipLead: resolve(
+          msg("{term, select, mr {MR} cr {change request} other {PR}} #{number} - Merged", {
+            term,
+            number,
+          }),
+        ),
+      };
+  }
+}
+
 function resolveThreadPullRequestBadgePresentation(
   {
     badge,
@@ -222,36 +351,39 @@ function resolveThreadPullRequestBadgePresentation(
     readonly url?: string | undefined;
     readonly status: PrStatusIndicator | null;
   },
-  t: TFunction = i18n.t,
+  resolve: MessageResolver = m,
 ): ThreadPullRequestBadgePresentation | null {
-  // The badge already folds every visible link into one state, draft included, so both the
-  // stack and the linked count index the shared table directly rather than the single-PR resolver.
-
+  const terminology = changeRequestTerminologyForUrl(url);
   if (badge?.kind === "stack") {
     const aggregate = PULL_REQUEST_STATE_PRESENTATION[badge.state];
     return {
       Icon: PullRequestGlyph.stack,
       toneClassName: aggregate.toneClassName,
-      label: t("pullRequest.stack", {
-        count: badge.layers,
-        state: t(aggregate.labelKey).toLowerCase(),
-      }),
+      label: stackBadgeLabel(
+        badge.state,
+        badge.layers,
+        changeRequestTermKind(terminology),
+        resolve,
+      ),
       text: badge.layers,
     };
   }
   if (number === undefined || url === undefined) return null;
 
-  const tooltip = status?.tooltip ?? t("pullRequest.pending", { number });
+  const tooltip =
+    status?.tooltip ??
+    resolve(
+      msg("{term, select, mr {MR} cr {change request} other {PR}} #{number}, status pending", {
+        term: changeRequestTermKind(terminology),
+        number,
+      }),
+    );
   if (badge?.kind === "pull-request" && badge.others > 0) {
     const aggregate = PULL_REQUEST_STATE_PRESENTATION[badge.state];
     return {
       Icon: aggregate.Icon,
       toneClassName: aggregate.toneClassName,
-      label: t("pullRequest.moreLinked", {
-        tooltip,
-        count: badge.others,
-        state: t(aggregate.labelKey).toLowerCase(),
-      }),
+      label: moreLinkedBadgeLabel(badge.state, tooltip, badge.others, resolve),
       text: `+${badge.others + 1}`,
     };
   }
@@ -282,8 +414,8 @@ export function ThreadPullRequestBadgeControl({
   onOpenList: () => void;
   onOpenPullRequest: (event: MouseEvent<HTMLElement>, url?: string) => void;
 }) {
-  const t = useTranslate();
-  const presentation = resolveThreadPullRequestBadgePresentation({ badge, number, url, status }, t);
+  const m = useMessages();
+  const presentation = resolveThreadPullRequestBadgePresentation({ badge, number, url, status }, m);
   if (presentation === null) return null;
   return (
     <PullRequestBadge
@@ -388,7 +520,6 @@ export function ThreadPullRequestsMiniList({
   pullRequests: ReadonlyArray<ThreadPullRequestLink>;
   onOpenPullRequest?: (event: MouseEvent<HTMLAnchorElement>, url: string) => void;
 }) {
-  const t = useTranslate();
   const lines = pipe(
     visibleThreadPullRequests(pullRequests),
     resolveThreadPullRequestChains,
@@ -402,7 +533,7 @@ export function ThreadPullRequestsMiniList({
         const presentation =
           snapshot === null
             ? null
-            : resolvePullRequestState({ state: snapshot.state, isDraft: snapshot.isDraft }, t);
+            : resolvePullRequestState({ state: snapshot.state, isDraft: snapshot.isDraft });
         return (
           <ThreadPullRequestMiniListItem
             key={`${line.link.host}/${line.link.repository}#${line.link.number}`}
@@ -415,7 +546,12 @@ export function ThreadPullRequestsMiniList({
           >
             {line.stack ? (
               <span className="ml-auto shrink-0 pl-1 text-3xs">
-                {line.stack.kind === "native" ? "stack" : "chain"} · {line.stack.size}
+                {line.stack.kind === "native" ? (
+                  <T context="a native stack of pull requests">stack</T>
+                ) : (
+                  <T context="a chain of pull requests based on each other">chain</T>
+                )}{" "}
+                · {line.stack.size}
               </span>
             ) : null}
           </ThreadPullRequestMiniListItem>
@@ -477,18 +613,22 @@ function ThreadPullRequestMiniListItem({
 export function prStatusIndicator(
   pr: ThreadPr,
   provider: VcsStatusResult["sourceControlProvider"] | null | undefined,
-  t: TFunction = i18n.t,
+  resolve: MessageResolver = m,
 ): PrStatusIndicator | null {
   if (!pr) return null;
-  const { shortLabel } = sourceControlClients.get(provider?.kind).changeRequest;
-  const state = resolvePullRequestState({ state: pr.state, isDraft: pr.isDraft === true }, t);
-
-  const tooltipLead = `${shortLabel} #${pr.number} - ${state.label}`;
+  const term = changeRequestTermKind(sourceControlClients.get(provider?.kind).changeRequest);
+  const state = resolvePullRequestState({ state: pr.state, isDraft: pr.isDraft === true }, resolve);
+  const { label, tooltipLead } = prStatusLabels(
+    pr.state === "open" && pr.isDraft === true ? "draft" : pr.state,
+    term,
+    pr.number,
+    resolve,
+  );
   return {
-    label: `${shortLabel} ${state.label.toLowerCase()}`,
+    label,
     colorClass: state.toneClassName,
     Icon: state.Icon,
-    tooltip: `${tooltipLead}: ${pr.title}`,
+    tooltip: resolve(msg("{tooltipLead}: {title}", { tooltipLead, title: pr.title })),
     tooltipLead,
     tooltipTitle: pr.title,
     url: pr.url,
@@ -558,12 +698,13 @@ export function resolveDisplayedThreadPrProvider(input: {
 
 export function terminalStatusFromRunningIds(
   runningTerminalIds: ReadonlyArray<string>,
+  resolve: MessageResolver = m,
 ): TerminalStatusIndicator | null {
   if (runningTerminalIds.length === 0) {
     return null;
   }
   return {
-    label: "Terminal process running",
+    label: resolve(msg("Terminal process running")),
     colorClass: "text-teal-600 dark:text-teal-300/90",
     pulse: true,
   };
@@ -588,11 +729,15 @@ export function ThreadTerminalStatusButton({
   terminalIds: readonly string[];
   onThreadActivate: (threadRef: ScopedThreadRef) => void;
 }) {
-  const t = useTranslate();
+  const gt = useGT();
+  const messages = useMessages();
   const terminalId = terminalIds[0];
   if (terminalId === undefined) return null;
-  const status = terminalStatusFromRunningIds(terminalIds);
-  const label = t("thread.terminalRunningOpen", { count: terminalIds.length });
+  const status = terminalStatusFromRunningIds(terminalIds, messages);
+  const label = gt(
+    "{count, plural, one {{count} terminal process running. Open terminal} other {{count} terminal processes running. Open terminal}}",
+    { count: terminalIds.length },
+  );
   return (
     <Tooltip>
       <TooltipTrigger
@@ -631,7 +776,7 @@ export function ThreadWorktreeIndicator({
 }: {
   thread: Pick<SidebarThreadSummary, "id" | "branch" | "worktreePath">;
 }) {
-  const t = useTranslate();
+  const gt = useGT();
   const worktreePath = thread.worktreePath?.trim();
   if (!worktreePath) {
     return null;
@@ -639,8 +784,8 @@ export function ThreadWorktreeIndicator({
 
   const displayPath = formatWorktreePathForDisplay(worktreePath);
   const tooltip = thread.branch
-    ? t("thread.worktreeBranch", { path: displayPath, branch: thread.branch })
-    : t("thread.worktree", { path: displayPath });
+    ? gt("Worktree: {path} ({branch})", { path: displayPath, branch: thread.branch })
+    : gt("Worktree: {path}", { path: displayPath });
 
   return (
     <Tooltip>
@@ -668,7 +813,8 @@ function ThreadStatusLabel({
   status: ThreadStatusPill;
   compact?: boolean;
 }) {
-  const t = useTranslate();
+  const m = useMessages();
+  const label = m(status.label);
   if (compact) {
     return (
       <Tooltip>
@@ -676,7 +822,7 @@ function ThreadStatusLabel({
           render={
             <span
               role="img"
-              aria-label={localizedStatusLabel(status.label, t)}
+              aria-label={label}
               className={`inline-flex size-3.5 shrink-0 items-center justify-center ${status.colorClass}`}
             />
           }
@@ -687,7 +833,7 @@ function ThreadStatusLabel({
             }`}
           />
         </TooltipTrigger>
-        <TooltipPopup side="top">{localizedStatusLabel(status.label, t)}</TooltipPopup>
+        <TooltipPopup side="top">{label}</TooltipPopup>
       </Tooltip>
     );
   }
@@ -698,7 +844,7 @@ function ThreadStatusLabel({
         render={
           <span
             role="img"
-            aria-label={localizedStatusLabel(status.label, t)}
+            aria-label={label}
             className={`inline-flex items-center gap-1 text-3xs ${status.colorClass}`}
           />
         }
@@ -708,15 +854,16 @@ function ThreadStatusLabel({
             status.pulse ? "motion-safe:animate-status-pulse" : ""
           }`}
         />
-        <span className="hidden md:inline">{localizedStatusLabel(status.label, t)}</span>
+        <span className="hidden md:inline">{label}</span>
       </TooltipTrigger>
-      <TooltipPopup side="top">{localizedStatusLabel(status.label, t)}</TooltipPopup>
+      <TooltipPopup side="top">{label}</TooltipPopup>
     </Tooltip>
   );
 }
 
 export function ThreadRowLeadingStatus({ thread }: { thread: SidebarThreadSummary }) {
-  const t = useTranslate();
+  const gt = useGT();
+  const m = useMessages();
   const { leaseLiveStatus, rowRef } = useSidebarRowSubscriptionLease(false);
   // A new ref callback would detach and reattach the row, and each reattach sets lease state.
   const statusRef = useStableCallback((node: HTMLSpanElement | null) =>
@@ -762,7 +909,7 @@ export function ThreadRowLeadingStatus({ thread }: { thread: SidebarThreadSummar
   const prStatus = prStatusIndicator(
     pr,
     linkedPullRequest?.sourceControlProvider ?? resolveDisplayedThreadPrProvider(displayedPrInput),
-    t,
+    m,
   );
   const threadStatus = resolveThreadStatusPill({
     thread: {
@@ -804,7 +951,13 @@ export function ThreadRowLeadingStatus({ thread }: { thread: SidebarThreadSummar
       {pendingLink ? (
         <PullRequestGlyph.pullRequest
           className="size-3 text-muted-foreground"
-          aria-label={t("pullRequest.pending", { number: pendingLink.number })}
+          aria-label={gt(
+            "{term, select, mr {MR} cr {change request} other {PR}} #{number}, status pending",
+            {
+              term: changeRequestTermKind(changeRequestTerminologyForUrl(pendingLink.url)),
+              number: pendingLink.number,
+            },
+          )}
         />
       ) : null}
       {threadStatus ? <ThreadStatusLabel status={threadStatus} /> : null}
@@ -813,7 +966,8 @@ export function ThreadRowLeadingStatus({ thread }: { thread: SidebarThreadSummar
 }
 
 export function ThreadRowTrailingStatus({ thread }: { thread: SidebarThreadSummary }) {
-  const t = useTranslate();
+  const gt = useGT();
+  const m = useMessages();
   const runningTerminalIds = useThreadRunningTerminalIds({
     environmentId: thread.environmentId,
     threadId: thread.id,
@@ -823,10 +977,10 @@ export function ThreadRowTrailingStatus({ thread }: { thread: SidebarThreadSumma
   const isRemoteThread = thread.environmentId !== primaryEnvironmentId;
   const remoteEnvLabel = environment?.label ?? null;
   const threadEnvironmentLabel = isRemoteThread
-    ? (remoteEnvLabel ?? t("environment.remote"))
+    ? (remoteEnvLabel ?? gt("Remote", { $context: "machine location" }))
     : null;
   const remoteMachine = resolveEnvironmentMachineKind(environment?.serverConfig ?? null);
-  const terminalStatus = terminalStatusFromRunningIds(runningTerminalIds);
+  const terminalStatus = terminalStatusFromRunningIds(runningTerminalIds, m);
 
   if (!terminalStatus && !isRemoteThread) {
     return null;
@@ -840,7 +994,7 @@ export function ThreadRowTrailingStatus({ thread }: { thread: SidebarThreadSumma
             render={
               <span
                 role="img"
-                aria-label={localizedStatusLabel(terminalStatus.label, t)}
+                aria-label={terminalStatus.label}
                 className={`inline-flex items-center justify-center ${terminalStatus.colorClass}`}
               />
             }
@@ -850,7 +1004,7 @@ export function ThreadRowTrailingStatus({ thread }: { thread: SidebarThreadSumma
               onAnimationStart={synchronizeTerminalPulse}
             />
           </TooltipTrigger>
-          <TooltipPopup side="top">{localizedStatusLabel(terminalStatus.label, t)}</TooltipPopup>
+          <TooltipPopup side="top">{terminalStatus.label}</TooltipPopup>
         </Tooltip>
       ) : null}
       {isRemoteThread ? (
@@ -858,7 +1012,9 @@ export function ThreadRowTrailingStatus({ thread }: { thread: SidebarThreadSumma
           <TooltipTrigger
             render={
               <span
-                aria-label={threadEnvironmentLabel ?? t("environment.remote")}
+                aria-label={
+                  threadEnvironmentLabel ?? gt("Remote", { $context: "machine location" })
+                }
                 className="inline-flex items-center justify-center"
               />
             }
@@ -909,6 +1065,7 @@ export function ThreadSearchPullRequestNumber({
     thread.pullRequests,
     thread.branchPullRequest,
   );
+  const m = useMessages();
   if (!matched) return null;
   const badge = supportsMultiplePullRequests
     ? resolveThreadPullRequestBadge(thread.pullRequests)
@@ -924,12 +1081,15 @@ export function ThreadSearchPullRequestNumber({
       (reference) =>
         reference != null && pullRequestMatchesSearchQuery({ linkedPullRequest: reference }, query),
     );
-  const presentation = resolveThreadPullRequestBadgePresentation({
-    badge,
-    number: pr?.number ?? stored?.number,
-    url: pr?.url ?? stored?.url,
-    status: prStatusIndicator(pr, linked?.sourceControlProvider),
-  });
+  const presentation = resolveThreadPullRequestBadgePresentation(
+    {
+      badge,
+      number: pr?.number ?? stored?.number,
+      url: pr?.url ?? stored?.url,
+      status: prStatusIndicator(pr, linked?.sourceControlProvider, m),
+    },
+    m,
+  );
   if (presentation === null) return null;
   const aggregate = badge !== null && (badge.kind === "stack" || badge.others > 0);
   const state = aggregate
@@ -954,4 +1114,20 @@ export function ThreadSearchPullRequestNumber({
       <span>{presentation.text}</span>
     </span>
   );
+}
+
+export function localizedStatusLabel(label: string, t: TFunction): string {
+  const keys: Record<string, string> = {
+    Working: "thread.working",
+    Connecting: "thread.connecting",
+    Completed: "thread.completed",
+    "Pending Approval": "thread.pendingApproval",
+    "Awaiting Input": "thread.awaitingInput",
+    "Guest Request": "thread.request",
+    Failed: "thread.failed",
+    Waiting: "thread.waiting",
+    "Plan Ready": "thread.planReady",
+    "Terminal process running": "thread.terminalRunning",
+  };
+  return keys[label] ? t(keys[label]!) : label;
 }

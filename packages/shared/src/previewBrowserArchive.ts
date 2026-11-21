@@ -13,7 +13,7 @@ import NodeFS from "node:fs";
 
 // HTML previews and server tabs share this pinned headless Chrome. Packages carry it; source builds download it.
 // When bumping, update every platform archive size and SHA-256 from Chrome for Testing.
-const VERSION = "157.0.8103.78";
+export const VERSION = "157.0.8103.78";
 const ARCHIVES = {
   linux64: {
     bytes: 127_965_683,

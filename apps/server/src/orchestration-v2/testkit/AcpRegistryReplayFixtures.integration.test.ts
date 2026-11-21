@@ -237,9 +237,9 @@ describe("ACP registry replay fixtures", () => {
             'Invalid provider; The agent did not accept the model "replay-model-b"; actual model is "replay-model-a". Choose another model for this provider, then retry.',
           );
         } else {
-          assert.match(
-            errors[0]?.failure.message ?? "",
-            /^Failed to open acpRegistry provider session \S+\.$/u,
+          assert.equal(
+            errors[0]?.failure.message,
+            "The provider needs you to sign in. Sign in from its provider settings or with its own CLI or app, then retry the turn.",
           );
         }
       }).pipe(

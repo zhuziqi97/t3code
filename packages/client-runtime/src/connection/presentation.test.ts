@@ -69,6 +69,7 @@ function supervisorState(overrides: Partial<SupervisorConnectionState>): Supervi
     generation: 0,
     lastFailure: null,
     retryAt: null,
+    refusedRouteIds: [],
     ...overrides,
   };
 }
@@ -245,10 +246,10 @@ it("translates connection status while keeping the original error reason and sou
     error: "ECONNREFUSED host.example:3773",
     traceId: "trace-1",
   };
-  expect(connectionStatusText(connection, t)).toBe(
+  expect(connectionStatusText(connection, undefined, t)).toBe(
     "连接失败，正在重新连接…原因：ECONNREFUSED host.example:3773",
   );
-  expect(connectionStatusTitle(connection, t)).toBe("连接失败，正在重新连接…");
+  expect(connectionStatusTitle(connection, undefined, t)).toBe("连接失败，正在重新连接…");
   expect(connectionStatusText(connection)).toBe(
     "Failed to connect. Reconnecting... Reason: ECONNREFUSED host.example:3773",
   );
@@ -292,6 +293,7 @@ it("translates known authentication failures and machine mismatch labels, leavin
   expect(
     connectionStatusText(
       { phase: "error", error: "The environment credential is invalid.", traceId: "trace-raw" },
+      undefined,
       t,
     ),
   ).toBe("连接失败。原因：执行环境凭据无效。");

@@ -1,5 +1,3 @@
-import type { MessageKey } from "@t3tools/client-runtime/i18n";
-import { useTranslate } from "~/i18n";
 import type { ProjectId, ScopedThreadRef, ThreadPullRequestLink } from "@t3tools/contracts";
 import {
   sourceControlClients,
@@ -21,6 +19,7 @@ import {
   PlusIcon,
 } from "lucide-react";
 import { LegendList } from "@legendapp/list/react";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { memo, useState } from "react";
 
 import {
@@ -29,7 +28,10 @@ import {
 } from "~/components/chat/composerMentionDrag";
 import { writeTextToClipboard } from "~/hooks/useCopyToClipboard";
 import { findProjectForChangeRequest } from "@t3tools/client-runtime/change-request-links";
-import { useOpenPrLink } from "~/lib/openPullRequestLink";
+import { pullRequestLinkPanelTarget, useOpenPrLink } from "~/lib/openPullRequestLink";
+import { useClientSettings } from "~/hooks/useSettings";
+import { usePrimaryEnvironmentId } from "~/state/environments";
+import { usePullRequestIntentPrefetch } from "./usePullRequestIntentPrefetch";
 import { cn } from "~/lib/utils";
 import { useShortcutModifierState } from "~/shortcutModifierState";
 import { useProjects, useServerConfigs, useThreadShell } from "~/state/entities";
@@ -38,6 +40,7 @@ import { PullRequestsUnavailableState } from "./PullRequestsUnavailableState";
 import { threadEnvironment } from "~/state/threads";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { RelativeTime } from "~/components/RelativeTime";
+import { ThreadDetailsIssueRows } from "../chat/ThreadDetailsIssueRows";
 import { Button } from "../ui/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { MiddleTruncate } from "../ui/middle-truncate";
@@ -60,12 +63,14 @@ import { PullRequestGlyph } from "./pullRequestIcons";
 import { pullRequestQuickActions } from "./pullRequestList.logic";
 import { PullRequestSpeedActions, PullRequestSpeedModeContext } from "./PullRequestSpeedActions";
 
-const SOURCE_LABEL_KEYS: Record<ThreadPullRequestLink["source"], MessageKey> = {
-  manual: "pullRequest.linked.source.manual",
-  created: "pullRequest.linked.source.created",
-  agent: "pullRequest.linked.source.agent",
-  stack: "pullRequest.linked.source.stack",
-  "stack-dismissed": "pullRequest.linked.source.dismissed",
+import { changeRequestTermKind } from "./changeRequestTerm";
+
+const SOURCE_LABELS: Record<ThreadPullRequestLink["source"], string> = {
+  manual: msg("Linked by you"),
+  created: msg("Created from this thread"),
+  agent: msg("Linked by the agent"),
+  stack: msg("Found in the stack"),
+  "stack-dismissed": msg("Dismissed", { $context: "pull request link source" }),
 };
 
 function ChecksGlyph({
@@ -73,8 +78,8 @@ function ChecksGlyph({
 }: {
   state: NonNullable<ThreadPullRequestLink["snapshot"]>["checksState"] & string;
 }) {
-  const t = useTranslate();
-  const presentation = pullRequestChecksStatePresentation(state, t);
+  const resolve = useMessages();
+  const presentation = pullRequestChecksStatePresentation(state, resolve);
   return (
     <Tooltip>
       <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
@@ -96,6 +101,7 @@ function LinkRowImpl({
   speedMode,
   onUnlink,
   onSetWatching,
+  onIntent,
   canStartWatch,
 }: {
   line: PullRequestListLine;
@@ -104,9 +110,11 @@ function LinkRowImpl({
   speedMode: boolean;
   onUnlink: (link: ThreadPullRequestLink) => void;
   onSetWatching: ((link: ThreadPullRequestLink, watching: boolean) => void) | null;
+  onIntent: (link: ThreadPullRequestLink | null) => void;
   canStartWatch: boolean;
 }) {
-  const t = useTranslate();
+  const gt = useGT();
+  const resolve = useMessages();
   const openPrLink = useOpenPrLink(threadRef);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
@@ -138,6 +146,14 @@ function LinkRowImpl({
   return (
     <div
       className={cn(PULL_REQUEST_ROW_CLASS, "relative hover:bg-accent/60")}
+      onPointerEnter={() => onIntent(link)}
+      onPointerLeave={(event) => {
+        if (!event.currentTarget.contains(document.activeElement)) onIntent(null);
+      }}
+      onFocus={() => onIntent(link)}
+      onBlur={(event) => {
+        if (!event.currentTarget.matches(":hover")) onIntent(null);
+      }}
       onContextMenu={(event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -149,7 +165,7 @@ function LinkRowImpl({
       {depth > 0 ? <span aria-hidden className="-ml-2 h-6 w-px shrink-0 bg-border/70" /> : null}
       {snapshot === null ? (
         <PullRequestGlyph.pullRequest
-          aria-label={t("pullRequest.linked.waitingForHost")}
+          aria-label={gt("Waiting for host state")}
           className="size-4 shrink-0 text-muted-foreground"
         />
       ) : (
@@ -190,7 +206,7 @@ function LinkRowImpl({
                 #{link.number}
               </TooltipTrigger>
               <TooltipPopup>
-                {t(SOURCE_LABEL_KEYS[link.source])} · <RelativeTime timestamp={link.linkedAt} />
+                {resolve(SOURCE_LABELS[link.source])} · <RelativeTime timestamp={link.linkedAt} />
               </TooltipPopup>
             </Tooltip>
           }
@@ -201,13 +217,14 @@ function LinkRowImpl({
                 {watching ? (
                   <Tooltip>
                     <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
-                      <EyeIcon
-                        role="img"
-                        aria-label={t("pullRequest.linked.watching")}
-                        className="size-3.5"
-                      />
+                      <EyeIcon role="img" aria-label={gt("Watching")} className="size-3.5" />
                     </TooltipTrigger>
-                    <TooltipPopup>{t("pullRequest.linked.watchingDescription")}</TooltipPopup>
+                    <TooltipPopup>
+                      <T>
+                        Watching: the agent wakes when checks finish, someone comments, or the
+                        branch conflicts
+                      </T>
+                    </TooltipPopup>
                   </Tooltip>
                 ) : null}
                 {snapshot?.checksState ? <ChecksGlyph state={snapshot.checksState} /> : null}
@@ -253,11 +270,17 @@ function LinkRowImpl({
                   </TooltipTrigger>
                   <TooltipPopup>
                     {stack.kind === "native"
-                      ? t("pullRequest.linked.hostStack", {
-                          count: stack.size,
+                      ? gt("{host} stack of {size}: merging a layer lands the ones below it.", {
                           host: sourceControlClients.hostLabelForChangeRequestUrl(link.url),
+                          size: stack.size,
                         })
-                      : t("pullRequest.linked.chain", { count: stack.size })}
+                      : gt(
+                          "{size} {terms, select, mr {merge requests} cr {change requests} other {pull requests}} chained by base branch.",
+                          {
+                            size: stack.size,
+                            terms: changeRequestTermKind(linkHost.changeRequest),
+                          },
+                        )}
                   </TooltipPopup>
                 </Tooltip>
               ) : null}
@@ -320,7 +343,7 @@ function LinkRowImpl({
               <Button
                 variant="ghost"
                 size="icon-micro"
-                aria-label={t("pullRequest.linked.actions", { number: link.number })}
+                aria-label={gt("Actions for #{number}", { number: link.number })}
                 className="relative"
               >
                 <MoreHorizontalIcon className="size-3.5" />
@@ -333,25 +356,31 @@ function LinkRowImpl({
             side="bottom"
             sideOffset={menuPosition ? 0 : 4}
           >
-            <MenuItem onClick={() => void writeTextToClipboard(link.url, "link")}>
+            <MenuItem
+              onClick={() =>
+                void writeTextToClipboard(link.url, {
+                  target: "link",
+                  unavailableMessage: msg("Clipboard API is unavailable while copying link."),
+                  failureMessage: msg("Failed to copy link to the clipboard."),
+                })
+              }
+            >
               <LinkIcon className="size-3.5" />
-              {t("pullRequest.link.copy")}
+              <T>Copy link</T>
             </MenuItem>
             <MenuItem onClick={(event) => openPrLink(event, link.url, threadRef)}>
               <ArrowUpRightIcon className="size-3.5" />
-              {t("pullRequest.linked.open")}
+              <T context="verb, open a link">Open</T>
             </MenuItem>
             {onSetWatching !== null && open && (watching || canStartWatch) ? (
               <MenuItem onClick={() => onSetWatching(link, !watching)}>
                 {watching ? <EyeOffIcon className="size-3.5" /> : <EyeIcon className="size-3.5" />}
-                {watching ? t("pullRequest.linked.stopWatching") : t("pullRequest.linked.watch")}
+                {watching ? gt("Stop watching") : gt("Watch for changes")}
               </MenuItem>
             ) : null}
             <MenuItem onClick={() => onUnlink(link)}>
               <PullRequestGlyph.unlink className="size-3.5" />
-              {link.source === "stack"
-                ? t("pullRequest.linked.dismiss")
-                : t("pullRequest.linked.unlink")}
+              {link.source === "stack" ? gt("Dismiss from thread") : gt("Unlink from thread")}
             </MenuItem>
           </MenuPopup>
         </Menu>
@@ -375,13 +404,13 @@ const lineKey = (line: PullRequestListLine) =>
   `${line.link.host}/${line.link.repository}#${line.link.number}`;
 
 export function ThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThreadRef }) {
-  const t = useTranslate();
+  const gt = useGT();
   const configs = useServerConfigs();
   if (configs.get(threadRef.environmentId) === undefined) {
     return (
       <PullRequestsUnavailableState
-        title={t("pullRequest.linked.unavailable")}
-        error={t("pullRequest.linked.unsupported")}
+        title={gt("Linked items unavailable")}
+        error={gt("The thread's environment is not available.")}
       />
     );
   }
@@ -389,8 +418,9 @@ export function ThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThread
 }
 
 function EnabledThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThreadRef }) {
-  const t = useTranslate();
+  const gt = useGT();
   const thread = useThreadShell(threadRef);
+  const issues = thread?.issues ?? [];
   const projects = useProjects();
   const environmentProjects = projects
     .filter((project) => project.environmentId === threadRef.environmentId)
@@ -412,6 +442,37 @@ function EnabledThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThread
   const unlink = useAtomCommand(threadEnvironment.unlinkPullRequest, { reportFailure: true });
   const watch = useAtomCommand(threadEnvironment.watchPullRequest, { reportFailure: true });
   const capabilities = useServerConfigs().get(threadRef.environmentId)?.environment.capabilities;
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const opensInApp = useClientSettings((settings) => settings.pullRequestLinksOpenInApp);
+  const prefetch = usePullRequestIntentPrefetch((target) =>
+    links.some(
+      (link) =>
+        link.number === target.number &&
+        link.repository.toLowerCase() === target.repository.toLowerCase(),
+    ),
+  );
+  const intendLink = (link: ThreadPullRequestLink | null) => {
+    const target =
+      link === null || !opensInApp
+        ? null
+        : pullRequestLinkPanelTarget({
+            url: link.url,
+            environmentId: threadRef.environmentId,
+            primaryEnvironmentId,
+            lendHostProject: true,
+          });
+    prefetch(
+      target?.host === undefined
+        ? null
+        : {
+            environmentId: target.project.environmentId,
+            projectId: target.project.id,
+            host: target.host,
+            repository: target.repository,
+            number: target.number,
+          },
+    );
+  };
   const supportsWatch = capabilities?.threadPullRequestWatch === true;
   const canStartWatch = thread !== null && canStartThreadPullRequestWatch(thread);
   const handleUnlink = (link: ThreadPullRequestLink) => {
@@ -439,19 +500,32 @@ function EnabledThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThread
   };
 
   // Legend rows update only for data/extraData changes; include all external inputs.
-  const rowInputs = { speedMode, environmentProjects, capabilities, supportsWatch, thread };
+  const rowInputs = {
+    speedMode,
+    environmentProjects,
+    capabilities,
+    supportsWatch,
+    thread,
+    opensInApp,
+    primaryEnvironmentId,
+  };
 
-  if (linkCount === 0) {
+  if (linkCount === 0 && issues.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
         <PullRequestGlyph.link aria-hidden className="size-6 text-muted-foreground/60" />
-        <p className="text-sm font-medium">{t("pullRequest.linked.none")}</p>
+        <p className="text-sm font-medium">
+          <T>No linked pull requests</T>
+        </p>
         <p className="max-w-60 text-xs text-muted-foreground">
-          {t("pullRequest.linked.emptyDescription")}
+          <T>
+            Pull requests the agent opens from this thread land here. Link one yourself from a URL
+            or a number.
+          </T>
         </p>
         <Button size="sm" variant="outline" onClick={openLinkDialog}>
           <PlusIcon className="size-3.5" />
-          {t("pullRequest.linked.linkPullRequest")}
+          <T>Link pull request</T>
         </Button>
       </div>
     );
@@ -466,6 +540,28 @@ function EnabledThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThread
           data={lines}
           keyExtractor={lineKey}
           extraData={rowInputs}
+          ListHeaderComponent={
+            issues.length > 0 ? (
+              <>
+                <section aria-label={gt("Linked issues")} className="flex flex-col">
+                  <h2 className="px-2 py-1 text-xs font-medium text-muted-foreground">
+                    <T>Issues</T>
+                  </h2>
+                  <ThreadDetailsIssueRows
+                    links={issues}
+                    threadRef={threadRef}
+                    compact={false}
+                    mountScope="linked-items"
+                  />
+                </section>
+                {linkCount > 0 ? (
+                  <h2 className="mt-2 border-t border-border/60 px-3 pt-2 pb-1 text-xs font-medium text-muted-foreground">
+                    <T>Pull requests</T>
+                  </h2>
+                ) : null}
+              </>
+            ) : null
+          }
           renderItem={({ item: line }) => (
             <LinkRow
               line={line}
@@ -480,6 +576,7 @@ function EnabledThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThread
               speedMode={speedMode}
               onUnlink={handleUnlink}
               onSetWatching={supportsWatch ? handleSetWatching : null}
+              onIntent={intendLink}
               canStartWatch={canStartWatch}
             />
           )}
@@ -489,17 +586,27 @@ function EnabledThreadPullRequestsPanel({ threadRef }: { threadRef: ScopedThread
         />
         <footer className="flex items-center justify-between border-t border-border/60 px-2 py-1.5 text-2xs text-muted-foreground">
           <span>
-            {t("pullRequest.linked.counts", { open: openCount, linked: linkCount })}
+            {linkCount > 0
+              ? gt(
+                  "{openCount, plural, one {{openCount} open} other {{openCount} open}} · {linkCount, plural, one {{linkCount} linked} other {{linkCount} linked}}",
+                  { openCount, linkCount },
+                )
+              : null}
             {lastSynced ? (
               <>
-                {` · ${t("pullRequest.linked.synced", { time: "" })}`}
-                <RelativeTime timestamp={lastSynced} />
+                {" · "}
+                <T context="followed by a relative time such as 5m ago or just now">
+                  synced{" "}
+                  <Var>
+                    <RelativeTime timestamp={lastSynced} />
+                  </Var>
+                </T>
               </>
             ) : null}
           </span>
           <Button size="xs" variant="ghost" onClick={openLinkDialog}>
             <PlusIcon className="size-3.5" />
-            {t("pullRequest.linked.link")}
+            <T context="verb, button">Link pull request</T>
           </Button>
         </footer>
       </div>

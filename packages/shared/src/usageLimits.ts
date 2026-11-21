@@ -11,8 +11,8 @@ import {
   isProviderAvailable,
   PROVIDER_DISPLAY_NAMES,
   type ServerProvider,
-  type ServerProviderResetCredits,
   type ServerProviderUsageLimits,
+  type ServerProviderResetCredits,
   type ServerProviderUsageWindow,
   type UsageLimitSourceSnapshot,
   type UsageLimitSourceSnapshots,
@@ -161,7 +161,9 @@ function cursorUsageWindowRank(id: string): number {
   return rank < 0 ? CURSOR_USAGE_WINDOWS.length : rank;
 }
 
-function providersWithLimits(providers: readonly ServerProvider[]): readonly ServerProvider[] {
+export function providersWithLimits(
+  providers: readonly ServerProvider[],
+): readonly ServerProvider[] {
   return providers.filter(
     (provider) =>
       provider.enabled &&
@@ -182,7 +184,10 @@ export type LimitPresentations = ReadonlyMap<
   }
 >;
 
-export function collectExternalUsageLinks(presentations: LimitPresentations) {
+export function collectExternalUsageLinks(
+  presentations: LimitPresentations,
+  accountLabel = (provider: string, environment: string) => `${provider} on ${environment}`,
+) {
   const links = new Map<
     string,
     {
@@ -196,7 +201,10 @@ export function collectExternalUsageLinks(presentations: LimitPresentations) {
     for (const provider of providersWithLimits(presentation.serverConfig?.providers ?? [])) {
       const external = provider.usageLimits?.externalUsage;
       if (external && provider.auth.status === "authenticated") {
-        const account = `${provider.displayName ?? provider.instanceId} on ${presentation.entry.target.label}`;
+        const account = accountLabel(
+          provider.displayName ?? provider.instanceId,
+          presentation.entry.target.label,
+        );
         links.set(external.url, {
           ...external,
           message: provider.usageLimits?.unavailable?.message,
@@ -424,34 +432,6 @@ export function collectLimitAccounts(presentations: LimitPresentations): readonl
     }
   }
   return [...accounts.values()];
-}
-
-export function collectLimitNotices(
-  presentations: LimitPresentations,
-  translate?: UsageLimitTranslate,
-): readonly string[] {
-  const label = (environmentLabel: string, subject: string) =>
-    presentations.size > 1 ? `${environmentLabel} · ${subject}` : subject;
-  const notices = new Set<string>();
-  for (const presentation of presentations.values()) {
-    const environmentLabel = presentation.entry.target.label;
-    for (const provider of providersWithLimits(presentation.serverConfig?.providers ?? [])) {
-      if (provider.usageLimits?.unavailable?.reason === "unsupported") continue;
-      const notice = provider.usageLimits ? limitsNotice(provider.usageLimits, translate) : null;
-      const name = provider.displayName?.trim() || String(provider.driver);
-      if (notice) notices.add(`${label(environmentLabel, name)}: ${notice}`);
-    }
-    for (const source of presentation.serverConfig?.usageLimitSources ?? []) {
-      if (source.error) {
-        notices.add(`${label(environmentLabel, source.label)}: ${source.error}`);
-      } else if (source.accounts.length === 0) {
-        notices.add(
-          `${label(environmentLabel, source.label)}: ${translate?.("usage.limits.noAccounts", {}) ?? "No accounts reported."}`,
-        );
-      }
-    }
-  }
-  return [...notices];
 }
 
 export interface LimitPoolMember {
@@ -710,7 +690,7 @@ function poolWindows(accounts: readonly LimitAccount[], now: number): readonly L
   return pools.sort((left, right) => WINDOW_KIND_ORDER[left.kind] - WINDOW_KIND_ORDER[right.kind]);
 }
 
-export function limitsNotice(
+function limitsNotice(
   limits: ServerProviderUsageLimits,
   translate?: UsageLimitTranslate,
 ): string | null {
@@ -776,7 +756,7 @@ function paceOfShares(usedPercent: number, elapsed: number): LimitPace {
 
 type UsageLimitTranslate = (key: string, values: Record<string, string | number>) => string;
 
-export function formatDuration(ms: number, translate?: UsageLimitTranslate): string {
+function formatDuration(ms: number, translate?: UsageLimitTranslate): string {
   const remaining = Math.max(0, ms);
   const days = Math.floor(remaining / DAY);
   const hours = Math.floor((remaining % DAY) / HOUR);
@@ -861,19 +841,20 @@ export function resetCreditChoices(
     },
   ];
 }
+export type ResetCountdown =
+  | { readonly kind: "now" }
+  | { readonly kind: "momentarily" }
+  | { readonly kind: "in"; readonly ms: number };
 
-export function formatResetsIn(
+export function resetCountdown(
   window: ServerProviderUsageWindow,
   now: number,
-  translate?: UsageLimitTranslate,
-): string | null {
+): ResetCountdown | null {
   const resetsAt = resetMillis(window);
   if (resetsAt === null) return null;
-  if (resetsAt <= now) return translate?.("usage.limits.resetsNow", {}) ?? "resets now";
-  if (resetsAt - now < MINUTE)
-    return translate?.("usage.limits.resetsSoon", {}) ?? "Resets momentarily";
-  const duration = formatDuration(resetsAt - now, translate);
-  return translate?.("usage.limits.resetsIn", { duration }) ?? `resets in ${duration}`;
+  if (resetsAt <= now) return { kind: "now" };
+  if (resetsAt - now < MINUTE) return { kind: "momentarily" };
+  return { kind: "in", ms: resetsAt - now };
 }
 
 export const USAGE_LIMITS_COMMAND = {

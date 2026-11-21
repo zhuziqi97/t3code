@@ -1,16 +1,13 @@
 import { useTranslate } from "../../i18n";
-import * as Schema from "effect/Schema";
 import { deriveProjectIdentity } from "../../projectIdentity";
 import { ProjectMonogram } from "../ProjectMonogram";
-import {
-  ProjectMonogramText,
-  type ProjectIconColor,
-  type ProjectIconOverride,
-} from "@t3tools/contracts";
+import type { ProjectIconColor, ProjectIconOverride } from "@t3tools/contracts";
+import { useMessages } from "gt-react";
 import { createElement, useState } from "react";
 import {
   filterProjectIconNames,
   firstEmoji,
+  isValidProjectMonogram,
   PROJECT_EMOJIS,
   PROJECT_ICON_COLORS,
   projectIconColorClassName,
@@ -32,7 +29,6 @@ import { ScrollArea } from "../ui/scroll-area";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 
 const DEFAULT_ICON = "folder-code";
-const isMonogramText = Schema.is(ProjectMonogramText);
 
 function PickerIcon({ name }: { name: string }) {
   const icon = lucideIconByName(name);
@@ -86,6 +82,7 @@ function ProjectIconPickerBody({
   readonly onSelect: (icon: ProjectIconOverride) => void;
 }) {
   const t = useTranslate();
+  const m = useMessages();
   const automatic = deriveProjectIdentity(projectName);
   const [mode, setMode] = useState<ProjectIconOverride["kind"]>(current?.kind ?? "lucide");
   const [iconName, setIconName] = useState<string>(
@@ -104,7 +101,7 @@ function ProjectIconPickerBody({
   const icons = filterProjectIconNames(query);
   const selectedColorClassName = projectIconColorClassName(color);
   const monogram = letters.normalize("NFKC").trim().toUpperCase();
-  const validMonogram = isMonogramText(monogram);
+  const validMonogram = isValidProjectMonogram(monogram);
   const save = () => {
     if (mode === "monogram" && !validMonogram) return;
     onSelect(
@@ -152,7 +149,7 @@ function ProjectIconPickerBody({
                 <button
                   key={option.value}
                   type="button"
-                  aria-label={option.label}
+                  aria-label={m(option.label)}
                   aria-pressed={color === option.value}
                   className={cn(
                     "flex size-6 items-center justify-center rounded-full border border-transparent outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
@@ -234,7 +231,7 @@ function ProjectIconPickerBody({
                   <button
                     key={option.emoji}
                     type="button"
-                    aria-label={option.label}
+                    aria-label={m(option.label)}
                     aria-pressed={emoji === option.emoji}
                     className={cn(
                       "flex aspect-square items-center justify-center rounded-md border border-transparent text-xl outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",

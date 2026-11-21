@@ -1,5 +1,6 @@
-import { useTranslate } from "~/i18n";
-import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
+import { T, useGT } from "gt-react";
+
+import { type ClipboardTarget, useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { cn } from "~/lib/utils";
 
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -14,14 +15,14 @@ export function PullRequestCopyableCode({
   onError,
 }: {
   readonly value: string;
-  readonly target: string;
+  readonly target: ClipboardTarget;
   readonly copyLabel: string;
   readonly copiedLabel: string;
   readonly className?: string;
   readonly tooltipSide?: "top" | "bottom";
   readonly onError?: (error: Error) => void;
 }) {
-  const t = useTranslate();
+  const gt = useGT();
   const { copyToClipboard, isCopied } = useCopyToClipboard({
     target,
     timeout: 1600,
@@ -57,11 +58,11 @@ export function PullRequestCopyableCode({
             isCopied ? "opacity-100" : "opacity-0",
           )}
         >
-          {t("pullRequest.detail.copied")}
+          <T>Copied</T>
         </span>
       </TooltipTrigger>
       <TooltipPopup variant="code" side={tooltipSide}>
-        {`${isCopied ? t("pullRequest.detail.copied") : copyLabel}: ${value}`}
+        {`${isCopied ? gt("Copied") : copyLabel}: ${value}`}
       </TooltipPopup>
     </Tooltip>
   );

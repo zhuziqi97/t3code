@@ -23,6 +23,7 @@ import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -284,6 +285,17 @@ export interface ProviderSessionManagerV2Shape {
     readonly providerSessionId: ProviderSessionId;
     readonly threadId: ThreadId;
   }) => Effect.Effect<ReadonlyArray<ThreadId>>;
+  /**
+   * Forgets that the thread has this provider thread loaded, so its next resume reaches the
+   * adapter. Leaves the attachment, idle unload and MCP credential alone, unlike detach.
+   */
+  readonly forgetLoadedProviderThread: (input: {
+    readonly providerSessionId: ProviderSessionId;
+    readonly threadId: ThreadId;
+    readonly providerThread: OrchestrationV2ProviderThread;
+    readonly modelSelection: ModelSelection;
+    readonly runtimePolicy: ProviderAdapter.ProviderAdapterV2RuntimePolicy;
+  }) => Effect.Effect<void>;
   /** The thread's latest predicted next prompt, then each replacement. */
   readonly subscribePromptSuggestion: (
     threadId: ThreadId,
@@ -612,7 +624,7 @@ export const layerWithOptions = (
                         yield* restorePrepare(agentAccessSettings(threadId));
                       const capabilities = new Set<
                         import("../mcp/McpInvocationContext.ts").McpCapability
-                      >(["orchestration", "worktree", "pull-requests"]);
+                      >(["orchestration", "worktree", "pull-requests", "issues"]);
                       if (browserToolsAvailable) capabilities.add("preview");
                       if (deviceToolsAvailable) capabilities.add("device");
                       const subagent = yield* restorePrepare(
@@ -2821,11 +2833,13 @@ export const layerWithOptions = (
         };
       };
 
-      const startEventPump = (entry: LiveSessionEntry) => {
+      const startEventPump = (entry: LiveSessionEntry, sessionClosed: Deferred.Deferred<void>) => {
         let stoppedByProvider = false;
         let lastSessionStatus = entry.runtime.providerSession.status;
         const retryStalls = makeRetryStallWatch(entry);
         return entry.runtime.events.pipe(
+          // Several adapters never end their event stream, and a parked pump retains the whole session.
+          Stream.interruptWhen(Deferred.await(sessionClosed)),
           Stream.runForEach((nativeEvent) => {
             if (shutdownSignal.received) return Effect.void;
             // Live output bypasses persistence and subscribers so floods cannot delay domain events.
@@ -3127,6 +3141,9 @@ export const layerWithOptions = (
                 Effect.gen(function* () {
                   const openedWithLinkedEnvironments = yield* readLinkedEnvironments;
                   const sessionScope = yield* Scope.fork(sessionScopes);
+                  // Runs after the adapter finalizers so the pump drains their events.
+                  const sessionClosed = yield* Deferred.make<void>();
+                  yield* Scope.addFinalizer(sessionScope, Deferred.done(sessionClosed, Exit.void));
                   let recorded = false;
                   return yield* restore(
                     withMcpSession(
@@ -3221,7 +3238,7 @@ export const layerWithOptions = (
                               providerSessionId: input.providerSessionId,
                               cause: "The provider session closed while opening.",
                             });
-                          yield* startEventPump(entry);
+                          yield* startEventPump(entry, sessionClosed);
                           yield* scheduleIdleRelease(input.providerSessionId);
                           return exposedRuntime;
                         }),
@@ -3508,6 +3525,22 @@ export const layerWithOptions = (
               ),
             ),
         ),
+        forgetLoadedProviderThread: (input) =>
+          Ref.update(sessions, (current) => {
+            const key = sessionKey(input.providerSessionId);
+            const entry = current.get(key);
+            // Only the matching load: a different key belongs to a later load of this thread.
+            if (
+              entry === undefined ||
+              entry.loadedProviderThreadKeyByThread.get(input.threadId) !==
+                providerThreadLoadKey({ ...input, runtime: entry.runtime })
+            ) {
+              return current;
+            }
+            const loadedProviderThreadKeyByThread = new Map(entry.loadedProviderThreadKeyByThread);
+            loadedProviderThreadKeyByThread.delete(input.threadId);
+            return new Map(current).set(key, { ...entry, loadedProviderThreadKeyByThread });
+          }),
         // Stored suggestions can outlive a deleted thread, so check the thread before serving one.
         subscribePromptSuggestion: (threadId) =>
           SubscriptionRef.changes(promptSuggestionStore).pipe(

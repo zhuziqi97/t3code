@@ -3,6 +3,7 @@ import { useTranslate } from "../../i18n";
 import type { TFunction } from "i18next";
 
 import { ArrowDownIcon, ArrowUpIcon, PencilIcon, PlusIcon, StarIcon, XIcon } from "lucide-react";
+import { useGT } from "gt-react";
 import { memo, useEffect, useRef, useState } from "react";
 import {
   ProviderDriverKind,
@@ -144,6 +145,7 @@ export function ProviderModelsSection({
   onModelOrderChange,
 }: ProviderModelsSectionProps) {
   const t = useTranslate();
+  const gt = useGT();
   const [input, setInput] = useState("");
   const [isAdding, setIsAdding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -367,12 +369,16 @@ export function ProviderModelsSection({
             </Button>
           ) : null}
           <span className="text-xs text-muted-foreground">
-            {t("provider.models.count", { count: models.length })}
+            {gt("{count, plural, one {{count} model} other {{count} models}}", {
+              count: models.length,
+            })}
             {favoriteCount > 0
-              ? ` · ${t("provider.models.favoriteCount", { count: favoriteCount })}`
+              ? ` · ${gt("{count, plural, one {{count} favorite} other {{count} favorites}}", {
+                  count: favoriteCount,
+                })}`
               : ""}
             {hiddenCount > 0
-              ? ` · ${t("provider.models.hiddenCount", { count: hiddenCount })}`
+              ? ` · ${gt("{count, plural, other {{count} hidden}}", { count: hiddenCount })}`
               : ""}
           </span>
         </div>
@@ -521,6 +527,7 @@ const ProviderModelRow = memo(function ProviderModelRow({
   readonly onRemove: (slug: string) => void;
 }) {
   const t = useTranslate();
+  const gt = useGT();
   const capLabels = describeModelCapabilities(model, t, flagMissingReasoning);
   const nameClassName = cn("text-xs", isHidden ? "text-muted-foreground" : "text-foreground/90");
   const pickerTooltip = model.isCustom
@@ -545,10 +552,11 @@ const ProviderModelRow = memo(function ProviderModelRow({
               variant="ghost-muted"
               disabled={!canWritePreferences}
               onClick={() => onToggleFavorite(model.slug)}
-              aria-label={t(
-                isFavorite ? "provider.models.unfavoriteNamed" : "provider.models.favoriteNamed",
-                { model: model.name },
-              )}
+              aria-label={
+                isFavorite
+                  ? gt("Remove {name} from favorites", { name: model.name })
+                  : gt("Add {name} to favorites", { name: model.name })
+              }
             />
           }
         >

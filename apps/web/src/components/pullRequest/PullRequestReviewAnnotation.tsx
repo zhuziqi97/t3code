@@ -1,8 +1,3 @@
-import { useTranslate } from "~/i18n";
-/**
- * Pull-request-specific annotations: conversations already on the host and comments queued for
- * the review being written. New comment composition uses the shared diff annotation.
- */
 import type {
   EnvironmentId,
   PullRequestActor,
@@ -21,6 +16,7 @@ import {
   CircleCheckIcon,
   CircleIcon,
 } from "lucide-react";
+import { T, useGT } from "gt-react";
 import { type ReactNode, useRef, useState } from "react";
 import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 
@@ -97,7 +93,7 @@ export function PendingReviewCommentCard({
   comment: PendingReviewComment;
   onRemove: () => void;
 }) {
-  const t = useTranslate();
+  const gt = useGT();
   return (
     <div
       className={cn(CARD_CLASS, "border-dashed")}
@@ -106,12 +102,14 @@ export function PendingReviewCommentCard({
     >
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <MessageSquareIcon className="size-3.5" />
-        <span>Pending. Sent when you submit the review</span>
+        <span>
+          <T>Pending. Sent when you submit the review</T>
+        </span>
         <Button
           size="icon-xs"
           variant="ghost"
           className="ml-auto"
-          aria-label={t("pullRequest.flow.annotation.discard")}
+          aria-label={gt("Discard this comment")}
           onClick={onRemove}
         >
           <Trash2Icon className="size-3.5" />
@@ -130,6 +128,7 @@ export function InlineReviewThreads({
   threads: ReadonlyArray<PullRequestReviewThread>;
   renderThread: (thread: PullRequestReviewThread, hidden: boolean) => ReactNode;
 }) {
+  const gt = useGT();
   const [shown, setShown] = useState<ReadonlySet<string>>(() => new Set());
   // A conversation seen open stays shown once resolved, so it does not vanish under the reader.
   const open = threads.filter((thread) => !thread.isResolved);
@@ -143,8 +142,10 @@ export function InlineReviewThreads({
     authors.set(comment.author?.login ?? "ghost", comment.author);
   }
   if (authors.size === 0) authors.set("ghost", null);
-  const label =
-    resolved.length === 1 ? "Resolved conversation" : `${resolved.length} resolved conversations`;
+  const label = gt(
+    "{count, plural, =1 {Resolved conversation} other {{count} resolved conversations}}",
+    { count: resolved.length },
+  );
   return (
     <>
       {resolved.length > 0 ? (
@@ -230,8 +231,7 @@ export function ReviewThreadCard({
   /** Set on a diff line. Hidden draws nothing but stays mounted, so an unsent reply survives. */
   hidden?: boolean;
 }) {
-  const t = useTranslate();
-  // A resolved thread is finished work, so it opens collapsed and stays one line until asked for.
+  const gt = useGT();
   const [expanded, setExpanded] = useState(hidden !== undefined || !thread.isResolved);
   const [replying, setReplying] = useState(false);
   const [reply, setReply] = useState("");
@@ -326,15 +326,14 @@ export function ReviewThreadCard({
           onClick={() => setExpanded((current) => !current)}
         >
           {thread.isResolved
-            ? t("pullRequest.flow.resolved")
-            : t("pullRequest.flow.annotation.open")}{" "}
+            ? gt("Resolved", { $context: "review thread state" })
+            : gt("Open", { $context: "review thread state" })}{" "}
           ·{" "}
-          {t("pullRequest.flow.commentsCount", {
+          {gt("{count, plural, one {{count} comment} other {{count} comments}}", {
             count: commentCount,
-            formattedCount: commentCount.toLocaleString(),
           })}
         </button>
-        {thread.isOutdated ? <span>{t("pullRequest.flow.annotation.outdated")}</span> : null}
+        {thread.isOutdated ? <span>outdated</span> : null}
         {onFix ? (
           <Button
             size="compact"
@@ -344,9 +343,7 @@ export function ReviewThreadCard({
             onClick={onFix}
           >
             <HammerIcon className="size-3" />
-            {fixPending
-              ? t("pullRequest.flow.preparing")
-              : (fixLabel ?? t("pullRequest.flow.fix.thread"))}
+            {fixPending ? gt("Preparing...") : (fixLabel ?? gt("Fix in a thread"))}
           </Button>
         ) : null}
         {onAddToChat && comments.some((comment) => visibleBody(comment.body) !== null) ? (
@@ -357,7 +354,7 @@ export function ReviewThreadCard({
             onClick={() => onAddToChat({ ...thread, comments })}
           >
             <MessageSquarePlusIcon className="size-3" />
-            Add to chat
+            <T>Add to chat</T>
           </Button>
         ) : null}
         {canResolve ? (
@@ -368,9 +365,7 @@ export function ReviewThreadCard({
             disabled={pending}
             onClick={onToggleResolved}
           >
-            {thread.isResolved
-              ? t("pullRequest.flow.annotation.unresolve")
-              : t("pullRequest.flow.annotation.resolve")}
+            {thread.isResolved ? gt("Unresolve") : gt("Resolve")}
           </Button>
         ) : null}
       </div>
@@ -402,7 +397,7 @@ export function ReviewThreadCard({
                     cwd={workspaceRoot}
                     environmentId={environmentId}
                     completionScope={completionScope}
-                    label={t("pullRequest.flow.comment.edit")}
+                    label={gt("Edit comment")}
                     saving={savingEdit}
                     onSave={(body) => void saveEdit(comment.id, body)}
                     onCancel={() => setEditingId(null)}
@@ -417,7 +412,7 @@ export function ReviewThreadCard({
                     />
                     {canEditComment(comment) ? (
                       <PullRequestEditButton
-                        aria-label={t("pullRequest.flow.comment.edit")}
+                        aria-label={gt("Edit comment")}
                         onClick={() => setEditingId(comment.id)}
                       />
                     ) : null}
@@ -434,9 +429,7 @@ export function ReviewThreadCard({
                 disabled={loadingMore}
                 onClick={() => void loadMore()}
               >
-                {loadingMore
-                  ? t("pullRequest.flow.loading")
-                  : t("pullRequest.flow.annotation.more")}
+                {loadingMore ? gt("Loading...") : gt("Load more comments")}
               </Button>
             </div>
           ) : null}
@@ -461,8 +454,8 @@ export function ReviewThreadCard({
                       size="sm"
                       completionScope={completionScope}
                       value={reply}
-                      placeholder={t("pullRequest.flow.annotation.reply")}
-                      aria-label={t("pullRequest.flow.annotation.replyLabel")}
+                      placeholder={gt("Reply", { $context: "noun, placeholder" })}
+                      aria-label={gt("Reply to this conversation")}
                       onValueChange={setReply}
                       onKeyDown={submitKeys({
                         value: reply,
@@ -476,7 +469,7 @@ export function ReviewThreadCard({
                     <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
                       <TextFieldSpeechControls speech={speech} disabled={pending} />
                       <Button size="xs" variant="ghost" onClick={() => setReplying(false)}>
-                        {t("pullRequest.flow.cancel")}
+                        <T>Cancel</T>
                       </Button>
                       <Button
                         size="xs"
@@ -487,7 +480,7 @@ export function ReviewThreadCard({
                         }
                         onClick={() => speech.submitAfterDictation((text) => void send(text))}
                       >
-                        {t("pullRequest.flow.annotation.reply")}
+                        <T context="verb, button">Reply</T>
                       </Button>
                     </div>
                   </div>
@@ -495,7 +488,7 @@ export function ReviewThreadCard({
               </SpeechTextField>
             ) : (
               <Button size="xs" variant="ghost" className="mt-2" onClick={() => setReplying(true)}>
-                {t("pullRequest.flow.annotation.reply")}
+                <T context="verb, button">Reply</T>
               </Button>
             )
           ) : null}

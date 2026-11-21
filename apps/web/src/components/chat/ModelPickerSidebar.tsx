@@ -1,39 +1,47 @@
-import type { TFunction } from "i18next";
-import { i18n, useTranslate } from "../../i18n";
+import { useTranslate } from "../../i18n";
 import { Toolbar } from "@base-ui/react/toolbar";
 import { type ProviderInstanceId } from "@t3tools/contracts";
 import { memo, useLayoutEffect, useRef, useState } from "react";
+import { msg, useMessages } from "gt-react";
 import { StarIcon } from "lucide-react";
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { cn } from "~/lib/utils";
+import type { MessageResolver } from "../../i18n/messages";
 import {
   isProviderInstancePickerReady,
   shouldShowInstanceBadge,
   type ProviderInstanceEntry,
 } from "../../providerInstances";
 
-/**
- * Build the hover tooltip for an instance button. Mirrors the old
- * kind-based copy but uses the entry's configured `displayName` so custom
- * instances get their user-authored name (e.g. "Codex Personal — Unavailable.").
- */
-function describeUnavailableInstance(entry: ProviderInstanceEntry, t: TFunction = i18n.t): string {
+function describeUnavailableInstance(
+  entry: ProviderInstanceEntry,
+  resolve: MessageResolver,
+): string {
   const label = entry.displayName;
   if ((!entry.enabled && entry.isAvailable) || entry.status === "disabled") {
-    return t("chat.model.disabled", { provider: label });
+    return resolve(msg("{label}: Disabled.", { label }));
   }
   if (isProviderInstancePickerReady(entry)) {
     return label;
   }
-  const kind =
+  const message = entry.snapshot.message?.trim();
+  if (message) {
+    return resolve(
+      entry.status === "error"
+        ? msg("{label}: Unavailable. {message}", { label, message })
+        : entry.status === "warning"
+          ? msg("{label}: Limited. {message}", { label, message })
+          : msg("{label}: Not ready. {message}", { label, message }),
+    );
+  }
+  return resolve(
     entry.status === "error"
-      ? t("common.unavailable")
+      ? msg("{label}: Unavailable.", { label })
       : entry.status === "warning"
-        ? t("thread.limited")
-        : t("chat.model.notReady");
-  const msg = entry.snapshot.message?.trim();
-  return msg ? `${label}: ${kind}. ${msg}` : `${label}: ${kind}.`;
+        ? msg("{label}: Limited.", { label })
+        : msg("{label}: Not ready.", { label }),
+  );
 }
 
 const PICKER_TOOLTIP_SIDE = "left" as const;
@@ -50,6 +58,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
   getDisabledInstanceTooltip?: (entry: ProviderInstanceEntry) => string;
 }) {
   const t = useTranslate();
+  const m = useMessages();
   const handleSelect = (instanceId: ProviderInstanceId | "favorites") => {
     props.onSelectInstance(instanceId);
   };
@@ -151,7 +160,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
             const showInstanceBadge = shouldShowInstanceBadge(entry, props.instanceEntries);
 
             const tooltip = isUnavailable
-              ? describeUnavailableInstance(entry, t)
+              ? describeUnavailableInstance(entry, m)
               : isContextDisabled
                 ? (props.getDisabledInstanceTooltip?.(entry) ?? entry.displayName)
                 : entry.displayName;

@@ -13,9 +13,11 @@ import {
 import type { ProviderOptionDescriptor, RuntimeMode } from "@t3tools/contracts";
 import type { EffortDisplay } from "@t3tools/contracts/settings";
 import { getProviderOptionCurrentLabel } from "@t3tools/shared/model";
+import { msg, useGT } from "gt-react";
 import { CheckIcon, ChevronRightIcon, ChevronUpIcon, WorkflowIcon } from "lucide-react";
 import { type KeyboardEvent, type ReactNode, use, useRef, useState } from "react";
 
+import { m, type MessageResolver } from "~/i18n/messages";
 import { cn } from "~/lib/utils";
 import {
   Menu,
@@ -32,7 +34,6 @@ import { ComposerPermissionsSection, type RuntimeModeOption } from "./ComposerFo
 import { composerFloatingLayerProps, focusCheckedPermission } from "./composerEventScope";
 import { EffortGlyph, FastBolt, resolveEffortGlyph } from "./EffortGlyph";
 import { DockedPickerContext } from "./ProviderModelPicker";
-import { runtimeModePresentation } from "./runtimeModeConfig";
 import {
   getTraitsSectionVisibility,
   type TraitsSelectionInput,
@@ -98,6 +99,7 @@ export function describeComposerEffort(
   traits: TraitsSelectionInput | null,
   effortDisplay: EffortDisplay,
   size: ComposerControlSize,
+  resolve: MessageResolver = m,
 ): { suffix: ReactNode; detail: string | null } {
   if (!traits) return { suffix: null, detail: null };
   const visibility = getTraitsSectionVisibility(traits);
@@ -138,7 +140,9 @@ export function describeComposerEffort(
     : !reasoning
       ? null
       : reasoning.type === "boolean"
-        ? `${formatProviderOptionName(reasoning, i18n.t)} ${reasoning.currentValue === true ? i18n.t("common.on") : i18n.t("common.off")}`
+        ? reasoning.currentValue === true
+          ? resolve(msg("{option} On", { option: reasoning.label }))
+          : resolve(msg("{option} Off", { option: reasoning.label }))
         : ultrathink
           ? "Ultrathink"
           : (getProviderOptionCurrentLabel(
@@ -213,6 +217,7 @@ function ColumnRow(props: {
   onPick: () => void;
 }) {
   const t = useTranslate();
+  const gt = useGT();
   const rowProps = {
     type: "button",
     role: "radio",
@@ -231,7 +236,11 @@ function ColumnRow(props: {
       <span className="min-w-0 flex-1 truncate">{props.label}</span>
       {props.selected ? (
         <>
-          {props.isDefault ? <span className="sr-only">{t("chat.traits.default")}</span> : null}
+          {props.isDefault ? (
+            <span className="sr-only">
+              {gt("Default", { $context: "marks the default option" })}
+            </span>
+          ) : null}
           <CheckIcon aria-hidden="true" className="size-3.5" />
         </>
       ) : props.isDefault ? (
@@ -401,6 +410,7 @@ function OptionMenuRow(props: {
   /** Holds the column's tab stop when the model has no levels. */
   tabStop: boolean;
 }) {
+  const gt = useGT();
   const { descriptor, traits } = props;
   const [open, setOpen] = useState(false);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -482,7 +492,9 @@ function OptionMenuRow(props: {
                   ) : null}
                 </span>
                 {choice.isDefault ? (
-                  <span className="text-muted-foreground/70 text-xs">Default</span>
+                  <span className="text-muted-foreground/70 text-xs">
+                    {gt("Default", { $context: "marks the default option" })}
+                  </span>
                 ) : null}
                 <MenuRadioItemIndicator />
               </span>
@@ -500,11 +512,17 @@ function OptionSwitchRow(props: {
   traits: TraitsSelection;
   tabStop: boolean;
 }) {
+  const gt = useGT();
   const { descriptor, traits } = props;
   const checked = descriptor.currentValue === true;
   return (
     <label className={cn(OPTION_ROW, "has-focus-visible:bg-foreground/[0.09]")}>
-      <OptionRowText label={descriptor.label} value={checked ? "On" : "Off"} />
+      <OptionRowText
+        label={descriptor.label}
+        value={
+          checked ? gt("On", { $context: "option state" }) : gt("Off", { $context: "option state" })
+        }
+      />
       <Switch
         size="sm"
         checked={checked}
@@ -543,7 +561,8 @@ export function ComposerEffortColumn(props: { traits: TraitsSelectionInput | nul
           <span className="shrink-0 text-muted-foreground">
             {(controls?.effort
               ? formatProviderOptionName(controls.effort.descriptor, t)
-              : undefined) ?? (controls?.others.length ? "Options" : t("chat.traits.effort"))}
+              : undefined) ??
+              (controls?.others.length ? t("chat.traits.options") : t("chat.traits.effort"))}
           </span>
           <span className="ms-auto min-w-0 truncate text-muted-foreground text-xs">
             {picker.modelLabel}
@@ -568,10 +587,12 @@ const FOOTER_SEGMENT =
 function SpeedSegment(props: {
   checked: boolean;
   label: string;
+  /** The untranslated speed name that picks the bolt, when `label` is translated. */
+  speed?: string;
   description?: string | undefined;
   onPick: () => void;
 }) {
-  const t = useTranslate();
+  const speed = props.speed ?? props.label;
   const buttonProps = {
     type: "button",
     role: "radio",
@@ -582,9 +603,8 @@ function SpeedSegment(props: {
   } as const;
   const content = (
     <>
-      {props.label === t("chat.traits.choice.fast") ||
-      props.label === t("chat.traits.choice.ultrafast") ? (
-        <FastBolt ultra={props.label === t("chat.traits.choice.ultrafast")} />
+      {speed === "Fast" || speed === "Ultrafast" ? (
+        <FastBolt ultra={speed === "Ultrafast"} />
       ) : null}
       {props.label}
     </>
@@ -600,6 +620,7 @@ function SpeedSegment(props: {
 
 function SpeedControl(props: { traits: TraitsSelectionInput }) {
   const t = useTranslate();
+  const gt = useGT();
   const traits = useTraitsSelection(props.traits);
   const { speedSelect, fastToggle } = splitSpeed(
     traits.selectDescriptors,
@@ -631,10 +652,13 @@ function SpeedControl(props: { traits: TraitsSelectionInput }) {
           ? ([false, true] as const).map((value) => (
               <SpeedSegment
                 key={String(value)}
-                checked={
-                  typeof fastToggle.currentValue === "boolean" && fastToggle.currentValue === value
+                checked={(fastToggle.currentValue === true) === value}
+                speed={value ? "Fast" : "Standard"}
+                label={
+                  value
+                    ? gt("Fast", { $context: "response speed" })
+                    : gt("Standard", { $context: "response speed" })
                 }
-                label={value ? t("chat.traits.choice.fast") : t("chat.traits.choice.standard")}
                 onPick={() => traits.changeBoolean(fastToggle.id, value)}
               />
             ))
@@ -674,7 +698,6 @@ function PermissionsMenu(props: {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const current = props.options.find((option) => option.mode === props.runtimeMode);
   if (!current) return null;
-  const presentation = runtimeModePresentation(current.mode, t);
   const CurrentIcon = current.icon;
   return (
     <Menu
@@ -688,13 +711,13 @@ function PermissionsMenu(props: {
             ref={triggerRef}
             type="button"
             data-composer-permissions-trigger
-            aria-label={t("chat.permissions.current", { mode: presentation.label })}
+            aria-label={t("chat.permissions.current", { mode: current.label })}
             className="ms-auto flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2 text-muted-foreground text-xs outline-none hover:bg-foreground/[0.09] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset data-popup-open:bg-foreground/[0.09] data-popup-open:text-foreground"
           />
         }
       >
         <CurrentIcon aria-hidden="true" className="size-3.5" />
-        {presentation.label}
+        {current.label}
         <ChevronUpIcon aria-hidden="true" className="size-3" />
       </MenuTrigger>
       <MenuPopup side="top" align="end" {...composerFloatingLayerProps}>

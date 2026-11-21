@@ -1,12 +1,13 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { GitCommandError } from "@t3tools/contracts";
+import { GitCommandError, ServerPrepareTriageInput } from "@t3tools/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Queue from "effect/Queue";
+import * as Schema from "effect/Schema";
 import { ChildProcessSpawner } from "effect/process";
 
 import packageJson from "../../package.json" with { type: "json" };
@@ -148,7 +149,9 @@ it.effect("reuses a finished clone without fetching", () =>
   }).pipe(Effect.provide(TestLayer)),
 );
 
-it.effect("still starts triage when the source lookup fails", () =>
+const decodeTriageInput = Schema.decodeUnknownEffect(ServerPrepareTriageInput);
+
+it.effect("keeps feedback in Convene even if an older client requests upstream", () =>
   Effect.gen(function* () {
     const { triage } = yield* makeTriage(() =>
       Effect.fail(
@@ -161,11 +164,16 @@ it.effect("still starts triage when the source lookup fails", () =>
       ),
     );
 
-    const { prompt } = yield* triage.prepare({ client: {}, feedbackTarget: "upstream" });
+    const legacyInput = yield* decodeTriageInput({
+      client: {},
+      feedbackTarget: "upstream",
+    });
+    const { prompt } = yield* triage.prepare(legacyInput);
     assert.include(
       yield* readContext,
-      "https://github.com/pingdotgg/t3code (explicit upstream choice)",
+      "Feedback destination: convene://issues/zzq/software-factory/t3code",
     );
+    assert.notInclude(yield* readContext, "explicit upstream choice");
     assert.include(yield* readContext, "Source repository: https://github.com/zhuziqi97/t3code");
 
     assert.include(prompt, "triage-playbook.md");

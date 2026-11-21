@@ -1,3 +1,4 @@
+import { ChevronDownIcon } from "lucide-react";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { canShareWithGuestAtom } from "./chat/guestShareAvailability";
 import { ProjectEnvironmentBadge } from "./ProjectEnvironmentBadge";
@@ -24,6 +25,9 @@ import { i18n } from "../i18n";
 import { sortProjectTreeActiveThreads, projectExpansionKeys } from "./sidebar/projectTree";
 
 import { liveShellEnvironmentIdsAtom } from "../state/shell";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { msg, T, useGT } from "gt-react";
+import { m } from "../i18n/messages";
 import { attachSidebarTree } from "../lib/sidebarTree";
 import { type EnvironmentId, type ScopedProjectRef } from "@t3tools/contracts";
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
@@ -881,6 +885,7 @@ const projectShelvesSchema = Schema.Record(Schema.String, Schema.Boolean);
 export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReveal }) {
   const t = useTranslate();
   const dndAccessibility = useDndAccessibility();
+  const gt = useGT();
   const {
     projects,
     serverConfigs,
@@ -934,27 +939,24 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: t("clipboard.path.failed"),
-          description: error instanceof Error ? error.message : t("common.error"),
+          title: gt("Failed to copy path"),
+          description: thrownErrorMessage(error, m) ?? gt("An error occurred."),
         }),
       );
     },
   });
   const { copyToClipboard: copyBranchToClipboard } = useCopyToClipboard<{ branch: string }>({
-    target: t("clipboard.branch.context"),
-    onCopy: ({ branch }) => {
-      toastManager.add({
-        type: "success",
-        title: t("clipboard.branch.copied"),
-        description: branch,
-      });
+    target: {
+      target: "branch name",
+      unavailableMessage: msg("Clipboard API is unavailable while copying branch name."),
+      failureMessage: msg("Failed to copy branch name to the clipboard."),
     },
     onError: (error) => {
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: t("clipboard.branch.failed"),
-          description: error instanceof Error ? error.message : t("common.error"),
+          title: gt("Failed to copy branch"),
+          description: thrownErrorMessage(error, m) ?? gt("An error occurred."),
         }),
       );
     },
@@ -971,8 +973,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: t("clipboard.thread.failed"),
-          description: error instanceof Error ? error.message : t("common.error"),
+          title: gt("Failed to copy thread ID"),
+          description: thrownErrorMessage(error, m) ?? gt("An error occurred."),
         }),
       );
     },
@@ -1321,6 +1323,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     searchableThreads,
     settledVisibleCount,
     settledCount,
+    olderSettledShelf,
+    hiddenSettledCount,
+    showMoreSettled,
     settledShelfExpanded,
     snoozedShelfExpanded,
     workingShelfExpanded,
@@ -1746,8 +1751,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: t("thread.title.renameFailed"),
-            description: error instanceof Error ? error.message : t("common.error"),
+            title: gt("Failed to rename thread"),
+            description: thrownErrorMessage(error, m) ?? gt("An error occurred."),
           }),
         );
       }
@@ -1818,8 +1823,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           toastManager.add(
             stackedThreadToast({
               type: "error",
-              title: t("thread.settle.failed"),
-              description: error instanceof Error ? error.message : t("common.error"),
+              title: gt("Failed to settle thread"),
+              description: thrownErrorMessage(error, m) ?? gt("An error occurred."),
             }),
           );
         }
@@ -1856,8 +1861,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: t("thread.unsettle.failed"),
-            description: error instanceof Error ? error.message : t("common.error"),
+            title: gt("Failed to un-settle thread"),
+            description: thrownErrorMessage(error, m) ?? gt("An error occurred."),
           }),
         );
       }
@@ -1871,8 +1876,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: t("thread.wake.failed"),
-            description: error instanceof Error ? error.message : t("common.error"),
+            title: gt("Failed to wake thread"),
+            description: thrownErrorMessage(error, m) ?? gt("An error occurred."),
           }),
         );
       }
@@ -1969,7 +1974,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     restoreDragScroll();
     const threads = contextDragThreads();
     const threadRef = parseScopedThreadKey(contextDragKeyRef.current ?? "");
-    const title = (threadRef && readThreadShell(threadRef)?.title.trim()) || "Thread";
+    const title = (threadRef && readThreadShell(threadRef)?.title.trim()) || gt("Thread");
     moveThreadContextDragGhost(point, { title, count: threads.length });
     return true;
   };
@@ -2089,8 +2094,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: t("thread.pin.failed"),
-            description: error instanceof Error ? error.message : t("common.error"),
+            title: gt("Failed to pin thread"),
+            description: thrownErrorMessage(error, m) ?? gt("An error occurred."),
           }),
         );
       }
@@ -2104,8 +2109,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: t("thread.unpin.failed"),
-            description: error instanceof Error ? error.message : t("common.error"),
+            title: gt("Failed to unpin thread"),
+            description: thrownErrorMessage(error, m) ?? gt("An error occurred."),
           }),
         );
       }
@@ -2349,7 +2354,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             stackedThreadToast({
               type: "error",
               title,
-              description: error instanceof Error ? error.message : t("common.error"),
+              description: thrownErrorMessage(error, m) ?? gt("An error occurred."),
             }),
           );
         }
@@ -2456,9 +2461,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           toastManager.add(
             stackedThreadToast({
               type: "error",
-              title: t("thread.snooze.failed"),
-              description:
-                outcome.error instanceof Error ? outcome.error.message : t("common.error"),
+              title: gt("Failed to snooze thread"),
+              description: thrownErrorMessage(outcome.error, m) ?? gt("An error occurred."),
             }),
           );
           return;
@@ -2629,9 +2633,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 type: "error",
                 title:
                   snoozedThreadRefs.length > 0
-                    ? t("thread.snooze.bulkFailureCount", { count: failures.length })
-                    : t("thread.snooze.bulkFailed"),
-                description: firstError instanceof Error ? firstError.message : t("common.error"),
+                    ? gt(
+                        "{count, plural, one {Failed to snooze {count} thread} other {Failed to snooze {count} threads}}",
+                        { count: failures.length },
+                      )
+                    : gt("Failed to snooze threads"),
+                description: thrownErrorMessage(firstError, m) ?? gt("An error occurred."),
               }),
             );
           }
@@ -2681,7 +2688,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       if (confirmThreadDelete) {
         const confirmed = await settlePromise(() =>
           api.dialogs.confirm(
-            [t("thread.delete.bulkQuestion", { count }), t("thread.delete.bulkWarning")].join("\n"),
+            [
+              gt("{count, plural, one {Delete {count} thread?} other {Delete {count} threads?}}", {
+                count,
+              }),
+              gt("This permanently clears conversation history for these threads."),
+            ].join("\n"),
             { variant: "destructive" },
           ),
         );
@@ -2711,8 +2723,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: t("thread.delete.bulkFailed"),
-            description: firstError instanceof Error ? firstError.message : t("common.error"),
+            title: gt("Failed to delete threads"),
+            description: thrownErrorMessage(firstError, m) ?? gt("An error occurred."),
           }),
         );
       }
@@ -2778,17 +2790,30 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   );
 
   const handleThreadContextMenu = useStableCallback(
-    (threadRef: ScopedThreadRef, position: { x: number; y: number }, source: ContextMenuSource) => {
+    (
+      threadRef: ScopedThreadRef,
+      position: { x: number; y: number },
+      source: ContextMenuSource,
+      fromSearch = false,
+    ) => {
       void (async () => {
         const api = readLocalApi();
         if (!api) return;
         const threadKey = scopedThreadKey(threadRef);
         const selectionState = useThreadSelectionStore.getState();
-        if (selectionState.hasSelection() && selectionState.selectedThreadKeys.has(threadKey)) {
+        // Search results are not selectable rows, so they always act on their own thread.
+        if (
+          !fromSearch &&
+          selectionState.hasSelection() &&
+          selectionState.selectedThreadKeys.has(threadKey)
+        ) {
           await handleMultiSelectContextMenu(position, source);
           return;
         }
-        const thread = threadByKeyRef.current.get(threadKey);
+        // Search results also reach threads in collapsed shelves, which are not rendered rows.
+        const thread =
+          threadByKeyRef.current.get(threadKey) ??
+          searchableThreads.find((candidate) => threadShellKey(candidate) === threadKey);
         if (!thread) return;
         const threadWorkspacePath =
           thread.worktreePath ??
@@ -2818,41 +2843,39 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           ) ?? null;
         const clicked = await settlePromise(() =>
           api.contextMenu.show(
-            buildThreadActionMenuItems(
-              {
-                canOperate: readEnvironmentScope(
-                  threadRef.environmentId,
-                  AuthOrchestrationOperateScope,
-                ),
-                branch: thread.branch ?? null,
-                projectFilter: threadProjectGroup
-                  ? {
-                      label: threadProjectGroup.displayName,
-                      isActive: projectScopeKeys.includes(threadProjectGroup.projectKey),
-                    }
-                  : null,
-                isPinned,
-                isSettled,
-                autoSettleEnabled: thread.autoSettleDisabledAt == null,
-                isSnoozed,
-                canSnoozeNow: canSnooze(thread, { now: new Date().toISOString() }),
-                isRegeneratingTitle,
-                isRunning: !threadRuntimeCanArchive(thread.runtime),
-                canShareWithGuest: appAtomRegistry.get(
-                  canShareWithGuestAtom(threadRef.environmentId),
-                ),
-                canTurnIntoProject: canTurnThreadIntoProject(threadRef),
-                supports: {
-                  settlement: configLoaded,
-                  autoSettleOptOut: supportsAutoSettleOptOut,
-                  snooze: configLoaded,
-                  pinning: configLoaded,
-                  titleRegeneration: configLoaded,
-                },
-                snoozePresets,
+            buildThreadActionMenuItems({
+              canOperate: readEnvironmentScope(
+                threadRef.environmentId,
+                AuthOrchestrationOperateScope,
+              ),
+              branch: thread.branch ?? null,
+              projectFilter: threadProjectGroup
+                ? {
+                    label: threadProjectGroup.displayName,
+                    isActive: projectScopeKeys.includes(threadProjectGroup.projectKey),
+                  }
+                : null,
+              isPinned,
+              isSettled,
+              autoSettleEnabled: thread.autoSettleDisabledAt == null,
+              isSnoozed,
+              canSnoozeNow: canSnooze(thread, { now: new Date().toISOString() }),
+              isRegeneratingTitle,
+              isRunning: !threadRuntimeCanArchive(thread.runtime),
+              canShareWithGuest: appAtomRegistry.get(
+                canShareWithGuestAtom(threadRef.environmentId),
+              ),
+              canTurnIntoProject: canTurnThreadIntoProject(threadRef),
+              canRename: !fromSearch,
+              supports: {
+                settlement: configLoaded,
+                autoSettleOptOut: supportsAutoSettleOptOut,
+                snooze: configLoaded,
+                pinning: configLoaded,
+                titleRegeneration: configLoaded,
               },
-              t,
-            ),
+              snoozePresets,
+            }),
             position,
             source,
           ),
@@ -2904,8 +2927,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               toastManager.add(
                 stackedThreadToast({
                   type: "error",
-                  title: t("thread.create.failed"),
-                  description: error instanceof Error ? error.message : t("common.error"),
+                  title: gt("Could not create thread"),
+                  description: thrownErrorMessage(error, m) ?? gt("An error occurred."),
                 }),
               );
             }
@@ -2939,8 +2962,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               toastManager.add(
                 stackedThreadToast({
                   type: "error",
-                  title: i18n.t("thread.toProject.failed"),
-                  description: error instanceof Error ? error.message : i18n.t("common.error"),
+                  title: gt("Could not turn thread into a project"),
+                  description: thrownErrorMessage(error, m) ?? gt("An error occurred."),
                 }),
               );
             }
@@ -2957,8 +2980,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               toastManager.add(
                 stackedThreadToast({
                   type: "error",
-                  title: t("thread.autoSettle.failed"),
-                  description: error instanceof Error ? error.message : t("common.error"),
+                  title: gt("Failed to update auto-settle"),
+                  description: thrownErrorMessage(error, m) ?? gt("An error occurred."),
                 }),
               );
             }
@@ -3003,7 +3026,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             }
             return;
           case "copy-thread":
-            void copyThreadReference(threadChipCopyTarget(threadRef, thread.title));
+            void copyThreadReference(threadChipCopyTarget(threadRef, thread.title, m));
             return;
           case "copy-thread-id":
             copyThreadIdToClipboard(thread.id, { threadId: thread.id });
@@ -3011,7 +3034,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           case "archive": {
             if (confirmThreadArchive) {
               const confirmed = await settlePromise(() =>
-                api.dialogs.confirm(t("thread.archive.question", { title: thread.title })),
+                api.dialogs.confirm(gt('Archive thread "{title}"?', { title: thread.title })),
               );
               if (confirmed._tag === "Failure" || !confirmed.value) return;
             }
@@ -3027,9 +3050,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 stackedThreadToast({
                   type: "error",
                   title: didArchive
-                    ? t("thread.archive.navigationFailed")
-                    : t("thread.archive.failed"),
-                  description: error instanceof Error ? error.message : t("common.error"),
+                    ? gt("Thread archived, but navigation failed")
+                    : gt("Failed to archive thread"),
+                  description: thrownErrorMessage(error, m) ?? gt("An error occurred."),
                 }),
               );
               return;
@@ -3041,8 +3064,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               const confirmed = await settlePromise(() =>
                 api.dialogs.confirm(
                   [
-                    t("thread.delete.question", { title: thread.title }),
-                    t("thread.delete.warning"),
+                    gt('Delete thread "{title}"?', { title: thread.title }),
+                    gt("This permanently clears conversation history for this thread."),
                   ].join("\n"),
                   { variant: "destructive" },
                 ),
@@ -3055,8 +3078,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               toastManager.add(
                 stackedThreadToast({
                   type: "error",
-                  title: t("thread.delete.failed"),
-                  description: error instanceof Error ? error.message : t("common.error"),
+                  title: gt("Failed to delete thread"),
+                  description: thrownErrorMessage(error, m) ?? gt("An error occurred."),
                 }),
               );
               return;
@@ -3068,6 +3091,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         }
       })();
     },
+  );
+  const handleSearchResultContextMenu = useStableCallback(
+    (threadRef: ScopedThreadRef, position: { x: number; y: number }, source: ContextMenuSource) =>
+      handleThreadContextMenu(threadRef, position, source, true),
   );
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to window keydown for thread navigation shortcuts using the current thread list
@@ -3175,12 +3202,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                       <SidebarHeaderIconButton
                         label={
                           scopedProjectGroups.length > 0
-                            ? t("thread.filter.projectSelected", {
+                            ? gt("Filter threads by project: {projects}", {
                                 projects: scopedProjectGroups
                                   .map((project) => project.displayName)
                                   .join(", "),
                               })
-                            : t("thread.filter.project")
+                            : gt("Filter threads by project")
                         }
                       />
                     }
@@ -3386,7 +3413,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                     ref={searchResultsListRef}
                     id="sidebar-thread-search-results"
                     role="listbox"
-                    aria-label="Thread search results"
+                    aria-label={gt("Thread search results")}
                     className="flex flex-col gap-px"
                   >
                     {threadSearchResults.map((thread, index) => {
@@ -3429,6 +3456,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                           searchMatchQuery={threadSearch.query}
                           onHighlight={() => setActiveSearchResultIndex(index)}
                           onSelect={() => selectThreadSearchResult(thread)}
+                          onContextMenu={handleSearchResultContextMenu}
                           onFileDropThreads={handleThreadFileDrop}
                         />
                       );
@@ -3441,7 +3469,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 role="status"
                 className="px-2 py-6 text-center text-xs text-sidebar-muted-foreground"
               >
-                {threadSearch.isPending ? t("thread.search.searching") : t("thread.search.none")}
+                {threadSearch.isPending
+                  ? gt("Searching thread messages…")
+                  : threadSearch.failed
+                    ? gt("Couldn't search thread messages")
+                    : gt("No threads found")}
               </p>
             )
           ) : null}
@@ -3457,35 +3489,43 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             <div className="flex flex-col items-center gap-2 px-2 py-6 text-center text-xs text-muted-foreground/60">
               {projects.length === 0 ? (
                 <>
-                  <span>No projects yet</span>
+                  <span>
+                    <T>No projects yet</T>
+                  </span>
                   <button
                     type="button"
                     onClick={openAddProjectCommandPalette}
                     className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-sidebar-border px-2.5 py-1 text-2xs font-medium text-sidebar-muted-foreground transition-colors hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
                   >
                     <PlusIcon className="-mx-0.5 size-3" />
-                    Add project
+                    <T>Add project</T>
                   </button>
                 </>
               ) : scopedProjectGroups.length > 0 ? (
                 <>
                   <span>
-                    {`No ${settledCount > 0 ? "active threads" : "threads"} in ${
-                      scopedProjectGroups.length > 1
-                        ? "these projects"
-                        : scopedProjectGroups[0]!.displayName
-                    }${settledCount > 0 ? "" : " yet"}`}
+                    {settledCount > 0
+                      ? scopedProjectGroups.length > 1
+                        ? gt("No active threads in these projects")
+                        : gt("No active threads in {project}", {
+                            project: scopedProjectGroups[0]!.displayName,
+                          })
+                      : scopedProjectGroups.length > 1
+                        ? gt("No threads in these projects yet")
+                        : gt("No threads in {project} yet", {
+                            project: scopedProjectGroups[0]!.displayName,
+                          })}
                   </span>
                   <button
                     type="button"
                     onClick={() => setProjectScopeKeys([])}
                     className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-sidebar-border px-2.5 py-1 text-2xs font-medium text-sidebar-muted-foreground transition-colors hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
                   >
-                    Show all projects
+                    <T>Show all projects</T>
                   </button>
                 </>
               ) : (
-                "No threads yet"
+                <T>No threads yet</T>
               )}
             </div>
           ) : null}
@@ -3842,6 +3882,35 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                         </ProjectTreeLayout>
                       );
                     })()}
+                    {settledShelfExpanded && hiddenSettledCount > 0 ? (
+                      <li className="list-none">
+                        <button
+                          type="button"
+                          data-sidebar-row="settled:more"
+                          data-sidebar-parent="shelf:settled"
+                          aria-disabled={olderSettledShelf.loading}
+                          onClick={() => {
+                            if (olderSettledShelf.loading) return;
+                            olderSettledShelf.retry();
+                            showMoreSettled();
+                          }}
+                          className="flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground aria-disabled:cursor-default"
+                        >
+                          {/* Plus means "add", so revealing more uses a chevron. */}
+                          <ChevronDownIcon aria-hidden className="size-4 shrink-0" />
+                          {olderSettledShelf.loading
+                            ? gt("Loading")
+                            : olderSettledShelf.failed
+                              ? gt("Could not load older threads. Retry")
+                              : gt(
+                                  "{count, plural, one {Show {count} more} other {Show {count} more}}",
+                                  {
+                                    count: Math.min(hiddenSettledCount, SETTLED_TAIL_PAGE_COUNT),
+                                  },
+                                )}
+                        </button>
+                      </li>
+                    ) : null}
                   </ul>
                 </SortableContext>
               </DndContext>

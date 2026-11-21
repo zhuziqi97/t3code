@@ -29,6 +29,7 @@ import {
   getProviderOptionCurrentValue,
   isClaudeUltrathinkPrompt,
 } from "@t3tools/shared/model";
+import { T } from "gt-react";
 import { memo } from "react";
 import { GaugeIcon } from "lucide-react";
 import {
@@ -75,10 +76,9 @@ type TraitsPersistence =
     };
 
 function DefaultBadge() {
-  const t = useTranslate();
   return (
     <Badge variant="outline" size="sm" className="min-w-0">
-      {t("chat.traits.default")}
+      <T context="the default option in a list">Default</T>
     </Badge>
   );
 }
@@ -345,7 +345,13 @@ const TraitsMenuContent = memo(function TraitsMenuContentImpl(props: TraitsSelec
               {(["on", "off"] as const).map((value) => (
                 <MenuRadioItem key={value} value={value} hideIndicator closeOnClick>
                   <span className="flex w-full min-w-0 items-center justify-between gap-3">
-                    <span>{value === "on" ? t("common.on") : t("common.off")}</span>
+                    <span>
+                      {value === "on" ? (
+                        <T context="toggle state">On</T>
+                      ) : (
+                        <T context="toggle state">Off</T>
+                      )}
+                    </span>
                   </span>
                 </MenuRadioItem>
               ))}

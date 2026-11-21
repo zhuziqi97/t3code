@@ -1,13 +1,13 @@
+import { createI18n } from "@t3tools/client-runtime/i18n";
 import {
   resolveWorkGroupScrollIndex,
   shouldFollowWorkGroupAppend,
   threadReadLabelPrefix,
   threadReadTargetId,
   threadReadTargetTitle,
-  workEntryReadOutput,
   workEntryIsVisibleInGroup,
 } from "./MessagesTimeline.logic";
-import { createI18n } from "@t3tools/client-runtime/i18n";
+import { resolveChineseMessage } from "../../../test/gtCatalog";
 import { shouldPreserveAssistantLineBreaks } from "@t3tools/shared/markdownPipeline";
 import { ThreadId, type WorktreeSetupSnapshot } from "@t3tools/contracts";
 import {
@@ -49,6 +49,7 @@ import {
   resolveAssistantMessageCopyState,
   type MessagesTimelineRow,
   workEntryDisplayLabel,
+  workEntryReadOutput,
 } from "./MessagesTimeline.logic";
 import { workEntryIconName } from "./TimelineWorkEntryRow.logic";
 import type { WorkLogEntry } from "../../session-logic";
@@ -197,7 +198,7 @@ describe("work entry labels", () => {
   });
 
   it("localizes named-thread prefixes, commands and file paths without altering identities", () => {
-    const t = createI18n({ lng: "zh" }).t;
+    const t = resolveChineseMessage;
     const threadRead = {
       ...entry,
       itemType: "dynamic_tool" as const,
@@ -208,12 +209,15 @@ describe("work entry labels", () => {
         input: { threadId: "raw-target" },
       } as never,
     };
-    expect(threadReadLabelPrefix(threadRead, false, t)).toBe("已读取会话");
-    expect(threadReadLabelPrefix({ ...threadRead, toolLifecycleStatus: "failed" }, true, t)).toBe(
-      "未能读取会话",
-    );
+    const translate = createI18n({ lng: "zh" }).t;
+    expect(threadReadLabelPrefix(threadRead, false, translate)).toBe("已读取会话");
+    expect(
+      threadReadLabelPrefix({ ...threadRead, toolLifecycleStatus: "failed" }, true, translate),
+    ).toBe("未能读取会话");
     expect(threadReadTargetId(threadRead)).toBe("raw-target");
-    expect(threadReadLabelPrefix({ ...entry, label: "Read a T3 thread" }, false, t)).toBeNull();
+    expect(
+      threadReadLabelPrefix({ ...entry, label: "Read a T3 thread" }, false, translate),
+    ).toBeNull();
     expect(
       liveWorkEntryLabel(
         {
@@ -239,7 +243,7 @@ describe("work entry labels", () => {
         true,
         t,
       ),
-    ).toBe("node 运行失败");
+    ).toBe("node 失败");
     const read = {
       ...entry,
       label: "Read",
@@ -248,7 +252,7 @@ describe("work entry labels", () => {
       changedFiles: ["/repo/src/原始文件.ts", "/repo/src/other.ts"],
     };
     expect(workEntryDisplayLabel(read, "/repo", t)).toBe(
-      "读取 repo/src/原始文件.ts，另有 1 个文件",
+      "已读取 repo/src/原始文件.ts，另有 1 个文件",
     );
     expect(read.changedFiles[0]).toBe("/repo/src/原始文件.ts");
   });
@@ -377,8 +381,8 @@ describe("work entry labels", () => {
           WorkLogEntry["structuredPayload"]
         >,
       };
-      expect(workEntryDisplayLabel(search, undefined, createI18n({ lng: "zh" }).t)).toBe(expected);
-      expect(workEntryDisplayLabel(search, undefined, createI18n({ lng: "en" }).t)).toBe(
+      expect(workEntryDisplayLabel(search, undefined, resolveChineseMessage)).toBe(expected);
+      expect(workEntryDisplayLabel(search, undefined, undefined)).toBe(
         workEntryDisplayLabel(search, undefined),
       );
       expect(search.toolData.input).toBe(input);
@@ -386,7 +390,7 @@ describe("work entry labels", () => {
   );
 
   it("translates only owned skill and search headings while retaining custom titles", () => {
-    const t = createI18n({ lng: "zh" }).t;
+    const t = resolveChineseMessage;
     const skill = {
       ...entry,
       itemType: "dynamic_tool" as const,
@@ -451,7 +455,7 @@ describe("work entry labels", () => {
         patterns: ["原始 query"],
       } as NonNullable<WorkLogEntry["structuredPayload"]>,
     };
-    expect(singleToolCallLabel(webSearch, t)).toBe("网页搜索");
+    expect(singleToolCallLabel(webSearch, t)).toBe("网络搜索");
   });
 
   it("keeps a multi-line approval prompt as its label", () => {
@@ -1201,7 +1205,7 @@ describe("deriveMessagesTimelineRows", () => {
           active: true,
           label: "Compacting before the cache expires…",
         },
-        "Context automatically compacted before cache expiry",
+        "Auto-compacted before cache expiry",
       ],
       ["onReturn", { kind: "working", compacting: true }, "Context compacted before sending"],
       [undefined, { kind: "context-compaction", active: true }, undefined],
@@ -1734,7 +1738,7 @@ describe("deriveMessagesTimelineRows", () => {
     expect(foldRow?.runId).toBe("turn-1");
     expect(foldRow?.expanded).toBe(false);
     // User message boundary (00:00:00) → terminal message updatedAt (00:00:22).
-    expect(foldRow).toMatchObject({ duration: "22s", interrupted: false });
+    expect(foldRow).toMatchObject({ label: "Worked for 22s" });
     expect(collapsedRows.map((row) => row.id)).toEqual([
       "user-entry",
       "turn-fold:turn-1",
@@ -1963,7 +1967,7 @@ describe("deriveMessagesTimelineRows", () => {
         row.kind === "turn-fold",
     );
     expect(foldRow?.runId).toBe("turn-1");
-    expect(foldRow).toMatchObject({ duration: "12s", interrupted: false });
+    expect(foldRow).toMatchObject({ label: "Worked for 12s" });
   });
 
   it("uses latest-turn timings and the stopped label for an interrupted latest turn", () => {
@@ -1998,8 +2002,7 @@ describe("deriveMessagesTimelineRows", () => {
       expect.objectContaining({
         kind: "turn-fold",
         runId: "turn-1",
-        duration: "47s",
-        interrupted: true,
+        label: "You stopped after 47s",
         expanded: false,
       }),
     ]);
@@ -2074,8 +2077,7 @@ describe("deriveMessagesTimelineRows", () => {
             "steer",
           ]);
           expect(rows[1]?.createdAt).toBe(time(0));
-          if (!isWorking)
-            expect(rows[1]).toMatchObject({ duration: "20s", interrupted: false, expanded });
+          if (!isWorking) expect(rows[1]).toMatchObject({ label: "Worked for 20s", expanded });
           expect(rows.some((row) => row.id === "final")).toBe(true);
           expect(rows.some((row) => row.id === "work")).toBe(isWorking || expanded);
         }
@@ -2120,8 +2122,20 @@ describe("deriveMessagesTimelineRows", () => {
           message("steer", 10, "user", "steer"),
           work("work-after-steer", 15),
           message("final", 30, "assistant"),
+          {
+            kind: "event",
+            id: "late-subagent",
+            createdAt: time(50),
+            projectedItem: { item: { type: "subagent", status: "completed", runId } } as never,
+          },
         ],
-        latestRun: { runId, status: "completed", startedAt: time(0), completedAt: time(30) },
+        // A later wake run is the latest, so this turn's times come from its entries.
+        latestRun: {
+          runId: RunId.make("wake-run"),
+          status: "completed",
+          startedAt: time(55),
+          completedAt: time(58),
+        },
         isWorking: false,
         expandedRunIds,
         turnDiffSummaries: [],
@@ -2136,6 +2150,7 @@ describe("deriveMessagesTimelineRows", () => {
       "steer",
       `turn-fold:${segmentKey}`,
       "final",
+      "late-subagent",
     ]);
     expect(collapsed[1]).toMatchObject({ label: "Worked for 30s" });
     expect(collapsed[3]).toMatchObject({ label: "Continued for 20s", createdAt: time(10) });
@@ -2147,6 +2162,7 @@ describe("deriveMessagesTimelineRows", () => {
       `turn-fold:${segmentKey}`,
       "work-after-steer",
       "final",
+      "late-subagent",
     ]);
   });
 
@@ -2662,7 +2678,7 @@ describe("deriveMessagesTimelineRows", () => {
     const shape = (timeline: ReadonlyArray<MessagesTimelineRow>) =>
       timeline.map((row) =>
         row.kind === "turn-fold"
-          ? `fold:${row.interrupted ? "stopped" : "worked"}:${row.duration}`
+          ? `fold:${row.label}`
           : row.kind === "message"
             ? `${row.message.role}:${row.message.id}`
             : row.kind,
@@ -2671,10 +2687,10 @@ describe("deriveMessagesTimelineRows", () => {
     const settled = rows({ resume: "completed", working: false });
     expect(shape(settled)).toEqual([
       "user:launch",
-      "fold:worked:8s",
+      "fold:Worked for 8s",
       "assistant:launch-answer",
       "user:resume",
-      "fold:worked:8s",
+      "fold:Worked for 8s",
       "assistant:resume-answer",
     ]);
 
@@ -2687,17 +2703,17 @@ describe("deriveMessagesTimelineRows", () => {
     });
     expect(shape(expanded)).toEqual([
       "user:launch",
-      "fold:worked:8s",
+      "fold:Worked for 8s",
       "work-toggle",
       "assistant:launch-answer",
       "user:resume",
-      "fold:worked:8s",
+      "fold:Worked for 8s",
       "assistant:resume-answer",
     ]);
 
     expect(shape(rows({ resume: "running", working: true }))).toEqual([
       "user:launch",
-      "fold:worked:8s",
+      "fold:Worked for 8s",
       "assistant:launch-answer",
       "user:resume",
       "working",
@@ -2706,7 +2722,7 @@ describe("deriveMessagesTimelineRows", () => {
 
     expect(shape(rows({ resume: "failed", working: false }))).toEqual([
       "user:launch",
-      "fold:worked:8s",
+      "fold:Worked for 8s",
       "assistant:launch-answer",
       "user:resume",
       "work",
@@ -3510,7 +3526,7 @@ describe("v2 run and attempt history", () => {
     expect(foldRow?.runId).toBe("turn-1");
     expect(foldRow?.expanded).toBe(false);
     // User message boundary (00:00:00) → terminal message updatedAt (00:00:22).
-    expect(foldRow).toMatchObject({ duration: "22s", interrupted: false });
+    expect(foldRow).toMatchObject({ label: "Worked for 22s" });
     expect(collapsedRows.map((row) => row.id)).toEqual([
       "user-entry",
       "turn-fold:turn-1",
@@ -4157,9 +4173,6 @@ it.each([
     runId: RunId.make("run"),
     createdAt: "2026-01-01T00:00:00Z",
     label: "Worked for 1m",
-    duration: "1m",
-    interrupted: false,
-    continued: false,
     expanded: true,
     ...(before === undefined ? {} : { deferredWorkItemIds: before }),
   };
@@ -5678,5 +5691,16 @@ describe("isTimelineMinimapTurnVisible", () => {
     expect(isTimelineMinimapTurnVisible(500, undefined, 200, 210)).toBe(false);
     expect(isTimelineMinimapTurnVisible(10, 500, 500, 510)).toBe(false);
     expect(isTimelineMinimapTurnVisible(10, 500, null, null)).toBe(false);
+  });
+});
+
+describe("workEntryReadOutput", () => {
+  it("joins relative paths to the workspace root but keeps home paths as written", () => {
+    expect(
+      workEntryReadOutput(
+        { changedFiles: ["src/app.ts", "~/.claude/CLAUDE.md", "~\\.gitconfig"] },
+        "/workspace/t3code",
+      ),
+    ).toBe("/workspace/t3code/src/app.ts\n~/.claude/CLAUDE.md\n~/.gitconfig");
   });
 });

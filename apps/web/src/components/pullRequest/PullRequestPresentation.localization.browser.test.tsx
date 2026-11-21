@@ -1,10 +1,11 @@
+import { resolveChineseMessage } from "../../../test/gtCatalog";
 import "~/index.css";
 import { act, render as renderTestUi, type Screen } from "../../../test/render";
 import type { EnvironmentId, ProjectId, PullRequestCheck } from "@t3tools/contracts";
 
 import { expect, it, vi } from "vite-plus/test";
 
-import { changeLanguage, i18n } from "~/i18n";
+import { changeLanguage } from "~/i18n";
 import { PullRequestChecksPopover } from "./PullRequestChecksPopover";
 import { PullRequestDetailGhost } from "./PullRequestGhosts";
 import { PullRequestCopyableCode } from "./PullRequestCopyableCode";
@@ -190,7 +191,11 @@ it("keeps the current loading tab and copied code when their labels change", asy
         <PullRequestDetailGhost activeTab="timeline" number={42} />
         <PullRequestCopyableCode
           value="feature/原文"
-          target="branch name"
+          target={{
+            target: "branch name",
+            unavailableMessage: "Clipboard unavailable",
+            failureMessage: "Copy failed",
+          }}
           copyLabel="Copy"
           copiedLabel="Done"
         />
@@ -221,16 +226,16 @@ it("distinguishes approvals, manual action and neutral results with complete bil
     "1 workflow and 2 checks awaiting action",
   );
   await changeLanguage("zh");
-  expect(summarizePullRequestChecks([workflow, gate], i18n.t)).toBe(
+  expect(summarizePullRequestChecks([workflow, gate], resolveChineseMessage)).toBe(
     "1 个工作流和 1 项检查等待处理",
   );
-  expect(summarizePullRequestChecks([check("success"), check("neutral")], i18n.t)).toBe(
-    "2 项检查中有 1 项通过",
-  );
-  expect(summarizePullRequestChecks([check("failure"), workflow], i18n.t)).toBe(
+  expect(
+    summarizePullRequestChecks([check("success"), check("neutral")], resolveChineseMessage),
+  ).toBe("2 项检查中有 1 项通过");
+  expect(summarizePullRequestChecks([check("failure"), workflow], resolveChineseMessage)).toBe(
     "2 项检查中有 1 项失败",
   );
-  expect(summarizePullRequestChecks([workflow], i18n.t)).toBe("1 个工作流等待批准");
+  expect(summarizePullRequestChecks([workflow], resolveChineseMessage)).toBe("1 个工作流等待批准");
 });
 
 let renderStack: AsyncDisposableStack;

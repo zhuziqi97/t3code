@@ -19,6 +19,7 @@ import {
   LockOpenIcon,
 } from "lucide-react";
 import { Fragment, useState, type ReactElement, type ReactNode } from "react";
+import { T, useGT, useMessages, Var } from "gt-react";
 import {
   isProviderDriverKind,
   resolveProviderInstanceEnabled,
@@ -106,6 +107,8 @@ function ProviderStatusDiagnostic({
     </Tooltip>
   );
 }
+
+const ENVIRONMENT_VARIABLE_NAME_PLACEHOLDER = "VARIABLE_NAME";
 
 let environmentVariableDraftId = 0;
 const DRAFT_ROW_ID_PREFIX = "provider-env-";
@@ -345,6 +348,7 @@ export function ProviderEnvironmentSection(props: {
   readonly environmentId?: EnvironmentId | undefined;
 }) {
   const t = useTranslate();
+  const gt = useGT();
   const [storedDraft, setDraft] = useState(() =>
     seedRowsDraft(props.environment, toEnvironmentDraftRows),
   );
@@ -467,9 +471,9 @@ export function ProviderEnvironmentSection(props: {
                 value={variable.name}
                 onCommit={(name) => updateVariable(variable.id, { name: name.trim() })}
                 disabled={variable.valueRedacted === true}
-                placeholder="VARIABLE_NAME"
+                placeholder={ENVIRONMENT_VARIABLE_NAME_PLACEHOLDER}
                 spellCheck={false}
-                aria-label={t("provider.instance.variableName", { index: index + 1 })}
+                aria-label={gt("Environment variable name {number}", { number: index + 1 })}
               />
             );
             const removeButton = (
@@ -478,7 +482,7 @@ export function ProviderEnvironmentSection(props: {
                 size="icon-micro"
                 variant="ghost-destructive"
                 onClick={() => removeVariable(variable.id)}
-                aria-label={t("provider.instance.removeVariable", {
+                aria-label={gt("Remove environment variable {name}", {
                   name: variable.name || index + 1,
                 })}
               >
@@ -505,7 +509,9 @@ export function ProviderEnvironmentSection(props: {
                           });
                         }}
                         aria-pressed={variable.sensitive}
-                        aria-label={`Mark environment variable ${variable.name || index + 1} as sensitive`}
+                        aria-label={gt("Mark environment variable {name} as sensitive", {
+                          name: variable.name || index + 1,
+                        })}
                       >
                         {variable.sensitive ? (
                           <LockIcon className="size-3" />
@@ -516,7 +522,7 @@ export function ProviderEnvironmentSection(props: {
                     }
                   />
                   <TooltipPopup side="top">
-                    {variable.sensitive ? "Sensitive, stored separately" : "Plain text"}
+                    {variable.sensitive ? gt("Sensitive, stored separately") : gt("Plain text")}
                   </TooltipPopup>
                 </Tooltip>
               ) : null;
@@ -542,10 +548,12 @@ export function ProviderEnvironmentSection(props: {
                     className="min-w-0 flex-1"
                     value={variable.valueRedacted ? "" : variable.value}
                     onCommit={(value) => updateVariable(variable.id, { value })}
-                    placeholder="value"
+                    placeholder={gt("value", {
+                      $context: "placeholder for an environment variable value",
+                    })}
                     configured={variable.valueRedacted === true}
                     spellCheck={false}
-                    aria-label={`Environment variable value ${index + 1}`}
+                    aria-label={gt("Environment variable value {number}", { number: index + 1 })}
                     sources={props.secretSources ?? []}
                     environmentId={props.environmentId}
                     onSecretChange={(secret) => setVariableSecret(variable.id, secret)}
@@ -566,9 +574,11 @@ export function ProviderEnvironmentSection(props: {
                       }
                       onCommit={(value) => updateVariable(variable.id, { value })}
                       autoComplete="off"
-                      placeholder="value"
+                      placeholder={gt("value", {
+                        $context: "placeholder for an environment variable value",
+                      })}
                       spellCheck={false}
-                      aria-label={`Environment variable value ${index + 1}`}
+                      aria-label={gt("Environment variable value {number}", { number: index + 1 })}
                     />,
                   )
                 )}
@@ -576,10 +586,11 @@ export function ProviderEnvironmentSection(props: {
             );
           })}
           <p className="text-xs text-muted-foreground">
-            Sensitive values are stored separately and never returned to the app.
             {rows.some((row) => row.valueRedacted === true)
-              ? " Enter a new value to rename a saved one or make it plain text."
-              : null}
+              ? gt(
+                  "Sensitive values are stored separately and never returned to the app. Enter a new value to rename a saved one or make it plain text.",
+                )
+              : gt("Sensitive values are stored separately and never returned to the app.")}
           </p>
         </div>
       ) : null}
@@ -595,9 +606,20 @@ function ProjectOverrideInheritance({
   readonly deviceEnabled: boolean;
 }) {
   const t = useTranslate();
+  const gt = useGT();
   const layers = [
-    { key: "project", label: "Project", enabled: projectEnabled, effective: true },
-    { key: "device", label: "Device", enabled: deviceEnabled, effective: false },
+    {
+      key: "project",
+      label: gt("Project", { $context: "settings layer" }),
+      enabled: projectEnabled,
+      effective: true,
+    },
+    {
+      key: "device",
+      label: gt("Device", { $context: "settings layer" }),
+      enabled: deviceEnabled,
+      effective: false,
+    },
   ];
   return (
     <Popover>
@@ -609,7 +631,7 @@ function ProjectOverrideInheritance({
                 <Button
                   size="icon-micro"
                   variant="ghost-muted"
-                  aria-label="Overridden for this project. Show where this value comes from"
+                  aria-label={gt("Overridden for this project. Show where this value comes from")}
                 />
               }
             />
@@ -770,6 +792,8 @@ export function ProviderInstanceCard({
   projectOverride,
 }: ProviderInstanceCardProps) {
   const t = useTranslate();
+  const gt = useGT();
+  const m = useMessages();
   const enabled = projectOverride?.effectiveEnabled ?? resolveProviderInstanceEnabled(instance);
   const effectiveProvider = liveProvider && { ...liveProvider, enabled };
   const compatibility = enabled ? liveProvider?.compatibilityAdvisory : undefined;
@@ -782,7 +806,7 @@ export function ProviderInstanceCard({
   const isAuthenticated = enabled && liveProvider?.auth.status === "authenticated";
   const authLabel =
     enabled && liveProvider?.auth.status === "authenticated"
-      ? (formatProviderAuthLabel(liveProvider, t) ?? null)
+      ? (formatProviderAuthLabel(liveProvider, t, m) ?? null)
       : null;
   const versionLabel = getProviderVersionLabel(liveProvider?.version);
   const versionAdvisory = getProviderVersionAdvisoryPresentation(
@@ -819,7 +843,7 @@ export function ProviderInstanceCard({
     instance.displayName?.trim() || driverOption?.label || String(instance.driver);
   const accentColor = normalizeProviderAccentColor(instance.accentColor);
   const managedPolicy = useManagedPolicy(environmentId);
-  const instanceLocks = managedInstanceLocks(managedPolicy, instance.driver);
+  const instanceLocks = managedInstanceLocks(managedPolicy, instance.driver, m);
   const managedDriverReason = isManagedDriverAllowed(managedPolicy, instance.driver)
     ? undefined
     : disallowedProviderMessage(
@@ -1002,8 +1026,14 @@ export function ProviderInstanceCard({
     isAuthenticated && authEmail ? (
       <>
         {needsAttention ? statusDotNode : null}
-        <span>{t("provider.instance.authenticatedAs")}</span>
-        <ProviderAuthEmail email={authEmail} />
+        <span className="min-w-0 max-w-full">
+          <T>
+            Authenticated as{" "}
+            <Var>
+              <ProviderAuthEmail email={authEmail} />
+            </Var>
+          </T>
+        </span>
         {authLabel ? <span>· {authLabel}</span> : null}
         {inlineStatusDetail ? (
           <span className="min-w-0 [overflow-wrap:anywhere]">· {inlineStatusDetail}</span>
@@ -1030,8 +1060,8 @@ export function ProviderInstanceCard({
                   size={mode === "list" ? "icon-micro" : "icon-xs"}
                   variant="ghost-muted"
                   className={mode === "list" ? "pointer-events-auto relative shrink-0" : undefined}
-                  aria-label={t("provider.instance.details", {
-                    title: updateProgress ? t("provider.instance.updating") : versionAdvisory.title,
+                  aria-label={gt("{status}, view details", {
+                    status: updateProgress ? gt("Updating") : versionAdvisory.title,
                   })}
                 >
                   {updateProgress ? (
@@ -1081,10 +1111,10 @@ export function ProviderInstanceCard({
               {isUpdating
                 ? t("provider.instance.updating")
                 : versionAdvisory.targetVersion
-                  ? t("provider.instance.installVersion", {
+                  ? gt("Install {version}", {
                       version: getProviderVersionLabel(versionAdvisory.targetVersion),
                     })
-                  : t("provider.instance.updateNow")}
+                  : gt("Update now")}
             </Button>
           ) : null}
           {updateProgress || updateProblem ? (
@@ -1198,8 +1228,8 @@ export function ProviderInstanceCard({
                 deviceEnabled={resolveProviderInstanceEnabled(instance)}
               />
               <SettingResetButton
-                label={`${displayName} enablement`}
-                tooltip="Reset to the device setting"
+                ariaLabel={gt("Reset {provider} enablement to default", { provider: displayName })}
+                tooltip={gt("Reset to the device setting")}
                 disabled={readOnly || !canWriteSettings}
                 onClick={projectOverride.onReset}
               />
@@ -1325,7 +1355,7 @@ export function ProviderInstanceCard({
   return (
     <>
       <SettingsSection title={displayName} icon={titleIconNode} headerAction={editorHeaderAction}>
-        <SettingsRow title="Status" status={statusContent} />
+        <SettingsRow title={gt("Status")} status={statusContent} />
         <SettingsRow
           title={t("provider.instance.displayName")}
           control={
@@ -1405,7 +1435,8 @@ export function ProviderInstanceCard({
             {runtime ?? runtimeFields}
           </FoldedSettingsSection>
         </div>
-      ) : !driverOption || deriveProviderSettingsFields(driverOption).length > 0 ? (
+      ) : !driverOption ||
+        deriveProviderSettingsFields(driverOption, undefined, t, m).length > 0 ? (
         <SettingsSection
           title={t("provider.instance.runtime")}
           inert={readOnly}

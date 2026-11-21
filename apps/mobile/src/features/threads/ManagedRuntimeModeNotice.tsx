@@ -1,10 +1,11 @@
 import { useTranslate } from "../../i18n";
+import { managedRuntimeModeDenial } from "@t3tools/client-runtime/contract-labels";
 import {
   clampManagedRuntimeMode,
-  managedRuntimeModeDenial,
   type ManagedPolicySummary,
   type RuntimeMode,
 } from "@t3tools/contracts";
+import { useMessages } from "gt-react-native";
 import { View } from "react-native";
 
 import { AppText } from "../../components/ui/AppText";
@@ -26,9 +27,10 @@ export function ManagedRuntimeModeNotice(props: {
   readonly policy: ManagedPolicySummary | undefined;
 }) {
   const t = useTranslate();
+  const messages = useMessages();
   const draftSettings = useComposerDraftSettings(props.threadKey);
   const runtimeMode = draftSettings.runtimeMode ?? props.threadRuntimeMode;
-  const denial = managedRuntimeModeDenial(props.policy, runtimeMode);
+  const denial = managedRuntimeModeDenial(props.policy, runtimeMode, messages);
   if (denial === undefined) return null;
   const choices = runtimeModeChoicesForSupportedModes(props.supportedRuntimeModes);
   const target = clampManagedRuntimeMode(
@@ -36,13 +38,12 @@ export function ManagedRuntimeModeNotice(props: {
     runtimeMode,
     choices.map((choice) => choice.mode),
   );
-  const targetLabel = choices.find((choice) => choice.mode === target)?.label;
   return (
     <View className="gap-2 px-4 pb-3">
       <AppText textRole="footnote" className="text-foreground-muted">
         {denial} {t("managed.switchModeToContinue")}
       </AppText>
-      {target === undefined || targetLabel === undefined ? null : (
+      {target === undefined ? null : (
         <Button
           label={t("managed.switchTo", { mode: t(`chat.runtime.${target}.label`) })}
           onPress={() => updateComposerDraftSettings(props.threadKey, { runtimeMode: target })}

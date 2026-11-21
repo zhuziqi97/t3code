@@ -5,6 +5,9 @@ import type {
   ServerProviderVersionAdvisory,
   ServerProviderCompatibilityAdvisory,
 } from "@t3tools/contracts";
+import { msg } from "gt-react";
+
+import { m, type MessageResolver } from "../../i18n/messages";
 
 export const PROVIDER_STATUS_STYLES = {
   checking: { dot: "bg-muted-foreground/50" },
@@ -246,7 +249,9 @@ export function formatProviderStatusMessage(message: string, translate: TFunctio
 export function formatProviderAuthLabel(
   provider: ServerProvider,
   translate: TFunction,
+  resolve: MessageResolver = m,
 ): string | undefined {
+  if (provider.auth.type === "customEndpoint") return resolve(msg("Custom API endpoint"));
   const label = provider.auth.label ?? provider.auth.type;
   if (provider.driver === "grok") {
     if (label === "Grok account") return translate("provider.auth.grokAccount");
@@ -323,7 +328,7 @@ export function getProviderSummary(
   }
   if (isAntigravitySignInUnchecked(provider)) {
     return {
-      headline: "Installed · Sign-in not checked",
+      headline: m(msg("Installed · Sign-in not checked")),
       detail: provider.message ?? null,
     };
   }

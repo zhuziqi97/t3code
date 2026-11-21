@@ -1,4 +1,4 @@
-import { i18n } from "../i18n";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { RegistryContext } from "@effect/atom-react";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { availableScratchWorkspaceRoot } from "@t3tools/client-runtime/operations/projects";
@@ -10,9 +10,11 @@ import {
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import type { EnvironmentId } from "@t3tools/contracts";
 import type { AtomRegistry } from "effect/reactivity";
+import { msg } from "gt-react";
 import { useContext } from "react";
 
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
+import { m } from "~/i18n/messages";
 import {
   type EnvironmentPresentation,
   useEnvironments,
@@ -26,7 +28,7 @@ function reportScratchFailure(title: string, error: unknown) {
     stackedThreadToast({
       type: "error",
       title,
-      description: error instanceof Error ? error.message : i18n.t("common.error"),
+      description: thrownErrorMessage(error, m) ?? m(msg("An error occurred.")),
     }),
   );
 }
@@ -41,7 +43,6 @@ export function createScratchProjectActions(input: {
   readonly registry: AtomRegistry.AtomRegistry;
   readonly handleNewThread: NewThreadHandler;
 }) {
-  const t = i18n.t;
   const scratchWorkspaceRootFor = (environmentId: EnvironmentId | null): string | null => {
     let environment: ScratchEnvironment | undefined;
     for (const entry of input.environments()) {
@@ -63,7 +64,7 @@ export function createScratchProjectActions(input: {
 
   const openScratchProject = async (
     environmentId: EnvironmentId,
-    failureTitle = t("project.scratch.startFailed"),
+    failureTitle = m(msg("Could not start without a project")),
   ): Promise<EnvironmentProject | null> => {
     const command = projectEnvironment.openScratch;
     const result = await runAtomCommand(
@@ -84,7 +85,9 @@ export function createScratchProjectActions(input: {
     if (project) {
       await input
         .handleNewThread(scopeProjectRef(project.environmentId, project.id))
-        .catch((error: unknown) => reportScratchFailure(t("project.scratch.startFailed"), error));
+        .catch((error: unknown) =>
+          reportScratchFailure(m(msg("Could not start without a project")), error),
+        );
     }
   };
 

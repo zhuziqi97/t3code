@@ -1,6 +1,6 @@
-import { useTranslate } from "../../i18n";
 import { resolveTimelineMinimapPreview, type TimelineMinimapItem } from "./timelineMinimapItems";
 import { useRef, useState, type MouseEvent } from "react";
+import { T, useGT } from "gt-react";
 import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { Button } from "../ui/button";
 import {
@@ -49,7 +49,7 @@ export function TimelineMinimap({
   onWheel: (event: WheelEvent) => void;
   onSelect: (item: TimelineMinimapItem) => void;
 }) {
-  const t = useTranslate();
+  const gt = useGT();
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const wheelTargetRef = (node: HTMLDivElement | null) => {
     if (!node) return;
@@ -148,8 +148,8 @@ export function TimelineMinimap({
             }}
           />
           <button
-            aria-label={t("chat.timeline.jumpTo", {
-              text: activeItem?.userText ?? t("chat.timeline.userMessage"),
+            aria-label={gt("Jump to message: {text}", {
+              text: activeItem?.userText ?? gt("User message"),
             })}
             className="absolute inset-y-0 left-0 w-full cursor-pointer bg-transparent before:absolute before:inset-x-0 before:-inset-y-1 before:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
             onBlur={() => setActiveIndex(null)}
@@ -190,7 +190,6 @@ export function TimelineMinimap({
             onMouseDown={(event) => event.preventDefault()}
             type="button"
           >
-            <div className="absolute top-0 left-3 h-full w-px bg-border/15" />
             {items.map((item, index) => {
               const top = `${resolveTimelineMinimapTopPercent(index, items.length)}%`;
               const activeDistance =
@@ -235,7 +234,7 @@ export function TimelineMinimap({
               >
                 <span className="dropdown-glass block rounded-xl p-3 text-left text-popover-foreground shadow-xl shadow-black/25">
                   <span className="block max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium leading-5">
-                    {activeItem.userText ?? t("chat.timeline.userMessage")}
+                    {activeItem.userText ?? <T>User message</T>}
                   </span>
                   {activeItem.assistantText ? (
                     <span
@@ -278,9 +277,9 @@ function TimelineMinimapNavigationButton({
   interactive: boolean;
   onClick: () => void;
 }) {
-  const t = useTranslate();
+  const gt = useGT();
   const previous = direction === "previous";
-  const label = previous ? t("chat.timeline.previousTurn") : t("chat.timeline.nextTurn");
+  const label = previous ? gt("Previous turn") : gt("Next turn");
   const Icon = previous ? ChevronUpIcon : ChevronDownIcon;
 
   return (

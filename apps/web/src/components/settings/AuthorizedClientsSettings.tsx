@@ -1,17 +1,22 @@
 import { authScopePresentation } from "./authScopePresentation";
 import { i18n, useTranslate } from "../../i18n";
 import { formatConnectionErrorMessage } from "@t3tools/client-runtime/connection";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { m as resolveMessage } from "~/i18n/messages";
+import { managedCapabilityDenial } from "@t3tools/client-runtime/contract-labels";
 import { AUTH_SCOPE_OPTIONS as PAIRING_SCOPE_OPTIONS } from "@t3tools/shared/authScopeOptions";
 import { PlugIcon, PlusIcon, QrCodeIcon } from "lucide-react";
 import { type ReactNode, memo, useId, useState } from "react";
+import { T, useGT, useMessages } from "gt-react";
 import {
   AuthAccessWriteScope,
   AuthDiagnosticsReadScope,
   AuthOrchestrationReadScope,
   AuthFilesystemReadScope,
+  AuthRelayConfigureScope,
   AuthStandardClientScopes,
+  AuthTerminalOperateScope,
   AuthTerminalReadScope,
-  managedCapabilityDenial,
   type AuthEnvironmentScope,
   type AuthGrantScope,
   type AuthPairingCredentialResult,
@@ -53,7 +58,6 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import {
-  isLoopbackHostname,
   type ServerClientSessionRecord,
   type ServerPairingLinkRecord,
 } from "~/environments/primary";
@@ -84,7 +88,10 @@ function AccessScopeSummary({
   readonly label: string;
 }) {
   const t = useTranslate();
-  const scopeCountLabel = t("connections.scopeCount", { count: scopes.length });
+  const gt = useGT();
+  const scopeCountLabel = gt("{count, plural, one {{count} scope} other {{count} scopes}}", {
+    count: scopes.length,
+  });
 
   return (
     <Popover>
@@ -155,6 +162,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
   canRevoke,
 }: PairingLinkListRowProps) {
   const t = useTranslate();
+  const gt = useGT();
   const nowMs = useNowSecond();
   const expiresAtMs = new Date(pairingLink.expiresAt).getTime();
   const [isRevealDialogOpen, setIsRevealDialogOpen] = useState(false);
@@ -193,7 +201,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
         preferenceKey: endpointDefaultPreferenceKey(endpoint),
         label: endpoint.label,
         url,
-        detail: endpointShareHint(endpoint, url, t),
+        detail: endpointShareHint(endpoint, url),
         qrShareable: isQrShareableEndpoint(endpoint),
       });
     }
@@ -203,9 +211,9 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
     endpointPairingUrl ??
     (credential && endpointUrl != null && endpointUrl !== ""
       ? (hostedPairingUrl ?? resolveDesktopPairingUrl(endpointUrl, credential))
-      : !servedByEnvironment || isLoopbackHostname(window.location.hostname)
-        ? null
-        : currentOriginPairingUrl);
+      : servedByEnvironment
+        ? currentOriginPairingUrl
+        : null);
   const [failedCopyValue, setFailedCopyValue] = useState<string | null>(null);
   const revealValue = failedCopyValue ?? shareablePairingUrl ?? credential ?? "";
   const isRevealValueUrl = revealValue !== credential;
@@ -270,7 +278,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
     if (credential) copyPairingValue(credential, "code");
   };
 
-  const expiresAbsolute = formatAccessTimestamp(pairingLink.expiresAt, t);
+  const expiresAbsolute = formatAccessTimestamp(pairingLink.expiresAt);
 
   const primaryLabel = pairingLink.label ?? t("connections.pairingLink");
   const selectedQrOption = selectQrEndpointOption(
@@ -290,8 +298,8 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex min-h-5 items-center gap-1.5">
             <ConnectionStatusDot
-              tooltipText={t("connections.linkCreatedAt", {
-                time: formatAccessTimestamp(pairingLink.createdAt, t),
+              tooltipText={gt("Link created at {time}", {
+                time: formatAccessTimestamp(pairingLink.createdAt),
               })}
               dotClassName="bg-warning"
             />
@@ -300,7 +308,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
           <p className="text-xs text-muted-foreground">
             <Tooltip>
               <TooltipTrigger render={<span />}>
-                {formatExpiresInLabel(pairingLink.expiresAt, nowMs, t)}
+                {formatExpiresInLabel(pairingLink.expiresAt, nowMs)}
               </TooltipTrigger>
               <TooltipPopup side="top">{expiresAbsolute}</TooltipPopup>
             </Tooltip>
@@ -376,7 +384,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
                       size={132}
                       level="M"
                       marginSize={2}
-                      title="Pairing link. Scan to open on another device"
+                      title={gt("Pairing link. Scan to open on another device")}
                     />
                   </div>
                 ) : null}
@@ -481,7 +489,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
                 size={168}
                 level="M"
                 marginSize={1}
-                title="Pairing link. Scan to open on another device"
+                title={gt("Pairing link. Scan to open on another device")}
               />
             </div>
           ) : (
@@ -511,18 +519,20 @@ const ConnectedClientListRow = memo(function ConnectedClientListRow({
   canRevoke,
 }: ConnectedClientListRowProps) {
   const t = useTranslate();
+  const gt = useGT();
+  const m = useMessages();
   const nowMs = useNowSecond();
   const isLive = clientSession.current || clientSession.connected;
   const lastConnectedAt = clientSession.lastConnectedAt;
   const statusTooltip = isLive
     ? lastConnectedAt
-      ? t("connections.connectedFor", {
-          duration: formatElapsedDurationLabel(lastConnectedAt, nowMs, t),
+      ? gt("Connected for {duration}", {
+          duration: formatElapsedDurationLabel(lastConnectedAt, nowMs, m),
         })
-      : t("connections.connected")
+      : gt("Connected")
     : lastConnectedAt
-      ? t("connections.lastConnectedAt", { time: formatAccessTimestamp(lastConnectedAt, t) })
-      : t("connections.notConnectedYet");
+      ? gt("Last connected at {time}", { time: formatAccessTimestamp(lastConnectedAt) })
+      : gt("Not connected yet.");
   const deviceInfoBits = [
     clientSession.client.deviceType !== "unknown"
       ? t(`connections.device.${clientSession.client.deviceType}`, {
@@ -604,6 +614,8 @@ export const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHead
   onRevokeOtherClients,
   delegatableScopes,
 }: AuthorizedClientsHeaderActionProps) {
+  const gt = useGT();
+  const m = useMessages();
   const t = useTranslate();
   const pairingDenial = managedCapabilityDenial(useManagedPolicy(environmentId), "remoteClients");
   const createPairingCredential = useAtomCommand(authEnvironment.createPairingCredential, {
@@ -615,6 +627,8 @@ export const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHead
     ...AuthStandardClientScopes,
   ]);
   const selectedScopes = pairingScopes.filter((scope) => delegatableScopes.includes(scope));
+  const terminalSelected = selectedScopes.includes(AuthTerminalOperateScope);
+  const relayAdminSelected = selectedScopes.includes(AuthRelayConfigureScope);
   const [isCreatingPairingLink, setIsCreatingPairingLink] = useState(false);
 
   const handleCreatePairingLink = async () => {
@@ -639,7 +653,10 @@ export const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHead
       setDialogOpen(false);
     } else if (!isAtomCommandInterrupted(result)) {
       const error = squashAtomCommandFailure(result);
-      const message = error instanceof Error ? error.message : t("connections.createFailedDetail");
+      const message =
+        error instanceof Error
+          ? (thrownErrorMessage(error, resolveMessage) ?? error.message)
+          : gt("Failed to create pairing URL.");
       toastManager.add(
         stackedThreadToast({
           type: "error",
@@ -659,7 +676,7 @@ export const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHead
     <div className="flex flex-wrap items-center justify-end gap-2">
       <Button size="xs" variant="outline" onClick={() => openUseInAnotherApp(environmentId)}>
         <PlugIcon className="size-3" />
-        Use in another app (MCP)
+        <T>Use in another app (MCP)</T>
       </Button>
       <Button
         size="xs"
@@ -673,7 +690,7 @@ export const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHead
         <ManagedControl reason={pairingDenial}>
           <Button size="xs" variant="default" disabled>
             <PlusIcon className="size-3" />
-            Create link
+            <T>Create link</T>
           </Button>
         </ManagedControl>
       ) : null}
@@ -776,10 +793,24 @@ export const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHead
                         onCheckedChange={(checked) => togglePairingScope(scope, checked === true)}
                       />
                       <span className="min-w-0">
-                        <span className="block text-xs font-medium text-foreground">{title}</span>
-                        <span className="block text-xs leading-snug text-muted-foreground">
-                          {description}
+                        <span className="block text-xs font-medium text-foreground">
+                          {m(title)}
                         </span>
+                        <span className="block text-xs leading-snug text-muted-foreground">
+                          {m(description)}
+                        </span>
+                        {terminalSelected && scope === AuthTerminalOperateScope ? (
+                          <span className="block text-xs text-warning">
+                            {gt(
+                              "Terminal commands can read or change files within the server account’s permissions.",
+                            )}
+                          </span>
+                        ) : null}
+                        {relayAdminSelected && scope === AuthRelayConfigureScope ? (
+                          <span className="block text-xs text-warning">
+                            {gt("This client can change who can issue pairing credentials.")}
+                          </span>
+                        ) : null}
                       </span>
                     </label>
                   ))}
@@ -906,7 +937,8 @@ export const AdvertisedEndpointListRow = memo(function AdvertisedEndpointListRow
   const canDisableTailscaleServe =
     isTailscaleHttpsEndpoint(endpoint) && endpoint.status === "available";
   const shouldShowEndpointUrl = !needsTailscaleSetup;
-  const remoteDenial = managedCapabilityDenial(usePrimaryManagedPolicy(), "remoteClients");
+  const m = useMessages();
+  const remoteDenial = managedCapabilityDenial(usePrimaryManagedPolicy(), "remoteClients", m);
   return (
     <div className={endpointRowClassName(isAvailable)}>
       {isDefault ? (

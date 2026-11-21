@@ -8,6 +8,7 @@ import { primaryServerKeybindingsAtom } from "../state/server";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { PlusIcon, ScaleIcon } from "lucide-react";
 import { memo } from "react";
+import { T, useGT } from "gt-react";
 
 import { ADD_TO_MACHINE_LABEL_CLASS, type EnvironmentOption } from "./BranchToolbar.logic";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
@@ -46,6 +47,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   onAddToMachine,
 }: BranchToolbarEnvironmentSelectorProps) {
   const t = useTranslate();
+  const gt = useGT();
   const composerFloatingLayerProps = useComposerMenuProps();
   const shortcutLabel = shortcutLabelForCommand(
     useAtomValue(primaryServerKeybindingsAtom),
@@ -62,7 +64,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
       value: environmentValue(env.environmentId),
       label: env.label,
     })),
-    ...(onAddToMachine ? [{ value: ADD_MACHINE_VALUE, label: "Add to another machine" }] : []),
+    ...(onAddToMachine ? [{ value: ADD_MACHINE_VALUE, label: gt("Add to another machine") }] : []),
   ];
 
   // Match the xs control's height and padding: the composer strip has no min-height,
@@ -166,7 +168,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
             <SelectItem value={ADD_MACHINE_VALUE}>
               <span className={ADD_TO_MACHINE_LABEL_CLASS}>
                 <PlusIcon aria-hidden="true" className="size-3" />
-                Add to another machine
+                <T>Add to another machine</T>
               </span>
             </SelectItem>
           ) : null}

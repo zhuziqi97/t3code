@@ -100,6 +100,7 @@ export function matchesConveneGuideline(query: string): boolean {
 
 export function serializeConveneComposerItem(item: ConveneComposerItem): string {
   if (item.type === "convene-guideline") {
+    // oxlint-disable-next-line t3code/no-untranslated-copy -- The serialized text is an agent instruction.
     return "Use the authorized Convene MCP to call get_platform_guideline (or read convene://reference/platform) before working with platform resources. ";
   }
   const resource = item.resource;

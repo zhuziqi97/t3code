@@ -2,6 +2,7 @@ import { useTranslate } from "../../i18n";
 import { Spinner } from "~/components/ui/spinner";
 import { AuthFilesystemReadScope, type ProjectContentMatch } from "@t3tools/contracts";
 
+import { T, useGT, useMessages } from "gt-react";
 import { useState, type ReactNode } from "react";
 
 import { useActiveProjectTarget, type ActiveProjectTarget } from "~/hooks/useActiveProjectTarget";
@@ -109,6 +110,8 @@ function OpenContentSearchDialog(props: {
 }) {
   const t = useTranslate();
   const { target } = props;
+  const gt = useGT();
+  const messages = useMessages();
   const { resolvedTheme } = useTheme();
   const renderedAppearance = useRenderedAppearance();
   const [query, setQuery] = useState("");
@@ -119,14 +122,17 @@ function OpenContentSearchDialog(props: {
 
   const [visibleCount, setVisibleCount] = useState(VISIBLE_MATCH_WINDOW);
 
-  const search = useProjectContentSearch({
-    environmentId: target.environmentId,
-    cwd: target.cwd,
-    query,
-    caseSensitive,
-    wholeWord,
-    useRegex,
-  });
+  const search = useProjectContentSearch(
+    {
+      environmentId: target.environmentId,
+      cwd: target.cwd,
+      query,
+      caseSensitive,
+      wholeWord,
+      useRegex,
+    },
+    messages,
+  );
   const canOpenMatches = search.canReadFiles && !search.isPending && search.error === null;
   const matches = search.matches;
   const [resultsFor, setResultsFor] = useState(matches);
@@ -177,7 +183,8 @@ function OpenContentSearchDialog(props: {
             label={t("project.search.matchCase")}
             onClick={() => setCaseSensitive((current) => !current)}
           >
-            Aa
+            {/* oxlint-disable-next-line t3code/no-untranslated-copy -- match-case glyph; the label carries the meaning */}
+            {"Aa"}
           </SearchOptionButton>
           <SearchOptionButton
             active={wholeWord}
@@ -238,10 +245,17 @@ function OpenContentSearchDialog(props: {
           ) : search.error ? (
             <span className="text-destructive">{search.error}</span>
           ) : search.invalidRegex ? (
-            <span className="text-destructive">{t("project.search.invalidRegex")}</span>
+            <span className="text-destructive">
+              <T>Invalid regular expression</T>
+            </span>
+          ) : search.truncated ? (
+            gt("{results}+ results in {files} files", {
+              results: matches.length.toLocaleString(),
+              files: fileCount.toLocaleString(),
+            })
           ) : (
-            t("project.search.results", {
-              results: `${matches.length.toLocaleString()}${search.truncated ? "+" : ""}`,
+            gt("{results} results in {files} files", {
+              results: matches.length.toLocaleString(),
               files: fileCount.toLocaleString(),
             })
           )}

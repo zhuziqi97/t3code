@@ -1,4 +1,3 @@
-import { i18n } from "../../i18n";
 import type {
   BackgroundActivityProfile,
   BackgroundActivitySettings,
@@ -22,6 +21,9 @@ import {
 } from "@t3tools/shared/backgroundActivitySettings";
 import * as Duration from "effect/Duration";
 import * as Equal from "effect/Equal";
+import { msg } from "gt-react";
+
+import { m, type MessageResolver } from "../../i18n/messages";
 
 export function isProjectGroupingEnabled(mode: SidebarProjectGroupingMode): boolean {
   return mode !== "separate";
@@ -89,28 +91,26 @@ type TypographySettings = Pick<
   | "fontSizeTerminal"
 >;
 
-/** Labels the font rows whose family or size differs from the defaults. */
 export function getChangedTypographySettingLabels(
   settings: TypographySettings,
-  translate: (key: string) => string = (key) =>
-    i18n.t(key as import("@t3tools/client-runtime/i18n").MessageKey),
+  resolve: MessageResolver = m,
 ): string[] {
   return [
     ...(settings.fontFamilySans !== DEFAULT_UNIFIED_SETTINGS.fontFamilySans ||
     settings.fontSizeInterface !== DEFAULT_UNIFIED_SETTINGS.fontSizeInterface
-      ? [translate("settings.search.interface-font.title")]
+      ? [resolve(msg("Interface font"))]
       : []),
     ...(settings.fontFamilyComposer !== DEFAULT_UNIFIED_SETTINGS.fontFamilyComposer ||
     settings.fontSizePrompt !== DEFAULT_UNIFIED_SETTINGS.fontSizePrompt
-      ? [translate("settings.search.prompt-font.title")]
+      ? [resolve(msg("Prompt font"))]
       : []),
     ...(settings.fontFamilyCode !== DEFAULT_UNIFIED_SETTINGS.fontFamilyCode ||
     settings.fontSizeCode !== DEFAULT_UNIFIED_SETTINGS.fontSizeCode
-      ? [translate("settings.search.code-font.title")]
+      ? [resolve(msg("Code font"))]
       : []),
     ...(settings.fontFamilyTerminal !== DEFAULT_UNIFIED_SETTINGS.fontFamilyTerminal ||
     settings.fontSizeTerminal !== DEFAULT_UNIFIED_SETTINGS.fontSizeTerminal
-      ? [translate("settings.search.terminal-font.title")]
+      ? [resolve(msg("Terminal font"))]
       : []),
   ];
 }
@@ -142,11 +142,9 @@ function isSamePreviewViewport(
     : true;
 }
 
-/** Labels the browser-default rows that differ from the defaults. */
 export function getChangedBrowserSettingLabels(
   settings: BrowserDefaultSettings,
-  translate: (key: string) => string = (key) =>
-    i18n.t(key as import("@t3tools/client-runtime/i18n").MessageKey),
+  resolve: MessageResolver = m,
 ): string[] {
   return [
     ...(isSamePreviewViewport(
@@ -154,31 +152,31 @@ export function getChangedBrowserSettingLabels(
       DEFAULT_UNIFIED_SETTINGS.browserDefaultViewport,
     )
       ? []
-      : [translate("restore.browserViewport")]),
+      : [resolve(msg("Browser viewport"))]),
     ...(settings.browserDefaultZoomFactor !== DEFAULT_UNIFIED_SETTINGS.browserDefaultZoomFactor
-      ? [translate("restore.browserZoom")]
+      ? [resolve(msg("Browser zoom"))]
       : []),
     ...(settings.browserDefaultAppearance !== DEFAULT_UNIFIED_SETTINGS.browserDefaultAppearance
-      ? [translate("restore.browserAppearance")]
+      ? [resolve(msg("Browser appearance"))]
       : []),
     ...(settings.browserRecordingFrameRate !== DEFAULT_UNIFIED_SETTINGS.browserRecordingFrameRate
-      ? [translate("restore.browserFrameRate")]
+      ? [resolve(msg("Recording frame rate"))]
       : []),
-    ...(settings.browserRecordingShowKeyPresses ? [translate("restore.browserKeys")] : []),
-    ...(settings.browserRecordingShowMousePresses ? [translate("restore.browserMouse")] : []),
+    ...(settings.browserRecordingShowKeyPresses ? [resolve(msg("Recording key presses"))] : []),
+    ...(settings.browserRecordingShowMousePresses ? [resolve(msg("Recording mouse presses"))] : []),
     ...(settings.browserLinkTarget !== DEFAULT_UNIFIED_SETTINGS.browserLinkTarget
-      ? [translate("restore.browserLinks")]
+      ? [resolve(msg("Open links in"))]
       : []),
     ...(settings.browserSearchEngine !== DEFAULT_UNIFIED_SETTINGS.browserSearchEngine ||
     settings.browserCustomSearchUrl !== DEFAULT_UNIFIED_SETTINGS.browserCustomSearchUrl
-      ? ["Search engine"]
+      ? [resolve(msg("Search engine"))]
       : []),
     ...(settings.browserAutoShowFloatingPreview !==
     DEFAULT_UNIFIED_SETTINGS.browserAutoShowFloatingPreview
-      ? [translate("restore.browserFloating")]
+      ? [resolve(msg("Floating preview"))]
       : []),
     ...(settings.pullRequestLinksOpenInApp !== DEFAULT_UNIFIED_SETTINGS.pullRequestLinksOpenInApp
-      ? [translate("settings.search.pull-request-links-open-in-app.title")]
+      ? [resolve(msg("Open pull requests in T3 Code"))]
       : []),
   ];
 }

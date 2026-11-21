@@ -1,3 +1,4 @@
+import { resolveChineseMessage } from "../../test/gtCatalog";
 import {
   clampDrawerHeight,
   resolveTerminalDrawerMaxHeight,
@@ -6,7 +7,6 @@ import {
   terminalThemeFromApp,
 } from "./ThreadTerminalDrawer";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import { i18n } from "../i18n";
 import {
   applyTerminalAttachStreamEvent,
   combineTerminalSessionState,
@@ -59,7 +59,7 @@ describe("terminal selection menus", () => {
   it("translates native menu labels while retaining action IDs and read-only restrictions", () => {
     const items = terminalContextMenuItems(
       { hasSelection: false, canAddToChat: false, readOnly: true },
-      i18n.getFixedT("zh"),
+      resolveChineseMessage,
     );
     expect(items).toEqual([
       { id: "copy", label: "复制", disabled: true },
@@ -67,7 +67,7 @@ describe("terminal selection menus", () => {
       { id: "select-all", label: "全选" },
       { id: "scroll-to-bottom", label: "跳到最新输出" },
     ]);
-    expect(terminalSelectionMenuItems(undefined, i18n.getFixedT("zh"))).toEqual([
+    expect(terminalSelectionMenuItems(undefined, resolveChineseMessage)).toEqual([
       { id: "add-to-chat", label: "添加到聊天" },
       { id: "copy", label: "复制" },
     ]);

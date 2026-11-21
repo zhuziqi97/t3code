@@ -37,7 +37,7 @@ import { ProjectCloneToastCoordinator } from "../components/ProjectCloneToastCoo
 import { ConnectDeviceApprovalCoordinator } from "../components/ConnectDeviceApprovalCoordinator";
 import { ChatGptWelcomeCoordinator } from "../components/settings/ChatGptWelcomeCoordinator";
 import { ThemeEditorHost } from "../components/settings/ThemeEditorHost";
-import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
+import { namedClipboardTarget, useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { Button } from "../components/ui/button";
 import { StandalonePage, StandalonePageHeader } from "../components/ui/standalone-page";
 import { AnchoredToastProvider, ToastProvider } from "../components/ui/toast";
@@ -181,9 +181,11 @@ function RootRouteBranch() {
   // first-run gate and the event router, whose first navigation would leave the page.
   const appHosts = (
     <>
-      {primaryEnvironmentAuthenticated ? <DesktopAppActivationCoordinator /> : null}
       {primaryEnvironmentAuthenticated || localEnvironmentDisabled ? (
-        <DesktopWebLinkCoordinator />
+        <>
+          <DesktopAppActivationCoordinator />
+          <DesktopWebLinkCoordinator />
+        </>
       ) : null}
       {isElectron ? <RunningThreadKeepAlive /> : null}
       <RelayClientInstallDialog />
@@ -277,7 +279,9 @@ function RootRouteErrorView({ error }: ErrorComponentProps) {
 
 function CopyErrorButton({ report }: { report: string }) {
   const t = useTranslate();
-  const { copyToClipboard, isCopied } = useCopyToClipboard({ target: "error-report" });
+  const { copyToClipboard, isCopied } = useCopyToClipboard({
+    target: namedClipboardTarget("error-report"),
+  });
 
   return (
     <Button size="sm" variant="outline" onClick={() => copyToClipboard(report)}>
@@ -311,6 +315,7 @@ function errorDetails(error: unknown): string {
   try {
     return JSON.stringify(error, null, 2);
   } catch {
+    // oxlint-disable-next-line t3code/no-untranslated-copy -- error report pasted into bug reports
     return "No additional error details are available.";
   }
 }

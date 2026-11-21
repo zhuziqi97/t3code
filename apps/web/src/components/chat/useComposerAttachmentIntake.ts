@@ -1,5 +1,5 @@
-import { useTranslate } from "../../i18n";
-
+import { msg } from "gt-react";
+import { m } from "~/i18n/messages";
 import type { ChatComposerProps } from "./ChatComposer";
 import {
   type ChatFileAttachment,
@@ -92,7 +92,6 @@ export function useComposerAttachmentIntake(input: {
     pendingInsertion?: ComposerAttachmentInsertion,
   ) => boolean;
 }) {
-  const t = useTranslate();
   const {
     activeThreadId,
     activePendingProgress,
@@ -139,7 +138,7 @@ export function useComposerAttachmentIntake(input: {
     ) {
       toastManager.add({
         type: "error",
-        title: t("chat.input.noAttachments"),
+        title: m(msg("This question cannot accept attachments.")),
       });
       return false;
     }
@@ -186,28 +185,35 @@ export function useComposerAttachmentIntake(input: {
         replacedReattachMarkerIds.add(matchingReattachMarker.id);
       }
       if (!matchingReattachMarker && reservedCount >= PROVIDER_SEND_TURN_MAX_ATTACHMENTS) {
-        error = t("chat.attachment.fileLimit", { count: PROVIDER_SEND_TURN_MAX_ATTACHMENTS });
-        // Keep scanning: a later file in this batch can still replace a
-        // needs-reattach marker without needing a free slot.
+        error = m(
+          msg("You can attach up to {max} files per message.", {
+            max: PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
+          }),
+        );
         continue;
       }
       if (attachmentKind === "unsupported-image") {
-        error = t("chat.attachment.unsupportedImage", { name: file.name });
+        error = m(
+          msg(
+            "''{name}'' is not a supported image type. Attach GIF, HEIC, HEIF, JPEG, PNG, or WebP images.",
+            { name: file.name },
+          ),
+        );
         continue;
       }
       if (attachmentKind === "image") {
         acceptedImages.push(normalizeComposerImageFileMimeType(file));
       } else {
         if (fileStagingLimit === null) {
-          error = t("chat.attachment.unsupported");
+          error = m(msg("This server does not support file attachments."));
           continue;
         }
         if (file.size <= 0) {
-          error = t("chat.attachment.empty", { name: file.name });
+          error = m(msg("''{name}'' is empty or could not be read.", { name: file.name }));
           continue;
         }
         if (file.size > fileStagingLimit) {
-          error = fileAttachmentTooLargeMessage(file.name, fileStagingLimit);
+          error = fileAttachmentTooLargeMessage(file.name, fileStagingLimit, m);
           continue;
         }
         const attachmentFile =
@@ -243,11 +249,13 @@ export function useComposerAttachmentIntake(input: {
         const attached = storedFiles[0]!;
         toastManager.add({
           type: "info",
-          title: t("chat.paste.attached", { name: attached.name }),
-          description: t("chat.paste.inlineHint", {
-            size: formatAttachmentSize(attached.sizeBytes),
-            shortcut: isMacPlatform(navigator.platform) ? "⌘⇧V" : "Ctrl+Shift+V",
-          }),
+          title: m(msg("Large paste attached as {name}", { name: attached.name })),
+          description: m(
+            msg("{size} · Use {shortcut} to keep a large paste inline.", {
+              size: formatAttachmentSize(attached.sizeBytes, m),
+              shortcut: isMacPlatform(navigator.platform) ? "⌘⇧V" : "Ctrl+Shift+V",
+            }),
+          ),
           data: { hideCopyButton: true },
         });
       }
@@ -291,8 +299,12 @@ export function useComposerAttachmentIntake(input: {
         compressionErrors.set(
           id,
           result.reason === "unreadable"
-            ? `'${file.name}' could not be read as an image.`
-            : `'${file.name}' is too large to attach, even after compression.`,
+            ? m(msg("''{name}'' could not be read as an image.", { name: file.name }))
+            : m(
+                msg("''{name}'' is too large to attach, even after compression.", {
+                  name: file.name,
+                }),
+              ),
         );
         continue;
       }
@@ -310,6 +322,7 @@ export function useComposerAttachmentIntake(input: {
     const stillPreparingIds = removePreparingComposerImages(
       attachmentTargetKey,
       new Set(preparingImages.map((image) => image.id)),
+      { cancelSubmission: compressionErrors.size > 0 || questionDiscarded },
     );
     if (questionAttachmentTarget)
       changeQuestionAttachmentPreparation(questionAttachmentTarget, -stillPreparingIds.size);
@@ -360,7 +373,11 @@ export function useComposerAttachmentIntake(input: {
   };
 
   const removeComposerImage = (imageId: string) => {
-    if (removePreparingComposerImages(attachmentTargetKey, new Set([imageId])).size > 0) {
+    if (
+      removePreparingComposerImages(attachmentTargetKey, new Set([imageId]), {
+        cancelSubmission: true,
+      }).size > 0
+    ) {
       // Its compression finishes in the background and is dropped.
       if (questionAttachmentTarget)
         changeQuestionAttachmentPreparation(questionAttachmentTarget, -1);
@@ -375,7 +392,18 @@ export function useComposerAttachmentIntake(input: {
       return;
     }
     const confirmation = requestConfirmDialog(
-      t("chat.attachment.removeQuestion", { name: image?.name ?? t("chat.attachment.thisImage") }),
+      image?.name != null
+        ? m(
+            msg(
+              "Remove {name} from the message?\nIt is referenced in your text; removing it also removes every reference.",
+              { name: image.name },
+            ),
+          )
+        : m(
+            msg(
+              "Remove this image from the message?\nIt is referenced in your text; removing it also removes every reference.",
+            ),
+          ),
       { variant: "destructive" },
     );
     if (!confirmation) {
@@ -428,8 +456,8 @@ export function useComposerAttachmentIntake(input: {
       }
       toastManager.add({
         type: "error",
-        title: t("chat.paste.tooLarge"),
-        description: t("chat.paste.removeSome"),
+        title: m(msg("Pasted text is too large for this message")),
+        description: m(msg("Remove some text or an attachment, then paste again.")),
         data: { hideCopyButton: true },
       });
       return true;
@@ -450,8 +478,8 @@ export function useComposerAttachmentIntake(input: {
       if (!wouldExceedInputLimit) return false;
       toastManager.add({
         type: "error",
-        title: t("chat.paste.attachmentTooLarge"),
-        description: t("chat.paste.reduceClipboard"),
+        title: m(msg("Pasted text is too large to attach")),
+        description: m(msg("Reduce the clipboard contents or save a smaller excerpt as a file.")),
         data: { hideCopyButton: true },
       });
       return true;

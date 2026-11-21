@@ -2,6 +2,7 @@ import { useTranslate } from "../../i18n";
 
 import { useSyncLayout } from "@legendapp/list/react";
 import { type OrchestrationV2CheckpointFileTotals, type RunId } from "@t3tools/contracts";
+import { useGT } from "gt-react";
 import { type MouseEvent, type ReactNode, memo, useLayoutEffect, useRef, useState } from "react";
 import { type TurnDiffFileChange } from "../../types";
 import { buildTurnDiffTree, type TurnDiffTreeNode } from "../../lib/turnDiffTree";
@@ -54,6 +55,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
     onOpenTurnDiff,
     onFileContextMenu,
   } = props;
+  const gt = useGT();
   const syncTimelineLayout = useSyncLayout();
   const hiddenFileCount = totals.count - files.length;
   const hasDirectories = files.some((file) => /[/\\]/.test(file.path));
@@ -147,8 +149,10 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
             variant="ghost-muted"
             onClick={() => onOpenTurnDiff(runId, files[0]?.path)}
           >
-            {hiddenFileCount.toLocaleString()} more file{hiddenFileCount === 1 ? "" : "s"} in the
-            full diff
+            {gt(
+              "{count, plural, one {{formattedCount} more file in the full diff} other {{formattedCount} more files in the full diff}}",
+              { count: hiddenFileCount, formattedCount: hiddenFileCount.toLocaleString() },
+            )}
           </Button>
         </div>
       )}

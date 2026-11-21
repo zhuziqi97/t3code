@@ -1,3 +1,6 @@
+import * as GitManager from "../../../git/GitManager.ts";
+import * as IssueService from "../../../issue/IssueService.ts";
+import * as ThreadIssueService from "../../../orchestration-v2/ThreadIssueService.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { idleThreadProjection, liveThreadShell } from "../../McpToolAccess.testkit.ts";
 import type { OrchestrationV2ServerCommand } from "@t3tools/contracts";
@@ -61,7 +64,9 @@ const layerStubServices = Layer.mergeAll(
   Layer.mock(DocumentText.DocumentText)({}),
   Layer.mock(Orchestrator.OrchestratorV2)({}),
   Layer.mock(ThreadWorkspaceRecovery.ThreadWorkspaceRecovery)({}),
-  Layer.mock(ProjectionStore.ProjectionStoreV2)({}),
+  Layer.mock(ProjectionStore.ProjectionStoreV2)({
+    getThreadShell: (id) => Effect.succeed(liveThreadShell(id)),
+  }),
   Layer.mock(DeviceService.DeviceService)({}),
   Layer.mock(ProviderRegistry.ProviderRegistry)({}),
   Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({}),
@@ -70,7 +75,9 @@ const layerStubServices = Layer.mergeAll(
   Layer.mock(ProjectService.ProjectService)({}),
   Layer.mock(PullRequestReviewGuideService.PullRequestReviewGuideService)({}),
   Layer.mock(EnvironmentTheme.EnvironmentThemeService)({}),
-  Layer.mock(PullRequestService.PullRequestService)({}),
+  Layer.mock(PullRequestService.PullRequestService)({
+    servesProject: () => Effect.succeed(false),
+  }),
   Layer.mock(ProjectCloneTracker.ProjectCloneTracker)({}),
   ServerSettings.layerTest({}),
   Layer.mock(GitWorkflowService.GitWorkflowService)({}),
@@ -139,6 +146,13 @@ it.effect("production mcp layer lists worktree tools over http", () =>
               }),
           }),
         ),
+        Layer.provide(
+          Layer.mergeAll(
+            Layer.mock(GitManager.GitManager)({}),
+            Layer.mock(IssueService.IssueService)({}),
+            Layer.mock(ThreadIssueService.ThreadIssueService)({}),
+          ),
+        ),
         Layer.provide(layerStubServices),
         Layer.build,
       );
@@ -162,7 +176,7 @@ it.effect("production mcp layer lists worktree tools over http", () =>
           "application/json",
         ),
       });
-      expect(initResponse.status).toBe(200);
+      expect(initResponse.status, yield* initResponse.text).toBe(200);
       const sessionId = initResponse.headers["mcp-session-id"];
 
       const listResponse = yield* httpClient.post("/mcp", {

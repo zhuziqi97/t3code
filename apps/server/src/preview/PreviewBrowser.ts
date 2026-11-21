@@ -1,4 +1,3 @@
-const megabytes = (bytes: number) => (bytes / 1_048_576).toFixed(1);
 import {
   PreviewBrowserInstallError,
   previewBrowserRelease,
@@ -27,6 +26,10 @@ import { HttpClient } from "effect/http";
 
 import * as ServerConfig from "../config.ts";
 import { openZipArchive } from "../zipArchive.ts";
+
+export { VERSION } from "@t3tools/shared/previewBrowserArchive";
+
+const megabytes = (bytes: number) => (bytes / 1_048_576).toFixed(1);
 
 export class PreviewBrowserInstallingError extends Schema.TaggedError<PreviewBrowserInstallingError>()(
   "PreviewBrowserInstallingError",

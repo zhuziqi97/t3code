@@ -63,6 +63,12 @@ function setup() {
     tabId: "tab",
     interactive: false,
     background: "white",
+    labels: {
+      page: "Browser page",
+      pageInput: "Browser page input",
+      pictureInPictureNotReady: "Preview is not ready",
+      pictureInPictureUnavailable: "Picture-in-picture is unavailable",
+    },
   });
   vi.advanceTimersByTime(0);
   const owner = stack.move();

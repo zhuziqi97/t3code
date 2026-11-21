@@ -4,6 +4,7 @@ import { shouldPreserveAssistantLineBreaks } from "@t3tools/shared/markdownPipel
 import { MessageId, type RunId, type TurnItemId } from "@t3tools/contracts";
 import { canForkProjectedAssistantItem } from "@t3tools/client-runtime/state/thread-workflows";
 import { agentWorkingDirectories } from "@t3tools/client-runtime/workspace-basename-lookup";
+import { useGT, useMessages } from "gt-react";
 import { memo, use, useState } from "react";
 import { type ChatMessage, type TurnDiffSummary } from "../../types";
 import ChatMarkdown from "../ChatMarkdown";
@@ -43,6 +44,7 @@ const NO_VCS_STATUS = Atom.make(AsyncResult.initial());
 export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const t = useTranslate();
   const ctx = use(TimelineRowCtx);
+  const gt = useGT();
   // The timeline holds a streaming message's row while only its text grows.
   const liveText = useAssistantMessageText(
     row.message.streaming ? ctx.threadRef : null,
@@ -50,7 +52,7 @@ export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind
   );
   const text = liveText ?? row.message.text;
   const messageText =
-    text || (row.message.streaming || row.suppressEmptyResponse ? "" : "(empty response)");
+    text || (row.message.streaming || row.suppressEmptyResponse ? "" : gt("(empty response)"));
 
   return (
     <>
@@ -234,8 +236,8 @@ function AssistantMessageMeta({
   alwaysVisible?: boolean;
   end?: RunEndFeedback | null;
 }) {
-  const t = useTranslate();
   const ctx = use(TimelineRowCtx);
+  const m = useMessages();
 
   const timestamp = end?.completedAt ?? message.updatedAt;
   return (
@@ -265,16 +267,16 @@ function AssistantMessageMeta({
       ) : null}
       {!message.streaming && (
         <Tooltip>
-          <TooltipTrigger
-            render={
-              <time dateTime={timestamp} className="text-muted-foreground text-xs tabular-nums" />
-            }
-          >
-            {formatDayAwareTimestamp(timestamp, ctx.timestampFormat, undefined, undefined, t)}
+          <TooltipTrigger render={<p className="text-muted-foreground text-xs tabular-nums" />}>
+            {formatDayAwareTimestamp(
+              message.updatedAt,
+              ctx.timestampFormat,
+              undefined,
+              undefined,
+              m,
+            )}
           </TooltipTrigger>
-          <TooltipPopup>
-            {formatChatTimestampTooltip(timestamp, ctx.timestampFormat, t)}
-          </TooltipPopup>
+          <TooltipPopup>{formatChatTimestampTooltip(timestamp, ctx.timestampFormat)}</TooltipPopup>
         </Tooltip>
       )}
       {end ? <RunEndStateFeedback end={end} timestampFormat={ctx.timestampFormat} inline /> : null}

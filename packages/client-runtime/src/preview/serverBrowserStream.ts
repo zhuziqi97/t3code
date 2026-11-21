@@ -1,5 +1,6 @@
 import * as Schema from "effect/Schema";
 // @effect-diagnostics globalTimers:off globalFetch:off - This browser and WebView transport runs without an Effect runtime.
+import { mFallback, msg } from "gt-i18n";
 import type { TFunction } from "i18next";
 import { type DeviceHubAccess, withDeviceHubQuery } from "../device/hubAccess.ts";
 import {
@@ -502,22 +503,25 @@ export const previewStreamHostSetupMessage = (setup: PreviewStreamHostSetup, t?:
     : (t?.("browser.setup.libraries") ??
       "This server's host is missing libraries its browser needs. Run this once on the host, then try again:");
 
-/** Shared viewer copy; native clients use English until they provide a translator. */
 export function previewStreamStatusMessage(status: PreviewStreamStatus, t?: TFunction): string {
   switch (status.state) {
     case "preparing":
-      return t?.("browser.preparing") ?? "Preparing browser…";
+      return t?.("browser.preparing") ?? mFallback(msg("Preparing browser…"));
     case "ready":
       return "";
     case "installing":
       return status.unpacking
-        ? (t?.("browser.unpacking") ?? "Unpacking the browser component. Try again shortly.")
-        : (t?.("browser.installing") ?? "Installing the browser component. Try again shortly.");
+        ? (t?.("browser.unpacking") ??
+            mFallback(msg("Unpacking the browser component. Try again shortly.")))
+        : (t?.("browser.installing") ??
+            mFallback(msg("Installing the browser component. Try again shortly.")));
     case "failed":
       return status.reason === "install"
-        ? (t?.("browser.installFailed") ?? "The browser component could not be installed.")
+        ? (t?.("browser.installFailed") ??
+            mFallback(msg("The browser component could not be installed.")))
         : status.reason === "unsupported"
-          ? (t?.("browser.unsupportedHost") ?? "The browser is unavailable on this host.")
-          : (t?.("browser.launchFailed") ?? "The browser could not start.");
+          ? (t?.("browser.unsupportedHost") ??
+            mFallback(msg("The browser is unavailable on this host.")))
+          : (t?.("browser.launchFailed") ?? mFallback(msg("The browser could not start.")));
   }
 }

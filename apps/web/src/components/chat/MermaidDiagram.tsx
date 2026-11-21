@@ -1,6 +1,7 @@
 import { useTranslate } from "../../i18n";
 import DOMPurify from "dompurify";
 import type { DiagramType, MathResolver } from "pele/lazy";
+import { useGT } from "gt-react";
 import { use, useState } from "react";
 
 import { serializeCodeBlockToMarkdown } from "../../markdown-clipboard";
@@ -228,6 +229,7 @@ export function MermaidDiagram({
   onExpand: (imageUrl: string) => void;
 }) {
   const t = useTranslate();
+  const gt = useGT();
   const [, setAttempt] = useState(0);
   const [renderError, setRenderError] = useState<string | null>(null);
   const trimmedSource = source.trim();
@@ -249,7 +251,7 @@ export function MermaidDiagram({
       onRender: () => setRenderError(null),
       onError: (error) =>
         setRenderError(
-          error instanceof Error ? error.message : "The diagram could not be rendered.",
+          error instanceof Error ? error.message : gt("The diagram could not be rendered."),
         ),
     });
     return () => mounted.destroy();
@@ -258,7 +260,7 @@ export function MermaidDiagram({
   if (load.status === "failed") {
     return (
       <DiagramError
-        message="The diagram renderer failed to load."
+        message={gt("The diagram renderer failed to load.")}
         source={source}
         onRetry={() => {
           if (core.status === "failed") coreLoad = null;

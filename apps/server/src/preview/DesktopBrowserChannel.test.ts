@@ -154,9 +154,9 @@ it.effect("protects unknown desktop visibility until an explicit hidden report a
       yield* channel.awaitAttached({ threadId: key.threadId, tabId: "sentinel-1" }, "5 seconds");
       expect(channel.isShown(key)).toBe(false);
 
+      const shown = yield* channel.awaitShown(key, "5 seconds").pipe(Effect.forkChild);
       yield* send({ type: "shown", ...key, shown: true });
-      yield* send({ type: "attached", threadId: key.threadId, tabId: "sentinel-2" });
-      yield* channel.awaitAttached({ threadId: key.threadId, tabId: "sentinel-2" }, "5 seconds");
+      expect(yield* Fiber.join(shown)).toBe(true);
       expect(channel.isShown(key)).toBe(true);
 
       yield* send({ type: "shown", ...key, shown: false });

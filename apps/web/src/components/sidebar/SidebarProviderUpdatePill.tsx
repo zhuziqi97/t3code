@@ -58,8 +58,8 @@ export function SidebarProviderUpdatePill() {
   const [dismissAfterExitKey, setDismissAfterExitKey] = useState<string | null>(null);
   const [visibleAfterIso, setVisibleAfterIso] = useState<string | undefined>();
   const effectiveVisibleAfterIso = visibleAfterIso ?? latestProviderCheckedAt(providers);
-  const resolveText = (translate: TFunction) =>
-    getProviderUpdateSidebarPillView(providers, translate, {
+  const resolveText = (_translate: TFunction) =>
+    getProviderUpdateSidebarPillView(providers, {
       ...(effectiveVisibleAfterIso !== undefined
         ? { visibleAfterIso: effectiveVisibleAfterIso }
         : {}),
@@ -75,7 +75,7 @@ export function SidebarProviderUpdatePill() {
   const openProviderSettings = () => {
     void navigate({ to: "/settings/providers" });
   };
-  const displayedView = renderedView ?? view;
+  const displayedView = renderedView?.key === view?.key ? view : (renderedView ?? view);
   const dismissAfterVisibleMs = displayedView?.dismissAfterVisibleMs;
   const viewKey = displayedView?.key ?? null;
   const showDismissProgress =

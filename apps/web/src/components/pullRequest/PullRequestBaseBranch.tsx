@@ -1,5 +1,5 @@
-import { useTranslate } from "~/i18n";
 import type { PullRequestUpdateMethod } from "@t3tools/contracts";
+import { T, useGT } from "gt-react";
 import { TriangleAlertIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -32,15 +32,18 @@ function PullRequestBaseFreshnessWarning({
   readonly className?: string;
   readonly children?: ReactNode;
 }) {
-  const t = useTranslate();
+  const gt = useGT();
   const summary =
     freshness.behindBy === null
-      ? t("pullRequest.flow.branch.behindUnknown", { branch: baseBranch })
-      : t("pullRequest.flow.branch.behind", {
-          branch: baseBranch,
-          count: freshness.behindBy,
-          formattedCount: freshness.behindBy.toLocaleString(),
-        });
+      ? gt("This branch is out-of-date with {baseBranch}.", { baseBranch })
+      : gt(
+          "{count, plural, one {This branch is out-of-date with {baseBranch} by {formatted} commit.} other {This branch is out-of-date with {baseBranch} by {formatted} commits.}}",
+          {
+            count: freshness.behindBy,
+            formatted: freshness.behindBy.toLocaleString(),
+            baseBranch,
+          },
+        );
   return (
     <Popover>
       <PopoverTrigger
@@ -63,9 +66,9 @@ function PullRequestBaseFreshnessWarning({
       </PopoverTrigger>
       <PopoverPopup align="start" side="bottom" className="max-w-80" padding="compact">
         <p className="text-xs text-foreground">{summary}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">{t("pullRequest.flow.branch.clean")}</p>
-        {/* Each way the host offers and this reader may take, as its own button: a split button
-            would need a menu inside a popover, and two buttons say the same thing in one layer. */}
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          <T>Changes can be cleanly merged.</T>
+        </p>
         {freshness.methods.length > 0 ? (
           <span className="mt-2 flex flex-wrap items-center gap-1.5">
             {freshness.methods.map((method) => (
@@ -77,9 +80,7 @@ function PullRequestBaseFreshnessWarning({
                 onClick={() => onUpdate(method)}
               >
                 <PullRequestGlyph.merged aria-hidden className="size-3" />
-                {method === "rebase"
-                  ? t("pullRequest.flow.branch.rebase")
-                  : t("pullRequest.flow.branch.update")}
+                {method === "rebase" ? gt("Update with rebase") : gt("Update branch")}
               </Button>
             ))}
           </span>
@@ -105,12 +106,12 @@ export function PullRequestBaseBranch({
   readonly onUpdate: (method: PullRequestUpdateMethod) => void;
   readonly iconClassName?: string;
 }) {
-  const t = useTranslate();
+  const gt = useGT();
   const label = (
     <>
       {stacked ? (
         <PullRequestGlyph.stack
-          aria-label={t("pullRequest.flow.stack.label")}
+          aria-label={gt("Stacked pull request")}
           className="size-3 shrink-0"
         />
       ) : null}
@@ -142,7 +143,9 @@ export function PullRequestBaseBranch({
           </span>
         }
       />
-      <TooltipPopup side="top">{stacked ? `Stacked on ${baseBranch}` : baseBranch}</TooltipPopup>
+      <TooltipPopup side="top">
+        {stacked ? gt("Stacked on {baseBranch}", { baseBranch }) : baseBranch}
+      </TooltipPopup>
     </Tooltip>
   );
 }

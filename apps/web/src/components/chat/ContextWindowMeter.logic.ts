@@ -1,6 +1,9 @@
 import type { ModelSelection, ProviderInstanceId } from "@t3tools/contracts";
 import { COMPACTION_SUGGESTION_MIN_TOKENS } from "@t3tools/shared/claudeCompaction";
 import type { ProviderInstanceEntry } from "../../providerInstances";
+import { msg } from "gt-react";
+import { getActiveLocale, m, type MessageResolver } from "../../i18n/messages";
+import { formatContextWindowCompactionMessage as fallbackCompactionMessage } from "./compaction.logic";
 import { getDisplayModelName, type ModelEsque } from "./providerIconUtils";
 
 // Fallback TTL: Claude's 1h cache plus slack.
@@ -53,13 +56,15 @@ export function resolveContextWindowModelDisplayName(
 export function formatContextWindowCompactionMessage(
   modelDisplayName: string | null | undefined,
   autoCompactThreshold?: number | null,
+  resolve: MessageResolver = m,
+  locale = getActiveLocale(),
 ): string {
-  if (typeof autoCompactThreshold === "number" && autoCompactThreshold > 0) {
-    return `Compacts automatically at about ${autoCompactThreshold.toLocaleString("en-US")} tokens.`;
-  }
-  return modelDisplayName
-    ? `Context for ${modelDisplayName} compacts automatically when needed.`
-    : "Context compacts automatically when needed.";
+  const hasThreshold = typeof autoCompactThreshold === "number" && autoCompactThreshold > 0;
+  return modelDisplayName && !hasThreshold
+    ? resolve(
+        msg("Context for {model} compacts automatically when needed.", { model: modelDisplayName }),
+      )
+    : fallbackCompactionMessage(autoCompactThreshold, resolve, locale);
 }
 
 export function formatContextWindowCost(cost: {

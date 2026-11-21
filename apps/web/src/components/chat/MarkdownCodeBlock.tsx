@@ -1,6 +1,6 @@
+import { useGT } from "gt-react";
+import { PlayIcon, WrapTextIcon, CheckIcon, CopyIcon } from "lucide-react";
 import { useTranslate } from "../../i18n";
-import { PlayIcon, WrapTextIcon } from "lucide-react";
-import { CheckIcon, CopyIcon } from "lucide-react";
 import { toHtml } from "hast-util-to-html";
 import React, { use, useEffect, useState, type ReactNode } from "react";
 
@@ -101,6 +101,7 @@ function MarkdownCodeBlockTitleContent({
   language: string;
   theme: "light" | "dark";
 }) {
+  const gt = useGT();
   if (fenceTitle) {
     return (
       <>
@@ -118,7 +119,10 @@ function MarkdownCodeBlockTitleContent({
     <Tooltip>
       <TooltipTrigger
         render={
-          <span className="inline-flex shrink-0 rounded-sm" aria-label={`Language: ${language}`} />
+          <span
+            className="inline-flex shrink-0 rounded-sm"
+            aria-label={gt("Language: {language}", { language })}
+          />
         }
       >
         <PierreEntryIcon pathValue={fileName} kind="file" theme={theme} className="size-3.5" />

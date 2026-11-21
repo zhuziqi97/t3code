@@ -1,3 +1,5 @@
+import { m } from "../../i18n/messages";
+import { resolveChineseMessage } from "../../../test/gtCatalog";
 import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
 import {
   commandLabel,
@@ -5,7 +7,6 @@ import {
   groupKeybindingRows,
 } from "./KeybindingsSettings.logic";
 import { assert, describe, expect, it } from "vite-plus/test";
-import { i18n } from "../../i18n";
 import type { ResolvedKeybindingsConfig } from "@t3tools/contracts";
 import {
   compileResolvedKeybindingsConfig,
@@ -271,6 +272,12 @@ describe("KeybindingsSettings.logic", () => {
     ] satisfies ResolvedKeybindingsConfig);
 
     expect(rows[0]?.conflicts).toEqual(["Chat: New Local"]);
+    const disabledRows = buildKeybindingRows([
+      rows[0]!.binding,
+      { ...rows[1]!.binding, whenAst: { type: "identifier", name: "false" } },
+    ]);
+    expect(disabledRows.map((row) => row.conflicts)).toEqual([[], []]);
+
     expect(
       keybindingConflictLabels(rows, {
         rowId: rows[0]?.id ?? "",
@@ -316,13 +323,13 @@ describe("KeybindingsSettings.logic", () => {
 });
 
 it("keeps native command choices and row identities while translating labels and searching both languages", () => {
-  const en = i18n.getFixedT("en");
-  const zh = i18n.getFixedT("zh");
+  const en = m;
+  const zh = resolveChineseMessage;
   const english = buildKeybindingRows(DEFAULT_RESOLVED_KEYBINDINGS, undefined, en);
   const chinese = buildKeybindingRows(DEFAULT_RESOLVED_KEYBINDINGS, undefined, zh);
   expect(chinese.map((row) => row.id)).toEqual(english.map((row) => row.id));
-  expect(groupKeybindingRows(chinese, zh).map((group) => group.id)).toEqual(
-    groupKeybindingRows(english, en).map((group) => group.id),
+  expect(groupKeybindingRows(chinese).map((group) => group.id)).toEqual(
+    groupKeybindingRows(english).map((group) => group.id),
   );
   expect(commandLabel("composer.host", zh)).toBe("输入框：选择执行环境");
   expect(commandLabel("script.setup-db.run", zh)).toBe("运行脚本：Setup Db");

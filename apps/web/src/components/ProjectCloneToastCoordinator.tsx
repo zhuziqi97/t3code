@@ -1,5 +1,6 @@
 import { localizedProjectCloneProgressSummary } from "../lib/projectClonePresentation";
 import { i18n, useTranslate } from "../i18n";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { useParams } from "@tanstack/react-router";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import {
@@ -14,7 +15,9 @@ import {
   type ProjectId,
 } from "@t3tools/contracts";
 import { useEffect, useRef } from "react";
+import { msg } from "gt-react";
 
+import { m } from "../i18n/messages";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useRemoveClonedProject } from "../hooks/useRemoveClonedProject";
 import { useEnvironments } from "../state/environments";
@@ -49,6 +52,23 @@ function renderKey(clone: ProjectCloneSnapshot): string {
   return `${clone.phase}:${clone.stage}:${clone.percent ?? ""}:${clone.detail ?? ""}:${clone.stalled === true}:${clone.error ?? ""}`;
 }
 
+async function runCloneAction(
+  title: string,
+  action: () => Promise<AtomCommandResult<unknown, unknown>>,
+) {
+  const result = await action();
+  if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+    const error = squashAtomCommandFailure(result);
+    toastManager.add(
+      stackedThreadToast({
+        type: "error",
+        title,
+        description: thrownErrorMessage(error, m) ?? m(msg("An error occurred.")),
+      }),
+    );
+  }
+}
+
 function EnvironmentCloneToasts({ environmentId }: { environmentId: EnvironmentId }) {
   const t = useTranslate();
   const clones = useEnvironmentProjectClones(environmentId);
@@ -60,24 +80,6 @@ function EnvironmentCloneToasts({ environmentId }: { environmentId: EnvironmentI
   const retryClone = useAtomCommand(sourceControlEnvironment.retryProjectClone, {
     reportFailure: false,
   });
-  // The toast mirrors the server's clone state, so a request that never got
-  // there needs its own feedback.
-  const runCloneAction = async (
-    title: string,
-    action: () => Promise<AtomCommandResult<unknown, unknown>>,
-  ) => {
-    const result = await action();
-    if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-      const error = squashAtomCommandFailure(result);
-      toastManager.add(
-        stackedThreadToast({
-          type: "error",
-          title,
-          description: error instanceof Error ? error.message : t("common.error"),
-        }),
-      );
-    }
-  };
   const removeClonedProject = useRemoveClonedProject();
   const toasts = useRef(new Map<ProjectId, TrackedToast>());
 
@@ -219,7 +221,6 @@ function EnvironmentCloneToasts({ environmentId }: { environmentId: EnvironmentI
     openProject,
     removeClonedProject,
     retryClone,
-    runCloneAction,
     t,
   ]);
 

@@ -2,6 +2,8 @@ import type { TFunction } from "i18next";
 import { formatDiagnosticsMessage } from "./diagnosticsMessages";
 
 import { i18n, useTranslate } from "../../i18n";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { m as resolveMessage } from "~/i18n/messages";
 import { ProcessSignalActions } from "./ProcessSignalActions";
 import { resolveUsageAccess } from "@t3tools/client-runtime/state/usage-access";
 import { environmentSession } from "../../state/session";
@@ -22,6 +24,7 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { useRef, useState, type ReactNode } from "react";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 import type {
   ServerProcessDiagnosticsEntry,
   ServerProcessResourceHistorySummary,
@@ -62,7 +65,7 @@ function formatCount(value: number): string {
 function RelativeTimeNoWrap(props: { value: DateTime.Utc }) {
   const relative = useRelativeTimeState(DateTime.formatIso(props.value));
   if (relative.status !== "relative") return null;
-  return relative.suffix ? `${relative.value}\u00a0${relative.suffix}` : relative.value;
+  return relative.label.replaceAll(" ", "\u00a0");
 }
 
 function shortenTraceId(traceId: string): string {
@@ -201,7 +204,11 @@ function DiagnosticsTable({
 function TraceIdCell({ traceId }: { traceId: string }) {
   const t = useTranslate();
   const { copyToClipboard, isCopied: copied } = useCopyToClipboard({
-    target: t("diagnostics.trace.id"),
+    target: {
+      target: "trace ID",
+      unavailableMessage: msg("Clipboard API is unavailable while copying trace ID."),
+      failureMessage: msg("Failed to copy trace ID to the clipboard."),
+    },
     timeout: 1_200,
   });
 
@@ -461,17 +468,18 @@ function ResourceHistoryProcessNameCell({
   process: ServerProcessResourceHistorySummary;
   visualDepth: number;
 }) {
-  const t = useTranslate();
+  const gt = useGT();
   const name = formatShortProcessName(process.command);
 
   return (
     <div
       className="grid min-w-0 grid-cols-[1.25rem_0.375rem_minmax(0,1fr)] items-center gap-2"
       style={{ paddingLeft: `${Math.min(visualDepth, 6) * 10}px` }}
-      aria-label={t(
-        process.isServerRoot ? "diagnostics.process.root-name" : "diagnostics.process.child-name",
-        { name },
-      )}
+      aria-label={
+        process.isServerRoot
+          ? gt("Root process {name}", { name })
+          : gt("Child process {name}", { name })
+      }
     >
       <span className="size-5 shrink-0" aria-hidden="true" />
       <span
@@ -501,7 +509,7 @@ function ProcessResourceHistoryChart({
     readonly maxCpuPercent: number;
   }>;
 }) {
-  const t = useTranslate();
+  const gt = useGT();
   const maxCpuPercent = Math.max(1, ...buckets.map((bucket) => bucket.maxCpuPercent));
 
   return (
@@ -517,7 +525,7 @@ function ProcessResourceHistoryChart({
                   <div className="flex h-full min-w-1 flex-1 items-end">
                     <div
                       className="relative h-full w-full"
-                      aria-label={t("diagnostics.cpu.chart", {
+                      aria-label={gt("Average CPU {average}%, peak CPU {peak}%", {
                         average: bucket.avgCpuPercent.toFixed(1),
                         peak: bucket.maxCpuPercent.toFixed(1),
                       })}
@@ -535,7 +543,7 @@ function ProcessResourceHistoryChart({
                 }
               />
               <TooltipPopup side="top">
-                {t("diagnostics.cpu.chart-short", {
+                {gt("Avg {average}%, peak {peak}%", {
                   average: bucket.avgCpuPercent.toFixed(1),
                   peak: bucket.maxCpuPercent.toFixed(1),
                 })}
@@ -585,6 +593,7 @@ function ProcessResourceHistoryTable({
   emptyLabel: string;
 }) {
   const t = useTranslate();
+  const m = useMessages();
   const shallowestChildDepth = processes.reduce<number | null>((minDepth, process) => {
     if (process.isServerRoot) return minDepth;
     return minDepth === null ? process.depth : Math.min(minDepth, process.depth);
@@ -644,7 +653,7 @@ function ProcessResourceHistoryTable({
                   />
                 </td>
                 <td className="px-3 py-2 text-right align-middle font-mono tabular-nums">
-                  {formatCpuTime(process.cpuSecondsApprox)}
+                  {formatCpuTime(process.cpuSecondsApprox, m)}
                 </td>
                 <td className="px-3 py-2 text-right align-middle font-mono tabular-nums">
                   {process.currentCpuPercent.toFixed(1)}%
@@ -682,10 +691,15 @@ function ProcessResourceHistoryTable({
 
 function DiagnosticsLastChecked({ checkedAt }: { checkedAt: DateTime.Utc | null }) {
   const t = useTranslate();
+  const gt = useGT();
   const relative = useRelativeTimeState(checkedAt ? DateTime.formatIso(checkedAt) : null);
 
   if (relative.status === "missing") {
-    return <span className="text-2xs text-muted-foreground/50">{t("diagnostics.checking")}</span>;
+    return (
+      <span className="text-2xs text-muted-foreground/50">
+        <T>Checking</T>
+      </span>
+    );
   }
 
   if (relative.status === "invalid") {
@@ -698,11 +712,17 @@ function DiagnosticsLastChecked({ checkedAt }: { checkedAt: DateTime.Utc | null 
 
   return (
     <span className="text-2xs text-muted-foreground/60">
-      {t("diagnostics.checked", {
-        time: relative.suffix
-          ? t("time.relative", { value: relative.value, suffix: relative.suffix })
-          : relative.value,
-      })}
+      {relative.suffix ? (
+        <T context="the time is an elapsed time such as 5m">
+          Checked{" "}
+          <span className="font-mono tabular-nums">
+            <Var>{relative.value}</Var>
+          </span>{" "}
+          ago
+        </T>
+      ) : (
+        gt("Checked {time}", { time: relative.value })
+      )}
     </span>
   );
 }
@@ -744,6 +764,8 @@ export function DiagnosticsSettingsPanel() {
 
 function DiagnosticsSettingsBody() {
   const t = useTranslate();
+  const gt = useGT();
+  const m = useMessages();
   const { environment } = useSettingsScope();
   const environmentId = environment?.environmentId ?? null;
   const canMaintainEnvironment = useEnvironmentScope(environmentId, AuthEnvironmentMaintainScope);
@@ -752,12 +774,16 @@ function DiagnosticsSettingsBody() {
   const canOpenHostEditor = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
   const session = useEnvironmentQuery(
     environmentId === null ? null : environmentSession.sessionStateAtom(environmentId),
+    m,
   );
-  const diagnosticsAccess = resolveUsageAccess({
-    connectionPhase: environment?.connection.phase ?? "available",
-    session: session.data,
-    hasSessionError: session.error !== null,
-  });
+  const diagnosticsAccess = resolveUsageAccess(
+    {
+      connectionPhase: environment?.connection.phase ?? "available",
+      session: session.data,
+      hasSessionError: session.error !== null,
+    },
+    m,
+  );
   const canReadDiagnostics = diagnosticsAccess.canReadDiagnostics;
   const signalServerProcess = useAtomCommand(serverEnvironment.signalProcess, {
     reportFailure: false,
@@ -771,6 +797,7 @@ function DiagnosticsSettingsBody() {
     environmentId === null || !canReadDiagnostics
       ? null
       : serverEnvironment.traceDiagnostics({ environmentId, input: {} }),
+    m,
   );
   const {
     data: processData,
@@ -781,6 +808,7 @@ function DiagnosticsSettingsBody() {
     environmentId === null || !canReadDiagnostics
       ? null
       : serverEnvironment.processDiagnostics({ environmentId, input: {} }),
+    m,
   );
   const {
     data: resourceData,
@@ -797,6 +825,7 @@ function DiagnosticsSettingsBody() {
             bucketMs: selectedResourceWindow.bucketMs,
           },
         }),
+    m,
   );
   const [isOpeningLogsDirectory, setIsOpeningLogsDirectory] = useState(false);
   const [openLogsDirectoryError, setOpenLogsDirectoryError] = useState<
@@ -823,11 +852,9 @@ function DiagnosticsSettingsBody() {
       setIsOpeningLogsDirectory(false);
       if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
         const error = squashAtomCommandFailure(result);
-        setOpenLogsDirectoryError(
-          error instanceof Error
-            ? { message: error.message }
-            : { key: "diagnostics.logs.open-failed" },
-        );
+        setOpenLogsDirectoryError({
+          message: thrownErrorMessage(error, resolveMessage) ?? gt("Unable to open logs folder."),
+        });
       }
     })();
   };
@@ -874,11 +901,11 @@ function DiagnosticsSettingsBody() {
         clearSignaling();
         toastManager.add({
           type: "error",
-          title: i18n.t("diagnostics.signal.confirm-failed"),
+          title: gt("Could not confirm signal"),
           description:
             error instanceof Error
-              ? error.message
-              : i18n.t("diagnostics.signal.failed", { signal }),
+              ? (thrownErrorMessage(error, resolveMessage) ?? error.message)
+              : gt("Failed to send {signal}.", { signal }),
         });
         return;
       }
@@ -904,11 +931,11 @@ function DiagnosticsSettingsBody() {
         const error = squashAtomCommandFailure(result);
         toastManager.add({
           type: "error",
-          title: i18n.t("diagnostics.signal.send-failed", { signal }),
+          title: gt("Could not send {signal}", { signal }),
           description:
             error instanceof Error
-              ? error.message
-              : i18n.t("diagnostics.signal.failed", { signal }),
+              ? (thrownErrorMessage(error, resolveMessage) ?? error.message)
+              : gt("Failed to send {signal}.", { signal }),
         });
       }
       return;
@@ -981,7 +1008,7 @@ function DiagnosticsSettingsBody() {
             value={processData ? formatCount(processData.processCount) : "..."}
           />
           <StatBlock
-            label="CPU"
+            label={gt("CPU")}
             value={processData ? `${processData.totalCpuPercent.toFixed(1)}%` : "..."}
             tooltip={t("diagnostics.cpu.children-detail")}
           />
@@ -1050,14 +1077,16 @@ function DiagnosticsSettingsBody() {
           <StatBlock
             label={t("diagnostics.samples")}
             value={resourceData ? formatCount(resourceData.retainedSampleCount) : "..."}
-            tooltip="In-memory process samples retained by the server. The server samples only while diagnostics is open, and this resets when the server restarts."
+            tooltip={gt(
+              "In-memory process samples retained by the server. The server samples only while diagnostics is open, and this resets when the server restarts.",
+            )}
           />
           <StatBlock
-            label="Interval"
+            label={gt("Interval")}
             value={
               resourceData
                 ? resourceData.sampleIntervalMs === 0
-                  ? "On demand"
+                  ? gt("On demand")
                   : formatDiagnosticsDuration(resourceData.sampleIntervalMs)
                 : "..."
             }
@@ -1142,10 +1171,10 @@ function DiagnosticsSettingsBody() {
             value={data ? formatCount(data.slowSpanCount) : "..."}
             tooltip={
               data
-                ? t("diagnostics.spans.threshold", {
+                ? gt("Spans with a duration of {duration} or longer.", {
                     duration: formatDiagnosticsDuration(data.slowSpanThresholdMs),
                   })
-                : t("diagnostics.spans.threshold-loading")
+                : gt("Spans at or above the configured slow-span threshold.")
             }
             tone={data && data.slowSpanCount > 0 ? "warning" : "default"}
           />

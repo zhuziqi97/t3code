@@ -1,5 +1,6 @@
 import { useAuth, useClerk } from "@clerk/react";
 import { readConnectAuthorizeRequest } from "@t3tools/shared/connectAuth";
+import { T } from "gt-react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import {
@@ -77,7 +78,7 @@ export function ConnectCliAuthorizeSurface() {
       {loadFailed ? (
         <div className="mt-6">
           <Button type="button" onClick={retryClerkLoad}>
-            Retry sign-in
+            <T>Retry sign-in</T>
           </Button>
         </div>
       ) : isLoaded && !isSignedIn ? (

@@ -1,10 +1,10 @@
-import type { MessageKey } from "@t3tools/client-runtime/i18n";
-import { i18n, useTranslate } from "~/i18n";
 import { useAtomCommand } from "~/state/use-atom-command";
-
 import type { EnvironmentId, PullRequestRef, PullRequestReviewVerdict } from "@t3tools/contracts";
 import { CheckIcon, MessageSquareIcon, XCircleIcon } from "lucide-react";
+import { msg, useGT, useMessages } from "gt-react";
 import { useEffect, useState, type ReactNode, type RefObject } from "react";
+
+import { m } from "~/i18n/messages";
 
 import { TextFieldSpeechControls, useTextFieldSpeech } from "~/speech/useTextFieldSpeech";
 import { pullRequestEnvironment } from "~/state/pullRequests";
@@ -25,28 +25,36 @@ import {
   type PullRequestCompletionScope,
 } from "./PullRequestMarkdownTextarea";
 
+import type { ChangeRequestTermKind } from "./changeRequestTerm";
+
 const VERDICTS: ReadonlyArray<{
   readonly value: PullRequestReviewVerdict;
-  readonly labelKey: MessageKey;
-  readonly sentKey: (term: string) => MessageKey;
+  readonly label: string;
+  readonly sent: (term: ChangeRequestTermKind) => string;
   readonly icon: ReactNode;
 }> = [
   {
     value: "comment",
-    labelKey: "pullRequest.flow.comment",
-    sentKey: () => "pullRequest.flow.review.sent",
+    label: msg("Comment", { $context: "review verdict" }),
+    sent: () => m(msg("Review submitted")),
     icon: <MessageSquareIcon className="size-3" />,
   },
   {
     value: "approve",
-    labelKey: "pullRequest.flow.review.approve",
-    sentKey: () => "pullRequest.flow.review.approved",
+    label: msg("Approve", { $context: "review verdict" }),
+    sent: (term) =>
+      m(
+        msg(
+          "{term, select, mr {Merge request} cr {Change request} other {Pull request}} approved",
+          { term },
+        ),
+      ),
     icon: <CheckIcon className="size-3" />,
   },
   {
     value: "request-changes",
-    labelKey: "pullRequest.flow.review.requestChanges",
-    sentKey: () => "pullRequest.flow.review.changesRequested",
+    label: msg("Request changes"),
+    sent: () => m(msg("Changes requested")),
     icon: <XCircleIcon className="size-3" />,
   },
 ];
@@ -69,8 +77,7 @@ export function PullRequestReviewForm({
   active: boolean;
   reference: PullRequestRef;
   completionScope: PullRequestCompletionScope | null;
-  /** The host's word for a change request, as in "pull request". */
-  term: string;
+  term: ChangeRequestTermKind;
   verdicts: ReadonlyArray<PullRequestReviewVerdict>;
   requestChangesSummaryRequired: boolean;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
@@ -78,7 +85,8 @@ export function PullRequestReviewForm({
   onPendingChange: (pending: boolean) => void;
   onSubmitted: () => void;
 }) {
-  const t = useTranslate();
+  const gt = useGT();
+  const resolve = useMessages();
   const [requestedVerdict, setRequestedVerdict] = useState<PullRequestReviewVerdict>("comment");
   const comments = usePendingReviewComments(reference);
   const reviewKey = pullRequestReviewKey(reference);
@@ -126,10 +134,10 @@ export function PullRequestReviewForm({
     if (result._tag === "Failure") {
       toastManager.add({
         type: "error",
-        title: i18n.t("pullRequest.flow.review.failed"),
+        title: m(msg("The review could not be submitted")),
         description: readableFailure(
           squashAtomCommandFailure(result),
-          "The host refused the review. Your draft is still here to try again.",
+          m(msg("The host refused the review. Your draft is still here to try again.")),
         ),
       });
       return;
@@ -140,7 +148,7 @@ export function PullRequestReviewForm({
       submittedComments.map((comment) => comment.id),
     );
     clearSummary(reviewKey, submittedBody);
-    toastManager.add({ type: "success", title: i18n.t(verdict.sentKey(term)) });
+    toastManager.add({ type: "success", title: verdict.sent(term) });
     onSubmitted();
   };
 
@@ -151,10 +159,10 @@ export function PullRequestReviewForm({
       : verdict === "approve" || summary.trim().length > 0 || commentCount > 0;
   const placeholder =
     selectedVerdict === undefined || canSubmit(selectedVerdict.value, "", comments.length)
-      ? "Summarize your review (optional)"
+      ? gt("Summarize your review (optional)")
       : selectedVerdict.value === "request-changes" && requestChangesSummaryRequired
-        ? "Summarize your review (required to request changes)"
-        : "Summarize your review or add line comments";
+        ? gt("Summarize your review (required to request changes)")
+        : gt("Summarize your review or add line comments");
 
   return (
     <>
@@ -165,7 +173,7 @@ export function PullRequestReviewForm({
         readOnly={speech.freezesEditor}
         value={body}
         placeholder={placeholder}
-        aria-label={t("pullRequest.flow.review.summary")}
+        aria-label={gt("Review summary")}
         onValueChange={(next) => setSummary(reviewKey, next)}
         onKeyDown={(event) => {
           if (event.nativeEvent.isComposing || event.keyCode === 229 || event.repeat) return;
@@ -189,14 +197,10 @@ export function PullRequestReviewForm({
               if (value !== null) setRequestedVerdict(value);
             }}
           >
-            <SelectTrigger
-              size="xs"
-              className="w-auto min-w-0"
-              aria-label={t("pullRequest.flow.review.verdict")}
-            >
+            <SelectTrigger size="xs" className="w-auto min-w-0" aria-label={gt("Review verdict")}>
               <span className="flex items-center gap-1.5">
                 {selectedVerdict?.icon}
-                {selectedVerdict ? t(selectedVerdict.labelKey) : null}
+                {selectedVerdict ? resolve(selectedVerdict.label) : null}
               </span>
             </SelectTrigger>
             <SelectPopup side="top" alignItemWithTrigger={false}>
@@ -204,7 +208,7 @@ export function PullRequestReviewForm({
                 <SelectItem key={verdict.value} value={verdict.value}>
                   <span className="flex items-center gap-1.5">
                     {verdict.icon}
-                    {t(verdict.labelKey)}
+                    {resolve(verdict.label)}
                   </span>
                 </SelectItem>
               ))}
@@ -224,7 +228,7 @@ export function PullRequestReviewForm({
               speech.submitAfterDictation((text) => void submit(selectedVerdict, text));
           }}
         >
-          {pending ? t("pullRequest.flow.review.submitting") : t("pullRequest.flow.review.submit")}
+          {pending ? gt("Submitting...") : gt("Submit review")}
         </Button>
       </div>
     </>

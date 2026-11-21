@@ -119,6 +119,9 @@ const NO_ENVIRONMENTS: readonly EnvironmentId[] = [];
 
 const AGENT_ONBOARDING_THREAD_ID = ThreadId.make("onboarding-agent-setup");
 
+const CONVENE_WORDMARK_SUFFIX = "Code for Convene";
+const LANGUAGE_PICKER_LABEL = "语言 / Language";
+
 export function WelcomeWizard({
   localAvailable,
   onDone,
@@ -252,7 +255,7 @@ export function WelcomeWizard({
               <div className="flex items-baseline gap-1.5" role="img" aria-label={APP_BASE_NAME}>
                 <T3Wordmark className="h-4 w-auto shrink-0" aria-hidden />
                 <span className="text-2xl font-medium tracking-tight text-muted-foreground">
-                  Code for Convene
+                  {CONVENE_WORDMARK_SUFFIX}
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -271,7 +274,7 @@ export function WelcomeWizard({
                     );
                   }}
                 >
-                  <SelectTrigger size="sm" aria-label="语言 / Language">
+                  <SelectTrigger size="sm" aria-label={LANGUAGE_PICKER_LABEL}>
                     <SelectValue>{LANGUAGE_LABELS[language]}</SelectValue>
                   </SelectTrigger>
                   <SelectPopup align="end" alignItemWithTrigger={false}>
@@ -455,7 +458,7 @@ function ConnectionStep({
                   <span className="shrink-0 text-xs text-muted-foreground">
                     {!environment.entry.enabled && environment.connection.phase !== "unsupported"
                       ? t("common.off")
-                      : presentSavedCloudEnvironmentConnection(environment.connection, t)
+                      : presentSavedCloudEnvironmentConnection(environment.connection, undefined, t)
                           .buttonLabel}
                   </span>
                 </span>

@@ -1,5 +1,8 @@
 import { useTranslate } from "../../i18n";
 
+import { msg } from "gt-react";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { m } from "~/i18n/messages";
 import type {
   EnvironmentProject,
   EnvironmentThreadShell,
@@ -9,7 +12,7 @@ import type { ComposerHandleRef } from "../../composerHandleContext";
 import type { selectThreadTerminalUiState } from "../../terminalUiStateStore";
 import { useStableCallback } from "../../hooks/useStableCallback";
 import { useThreadTerminalActions } from "../terminal/useThreadTerminalActions";
-import { getTerminalLabel } from "@t3tools/shared/terminalLabels";
+import { getTerminalLabel } from "@t3tools/shared/terminalLabelsCopy";
 import {
   AuthTerminalReadScope,
   AuthTerminalOperateScope,
@@ -274,9 +277,8 @@ export function useChatTerminalActions(input: ChatTerminalActionsInput) {
         const error = squashAtomCommandFailure(openResult);
         setThreadError(
           activeThreadId,
-          error instanceof Error
-            ? error.message
-            : t("project.actions.runFailed", { name: script.name }),
+          thrownErrorMessage(error, m) ??
+            m(msg('Failed to run script "{name}".', { name: script.name })),
         );
       }
       return;
@@ -294,9 +296,8 @@ export function useChatTerminalActions(input: ChatTerminalActionsInput) {
         const error = squashAtomCommandFailure(writeResult);
         setThreadError(
           activeThreadId,
-          error instanceof Error
-            ? error.message
-            : t("project.actions.runFailed", { name: script.name }),
+          thrownErrorMessage(error, m) ??
+            m(msg('Failed to run script "{name}".', { name: script.name })),
         );
       }
       return;
@@ -316,8 +317,8 @@ export function useChatTerminalActions(input: ChatTerminalActionsInput) {
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: t("chat.preview.openFailed"),
-            description: error instanceof Error ? error.message : t("common.unexpectedError"),
+            title: m(msg("Could not open preview")),
+            description: thrownErrorMessage(error, m) ?? m(msg("An unexpected error occurred.")),
           }),
         );
       }
@@ -396,9 +397,7 @@ export function useChatTerminalActions(input: ChatTerminalActionsInput) {
   const closePanelTerminalStable = useStableCallback(closePanelTerminal);
   const requestCloseTerminal = (terminalId: string) => {
     if (!hasTerminalWriteAccess()) return;
-    const label =
-      activeTerminalLabelsById.get(terminalId) ??
-      getTerminalLabel(terminalId, t("panels.terminal"));
+    const label = activeTerminalLabelsById.get(terminalId) ?? getTerminalLabel(terminalId);
     void confirmTerminalClose([label]).then((confirmed) => {
       if (confirmed && readEnvironmentScope(environmentId, AuthTerminalOperateScope)) {
         closeTerminal(terminalId);
@@ -408,9 +407,7 @@ export function useChatTerminalActions(input: ChatTerminalActionsInput) {
   const requestCloseTerminalStable = useStableCallback(requestCloseTerminal);
   const requestClosePanelTerminal = (terminalId: string) => {
     if (!hasTerminalWriteAccess()) return;
-    const label =
-      activeTerminalLabelsById.get(terminalId) ??
-      getTerminalLabel(terminalId, t("panels.terminal"));
+    const label = activeTerminalLabelsById.get(terminalId) ?? getTerminalLabel(terminalId);
     void confirmTerminalClose([label]).then((confirmed) => {
       if (confirmed && readEnvironmentScope(environmentId, AuthTerminalOperateScope)) {
         closePanelTerminal(terminalId);

@@ -1,3 +1,5 @@
+import { msg } from "gt-react";
+import { m } from "../i18n/messages";
 import { i18n } from "../i18n";
 import {
   type AtomCommandResult,
@@ -48,7 +50,7 @@ function threadUndoNoticeSummary(notice: Pick<UndoNotice, "action" | "count">): 
 
 export function threadUndoLabel(keybindings: Parameters<typeof shortcutLabelForCommand>[0]) {
   const shortcut = shortcutLabelForCommand(keybindings, "thread.undo");
-  return shortcut ? `${shortcut} to undo` : "Undo";
+  return shortcut ? i18n.t("thread.undo.shortcut", { shortcut }) : i18n.t("common.undo");
 }
 
 let announcedSummary: string | null = null;
@@ -125,7 +127,14 @@ function refreshNotice() {
       );
       // Failures already raise a toast, so only what was actually restored is spoken.
       if (undone > 0) {
-        announce(`Undid ${UNDONE_ACTION[latest.action]} of ${countLabel(latest.action, undone)}`);
+        announce(
+          m(
+            msg("Undid {action} of {items}", {
+              action: UNDONE_ACTION[latest.action],
+              items: countLabel(latest.action, undone),
+            }),
+          ),
+        );
       }
     },
   });

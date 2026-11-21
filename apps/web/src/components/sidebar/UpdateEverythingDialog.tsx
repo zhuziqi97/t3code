@@ -2,8 +2,8 @@ import { useAtomValue } from "@effect/atom-react";
 import { EnvironmentId } from "@t3tools/contracts";
 import { Atom } from "effect/reactivity";
 import { ChevronRightIcon } from "lucide-react";
+import { msg, T, useGT, useMessages } from "gt-react";
 import { Fragment, type RefObject, useRef } from "react";
-import { useTranslate } from "../../i18n";
 
 import { environmentThreadShells } from "~/state/threads";
 import {
@@ -87,6 +87,12 @@ export function UpdateEverythingDialog({
   );
 }
 
+const APP_LABELS = {
+  "this-app": msg("This app"),
+  server: msg("Server"),
+  "desktop-app": msg("Desktop app"),
+} as const;
+
 function UpdateEverythingDialogContent({
   version,
   providerCount,
@@ -101,7 +107,8 @@ function UpdateEverythingDialogContent({
   busy = false,
   checking = false,
 }: UpdateEverythingDialogContentProps) {
-  const t = useTranslate();
+  const gt = useGT();
+  const m = useMessages();
   const stopped = useAtomValue(
     runningThreadCountAtom(
       restarts
@@ -119,7 +126,6 @@ function UpdateEverythingDialogContent({
     ),
   );
   const running = stopped + continuing;
-  const threads = t("update.dialog.running", { count: running });
   const restarting = new Set(restarts.map((machine) => machine.environmentId));
   const updating = rows.filter((row) => row.app !== null || row.providers.length > 0);
   const skipped = rows.filter((row) => row.skipped !== null);
@@ -128,7 +134,10 @@ function UpdateEverythingDialogContent({
     <>
       <AlertDialogHeader className="shrink-0">
         <AlertDialogTitle>
-          {title ?? t("update.dialog.title", { count: updating.length })}
+          {title ??
+            gt("{count, plural, one {Update {count} machine?} other {Update {count} machines?}}", {
+              count: updating.length,
+            })}
         </AlertDialogTitle>
         <AlertDialogDescription>
           {version !== null ? (
@@ -137,9 +146,14 @@ function UpdateEverythingDialogContent({
             </>
           ) : null}
           {version !== null && providerCount > 0 ? " · " : null}
-          {providerCount > 0 ? t("update.dialog.providers", { count: providerCount }) : null}
+          {providerCount > 0
+            ? gt(
+                "{count, plural, one {{count} provider update} other {{count} provider updates}}",
+                { count: providerCount },
+              )
+            : null}
           {checking
-            ? `${version !== null || providerCount > 0 ? " · " : ""}Checking for more…`
+            ? `${version !== null || providerCount > 0 ? " · " : ""}${gt("Checking for more…")}`
             : null}
         </AlertDialogDescription>
       </AlertDialogHeader>
@@ -159,9 +173,13 @@ function UpdateEverythingDialogContent({
               role="row"
               className="col-span-full grid grid-cols-subgrid border-b pb-1.5 text-muted-foreground text-xs"
             >
-              <span role="columnheader">{t("update.dialog.machine")}</span>
+              <span role="columnheader">
+                <T>Machine</T>
+              </span>
               <span role="columnheader">T3 Code</span>
-              <span role="columnheader">{t("update.dialog.providersHeading")}</span>
+              <span role="columnheader">
+                <T>Providers</T>
+              </span>
               <span role="columnheader" />
             </div>
             {updating.map((row) => (
@@ -175,13 +193,15 @@ function UpdateEverythingDialogContent({
                   <MiddleTruncate value={row.label} aria-hidden />
                 </span>
                 <span role="cell">
-                  {row.app !== null ? t(`update.dialog.app.${row.app}`) : null}
+                  {row.app !== null ? m(APP_LABELS[row.app]) : null}
                   {row.app === null && row.skipped !== null ? (
-                    <span className="text-muted-foreground">{t("update.dialog.skipped")}</span>
+                    <span className="text-muted-foreground">
+                      <T>Skipped</T>
+                    </span>
                   ) : null}
                   {row.app === "this-app" ? (
                     <span className="block text-muted-foreground text-xs">
-                      {t("update.dialog.restartsLast")}
+                      <T>restarts last</T>
                     </span>
                   ) : null}
                 </span>
@@ -205,7 +225,9 @@ function UpdateEverythingDialogContent({
             <Collapsible>
               <CollapsibleTrigger className="flex items-center gap-1 text-muted-foreground text-xs hover:text-foreground data-panel-open:[&_svg]:rotate-90">
                 <ChevronRightIcon className="size-3.5 transition-transform" aria-hidden />
-                {t("update.dialog.skippedCount", { count: skipped.length })}
+                {gt("{count, plural, one {{count} skipped} other {{count} skipped}}", {
+                  count: skipped.length,
+                })}
               </CollapsibleTrigger>
               <CollapsiblePanel>
                 <div className="grid grid-cols-[minmax(0,max-content)_1fr] gap-x-3 gap-y-0.5 pt-1.5 ps-4.5 text-muted-foreground text-xs">
@@ -231,17 +253,29 @@ function UpdateEverythingDialogContent({
         ) : running > 0 ? (
           <p className="self-center text-muted-foreground text-sm max-sm:order-1 max-sm:text-center sm:mr-auto">
             {stopped === 0
-              ? t("update.dialog.resumeAll", { threads })
+              ? gt(
+                  "{count, plural, one {{count} running thread will be interrupted and can resume after the restart.} other {{count} running threads will be interrupted and can resume after the restart.}}",
+                  { count: running },
+                )
               : continuing === 0
-                ? t("update.dialog.interruptAll", { threads })
-                : t("update.dialog.resumeSome", { threads, count: continuing })}
+                ? gt(
+                    "{count, plural, one {{count} running thread will be interrupted.} other {{count} running threads will be interrupted.}}",
+                    { count: running },
+                  )
+                : `${gt(
+                    "{count, plural, one {{count} running thread will be interrupted.} other {{count} running threads will be interrupted.}}",
+                    { count: running },
+                  )} ${gt(
+                    "{count, plural, one {{count} can resume after the restart.} other {{count} can resume after the restart.}}",
+                    { count: continuing },
+                  )}`}
           </p>
         ) : null}
         <AlertDialogClose ref={cancelRef} render={<Button variant="outline" disabled={busy} />}>
-          {t("common.cancel")}
+          <T>Cancel</T>
         </AlertDialogClose>
         <Button disabled={disabledReason !== null || busy} onClick={onConfirm}>
-          {confirmLabel ?? t("connections.update")}
+          {confirmLabel ?? gt("Update", { $context: "verb, confirms the update" })}
         </Button>
       </AlertDialogFooter>
     </>
@@ -249,11 +283,11 @@ function UpdateEverythingDialogContent({
 }
 
 function RunningThreads({ environmentId }: { readonly environmentId: EnvironmentId }) {
-  const t = useTranslate();
   const count = useAtomValue(runningThreadCountAtom(environmentId));
+  const gt = useGT();
   return count > 0 ? (
     <span className="whitespace-nowrap text-warning">
-      {t("update.dialog.runningCount", { count })}
+      {gt("{count, plural, one {{count} running} other {{count} running}}", { count })}
     </span>
   ) : null;
 }

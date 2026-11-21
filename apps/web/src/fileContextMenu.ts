@@ -131,8 +131,8 @@ export function useFileContextMenu(
       serverConfig?.shellRevealInFileManager === true &&
       serverConfig.availableEditors.includes("file-manager")
         ? serverConfig.shellRevealInFileManagerKind === undefined
-          ? revealInFileExplorerLabelForOs(serverConfig.environment.platform.os, t)
-          : revealInFileExplorerLabelForKind(serverConfig.shellRevealInFileManagerKind, t)
+          ? revealInFileExplorerLabelForOs(serverConfig.environment.platform.os)
+          : revealInFileExplorerLabelForKind(serverConfig.shellRevealInFileManagerKind)
         : undefined,
     canOpenDefault: availableEditors.includes("file-manager"),
     editorIds: workspace ? ["browser", ...editorAction.editorIds] : editorAction.editorIds,

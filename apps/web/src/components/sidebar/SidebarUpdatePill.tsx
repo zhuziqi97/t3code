@@ -1,12 +1,10 @@
-import {
-  type DesktopBridge,
-  type DesktopUpdateState,
-  managedUpdatesDenial,
-} from "@t3tools/contracts";
+import { managedUpdatesDenial } from "@t3tools/client-runtime/contract-labels";
+import { type DesktopBridge, type DesktopUpdateState } from "@t3tools/contracts";
 import { TriangleAlertIcon } from "lucide-react";
+import { useGT, useMessages } from "gt-react";
 import { type ComponentProps, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { useTranslate } from "../../i18n";
+import { i18n, useTranslate } from "../../i18n";
 import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { isElectron } from "../../env";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
@@ -131,7 +129,7 @@ export async function downloadLocalUpdate(
   } catch (error) {
     reportError(
       "update.downloadStartFailed",
-      error instanceof Error ? error.message : "An unexpected error occurred.",
+      error instanceof Error ? error.message : i18n.t("common.unexpectedError"),
     );
     return false;
   }
@@ -157,7 +155,7 @@ export async function installLocalUpdate(
   } catch (error) {
     reportError(
       "about.updateInstall.error",
-      error instanceof Error ? error.message : "An unexpected error occurred.",
+      error instanceof Error ? error.message : i18n.t("common.unexpectedError"),
     );
     return false;
   }
@@ -170,8 +168,10 @@ export function SidebarUpdatePill() {
 function SidebarUpdateControl() {
   const t = useTranslate();
   const state = useDesktopUpdateState();
+  const gt = useGT();
+  const messages = useMessages();
   // The desktop updates this machine, whose policy the primary environment reports.
-  const updatesDenial = managedUpdatesDenial(usePrimaryManagedPolicy());
+  const updatesDenial = managedUpdatesDenial(usePrimaryManagedPolicy(), messages);
   const [isActionPending, setIsActionPending] = useState(false);
   const [isClientDownloadPending, setIsClientDownloadPending] = useState(false);
   const [providerCheck, setProviderCheck] = useState<"button" | "dialog" | null>(null);
@@ -438,7 +438,11 @@ function SidebarUpdateControl() {
   const updateButton = (
     <button
       type="button"
-      aria-label={idleTooltip?.detail ? `${tooltip}: ${idleTooltip.detail}` : tooltip}
+      aria-label={
+        idleTooltip?.detail
+          ? gt("{tooltip}: {detail}", { tooltip, detail: idleTooltip.detail })
+          : tooltip
+      }
       aria-disabled={isInteractionDisabled || undefined}
       className={cn(
         "inline-flex size-8 shrink-0 items-center justify-center rounded-full outline-hidden ring-ring transition-colors focus-visible:ring-2 focus-visible:ring-inset",

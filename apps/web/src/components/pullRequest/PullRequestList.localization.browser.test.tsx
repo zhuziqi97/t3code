@@ -64,7 +64,15 @@ it("keeps a typed host query when its input switches language", async () => {
 
   function SearchHarness() {
     const [query, setQuery] = useState("");
-    return <PullRequestSearchInput value={query} onChange={setQuery} onSubmit={setQuery} />;
+    return (
+      <PullRequestSearchInput
+        value={query}
+        onChange={setQuery}
+        onSubmit={setQuery}
+        label="Search pull requests"
+        placeholder="Search label:bug"
+      />
+    );
   }
   await act(async () => root.rerender(<SearchHarness />));
   const input = container.querySelector("input")!;

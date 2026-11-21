@@ -1,4 +1,4 @@
-import { i18n } from "../i18n";
+import { m } from "../i18n/messages";
 import { describe, expect, it } from "vite-plus/test";
 import {
   EnvironmentId,
@@ -19,7 +19,7 @@ import {
   type ProviderUpdateCandidate,
 } from "./ProviderUpdateLaunchNotification.logic";
 
-const t = i18n.getFixedT("en");
+const t = m;
 
 const checkedAt = "2026-04-23T10:00:00.000Z";
 const sessionStartedAt = "2026-04-23T09:59:00.000Z";
@@ -173,6 +173,7 @@ describe("provider update launch notification logic", () => {
           },
         }),
       ],
+      undefined,
       t,
     );
 
@@ -197,6 +198,7 @@ describe("provider update launch notification logic", () => {
           },
         }),
       ],
+      undefined,
       t,
     );
 
@@ -260,7 +262,6 @@ describe("provider update launch notification logic", () => {
           },
         }),
       ],
-      undefined,
       { visibleAfterIso: sessionStartedAt },
     );
 
@@ -285,8 +286,8 @@ describe("provider update launch notification logic", () => {
           },
         }),
       ],
-      t,
       { visibleAfterIso: sessionStartedAt },
+      t,
     );
 
     expect(view).toMatchObject({
@@ -315,8 +316,8 @@ describe("provider update launch notification logic", () => {
           },
         }),
       ],
-      t,
       { visibleAfterIso: sessionStartedAt },
+      t,
     );
 
     expect(view).toMatchObject({
@@ -342,8 +343,8 @@ describe("provider update launch notification logic", () => {
           },
         }),
       ],
-      t,
       { visibleAfterIso: sessionStartedAt },
+      t,
     );
 
     expect(view).toMatchObject({
@@ -369,8 +370,8 @@ describe("provider update launch notification logic", () => {
             },
           }),
         ],
-        t,
         { visibleAfterIso: "2026-04-23T10:00:01.000Z" },
+        t,
       ),
     ).toBeNull();
   });
@@ -402,7 +403,7 @@ describe("provider update launch notification logic", () => {
       }),
     ] satisfies ReadonlyArray<ServerProvider>;
 
-    const successView = getProviderUpdateSidebarPillView(providers, t, {
+    const successView = getProviderUpdateSidebarPillView(providers, {
       visibleAfterIso: sessionStartedAt,
     });
     expect(successView).toMatchObject({
@@ -411,7 +412,7 @@ describe("provider update launch notification logic", () => {
       title: "Codex updated: v1.2.0",
     });
 
-    const failureView = getProviderUpdateSidebarPillView(providers, t, {
+    const failureView = getProviderUpdateSidebarPillView(providers, {
       visibleAfterIso: sessionStartedAt,
       dismissedKeys: new Set(["succeeded:codex:2026-04-23T10:01:00.000Z:Provider updated."]),
     });
@@ -429,6 +430,7 @@ describe("provider update launch notification logic", () => {
           provider({ driver: driver("codex"), canUpdate: true }),
           provider({ driver: driver("cursor"), canUpdate: false }),
         ],
+        undefined,
         t,
       ),
     ).toBeNull();
@@ -499,7 +501,7 @@ describe("getProviderUpdateRunToastView", () => {
       description: `Linux · OpenCode: ${message}\nLaptop · OpenCode: ${message}`,
     });
     expect(
-      getProviderUpdateSidebarPillView([updated], undefined, {
+      getProviderUpdateSidebarPillView([updated], {
         visibleAfterIso: sessionStartedAt,
       }),
     ).toMatchObject({ title: "OpenCode updated: v2.2.5", description: message });

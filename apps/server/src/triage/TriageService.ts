@@ -224,7 +224,6 @@ const make = Effect.gen(function* () {
         ),
       );
       const session = yield* writeTriageSession({
-        feedbackTarget: input.feedbackTarget,
         baseDir: config.baseDir,
         paths: config,
         entry: { kind: "app", client: describeClient(input.client) },

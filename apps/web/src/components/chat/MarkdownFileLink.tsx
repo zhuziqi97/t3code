@@ -1,3 +1,4 @@
+import { useNativeFileDrag } from "../../useNativeFileDrag";
 import { useAssetUrlState } from "../../assets/assetUrls";
 import { formatFilePathForClipboard } from "@t3tools/client-runtime/media-actions";
 import {
@@ -7,6 +8,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import type { ContextMenuSource, EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
 import { memo, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useGT } from "gt-react";
 import { FolderIcon } from "lucide-react";
 
 import { contextMenuSourceOf } from "../../contextMenuSource";
@@ -43,6 +45,7 @@ interface MarkdownFileLinkProps {
   threadRef?: ScopedThreadRef | undefined;
   onOpen?: (() => Promise<AtomCommandResult<unknown, unknown>>) | undefined;
   onOpenInPanel: (panelPath: string, line: number | undefined) => void;
+  resolveDragPath: () => Promise<string>;
   resolveCopyPaths: () => Promise<ReturnType<typeof markdownFileCopyPaths>>;
   openInEditorMenuLabel: string;
   onOpenInBrowser?: (() => Promise<AtomCommandResult<unknown, unknown>>) | undefined;
@@ -74,8 +77,11 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
   onReveal,
   revealLabel,
   resolveCopyPaths,
+  resolveDragPath,
 }: MarkdownFileLinkProps) {
   const t = useTranslate();
+  const gt = useGT();
+  const nativeDrag = useNativeFileDrag(environmentId, resolveDragPath);
   const handleOpenInEditor = () => {
     if (!onOpen) {
       return;
@@ -203,12 +209,16 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
   };
 
   const handleCopy = (resolveValue: () => Promise<string>, title: string) => {
+    const failureTitle =
+      title === "Relative path"
+        ? gt("Failed to copy relative path")
+        : gt("Failed to copy full path");
     if (typeof window === "undefined" || !navigator.clipboard?.writeText) {
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: t(title === "Relative path" ? "files.copyRelativeFailed" : "files.copyFullFailed"),
-          description: t("clipboard.unavailable"),
+          title: failureTitle,
+          description: gt("Clipboard API unavailable."),
         }),
       );
       return;
@@ -240,10 +250,8 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: t(
-              title === "Relative path" ? "files.copyRelativeFailed" : "files.copyFullFailed",
-            ),
-            description: error instanceof Error ? error.message : t("common.error"),
+            title: failureTitle,
+            description: error instanceof Error ? error.message : gt("An error occurred."),
           }),
         );
       },
@@ -346,6 +354,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
         render={
           hasPrimaryAction ? (
             <ContextChip
+              {...nativeDrag}
               kind={chipKind}
               dir="ltr"
               render={<a href={href} />}
@@ -380,6 +389,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
             </ContextChip>
           ) : (
             <ContextChip
+              {...nativeDrag}
               kind={chipKind}
               dir="ltr"
               render={<button type="button" />}
@@ -436,6 +446,7 @@ function areMarkdownFileLinkPropsEqual(
     previous.onOpenMedia === next.onOpenMedia &&
     previous.onReveal === next.onReveal &&
     previous.resolveCopyPaths === next.resolveCopyPaths &&
+    previous.resolveDragPath === next.resolveDragPath &&
     previous.revealLabel === next.revealLabel
   );
 }

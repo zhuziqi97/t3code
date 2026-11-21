@@ -1,4 +1,5 @@
 import type { EnvironmentId } from "@t3tools/contracts";
+import { useMessages } from "gt-react";
 import { ChevronDownIcon, GitBranchIcon } from "lucide-react";
 import { useState } from "react";
 import { useTranslate } from "../i18n";
@@ -32,13 +33,17 @@ export function WorktreeBaseBranchPicker({
   id?: string;
 }) {
   const t = useTranslate();
+  const messages = useMessages();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const branches = usePaginatedBranches({
-    environmentId,
-    cwd,
-    query: sanitizeNewRefName(query.trim()),
-  });
+  const branches = usePaginatedBranches(
+    {
+      environmentId,
+      cwd,
+      query: sanitizeNewRefName(query.trim()),
+    },
+    messages,
+  );
   const selectedRefQuery = useEnvironmentQuery(
     cwd && value
       ? vcsEnvironment.listRefs({

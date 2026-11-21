@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeOS from "node:os";
 
-import { type ServerPrepareTriageInput, TRIAGE_PROMPT_FILE_NAME } from "@t3tools/contracts";
+import { TRIAGE_PROMPT_FILE_NAME } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -52,7 +52,6 @@ export const writeTriageSession = Effect.fn("triage.writeTriageSession")(functio
   readonly entry: TriageEntry;
   readonly server: string;
   readonly sourceClone?: TriageSourceClone | undefined;
-  readonly feedbackTarget?: ServerPrepareTriageInput["feedbackTarget"];
 }) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -77,7 +76,6 @@ export const writeTriageSession = Effect.fn("triage.writeTriageSession")(functio
       server: input.server,
       sourceClone: input.sourceClone,
       build: CONVENE_BUILD_INFO,
-      feedbackTarget: input.feedbackTarget,
       paths: {
         stateDir: paths.stateDir,
         dbPath: paths.dbPath,

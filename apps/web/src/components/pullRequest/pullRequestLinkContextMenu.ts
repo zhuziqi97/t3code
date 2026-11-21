@@ -1,21 +1,29 @@
-import { i18n } from "../../i18n";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import type { ContextMenuItem } from "@t3tools/contracts";
 import {
   type SourceControlDefinition,
   UNKNOWN_SOURCE_CONTROL_CLIENT,
 } from "@t3tools/client-runtime/source-control-clients";
 
+import { msg } from "gt-react";
+
 import { writeTextToClipboard } from "~/hooks/useCopyToClipboard";
+import { i18n } from "~/i18n";
+import { m, type MessageResolver } from "~/i18n/messages";
 import { readLocalApi } from "~/localApi";
 
 import { toastManager } from "../ui/toast";
 
 export type PullRequestLinkContextMenuAction = "copy-link" | "open-external";
 
-export const openOnHostLabel = (host: SourceControlDefinition): string =>
+export const openOnHostLabel = (
+  host: SourceControlDefinition,
+  resolve?: MessageResolver,
+): string =>
   host === UNKNOWN_SOURCE_CONTROL_CLIENT
-    ? i18n.t("pullRequest.link.openOnUnknownHost")
-    : i18n.t("pullRequest.link.openOnHost", { host: host.label });
+    ? (resolve?.(msg("Open on host")) ?? i18n.t("pullRequest.link.openOnUnknownHost"))
+    : (resolve?.(msg("Open on {host}", { host: host.label })) ??
+      i18n.t("pullRequest.link.openOnHost", { host: host.label }));
 
 function pullRequestLinkContextMenuItems(
   openLabel: string,
@@ -44,14 +52,18 @@ export async function showPullRequestLinkContextMenu({
     return;
   }
   try {
-    if (action === "copy-link") await writeTextToClipboard(url, "link");
+    if (action === "copy-link")
+      await writeTextToClipboard(url, {
+        target: "link",
+        unavailableMessage: msg("Clipboard API is unavailable while copying link."),
+        failureMessage: msg("Failed to copy link to the clipboard."),
+      });
     else if (action === "open-external") await openPullRequestExternal(url);
-  } catch {
+  } catch (error) {
     toastManager.add({
       type: "error",
-      title: i18n.t(
-        action === "copy-link" ? "pullRequest.link.couldNotCopy" : "pullRequest.link.couldNotOpen",
-      ),
+      title: i18n.t("pullRequest.link.couldNotCopy"),
+      description: thrownErrorMessage(error, m),
     });
   }
 }
@@ -65,7 +77,7 @@ export async function openPullRequestExternal(url: string): Promise<void> {
     toastManager.add({
       type: "error",
       title: i18n.t("pullRequest.link.couldNotOpen"),
-      ...(error instanceof Error ? { description: error.message } : {}),
+      description: thrownErrorMessage(error, m),
     });
   }
 }

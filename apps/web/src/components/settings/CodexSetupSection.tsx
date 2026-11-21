@@ -2,6 +2,8 @@ import { Tooltip, TooltipTrigger, TooltipPopup } from "../ui/tooltip";
 import { ProviderOperationActions } from "../ProviderOperationActions";
 import { Trans } from "react-i18next";
 import { useTranslate } from "../../i18n";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { m as resolveMessage } from "~/i18n/messages";
 import { useAtomValue } from "@effect/atom-react";
 import { AuthProvidersManageScope, ProviderDriverKind } from "@t3tools/contracts";
 import { readPreparedConnection, useEnvironmentScope } from "../../state/session";
@@ -30,6 +32,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { T, useGT, useMessages } from "gt-react";
 
 import { ensureLocalApi } from "../../localApi";
 import { managedInstanceLocks, useManagedPolicy } from "../../state/managedPolicy";
@@ -112,11 +115,13 @@ interface CodexSetupSectionProps {
 
 export function CodexSetupSection(props: CodexSetupSectionProps) {
   const t = useTranslate();
+  const m = useMessages();
   const [requested, setRequested] = useState(false);
   // A policy that owns Codex's launch settings also rules out ChatGPT's own runtime.
   const codexLocks = managedInstanceLocks(
     useManagedPolicy(props.environmentId),
     ProviderDriverKind.make("codex"),
+    m,
   );
   const chatGptDenial = codexLocks?.configKeys.has("setupMode") ? codexLocks.reason : undefined;
   const existingState = getOnboardingProviderState(props.provider);
@@ -307,15 +312,20 @@ function ManagedCodexSetup({
   readonly allowExistingCli?: boolean;
 }) {
   const t = useTranslate();
+  const gt = useGT();
   const target = { environmentId, input: { instanceId } };
-  const authQuery = useEnvironmentQuery(serverEnvironment.providerAuthState(target));
-  const installQuery = useEnvironmentQuery(serverEnvironment.providerInstallState(target));
+  const authQuery = useEnvironmentQuery(serverEnvironment.providerAuthState(target), useMessages());
+  const installQuery = useEnvironmentQuery(
+    serverEnvironment.providerInstallState(target),
+    useMessages(),
+  );
   const [handoff, setHandoff] = useState<{
     environmentId: EnvironmentId;
     input: ChatGptHandoffInput;
   } | null>(null);
   const handoffQuery = useEnvironmentQuery(
     handoff ? serverEnvironment.chatGptHandoffState(handoff) : null,
+    useMessages(),
   );
   const auth = handoffQuery.data?.phase === "auth" ? handoffQuery.data.state : authQuery.data;
   const [accountPickerOpen, setAccountPickerOpen] = useState(false);
@@ -432,7 +442,11 @@ function ManagedCodexSetup({
       if (result._tag === "Failure") {
         if (!isAtomCommandInterrupted(result)) {
           const failure = squashAtomCommandFailure(result);
-          setError(failure instanceof Error ? failure.message : { key: "setup.codex.failure" });
+          setError(
+            failure instanceof Error
+              ? (thrownErrorMessage(failure, resolveMessage) ?? failure.message)
+              : gt("Codex setup failed. Try again."),
+          );
         }
       } else {
         succeeded = true;
@@ -517,7 +531,7 @@ function ManagedCodexSetup({
         await ensureLocalApi().shell.openExternal(authorizationUrl);
       }
     } catch {
-      setError("Could not finish sign-in on this computer. Try again.");
+      setError(gt("Could not finish sign-in on this computer. Try again."));
     }
   };
 
@@ -1061,7 +1075,7 @@ function ManagedCodexSetup({
                       void run(() => startInstall({ environmentId, input: { instanceId } }))
                     }
                   >
-                    Update Codex
+                    <T>Update Codex</T>
                   </Button>
                 ) : null}
                 <Button
@@ -1118,7 +1132,7 @@ function ManagedCodexSetup({
                     disabled={readOnly || busy}
                     onClick={() => onModeChange("existing")}
                   >
-                    Use existing CLI
+                    <T>Use existing CLI</T>
                   </Button>
                 ) : null}
               </>
@@ -1164,6 +1178,7 @@ export function CodexManagedRuntimeFields({
       environmentId,
       input: { instanceId },
     }),
+    useMessages(),
   );
   const executablePath = installation.data?.executablePath ?? "";
   return (

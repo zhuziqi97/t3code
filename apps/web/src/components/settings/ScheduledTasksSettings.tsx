@@ -1,4 +1,7 @@
+import { searchableSetting } from "./settingsSearch";
 import { i18n, useTranslate } from "~/i18n";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { managedCapabilityDenial } from "@t3tools/client-runtime/contract-labels";
 import { useAtomValue } from "@effect/atom-react";
 import { connectionStatusTitle } from "@t3tools/client-runtime/connection";
 import { AsyncResult } from "effect/reactivity";
@@ -36,6 +39,7 @@ import {
   type WebhookFilterDraft,
 } from "@t3tools/client-runtime/scheduled-task-webhook";
 import { scheduleTimeZoneLabel } from "@t3tools/client-runtime/scheduled-task-time-zone";
+import { scheduledTaskWorktreeBaseRef } from "@t3tools/client-runtime/scheduled-task-worktree";
 import {
   MAX_WEBHOOK_DELIVERY_AGE_MINUTES,
   MAX_WEBHOOK_FILTERS,
@@ -48,6 +52,8 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
+import { msg, T, useGT, useMessages } from "gt-react";
+import { m } from "../../i18n/messages";
 
 import { formatRelativeTime } from "../../timestampFormat";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
@@ -73,7 +79,7 @@ import {
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { environmentAtomList, environmentIdsKey } from "../../state/environmentAtomList";
-import { useThreadSearch } from "../../state/queries";
+import { usePaginatedBranches, useThreadSearch } from "../../state/queries";
 import { formatEnvironmentQueryError, useEnvironmentQuery } from "../../state/query";
 import { EMPTY_SERVER_PROVIDERS, serverEnvironment } from "../../state/server";
 import { threadFamilies } from "../../state/threads";
@@ -81,11 +87,7 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { WorktreeBaseBranchPicker } from "../WorktreeBaseBranchPicker";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import { ConnectionStatusDot, connectionPhaseDotClassName } from "../ConnectionStatusDot";
-import {
-  AuthOrchestrationOperateScope,
-  clampManagedRuntimeMode,
-  managedCapabilityDenial,
-} from "@t3tools/contracts";
+import { AuthOrchestrationOperateScope, clampManagedRuntimeMode } from "@t3tools/contracts";
 import { resolvePastedPath } from "@t3tools/shared/path";
 import { useManagedPolicy } from "~/state/managedPolicy";
 import { ManagedNotice } from "../ManagedPolicy";
@@ -107,7 +109,6 @@ import {
   scheduleFromDraft,
   scheduleLabel,
   scheduledTaskDefaultModel,
-  WEEKDAY_LABELS,
   taskToDraft,
   unbindDraftFromThread,
   type DraftState,
@@ -146,7 +147,6 @@ import { Switch } from "../ui/switch";
 import { Textarea } from "../ui/textarea";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import { searchableSetting } from "./settingsSearch";
 import {
   SettingsPageContainer,
   SettingsRow,
@@ -180,7 +180,7 @@ const EMPTY_DRAFT: DraftState = {
   threadId: "",
   threadMode: "new_thread",
   workspaceMode: "worktree",
-  baseRef: "main",
+  baseRef: "",
   startFromOrigin: true,
   existingWorktreePath: "",
   modelKey: "",
@@ -284,6 +284,7 @@ function WebhookFiltersField({
               <div className="grid min-w-0 flex-1 grid-cols-1">
                 <Input
                   aria-label={t("scheduled.filterValue", { number: index + 1 })}
+                  // oxlint-disable-next-line t3code/no-untranslated-copy -- webhook event values are protocol literals.
                   placeholder={filter.op === "in" ? "opened, reopened" : "opened"}
                   value={filter.value}
                   onChange={(event) => update(index, { value: event.target.value })}
@@ -335,7 +336,7 @@ function relativeLabel(value: string | null, nowMs: number, t: typeof i18n.t): s
   if (!value) return t("scheduled.notScheduled");
   const diffMs = new Date(value).getTime() - nowMs;
   if (diffMs <= 0) {
-    const relative = formatRelativeTime(value, undefined, nowMs);
+    const relative = formatRelativeTime(value, nowMs);
     if (!relative) return t("scheduled.notScheduled");
     return relative.suffix ? `${relative.value} ${relative.suffix}` : relative.value;
   }
@@ -368,6 +369,8 @@ function deliveryOutcomeVariant(outcome: string) {
   if (outcome === "dispatch_failed" || outcome === "rejected_signature") return "error";
   return "outline";
 }
+
+const WEEKDAY_LABELS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 
 function statusVariant(status: ScheduledTask["lastRunStatus"]) {
   if (status === "failed") return "error";
@@ -528,6 +531,7 @@ function ScheduledTaskEnvironmentList({
   readonly onEdit: (environmentId: EnvironmentId, task: ScheduledTask) => void;
 }) {
   const t = useTranslate();
+  const messages = useMessages();
   const { scope, environments } = useSettingsScope();
   const connectedIds = environments.flatMap((environment) =>
     environment.connection.phase === "connected" && environment.serverConfig !== null
@@ -546,7 +550,7 @@ function ScheduledTaskEnvironmentList({
       tasks: data?.tasks.filter((task) =>
         matchesScheduledTaskScope(scope, environment.environmentId, task.projectId),
       ),
-      error: query?._tag === "Failure" ? formatEnvironmentQueryError(query.cause) : null,
+      error: query?._tag === "Failure" ? formatEnvironmentQueryError(query.cause, messages) : null,
     };
   });
   const linkedState = states.find((state) => state.environment.environmentId === environmentId);
@@ -590,10 +594,10 @@ function ScheduledTaskEnvironmentList({
             >
               <ConnectionStatusDot
                 dotClassName={connectionPhaseDotClassName(environment.connection.phase)}
-                tooltipText={connectionStatusTitle(environment.connection)}
+                tooltipText={connectionStatusTitle(environment.connection, messages)}
               />
               <span className="text-xs text-muted-foreground">
-                {connectionStatusTitle(environment.connection)}
+                {connectionStatusTitle(environment.connection, messages)}
               </span>
             </EnvironmentRow>
             {tasks?.map((task) => (
@@ -682,6 +686,7 @@ function ScheduledTaskEnvironmentSection({
           input: {},
         })
       : null,
+    useMessages(),
   );
   const tasks = tasksQuery.data?.tasks.filter((task) =>
     matchesScheduledTaskScope(scope, environment.environmentId, task.projectId),
@@ -753,6 +758,7 @@ function ScheduledTaskRow({
   readonly onEdit: () => void;
 }) {
   const t = useTranslate();
+  const gt = useGT();
   const canOperate = useAtomValue(
     serverEnvironment.upsertScheduledTask.permissionAtom(environmentId),
   );
@@ -771,7 +777,7 @@ function ScheduledTaskRow({
   const act = async (action: "toggle" | "run" | "delete") => {
     if (busy || !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)) return;
     if (action === "delete") {
-      const message = `Delete "${task.title}"?\nThis cannot be undone.`;
+      const message = `${gt('Delete "{title}"?', { title: task.title })}\n${gt("This cannot be undone.")}`;
       const confirmed =
         (await requestConfirmDialog(message, { variant: "destructive" })) ??
         window.confirm(message);
@@ -892,6 +898,7 @@ function ScheduledTaskThreadLink({
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
 }) {
+  const gt = useGT();
   const ref = scopeThreadRef(environmentId, threadId);
   const title = useQuietThreadShell(ref)?.title.trim();
   return (
@@ -900,7 +907,7 @@ function ScheduledTaskThreadLink({
       params={buildThreadRouteParams(ref)}
       className="max-w-64 truncate underline underline-offset-2 hover:text-foreground"
     >
-      {title || "Open thread"}
+      {title || gt("Open thread")}
     </Link>
   );
 }
@@ -915,11 +922,13 @@ function WebhookDeliveriesDialog({
   readonly onClose: () => void;
 }) {
   const t = useTranslate();
+  const messages = useMessages();
   const deliveriesQuery = useEnvironmentQuery(
     serverEnvironment.scheduledTaskWebhookDeliveries({
       environmentId,
       input: { id: task.id, acceptAnyOutcome: true },
     }),
+    messages,
   );
   const [selectedId, setSelectedId] = useState<ScheduledTaskWebhookDeliverySummary["id"] | null>(
     null,
@@ -931,6 +940,7 @@ function WebhookDeliveriesDialog({
           environmentId,
           input: { id: task.id, deliveryId: selectedId, acceptAnyOutcome: true },
         }),
+    messages,
   );
   const deliveries = deliveriesQuery.data?.deliveries ?? null;
   const selected = selectedQuery.data?.delivery ?? null;
@@ -964,7 +974,7 @@ function WebhookDeliveriesDialog({
                     selected.pendingWindow ? "coalesced" : selected.outcome,
                   )}
                 >
-                  {webhookDeliveryLabel(selected, t)}
+                  {webhookDeliveryLabel(selected, messages)}
                 </Badge>
                 <span>
                   {selected.method} · <ScheduledRelativeLabel value={selected.receivedAt} />
@@ -1031,7 +1041,7 @@ function WebhookDeliveriesDialog({
                         delivery.pendingWindow ? "coalesced" : delivery.outcome,
                       )}
                     >
-                      {webhookDeliveryLabel(delivery, t)}
+                      {webhookDeliveryLabel(delivery, messages)}
                     </Badge>
                     <span>{delivery.method}</span>
                     <span className="text-muted-foreground">
@@ -1094,11 +1104,18 @@ function WebhookEndpointField({
   readonly task: ScheduledTask | null;
 }) {
   const t = useTranslate();
+  const messages = useMessages();
   const canRotate = useAtomValue(
     serverEnvironment.rotateScheduledTaskWebhookToken.permissionAtom(environmentId),
   );
   const httpBaseUrl = useEnvironmentHttpBaseUrl(environmentId);
-  const { copyToClipboard, isCopied } = useCopyToClipboard({ target: "webhook URL" });
+  const { copyToClipboard, isCopied } = useCopyToClipboard({
+    target: {
+      target: "webhook URL",
+      unavailableMessage: msg("Clipboard API is unavailable while copying webhook URL."),
+      failureMessage: msg("Failed to copy webhook URL to the clipboard."),
+    },
+  });
   const rotate = useAtomCommand(serverEnvironment.rotateScheduledTaskWebhookToken, {
     label: "scheduled task rotate webhook token",
   });
@@ -1109,7 +1126,7 @@ function WebhookEndpointField({
       <p className="text-sm text-muted-foreground">{t("scheduled.theUrlAppearsAfterYouSave")}</p>
     );
   }
-  const { address: url, copyable, note } = webhookAddress(endpoint, httpBaseUrl);
+  const { address: url, copyable, note } = webhookAddress(endpoint, httpBaseUrl, messages);
   const rotateUrl = async () => {
     const confirmed =
       (await requestConfirmDialog(t("scheduled.rotateConfirm"), {
@@ -1174,7 +1191,7 @@ function WebhookDeliveryMode({ environmentId }: { readonly environmentId: Enviro
         ? t("scheduled.heldWhileOffline")
         : t("scheduled.forwardedLive")}{" "}
       <Link to="/settings/access" className="underline underline-offset-2">
-        Change in Sharing & access
+        <T>Change in Sharing & access</T>
       </Link>
     </p>
   );
@@ -1212,9 +1229,9 @@ function ScheduledTaskEditorDialog({
 }
 
 const THREAD_MODE_LABELS: Record<ScheduledTaskThreadMode, string> = {
-  new_thread: "New thread each run",
-  continue: "One thread, continuing the conversation",
-  fresh_session: "One thread, fresh session each run",
+  new_thread: msg("New thread each run"),
+  continue: msg("One thread, continuing the conversation"),
+  fresh_session: msg("One thread, fresh session each run"),
 };
 
 function useScheduledTaskThread(environmentId: EnvironmentId, threadId: ThreadId | null) {
@@ -1245,16 +1262,18 @@ function ScheduledTaskDestination({
   /** Absent on servers that predate thread modes. */
   readonly onThreadModeChange: ((mode: ScheduledTaskThreadMode) => void) | undefined;
 }) {
+  const messages = useMessages();
+  const gt = useGT();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const ref = threadId === null ? null : scopeThreadRef(environmentId, threadId);
   const thread = useScheduledTaskThread(environmentId, threadId);
   const currentLabel =
     ref !== null
-      ? thread?.title.trim() || `Thread ${ref.threadId}`
+      ? thread?.title.trim() || gt("Thread {id}", { id: ref.threadId })
       : threadMode === "new_thread"
-        ? "New thread each run"
-        : "Started by the first run";
+        ? gt("New thread each run")
+        : gt("Started by the first run");
   const shells = useVisibleThreadShells(open);
   // Mounts older settled threads matching the query, which shells may leave out.
   useThreadSearch(open && projectId ? [environmentId] : [], query, {
@@ -1279,28 +1298,32 @@ function ScheduledTaskDestination({
   };
   const detail =
     threadMode === "new_thread"
-      ? "Each run starts a new thread with the workspace and model below."
+      ? gt("Each run starts a new thread with the workspace and model below.")
       : ref === null
         ? threadMode === "continue"
-          ? "The first run starts a thread with the workspace and model below. Later runs continue that conversation."
-          : "The first run starts a thread with the workspace and model below. Later runs post there, each in a fresh session without earlier runs' context."
+          ? gt(
+              "The first run starts a thread with the workspace and model below. Later runs continue that conversation.",
+            )
+          : gt(
+              "The first run starts a thread with the workspace and model below. Later runs post there, each in a fresh session without earlier runs' context.",
+            )
         : threadMode === "continue"
-          ? "Each run continues this conversation, in its workspace and with its current model."
-          : "Each run starts a fresh session in this thread, without earlier runs' context.";
+          ? gt("Each run continues this conversation, in its workspace and with its current model.")
+          : gt("Each run starts a fresh session in this thread, without earlier runs' context.");
   return (
-    <Field label="Destination" htmlFor="scheduled-task-destination">
+    <Field label={gt("Destination")} htmlFor="scheduled-task-destination">
       {onThreadModeChange ? (
         <Select
           value={threadMode}
           onValueChange={(value) => onThreadModeChange(value as ScheduledTaskThreadMode)}
         >
           <SelectTrigger size="sm" id="scheduled-task-destination">
-            <SelectValue>{THREAD_MODE_LABELS[threadMode]}</SelectValue>
+            <SelectValue>{messages(THREAD_MODE_LABELS[threadMode])}</SelectValue>
           </SelectTrigger>
           <SelectPopup>
             {(Object.keys(THREAD_MODE_LABELS) as ScheduledTaskThreadMode[]).map((mode) => (
               <SelectItem key={mode} value={mode}>
-                {THREAD_MODE_LABELS[mode]}
+                {messages(THREAD_MODE_LABELS[mode])}
               </SelectItem>
             ))}
           </SelectPopup>
@@ -1332,7 +1355,7 @@ function ScheduledTaskDestination({
                 ? "scheduled-task-destination-thread"
                 : "scheduled-task-destination"
             }
-            aria-label={onThreadModeChange ? "Destination thread" : undefined}
+            aria-label={onThreadModeChange ? gt("Destination thread") : undefined}
             disabled={disabled}
             render={<Button variant="outline" size="sm" />}
             className="w-full justify-between"
@@ -1343,21 +1366,23 @@ function ScheduledTaskDestination({
           </ComboboxTrigger>
           <ComboboxPopup align="start" side="bottom" className="w-80">
             <ComboboxSearchInput
-              aria-label="Search threads"
-              placeholder="Search all threads..."
+              aria-label={gt("Search threads")}
+              placeholder={gt("Search all threads...")}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
-            <ComboboxEmpty>No threads found.</ComboboxEmpty>
+            <ComboboxEmpty>
+              <T>No threads found.</T>
+            </ComboboxEmpty>
             <ComboboxList className="max-h-72">
               {items.map((value, index) => (
                 <ComboboxItem key={value} index={index} value={value}>
                   <span className="block truncate">
                     {value === NEW_THREAD_DESTINATION
-                      ? "New thread each run"
+                      ? gt("New thread each run")
                       : value === threadId
                         ? currentLabel
-                        : threads.find((row) => row.id === value)?.title || "Untitled thread"}
+                        : threads.find((row) => row.id === value)?.title || gt("Untitled thread")}
                   </span>
                 </ComboboxItem>
               ))}
@@ -1368,7 +1393,9 @@ function ScheduledTaskDestination({
       <div className="space-y-1 text-sm">
         <p className="text-muted-foreground">{detail}</p>
         {threadMode !== "new_thread" ? (
-          <p className="text-muted-foreground">Deleting the thread also deletes this task.</p>
+          <p className="text-muted-foreground">
+            <T>Deleting the thread also deletes this task.</T>
+          </p>
         ) : null}
       </div>
     </Field>
@@ -1389,6 +1416,8 @@ function ScheduledTaskEditorForm({
   readonly onClose: () => void;
 }) {
   const t = useTranslate();
+  const messages = useMessages();
+  const gt = useGT();
   const { scope, connectedEnvironments } = useSettingsScope();
   const [environmentId, setEnvironmentId] = useState(initialEnvironmentId);
   const environment = useEnvironment(environmentId);
@@ -1402,6 +1431,7 @@ function ScheduledTaskEditorForm({
     environment?.connection.phase === "connected" && environment.serverConfig !== null;
   const tasksQuery = useEnvironmentQuery(
     connected ? serverEnvironment.scheduledTasksLive({ environmentId, input: {} }) : null,
+    messages,
   );
   const allProjects = useProjects();
   const projectsOn = (id: EnvironmentId) =>
@@ -1418,7 +1448,11 @@ function ScheduledTaskEditorForm({
   const upsertTask = useAtomCommand(serverEnvironment.upsertScheduledTask, {
     label: "scheduled task upsert",
   });
-  const webhookDenial = managedCapabilityDenial(useManagedPolicy(environmentId), "webhookTasks");
+  const webhookDenial = managedCapabilityDenial(
+    useManagedPolicy(environmentId),
+    "webhookTasks",
+    messages,
+  );
   const [draft, setDraft] = useState<DraftState>(() =>
     task
       ? taskToDraft(task)
@@ -1447,6 +1481,19 @@ function ScheduledTaskEditorForm({
     : task;
   const selectedProjectId = draft.projectId || projects[0]?.id || "";
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
+  const automaticBaseRef = draft.workspaceMode === "worktree" && !draft.baseRef.trim();
+  const automaticBaseRefs = usePaginatedBranches({
+    environmentId,
+    cwd: automaticBaseRef ? (selectedProject?.workspaceRoot ?? null) : null,
+    query: "",
+  });
+  const worktreeBaseRef = scheduledTaskWorktreeBaseRef(draft.baseRef, automaticBaseRefs.refs);
+  // Until the project's refs load, the automatic base would save as `main`. A failed lookup falls back to it.
+  const automaticBaseRefLoading =
+    automaticBaseRef &&
+    selectedProject !== undefined &&
+    automaticBaseRefs.data === null &&
+    automaticBaseRefs.error === null;
   const instanceEntries = providerInstanceEntriesFor(
     providers,
     settings,
@@ -1490,7 +1537,8 @@ function ScheduledTaskEditorForm({
       stackedThreadToast({
         type: "error",
         title,
-        description: error instanceof Error ? error.message : String(error),
+        description:
+          error instanceof Error ? (thrownErrorMessage(error, m) ?? error.message) : String(error),
       }),
     );
   };
@@ -1502,7 +1550,8 @@ function ScheduledTaskEditorForm({
       saving ||
       editingTaskMissing ||
       !connected ||
-      tasksQuery.data === null
+      tasksQuery.data === null ||
+      automaticBaseRefLoading
     )
       return;
     const selection = activeSelection;
@@ -1515,14 +1564,14 @@ function ScheduledTaskEditorForm({
       reportFailure(t("scheduled.incomplete"), t("scheduled.completeRequiredFields"));
       return;
     }
-    const parsedFilters = parseWebhookFilterDrafts(draft.filters, t);
+    const parsedFilters = parseWebhookFilterDrafts(draft.filters, messages);
     if (draft.scheduleMode === "webhook" && "error" in parsedFilters) {
       reportFailure(t("scheduled.invalidFilter"), parsedFilters.error);
       return;
     }
     const schedule = scheduleFromDraft(draft);
     if (schedule === null) {
-      for (const error of scheduleDraftErrors(draft, t))
+      for (const error of scheduleDraftErrors(draft, messages))
         reportFailure(error.title, error.description);
       return;
     }
@@ -1564,7 +1613,7 @@ function ScheduledTaskEditorForm({
           ? { type: "existing_worktree", worktreePath: draft.existingWorktreePath.trim() }
           : {
               type: "worktree",
-              baseRef: draft.baseRef.trim() || "main",
+              baseRef: worktreeBaseRef,
               startFromOrigin: draft.startFromOrigin,
             };
     const input: ScheduledTaskUpsertInput = {
@@ -1632,7 +1681,7 @@ function ScheduledTaskEditorForm({
                   projectId: defaultScheduledTaskProjectId(projectsOn(next.environmentId), scope),
                   modelKey: "",
                   baseModelSelection: null,
-                  baseRef: "main",
+                  baseRef: "",
                   startFromOrigin: true,
                   existingWorktreePath: "",
                 }));
@@ -1787,7 +1836,7 @@ function ScheduledTaskEditorForm({
                 id="scheduled-task-base-ref"
                 environmentId={environmentId}
                 cwd={selectedProject?.workspaceRoot ?? null}
-                value={draft.baseRef}
+                value={automaticBaseRefLoading ? "" : worktreeBaseRef}
                 onValueChange={(baseRef) => setDraft((current) => ({ ...current, baseRef }))}
                 startFromOrigin={draft.startFromOrigin}
                 onStartFromOriginChange={(startFromOrigin) =>
@@ -1959,8 +2008,8 @@ function ScheduledTaskEditorForm({
                   onChange={(filters) => setDraft((current) => ({ ...current, filters }))}
                 />
                 <Field
-                  label="Duplicate request key"
-                  hint="template, optional"
+                  label={gt("Duplicate request key")}
+                  hint={gt("template, optional")}
                   htmlFor="scheduled-task-replay-key"
                 >
                   <Input
@@ -1973,7 +2022,7 @@ function ScheduledTaskEditorForm({
                   />
                 </Field>
                 <p className="text-xs text-muted-foreground">
-                  Requests with the same key run only once within 7 days.
+                  <T>Requests with the same key run only once within 7 days.</T>
                 </p>
                 <Field
                   label={t("scheduled.coalesceKey")}
@@ -2011,8 +2060,10 @@ function ScheduledTaskEditorForm({
                   />
                 </Field>
                 <p className="text-xs text-muted-foreground">
-                  Coalescing runs the latest payload once when the window from the first delivery
-                  closes. Empty keys run normally.
+                  <T>
+                    Coalescing runs the latest payload once when the window from the first delivery
+                    closes. Empty keys run normally.
+                  </T>
                 </p>
                 <div className="flex items-center justify-between gap-4">
                   <div className="min-w-0 space-y-1">
@@ -2214,6 +2265,7 @@ function ScheduledTaskEditorForm({
             editingTaskMissing ||
             !connected ||
             !tasksQuery.data ||
+            automaticBaseRefLoading ||
             (draft.enabled && draft.scheduleMode === "webhook" && webhookDenial !== undefined)
           }
           onClick={() => void submit()}

@@ -1,19 +1,24 @@
-import type { TFunction } from "i18next";
-import { i18n, useTranslate } from "../i18n";
+import { msg, T, Var } from "gt-react";
+
+import { m } from "../i18n/messages";
 import { type SlowRpcAckRequest, subscribeSlowRpcAckRequests } from "../rpc/requestLatencyState";
 import { toastManager } from "./ui/toast";
 
-function describeSlowRequests(requests: ReadonlyArray<SlowRpcAckRequest>, t: TFunction): string {
+function describeSlowRequests(requests: ReadonlyArray<SlowRpcAckRequest>): string {
   const count = requests.length;
   const thresholdSeconds = Math.round(
     Math.min(...requests.map((request) => request.thresholdMs)) / 1000,
   );
 
-  return t("toast.slowRequests.description", { count, seconds: thresholdSeconds });
+  return m(
+    msg(
+      "{count, plural, one {{count} request} other {{count} requests}} waiting longer than {thresholdSeconds}s.",
+      { count, thresholdSeconds },
+    ),
+  );
 }
 
 function SlowRequestDetails({ requests }: { requests: ReadonlyArray<SlowRpcAckRequest> }) {
-  const t = useTranslate();
   return (
     <ul className="space-y-2.5 text-xs text-muted-foreground">
       {requests.map((request) => (
@@ -23,9 +28,9 @@ function SlowRequestDetails({ requests }: { requests: ReadonlyArray<SlowRpcAckRe
         >
           <div className="wrap-break-word font-medium text-foreground">{request.tag}</div>
           <div className="mt-0.5 text-3xs opacity-75">
-            {t("toast.slowRequests.started", {
-              time: new Date(request.startedAt).toLocaleTimeString(),
-            })}
+            <T>
+              Started <Var>{new Date(request.startedAt).toLocaleTimeString()}</Var>
+            </T>
           </div>
         </li>
       ))}
@@ -35,12 +40,9 @@ function SlowRequestDetails({ requests }: { requests: ReadonlyArray<SlowRpcAckRe
 
 /** One warning toast that tracks the set of slow requests while any are outstanding. */
 export function startSlowRpcRequestToasts(): () => void {
-  const t = i18n.t;
   let toastId: ReturnType<typeof toastManager.add> | null = null;
 
-  let currentRequests: ReadonlyArray<SlowRpcAckRequest> = [];
-  const render = (slowRequests: ReadonlyArray<SlowRpcAckRequest>) => {
-    currentRequests = slowRequests;
+  const unsubscribe = subscribeSlowRpcAckRequests((slowRequests) => {
     if (slowRequests.length === 0) {
       if (toastId !== null) {
         toastManager.close(toastId);
@@ -53,14 +55,11 @@ export function startSlowRpcRequestToasts(): () => void {
       data: {
         expandableContent: <SlowRequestDetails requests={slowRequests} />,
         expandableDescriptionTrigger: true,
-        expandableLabels: {
-          collapse: t("toast.slowRequests.hide"),
-          expand: t("toast.slowRequests.show"),
-        },
+        expandableLabels: { collapse: m(msg("Hide requests")), expand: m(msg("Show requests")) },
       },
-      description: describeSlowRequests(slowRequests, t),
+      description: describeSlowRequests(slowRequests),
       timeout: 0,
-      title: t("toast.slowRequests.title"),
+      title: m(msg("Some requests are slow")),
       type: "warning" as const,
     };
 
@@ -69,13 +68,10 @@ export function startSlowRpcRequestToasts(): () => void {
     } else {
       toastManager.update(toastId, nextToast);
     }
-  };
-  const unsubscribe = subscribeSlowRpcAckRequests(render);
-  const translate = () => render(currentRequests);
-  i18n.on("languageChanged", translate);
+  });
+
   return () => {
     unsubscribe();
-    i18n.off("languageChanged", translate);
     if (toastId !== null) toastManager.close(toastId);
   };
 }

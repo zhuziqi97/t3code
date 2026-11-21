@@ -9,8 +9,10 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentId } from "@t3tools/contracts";
+import { msg } from "gt-react";
 
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
+import { m } from "~/i18n/messages";
 import { waitForProject } from "~/state/entities";
 import { projectEnvironment } from "~/state/projects";
 import { sourceControlEnvironment } from "~/state/sourceControl";
@@ -53,10 +55,12 @@ export function useNewProject() {
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: t("project.new.hostFailed", { host: label }),
-            description: t("project.new.publishedRetry", {
-              error: errorMessage(squashAtomCommandFailure(result)),
-            }),
+            title: m(msg("Could not create the {label} repository", { label })),
+            description: m(
+              msg("{error} Use Publish Repository in the Git menu to try again.", {
+                error: errorMessage(squashAtomCommandFailure(result)),
+              }),
+            ),
           }),
         );
       }
@@ -107,11 +111,13 @@ export function useNewProject() {
             }
           : {
               type: "warning",
-              title: t("project.new.noCommit", { name: input.name }),
-              description: t("project.new.commitFailure", {
-                error: commitError,
-                path: workspaceRoot,
-              }),
+              title: m(msg("Created {name} without a first commit", { name: input.name })),
+              description: m(
+                msg("{error} The project is in {path}.", {
+                  error: commitError,
+                  path: workspaceRoot,
+                }),
+              ),
             },
       ),
     );
@@ -129,8 +135,12 @@ export function useNewProject() {
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: t("project.openFailed"),
-          description: t("project.new.waitForClient", { error: errorMessage(error) }),
+          title: m(msg("Failed to open project")),
+          description: m(
+            msg("{error} It will appear in the sidebar once this client catches up.", {
+              error: errorMessage(error),
+            }),
+          ),
         }),
       );
       return null;

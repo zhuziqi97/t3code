@@ -1,4 +1,3 @@
-import { useTranslate } from "../../i18n";
 import { AuthProvidersManageScope } from "@t3tools/contracts";
 import { readEnvironmentScope, useEnvironmentScope } from "../../state/session";
 import { useAtomValue } from "@effect/atom-react";
@@ -8,6 +7,7 @@ import {
   type EnvironmentId,
   type ServerProvider,
 } from "@t3tools/contracts";
+import { T, useGT } from "gt-react";
 import { useState, type ReactNode } from "react";
 import { usesChatGptSharing } from "@t3tools/shared/usageLimits";
 
@@ -38,12 +38,14 @@ export function AddCodexAccountDialog({
     | undefined;
   readonly renderSetup: (instanceId: ProviderInstanceId, provider: ServerProvider) => ReactNode;
 }) {
-  const t = useTranslate();
+  const gt = useGT();
   const canManageProviders = useEnvironmentScope(environmentId, AuthProvidersManageScope);
   const settings = useEnvironmentSettings(environmentId);
   const providers = useAtomValue(serverEnvironment.providersValueAtom(environmentId));
-  const update = useAtomCommand(serverEnvironment.updateSettings, t("setup.account.add"));
-  const [name, setName] = useState(() => t("setup.account.defaultName"));
+  const update = useAtomCommand(serverEnvironment.updateSettings, "Add ChatGPT account");
+  const [name, setName] = useState(() =>
+    gt("Personal", { $context: "default name for a ChatGPT account" }),
+  );
   const displayName = `ChatGPT - ${name.trim()}`;
   const [instanceId, setInstanceId] = useState<ProviderInstanceId | null>(null);
   const [pending, setPending] = useState(false);
@@ -92,8 +94,10 @@ export function AddCodexAccountDialog({
     >
       <WizardPopup size="wide">
         <WizardHeader
-          title={instanceId ? displayName : t("setup.account.add")}
-          description={t("setup.account.description")}
+          title={instanceId ? displayName : gt("Add ChatGPT account")}
+          description={gt(
+            "Each account has its own Codex instance and sign-in. Choose the other account on the sign-in page.",
+          )}
         />
         <WizardPanel>
           {instanceId ? (
@@ -101,8 +105,8 @@ export function AddCodexAccountDialog({
               renderSetup(instanceId, provider)
             ) : (
               <SettingsRow
-                title={t("setup.account.runtime")}
-                description={t("setup.account.preparing")}
+                title={gt("Codex runtime")}
+                description={gt("Preparing managed setup.")}
               />
             )
           ) : (
@@ -115,15 +119,15 @@ export function AddCodexAccountDialog({
               }}
             >
               <SettingsRow
-                title={t("setup.account.name")}
-                description={t("setup.account.nameDescription")}
+                title={gt("Account name")}
+                description={gt("Shown in the provider list and model picker.")}
                 control={
                   <Input
-                    aria-label={t("setup.account.name")}
+                    aria-label={gt("Account name")}
                     value={name}
                     disabled={pending}
                     onChange={(event) => setName(event.target.value)}
-                    placeholder={t("setup.account.namePlaceholder")}
+                    placeholder={gt("e.g. Personal or Work")}
                   />
                 }
               />
@@ -134,19 +138,19 @@ export function AddCodexAccountDialog({
         <WizardFooter>
           {instanceId ? (
             <Button variant="outline" onClick={onClose}>
-              {t("common.finishLater")}
+              <T>Finish later</T>
             </Button>
           ) : (
             <>
               <Button variant="outline" disabled={pending} onClick={onClose}>
-                {t("common.cancel")}
+                <T>Cancel</T>
               </Button>
               <Button
                 type="submit"
                 form="add-codex-account"
                 disabled={pending || !name.trim() || !canManageProviders}
               >
-                {pending ? t("setup.account.adding") : t("common.continue")}
+                {pending ? gt("Adding account…") : gt("Continue")}
               </Button>
             </>
           )}

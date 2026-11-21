@@ -1,4 +1,4 @@
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -9,40 +9,18 @@ import {
 } from "@t3tools/client-runtime/i18n";
 
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
-import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
-import { I18nProvider, useGT, useLanguagePreference } from "../../i18n/I18nProvider";
+import { mobilePreferencesAtom, saveMobilePreferences } from "../../state/preferences";
+import { useAtomCommand } from "../../state/use-atom-command";
+import { useGT } from "gt-react-native";
+import { useLanguagePreference } from "../../i18n/I18nProvider";
 import { ListChoiceRow } from "../../components/ui/ListChoiceRow";
 import { SettingsRow } from "./components/SettingsRow";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { SettingsSection } from "./components/SettingsSection";
 
-/** `system` follows the device locale; i18next falls back to English per key. */
-const LANGUAGE_OPTIONS: ReadonlyArray<{
-  readonly preference: LanguagePreference;
-  readonly label: string;
-  readonly description: string;
-}> = [
-  {
-    preference: "system",
-    label: "System default",
-    description: "Follow the device language.",
-  },
-  ...SUPPORTED_LANGUAGES.map((language) => ({
-    preference: language satisfies LanguagePreference,
-    label: LANGUAGE_LABELS[language],
-    description: "",
-  })),
-];
+const LANGUAGE_OPTIONS: readonly LanguagePreference[] = ["system", ...SUPPORTED_LANGUAGES];
 
 export function LanguageSettingsSection() {
-  return (
-    <I18nProvider>
-      <LanguageRow />
-    </I18nProvider>
-  );
-}
-
-function LanguageRow() {
   const gt = useGT();
   const language = useLanguagePreference();
   return (
@@ -58,18 +36,10 @@ function LanguageRow() {
 }
 
 export function SettingsLanguageRouteScreen() {
-  return (
-    <I18nProvider>
-      <LanguageSettings />
-    </I18nProvider>
-  );
-}
-
-function LanguageSettings() {
   const gt = useGT();
   const insets = useSafeAreaInsets();
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
-  const savePreferences = useAtomSet(updateMobilePreferencesAtom);
+  const savePreferences = useAtomCommand(saveMobilePreferences);
   const preferencesReady = AsyncResult.isSuccess(preferencesResult) && !preferencesResult.waiting;
   const selected = AsyncResult.isSuccess(preferencesResult)
     ? (preferencesResult.value.languagePreference ?? "system")
@@ -85,19 +55,15 @@ function LanguageSettings() {
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
       >
         <SettingsSection title={gt("Language")}>
-          {LANGUAGE_OPTIONS.map((option, index) => (
+          {LANGUAGE_OPTIONS.map((preference, index) => (
             <ListChoiceRow
-              key={option.preference}
-              label={option.preference === "system" ? gt("System default") : option.label}
-              description={
-                option.preference === "system"
-                  ? gt("Follow the device language.")
-                  : option.description
-              }
-              selected={selected === option.preference}
+              key={preference}
+              label={preference === "system" ? gt("System default") : LANGUAGE_LABELS[preference]}
+              description={preference === "system" ? gt("Follow the device language.") : undefined}
+              selected={selected === preference}
               separated={index > 0}
               disabled={!preferencesReady}
-              onPress={() => savePreferences({ languagePreference: option.preference })}
+              onPress={() => void savePreferences({ languagePreference: preference })}
             />
           ))}
         </SettingsSection>

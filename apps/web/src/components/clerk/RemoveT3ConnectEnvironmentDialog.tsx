@@ -1,7 +1,6 @@
-import { Trans } from "react-i18next";
 import { Discovery } from "@t3tools/client-runtime/relay";
 import type { EnvironmentId } from "@t3tools/contracts";
-import { useTranslate } from "../../i18n";
+import { T, useGT, Var } from "gt-react";
 import { useState } from "react";
 
 import { useRelayEnvironmentDiscovery } from "../../state/environments";
@@ -28,8 +27,8 @@ export function RemoveT3ConnectEnvironmentDialog({
   readonly onCancel: () => void;
   readonly onConfirm: () => void;
 }) {
-  const t = useTranslate();
   const accountPage = useT3ConnectAccountPage();
+  const gt = useGT();
   const discovery = useRelayEnvironmentDiscovery();
   const registration = environmentId
     ? Discovery.relayEnvironmentRegistration(discovery, environmentId)
@@ -42,6 +41,19 @@ export function RemoveT3ConnectEnvironmentDialog({
     setShown({ label: environmentLabel, registration });
   }
   const openAccountPage = accountPage.open;
+  const accountPageLink = openAccountPage ? (
+    <InlineButton
+      onClick={() => {
+        onCancel();
+        openAccountPage();
+      }}
+    >
+      <T>T3 Connect settings</T>
+    </InlineButton>
+  ) : (
+    gt("T3 Connect settings")
+  );
+
   return (
     <>
       <AlertDialog
@@ -53,34 +65,35 @@ export function RemoveT3ConnectEnvironmentDialog({
         <AlertDialogPopup>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {t("connections.removeDeviceQuestion", { label: shown.label })}
+              <T>
+                Remove <Var>{shown.label}</Var> from this device?
+              </T>
             </AlertDialogTitle>
-            <AlertDialogDescription>{t("connections.forgetDevice")}</AlertDialogDescription>
             <AlertDialogDescription>
-              <Trans
-                t={t}
-                i18nKey="connections.keepConnectRegistration"
-                components={{
-                  settings: openAccountPage ? (
-                    <InlineButton
-                      onClick={() => {
-                        onCancel();
-                        openAccountPage();
-                      }}
-                    />
-                  ) : (
-                    <span />
-                  ),
-                }}
-              />
+              <T>This forgets its pairing, credentials, and cached threads here.</T>
+            </AlertDialogDescription>
+            <AlertDialogDescription>
+              {shown.registration === "registered" ? (
+                <T>
+                  It stays on your T3 Connect account and keeps its host space. Deregister it in{" "}
+                  <Var>{accountPageLink}</Var> to free it.
+                </T>
+              ) : shown.registration === "unregistered" ? (
+                gt("It's no longer on your T3 Connect account.")
+              ) : (
+                <T>
+                  This doesn't change your T3 Connect account. To deregister it there, use{" "}
+                  <Var>{accountPageLink}</Var>.
+                </T>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogClose render={<Button variant="outline" />}>
-              {t("connections.cancel")}
+              <T>Cancel</T>
             </AlertDialogClose>
             <Button variant="destructive" onClick={onConfirm}>
-              {t("connections.removeDevice")}
+              <T>Remove from this device</T>
             </Button>
           </AlertDialogFooter>
         </AlertDialogPopup>

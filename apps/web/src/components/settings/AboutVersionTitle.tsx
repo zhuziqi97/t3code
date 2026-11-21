@@ -1,3 +1,4 @@
+import { msg } from "gt-react";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { InlineButton } from "../ui/button";
 import { stackedThreadToast, toastManager } from "../ui/toast";
@@ -13,7 +14,11 @@ import { useTranslate } from "../../i18n";
 export function AboutVersionTitle() {
   const t = useTranslate();
   const { copyToClipboard } = useCopyToClipboard<void>({
-    target: "version",
+    target: {
+      target: "version",
+      unavailableMessage: msg("Clipboard API is unavailable while copying version."),
+      failureMessage: msg("Failed to copy version to the clipboard."),
+    },
     onError: (error) => {
       toastManager.add(
         stackedThreadToast({

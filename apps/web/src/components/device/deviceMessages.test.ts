@@ -1,11 +1,12 @@
+import { createI18n } from "@t3tools/client-runtime/i18n";
+import { resolveChineseMessage } from "../../../test/gtCatalog";
 import { expect, it } from "vite-plus/test";
-import { i18n } from "../../i18n";
 import { formatDeviceMessage } from "./deviceMessages";
 import { platformSetupStatus } from "./DeviceSetup";
 import { deviceToolInstallMessage, type DeviceServiceState } from "@t3tools/contracts";
 
 it("translates current host guidance while preserving SDK paths and unrecognized diagnostics", () => {
-  const t = i18n.getFixedT("zh");
+  const t = createI18n({ lng: "zh" }).t;
   expect(formatDeviceMessage("iOS Simulators need macOS with Xcode.", t)).toBe(
     "iOS 模拟器需要安装 Xcode 的 macOS。",
   );
@@ -30,7 +31,7 @@ it("translates current host guidance while preserving SDK paths and unrecognized
     hubBasePath: "/api/device-hub",
     revision: 0,
   };
-  expect(platformSetupStatus(state, "android", t)).toEqual({
+  expect(platformSetupStatus(state, "android", resolveChineseMessage)).toEqual({
     ready: false,
     message: "未检测到 Android 支持。",
   });
@@ -50,15 +51,17 @@ it("translates current host guidance while preserving SDK paths and unrecognized
       },
     ],
   };
-  expect(platformSetupStatus(withHosts, "ios", t).message).toContain("Xcode 设置 → 组件");
-  expect(platformSetupStatus(withHosts, "android", t)).toEqual({
+  expect(platformSetupStatus(withHosts, "ios", resolveChineseMessage).message).toContain(
+    "Xcode 设置 → 组件",
+  );
+  expect(platformSetupStatus(withHosts, "android", resolveChineseMessage)).toEqual({
     ready: false,
     message: "Custom raw diagnostic",
   });
 });
 
 it("translates real install and update progress without changing package versions", () => {
-  const t = i18n.getFixedT("zh");
+  const t = createI18n({ lng: "zh" }).t;
   expect(formatDeviceMessage(deviceToolInstallMessage("device hub", undefined), t)).toBe(
     "正在安装设备中心…",
   );

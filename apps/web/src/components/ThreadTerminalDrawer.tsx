@@ -1,7 +1,8 @@
-import { i18n, useTranslate } from "../i18n";
-import type { TFunction } from "i18next";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { workspaceAreaProps } from "../lib/workspaceFocus";
 import { useAtomMount, useAtomValue } from "@effect/atom-react";
+import { msg, T, useGT, useMessages } from "gt-react";
+import { m } from "../i18n/messages";
 import {
   isAtomCommandInterrupted,
   executeAtomQuery,
@@ -33,8 +34,7 @@ import {
   type ScopedThreadRef,
   type ThreadId,
 } from "@t3tools/contracts";
-import { getTerminalLabel } from "@t3tools/shared/terminalLabels";
-import { isMacPlatform } from "@t3tools/shared/keybindings";
+import { getTerminalLabel } from "@t3tools/shared/terminalLabelsCopy";
 import * as Schema from "effect/Schema";
 import { AsyncResult } from "effect/reactivity";
 import {
@@ -51,15 +51,7 @@ import { Popover, PopoverPopup, PopoverTrigger } from "~/components/ui/popover";
 import { Button } from "~/components/ui/button";
 import { PanelTabCloseButton } from "~/components/ui/panel-tab-close-button";
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
-import {
-  ClipboardApiUnavailableError,
-  ClipboardReadError,
-  ClipboardReadDeniedError,
-  ClipboardReadUnavailableError,
-  ClipboardWriteError,
-  readTextFromClipboard,
-  writeTextToClipboard,
-} from "~/hooks/useCopyToClipboard";
+import { readTextFromClipboard, writeTextToClipboard } from "~/hooks/useCopyToClipboard";
 import { cn } from "~/lib/utils";
 import { type TerminalContextSelection } from "~/lib/terminalContext";
 import {
@@ -67,7 +59,7 @@ import {
   type GhosttyTerminalSurfaceOptions,
 } from "~/terminal/ghostty/surface";
 import { type GhosttyColor, type GhosttyTheme } from "~/terminal/ghostty/core";
-import { useEditorAction, usePreferredEditor, readPreferredEditor } from "../editorPreferences";
+import { useOpenInPreferredEditor } from "../editorPreferences";
 import { isTerminalUrl, resolveTerminalLinkTarget } from "../terminal-links";
 import {
   isDiffToggleShortcut,
@@ -118,11 +110,6 @@ import {
 
 const MIN_DRAWER_HEIGHT = 180;
 const MAX_DRAWER_HEIGHT_RATIO = 0.75;
-const isClipboardApiUnavailableError = Schema.is(ClipboardApiUnavailableError);
-const isClipboardWriteError = Schema.is(ClipboardWriteError);
-const isClipboardReadUnavailableError = Schema.is(ClipboardReadUnavailableError);
-const isClipboardReadError = Schema.is(ClipboardReadError);
-const isClipboardReadDeniedError = Schema.is(ClipboardReadDeniedError);
 
 interface DrawerLayout {
   viewportHeight: number;
@@ -423,44 +410,42 @@ export type TerminalContextMenuAction =
   | "select-all"
   | "scroll-to-bottom";
 
-/** Post-selection popup: available selection actions, always enabled. */
 export function terminalSelectionMenuItems(
-  options?: { canAddToChat?: boolean },
-  translate: TFunction = i18n.t,
+  options?: {
+    canAddToChat?: boolean;
+  },
+  resolve: typeof m = m,
 ): ContextMenuItem<"add-to-chat" | "copy">[] {
   return [
     ...(options?.canAddToChat === false
       ? []
       : ([
-          { id: "add-to-chat", label: translate("terminal.menu.addToChat") },
+          { id: "add-to-chat", label: resolve(msg("Add to chat")) },
         ] satisfies ContextMenuItem<"add-to-chat">[])),
-    { id: "copy", label: translate("terminal.menu.copy") },
+    { id: "copy", label: resolve(msg("Copy")) },
   ];
 }
 
-/**
- * Right-click menu for selection, clipboard, and local scrollback actions.
- * Paste is always offered: the browser
- * (and Electron's default editing menu) can only paste into an editable
- * element, so a canvas terminal never gets a usable entry from them.
- */
 export function terminalContextMenuItems(
-  options: { hasSelection: boolean; canAddToChat?: boolean; readOnly?: boolean },
-  translate: TFunction = i18n.t,
+  options: {
+    hasSelection: boolean;
+    canAddToChat?: boolean;
+    readOnly?: boolean;
+  },
+  resolve: typeof m = m,
 ): ContextMenuItem<TerminalContextMenuAction>[] {
   const { hasSelection, canAddToChat = true } = options;
   return [
-    ...terminalSelectionMenuItems({ canAddToChat }, translate).map((item) => ({
+    ...terminalSelectionMenuItems({ canAddToChat }, resolve).map((item) => ({
       ...item,
       disabled: !hasSelection,
     })),
+    { id: "paste", label: resolve(msg("Paste")), ...(options.readOnly ? { disabled: true } : {}) },
     {
-      id: "paste",
-      label: translate("terminal.menu.paste"),
-      ...(options.readOnly ? { disabled: true } : {}),
+      id: "select-all",
+      label: resolve(msg("Select all", { $context: "select all terminal text" })),
     },
-    { id: "select-all", label: translate("terminal.menu.selectAll") },
-    { id: "scroll-to-bottom", label: translate("terminal.menu.latest") },
+    { id: "scroll-to-bottom", label: resolve(msg("Jump to latest")) },
   ];
 }
 
@@ -543,44 +528,20 @@ function TerminalSessionViewport({
   visible,
   keybindings,
 }: TerminalViewportProps) {
-  const t = useTranslate();
-  const initializationFailureRef = useRef<{ message: string | null } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const autoFocusedRef = useRef(false);
   const terminalRef = useRef<GhosttyTerminalSurface | null>(null);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Ghostty initialization writes retry text outside React; keep that DOM text in the current language.
-  useEffect(() => {
-    const failure = initializationFailureRef.current;
-    const mount = containerRef.current;
-    if (!failure || !mount) return;
-    mount.textContent = t("terminal.initRetry", {
-      message: failure.message ?? t("terminal.initFailed"),
-    });
-  }, [t]);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Ghostty owns its input and scrollback DOM; update their accessible labels when the language changes.
-  useEffect(() => {
-    terminalRef.current?.setAccessibleLabels(
-      t("terminal.inputLabel"),
-      t("terminal.scrollbackLabel"),
-    );
-  }, [t]);
   const visibleRef = useRef(visible);
   const environmentId = threadRef.environmentId;
   const canOperateTerminal = useEnvironmentScope(environmentId, AuthTerminalOperateScope);
   const hasTerminalWriteAccess = useEffectEvent(() =>
     readEnvironmentScope(environmentId, AuthTerminalOperateScope),
   );
-  const serverConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId));
-  const editorAction = useEditorAction(environmentId, serverConfig?.availableEditors ?? [], {
-    threadId: threadRef.threadId,
-    workspacePath: cwd,
-  });
-  const [preferredEditor] = usePreferredEditor();
-  const canOpenEditor = editorAction.unavailableReason(preferredEditor) === null;
   const canOpenHostEditor = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
   const canReadFilesystem = useEnvironmentScope(environmentId, AuthFilesystemReadScope);
   const [linkPath, setLinkPath] = useState<string | null>(null);
   const metadataThreadRef = useContext(FileMetadataThreadContext);
+  const serverConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId));
   const hostname = serverConfig?.hostname;
   const readHostname = useEffectEvent(() => hostname);
   const linkMetadataQuery =
@@ -594,7 +555,6 @@ function TerminalSessionViewport({
       : null;
   const canActivateTerminalLink = useEffectEvent((text: string) => {
     if (isTerminalUrl(text)) return true;
-    if (editorAction.unavailableReason(readPreferredEditor()) !== null) return false;
     if (!readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)) return false;
     if (text !== linkPath || !linkMetadataQuery) return false;
     const metadata = AsyncResult.getOrElse(appAtomRegistry.get(linkMetadataQuery), () => null);
@@ -602,7 +562,6 @@ function TerminalSessionViewport({
   });
   const validateTerminalLink = useEffectEvent(async (text: string) => {
     if (isTerminalUrl(text)) return true;
-    if (editorAction.unavailableReason(readPreferredEditor()) !== null) return false;
     if (
       !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope) ||
       !readEnvironmentScope(environmentId, AuthFilesystemReadScope)
@@ -621,7 +580,12 @@ function TerminalSessionViewport({
       (result.value?.kind === "file" || result.value?.kind === "directory")
     );
   });
-  const openTerminalPath = useEffectEvent((target: string) => editorAction.open(target));
+  const openInPreferredEditor = useOpenInPreferredEditor(
+    environmentId,
+    serverConfig?.availableEditors ?? [],
+    { workspacePath: worktreePath ?? cwd },
+  );
+  const openTerminalPath = useEffectEvent((target: string) => openInPreferredEditor(target));
   const openPreview = useAtomCommand(previewEnvironment.open, {
     reportFailure: false,
   });
@@ -707,7 +671,7 @@ function TerminalSessionViewport({
         hasHandledExitRef.current = true;
         writeSystemMessage(
           terminal,
-          t(status === "closed" ? "terminal.closed" : "terminal.exited"),
+          status === "closed" ? m(msg("Terminal closed")) : m(msg("Process exited")),
         );
         window.setTimeout(() => {
           if (hasHandledExitRef.current) {
@@ -730,14 +694,6 @@ function TerminalSessionViewport({
       consumePendingTerminalFocus(threadRef, terminalId);
   }, [canOperateTerminal, terminalId, threadRef]);
 
-  // Links re-read the grant on activation; only the hovered link's styling needs a nudge.
-  const linkActivationScopeRef = useRef(canOpenEditor);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- refreshes link activation styling on the imperative terminal surface when the editor grant changes
-  useEffect(() => {
-    if (linkActivationScopeRef.current === canOpenEditor) return;
-    linkActivationScopeRef.current = canOpenEditor;
-    terminalRef.current?.refreshLinkActivation();
-  }, [canOpenEditor]);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- refreshes the imperative terminal's hovered link after filesystem metadata or editor permissions change
   useEffect(() => {
     if (!linkMetadataQuery) {
@@ -772,7 +728,6 @@ function TerminalSessionViewport({
     const mount = containerRef.current;
     if (!mount) return;
 
-    initializationFailureRef.current = null;
     const localApi = readLocalApi();
     let cancelled = false;
     let teardown: (() => void) | null = null;
@@ -783,14 +738,10 @@ function TerminalSessionViewport({
       const setupFont = terminalFontRef.current;
       const terminalOptions = withLiveVisibility(visibleRef, {
         theme: terminalThemeFromApp(mount),
-        accessibleLabels: {
-          input: i18n.t("terminal.inputLabel"),
-          scrollback: i18n.t("terminal.scrollbackLabel"),
-        },
         font: terminalFontOptions(setupFont.family, setupFont.size),
         onData: (data) => handleData(data),
-        onBinary: (data) => void sendTerminalInput(data, i18n.t("terminal.writeFailed"), "binary"),
-        onReply: (data) => void sendTerminalInput(data, i18n.t("terminal.writeFailed"), "reply"),
+        onBinary: (data) => void sendTerminalInput(data, m(msg("Terminal write failed")), "binary"),
+        onReply: (data) => void sendTerminalInput(data, m(msg("Terminal write failed")), "reply"),
         onResize: (cols, rows) => void resizeTerminal(cols, rows),
         onSelectionChange: () => {},
         beforeKey: (event) => handleBeforeKey(event),
@@ -813,10 +764,6 @@ function TerminalSessionViewport({
       terminal.setTheme(terminalThemeFromApp(mount));
       setupTerminal = terminal;
       terminalRef.current = terminal;
-      terminal.setAccessibleLabels(
-        i18n.t("terminal.inputLabel"),
-        i18n.t("terminal.scrollbackLabel"),
-      );
       terminal.input.setAttribute("data-workspace-focus-default", "");
       terminal.input.readOnly = !hasTerminalWriteAccess();
       // Reapply font settings hydrated during loading, when terminalRef was null.
@@ -915,27 +862,7 @@ function TerminalSessionViewport({
         if (requestId !== selectionActionRequestIdRef.current) return;
         const activeTerminal = terminalRef.current;
         if (activeTerminal) {
-          const clipboardKey = isClipboardApiUnavailableError(error)
-            ? "terminal.clipboard.copyUnavailable"
-            : isClipboardWriteError(error)
-              ? "terminal.clipboard.copyFailed"
-              : isClipboardReadUnavailableError(error)
-                ? "terminal.clipboard.readUnavailable"
-                : isClipboardReadDeniedError(error)
-                  ? "terminal.clipboard.readDenied"
-                  : isClipboardReadError(error)
-                    ? "terminal.clipboard.readFailed"
-                    : null;
-          writeSystemMessage(
-            activeTerminal,
-            clipboardKey
-              ? i18n.t(clipboardKey, {
-                  shortcut: isMacPlatform(navigator.platform ?? "") ? "⌘V" : "Ctrl+Shift+V",
-                })
-              : error instanceof Error
-                ? error.message
-                : fallback,
-          );
+          writeSystemMessage(activeTerminal, thrownErrorMessage(error, m) ?? fallback);
         }
       };
 
@@ -947,9 +874,15 @@ function TerminalSessionViewport({
 
       const copySelection = async (text: string, requestId: number) => {
         try {
-          await writeTextToClipboard(text, "terminal selection");
+          await writeTextToClipboard(text, {
+            target: "terminal selection",
+            unavailableMessage: msg(
+              "Clipboard API is unavailable while copying terminal selection.",
+            ),
+            failureMessage: msg("Failed to copy terminal selection to the clipboard."),
+          });
         } catch (error) {
-          reportIfCurrent(requestId, error, i18n.t("terminal.copyFailed"));
+          reportIfCurrent(requestId, error, m(msg("Unable to copy terminal selection")));
         }
         focusIfCurrent(requestId);
       };
@@ -961,11 +894,19 @@ function TerminalSessionViewport({
         try {
           // Let the surface own clipboard reads so paste shortcuts can supersede an in-flight menu paste.
           await activeTerminal.pasteFromClipboard(
-            () => readTextFromClipboard("terminal input"),
+            () =>
+              readTextFromClipboard({
+                target: "terminal input",
+                unavailableMessage: msg(
+                  "Clipboard API is unavailable while reading terminal input.",
+                ),
+                failureMessage: msg("Failed to read terminal input from the clipboard."),
+              }),
             () => requestId === selectionActionRequestIdRef.current,
           );
         } catch (error) {
-          reportIfCurrent(requestId, error, i18n.t("terminal.clipboardFailed"));
+          reportIfCurrent(requestId, error, m(msg("Unable to read the clipboard")));
+          return;
         }
         focusIfCurrent(requestId);
       };
@@ -988,7 +929,7 @@ function TerminalSessionViewport({
             { x: event.clientX, y: event.clientY },
           );
         } catch (error) {
-          reportIfCurrent(requestId, error, i18n.t("terminal.menuFailed"));
+          reportIfCurrent(requestId, error, m(msg("Unable to open the terminal context menu")));
           focusIfCurrent(requestId);
           return;
         }
@@ -1063,7 +1004,7 @@ function TerminalSessionViewport({
             if (result._tag === "Success") return true;
             if (terminalRef.current === terminal && !isAtomCommandInterrupted(result)) {
               const error = squashAtomCommandFailure(result);
-              report(error instanceof Error ? error.message : fallbackError);
+              report(thrownErrorMessage(error, m) ?? fallbackError);
             }
             return false;
           },
@@ -1079,11 +1020,12 @@ function TerminalSessionViewport({
             if (result._tag === "Success") return true;
             if (!isAtomCommandInterrupted(result)) {
               const error = squashAtomCommandFailure(result);
-              report(error instanceof Error ? error.message : "Failed to close interrupted paste");
+              report(thrownErrorMessage(error, m) ?? m(msg("Failed to close interrupted paste")));
             }
             return false;
           },
-          () => report("Terminal paste interrupted. Paste again when the terminal is ready."),
+          () =>
+            report(m(msg("Terminal paste interrupted. Paste again when the terminal is ready."))),
         );
       };
 
@@ -1111,7 +1053,7 @@ function TerminalSessionViewport({
         if (navigationData !== null) {
           event.preventDefault();
           event.stopPropagation();
-          void sendTerminalInput(navigationData, "terminal.cursorFailed");
+          void sendTerminalInput(navigationData, m(msg("Failed to move cursor")));
           return false;
         }
 
@@ -1119,14 +1061,14 @@ function TerminalSessionViewport({
         if (deleteData !== null) {
           event.preventDefault();
           event.stopPropagation();
-          void sendTerminalInput(deleteData, "terminal.deleteInputFailed");
+          void sendTerminalInput(deleteData, m(msg("Failed to delete terminal input")));
           return false;
         }
 
         if (!isTerminalClearShortcut(event)) return true;
         event.preventDefault();
         event.stopPropagation();
-        void sendTerminalInput("\u000c", "terminal.clearFailed");
+        void sendTerminalInput("\u000c", m(msg("Failed to clear terminal")));
         return false;
       }
 
@@ -1140,14 +1082,17 @@ function TerminalSessionViewport({
         if (!latestTerminal) return;
         if (isTerminalUrl(text)) {
           if (!localApi) {
-            writeSystemMessage(latestTerminal, i18n.t("terminal.linksUnavailable"));
+            writeSystemMessage(
+              latestTerminal,
+              m(msg("Opening links is unavailable in this browser.")),
+            );
             return;
           }
           const fallbackToBrowser = () => {
             void localApi.shell.openExternal(text).catch((error: unknown) => {
               writeSystemMessage(
                 latestTerminal,
-                error instanceof Error ? error.message : i18n.t("terminal.linkFailed"),
+                thrownErrorMessage(error, m) ?? m(msg("Unable to open link")),
               );
             });
           };
@@ -1160,8 +1105,8 @@ function TerminalSessionViewport({
               toastManager.add(
                 stackedThreadToast({
                   type: "error",
-                  title: i18n.t("terminal.linkFailed"),
-                  description: error instanceof Error ? error.message : i18n.t("terminal.error"),
+                  title: m(msg("Unable to open link")),
+                  description: thrownErrorMessage(error, m) ?? m(msg("An error occurred.")),
                 }),
               );
             },
@@ -1177,13 +1122,13 @@ function TerminalSessionViewport({
           const error = squashAtomCommandFailure(result);
           writeSystemMessage(
             latestTerminal,
-            error instanceof Error ? error.message : i18n.t("terminal.pathFailed"),
+            thrownErrorMessage(error, m) ?? m(msg("Unable to open path")),
           );
         })();
       }
 
       function handleData(data: string): void {
-        void sendTerminalInput(data, i18n.t("terminal.writeFailed"));
+        void sendTerminalInput(data, m(msg("Terminal write failed")));
       }
 
       const themeObserver = new MutationObserver(() => {
@@ -1233,12 +1178,11 @@ function TerminalSessionViewport({
         setupTerminal?.dispose();
         setupTerminal = null;
         if (cancelled) return;
-        initializationFailureRef.current = {
-          message: error instanceof Error ? error.message : null,
-        };
-        mount.textContent = i18n.t("terminal.initRetry", {
-          message: initializationFailureRef.current.message ?? i18n.t("terminal.initFailed"),
-        });
+        const message =
+          thrownErrorMessage(error, m) ?? m(msg("Unable to initialize libghostty-vt"));
+        mount.textContent = m(
+          msg("{message}. Close and reopen the terminal to retry.", { message }),
+        );
       });
 
     return () => {
@@ -1391,7 +1335,7 @@ function TerminalSplitPanes({
   visible: boolean;
   keybindings: ResolvedKeybindingsConfig;
 }) {
-  const t = useTranslate();
+  const gt = useGT();
   return (
     <div
       className="grid h-full w-full min-w-0 gap-0 overflow-hidden"
@@ -1427,7 +1371,7 @@ function TerminalSplitPanes({
                 threadRef={threadRef}
                 threadId={threadId}
                 terminalId={terminalId}
-                terminalLabel={terminalLabelById.get(terminalId) ?? t("panels.terminal")}
+                terminalLabel={terminalLabelById.get(terminalId) ?? gt("Terminal")}
                 cwd={terminalLaunchLocation.cwd}
                 {...(terminalLaunchLocation.worktreePath !== undefined
                   ? { worktreePath: terminalLaunchLocation.worktreePath }
@@ -1467,18 +1411,18 @@ function TerminalSidebarGroup({
   onActiveTerminalChange: (terminalId: string) => void;
   onCloseTerminal: (terminalId: string) => void;
 }) {
+  const gt = useGT();
   const isGroupActive = terminalGroup.terminalIds.includes(activeTerminalId);
   const groupActiveTerminalId = isGroupActive
     ? activeTerminalId
     : (terminalGroup.terminalIds[0] ?? activeTerminalId);
   const terminalCount = terminalGroup.terminalIds.length;
   const isSplitGroup = terminalCount > 1;
-  const t = useTranslate();
   const groupLabel = !isSplitGroup
-    ? t("terminal.group.single")
+    ? gt("Single", { $context: "terminal group with one terminal" })
     : terminalGroup.splitDirection === "vertical"
-      ? t("terminal.group.stacked")
-      : t("terminal.group.sideBySide");
+      ? gt("Stacked", { $context: "terminals split vertically" })
+      : gt("Side by side", { $context: "terminals split horizontally" });
   const GroupIcon = !isSplitGroup
     ? Square
     : terminalGroup.splitDirection === "vertical"
@@ -1506,10 +1450,14 @@ function TerminalSidebarGroup({
       <div className="flex flex-col gap-0.5">
         {terminalGroup.terminalIds.map((terminalId) => {
           const isActive = terminalId === activeTerminalId;
-          const terminalLabel = terminalLabelById.get(terminalId) ?? t("panels.terminal");
-          const closeTerminalLabel = `Close ${terminalLabel}${
-            isActive && closeShortcutLabel ? ` (${closeShortcutLabel})` : ""
-          }`;
+          const terminalLabel = terminalLabelById.get(terminalId) ?? gt("Terminal");
+          const closeTerminalLabel =
+            isActive && closeShortcutLabel
+              ? gt("Close {terminal} ({shortcut})", {
+                  terminal: terminalLabel,
+                  shortcut: closeShortcutLabel,
+                })
+              : gt("Close {terminal}", { terminal: terminalLabel });
           return (
             <div
               key={terminalId}
@@ -1575,9 +1523,10 @@ export default function ThreadTerminalDrawer({
   terminalLabelsById,
   terminalLaunchLocationsById,
 }: ThreadTerminalDrawerProps) {
-  const t = useTranslate();
+  const gt = useGT();
+  const messages = useMessages();
   const canOperateTerminal = useEnvironmentScope(threadRef.environmentId, AuthTerminalOperateScope);
-  const terminalArea = workspaceAreaProps("terminal", 5, "Terminal");
+  const terminalArea = workspaceAreaProps("terminal", 5, gt("Terminal"));
   const isPanel = mode === "panel";
   const [advancedTypography] = useLocalStorage(
     TYPOGRAPHY_ADVANCED_STORAGE_KEY,
@@ -1692,7 +1641,10 @@ export default function ThreadTerminalDrawer({
   const terminalLabelById = (() => {
     const next = new Map<string, string>();
     for (const terminalId of normalizedTerminalIds) {
-      next.set(terminalId, terminalLabelsById?.get(terminalId) ?? getTerminalLabel(terminalId));
+      next.set(
+        terminalId,
+        terminalLabelsById?.get(terminalId) ?? getTerminalLabel(terminalId, messages),
+      );
     }
     return next;
   })();
@@ -1729,21 +1681,21 @@ export default function ThreadTerminalDrawer({
       ...(runtimeEnv ? { runtimeEnv } : {}),
     };
   const splitTerminalActionLabel = hasReachedSplitLimit
-    ? t("terminal.splitHorizontalLimit", { count: MAX_TERMINALS_PER_GROUP })
-    : t("terminal.splitHorizontal", {
-        shortcut: splitShortcutLabel ? ` (${splitShortcutLabel})` : "",
-      });
+    ? gt("Split Terminal Horizontally (max {max} per group)", { max: MAX_TERMINALS_PER_GROUP })
+    : splitShortcutLabel
+      ? gt("Split Terminal Horizontally ({shortcut})", { shortcut: splitShortcutLabel })
+      : gt("Split Terminal Horizontally");
   const splitTerminalVerticalActionLabel = hasReachedSplitLimit
-    ? t("terminal.splitVerticalLimit", { count: MAX_TERMINALS_PER_GROUP })
-    : t("terminal.splitVertical", {
-        shortcut: splitVerticalShortcutLabel ? ` (${splitVerticalShortcutLabel})` : "",
-      });
-  const newTerminalActionLabel = t("terminal.new", {
-    shortcut: newShortcutLabel ? ` (${newShortcutLabel})` : "",
-  });
-  const closeTerminalActionLabel = t("terminal.close", {
-    shortcut: closeShortcutLabel ? ` (${closeShortcutLabel})` : "",
-  });
+    ? gt("Split Terminal Vertically (max {max} per group)", { max: MAX_TERMINALS_PER_GROUP })
+    : splitVerticalShortcutLabel
+      ? gt("Split Terminal Vertically ({shortcut})", { shortcut: splitVerticalShortcutLabel })
+      : gt("Split Terminal Vertically");
+  const newTerminalActionLabel = newShortcutLabel
+    ? gt("New Terminal ({shortcut})", { shortcut: newShortcutLabel })
+    : gt("New Terminal");
+  const closeTerminalActionLabel = closeShortcutLabel
+    ? gt("Close Terminal ({shortcut})", { shortcut: closeShortcutLabel })
+    : gt("Close Terminal");
   const onSplitTerminalAction = () => {
     if (!canOperateTerminal || hasReachedSplitLimit) return;
     onSplitTerminal();
@@ -1758,8 +1710,7 @@ export default function ThreadTerminalDrawer({
   };
   const confirmCloseTerminal = (terminalId: string) => {
     if (!canOperateTerminal) return;
-    const label =
-      terminalLabelById.get(terminalId) ?? getTerminalLabel(terminalId, t("panels.terminal"));
+    const label = terminalLabelById.get(terminalId) ?? getTerminalLabel(terminalId, m);
     void confirmTerminalClose([label]).then((confirmed) => {
       if (confirmed && readEnvironmentScope(threadRef.environmentId, AuthTerminalOperateScope)) {
         onCloseTerminal(terminalId, threadRef);
@@ -1885,7 +1836,9 @@ export default function ThreadTerminalDrawer({
       >
         {resizeHandle}
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-4 py-6 text-center text-sm text-muted-foreground">
-          <p>{t("terminal.empty")}</p>
+          <p>
+            <T>No terminal sessions for this thread yet.</T>
+          </p>
           <Button
             size="xs"
             variant="outline"

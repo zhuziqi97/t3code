@@ -1,4 +1,6 @@
-import { i18n } from "../../i18n";
+import { msg } from "gt-react";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { m } from "~/i18n/messages";
 import { useAtomValue } from "@effect/atom-react";
 import {
   makeQueuedRunEditStore,
@@ -134,7 +136,7 @@ async function submitQueuedRunEdit(input: {
     await refreshExpiredAttachmentUploads({ environmentId, images: files, draftTarget });
     validateFiles();
     const uploaded = getUploadedAttachments({ environmentId, images: files });
-    if (uploaded === null) throw new Error(i18n.t("chat.upload.beforeSave"));
+    if (uploaded === null) throw new Error(m(msg("Retry or remove failed uploads before saving.")));
     return uploaded;
   };
   try {
@@ -146,7 +148,7 @@ async function submitQueuedRunEdit(input: {
       uploadFiles,
     });
     if (input.draftChanged())
-      return "Draft changed while preparing this message. Review it and save again.";
+      return m(msg("Draft changed while preparing this message. Review it and save again."));
     // The edit draft owns thread and machine mentions, so a chip removed while editing is dropped.
     const keptRecords = (editing.context?.records ?? []).filter(
       (record) =>
@@ -191,9 +193,9 @@ async function submitQueuedRunEdit(input: {
         },
       },
     });
-    return result._tag === "Failure" ? i18n.t("chat.queue.saveFailed") : null;
+    return result._tag === "Failure" ? m(msg("Could not save the edited queued message.")) : null;
   } catch (error) {
-    return error instanceof Error ? error.message : i18n.t("chat.queue.saveFailed");
+    return thrownErrorMessage(error, m) ?? m(msg("Could not save the edited queued message."));
   }
 }
 
@@ -319,15 +321,15 @@ export function useQueuedRunEdit(input: {
           toastManager.add(
             stackedThreadToast({
               type: recovery === "kept" ? "info" : "warning",
-              title: i18n.t("chat.queue.notQueued"),
+              title: m(msg("Queued message is no longer queued")),
               description:
-                recovery === "kept"
-                  ? title === undefined
-                    ? i18n.t("chat.queue.editKept")
-                    : i18n.t("chat.queue.editKeptInThread", { thread: title })
-                  : title === undefined
-                    ? i18n.t("chat.queue.editDiscarded")
-                    : i18n.t("chat.queue.editDiscardedInThread", { thread: title }),
+                title === undefined
+                  ? recovery === "kept"
+                    ? m(msg("Your unsaved edit was kept in the composer."))
+                    : m(msg("Your unsaved edit was discarded."))
+                  : recovery === "kept"
+                    ? m(msg("Your unsaved edit in “{title}” was kept in the composer.", { title }))
+                    : m(msg("Your unsaved edit in “{title}” was discarded.", { title })),
             }),
           );
         },
@@ -393,7 +395,11 @@ export function useQueuedRunEdit(input: {
     ) {
       setThreadError(
         editing.threadId,
-        i18n.t("chat.attachment.max", { count: PROVIDER_SEND_TURN_MAX_ATTACHMENTS }),
+        m(
+          msg("A message can have at most {max} attachments.", {
+            max: PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
+          }),
+        ),
       );
       return;
     }
@@ -426,7 +432,7 @@ export function useQueuedRunEdit(input: {
     setThreadError(
       editing.threadId,
       changedAfterSave
-        ? "The earlier edit was saved. Review your newer changes and save again."
+        ? m(msg("The earlier edit was saved. Review your newer changes and save again."))
         : error,
     );
     const current = finishSave(error === null && !changedAfterSave);

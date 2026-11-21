@@ -27,8 +27,7 @@ vi.mock("~/components/ui/toast", async (original) => ({
   ...(await original<typeof import("~/components/ui/toast")>()),
   toastManager: { add: state.toast },
 }));
-vi.mock("./ReadOnlySourcePreview", async (original) => ({
-  ...(await original<typeof import("./ReadOnlySourcePreview")>()),
+vi.mock("./ReadOnlySourcePreview", () => ({
   default: ({ text }: { text: string }) => <pre>{text}</pre>,
 }));
 

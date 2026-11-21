@@ -109,6 +109,7 @@ const unitTestProject = {
     setupFiles: [
       "../../packages/shared/src/testing/longTempDir.ts",
       "../../packages/shared/src/testing/providerEnv.ts",
+      "../../packages/shared/src/testing/gitEnv.ts",
     ],
   },
 } satisfies TestProjectInlineConfiguration;
@@ -157,6 +158,7 @@ const browserTestProject = {
       "micromark-util-combine-extensions",
       "pele/lazy",
       "@t3tools/shared > property-information",
+      "@t3tools/client-runtime > unbash",
       "react-markdown",
       "@t3tools/shared > rehype-raw",
       "@t3tools/shared > rehype-sanitize",
@@ -179,7 +181,7 @@ const browserTestProject = {
       "fast-xml-parser",
       "entities",
       "dompurify",
-      "heic-to/next",
+      "heic-to/csp",
       "jszip",
       "pdfjs-dist",
       "sql.js",

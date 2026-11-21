@@ -1,4 +1,5 @@
 import { i18n, useTranslate } from "../i18n";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import {
   parseScopedThreadKey,
   scopeProjectRef,
@@ -21,6 +22,7 @@ import { resolveWorktreeCleanup } from "@t3tools/shared/projectSettings";
 import * as Cause from "effect/Cause";
 import * as Schema from "effect/Schema";
 import { AsyncResult } from "effect/reactivity";
+import { msg } from "gt-react";
 import { useRouter } from "@tanstack/react-router";
 
 import { getFallbackThreadIdAfterDelete, pinOrderKeyBetween } from "../components/Sidebar.logic";
@@ -37,6 +39,7 @@ import { useNewThreadHandler } from "./useHandleNewThread";
 import { refreshArchivedThreadsForEnvironment } from "../lib/archivedThreadsState";
 import { releaseComposerDraftUploads } from "../lib/composerDraftUploads";
 import { announce } from "../lib/announce";
+import { m } from "../i18n/messages";
 import { readLocalApi } from "../localApi";
 import {
   readDelegatedUnderParent,
@@ -170,7 +173,7 @@ export class ThreadActiveReorderUnsupportedError extends Schema.TaggedError<Thre
 
 async function requestThreadUnpinConfirmation(input: {
   enabled: boolean;
-  title: string;
+  title: string | null;
   confirm: ((message: string) => Promise<boolean>) | null;
 }) {
   const { confirm } = input;
@@ -181,8 +184,10 @@ async function requestThreadUnpinConfirmation(input: {
   return settlePromise(() =>
     confirm(
       [
-        i18n.t("thread.unpin.question", { title: input.title }),
-        i18n.t("thread.unpin.warning"),
+        input.title === null
+          ? m(msg('Unpin thread "this thread"?'))
+          : m(msg('Unpin thread "{title}"?', { title: input.title })),
+        m(msg("This will move the thread out of your pinned section.")),
       ].join("\n"),
     ),
   );
@@ -195,8 +200,8 @@ export async function navigateAfterThreadDeletion(navigate: () => Promise<void>)
     toastManager.add(
       stackedThreadToast({
         type: "error",
-        title: i18n.t("thread.delete.navigationFailed"),
-        description: error instanceof Error ? error.message : i18n.t("common.error"),
+        title: m(msg("Thread deleted, but navigation failed")),
+        description: thrownErrorMessage(error, m) ?? m(msg("An error occurred.")),
       }),
     );
   }
@@ -685,8 +690,8 @@ export function useThreadActions() {
     if (cleanupFailure) {
       const removalFailed = removeResult._tag === "Failure";
       const error = squashAtomCommandFailure(cleanupFailure);
-      const message = error instanceof Error ? error.message : t("common.error");
-      console.error(t("thread.delete.cleanupFailed"), {
+      const message = thrownErrorMessage(error, m) ?? m(msg("An error occurred."));
+      console.error("Worktree cleanup failed after thread deletion", {
         threadId: threadRef.threadId,
         projectCwd: threadProject.workspaceRoot,
         worktreePath: orphanedWorktreePath,
@@ -699,10 +704,12 @@ export function useThreadActions() {
             ? t("thread.delete.worktreeFailed")
             : t("thread.delete.gitRefreshFailed"),
           description: removalFailed
-            ? t("thread.delete.worktreeDetail", {
-                path: displayWorktreePath ?? orphanedWorktreePath,
-                message,
-              })
+            ? m(
+                msg("Could not remove {path}. {message}", {
+                  path: displayWorktreePath ?? orphanedWorktreePath,
+                  message,
+                }),
+              )
             : message,
         }),
       );
@@ -778,7 +785,7 @@ export function useThreadActions() {
 
   const pinThread = async (target: ScopedThreadRef, opts: { orderKey?: string } = {}) => {
     const result = await sendPin(target, opts);
-    if (result._tag === "Success") announce("Pinned 1 thread");
+    if (result._tag === "Success") announce(m(msg("Pinned 1 thread")));
     return result;
   };
 
@@ -861,7 +868,7 @@ export function useThreadActions() {
     const resolved = resolveThreadTarget(target);
     const confirmationResult = await requestThreadUnpinConfirmation({
       enabled: confirmThreadUnpin,
-      title: resolved?.thread.title ?? t("thread.this"),
+      title: resolved?.thread.title ?? null,
       confirm: localApi ? (message) => localApi.dialogs.confirm(message) : null,
     });
     if (confirmationResult._tag === "Failure") {
@@ -997,10 +1004,15 @@ export function useThreadActions() {
     const resolved = resolveThreadTarget(target);
 
     if (confirmThreadDelete && localApi) {
-      const title = resolved?.thread.title ?? knownTitle ?? t("thread.this");
+      const title = resolved?.thread.title ?? knownTitle ?? null;
       const confirmationResult = await settlePromise(() =>
         localApi.dialogs.confirm(
-          [t("thread.delete.question", { title }), t("thread.delete.warning")].join("\n"),
+          [
+            title === null
+              ? m(msg('Delete thread "this thread"?'))
+              : m(msg('Delete thread "{title}"?', { title })),
+            m(msg("This permanently clears conversation history for this thread.")),
+          ].join("\n"),
           { variant: "destructive" },
         ),
       );

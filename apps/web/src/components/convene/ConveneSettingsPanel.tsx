@@ -17,7 +17,11 @@ export function ConveneSettingsPanel() {
     : (primaryId ?? environments[0]?.environmentId ?? null);
   return (
     <SettingsPageContainer>
-      <SettingsSection id="convene-connection" title="Convene" variant="plain">
+      <SettingsSection
+        id="convene-connection"
+        title={t("settings.sections.convene")}
+        variant="plain"
+      >
         <div className="space-y-5 p-4">
           {(environments.length > 1 || (search.machine && environmentId === null)) && (
             <div className="max-w-sm">

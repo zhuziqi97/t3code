@@ -44,30 +44,52 @@ export function dynamicToolSurface(toolName: string | null | undefined, input: u
     : undefined;
 }
 
-export function dynamicToolTitle(
+export type DynamicToolTitle =
+  | { readonly kind: "title"; readonly title: string }
+  | { readonly kind: "computer-use" }
+  | { readonly kind: "run-javascript" }
+  | { readonly kind: "skill"; readonly name: string };
+
+export function describeDynamicToolTitle(
   toolName: string | null | undefined,
   input: unknown,
   retainedTitle?: string | null,
-  formatSkill?: (name: string) => string,
-): string | undefined {
+): DynamicToolTitle | undefined {
   if (isJavaScriptReplTool(toolName)) {
     const title = asTrimmedString(retainedTitle);
     const meaningfulTitle =
       title && title.toLowerCase() !== "js" && title.toLowerCase() !== toolName?.toLowerCase()
         ? title
         : undefined;
-    return (
-      asTrimmedString(asRecord(input)?.title) ??
-      meaningfulTitle ??
-      (dynamicToolSurface(toolName, input) === "computer" ? "Computer use" : "Run JavaScript")
-    );
+    const shown = asTrimmedString(asRecord(input)?.title) ?? meaningfulTitle;
+    if (shown) return { kind: "title", title: shown };
+    return dynamicToolSurface(toolName, input) === "computer"
+      ? { kind: "computer-use" }
+      : { kind: "run-javascript" };
   }
   const skill = claudeSkillInvocation(toolName, input);
-  return skill === undefined
-    ? undefined
-    : formatSkill
-      ? formatSkill(skill.name)
-      : `Skill: ${skill.name}`;
+  return skill === undefined ? undefined : { kind: "skill", name: skill.name };
+}
+
+export function dynamicToolTitle(
+  toolName: string | null | undefined,
+  input: unknown,
+  retainedTitle?: string | null,
+  formatSkill?: (name: string) => string,
+): string | undefined {
+  const title = describeDynamicToolTitle(toolName, input, retainedTitle);
+  switch (title?.kind) {
+    case undefined:
+      return undefined;
+    case "title":
+      return title.title;
+    case "computer-use":
+      return "Computer use";
+    case "run-javascript":
+      return "Run JavaScript";
+    case "skill":
+      return formatSkill ? formatSkill(title.name) : `Skill: ${title.name}`;
+  }
 }
 
 function recordHasKeys(
@@ -369,6 +391,15 @@ function searchTargetName(value: string | undefined): string | undefined {
   return value.split(/[\\/]/u).findLast((part) => part.length > 0 && part !== ".");
 }
 
+export function searchToolLabelParts(data: Record<string, unknown> | undefined) {
+  const input = searchInputRecord(data);
+  return {
+    query: firstInputString(input, SEARCH_QUERY_KEYS),
+    glob: firstInputString(input, SEARCH_GLOB_KEYS),
+    target: searchTargetName(firstInputString(input, SEARCH_TARGET_KEYS)),
+  };
+}
+
 export function formatSearchToolLabel(
   data: Record<string, unknown> | undefined,
   format?: (label: {
@@ -377,10 +408,7 @@ export function formatSearchToolLabel(
     readonly target?: string;
   }) => string,
 ): string | undefined {
-  const input = searchInputRecord(data);
-  const query = firstInputString(input, SEARCH_QUERY_KEYS);
-  const glob = firstInputString(input, SEARCH_GLOB_KEYS);
-  const target = searchTargetName(firstInputString(input, SEARCH_TARGET_KEYS));
+  const { query, glob, target } = searchToolLabelParts(data);
   if (query && target) {
     return format
       ? format({ type: "query", term: query, target })

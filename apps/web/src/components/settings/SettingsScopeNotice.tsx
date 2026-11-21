@@ -6,6 +6,7 @@ import { useEnvironments } from "../../state/environments";
 import type { SettingsScopeSearch } from "./settingsScope";
 import { resolveEnvironmentMachineKind, type EnvironmentId } from "@t3tools/contracts";
 import { useLocation, useNavigate } from "@tanstack/react-router";
+import { useGT } from "gt-react";
 import { ChevronRightIcon, LayersIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -48,6 +49,7 @@ export function SettingsScopeNotice({
   eligibleEnvironmentIds?: readonly EnvironmentId[];
 }) {
   const t = useTranslate();
+  const gt = useGT();
   const { selectScope, search, groups } = useSettingsScope();
   const navigate = useNavigate({ from: "/settings" });
   const pathname = useLocation({ select: (location) => location.pathname });
@@ -92,7 +94,7 @@ export function SettingsScopeNotice({
         ? projectGroups.map((group) => ({
             label: group.displayName,
             secondary: [
-              ...(group.archived ? ["Archived"] : []),
+              ...(group.archived ? [gt("Archived", { $context: "project state" })] : []),
               ...(projectGroups.some(
                 (other) =>
                   other.projectKey !== group.projectKey && other.displayName === group.displayName,

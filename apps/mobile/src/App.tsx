@@ -4,6 +4,7 @@ import { installThreadOutboxDelivery } from "./state/threadOutboxDelivery";
 import * as Linking from "expo-linking";
 import * as SplashScreen from "expo-splash-screen";
 import { requireNativeModule } from "expo";
+import { useLocale } from "gt-react-native";
 import { useEffect, useRef, useState } from "react";
 import { Platform, StatusBar } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -22,10 +23,6 @@ import { pipe } from "effect/Function";
 import { DEFAULT_HOSTED_APP_URL } from "@t3tools/shared/connectAuth";
 
 import { RegistryContext, useAtomValue } from "@effect/atom-react";
-import { AsyncResult } from "effect/reactivity";
-import { resolveLanguage } from "@t3tools/client-runtime/i18n";
-import { changeLanguage, i18n } from "./i18n";
-import { mobilePreferencesAtom } from "./state/preferences";
 import { ProjectChipIconRasterizer } from "./native/ProjectChipIconImages";
 import { ThreadArrangementHost } from "./features/threads/ThreadArrangementSheet";
 import * as Dialog from "./components/ui/Dialog";
@@ -43,6 +40,7 @@ import {
 } from "./features/agent-awareness/notificationNavigation";
 import {
   installAppShortcuts,
+  republishAppShortcuts,
   recordAppShortcutNavigationState,
 } from "./features/shortcuts/appShortcutsRuntime";
 import {
@@ -51,6 +49,8 @@ import {
   useAppearancePreferences,
 } from "./features/settings/appearance/AppearancePreferencesProvider";
 import { RootStack, rootPathnameFromState, workspaceLocationFromState } from "./Stack";
+import { I18nProvider } from "./i18n/I18nProvider";
+import { DEFAULT_LOCALE } from "./i18n/locales";
 import { appAtomRegistry } from "./state/atom-registry";
 import { subscribeComposerDraftModelReconciliation } from "./state/use-composer-drafts";
 import { environmentThreadShells, threadEnvironment } from "./state/threads";
@@ -176,40 +176,6 @@ function linkToAppPath(href: string): void {
 
 const Navigation = createStaticNavigation(RootStack);
 
-/**
- * Applies the stored language preference to i18next.
- *
- * The host locale is read here rather than at module load so a language the
- * user picked is never overridden by the device on startup.
- */
-function LanguageSync() {
-  const preferencesResult = useAtomValue(mobilePreferencesAtom);
-  const languagePreference = AsyncResult.isSuccess(preferencesResult)
-    ? (preferencesResult.value.languagePreference ?? "system")
-    : "system";
-
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- applies the persisted language preference to the external i18next instance after preferences load
-  useEffect(() => {
-    const language = resolveLanguage(languagePreference, [deviceLocale()]);
-    if (i18n.resolvedLanguage !== language) {
-      void changeLanguage(language);
-    }
-  }, [languagePreference]);
-
-  return null;
-}
-
-/**
- * The device's preferred locale.
- *
- * Hermes reads this from the native locale settings, so it is coarser than
- * `expo-localization.getLocales()`; bring that in if per-region matching is
- * ever needed.
- */
-function deviceLocale(): string {
-  return Intl.DateTimeFormat().resolvedOptions().locale;
-}
-
 function handleNavigationStateChange(state: NavigationState | undefined): void {
   recordWorkspaceSelections(state);
   presentPendingIncomingShare();
@@ -292,12 +258,27 @@ function SplashScreenCoordinator() {
   return null;
 }
 
+function QuickActionsLanguage() {
+  const locale = useLocale();
+  // Shortcuts published before the catalog loaded are English.
+  const publishedLocale = useRef<string>(DEFAULT_LOCALE);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- the launcher keeps quick action titles from the last publish, so a language switch republishes them
+  useEffect(() => {
+    if (Platform.OS !== "android" || publishedLocale.current === locale) return;
+    publishedLocale.current = locale;
+    republishAppShortcuts();
+  }, [locale]);
+  return null;
+}
+
 export default function App() {
   return (
     <RegistryContext.Provider value={appAtomRegistry}>
       <CloudAuthProvider>
         <AppearancePreferencesProvider>
-          <AppContent />
+          <I18nProvider>
+            <AppContent />
+          </I18nProvider>
         </AppearancePreferencesProvider>
       </CloudAuthProvider>
     </RegistryContext.Provider>
@@ -319,7 +300,7 @@ function AppContent() {
   return (
     <>
       <SplashScreenCoordinator />
-      <LanguageSync />
+      <QuickActionsLanguage />
       <SubscriptionUsageCoordinator />
       <ConnectDeviceApprovalCoordinator />
       <GestureHandlerRootView className="flex-1">

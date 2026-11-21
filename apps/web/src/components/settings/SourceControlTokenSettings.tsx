@@ -1,11 +1,10 @@
-import { Trans } from "react-i18next";
-import { useTranslate } from "../../i18n";
 import {
   isSecretReference,
   type EnvironmentId,
   type SecretReference,
   type SettingsSecretValue,
 } from "@t3tools/contracts";
+import { T, useGT, Var } from "gt-react";
 import { ExternalLinkIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -36,7 +35,12 @@ export function SourceControlTokenSettings({
   readonly credentials: SourceControlHostCredentials;
   readonly onSaved: () => void;
 }) {
-  const t = useTranslate();
+  const gt = useGT();
+  // Translates the GitHub definition's English `tokenAccess`.
+  const tokenAccess =
+    definition.kind === "github"
+      ? gt("read and write access to pull requests and contents")
+      : credentials.tokenAccess;
   const { tokens } = useEnvironmentSettings(environmentId, (settings) =>
     readHostCredentialSettings(settings, definition.kind),
   );
@@ -91,24 +95,18 @@ export function SourceControlTokenSettings({
       {/* Locked while saving: a successful save clears the draft, which would drop edits made mid-request. */}
       <fieldset disabled={saving} className="contents">
         <p className="max-w-2xl text-xs leading-relaxed text-muted-foreground">
-          <Trans
-            t={t}
-            i18nKey="sourceControl.token.hint"
-            values={{
-              variable: credentials.tokenEnvVar,
-              command: credentials.cliName,
-              provider: definition.label,
-              cli: credentials.cliLabel,
-              access:
-                credentials.tokenAccess === "read and write access to pull requests and contents"
-                  ? t("sourceControl.token.pullRequestsAndContents")
-                  : credentials.tokenAccess,
-            }}
-            components={{
-              variable: <code className="rounded bg-muted px-1 py-px text-2xs" />,
-              command: <code className="rounded bg-muted px-1 py-px text-2xs" />,
-            }}
-          />{" "}
+          <T>
+            A token saved here is used before{" "}
+            <code className="rounded bg-muted px-1 py-px text-2xs">
+              <Var>{credentials.tokenEnvVar}</Var>
+            </code>{" "}
+            and the{" "}
+            <code className="rounded bg-muted px-1 py-px text-2xs">
+              <Var>{credentials.cliName}</Var>
+            </code>{" "}
+            login, so <Var>{definition.label}</Var> works without the{" "}
+            <Var>{credentials.cliLabel}</Var>. Give it <Var>{tokenAccess}</Var>.
+          </T>{" "}
           {normalizedHost || defaultHost ? (
             <InlineButton
               render={
@@ -119,7 +117,7 @@ export function SourceControlTokenSettings({
                 />
               }
             >
-              {t("sourceControl.github.createToken")}
+              <T>Create a token</T>
               <ExternalLinkIcon aria-hidden className="size-3" />
             </InlineButton>
           ) : null}
@@ -127,7 +125,7 @@ export function SourceControlTokenSettings({
         <div className="grid gap-3 sm:grid-cols-[12rem_1fr]">
           <div className="grid gap-1.5">
             <Label htmlFor={`${definition.kind}-token-host-${environmentId}`}>
-              {t("sourceControl.host")}
+              <T>Host</T>
             </Label>
             <Input
               id={`${definition.kind}-token-host-${environmentId}`}
@@ -140,12 +138,12 @@ export function SourceControlTokenSettings({
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor={`${definition.kind}-token-${environmentId}`}>
-              {t("sourceControl.token")}
+              <T>Token</T>
             </Label>
             <SecretSourceInput
               id={`${definition.kind}-token-${environmentId}`}
               size="sm"
-              aria-label={`${definition.label} token`}
+              aria-label={gt("{host} token", { host: definition.label })}
               environmentId={environmentId}
               configured={isSaved && !isSecretReference(savedToken)}
               value={draft}
@@ -158,11 +156,11 @@ export function SourceControlTokenSettings({
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">
             {savedHosts.length === 0
-              ? t("sourceControl.token.none", {
-                  variable: credentials.tokenEnvVar,
-                  command: credentials.cliName,
+              ? gt("No token saved; the server uses {envVar} or the {cliName} login.", {
+                  envVar: credentials.tokenEnvVar,
+                  cliName: credentials.cliName,
                 })
-              : t("sourceControl.github.savedHosts", { hosts: savedHosts.join(", ") })}
+              : gt("Saved for {hosts}.", { hosts: savedHosts.join(", ") })}
           </p>
           <div className="flex shrink-0 gap-2">
             {isSaved ? (
@@ -172,7 +170,7 @@ export function SourceControlTokenSettings({
                 disabled={saving}
                 onClick={() => void save(normalizedHost, "")}
               >
-                {t("common.remove")}
+                <T>Remove</T>
               </Button>
             ) : null}
             <Button
@@ -180,7 +178,7 @@ export function SourceControlTokenSettings({
               size="xs"
               disabled={!normalizedHost || submission === "" || saving}
             >
-              {t("common.save")}
+              <T>Save</T>
             </Button>
           </div>
         </div>

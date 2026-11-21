@@ -1,3 +1,4 @@
+import { msg } from "gt-react";
 import { useEffect, useLayoutEffect, useRef } from "react";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import type { ConveneResourceSurface } from "../../rightPanelStore";
@@ -62,7 +63,13 @@ export function ConveneResourceViewer({
         <Button
           size="sm"
           variant="outline"
-          onClick={() => void writeTextToClipboard(ready?.resource_uri ?? uri, "link")}
+          onClick={() =>
+            void writeTextToClipboard(ready?.resource_uri ?? uri, {
+              target: "link",
+              unavailableMessage: msg("Clipboard API is unavailable while copying link."),
+              failureMessage: msg("Failed to copy link to the clipboard."),
+            })
+          }
         >
           {t("convene.resource.copyLink")}
         </Button>

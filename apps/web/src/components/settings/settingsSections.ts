@@ -47,17 +47,15 @@ const SnapShotIcon = createLucideIcon("snap-shot", [
 ]);
 
 const NAV_GROUPS = [
-  { id: "general", headingKey: null, heading: null },
-  { id: "agents", headingKey: "settings.groups.agents", heading: "Agents" },
-  { id: "code", headingKey: "settings.groups.code", heading: "Code" },
-  { id: "connections", headingKey: "settings.sections.connections", heading: "Connections" },
-  { id: "other", headingKey: null, heading: null },
+  { id: "general" },
+  { id: "agents" },
+  { id: "code" },
+  { id: "connections" },
+  { id: "other" },
 ] as const;
 
 interface SettingsSectionDefinition {
   readonly path: `/settings/${string}`;
-  readonly labelKey: string;
-  readonly label: string;
   readonly icon: LucideIcon;
   readonly group: (typeof NAV_GROUPS)[number]["id"] | null;
   readonly searchScope?: SettingsSearchScope;
@@ -71,132 +69,96 @@ interface SettingsSectionDefinition {
 export const SETTINGS_SECTIONS = [
   {
     path: "/settings/secrets",
-    labelKey: "settings.sections.secrets",
-    label: "Secrets",
     icon: ShieldCheckIcon,
     group: "connections",
     searchScope: "environment",
   },
   {
     path: "/settings/general",
-    labelKey: "settings.sections.general",
-    label: "General",
     icon: Settings2Icon,
     group: "general",
   },
   {
     path: "/settings/appearance",
-    labelKey: "settings.sections.appearance",
-    label: "Appearance",
     icon: PaletteIcon,
     group: "general",
   },
   {
     path: "/settings/chat",
-    labelKey: "settings.sections.chat",
-    label: "Chat",
     icon: MessageSquareTextIcon,
     group: "general",
   },
   {
     path: "/settings/diffs",
-    labelKey: "settings.sections.diffs",
-    label: "Diffs & pull requests",
     icon: FileDiffIcon,
     group: "general",
   },
   {
     path: "/settings/keybindings",
-    labelKey: "settings.sections.keybindings",
-    label: "Keybindings",
     icon: KeyboardIcon,
     group: "general",
   },
   {
     path: "/settings/voice",
-    labelKey: "settings.sections.voice",
-    label: "Voice",
     icon: MicIcon,
     group: "general",
   },
   {
     path: "/settings/snap-shot",
-    labelKey: "settings.sections.snap-shot",
-    label: "SnapShots",
     icon: SnapShotIcon,
     group: "general",
   },
   {
     path: "/settings/providers",
-    labelKey: "settings.sections.providers",
-    label: "Providers",
     icon: BotIcon,
     group: "agents",
   },
   {
     path: "/settings/threads",
-    labelKey: "settings.sections.threads",
-    label: "Threads",
     icon: MessagesSquareIcon,
     group: "agents",
   },
   {
     path: "/settings/browser",
-    labelKey: "settings.sections.browser",
-    label: "Browser",
     icon: GlobeIcon,
     group: "agents",
   },
   {
     path: "/settings/devices",
-    labelKey: "settings.sections.devices",
-    label: "Devices",
     icon: SmartphoneIcon,
     group: "agents",
   },
   {
     path: "/settings/scheduled-tasks",
-    labelKey: "settings.sections.scheduled-tasks",
-    label: "Scheduled tasks",
     icon: CalendarClockIcon,
     group: "agents",
   },
   {
     path: "/settings/projects",
-    labelKey: "settings.sections.projects",
-    label: "Projects",
     icon: PanelsTopLeftIcon,
     group: "code",
     searchScope: "project",
   },
   {
     path: "/settings/source-control",
-    labelKey: "settings.sections.source-control",
-    label: "Source control",
     icon: GitBranchIcon,
     group: "code",
     searchScope: "environment-defaults",
   },
   {
     path: "/settings/worktrees",
-    labelKey: "settings.sections.worktrees",
-    label: "Worktrees",
     icon: FolderTreeIcon,
     group: "code",
     searchScope: "project-defaults",
   },
   {
     path: "/settings/connections",
-    labelKey: "settings.sections.connections",
-    label: "Environments",
     icon: ServerIcon,
     group: "connections",
     searchScope: "connections",
   },
   {
     path: "/settings/convene",
-    labelKey: "settings.sections.convene",
-    label: "Convene",
     icon: Link2Icon,
     group: "connections",
     search: [
@@ -212,45 +174,33 @@ export const SETTINGS_SECTIONS = [
   },
   {
     path: "/settings/access",
-    labelKey: "settings.sections.access",
-    label: "Sharing & access",
     icon: ShieldCheckIcon,
     group: "connections",
     searchScope: "connections",
   },
   {
     path: "/settings/maintenance",
-    labelKey: "settings.sections.maintenance",
-    label: "Maintenance",
     icon: WrenchIcon,
     group: "other",
   },
   {
     path: "/settings/labs",
-    labelKey: "settings.sections.labs",
-    label: "Labs",
     icon: FlaskConicalIcon,
     group: "other",
   },
   {
     path: "/settings/about",
-    labelKey: "settings.sections.about",
-    label: "About",
     icon: InfoIcon,
     group: "other",
   },
   {
     path: "/settings/archived",
-    labelKey: "settings.sections.archived",
-    label: "Archive",
     icon: ArchiveIcon,
     group: "other",
     searchScope: "project-defaults",
   },
   {
     path: "/settings/diagnostics",
-    labelKey: "settings.search.diagnostics.title",
-    label: "Diagnostics",
     icon: WrenchIcon,
     group: null,
     searchScope: "environment",
@@ -258,9 +208,6 @@ export const SETTINGS_SECTIONS = [
 ] as const satisfies ReadonlyArray<SettingsSectionDefinition>;
 
 export type SettingsPath = (typeof SETTINGS_SECTIONS)[number]["path"];
-
-export const SETTINGS_SECTIONS_BY_PATH: ReadonlyMap<SettingsPath, SettingsSectionDefinition> =
-  new Map(SETTINGS_SECTIONS.map((section) => [section.path, section]));
 
 export const SETTINGS_NAV_GROUPS = NAV_GROUPS.map((group) => ({
   ...group,

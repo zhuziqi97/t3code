@@ -1,12 +1,12 @@
-import { i18n, useTranslate } from "../../i18n";
-import type { TFunction } from "i18next";
-import type { MessageKey } from "@t3tools/client-runtime/i18n";
+import { i18n } from "../../i18n";
 import { PermissionChecklist, PermissionContinueButton } from "../permissions/PermissionChecklist";
 import { usePermissionStatus } from "../permissions/usePermissionStatus";
-import type { BrowserImportSource } from "@t3tools/contracts";
-import { BROWSER_IMPORT_FAILURE_COPY } from "@t3tools/contracts";
+import { browserImportFailureMessage } from "@t3tools/client-runtime/contract-labels";
+import type { BROWSER_IMPORT_FAILURE_COPY, BrowserImportSource } from "@t3tools/contracts";
 import { ArrowDownIcon, ArrowRightIcon, CheckIcon, HardDriveIcon } from "lucide-react";
 import { useRef, useState } from "react";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
+import type { MessageResolver } from "~/i18n/messages";
 
 import { cn, randomUUID } from "~/lib/utils";
 
@@ -25,7 +25,6 @@ import {
 import { Spinner } from "../ui/spinner";
 import {
   initialWizardStep,
-  browserProfileDisplayName,
   initialTargetSelection,
   canCloseWizard,
   isRetryableReason,
@@ -70,7 +69,7 @@ export function BrowserImportWizard({
   onCheckFullDiskAccess,
   onClose,
 }: BrowserImportWizardProps) {
-  const t = useTranslate();
+  const gt = useGT();
   const [source, setSource] = useState(initialSource);
   const [step, setStep] = useState<WizardStep>(() => initialWizardStep(initialSource));
   const [sourceProfileDirectory, setSourceProfileDirectory] = useState(
@@ -79,9 +78,7 @@ export function BrowserImportWizard({
   const [target, setTarget] = useState<WizardTargetSelection>(() =>
     initialTargetSelection(canCreateProfile, targetProfiles),
   );
-  const [targetError, setTargetError] = useState<MessageKey>();
-  // Stable across retries so a keychain re-approval lands in one profile, not
-  // a new one each time.
+  const [targetError, setTargetError] = useState<string>();
   const newProfileId = useRef(`profile-${randomUUID()}`);
   // Guard synchronously so a second click's refusal cannot leave the importing step during the first write.
   const importInFlight = useRef(false);
@@ -90,7 +87,9 @@ export function BrowserImportWizard({
     if (importInFlight.current) return;
     const chosen = resolveWizardTarget(target, newProfileId.current, targetProfiles);
     if (chosen === undefined) {
-      setTargetError("integrations.import.target-missing");
+      setTargetError(
+        gt("That profile is no longer available. Choose where to import these cookies."),
+      );
       setStep({ step: "configure" });
       return;
     }
@@ -152,11 +151,6 @@ export function BrowserImportWizard({
         ) : step.step === "done" ? (
           <DoneStep
             {...step}
-            targetName={
-              target.kind === "existing"
-                ? browserProfileDisplayName({ id: target.profileId, name: step.targetName }, t)
-                : step.targetName
-            }
             destinationEnvironmentName={destinationEnvironmentName}
             onClose={onClose}
           />
@@ -183,7 +177,7 @@ export function BrowserImportWizard({
               setTarget(selection);
               setTargetError(undefined);
             }}
-            targetError={targetError ? t(targetError) : undefined}
+            targetError={targetError}
             onCancel={onClose}
             onImport={runImport}
           />
@@ -202,33 +196,42 @@ function QuitStep({
   readonly onCancel: () => void;
   readonly onRechecked: () => void;
 }) {
-  const t = useTranslate();
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{t("integrations.import.quit-title", { source: source.name })}</DialogTitle>
+        <DialogTitle>
+          <T>
+            Quit <Var>{source.name}</Var> to import
+          </T>
+        </DialogTitle>
         <DialogDescription>
-          {t("integrations.import.quit-description", { source: source.name })}
+          <T>
+            <Var>{source.name}</Var> is open, so its cookies can&rsquo;t be read yet. Quit it, then
+            continue.
+          </T>
         </DialogDescription>
       </DialogHeader>
       <DialogFooter>
         <Button variant="outline" onClick={onCancel}>
-          {t("integrations.cancel")}
+          <T>Cancel</T>
         </Button>
-        <DialogAction onClick={onRechecked}>{t("integrations.import.quit-confirm")}</DialogAction>
+        <DialogAction onClick={onRechecked}>
+          <T>I&rsquo;ve quit it</T>
+        </DialogAction>
       </DialogFooter>
     </>
   );
 }
 
-/** "5,065 cookies", or "no cookies", or nothing when the store is unreadable. */
-function cookieCountLabel(count: number | undefined, t: TFunction): string | undefined {
+function cookieCountLabel(count: number | undefined, resolve: MessageResolver): string | undefined {
   if (count === undefined) return undefined;
-  if (count === 0) return t("integrations.import.cookies.none");
-  return t("integrations.import.cookies", {
-    count,
-    number: new Intl.NumberFormat(i18n.resolvedLanguage).format(count),
-  });
+  if (count === 0) return resolve(msg("no cookies"));
+  return resolve(
+    msg("{count, plural, one {{formatted} cookie} other {{formatted} cookies}}", {
+      count,
+      formatted: count.toLocaleString(),
+    }),
+  );
 }
 
 type ConfigureStepProps = {
@@ -260,9 +263,9 @@ function FullDiskAccessStep({
   readonly onGranted: () => void;
   readonly stillRequired: boolean;
 }) {
-  const t = useTranslate();
+  const gt = useGT();
   const [opening, setOpening] = useState(false);
-  const [openingError, setOpeningError] = useState<MessageKey | null>(null);
+  const [openingError, setOpeningError] = useState<string | null>(null);
   const permission = usePermissionStatus(async () => ({ fullDiskAccess: await onCheck() }), {
     fullDiskAccess: false,
   });
@@ -272,17 +275,23 @@ function FullDiskAccessStep({
     setOpeningError(null);
     void Promise.resolve()
       .then(onOpenSettings)
-      .catch(() => setOpeningError("integrations.import.fda-opening-error"))
+      .catch(() => setOpeningError(gt("Could not open System Settings. Try Allow again.")))
       .finally(() => setOpening(false));
   };
   return (
     <>
       <DialogHeader>
         <DialogTitle>
-          {t("integrations.import.fda-dialog-title", { source: source.name })}
+          <T>
+            Let T3 Code read <Var>{source.name}</Var>&rsquo;s cookies
+          </T>
         </DialogTitle>
         <DialogDescription>
-          {t("integrations.import.fda-description", { source: source.name })}
+          <T>
+            To import cookies from <Var>{source.name}</Var>, T3 Code needs Full Disk Access. Turn it
+            on in System Settings, then come back to finish the import. You can revoke it again once
+            the import is done.
+          </T>
         </DialogDescription>
       </DialogHeader>
       <DialogPanel>
@@ -297,9 +306,9 @@ function FullDiskAccessStep({
                   aria-hidden="true"
                 />
               ),
-              title: t("integrations.import.fda-title"),
-              description: t("integrations.import.fda-permission-description", {
-                source: source.name,
+              title: gt("Full Disk Access"),
+              description: gt("Read {browser}''s cookies for this import.", {
+                browser: source.name,
               }),
               granted: permission.status.fullDiskAccess,
               onAllow: () => void allow(),
@@ -308,27 +317,31 @@ function FullDiskAccessStep({
         />
         {openingError || permission.error ? (
           <p role="status" className="mt-3 text-xs text-muted-foreground">
-            {openingError ? t(openingError) : permission.error}
+            {openingError ?? permission.error}
           </p>
         ) : null}
         {!permission.isReady(["fullDiskAccess"]) ? (
           <p className="mt-3 text-xs text-muted-foreground">
             {stillRequired
-              ? t("integrations.import.fda-still-required")
-              : t("integrations.import.fda-restart")}
+              ? gt(
+                  "Access is still required. Quit and reopen T3 Code if you just allowed it, then retry the import.",
+                )
+              : gt(
+                  "If access doesn't update after you allow it, quit and reopen T3 Code, then retry the import.",
+                )}
           </p>
         ) : null}
       </DialogPanel>
       <DialogFooter>
         <Button variant="outline" onClick={onCancel}>
-          {t("integrations.cancel")}
+          <T>Cancel</T>
         </Button>
         <PermissionContinueButton
           ready={permission.isReady(["fullDiskAccess"])}
           busy={opening}
           onClick={onGranted}
         >
-          {t("integrations.continue")}
+          <T>Continue</T>
         </PermissionContinueButton>
       </DialogFooter>
     </>
@@ -347,7 +360,8 @@ function ConfigureStep({
   onCancel,
   onImport,
 }: ConfigureStepProps) {
-  const t = useTranslate();
+  const gt = useGT();
+  const m = useMessages();
   const targetMissing =
     target.kind === "existing" &&
     !targetProfiles.some((profile) => profile.id === target.profileId);
@@ -355,34 +369,36 @@ function ConfigureStep({
   const targetFeedback =
     targetError ??
     (targetMissing
-      ? t("integrations.import.target-missing")
+      ? gt("That profile is no longer available. Choose where to import these cookies.")
       : targetUncreatable
-        ? t("integrations.import.target-limit")
+        ? gt("You've reached the profile limit. Choose an existing profile to import into.")
         : undefined);
   return (
     <>
       <DialogHeader>
         <DialogTitle>
-          {t("integrations.import.configure-title", { source: source.name })}
+          <T>
+            Import from <Var>{source.name}</Var>
+          </T>
         </DialogTitle>
         <DialogDescription>
-          {t("integrations.import.configure-description", {
-            environment: destinationEnvironmentName,
-          })}
+          <T>
+            Choose which cookies to import for <Var>{destinationEnvironmentName}</Var>.
+          </T>
         </DialogDescription>
       </DialogHeader>
       <DialogPanel>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
           <section className="flex-1 space-y-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              {t("integrations.import.from")}
+              {gt("From", { $context: "source browser profile" })}
             </p>
             {source.profiles.map((profile) => (
               <SelectableTile
                 key={profile.directory}
                 selected={sourceProfileDirectory === profile.directory}
                 title={profile.name}
-                subtitle={cookieCountLabel(profile.cookieCount, t)}
+                subtitle={cookieCountLabel(profile.cookieCount, m)}
                 onSelect={() => onSourceProfileChange(profile.directory)}
               />
             ))}
@@ -393,13 +409,13 @@ function ConfigureStep({
           </div>
           <section className="flex-1 space-y-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              {t("integrations.import.into")}
+              {gt("Into", { $context: "destination profile" })}
             </p>
             {canCreateProfile ? (
               <SelectableTile
                 selected={target.kind === "new"}
-                title={t("integrations.profiles.new")}
-                subtitle={t("integrations.import.created")}
+                title={gt("New profile")}
+                subtitle={gt("Created for these cookies")}
                 onSelect={() => onTargetChange({ kind: "new" })}
               />
             ) : null}
@@ -407,8 +423,8 @@ function ConfigureStep({
               <SelectableTile
                 key={profile.id}
                 selected={target.kind === "existing" && target.profileId === profile.id}
-                title={browserProfileDisplayName(profile, t)}
-                subtitle={t("integrations.import.existing")}
+                title={profile.name}
+                subtitle={gt("Existing profile")}
                 onSelect={() => onTargetChange({ kind: "existing", profileId: profile.id })}
               />
             ))}
@@ -422,13 +438,13 @@ function ConfigureStep({
       </DialogPanel>
       <DialogFooter>
         <Button variant="outline" onClick={onCancel}>
-          {t("integrations.cancel")}
+          <T>Cancel</T>
         </Button>
         <Button
           disabled={sourceProfileDirectory === "" || targetMissing || targetUncreatable}
           onClick={onImport}
         >
-          {t("integrations.import.action")}
+          {gt("Import", { $context: "verb" })}
         </Button>
       </DialogFooter>
     </>
@@ -479,17 +495,22 @@ function SelectableTile({
 }
 
 function ImportingStep() {
-  const t = useTranslate();
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{t("integrations.import.title")}</DialogTitle>
-        <DialogDescription>{t("integrations.import.wait")}</DialogDescription>
+        <DialogTitle>
+          <T>Importing cookies</T>
+        </DialogTitle>
+        <DialogDescription>
+          <T>This may take a moment.</T>
+        </DialogDescription>
       </DialogHeader>
       <DialogPanel>
         <div className="flex items-center gap-3 py-2">
           <Spinner size="md" tone="muted" />
-          <span className="text-sm text-muted-foreground">{t("integrations.import.progress")}</span>
+          <span className="text-sm text-muted-foreground">
+            <T>Importing…</T>
+          </span>
         </div>
       </DialogPanel>
     </>
@@ -503,24 +524,26 @@ function CheckingStep({
   readonly sourceName: string;
   readonly check: "browser" | "fullDiskAccess";
 }) {
-  const t = useTranslate();
+  const gt = useGT();
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{t("integrations.import.check-title", { source: sourceName })}</DialogTitle>
+        <DialogTitle>
+          <T>
+            Checking <Var>{sourceName}</Var>
+          </T>
+        </DialogTitle>
         <DialogDescription>
           {check === "fullDiskAccess"
-            ? t("integrations.import.check-fda")
-            : t("integrations.import.check-quit")}
+            ? gt("Checking Full Disk Access.")
+            : gt("Checking whether the browser has closed.")}
         </DialogDescription>
       </DialogHeader>
       <DialogPanel>
         <div className="flex items-center gap-3 py-2">
           <Spinner size="md" tone="muted" />
           <span className="text-sm text-muted-foreground">
-            {check === "fullDiskAccess"
-              ? t("integrations.import.check-access")
-              : t("integrations.import.checking")}
+            {check === "fullDiskAccess" ? gt("Checking access…") : gt("Checking…")}
           </span>
         </div>
       </DialogPanel>
@@ -543,47 +566,55 @@ function DoneStep({
   readonly destinationEnvironmentName: string;
   readonly onClose: () => void;
 }) {
-  const t = useTranslate();
+  const gt = useGT();
+  const environment = destinationEnvironmentName;
   return (
     <>
       <DialogHeader>
         <DialogTitle>
           {imported > 0
-            ? t("integrations.import.imported", {
-                count: imported,
-                number: new Intl.NumberFormat(i18n.resolvedLanguage).format(imported),
-              })
+            ? gt(
+                "{count, plural, one {Imported {formatted} cookie} other {Imported {formatted} cookies}}",
+                { count: imported, formatted: imported.toLocaleString() },
+              )
             : skipped > 0
-              ? t("integrations.import.skipped-title", {
-                  count: skipped,
-                  number: new Intl.NumberFormat(i18n.resolvedLanguage).format(skipped),
-                })
-              : t("integrations.import.none-found")}
+              ? gt(
+                  "{count, plural, one {Skipped {formatted} cookie} other {Skipped {formatted} cookies}}",
+                  { count: skipped, formatted: skipped.toLocaleString() },
+                )
+              : gt("No cookies found")}
         </DialogTitle>
         <DialogDescription>
           {imported > 0
-            ? t(skipped > 0 ? "integrations.import.added-skipped" : "integrations.import.added", {
-                profile: targetName,
-                environment: destinationEnvironmentName,
-                count: skipped,
-                number: new Intl.NumberFormat(i18n.resolvedLanguage).format(skipped),
-              })
+            ? skipped > 0
+              ? gt(
+                  "{count, plural, one {Added to {target} for {environment}. {formatted} cookie skipped.} other {Added to {target} for {environment}. {formatted} cookies skipped.}}",
+                  {
+                    count: skipped,
+                    formatted: skipped.toLocaleString(),
+                    target: targetName,
+                    environment,
+                  },
+                )
+              : gt("Added to {target} for {environment}.", { target: targetName, environment })
             : skipped > 0
-              ? t("integrations.import.no-imported", { environment: destinationEnvironmentName })
-              : t("integrations.import.no-cookies", { environment: destinationEnvironmentName })}
+              ? gt("No cookies were imported for {environment}.", { environment })
+              : gt("There were no cookies to import for {environment}.", { environment })}
         </DialogDescription>
       </DialogHeader>
       {skippedDomains.length > 0 ? (
         <DialogPanel>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {t("integrations.import.skipped")}
+            {gt("Skipped", { $context: "heading, cookie domains that were skipped" })}
           </p>
-          <p className="mt-1 text-sm text-foreground">{formatSkippedDomains(skippedDomains, t)}</p>
+          <p className="mt-1 text-sm text-foreground">
+            {formatSkippedDomains(skippedDomains, i18n.t)}
+          </p>
         </DialogPanel>
       ) : null}
       <DialogFooter>
         <DialogClose render={<Button />} onClick={onClose}>
-          {t("integrations.done")}
+          <T>Done</T>
         </DialogClose>
       </DialogFooter>
     </>
@@ -603,23 +634,28 @@ function BlockedStep({
   readonly onClose: () => void;
   readonly onRetry: (() => void) | undefined;
 }) {
-  const t = useTranslate();
+  const messages = useMessages();
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{t("integrations.import.blocked-title", { source: source.name })}</DialogTitle>
+        <DialogTitle>
+          <T>
+            Couldn&rsquo;t import from <Var>{source.name}</Var>
+          </T>
+        </DialogTitle>
         <DialogDescription>
-          {message ??
-            t(`integrations.import.failure.${reason}` as MessageKey, {
-              defaultValue: BROWSER_IMPORT_FAILURE_COPY[reason],
-            })}
+          {message ?? browserImportFailureMessage(reason, messages)}
         </DialogDescription>
       </DialogHeader>
       <DialogFooter>
         <Button variant="outline" onClick={onClose}>
-          {t("integrations.close")}
+          <T>Close</T>
         </Button>
-        {onRetry ? <DialogAction onClick={onRetry}>{t("integrations.retry")}</DialogAction> : null}
+        {onRetry ? (
+          <DialogAction onClick={onRetry}>
+            <T>Try again</T>
+          </DialogAction>
+        ) : null}
       </DialogFooter>
     </>
   );

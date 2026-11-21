@@ -1,3 +1,4 @@
+import { T, msg, useGT, useMessages } from "gt-react";
 import {
   LANGUAGE_LABELS,
   SUPPORTED_LANGUAGES,
@@ -15,9 +16,8 @@ import { useRef, useState } from "react";
 import {
   type DesktopUpdateChannel,
   IDLE_COMPACTION_MODES,
+  type IdleCompactionMode,
   globalIdleCompaction,
-  managedUpdatesDenial,
-  managedUpdatesMessage,
   ProviderDriverKind,
   type ProviderInstanceId,
   type SidebarProjectGroupingMode,
@@ -33,6 +33,10 @@ import {
   ScreenReaderAnnouncements,
   ToolCallVisibility,
 } from "@t3tools/contracts/settings";
+import {
+  managedUpdatesDenial,
+  managedUpdatesMessage,
+} from "@t3tools/client-runtime/contract-labels";
 import { desktopUpdateChannelOf } from "@t3tools/shared/cliRelease";
 import { createModelSelection, pickModelSelection } from "@t3tools/shared/model";
 import { resolvePastedPath } from "@t3tools/shared/path";
@@ -117,6 +121,7 @@ import {
   SettingsRow,
   SettingsSection,
 } from "./settingsLayout";
+import { useSearchableSetting } from "./settingsSearch";
 import { searchableSetting } from "./settingsSearch";
 import { BackgroundActivitySettingsRow } from "./BackgroundActivitySettings";
 import { AdvancedSettings } from "./AdvancedSettings";
@@ -167,6 +172,8 @@ const QUIT_CONFIRMATION_MODE_LABELS: Record<QuitConfirmationMode, string> = {
 
 const DEFAULT_DRIVER_KIND = ProviderDriverKind.make("codex");
 function AboutVersionSection() {
+  const gt = useGT();
+  const messages = useMessages();
   const t = useTranslate();
   const updateState = useDesktopUpdateState();
   const [switchChannel, setSwitchChannel] = useState<DesktopUpdateChannel | null>(null);
@@ -185,7 +192,9 @@ function AboutVersionSection() {
   const selectedUpdateChannel = updateState?.channel ?? "latest";
   // The desktop updates this machine, whose policy the primary environment reports.
   const primaryPolicy = usePrimaryManagedPolicy();
-  const updatesDenial = hasDesktopBridge ? managedUpdatesDenial(primaryPolicy) : undefined;
+  const updatesDenial = hasDesktopBridge
+    ? managedUpdatesDenial(primaryPolicy, messages)
+    : undefined;
   const nightlyDeniedBy =
     hasDesktopBridge && primaryPolicy?.limits?.updates?.allowNightly === false
       ? primaryPolicy.organization
@@ -391,11 +400,16 @@ function AboutVersionSection() {
           {...searchableSetting("update-track", t)}
           description={
             nightlyDeniedBy !== undefined ? (
-              `${managedUpdatesMessage(nightlyDeniedBy)} Nightly builds are not available${
-                selectedUpdateChannel === "nightly"
-                  ? "; switch to Stable to keep getting updates."
-                  : "."
-              }`
+              selectedUpdateChannel === "nightly" ? (
+                gt(
+                  "{policy} Nightly builds are not available; switch to Stable to keep getting updates.",
+                  { policy: managedUpdatesMessage(nightlyDeniedBy, messages) },
+                )
+              ) : (
+                gt("{policy} Nightly builds are not available.", {
+                  policy: managedUpdatesMessage(nightlyDeniedBy, messages),
+                })
+              )
             ) : unswitchedMachines > 0 ? (
               <>
                 {t("about.updateTrack.stillRuns", {
@@ -524,6 +538,8 @@ function notifyTextGenerationModelNotSaved(reason: string) {
 
 export function useSettingsRestore(onRestored?: () => void) {
   const t = useTranslate();
+  const messages = useMessages();
+  const gt = useGT();
   const {
     theme,
     setTheme,
@@ -615,7 +631,7 @@ export function useSettingsRestore(onRestored?: () => void) {
     DEFAULT_UNIFIED_SETTINGS.persistComposerContextStrip
       ? [t("restore.composerContext")]
       : []),
-    ...getChangedTypographySettingLabels(settings),
+    ...getChangedTypographySettingLabels(settings, messages),
     ...(settings.diffFilesCollapsed !== DEFAULT_UNIFIED_SETTINGS.diffFilesCollapsed
       ? [t("general.diffFiles.label")]
       : []),
@@ -644,13 +660,13 @@ export function useSettingsRestore(onRestored?: () => void) {
       ? [t("restore.contextWindow")]
       : []),
     ...(settings.toolCallVisibility !== DEFAULT_UNIFIED_SETTINGS.toolCallVisibility
-      ? ["Tool calls in chat"]
+      ? [gt("Tool calls in chat")]
       : []),
     ...(settings.screenReaderAnnouncements !== DEFAULT_UNIFIED_SETTINGS.screenReaderAnnouncements
       ? [t("settings.search.screen-reader-announcements.title")]
       : []),
     ...(settings.screenReaderWindowTitle !== DEFAULT_UNIFIED_SETTINGS.screenReaderWindowTitle
-      ? ["Screen reader window title"]
+      ? [gt("Screen reader window title")]
       : []),
     ...(settings.responseStreamingMode !== DEFAULT_UNIFIED_SETTINGS.responseStreamingMode
       ? [t("general.streaming.label")]
@@ -664,7 +680,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       : []),
     ...(isBackgroundActivityDirty ? [t("settings.search.background-activity.title")] : []),
     ...(settings.keepAwakeWhileAgentsWork !== DEFAULT_UNIFIED_SETTINGS.keepAwakeWhileAgentsWork
-      ? ["Keep awake while agents work"]
+      ? [gt("Keep awake while agents work")]
       : []),
     ...(settings.defaultThreadEnvMode !== DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode
       ? [t("restore.newThreadMode")]
@@ -677,7 +693,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       ? [t("general.baseDirectory.label")]
       : []),
     ...(settings.ghqCloneLayout !== DEFAULT_UNIFIED_SETTINGS.ghqCloneLayout
-      ? ["Clone into host folders"]
+      ? [gt("Clone into host folders")]
       : []),
     ...(settings.confirmThreadUnpin !== DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin
       ? [t("settings.search.unpin-confirmation.title")]
@@ -695,7 +711,7 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.threadTitleInstructions !== DEFAULT_UNIFIED_SETTINGS.threadTitleInstructions
       ? [t("settings.search.thread-title-instructions.title")]
       : []),
-    ...getChangedBrowserSettingLabels(settings),
+    ...getChangedBrowserSettingLabels(settings, messages),
     ...(settings.enableAgentBrowserAccess !== DEFAULT_UNIFIED_SETTINGS.enableAgentBrowserAccess
       ? [t("restore.agentBrowserAccess")]
       : []),
@@ -790,6 +806,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       addProjectBaseDirectory: DEFAULT_UNIFIED_SETTINGS.addProjectBaseDirectory,
       ghqCloneLayout: DEFAULT_UNIFIED_SETTINGS.ghqCloneLayout,
       confirmThreadArchive: DEFAULT_UNIFIED_SETTINGS.confirmThreadArchive,
+      confirmTerminalClose: DEFAULT_UNIFIED_SETTINGS.confirmTerminalClose,
       confirmThreadDelete: DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete,
       confirmThreadUnpin: DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin,
       confirmQuit: DEFAULT_UNIFIED_SETTINGS.confirmQuit,
@@ -876,6 +893,8 @@ function AutoSettleDaysInput({
 
 /** Row anchor props with the registry title in the active language. */
 export function GeneralSettingsPanel() {
+  const gt = useGT();
+  const setting = useSearchableSetting();
   const t = useTranslate();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
@@ -895,7 +914,7 @@ export function GeneralSettingsPanel() {
           resetAction={
             settings.languagePreference !== DEFAULT_UNIFIED_SETTINGS.languagePreference ? (
               <SettingResetButton
-                label={t("settings.language.title")}
+                ariaLabel={t("settings.language.title")}
                 onClick={() =>
                   updateSettings({
                     languagePreference: DEFAULT_UNIFIED_SETTINGS.languagePreference,
@@ -961,7 +980,7 @@ export function GeneralSettingsPanel() {
             settings.sidebarProjectGroupingMode !==
             DEFAULT_UNIFIED_SETTINGS.sidebarProjectGroupingMode ? (
               <SettingResetButton
-                label={t("general.projectGrouping.reset")}
+                ariaLabel={t("general.projectGrouping.reset")}
                 onClick={() =>
                   updateSettings({
                     sidebarProjectGroupingMode: DEFAULT_UNIFIED_SETTINGS.sidebarProjectGroupingMode,
@@ -996,7 +1015,7 @@ export function GeneralSettingsPanel() {
             settings.sidebarProjectSortOrder !==
             DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder ? (
               <SettingResetButton
-                label={t("general.projectOrder.reset")}
+                ariaLabel={t("general.projectOrder.reset")}
                 onClick={() =>
                   updateSettings({
                     sidebarProjectSortOrder: DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder,
@@ -1040,7 +1059,7 @@ export function GeneralSettingsPanel() {
             settings.sidebarWorkingShelfEnabled !==
             DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled ? (
               <SettingResetButton
-                label={t("general.working.reset")}
+                ariaLabel={t("general.working.reset")}
                 onClick={() =>
                   updateSettings({
                     sidebarWorkingShelfEnabled: DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled,
@@ -1068,7 +1087,7 @@ export function GeneralSettingsPanel() {
           resetAction={
             settings.confirmThreadUnpin !== DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin ? (
               <SettingResetButton
-                label={t("general.unpin.reset")}
+                ariaLabel={t("general.unpin.reset")}
                 onClick={() =>
                   updateSettings({
                     confirmThreadUnpin: DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin,
@@ -1093,7 +1112,7 @@ export function GeneralSettingsPanel() {
           resetAction={
             settings.confirmThreadArchive !== DEFAULT_UNIFIED_SETTINGS.confirmThreadArchive ? (
               <SettingResetButton
-                label={t("general.archive.reset")}
+                ariaLabel={t("general.archive.reset")}
                 onClick={() =>
                   updateSettings({
                     confirmThreadArchive: DEFAULT_UNIFIED_SETTINGS.confirmThreadArchive,
@@ -1118,7 +1137,7 @@ export function GeneralSettingsPanel() {
           resetAction={
             settings.confirmThreadDelete !== DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete ? (
               <SettingResetButton
-                label={t("general.delete.reset")}
+                ariaLabel={t("general.delete.reset")}
                 onClick={() =>
                   updateSettings({
                     confirmThreadDelete: DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete,
@@ -1137,6 +1156,31 @@ export function GeneralSettingsPanel() {
             />
           }
         />
+        <SettingsRow
+          {...setting("terminal-close-confirmation")}
+          description={<T>Ask before closing terminals and stopping their running processes.</T>}
+          resetAction={
+            settings.confirmTerminalClose !== DEFAULT_UNIFIED_SETTINGS.confirmTerminalClose ? (
+              <SettingResetButton
+                ariaLabel={gt("Reset terminal close confirmation to default")}
+                onClick={() =>
+                  updateSettings({
+                    confirmTerminalClose: DEFAULT_UNIFIED_SETTINGS.confirmTerminalClose,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.confirmTerminalClose}
+              onCheckedChange={(checked) =>
+                updateSettings({ confirmTerminalClose: Boolean(checked) })
+              }
+              aria-label={gt("Confirm terminal closing")}
+            />
+          }
+        />
         {isElectron ? (
           <SettingsRow
             {...searchableSetting("quit-confirmation", t)}
@@ -1144,7 +1188,7 @@ export function GeneralSettingsPanel() {
             resetAction={
               settings.confirmQuit !== DEFAULT_UNIFIED_SETTINGS.confirmQuit ? (
                 <SettingResetButton
-                  label={t("general.quit.reset")}
+                  ariaLabel={t("general.quit.reset")}
                   onClick={() =>
                     updateSettings({ confirmQuit: DEFAULT_UNIFIED_SETTINGS.confirmQuit })
                   }
@@ -1189,7 +1233,7 @@ export function GeneralSettingsPanel() {
           resetAction={
             settings.timestampFormat !== DEFAULT_UNIFIED_SETTINGS.timestampFormat ? (
               <SettingResetButton
-                label={t("general.time.reset")}
+                ariaLabel={t("general.time.reset")}
                 onClick={() =>
                   updateSettings({
                     timestampFormat: DEFAULT_UNIFIED_SETTINGS.timestampFormat,
@@ -1234,6 +1278,8 @@ export function GeneralSettingsPanel() {
 }
 
 export function ChatSettingsPanel() {
+  const gt = useGT();
+  const setting = useSearchableSetting();
   const t = useTranslate();
   const modifierLabel = isMacPlatform(navigator.platform) ? "⌘" : "Ctrl";
   const sendShortcutOptions = [
@@ -1299,7 +1345,7 @@ export function ChatSettingsPanel() {
             settings.composerRichTextEnabled !==
             DEFAULT_UNIFIED_SETTINGS.composerRichTextEnabled ? (
               <SettingResetButton
-                label={t("general.richText.reset")}
+                ariaLabel={t("general.richText.reset")}
                 onClick={() =>
                   updateSettings({
                     composerRichTextEnabled: DEFAULT_UNIFIED_SETTINGS.composerRichTextEnabled,
@@ -1324,7 +1370,7 @@ export function ChatSettingsPanel() {
           resetAction={
             settings.sendShortcut !== DEFAULT_UNIFIED_SETTINGS.sendShortcut ? (
               <SettingResetButton
-                label={t("general.send.reset")}
+                ariaLabel={t("general.send.reset")}
                 onClick={() =>
                   updateSettings({ sendShortcut: DEFAULT_UNIFIED_SETTINGS.sendShortcut })
                 }
@@ -1364,14 +1410,14 @@ export function ChatSettingsPanel() {
             </Select>
           }
         />
-        <AdvancedSettings targetIds={[searchableSetting("skills-in-slash-menu").id]}>
+        <AdvancedSettings targetIds={[setting("skills-in-slash-menu").id]}>
           <SettingsRow
             {...searchableSetting("skills-in-slash-menu", t)}
             description={t("general.skills.description")}
             resetAction={
               settings.showSkillsInSlashMenu !== DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu ? (
                 <SettingResetButton
-                  label={t("general.skills.reset")}
+                  ariaLabel={t("general.skills.reset")}
                   onClick={() =>
                     updateSettings({
                       showSkillsInSlashMenu: DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu,
@@ -1408,7 +1454,7 @@ export function ChatSettingsPanel() {
           resetAction={
             settings.followUpBehavior !== DEFAULT_UNIFIED_SETTINGS.followUpBehavior ? (
               <SettingResetButton
-                label={t("general.followUp.reset")}
+                ariaLabel={t("general.followUp.reset")}
                 onClick={() =>
                   updateSettings({
                     followUpBehavior: DEFAULT_UNIFIED_SETTINGS.followUpBehavior,
@@ -1450,7 +1496,7 @@ export function ChatSettingsPanel() {
         <ToolCallVisibilityRow />
       </SettingsSection>
 
-      <SettingsSection id="screen-reader" title="Screen reader">
+      <SettingsSection id="screen-reader" title={gt("Screen reader")}>
         <ScreenReaderAnnouncementsRow />
         <ScreenReaderWindowTitleRow />
       </SettingsSection>
@@ -1459,25 +1505,30 @@ export function ChatSettingsPanel() {
 }
 
 const TOOL_CALL_VISIBILITY_LABELS: Record<ToolCallVisibility, string> = {
-  showAll: "Show all",
-  hideSuccessful: "Hide successful",
-  hideAll: "Hide all",
-  zen: "Zen",
+  showAll: msg("Show all"),
+  hideSuccessful: msg("Hide successful"),
+  hideAll: msg("Hide all"),
+  zen: msg("Zen", { $context: "tool call visibility" }),
 };
 
 const isToolCallVisibility = Schema.is(ToolCallVisibility);
 
 function ToolCallVisibilityRow() {
+  const messages = useMessages();
+  const setting = useSearchableSetting();
+  const gt = useGT();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
   return (
     <SettingsRow
-      {...searchableSetting("tool-call-visibility")}
-      description="Hide the commands, edits, and searches agents run. Hide successful keeps failures. Zen shows only final answers. Approvals, questions, and errors always show."
+      {...setting("tool-call-visibility")}
+      description={gt(
+        "Hide the commands, edits, and searches agents run. Hide successful keeps failures. Zen shows only final answers. Approvals, questions, and errors always show.",
+      )}
       resetAction={
         settings.toolCallVisibility !== DEFAULT_UNIFIED_SETTINGS.toolCallVisibility ? (
           <SettingResetButton
-            label="tool calls in chat"
+            ariaLabel={gt("Reset tool calls in chat to default")}
             onClick={() =>
               updateSettings({ toolCallVisibility: DEFAULT_UNIFIED_SETTINGS.toolCallVisibility })
             }
@@ -1491,13 +1542,15 @@ function ToolCallVisibilityRow() {
             if (isToolCallVisibility(value)) updateSettings({ toolCallVisibility: value });
           }}
         >
-          <SelectTrigger size="sm" className="w-full sm:w-40" aria-label="Tool calls in chat">
-            <SelectValue>{TOOL_CALL_VISIBILITY_LABELS[settings.toolCallVisibility]}</SelectValue>
+          <SelectTrigger size="sm" className="w-full sm:w-40" aria-label={gt("Tool calls in chat")}>
+            <SelectValue>
+              {messages(TOOL_CALL_VISIBILITY_LABELS[settings.toolCallVisibility])}
+            </SelectValue>
           </SelectTrigger>
           <SelectPopup align="end" alignItemWithTrigger={false}>
             {ToolCallVisibility.literals.map((value) => (
               <SelectItem key={value} value={value}>
-                {TOOL_CALL_VISIBILITY_LABELS[value]}
+                {messages(TOOL_CALL_VISIBILITY_LABELS[value])}
               </SelectItem>
             ))}
           </SelectPopup>
@@ -1527,7 +1580,7 @@ function ScreenReaderAnnouncementsRow() {
         settings.screenReaderAnnouncements !==
         DEFAULT_UNIFIED_SETTINGS.screenReaderAnnouncements ? (
           <SettingResetButton
-            label={t("settings.search.screen-reader-announcements.title")}
+            ariaLabel={t("settings.search.screen-reader-announcements.title")}
             onClick={() =>
               updateSettings({
                 screenReaderAnnouncements: DEFAULT_UNIFIED_SETTINGS.screenReaderAnnouncements,
@@ -1568,16 +1621,20 @@ function ScreenReaderAnnouncementsRow() {
 }
 
 function ScreenReaderWindowTitleRow() {
+  const setting = useSearchableSetting();
+  const gt = useGT();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
   return (
     <SettingsRow
-      {...searchableSetting("screen-reader-window-title")}
-      description="Start the window title with the thread's status, like Needs approval, and its name, so screen readers read them first when you switch apps. Taskbars, shared screens, and time trackers see it too."
+      {...setting("screen-reader-window-title")}
+      description={gt(
+        "Start the window title with the thread's status, like Needs approval, and its name, so screen readers read them first when you switch apps. Taskbars, shared screens, and time trackers see it too.",
+      )}
       resetAction={
         settings.screenReaderWindowTitle !== DEFAULT_UNIFIED_SETTINGS.screenReaderWindowTitle ? (
           <SettingResetButton
-            label="screen reader window title"
+            ariaLabel={gt("Reset screen reader window title to default")}
             onClick={() =>
               updateSettings({
                 screenReaderWindowTitle: DEFAULT_UNIFIED_SETTINGS.screenReaderWindowTitle,
@@ -1590,7 +1647,7 @@ function ScreenReaderWindowTitleRow() {
         <Switch
           checked={settings.screenReaderWindowTitle}
           onCheckedChange={(checked) => updateSettings({ screenReaderWindowTitle: checked })}
-          aria-label="Screen reader window title"
+          aria-label={gt("Screen reader window title")}
         />
       }
     />
@@ -1608,7 +1665,7 @@ function DiffColorsSettingsRow() {
       resetAction={
         settings.diffColorScheme !== DEFAULT_UNIFIED_SETTINGS.diffColorScheme ? (
           <SettingResetButton
-            label={t("appearance.diffReset")}
+            ariaLabel={t("appearance.diffReset")}
             onClick={() =>
               updateSettings({ diffColorScheme: DEFAULT_UNIFIED_SETTINGS.diffColorScheme })
             }
@@ -1673,7 +1730,7 @@ export function DiffsSettingsPanel() {
           resetAction={
             settings.diffLayout !== DEFAULT_UNIFIED_SETTINGS.diffLayout ? (
               <SettingResetButton
-                label={t("general.diffLayout.reset")}
+                ariaLabel={t("general.diffLayout.reset")}
                 onClick={() => updateSettings({ diffLayout: DEFAULT_UNIFIED_SETTINGS.diffLayout })}
               />
             ) : null
@@ -1711,7 +1768,7 @@ export function DiffsSettingsPanel() {
           resetAction={
             settings.diffIgnoreWhitespace !== DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace ? (
               <SettingResetButton
-                label={t("general.whitespace.reset")}
+                ariaLabel={t("general.whitespace.reset")}
                 onClick={() =>
                   updateSettings({
                     diffIgnoreWhitespace: DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace,
@@ -1736,7 +1793,7 @@ export function DiffsSettingsPanel() {
           resetAction={
             settings.diffFilesCollapsed !== DEFAULT_UNIFIED_SETTINGS.diffFilesCollapsed ? (
               <SettingResetButton
-                label={t("general.diffFiles.reset")}
+                ariaLabel={t("general.diffFiles.reset")}
                 onClick={() =>
                   updateSettings({
                     diffFilesCollapsed: DEFAULT_UNIFIED_SETTINGS.diffFilesCollapsed,
@@ -1786,7 +1843,7 @@ export function DiffsSettingsPanel() {
           resetAction={
             settings.proactivePanelsEnabled !== DEFAULT_UNIFIED_SETTINGS.proactivePanelsEnabled ? (
               <SettingResetButton
-                label={t("general.proactive.reset")}
+                ariaLabel={t("general.proactive.reset")}
                 onClick={() =>
                   updateSettings({
                     proactivePanelsEnabled: DEFAULT_UNIFIED_SETTINGS.proactivePanelsEnabled,
@@ -1816,7 +1873,14 @@ export function CompactIdleThreadsRow() {
   return useOptionalSettingsScope() === null ? null : <ScopedCompactIdleThreadsRow />;
 }
 
+const IDLE_COMPACTION_MODE_LABELS: Record<IdleCompactionMode, string> = {
+  onReturn: msg("When you return"),
+  beforeCacheExpires: msg("Before the cache expires (beta)"),
+  off: msg("Never", { $context: "idle thread compaction mode" }),
+};
+
 function ScopedCompactIdleThreadsRow() {
+  const messages = useMessages();
   const t = useTranslate();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
@@ -1833,7 +1897,7 @@ function ScopedCompactIdleThreadsRow() {
       resetAction={
         globalIdleCompaction(settings) !== globalIdleCompaction(DEFAULT_UNIFIED_SETTINGS) ? (
           <SettingResetButton
-            label={t("general.compactIdle.reset")}
+            ariaLabel={t("general.compactIdle.reset")}
             onClick={() =>
               updateSettings({ idleCompaction: globalIdleCompaction(DEFAULT_UNIFIED_SETTINGS) })
             }
@@ -1870,7 +1934,7 @@ function ScopedCompactIdleThreadsRow() {
                 // A server from before modes has only the on/off switch, so it cannot store "Never".
                 disabled={mode.value === "off" && !idleCompaction.neverAvailable}
               >
-                {mode.label}
+                {messages(IDLE_COMPACTION_MODE_LABELS[mode.value])}
               </SelectItem>
             ))}
           </SelectPopup>
@@ -1881,6 +1945,8 @@ function ScopedCompactIdleThreadsRow() {
 }
 
 export function ThreadsSettingsPanel() {
+  const gt = useGT();
+  const setting = useSearchableSetting();
   const t = useTranslate();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
@@ -1953,7 +2019,7 @@ export function ThreadsSettingsPanel() {
             settings.addProjectBaseDirectory !==
             DEFAULT_UNIFIED_SETTINGS.addProjectBaseDirectory ? (
               <SettingResetButton
-                label={t("general.baseDirectory.reset")}
+                ariaLabel={t("general.baseDirectory.reset")}
                 onClick={() =>
                   updateSettings({
                     addProjectBaseDirectory: DEFAULT_UNIFIED_SETTINGS.addProjectBaseDirectory,
@@ -1978,12 +2044,12 @@ export function ThreadsSettingsPanel() {
         <SettingsRow
           serverScoped
           settingKeys={["ghqCloneLayout"]}
-          {...searchableSetting("ghq-clone-layout")}
-          description="Clones go to github.com/owner/repo under the folder above, like ghq."
+          {...setting("ghq-clone-layout")}
+          description={gt("Clones go to github.com/owner/repo under the folder above, like ghq.")}
           resetAction={
             settings.ghqCloneLayout !== DEFAULT_UNIFIED_SETTINGS.ghqCloneLayout ? (
               <SettingResetButton
-                label="clone into host folders"
+                ariaLabel={gt("Reset clone into host folders to default")}
                 onClick={() =>
                   updateSettings({ ghqCloneLayout: DEFAULT_UNIFIED_SETTINGS.ghqCloneLayout })
                 }
@@ -1995,7 +2061,7 @@ export function ThreadsSettingsPanel() {
               settingKeys={["ghqCloneLayout"]}
               checked={settings.ghqCloneLayout}
               onCheckedChange={(checked) => updateSettings({ ghqCloneLayout: Boolean(checked) })}
-              aria-label="Clone into host folders"
+              aria-label={gt("Clone into host folders")}
             />
           }
         />
@@ -2055,7 +2121,7 @@ export function ThreadsSettingsPanel() {
               settings.sidebarAutoSettleOnMerge !==
               DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge ? (
                 <SettingResetButton
-                  label={t("general.settleMerge.reset")}
+                  ariaLabel={t("general.settleMerge.reset")}
                   onClick={() =>
                     updateSettings({
                       sidebarAutoSettleOnMerge: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge,
@@ -2085,7 +2151,7 @@ export function ThreadsSettingsPanel() {
               settings.sidebarAutoSettleAfterDays !==
               DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays ? (
                 <SettingResetButton
-                  label={t("general.settleInactive.reset")}
+                  ariaLabel={t("general.settleInactive.reset")}
                   onClick={() =>
                     updateSettings({
                       sidebarAutoSettleAfterDays:
@@ -2154,7 +2220,7 @@ export function ThreadsSettingsPanel() {
           resetAction={
             hasServerTargets && isTextGenerationModelDirty ? (
               <SettingResetButton
-                label={t("general.textModel.reset")}
+                ariaLabel={t("general.textModel.reset")}
                 onClick={() =>
                   updateSettings({
                     textGenerationModelSelection:
@@ -2263,7 +2329,7 @@ export function ThreadsSettingsPanel() {
             resetAction={
               settings.responseStreamingMode !== DEFAULT_UNIFIED_SETTINGS.responseStreamingMode ? (
                 <SettingResetButton
-                  label={t("general.streaming.reset")}
+                  ariaLabel={t("general.streaming.reset")}
                   onClick={() =>
                     updateSettings({
                       responseStreamingMode: DEFAULT_UNIFIED_SETTINGS.responseStreamingMode,
@@ -2310,6 +2376,8 @@ export function ThreadsSettingsPanel() {
 }
 
 export function MaintenanceSettingsPanel() {
+  const gt = useGT();
+  const setting = useSearchableSetting();
   const t = useTranslate();
   const settings = useScopedSettings();
   const updateSettings = useUpdateScopedSettings();
@@ -2330,7 +2398,7 @@ export function MaintenanceSettingsPanel() {
             settings.enableProviderUpdateChecks !==
             DEFAULT_UNIFIED_SETTINGS.enableProviderUpdateChecks ? (
               <SettingResetButton
-                label={t("general.providerUpdates.reset")}
+                ariaLabel={t("general.providerUpdates.reset")}
                 onClick={() =>
                   updateSettings({
                     enableProviderUpdateChecks: DEFAULT_UNIFIED_SETTINGS.enableProviderUpdateChecks,
@@ -2361,7 +2429,7 @@ export function MaintenanceSettingsPanel() {
             settings.continueThreadsAfterServerUpdate !==
               DEFAULT_UNIFIED_SETTINGS.continueThreadsAfterServerUpdate ? (
               <SettingResetButton
-                label={t("general.restart.reset")}
+                ariaLabel={t("general.restart.reset")}
                 onClick={() =>
                   updateSettings({
                     continueThreadsAfterServerUpdate:
@@ -2390,13 +2458,15 @@ export function MaintenanceSettingsPanel() {
         <SettingsRow
           serverScoped
           settingKeys={["keepAwakeWhileAgentsWork"]}
-          {...searchableSetting("keep-awake-while-agents-work")}
-          description="Stop the computer from going to sleep while agents are working, and let it sleep once they finish. Closing a laptop lid still puts it to sleep."
+          {...setting("keep-awake-while-agents-work")}
+          description={gt(
+            "Stop the computer from going to sleep while agents are working, and let it sleep once they finish. Closing a laptop lid still puts it to sleep.",
+          )}
           resetAction={
             settings.keepAwakeWhileAgentsWork !==
             DEFAULT_UNIFIED_SETTINGS.keepAwakeWhileAgentsWork ? (
               <SettingResetButton
-                label="keep awake while agents work"
+                ariaLabel={gt("Reset keep awake while agents work to default")}
                 onClick={() =>
                   updateSettings({
                     keepAwakeWhileAgentsWork: DEFAULT_UNIFIED_SETTINGS.keepAwakeWhileAgentsWork,
@@ -2412,7 +2482,7 @@ export function MaintenanceSettingsPanel() {
               onCheckedChange={(checked) =>
                 updateSettings({ keepAwakeWhileAgentsWork: Boolean(checked) })
               }
-              aria-label="Keep awake while agents work"
+              aria-label={gt("Keep awake while agents work")}
             />
           }
         />
@@ -2446,6 +2516,8 @@ export function MaintenanceSettingsPanel() {
 }
 
 export function AboutSettingsPanel() {
+  const setting = useSearchableSetting();
+  const gt = useGT();
   const primaryPolicy = usePrimaryManagedPolicy();
   const t = useTranslate();
   // The Welcome page sets up this computer, so it needs one.
@@ -2455,8 +2527,11 @@ export function AboutSettingsPanel() {
       <SettingsSection id="about" title={t("section.app")}>
         {primaryPolicy ? (
           <SettingsRow
-            title="Organization"
-            description={`This environment is managed by ${primaryPolicy.organization}. Some settings and features follow its policy.`}
+            title={gt("Organization")}
+            description={gt(
+              "This environment is managed by {organization}. Some settings and features follow its policy.",
+              { organization: primaryPolicy.organization },
+            )}
             control={
               primaryPolicy.supportUrl ? (
                 <Button
@@ -2466,7 +2541,7 @@ export function AboutSettingsPanel() {
                   size="sm"
                   variant="outline"
                 >
-                  Get help
+                  <T>Get help</T>
                 </Button>
               ) : null
             }
@@ -2486,11 +2561,11 @@ export function AboutSettingsPanel() {
         <MobileAppSettingsRow />
         {primaryEnvironmentId === null ? null : (
           <SettingsRow
-            {...searchableSetting("welcome-page")}
-            description="See your agents, import projects, and set up your phone."
+            {...setting("welcome-page")}
+            description={gt("See your agents, import projects, and set up your phone.")}
             control={
               <Button size="sm" variant="outline" render={<Link to="/welcome" />}>
-                Open
+                <T context="verb, opens a page">Open</T>
               </Button>
             }
           />

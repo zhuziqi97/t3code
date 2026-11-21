@@ -14,6 +14,8 @@ import {
   type ConnectionRoute,
 } from "./catalog.ts";
 import { BearerConnectionTarget, type ConnectionTarget } from "./model.ts";
+import { mFallback, msg } from "gt-i18n";
+import type { MFunctionType } from "gt-i18n/types";
 
 export type ConnectionRouteKind =
   | "relay"
@@ -187,13 +189,15 @@ function routeAddressKey(route: ConnectionRoute): string | null {
   }
 }
 
+const T3_CONNECT_NAME = "T3 Connect";
+
 /** Short user-facing route description: "LAN", "Tailscale", "T3 Connect", a URL, or an SSH host. */
 export function connectionRouteLabel(route: ConnectionRoute, t?: TFunction): string {
   switch (connectionRouteKind(route)) {
     case "relay":
-      return "T3 Connect";
+      return T3_CONNECT_NAME;
     case "loopback":
-      return t ? t("connections.thisDevice") : "This device";
+      return t ? t("connections.thisDevice") : connectionRouteLabelText(route);
     case "lan":
       return t ? t("connections.lan") : "LAN";
     case "tailnet":
@@ -207,7 +211,24 @@ export function connectionRouteLabel(route: ConnectionRoute, t?: TFunction): str
         : "SSH";
     }
     case "public":
-      return routeHostname(route) ?? (t ? t("connections.remoteLink") : "Remote link");
+      return (
+        routeHostname(route) ?? (t ? t("connections.remoteLink") : connectionRouteLabelText(route))
+      );
+  }
+}
+
+/** @public */
+export function connectionRouteLabelText(
+  route: ConnectionRoute,
+  resolve: MFunctionType = mFallback,
+): string {
+  switch (connectionRouteKind(route)) {
+    case "loopback":
+      return resolve(msg("This device"));
+    case "public":
+      return routeHostname(route) ?? resolve(msg("Remote link"));
+    default:
+      return connectionRouteLabel(route);
   }
 }
 

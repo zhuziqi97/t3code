@@ -1,5 +1,8 @@
+import { msg } from "gt-react-native";
+import { m } from "../../i18n/messages";
 import type { ViewStyle } from "react-native";
 import type { TFunction } from "i18next";
+
 import type { MobileThemeVariables } from "../../lib/mobileTheme";
 
 export const THREAD_LIST_V2_MONO_FONT = "monospace";
@@ -25,7 +28,9 @@ export const selectedThreadRowColors = {
 };
 
 export function getThreadListV2NewBranchMenuTitle(branch: string, t?: TFunction) {
-  return t ? t("thread.menu.newOnNamedBranch", { branch }) : `New thread on ${branch}`;
+  return t
+    ? t("thread.menu.newOnNamedBranch", { branch })
+    : m(msg("New thread on {branch}", { branch }));
 }
 
 export function getThreadListV2RowAppearance(

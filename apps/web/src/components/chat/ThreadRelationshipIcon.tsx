@@ -1,7 +1,7 @@
-import { i18n } from "../../i18n";
-import type { TFunction } from "i18next";
 import type { ProviderDriverKind, ServerProvider } from "@t3tools/contracts";
+import { msg } from "gt-react";
 import { BotIcon, type LucideIcon } from "lucide-react";
+import { m, type MessageResolver } from "../../i18n/messages";
 import { cn } from "../../lib/utils";
 import {
   hasInstanceBadge,
@@ -12,43 +12,43 @@ import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
 
 export function threadRelationshipStatusLabel(
   status: string | null,
-  t: TFunction = i18n.t,
+  resolve: MessageResolver = m,
 ): string {
   switch (status) {
     case "preparing":
     case "starting":
-      return t("chat.status.starting");
+      return resolve(msg("Starting", { $context: "agent status" }));
     case "running":
     case "in_progress":
-      return t("chat.status.running");
+      return resolve(msg("Running", { $context: "agent status" }));
     case "pending":
     case "queued":
-      return t("chat.timeline.queuedShort");
+      return resolve(msg("Queued", { $context: "agent status" }));
     case "waiting":
     case "blocked":
-      return t("thread.waiting");
+      return resolve(msg("Waiting", { $context: "agent status" }));
     case "completed":
-      return t("thread.done");
+      return resolve(msg("Done", { $context: "agent status" }));
     case "failed":
     case "error":
-      return t("thread.failed");
+      return resolve(msg("Failed", { $context: "agent status" }));
     case "cancelled":
     case "interrupted":
-      return t("chat.status.stopped");
+      return resolve(msg("Stopped", { $context: "agent status" }));
     case "rolled_back":
-      return t("chat.status.reverted");
+      return resolve(msg("Reverted", { $context: "agent status" }));
     case "resolved_native":
-      return t("chat.relationship.resolvedNative");
+      return resolve(msg("Resolved (native)", { $context: "agent status" }));
     case "resolved_portable":
-      return t("chat.relationship.resolvedPortable");
+      return resolve(msg("Resolved (portable)", { $context: "agent status" }));
     case "consumed":
-      return t("chat.status.consumed");
+      return resolve(msg("Consumed", { $context: "agent status" }));
     case "superseded":
-      return t("chat.status.superseded");
+      return resolve(msg("Superseded", { $context: "agent status" }));
     case "idle":
-      return t("chat.status.idle");
+      return resolve(msg("Idle", { $context: "agent status" }));
     default:
-      return t("common.unknown");
+      return resolve(msg("Unknown", { $context: "agent status" }));
   }
 }
 

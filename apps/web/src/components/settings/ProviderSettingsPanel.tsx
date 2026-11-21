@@ -15,10 +15,15 @@ import {
 import { useEnvironmentScope, readEnvironmentScope } from "../../state/session";
 import { useAtomValue } from "@effect/atom-react";
 import {
+  connectionErrorText,
   connectionStatusTitle,
   formatConnectionErrorMessage,
 } from "@t3tools/client-runtime/connection";
-import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
+import {
+  errorDisplayMessage,
+  safeErrorLogAttributes,
+  thrownErrorMessage,
+} from "@t3tools/client-runtime/errors";
 import {
   isAtomCommandInterrupted,
   settlePromise,
@@ -48,6 +53,8 @@ import * as Duration from "effect/Duration";
 import * as Result from "effect/Result";
 import { PlusIcon } from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
+import { msg, T, useGT, useMessages } from "gt-react";
+import { m as resolveNow } from "../../i18n/messages";
 
 import { isDesktopLocalConnectionTarget } from "../../connection/desktopLocal";
 import {
@@ -113,7 +120,7 @@ import { ProviderAuthenticationSection } from "./ProviderAuthenticationSection";
 import { CodexSetupSection, CodexManagedRuntimeFields } from "./CodexSetupSection";
 import { readCodexSetupMode } from "./CodexSetupSection.logic";
 import { providerClients } from "./providerDriverMeta";
-import { searchableSetting } from "./settingsSearch";
+import { useSearchableSetting } from "./settingsSearch";
 import { CompactIdleThreadsRow } from "./SettingsPanels";
 import {
   backgroundActivityOverrideSettings,
@@ -152,7 +159,7 @@ async function confirmProviderInstanceRemoval(
   question: string,
   consequence = "",
 ): Promise<boolean> {
-  const message = `${question}\nIts saved settings, including any custom binary path, will be removed.${consequence}`;
+  const message = `${question}\n${resolveNow(msg("Its saved settings, including any custom binary path, will be removed."))}${consequence}`;
   const confirmed = await settlePromise(() =>
     ensureLocalApi().dialogs.confirm(message, { variant: "destructive" }),
   );
@@ -202,7 +209,11 @@ function ProviderLastChecked({ environmentId }: { environmentId: EnvironmentId }
   }
 
   if (lastCheckedRelative.status === "invalid") {
-    return <span>Checked unavailable</span>;
+    return (
+      <span>
+        <T>Checked unavailable</T>
+      </span>
+    );
   }
 
   return (
@@ -210,7 +221,7 @@ function ProviderLastChecked({ environmentId }: { environmentId: EnvironmentId }
       <Trans
         t={t}
         i18nKey="provider.settings.checkedAt"
-        values={{ time: formatRelativeTimeLabel(lastCheckedAt!, t) }}
+        values={{ time: formatRelativeTimeLabel(lastCheckedAt!) }}
         components={{ time: <span className="font-mono tabular-nums" /> }}
       />
     </span>
@@ -247,6 +258,7 @@ function ProviderSettingsPlaceholder({
   readonly children?: ReactNode;
 }) {
   const t = useTranslate();
+  const searchableSetting = useSearchableSetting();
   return (
     <SettingsSection {...searchableSetting("providers", t)} variant="plain">
       {deviceTabs ? (
@@ -282,6 +294,8 @@ function EnvironmentUnavailablePlaceholder({
   readonly deviceTabs?: ReactNode;
 }) {
   const t = useTranslate();
+  const gt = useGT();
+  const m = useMessages();
   const isLoading = access.kind === "loading";
   const title = isLoading
     ? t("provider.settings.loadingSettings")
@@ -290,10 +304,10 @@ function EnvironmentUnavailablePlaceholder({
       : t("provider.settings.unavailable");
   const description = isLoading
     ? access.reason === "permissions"
-      ? t("provider.settings.checkingPermissions")
-      : t("provider.settings.waitingConfiguration", { environment: environment.label })
-    : connectionStatusTitle(environment.connection, t);
-  const error = isLoading ? null : environment.connection.error;
+      ? gt("Checking what this session is allowed to change.")
+      : gt("Waiting for {environment}''s configuration.", { environment: environment.label })
+    : connectionStatusTitle(environment.connection, m);
+  const error = isLoading ? null : connectionErrorText(environment.connection, m);
   // Wedged devices can remain here indefinitely; a spinner would continuously repaint.
   return (
     <ProviderSettingsPlaceholder
@@ -336,6 +350,7 @@ export function ProviderSettingsPanel(target: ProviderSettingsTarget) {
 
 function ProviderSettingsPanelContent(target: ProviderSettingsTarget) {
   const t = useTranslate();
+  const searchableSetting = useSearchableSetting();
   const { environments, isReady } = useEnvironments();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const searchTargetId = useSettingsSearchTargetId();
@@ -405,7 +420,7 @@ function ProviderSettingsPanelContent(target: ProviderSettingsTarget) {
           {options.map((environment) => {
             const machine = resolveEnvironmentMachineKind(environment.serverConfig);
             const detail = providerEnvironmentDetail(environment, t);
-            const statusText = connectionStatusTitle(environment.connection, t);
+            const statusText = connectionStatusTitle(environment.connection, undefined, t);
             return (
               <Tooltip key={environment.environmentId}>
                 <TooltipTrigger
@@ -565,6 +580,8 @@ export function EnvironmentProviderSettings({
   readonly readOnly?: boolean;
 }) {
   const t = useTranslate();
+  const searchableSetting = useSearchableSetting();
+  const gt = useGT();
   const settings = useEnvironmentSettings(environmentId);
   const managedPolicy = useManagedPolicy(environmentId);
   // A policy that allows no provider leaves nothing to add.
@@ -626,7 +643,9 @@ export function EnvironmentProviderSettings({
             type: "error",
             title: t("provider.settings.authContinueFailed"),
             description:
-              error instanceof Error ? error.message : t("provider.settings.authExpiredDetail"),
+              error instanceof Error
+                ? (thrownErrorMessage(error, resolveNow) ?? error.message)
+                : gt("The authentication request expired."),
           });
         }
       });
@@ -698,11 +717,13 @@ export function EnvironmentProviderSettings({
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: t("provider.settings.updateFailed", {
+            title: gt("Could not update {provider}", {
               provider: PROVIDER_DISPLAY_NAMES[candidate.driver] ?? candidate.driver,
             }),
             description:
-              error instanceof Error ? error.message : t("provider.settings.updateStartFailed"),
+              error instanceof Error
+                ? (errorDisplayMessage(error, resolveNow) ?? error.message)
+                : gt("The provider update command could not be started."),
           }),
         );
       }
@@ -822,9 +843,11 @@ export function EnvironmentProviderSettings({
       const error = squashAtomCommandFailure(result);
       toastManager.add({
         type: "error",
-        title: t("provider.settings.instanceUpdateFailed"),
+        title: gt("Could not update provider instance"),
         description:
-          error instanceof Error ? error.message : t("provider.settings.settingsUpdateFailed"),
+          error instanceof Error
+            ? (thrownErrorMessage(error, resolveNow) ?? error.message)
+            : gt("The settings update failed."),
       });
     }
     return result._tag !== "Failure";
@@ -857,7 +880,9 @@ export function EnvironmentProviderSettings({
   const deleteInstance = useStableCallback(
     async (instanceId: ProviderInstanceId, instance: ProviderInstanceConfig) => {
       const confirmed = await confirmProviderInstanceRemoval(
-        `Remove the ${providerInstanceName(instance)} provider instance?`,
+        gt("Remove the {provider} provider instance?", {
+          provider: providerInstanceName(instance),
+        }),
       );
       if (!confirmed) return;
       const updateResult = await persistProviderInstance({
@@ -868,9 +893,11 @@ export function EnvironmentProviderSettings({
         const error = squashAtomCommandFailure(updateResult);
         toastManager.add({
           type: "error",
-          title: t("provider.settings.instanceDeleteFailed"),
+          title: gt("Could not delete provider instance"),
           description:
-            error instanceof Error ? error.message : t("provider.settings.settingsUpdateFailed"),
+            error instanceof Error
+              ? (thrownErrorMessage(error, resolveNow) ?? error.message)
+              : gt("The settings update failed."),
         });
         return;
       }
@@ -889,9 +916,11 @@ export function EnvironmentProviderSettings({
         const error = squashAtomCommandFailure(uninstallResult);
         toastManager.add({
           type: "warning",
-          title: t("provider.settings.managedFilesRemain"),
+          title: gt("Provider deleted, but managed files remain"),
           description:
-            error instanceof Error ? error.message : t("provider.settings.managedCleanupFailed"),
+            error instanceof Error
+              ? (thrownErrorMessage(error, resolveNow) ?? error.message)
+              : gt("Managed binary cleanup failed."),
         });
       }
     },
@@ -904,8 +933,10 @@ export function EnvironmentProviderSettings({
       resolveProviderInstanceEnabled(instance) &&
       !resolveProviderInstanceEnabled({ driver: driverKind });
     const confirmed = await confirmProviderInstanceRemoval(
-      `Reset the ${providerInstanceName(instance)} provider to its defaults?`,
-      turnsOff ? " It will also be turned off." : "",
+      gt("Reset the {provider} provider to its defaults?", {
+        provider: providerInstanceName(instance),
+      }),
+      turnsOff ? ` ${gt("It will also be turned off.")}` : "",
     );
     if (!confirmed) return;
     const result = await persistProviderInstance({ operation: "remove", instanceId });
@@ -913,9 +944,11 @@ export function EnvironmentProviderSettings({
       const error = squashAtomCommandFailure(result);
       toastManager.add({
         type: "error",
-        title: t("provider.settings.instanceResetFailed"),
+        title: gt("Could not reset provider instance"),
         description:
-          error instanceof Error ? error.message : t("provider.settings.settingsUpdateFailed"),
+          error instanceof Error
+            ? (thrownErrorMessage(error, resolveNow) ?? error.message)
+            : gt("The settings update failed."),
       });
     }
   });
@@ -1055,10 +1088,11 @@ export function EnvironmentProviderSettings({
         {readOnly ? (
           <SettingsGroup divided={false} className="overflow-hidden">
             <SettingsRow
-              title={t("provider.settings.limitedPermissions")}
-              description={t("provider.settings.readOnlyDescription", {
-                environment: environmentLabel,
-              })}
+              title={gt("Limited permissions")}
+              description={gt(
+                "This session can view {environment}''s providers but can't change their settings.",
+                { environment: environmentLabel },
+              )}
             />
           </SettingsGroup>
         ) : null}
@@ -1137,9 +1171,9 @@ export function EnvironmentProviderSettings({
             <span className="inline-flex items-center gap-1.5">
               {searchableSetting("provider-health-check-interval", t).title}
               <PolicyTooltip>
-                This interval is configured here, then the shared Background activity policy decides
-                whether provider probes may run when the timer fires. Custom intervals appear as
-                Advanced in Maintenance settings.
+                {gt(
+                  "This interval is configured here, then the shared Background activity policy decides whether provider probes may run when the timer fires. Custom intervals appear as Advanced in Maintenance settings.",
+                )}
               </PolicyTooltip>
             </span>
           }
@@ -1151,7 +1185,7 @@ export function EnvironmentProviderSettings({
                 className={!canWriteSettings ? "opacity-50" : undefined}
               >
                 <SettingResetButton
-                  label={t("provider.settings.intervalResetLabel")}
+                  ariaLabel={gt("Reset provider health check interval to default")}
                   onClick={() =>
                     updateSettings(
                       backgroundActivityOverrideSettings(
@@ -1175,7 +1209,11 @@ export function EnvironmentProviderSettings({
               )}
             >
               <IntervalSecondsField
-                label="provider health check interval"
+                labels={{
+                  decrease: gt("Decrease provider health check interval"),
+                  input: gt("Provider health check interval in seconds"),
+                  increase: gt("Increase provider health check interval"),
+                }}
                 value={providerHealthRefreshIntervalSeconds}
                 min={0}
                 step={PROVIDER_HEALTH_INTERVAL_STEP_SECONDS}
@@ -1290,6 +1328,7 @@ function ProviderInstanceRow({
   readonly favorites: UnifiedSettings["favorites"];
   readonly actions: ProviderInstanceRowActions;
 }) {
+  const gt = useGT();
   const allProjects = useProjects();
   const secretSources = useSecretSources(environmentId);
   const acpProjects =
@@ -1431,8 +1470,10 @@ function ProviderInstanceRow({
           driver === "cursor" &&
           liveProvider?.setup?.canAuthenticate === false ? (
           <SettingsRow
-            title="Cursor account"
-            description="Using CURSOR_API_KEY. Remove it from this provider's environment to use browser sign-in."
+            title={gt("Cursor account")}
+            description={gt(
+              "Using CURSOR_API_KEY. Remove it from this provider's environment to use browser sign-in.",
+            )}
           />
         ) : null
       }
@@ -1445,7 +1486,9 @@ function ProviderInstanceRow({
       headerAction={
         mode === "editor" && isDefault && isDirty ? (
           <SettingResetButton
-            label={`${resetLabel} provider settings`}
+            ariaLabel={gt("Reset {provider} provider settings to default", {
+              provider: resetLabel,
+            })}
             onClick={() => actions.resetDefaultInstance(driver)}
           />
         ) : null

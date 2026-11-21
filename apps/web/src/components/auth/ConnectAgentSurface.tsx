@@ -1,5 +1,5 @@
 import { Trans } from "react-i18next";
-import { i18n, useTranslate } from "../../i18n";
+import { useTranslate } from "../../i18n";
 import {
   type AuthMcpApprovalDecision,
   type AuthMcpApprovalDetails,
@@ -7,21 +7,24 @@ import {
   AuthMcpClientAccess,
   AuthMcpAuthorizationRequest,
   isRuntimeModeAbove,
-  managedRuntimeModeCeilingMessage,
   parseMcpApprovalCode,
 } from "@t3tools/contracts";
+import { managedRuntimeModeCeilingMessage } from "@t3tools/client-runtime/contract-labels";
 import { Radio as RadioPrimitive } from "@base-ui/react/radio";
 import { isLoopbackHost } from "@t3tools/shared/preview";
 import { EyeIcon, type LucideIcon } from "lucide-react";
 import type * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import { msg, T, useGT, useMessages } from "gt-react";
 import { type ReactNode, useEffect, useState } from "react";
+
+import { type MessageResolver } from "../../i18n/messages";
 
 import { PrimaryEnvironmentHttpClient } from "~/environments/primary/httpClient";
 import { runPrimaryHttp } from "~/lib/runtime";
 import { cn } from "~/lib/utils";
-import { runtimeModeConfig, runtimeModePresentation } from "../chat/runtimeModeConfig";
+import { runtimeModeConfig } from "../chat/runtimeModeConfig";
 import {
   agentRedirectUrl,
   resolveApprovalDecision,
@@ -39,8 +42,8 @@ export const accessConfig: Record<
   { readonly label: string; readonly description: string; readonly icon: LucideIcon }
 > = {
   "read-only": {
-    label: "Read only",
-    description: "Read projects and threads. Cannot start, message or change anything.",
+    label: msg("Read only"),
+    description: msg("Read projects and threads. Cannot start, message or change anything."),
     icon: EyeIcon,
   },
   ...runtimeModeConfig,
@@ -60,7 +63,7 @@ function redirectsToThisComputer(redirectHost: string): boolean {
 
 type Loaded =
   | { readonly status: "loading" }
-  | { readonly status: "invalid"; readonly message: string | null }
+  | { readonly status: "invalid"; readonly message: string | null; readonly unsafeRedirect?: true }
   | { readonly status: "ready"; readonly details: AuthMcpApprovalDetails };
 
 const isApprovalError = Schema.is(AuthMcpApprovalError);
@@ -145,6 +148,8 @@ export function McpConsent({
   readonly footer?: ReactNode;
 }) {
   const t = useTranslate();
+  const gt = useGT();
+  const messages = useMessages();
   const [loaded, setLoaded] = useState<Loaded>({ status: "loading" });
   const [requestedAccess, setAccess] = useState<AuthMcpClientAccess | null>(null);
   const [pairingCode, setPairingCode] = useState("");
@@ -166,8 +171,9 @@ export function McpConsent({
     void transport.load(authorization).then((answer) => {
       if (cancelled) return;
       if (answer.kind === "redirect") {
-        if (!followRedirect(answer.url))
-          setLoaded({ status: "invalid", message: i18n.t("agentConnect.unsafeRedirect") });
+        if (!followRedirect(answer.url)) {
+          setLoaded({ status: "invalid", message: null, unsafeRedirect: true });
+        }
         return;
       }
       setLoaded(
@@ -238,7 +244,11 @@ export function McpConsent({
       <StandalonePage>
         <ConnectAgentHeading
           title={t("agentConnect.invalid")}
-          description={loaded.message ?? t("agentConnect.unreachable")}
+          description={
+            loaded.unsafeRedirect
+              ? t("agentConnect.unsafeRedirect")
+              : (loaded.message ?? t("agentConnect.unreachable"))
+          }
         />
         <p className="mt-4 text-sm text-muted-foreground">{t("agentConnect.restart")}</p>
         {footer}
@@ -268,25 +278,23 @@ export function McpConsent({
         }
       />
       <dl className="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-sm">
-        <dt className="text-muted-foreground">{t("agentConnect.app")}</dt>
+        <dt className="text-muted-foreground">
+          <T context="the app requesting access">App</T>
+        </dt>
         <dd className="min-w-0 break-words">
           {details.clientName}{" "}
           <span className="text-muted-foreground">{t("agentConnect.appNamed")}</span>
         </dd>
         <dt className="text-muted-foreground">{t("agentConnect.accessDestination")}</dt>
         <dd className="min-w-0 break-words font-medium">
-          {details.redirectHost}
-          {redirectsToThisComputer(details.redirectHost) ? (
-            <span className="font-normal text-muted-foreground">
-              {" "}
-              {t("agentConnect.localComputer")}
-            </span>
-          ) : (
-            <span className="font-normal text-muted-foreground">
-              {" "}
-              {t("agentConnect.remoteOperator")}
-            </span>
-          )}
+          {details.redirectHost}{" "}
+          <span className="font-normal text-muted-foreground">
+            {t(
+              redirectsToThisComputer(details.redirectHost)
+                ? "agentConnect.localComputer"
+                : "agentConnect.remoteOperator",
+            )}
+          </span>
         </dd>
       </dl>
       <p className="mt-2 text-xs text-muted-foreground">{t("agentConnect.onlyOwnSignIn")}</p>
@@ -340,12 +348,10 @@ export function McpConsent({
 
         {codeAccess ? (
           <p className="text-sm">
-            <span className="text-muted-foreground">{t("agentConnect.access")}</span>{" "}
-            <span className="font-medium">
-              {codeAccess === "read-only"
-                ? t("agentConnect.readOnly")
-                : runtimeModePresentation(codeAccess, t).label}
-            </span>
+            <span className="text-muted-foreground">
+              <T context="access level">Access</T>
+            </span>{" "}
+            <span className="font-medium">{messages(accessConfig[codeAccess].label)}</span>
           </p>
         ) : (
           <div className="space-y-2">
@@ -362,7 +368,7 @@ export function McpConsent({
                   key={option}
                   access={option}
                   selected={option === access}
-                  disabledReason={ceilingReason(details, option)}
+                  disabledReason={ceilingReason(details, option, messages)}
                 />
               ))}
             </RadioGroup>
@@ -378,7 +384,11 @@ export function McpConsent({
 
         <div className="flex flex-wrap gap-2">
           <Button disabled={!canApprove} type="submit">
-            {pending === "approve" ? t("agentConnect.approving") : t("agentConnect.approve")}
+            {pending === "approve"
+              ? gt("Approving…")
+              : access === null
+                ? gt("Choose what it may do")
+                : gt("Approve {level}", { level: messages(accessConfig[access].label) })}
           </Button>
           <Button
             disabled={pending !== null}
@@ -413,13 +423,17 @@ function ConnectAgentHeading({
 }
 
 /** Why a managed policy keeps `access` from being granted, or undefined when it may be. */
-function ceilingReason(details: AuthMcpApprovalDetails, access: AuthMcpClientAccess) {
+function ceilingReason(
+  details: AuthMcpApprovalDetails,
+  access: AuthMcpClientAccess,
+  resolve: MessageResolver,
+) {
   const ceiling = details.runtimeModeCeiling;
   return ceiling === undefined ||
     access === "read-only" ||
     !isRuntimeModeAbove(access, ceiling.maxRuntimeMode)
     ? undefined
-    : managedRuntimeModeCeilingMessage(ceiling.organization, ceiling.maxRuntimeMode);
+    : managedRuntimeModeCeilingMessage(ceiling.organization, ceiling.maxRuntimeMode, resolve);
 }
 
 /** One access level in a radio group; `description` replaces the level's own, null hides it. */
@@ -434,13 +448,11 @@ export function AccessOption({
   readonly disabledReason: string | undefined;
   readonly description?: string | null;
 }) {
-  const t = useTranslate();
-  const Icon = access === "read-only" ? EyeIcon : runtimeModeConfig[access].icon;
-  const { label, description: defaultDescription } =
-    access === "read-only"
-      ? { label: t("agentConnect.readOnly"), description: t("agentConnect.readOnlyDescription") }
-      : runtimeModePresentation(access, t);
-  const detail = disabledReason ?? (description === undefined ? defaultDescription : description);
+  const messages = useMessages();
+  const { label, icon: Icon } = accessConfig[access];
+  const detail =
+    disabledReason ??
+    (description === undefined ? messages(accessConfig[access].description) : description);
   return (
     <RadioPrimitive.Root
       value={access}
@@ -461,7 +473,7 @@ export function AccessOption({
         )}
       />
       <span className="min-w-0">
-        <span className="block text-sm font-medium text-foreground">{label}</span>
+        <span className="block text-sm font-medium text-foreground">{messages(label)}</span>
         {detail === null ? null : (
           <span className="block text-xs text-muted-foreground">{detail}</span>
         )}

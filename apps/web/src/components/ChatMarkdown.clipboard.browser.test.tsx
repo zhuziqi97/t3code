@@ -9,7 +9,7 @@ import {
   type RpcSession,
   type WsRpcProtocolClient,
 } from "@t3tools/client-runtime/rpc";
-import { createRuntimeCommand } from "@t3tools/client-runtime/state/runtime";
+import { createRuntimeCommand, runAtomCommand } from "@t3tools/client-runtime/state/runtime";
 import { startThreadTurn } from "@t3tools/client-runtime/operations";
 import {
   CommandId,
@@ -153,7 +153,7 @@ function mockSender(messageContext?: () => OrchestrationMessageContext | undefin
   );
   return {
     send: (text: string) =>
-      command.run(registry, text).then((result) => {
+      runAtomCommand(registry, command, text).then((result) => {
         expect(result._tag).toBe("Success");
       }),
     [Symbol.dispose]: () => registry.dispose(),

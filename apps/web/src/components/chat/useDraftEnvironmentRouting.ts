@@ -1,5 +1,6 @@
-import { useTranslate } from "../../i18n";
-
+import { msg, useGT } from "gt-react";
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { m } from "~/i18n/messages";
 import { useLoadBalancedEnvironment } from "../../hooks/useLoadBalancedEnvironment";
 import { useLogicalProjectEnvironments } from "../../hooks/useLogicalProjectEnvironments";
 import { useScratchProject } from "../../hooks/useScratchProject";
@@ -82,7 +83,7 @@ function carryFanoutSelections(
  * target machine prepares one, and the playbook link follows.
  */
 export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) {
-  const t = useTranslate();
+  const gt = useGT();
   const {
     draftId,
     draftThread,
@@ -235,8 +236,12 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
       toastManager.add({
         type: "warning",
         id: "load-balancing-attachments",
-        title: t("chat.routing.keepAttachments"),
-        description: t("chat.routing.removeAttachments"),
+        title: m(msg("Keep attachments on this machine")),
+        description: m(
+          msg(
+            "Remove attachments before choosing automatic routing, then attach them on the selected machine.",
+          ),
+        ),
       });
       return;
     }
@@ -253,12 +258,12 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
   const onAutoEnvironmentStable = useStableCallback(onAutoEnvironment);
   const autoEnvironmentLabel = automaticEnvironment
     ? draftThread?.loadBalancedEnvironmentId
-      ? t("chat.routing.autoBalance")
+      ? gt("Auto balance")
       : loadBalancing.pending
-        ? t("chat.routing.checking")
+        ? gt("Checking machines…")
         : loadBalancing.failed
-          ? t("chat.routing.unavailable")
-          : t("chat.routing.autoBalance")
+          ? gt("Auto balance unavailable")
+          : gt("Auto balance")
     : undefined;
 
   // A change in flight belongs to the draft and project it started on.
@@ -368,8 +373,8 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: t("chat.routing.switchFailed"),
-            description: error instanceof Error ? error.message : t("common.error"),
+            title: m(msg("Could not switch machine")),
+            description: thrownErrorMessage(error, m) ?? m(msg("An error occurred.")),
           }),
         );
       }
@@ -380,7 +385,7 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
       if (triagePrompt === null) return;
       const project =
         knownProject ??
-        (await openScratchProject(target.environmentId, t("chat.routing.switchFailed")));
+        (await openScratchProject(target.environmentId, m(msg("Could not switch machine"))));
       if (project) retarget(project, triagePrompt);
     };
     setBusyEnvironmentChange(request);

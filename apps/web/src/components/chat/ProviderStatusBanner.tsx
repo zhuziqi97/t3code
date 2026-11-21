@@ -6,6 +6,7 @@ import {
   type ServerProvider,
 } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
+import { useGT } from "gt-react";
 import { memo, useRef, useState, useSyncExternalStore } from "react";
 import { InfoIcon, XIcon } from "lucide-react";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "../ui/alert";
@@ -142,6 +143,7 @@ export const ProviderStatusBanner = memo(function ProviderStatusBanner({
   status: ServerProvider | null;
 }) {
   const t = useTranslate();
+  const gt = useGT();
   const canRefresh = useAtomValue(serverEnvironment.refreshProviders.permissionAtom(environmentId));
   const refreshProviders = useAtomCommand(serverEnvironment.refreshProviders, {
     label: "Refresh provider status",
@@ -209,14 +211,14 @@ export const ProviderStatusBanner = memo(function ProviderStatusBanner({
                 </InlineButton>
               ) : null}
               <Button
-                aria-label={`Refresh ${providerName} provider status`}
+                aria-label={gt("Refresh {provider} provider status", { provider: providerName })}
                 disabled={!canRefresh || isRefreshing}
                 onClick={() => void refresh()}
                 size="xs"
                 variant="outline"
               >
                 <RefreshIcon />
-                {isRefreshing ? "Refreshing..." : "Refresh"}
+                {isRefreshing ? gt("Refreshing...") : gt("Refresh")}
               </Button>
             </div>
           </div>

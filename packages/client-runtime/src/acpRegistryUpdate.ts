@@ -5,6 +5,8 @@ import type {
   ProviderInstanceConfig,
   ProviderInstanceId,
 } from "@t3tools/contracts";
+import { mFallback, msg } from "gt-i18n";
+import type { MFunctionType } from "gt-i18n/types";
 import { squashAtomCommandFailure, type AtomCommandResult } from "./state/runtime.ts";
 
 export function managedAcpRegistryUpdateTarget(instance: ProviderInstanceConfig | undefined) {
@@ -58,6 +60,7 @@ export async function runAcpRegistryUpdate(
     }) => Promise<AtomCommandResult<unknown, unknown>>;
   },
   publish: (state: AcpRegistryUpdateState) => void,
+  resolve: MFunctionType = mFallback,
 ): Promise<void> {
   const fail = (stage: "prepare" | "refresh", result: AtomCommandResult<unknown, unknown>) => {
     if (result._tag === "Success") return false;
@@ -82,7 +85,15 @@ export async function runAcpRegistryUpdate(
       publish({
         phase: "failed",
         stage: "prepare",
-        error: `The environment prepared ${prepared.value.distribution} instead of ${target.distribution}. Update the server before retrying.`,
+        error: resolve(
+          msg(
+            "The environment prepared {actual} instead of {expected}. Update the server before retrying.",
+            {
+              actual: prepared.value.distribution,
+              expected: target.distribution,
+            },
+          ),
+        ),
       });
       return;
     }

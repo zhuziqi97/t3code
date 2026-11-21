@@ -1,5 +1,4 @@
-import { useTranslate } from "../../i18n";
-import { formatDeviceMessage } from "../device/deviceMessages";
+import { T, useGT } from "gt-react";
 import { useState } from "react";
 import * as Option from "effect/Option";
 import type { SshDeviceHostConfig } from "@t3tools/contracts";
@@ -24,6 +23,8 @@ import {
   parseDeviceHostDraft,
   type DeviceHostCheckTarget,
 } from "./deviceHostConnectionChecks";
+
+const EXAMPLE_HOST_NAME = "Mac mini";
 
 export function DeviceHostEditor({
   host,
@@ -77,7 +78,7 @@ function DeviceHostEditorForm({
   onSave: (host: SshDeviceHostConfig) => void;
   onClose: () => void;
 }) {
-  const t = useTranslate();
+  const gt = useGT();
   const [draft, setDraft] = useState(host);
   const [expandedChecks, setExpandedChecks] = useState<{ key: string; open: boolean } | null>(null);
   const { checks, testConnection } = useHostConnectionChecks(targets);
@@ -91,12 +92,12 @@ function DeviceHostEditorForm({
     targets.length === 1 ||
     (expandedChecks?.key === connectionKey ? expandedChecks.open : failed > 0);
   const checkSummary = checking
-    ? t("device.editor.checking")
+    ? gt("Checking environments…")
     : results
       ? failed
-        ? t("device.editor.failed", { count: failed, total: targets.length })
-        : t("device.editor.passed")
-      : t("device.editor.check-before-save");
+        ? gt("{failed} of {total} failed", { failed, total: targets.length })
+        : gt("Connection checks passed")
+      : gt("Check access before saving");
   return (
     <form
       className="flex min-h-0 flex-col"
@@ -106,16 +107,21 @@ function DeviceHostEditorForm({
       }}
     >
       <DialogHeader>
-        <DialogTitle>{isNew ? t("device.editor.add") : t("device.editor.edit")}</DialogTitle>
+        <DialogTitle>{isNew ? gt("Add device host") : gt("Edit device host")}</DialogTitle>
         <DialogDescription>
           {targets.length === 1
-            ? t("device.editor.description-single", { environment: targets[0]?.label })
-            : t("device.editor.description-many", { count: targets.length })}
+            ? gt("Connect from {environment}.", { environment: targets[0]?.label })
+            : gt("{count, plural, other {Connect from {count} selected environments.}}", {
+                count: targets.length,
+              })}{" "}
+          <T>Hosts on the same machine are skipped.</T>
         </DialogDescription>
       </DialogHeader>
       <DialogPanel>
         <label className="block space-y-1.5 text-sm">
-          <span>{t("device.editor.name")}</span>
+          <span>
+            <T>Name</T>
+          </span>
           <Input
             autoFocus
             required
@@ -125,11 +131,13 @@ function DeviceHostEditorForm({
               const label = event.target.value;
               setDraft((current) => ({ ...current, label }));
             }}
-            placeholder="Mac mini"
+            placeholder={EXAMPLE_HOST_NAME}
           />
         </label>
         <label className="block space-y-1.5 text-sm">
-          <span>{t("device.editor.target")}</span>
+          <span>
+            <T>SSH target</T>
+          </span>
           <Input
             required
             value={draft.target}
@@ -138,7 +146,7 @@ function DeviceHostEditorForm({
               const target = event.target.value;
               setDraft((current) => ({ ...current, target }));
             }}
-            placeholder={t("device.editor.target-placeholder")}
+            placeholder={gt("user@host or SSH alias")}
           />
         </label>
         <details
@@ -146,11 +154,13 @@ function DeviceHostEditorForm({
           className="text-sm"
         >
           <summary className="cursor-pointer text-muted-foreground">
-            {t("device.editor.options")}
+            <T>SSH options</T>
           </summary>
           <div className="mt-3 grid grid-cols-[minmax(0,1fr)_7rem] gap-3">
             <label className="block space-y-1.5">
-              <span>{t("device.editor.identity")}</span>
+              <span>
+                <T>Identity file</T>
+              </span>
               <Input
                 value={draft.identityFile ?? ""}
                 disabled={busy}
@@ -161,11 +171,13 @@ function DeviceHostEditorForm({
                     return identityFile ? { ...rest, identityFile } : rest;
                   });
                 }}
-                placeholder={t("device.editor.identity-placeholder")}
+                placeholder={gt("SSH config default")}
               />
             </label>
             <label className="block space-y-1.5">
-              <span>{t("device.editor.port")}</span>
+              <span>
+                <T>Port</T>
+              </span>
               <Input
                 type="number"
                 min={1}
@@ -179,11 +191,13 @@ function DeviceHostEditorForm({
                     return port ? { ...rest, port: Number(port) } : rest;
                   });
                 }}
-                placeholder={t("device.editor.default")}
+                placeholder={gt("Default", { $context: "uses the default SSH port" })}
               />
             </label>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">{t("device.editor.optional")}</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            <T>Optional. Resolved separately on each environment.</T>
+          </p>
         </details>
         <Collapsible
           open={checksOpen}
@@ -199,7 +213,7 @@ function DeviceHostEditorForm({
               <div className="min-w-0 text-xs [--inline-button-white-space:normal]">
                 <CollapsibleTrigger
                   disabled={!results}
-                  aria-label={`${checkSummary}. Per-machine results`}
+                  aria-label={gt("{summary}. Per-machine results", { summary: checkSummary })}
                   render={<InlineButton tone="muted" />}
                 >
                   <span role="status" className="text-left">
@@ -222,8 +236,7 @@ function DeviceHostEditorForm({
                 if (Option.isSome(input)) void testConnection(input.value);
               }}
             >
-              {checking ? <Spinner size="xs" /> : null}
-              {t("device.test-connection")}
+              {checking ? <Spinner size="xs" /> : null} <T>Test connection</T>
             </Button>
           </div>
           {results ? (
@@ -242,23 +255,20 @@ function DeviceHostEditorForm({
                       >
                         {result.status === "pending" ? (
                           <>
-                            <Spinner size="xs" />
-                            {t("device.checking")}
+                            <Spinner size="xs" /> <T>Checking…</T>
                           </>
                         ) : result.status === "local" ? (
                           <>
-                            <MonitorIcon className="size-3" />
-                            {t("device.hosts.local")}
+                            <MonitorIcon className="size-3" /> <T>Already available locally</T>
                           </>
                         ) : result.status === "failed" ? (
                           <>
-                            <XIcon className="size-3" />
-                            {t("device.failed")}
+                            <XIcon className="size-3" />{" "}
+                            {gt("Failed", { $context: "connection check status" })}
                           </>
                         ) : (
                           <>
-                            <CheckIcon className="size-3" />
-                            {t("device.connected")}
+                            <CheckIcon className="size-3" /> <T>Connected</T>
                           </>
                         )}
                       </span>
@@ -271,10 +281,10 @@ function DeviceHostEditorForm({
                     {result.status === "failed" ? (
                       <details className="mt-1.5 text-muted-foreground">
                         <summary className="cursor-pointer">
-                          {t("device.editor.show-error")}
+                          <T>Show error</T>
                         </summary>
                         <p className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-words">
-                          {formatDeviceMessage(result.error, t)}
+                          {result.error}
                         </p>
                       </details>
                     ) : null}
@@ -287,11 +297,10 @@ function DeviceHostEditorForm({
       </DialogPanel>
       <DialogFooter>
         <Button type="button" variant="ghost" disabled={busy} onClick={onClose}>
-          {t("device.cancel")}
+          <T>Cancel</T>
         </Button>
         <Button type="submit" disabled={busy || checking || !valid || !draft.label.trim()}>
-          {busy ? <Spinner size="xs" /> : null}
-          {t("device.editor.save")}
+          {busy ? <Spinner size="xs" /> : null} <T>Save host</T>
         </Button>
       </DialogFooter>
     </form>

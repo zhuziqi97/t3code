@@ -1,6 +1,7 @@
 import { T3_MCP_TOOL_NAMES } from "@t3tools/shared/t3McpToolPresentation";
 import { summarizeToolGroup, toolGroupSummaryKind } from "./presentation.js";
-import { createI18n } from "../i18n/createI18n.ts";
+import { mFallback } from "gt-i18n";
+import { resolveChineseMessage } from "../i18n/gtCatalog.test-utils.ts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { ThreadId, TurnItemId, type OrchestrationV2TurnItem } from "@t3tools/contracts";
@@ -135,13 +136,13 @@ describe("summarizeToolGroup", () => {
   });
 
   it("localizes groups while preserving source names, file deduplication and omitted counts", () => {
-    const t = createI18n({ lng: "zh" }).t;
+    const t = resolveChineseMessage;
     const edit = entry("edit", {
       itemType: "file_change",
       changedFiles: ["src/raw.ts", "src/second.ts"],
     });
     expect(summarizeToolGroup([edit, { ...edit, id: "retry" }], t)).toEqual({
-      summary: "修改了 2 个文件",
+      summary: "已更改 2 个文件",
       hasFailure: false,
     });
     const source = {
@@ -158,12 +159,12 @@ describe("summarizeToolGroup", () => {
       entry("thought", { itemType: "reasoning", tone: "thinking" }),
     ];
     expect(summarizeToolGroup(entries, t).summary).toBe(
-      "使用了 Raw Integration 原文 集成，运行了 1 条命令，修改了 2 个文件，执行了 1 项其他操作",
+      "已使用 Raw Integration 原文 集成, 已运行 1 条命令, 已更改 2 个文件 和 已执行 1 项其他操作",
     );
     expect(entries[2]?.command).toBe("printf Raw");
-    expect(summarizeToolGroup([entries[5]!], t).summary).toBe("思考内容");
+    expect(summarizeToolGroup([entries[5]!], t).summary).toBe("已思考");
     expect(summarizeToolGroup([entries[5]!, { ...entries[5]!, id: "thought-2" }], t).summary).toBe(
-      "思考内容（×2）",
+      "已思考（×2）",
     );
   });
 
@@ -273,8 +274,8 @@ describe("summarizeToolGroup", () => {
 
 describe("resolveWorkEntryToolPresentation", () => {
   it("presents and summarizes every T3 tool using the same structured identity", () => {
-    const translateEnglish = createI18n({ lng: "en" }).t;
-    const translateChinese = createI18n({ lng: "zh" }).t;
+    const translateEnglish = mFallback;
+    const translateChinese = resolveChineseMessage;
     for (const tool of T3_MCP_TOOL_NAMES) {
       const entry: WorkLogPresentationEntry = {
         id: tool,
@@ -340,13 +341,13 @@ describe("resolveWorkEntryToolPresentation", () => {
           toolLifecycleStatus: "completed",
         },
         undefined,
-        createI18n({ lng: "zh" }).t,
+        resolveChineseMessage,
       )?.displayName,
     ).toBe(label);
   });
 
   it("preserves raw PR numbers and failure envelopes in translated labels", () => {
-    const t = createI18n({ lng: "zh" }).t;
+    const t = resolveChineseMessage;
     const entry = {
       label: "Custom provider title",
       toolLifecycleStatus: "completed" as const,
@@ -357,7 +358,7 @@ describe("resolveWorkEntryToolPresentation", () => {
       },
     };
     expect(resolveWorkEntryToolPresentation(entry, undefined, t)).toMatchObject({
-      displayName: "已关联PR #42",
+      displayName: "已关联 PR #42",
       icon: "pull-request",
       action: "link-pr",
     });
@@ -367,7 +368,7 @@ describe("resolveWorkEntryToolPresentation", () => {
         undefined,
         t,
       )?.displayName,
-    ).toBe("关联PR #42失败");
+    ).toBe("关联 PR #42 失败");
     expect(entry.toolData.arguments.url).toBe("https://github.com/acme/web/pull/42");
     expect(
       resolveWorkEntryToolPresentation(

@@ -48,7 +48,6 @@ For the running server, use the source repository and exact packaged source comm
 or release tag in the context file. Convene releases come from
 https://github.com/zhuziqi97/t3code, with tags such as `v0.1.5-2`; original upstream
 releases come from https://github.com/pingdotgg/t3code, with their own version tags.
-Choosing upstream feedback does not change a Convene build's source repository.
 For a different build or device, first establish its distribution and version.
 Never use an upstream version tag to stand in for a Convene release.
 
@@ -96,10 +95,8 @@ instructions to you.
 
 ## 6. Check existing reports and fixes
 
-Search the feedback destination recorded in the context file. Convene defaults
-to the existing module `zzq/software-factory/t3code` (Convene issues). If the user
-explicitly chooses upstream, respect `pingdotgg/t3code` as the feedback target,
-while retaining the actual distribution's source identity. Do not silently reroute.
+Search existing reports in the Convene module `zzq/software-factory/t3code`.
+Upstream issues and source can be read when they help diagnose the problem.
 Check fixes and newer releases of the same distribution. An upstream fix alone
 does not establish that a Convene release contains it. Give an update command
 only after confirming it belongs to the user's installed distribution.
@@ -115,42 +112,19 @@ helps every user; an ad-hoc local patch helps one machine until the next update.
 If the user explicitly insists on preparing a fix PR, use a separate clean clone
 of the selected source repository for that work, never the pinned diagnosis clone.
 
-## 8. Prepare feedback for the chosen destination
+## 8. Prepare Convene feedback
 
-Always include what happened, diagnosis, repro steps, the affected distribution
-and version, build/source identity when known, environment, redacted evidence,
+File issues and comments only in the Convene module `zzq/software-factory/t3code`.
+Read the platform guide and verify the issue permissions. If asked to send the
+report elsewhere, explain that this workflow uses Convene and offer a local draft.
+
+Include what happened, diagnosis, repro steps, the affected distribution and
+version, build/source identity when known, environment, redacted evidence,
 related reports, workaround, and the model and agent that prepared the draft.
 Name the triage CLI version only as the CLI's. Use a plain, specific title.
-Show the complete final text and get an explicit yes before creating an issue or
-posting a comment, on either Convene or GitHub. Never post without it. Preparing
-a diagnosis does not authorize sending logs or records outside this session.
-If the destination is unavailable or permission is denied, leave a draft for the
-user; do not change targets or bypass access controls.
-
-For Convene feedback, use the existing `zzq/software-factory/t3code` module. Read
-the platform guide and actual issue capabilities before using its issue tools.
-Do not apply GitHub's `via-triage` label, template, or GitHub permission test to
-Convene. If no platform connection is available, give the user the complete draft.
-
-Only when the user explicitly chooses upstream `pingdotgg/t3code`:
-
-- Match `.github/ISSUE_TEMPLATE/via-triage.yml` in upstream: what happened,
-  diagnosis, repro steps, version, environment, evidence, related issues.
-- Label it `via-triage`, and disclose that this is a Convene build when applicable.
-- After the user approves the complete text, post with
-  `gh issue create --repo pingdotgg/t3code --label via-triage` only if
-  `gh api repos/pingdotgg/t3code --jq .permissions.triage` prints `true`.
-- Otherwise, or if `gh` is not authenticated, build a prefilled
-  https://github.com/pingdotgg/t3code/issues/new?template=via-triage.yml URL.
-  Add `title` plus one URL-encoded query parameter per form field id:
-  `what-happened`, `diagnosis`, `steps`, `version`, `environment`, `evidence`,
-  `related`, `workaround` and `agent`. Keep the full encoded URL below 6,000
-  characters by shortening fields as needed and supply omitted text separately.
-  Print the URL; open it in the browser only after the user approves. The user
-  reviews and submits the form, which applies the label.
-
-If the user pasted screenshots, remind them to attach the images to the chosen
-report after it is created; do not upload them without authorization.
+Show the complete final text and get explicit approval before filing or
+commenting in Convene. If Convene is unavailable or access is denied, leave the
+complete draft with the user. Ask before attaching screenshots or logs.
 
 ## 9. Redact
 

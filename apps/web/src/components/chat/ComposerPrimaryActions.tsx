@@ -1,4 +1,3 @@
-import { useTranslate } from "../../i18n";
 import {
   memo,
   useEffect,
@@ -7,6 +6,7 @@ import {
   type PointerEventHandler,
   type ReactNode,
 } from "react";
+import { msg, useGT, useMessages } from "gt-react";
 import {
   CheckIcon,
   ChevronLeftIcon,
@@ -16,8 +16,9 @@ import {
   ListPlusIcon,
 } from "lucide-react";
 import { useEnvironmentIdentificationMode } from "~/hooks/useSettings";
+import type { MessageResolver } from "~/i18n/messages";
 import { formatContextWindowTokens } from "~/lib/contextWindow";
-import { cn } from "~/lib/utils";
+import { cn, isMacPlatform } from "~/lib/utils";
 import { useShortcutModifierState } from "../../shortcutModifierState";
 import { StageBackdropButtonArt, useSidebarStageBackdropVariant } from "../SidebarStageBackdrop";
 import { Button } from "../ui/button";
@@ -59,7 +60,6 @@ interface ComposerPrimaryActionsProps {
   preserveComposerFocusOnPointerDown?: boolean;
   isEditingQueuedMessage?: boolean;
   onSubmitMessage?: MouseEventHandler<HTMLButtonElement>;
-  onExpandForCompaction?: () => void;
   onResume?: () => void;
   onPreviousPendingQuestion: () => void;
   onInterrupt: () => void;
@@ -68,6 +68,29 @@ interface ComposerPrimaryActionsProps {
   keepFullHistory?: boolean;
   onToggleKeepFullHistory?: () => void;
 }
+
+const formatPendingPrimaryActionLabel = (
+  input: {
+    compact: boolean;
+    isLastQuestion: boolean;
+    isResponding: boolean;
+    questionIndex: number;
+  },
+  resolve: MessageResolver,
+) => {
+  if (input.isResponding) {
+    return resolve(msg("Submitting..."));
+  }
+  if (input.compact) {
+    return input.isLastQuestion
+      ? resolve(msg("Submit", { $context: "verb, submits answers" }))
+      : resolve(msg("Next", { $context: "button that goes to the next question" }));
+  }
+  if (!input.isLastQuestion) {
+    return resolve(msg("Next question"));
+  }
+  return input.questionIndex > 0 ? resolve(msg("Submit answers")) : resolve(msg("Submit answer"));
+};
 
 const STOP_PENDING_MAX_MS = 10_000;
 // The action that takes Stop's place ignores clicks this long, so repeat Stop clicks can't resume.
@@ -128,7 +151,7 @@ function StopGenerationButton({
   onStopRequested: () => void;
   onInterrupt: () => void;
 }) {
-  const t = useTranslate();
+  const gt = useGT();
   const isStopDisabled = stopPhase === "pending";
   return (
     <Tooltip>
@@ -147,7 +170,7 @@ function StopGenerationButton({
               onStopRequested();
               onInterrupt();
             }}
-            aria-label={stopPhase === "pending" ? t("common.stopping") : t("chat.primary.stop")}
+            aria-label={stopPhase === "pending" ? gt("Stopping") : gt("Stop generation")}
           />
         }
       >
@@ -156,7 +179,9 @@ function StopGenerationButton({
         </svg>
       </TooltipTrigger>
       <TooltipPopup>
-        {stopPhase === "pending" ? t("common.stopping") : t("chat.primary.interrupt")}
+        {stopPhase === "pending"
+          ? gt("Stopping…")
+          : gt("Interrupt", { $context: "verb, stops the running agent" })}
       </TooltipPopup>
     </Tooltip>
   );
@@ -227,7 +252,6 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   preserveComposerFocusOnPointerDown = false,
   isEditingQueuedMessage = false,
   onSubmitMessage,
-  onExpandForCompaction,
   onResume,
   onPreviousPendingQuestion,
   onInterrupt,
@@ -236,25 +260,8 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   keepFullHistory = false,
   onToggleKeepFullHistory,
 }: ComposerPrimaryActionsProps) {
-  const t = useTranslate();
-  const formatPendingPrimaryActionLabel = (input: {
-    compact: boolean;
-    isLastQuestion: boolean;
-    isResponding: boolean;
-    questionIndex: number;
-  }) => {
-    if (input.isResponding) {
-      return t("chat.primary.submitting");
-    }
-    if (input.compact) {
-      return input.isLastQuestion ? t("common.submit") : t("common.next");
-    }
-    if (!input.isLastQuestion) {
-      return t("question.next");
-    }
-    return input.questionIndex > 0 ? t("question.submitMany") : t("question.submitOne");
-  };
-
+  const gt = useGT();
+  const m = useMessages();
   const [stopPhase, setStopPhase] = useStopPhase({ runId, canInterrupt, canOperateThread });
   const pointerFocusProps = preserveComposerFocusOnPointerDown
     ? { onPointerDown: preventPointerFocus }
@@ -306,7 +313,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
               {...pointerFocusProps}
               onClick={onPreviousPendingQuestion}
               disabled={pendingAction.isResponding}
-              aria-label={t("question.previous")}
+              aria-label={gt("Previous question")}
             >
               <ChevronLeftIcon className="size-3.5" />
             </Button>
@@ -318,7 +325,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
               onClick={onPreviousPendingQuestion}
               disabled={pendingAction.isResponding}
             >
-              {t("common.previous")}
+              {gt("Previous", { $context: "button that goes to the previous question" })}
             </Button>
           )
         ) : null}
@@ -341,12 +348,15 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
                 : !pendingAction.canAdvance))
           }
         >
-          {formatPendingPrimaryActionLabel({
-            compact,
-            isLastQuestion: pendingAction.isLastQuestion,
-            isResponding: pendingAction.isResponding,
-            questionIndex: pendingAction.questionIndex,
-          })}
+          {formatPendingPrimaryActionLabel(
+            {
+              compact,
+              isLastQuestion: pendingAction.isLastQuestion,
+              isResponding: pendingAction.isResponding,
+              questionIndex: pendingAction.questionIndex,
+            },
+            m,
+          )}
         </button>
         {canInterrupt || stopPhase === "pending" || stopPhase === "timedOut"
           ? renderStopGenerationButton(true)
@@ -375,46 +385,54 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
       ? formatContextWindowTokens(compactBeforeSendTokens)
       : null;
   const compactsBeforeSend = compactTokens !== null && !keepFullHistory;
-  const opensForCompaction = compactsBeforeSend && onExpandForCompaction !== undefined;
 
   const submitLabel = showResume
-    ? t("chat.primary.resume")
+    ? gt("Resume thread")
     : isEditingQueuedMessage
-      ? t("chat.primary.updateQueued")
+      ? gt("Update queued message")
       : compactsBeforeSend
-        ? opensForCompaction
-          ? t("chat.composer.openToCompact")
-          : t("chat.primary.compactSend")
+        ? gt("Compact and send")
         : isQueuing
-          ? t("chat.primary.queue")
+          ? gt("Queue message")
           : isRunning
-            ? t("chat.primary.steer")
-            : t("chat.primary.send");
+            ? gt("Steer message")
+            : gt("Submit message");
   const submitStatus = isEnvironmentUnavailable
-    ? t("chat.primary.disconnected")
+    ? gt("Environment disconnected")
     : (sendDisabledReason ??
       (isPreparingWorktree
-        ? t("chat.primary.preparing")
+        ? gt("Preparing worktree")
         : isSendBusy
           ? isEditingQueuedMessage
-            ? t("chat.primary.updating")
-            : t("chat.primary.sending")
+            ? gt("Updating queued message")
+            : gt("Submitting message")
           : null));
+  const modifier = isMacPlatform(navigator.platform) ? "⌘" : "Ctrl";
+  const dispatchTooltip =
+    alternateAction === "queue"
+      ? alternateShortcutLabel
+        ? gt("Click to steer, {modifier}-click or {shortcut} to queue", {
+            modifier,
+            shortcut: alternateShortcutLabel,
+          })
+        : gt("Click to steer, {modifier}-click to queue", { modifier })
+      : alternateShortcutLabel
+        ? gt("Click to queue, {modifier}-click or {shortcut} to steer", {
+            modifier,
+            shortcut: alternateShortcutLabel,
+          })
+        : gt("Click to queue, {modifier}-click to steer", { modifier });
   const submitTooltip =
     submitStatus ??
     (compactsBeforeSend
-      ? t("chat.primary.summarizeSend", { tokens: compactTokens })
+      ? gt("Summarize {tokens} tokens of history, then send", { tokens: compactTokens })
       : isRunning && !isEditingQueuedMessage && canSteer
-        ? t(alternateShortcutLabel ? "chat.primary.dispatchShortcut" : "chat.primary.dispatch", {
-            primary: t(`chat.primary.verb.${followUpBehavior}`),
-            alternate: t(`chat.primary.verb.${alternateAction}`),
-            shortcut: alternateShortcutLabel,
-          })
+        ? dispatchTooltip
         : submitLabel);
 
   const sendButton = (
     <button
-      type={showResume || opensForCompaction ? "button" : "submit"}
+      type={showResume ? "button" : "submit"}
       className={cn(
         "relative isolate flex h-9 w-9 items-center justify-center overflow-hidden rounded-full shadow-xs transition-all duration-150 enabled:cursor-pointer enabled:inset-shadow-control-highlight hover:scale-105 active:inset-shadow-control-pressed active:shadow-none disabled:pointer-events-none disabled:shadow-none disabled:hover:scale-100 sm:h-8 sm:w-8 [&_svg]:pointer-events-none",
         stageBackdropVariant
@@ -428,7 +446,6 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
           return;
         }
         if (showResume) onResume?.();
-        else if (opensForCompaction) onExpandForCompaction?.();
         else onSubmitMessage?.(event);
       }}
       disabled={
@@ -474,7 +491,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
       <TooltipPopup>{submitTooltip}</TooltipPopup>
     </Tooltip>
   );
-  if (compactTokens === null || hideCompactToggle || onExpandForCompaction !== undefined) {
+  if (compactTokens === null || hideCompactToggle) {
     return withStopButton(
       <>
         {children}
@@ -493,7 +510,9 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
               className="flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-(--control-radius) px-2 font-medium text-base text-foreground/80 tabular-nums outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-64 sm:text-sm aria-pressed:bg-accent/60 aria-pressed:text-foreground [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:text-muted-foreground"
               {...pointerFocusProps}
               aria-pressed={!keepFullHistory}
-              aria-label={t("chat.primary.compactHistory", { tokens: compactTokens })}
+              aria-label={gt("Compact {tokens} tokens of history before sending", {
+                tokens: compactTokens,
+              })}
               disabled={!canOperateThread}
               onClick={onToggleKeepFullHistory}
             />
@@ -501,15 +520,20 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
         >
           <Minimize2Icon aria-hidden="true" />
           <span className="@max-[480px]/composer-surface:hidden">
-            {keepFullHistory ? t("chat.primary.full") : t("chat.primary.compact")}
+            {keepFullHistory
+              ? gt("Keep", { $context: "keep full history instead of compacting" })
+              : gt("Compact", { $context: "verb, compact history before sending" })}
           </span>
           <span className="text-muted-foreground">{compactTokens}</span>
         </TooltipTrigger>
         <TooltipPopup>
           <div>
             {keepFullHistory
-              ? t("chat.primary.keepHistory", { tokens: compactTokens })
-              : t("chat.primary.compactingHistory", { tokens: compactTokens })}
+              ? gt("Next send keeps all {tokens} tokens.", { tokens: compactTokens })
+              : gt("Next send compacts {tokens} tokens first.", { tokens: compactTokens })}
+          </div>
+          <div>
+            {keepFullHistory ? gt("Click to compact first") : gt("Click to keep full history")}
           </div>
         </TooltipPopup>
       </Tooltip>

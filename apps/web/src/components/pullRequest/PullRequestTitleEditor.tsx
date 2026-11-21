@@ -2,11 +2,9 @@ import { useTranslate } from "../../i18n";
 import { i18n } from "~/i18n";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentId, PullRequestDetail, PullRequestRef } from "@t3tools/contracts";
+import { useGT } from "gt-react";
 import { useState } from "react";
-import {
-  capitalizeTerm,
-  sourceControlClients,
-} from "@t3tools/client-runtime/source-control-clients";
+import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 
 import { pullRequestEnvironment } from "~/state/pullRequests";
 import { useAtomCommand } from "~/state/use-atom-command";
@@ -18,6 +16,8 @@ import { PullRequestDetailTitleRow } from "./PullRequestDetailLayout";
 import { PullRequestEditButton } from "./PullRequestEditButton";
 import { readableFailure } from "./pullRequestDetail.logic";
 import { canEditPullRequestChangeRequest } from "@t3tools/client-runtime/pull-request-editing";
+
+import { changeRequestTermKind } from "./changeRequestTerm";
 
 /** The pull request title, which the reader can rename in place when the host allows it. */
 export function PullRequestTitleEditor({
@@ -40,6 +40,7 @@ export function PullRequestTitleEditor({
     readonly text: string;
   } | null>(null);
   const titleDraft = titleScope?.pullRequestKey === pullRequestKey ? titleScope.text : null;
+  const gt = useGT();
   const [titleSaving, setTitleSaving] = useState(false);
 
   const saveTitle = async (next: string) => {
@@ -96,7 +97,12 @@ export function PullRequestTitleEditor({
         size="sm"
         disabled={titleSaving}
         value={titleDraft}
-        aria-label={`${capitalizeTerm(sourceControlClients.get(detail.provider).changeRequest.singular)} title`}
+        aria-label={gt(
+          "{term, select, mr {Merge request} cr {Change request} other {Pull request}} title",
+          {
+            term: changeRequestTermKind(sourceControlClients.get(detail.provider).changeRequest),
+          },
+        )}
         onChange={(event) => setTitleScope({ pullRequestKey, text: event.target.value })}
         onKeyDown={(event) => {
           if (event.nativeEvent.isComposing || event.keyCode === 229) return;

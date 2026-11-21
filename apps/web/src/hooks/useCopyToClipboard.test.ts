@@ -10,7 +10,13 @@ describe("readTextFromClipboard", () => {
   it("distinguishes unavailable, denied and other failed reads without a fallback", async () => {
     vi.stubGlobal("window", {});
     vi.stubGlobal("navigator", {});
-    await expect(readTextFromClipboard("terminal input")).rejects.toMatchObject({
+    await expect(
+      readTextFromClipboard({
+        target: "terminal input",
+        unavailableMessage: "Clipboard unavailable",
+        failureMessage: "Clipboard read failed",
+      }),
+    ).rejects.toMatchObject({
       _tag: "ClipboardReadUnavailableError",
       target: "terminal input",
     });
@@ -21,7 +27,13 @@ describe("readTextFromClipboard", () => {
     ] as const) {
       const readText = vi.fn().mockRejectedValue(cause);
       vi.stubGlobal("navigator", { clipboard: { readText } });
-      await expect(readTextFromClipboard("terminal input")).rejects.toMatchObject({
+      await expect(
+        readTextFromClipboard({
+          target: "terminal input",
+          unavailableMessage: "Clipboard unavailable",
+          failureMessage: "Clipboard read failed",
+        }),
+      ).rejects.toMatchObject({
         _tag: tag,
         target: "terminal input",
         cause,
@@ -43,7 +55,7 @@ describe("writeTextToClipboard", () => {
       },
     );
     await expect(
-      writeTextToClipboard("original", "message", {
+      writeTextToClipboard("original", undefined, {
         "text/plain": "replacement",
         "text/html": "<b>original</b>",
       }),
@@ -69,7 +81,7 @@ describe("writeTextToClipboard", () => {
     const rich = "<p><strong>Message</strong></p>";
 
     await expect(
-      writeTextToClipboard("Message", "message", {
+      writeTextToClipboard("Message", undefined, {
         [COMPOSER_CONTEXT_CLIPBOARD_MIME]: fragment,
         "text/html": rich,
       }),

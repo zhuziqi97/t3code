@@ -1,5 +1,4 @@
-import { i18n, useTranslate } from "../../i18n";
-import type { TFunction } from "i18next";
+import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
 import {
   MousePointer2Icon,
   PaintbrushIcon,
@@ -39,7 +38,6 @@ import { Switch } from "../ui/switch";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { getThemeRoleLabel, ThemeColorField } from "./ThemeColorPicker";
-import { translateThemeError } from "./themeErrorMessages";
 import { ThemeCssEditor } from "./ThemeCssEditor";
 import {
   clearThemeInspectorHover,
@@ -51,58 +49,55 @@ import {
   showThemeInspectorHover,
   type ThemeElementInspection,
 } from "./themeInspector";
+import { msg, T, useGT, useMessages } from "gt-react";
+import { m, type MessageResolver } from "../../i18n/messages";
 
 const THEME_EDITOR_SIMPLE_ROLES: ReadonlyArray<ThemeColorRole> = ["canvas", "accent"];
 
 type ThemeEditorColorFamily = Readonly<{
   id: string;
-  labelKey: string;
+  label: string;
   role: ThemeColorRole;
   roles: ReadonlyArray<ThemeColorRole>;
 }>;
 
 const THEME_EDITOR_ROLE_GROUPS: ReadonlyArray<{
   id: string;
-  titleKey: string;
+  title: string;
   families: ReadonlyArray<ThemeEditorColorFamily>;
 }> = [
   {
     id: "foundation",
-    titleKey: "appearance.theme.group.foundation",
+    title: msg("Foundation"),
     families: [
       {
         id: "background",
-        labelKey: "appearance.theme.family.background",
+        label: msg("Background"),
         role: "canvas",
         roles: ["canvas", "chrome", "toolbar"],
       },
-      {
-        id: "surface",
-        labelKey: "appearance.theme.family.surface",
-        role: "surface",
-        roles: ["surface"],
-      },
+      { id: "surface", label: msg("Surface"), role: "surface", roles: ["surface"] },
       {
         id: "raised-surface",
-        labelKey: "appearance.theme.family.raised",
+        label: msg("Raised surface"),
         role: "surfaceRaised",
         roles: ["surfaceRaised"],
       },
       {
         id: "overlay",
-        labelKey: "appearance.theme.family.overlay",
+        label: msg("Overlay"),
         role: "surfaceOverlay",
         roles: ["surfaceOverlay"],
       },
       {
         id: "text",
-        labelKey: "appearance.theme.family.text",
+        label: msg("Text"),
         role: "text",
         roles: ["text", "toolbarForeground", "toolbarControlForeground"],
       },
       {
         id: "muted-text",
-        labelKey: "appearance.theme.family.mutedText",
+        label: msg("Muted text"),
         role: "mutedForeground",
         roles: [
           "textMuted",
@@ -115,32 +110,32 @@ const THEME_EDITOR_ROLE_GROUPS: ReadonlyArray<{
       },
       {
         id: "border",
-        labelKey: "appearance.theme.family.border",
+        label: msg("Border"),
         role: "border",
         roles: ["border", "toolbarBorder", "sidebarBorder"],
       },
-      { id: "input", labelKey: "appearance.theme.family.input", role: "input", roles: ["input"] },
+      { id: "input", label: msg("Input"), role: "input", roles: ["input"] },
     ],
   },
   {
     id: "brand-content",
-    titleKey: "appearance.theme.group.brand",
+    title: msg("Brand & content"),
     families: [
       {
         id: "subtle-surface",
-        labelKey: "appearance.theme.family.subtle",
+        label: msg("Subtle surface"),
         role: "secondary",
         roles: ["secondary", "secondaryForeground", "muted", "toolbarControl"],
       },
       {
         id: "highlight-surface",
-        labelKey: "appearance.theme.family.highlight",
+        label: msg("Highlight surface"),
         role: "accentSurface",
         roles: ["accentSurface", "accentSurfaceForeground", "toolbarControlHover"],
       },
       {
         id: "accent",
-        labelKey: "appearance.theme.family.accent",
+        label: msg("Accent"),
         role: "accent",
         roles: [
           "accent",
@@ -154,19 +149,19 @@ const THEME_EDITOR_ROLE_GROUPS: ReadonlyArray<{
       },
       {
         id: "action",
-        labelKey: "appearance.theme.family.action",
+        label: msg("Action"),
         role: "messageAction",
         roles: ["messageAction", "messageActionForeground", "messageActionHover"],
       },
       {
         id: "message-surface",
-        labelKey: "appearance.theme.family.message",
+        label: msg("Message surface"),
         role: "messageSurface",
         roles: ["messageSurface", "messageForeground"],
       },
       {
         id: "code-surface",
-        labelKey: "appearance.theme.family.code",
+        label: msg("Code surface"),
         role: "codeBackground",
         roles: ["codeBackground", "codeForeground"],
       },
@@ -174,17 +169,17 @@ const THEME_EDITOR_ROLE_GROUPS: ReadonlyArray<{
   },
   {
     id: "search",
-    titleKey: "appearance.theme.group.search",
+    title: msg("Search"),
     families: [
       {
         id: "search-matches",
-        labelKey: "appearance.theme.family.searchMatches",
+        label: msg("Search matches"),
         role: "searchMatchBackground",
         roles: ["searchMatchBackground", "searchMatchForeground"],
       },
       {
         id: "current-match",
-        labelKey: "appearance.theme.family.currentMatch",
+        label: msg("Current match"),
         role: "searchMatchActiveBackground",
         roles: ["searchMatchActiveBackground", "searchMatchActiveForeground"],
       },
@@ -192,29 +187,29 @@ const THEME_EDITOR_ROLE_GROUPS: ReadonlyArray<{
   },
   {
     id: "context",
-    titleKey: "appearance.theme.group.context",
+    title: msg("Context"),
     families: [
       {
         id: "sidebar-background",
-        labelKey: "appearance.theme.family.sidebar",
+        label: msg("Sidebar background"),
         role: "sidebar",
         roles: ["sidebar", "sidebarForeground"],
       },
       {
         id: "sidebar-controls",
-        labelKey: "appearance.theme.family.sidebarControls",
+        label: msg("Sidebar controls"),
         role: "sidebarControlSurface",
         roles: ["sidebarControlSurface"],
       },
       {
         id: "sidebar-selection",
-        labelKey: "appearance.theme.family.sidebarSelection",
+        label: msg("Sidebar selection"),
         role: "sidebarRowSelected",
         roles: ["sidebarRowHover", "sidebarRowActive", "sidebarRowSelected"],
       },
       {
         id: "terminal-background",
-        labelKey: "appearance.theme.family.terminal",
+        label: msg("Terminal background"),
         role: "terminalBackground",
         roles: [
           "terminalBackground",
@@ -228,17 +223,17 @@ const THEME_EDITOR_ROLE_GROUPS: ReadonlyArray<{
   },
   {
     id: "status",
-    titleKey: "appearance.theme.group.status",
+    title: msg("Status"),
     families: [
       {
         id: "error",
-        labelKey: "appearance.theme.family.error",
+        label: msg("Error"),
         role: "error",
         roles: ["error", "errorForeground", "errorSurface"],
       },
       {
         id: "warning",
-        labelKey: "appearance.theme.family.warning",
+        label: msg("Warning"),
         role: "warning",
         roles: ["warning", "warningForeground", "warningSurface"],
       },
@@ -257,9 +252,9 @@ function getThemeEditorColorFamily(role: ThemeColorRole): ThemeEditorColorFamily
   return THEME_EDITOR_COLOR_FAMILY_BY_ROLE.get(role) ?? null;
 }
 
-function getThemeEditorRoleLabel(role: ThemeColorRole, t: TFunction): string {
+function themeEditorRoleLabel(role: ThemeColorRole, resolve: MessageResolver = m): string {
   const family = getThemeEditorColorFamily(role);
-  return family ? t(family.labelKey) : getThemeRoleLabel(role, t);
+  return family ? resolve(family.label) : getThemeRoleLabel(role, resolve);
 }
 
 type ThemeEditorColors = ThemeColors;
@@ -352,7 +347,8 @@ export function ThemeEditorPanel({
   seedName?: string | undefined;
   restoreTheme: () => void;
 }) {
-  const t = useTranslate();
+  const messages = useMessages();
+  const gt = useGT();
   const isEditing = editingTheme !== null;
   const [name, setName] = useState("");
   const [activeAppearance, setActiveAppearance] = useState<ThemeAppearance>(initialAppearance);
@@ -372,14 +368,6 @@ export function ThemeEditorPanel({
   const [isInspecting, setIsInspecting] = useState(false);
   const [selectedRole, setSelectedRole] = useState<ThemeColorRole | null>(null);
   const [usageCount, setUsageCount] = useState<number | null>(null);
-  const hoveredInspectionRef = useRef<ThemeElementInspection | null>(null);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- retranslates the inspector's imperative DOM hover overlay when the locale changes
-  useEffect(() => {
-    const inspection = hoveredInspectionRef.current;
-    if (inspection) {
-      showThemeInspectorHover(inspection, getThemeEditorRoleLabel(inspection.role, t));
-    }
-  }, [t]);
   // The rendered width is CSS-sized unless the user resized the panel, so the position
   // remembers the width measured at the last drag or resize.
   const [position, setPosition] = useState<{ x: number; y: number; width: number } | null>(null);
@@ -452,16 +440,18 @@ export function ThemeEditorPanel({
 
   const appearanceLockReason = (appearance: ThemeAppearance): string | null => {
     if (editableAppearances && !editableAppearances.includes(appearance)) {
-      return t("appearance.theme.editor.noPalette", {
-        name: editingTheme?.label,
-        mode: t(`appearance.${appearance}`),
-      });
+      return appearance === "light"
+        ? gt("“{label}” has no light palette. Create a theme with the same name to add one.", {
+            label: editingTheme?.label,
+          })
+        : gt("“{label}” has no dark palette. Create a theme with the same name to add one.", {
+            label: editingTheme?.label,
+          });
     }
     if (!isEditing && takenAppearances.includes(appearance)) {
-      return t("appearance.theme.editor.paletteTaken", {
-        name: mergeTarget?.label,
-        mode: t(`appearance.${appearance}`),
-      });
+      return appearance === "light"
+        ? gt("“{label}” already has a light palette.", { label: mergeTarget?.label })
+        : gt("“{label}” already has a dark palette.", { label: mergeTarget?.label });
     }
     return null;
   };
@@ -659,13 +649,11 @@ export function ThemeEditorPanel({
       clearHoverTimer();
       hoverTarget = null;
       hoverInspection = null;
-      hoveredInspectionRef.current = null;
       clearThemeInspectorHover();
     };
     const showInspection = (inspection: ThemeElementInspection) => {
       hoverInspection = inspection;
-      hoveredInspectionRef.current = inspection;
-      showThemeInspectorHover(inspection, getThemeEditorRoleLabel(inspection.role, i18n.t));
+      showThemeInspectorHover(inspection, themeEditorRoleLabel(inspection.role));
     };
     const handlePointerOver = (event: PointerEvent) => {
       const target = event.target;
@@ -677,7 +665,6 @@ export function ThemeEditorPanel({
       clearHoverTimer();
       hoverTarget = target;
       hoverInspection = null;
-      hoveredInspectionRef.current = null;
       const utilityInspection = inspectThemeRoleFromUtilitiesAtElement(target);
       if (utilityInspection) {
         showInspection(utilityInspection);
@@ -731,10 +718,7 @@ export function ThemeEditorPanel({
       hoverFrame = requestAnimationFrame(() => {
         hoverFrame = null;
         if (hoverInspection) {
-          showThemeInspectorHover(
-            hoverInspection,
-            getThemeEditorRoleLabel(hoverInspection.role, i18n.t),
-          );
+          showThemeInspectorHover(hoverInspection, themeEditorRoleLabel(hoverInspection.role));
         }
       });
     };
@@ -757,7 +741,6 @@ export function ThemeEditorPanel({
       window.removeEventListener("scroll", clearHoverOnScroll, true);
       clearHoverTimer();
       if (hoverFrame !== null) cancelAnimationFrame(hoverFrame);
-      hoveredInspectionRef.current = null;
       clearThemeInspectorHover();
     };
   }, [clearInspectorSelection, isInspecting, open, selectThemeRole]);
@@ -791,13 +774,15 @@ export function ThemeEditorPanel({
 
   const handleSubmit = () => {
     if (!name.trim()) {
-      setError("Name your theme first.");
+      setError(gt("Name your theme first."));
       return;
     }
 
     if (mergeTarget?.css && css.trim() && mergeTarget.css !== css) {
       setError(
-        `“${mergeTarget.label}” has different custom CSS. Use the same CSS or pick another name.`,
+        gt("“{label}” has different custom CSS. Use the same CSS or pick another name.", {
+          label: mergeTarget.label,
+        }),
       );
       return;
     }
@@ -821,7 +806,15 @@ export function ThemeEditorPanel({
         const editedModes = getThemeModes(editingTheme);
         const collision = editedModes.find((mode) => takenAppearances.includes(mode));
         if (collision) {
-          setError(`“${mergeTarget.label}” already has a ${collision} palette. Pick another name.`);
+          setError(
+            collision === "light"
+              ? gt("“{label}” already has a light palette. Pick another name.", {
+                  label: mergeTarget.label,
+                })
+              : gt("“{label}” already has a dark palette. Pick another name.", {
+                  label: mergeTarget.label,
+                }),
+          );
           return;
         }
         mergedAppearance = editedModes[0] ?? null;
@@ -864,7 +857,9 @@ export function ThemeEditorPanel({
       } else if (mergeTarget) {
         if (takenAppearances.includes(activeAppearance)) {
           setError(
-            `“${mergeTarget.label}” already has light and dark palettes. Pick another name.`,
+            gt("“{label}” already has light and dark palettes. Pick another name.", {
+              label: mergeTarget.label,
+            }),
           );
           return;
         }
@@ -913,24 +908,26 @@ export function ThemeEditorPanel({
             if (retiredTheme) installCustomTheme(retiredTheme);
           } catch {}
         }
-        setError("We couldn’t activate the theme. Try again.");
+        setError(gt("Theme saved, but it could not be made active. Try again."));
         return;
       }
       onOpenChange(false);
     } catch (cause) {
       setError(
         cause instanceof Error
-          ? cause.message
+          ? (errorDisplayMessage(cause, m) ?? cause.message)
           : isEditing
-            ? "Could not save the theme."
-            : "Could not create the theme.",
+            ? gt("Could not save the theme.")
+            : gt("Could not create the theme."),
       );
     }
   };
 
   const renderNameField = () => (
     <label className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] items-center gap-3">
-      <span className="text-sm font-medium">{t("appearance.theme.editor.name")}</span>
+      <span className="text-sm font-medium">
+        <T>Theme name</T>
+      </span>
       <Input
         autoFocus
         size="sm"
@@ -938,11 +935,7 @@ export function ThemeEditorPanel({
           setName(event.currentTarget.value);
           setError(null);
         }}
-        placeholder={
-          isEditing
-            ? t("appearance.theme.editor.name")
-            : t("appearance.theme.editor.namePlaceholder")
-        }
+        placeholder={isEditing ? gt("Theme name") : gt("e.g. Aurora")}
         value={name}
       />
     </label>
@@ -953,7 +946,7 @@ export function ThemeEditorPanel({
     // Use aria-disabled so locked modes remain hoverable for explanatory tooltips.
     const button = (
       <Toggle aria-disabled={lockReason !== null} value={appearance}>
-        {appearance === "light" ? t("appearance.light") : t("appearance.dark")}
+        {appearance === "light" ? gt("Light") : gt("Dark")}
       </Toggle>
     );
     if (lockReason === null) return button;
@@ -967,9 +960,11 @@ export function ThemeEditorPanel({
 
   const renderAppearanceButtons = () => (
     <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] items-center gap-3">
-      <span className="text-sm font-medium">{t("appearance.theme.editor.appearance")}</span>
+      <span className="text-sm font-medium">
+        <T>Appearance</T>
+      </span>
       <ToggleGroup
-        aria-label={t("appearance.theme.editor.appearanceLabel")}
+        aria-label={gt("Theme appearance")}
         variant="segmented"
         value={[activeAppearance]}
         onValueChange={(next) => {
@@ -991,26 +986,32 @@ export function ThemeEditorPanel({
   const renderColorsHeader = () => (
     <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] items-start gap-3">
       <div>
-        <h3 className="text-sm font-medium">{t("appearance.theme.editor.colors")}</h3>
+        <h3 className="text-sm font-medium">
+          <T>Colors</T>
+        </h3>
         {isAdvanced ? null : (
-          <p className="text-xs text-muted-foreground">{t("appearance.theme.editor.derived")}</p>
+          <p className="text-xs text-muted-foreground">
+            <T>Two colors, rest derived</T>
+          </p>
         )}
       </div>
       <div className="flex min-w-0 items-start gap-3">
         {isAdvanced ? (
           <Input
-            aria-label={t("appearance.theme.editor.filter")}
+            aria-label={gt("Filter colors")}
             className="min-w-0 flex-1"
             onChange={(event) => setRoleQuery(event.currentTarget.value)}
-            placeholder={t("appearance.theme.editor.filter")}
+            placeholder={gt("Filter colors")}
             size="sm"
             value={roleQuery}
           />
         ) : null}
         <label className="ml-auto flex shrink-0 cursor-pointer items-center gap-2 pt-0.5 text-sm font-medium">
-          <span>{t("appearance.theme.editor.advanced")}</span>
+          <span>
+            <T>Advanced</T>
+          </span>
           <Switch
-            aria-label={t("appearance.theme.editor.advancedLabel")}
+            aria-label={gt("Use advanced theme colors")}
             checked={isAdvanced}
             onCheckedChange={(checked) => handleAdvancedChange(Boolean(checked))}
           />
@@ -1027,7 +1028,7 @@ export function ThemeEditorPanel({
       {families.map((family) => (
         <ThemeColorField
           key={family.id}
-          label={t(family.labelKey)}
+          label={messages(family.label)}
           onChange={updateColor}
           onEditCancel={cancelColorEdit}
           onEditStart={startColorEdit}
@@ -1043,22 +1044,12 @@ export function ThemeEditorPanel({
 
   const renderColorFields = () => {
     const query = roleQuery.trim().toLowerCase();
-    const english = i18n.getFixedT("en");
-    const chinese = i18n.getFixedT("zh");
     const groups = THEME_EDITOR_ROLE_GROUPS.map((group) => ({
       ...group,
       families: group.families.filter(
         (family) =>
           !query ||
-          [
-            t(family.labelKey, { lng: "en" }),
-            t(family.labelKey, { lng: "zh" }),
-            ...family.roles.flatMap((role) => [
-              role,
-              getThemeRoleLabel(role, english),
-              getThemeRoleLabel(role, chinese),
-            ]),
-          ]
+          [messages(family.label), ...family.roles.map((role) => getThemeRoleLabel(role, messages))]
             .join(" ")
             .toLowerCase()
             .includes(query),
@@ -1068,12 +1059,14 @@ export function ThemeEditorPanel({
       <div className="space-y-5">
         {groups.map((group) => (
           <section className="space-y-2" key={group.id}>
-            <h4 className="text-sm font-medium text-foreground">{t(group.titleKey)}</h4>
+            <h4 className="text-sm font-medium text-foreground">{messages(group.title)}</h4>
             {renderRoleFields(group.families, "grid gap-1")}
           </section>
         ))}
         {groups.length === 0 ? (
-          <p className="text-xs text-muted-foreground">{t("appearance.theme.editor.noMatches")}</p>
+          <p className="text-xs text-muted-foreground">
+            <T>No matches.</T>
+          </p>
         ) : null}
       </div>
     ) : (
@@ -1087,11 +1080,7 @@ export function ThemeEditorPanel({
             onSelect={selectThemeRole}
             onToggleSelected={toggleThemeRole}
             role={role}
-            label={
-              role === "canvas"
-                ? t("appearance.theme.family.background")
-                : t("appearance.theme.family.accent")
-            }
+            label={role === "canvas" ? gt("Background") : gt("Accent")}
             selected={selectedRole === role}
             value={colorsByAppearance[activeAppearance][role]}
           />
@@ -1181,7 +1170,7 @@ export function ThemeEditorPanel({
 
   return (
     <div
-      aria-label={isEditing ? t("appearance.theme.edit") : t("appearance.theme.create")}
+      aria-label={isEditing ? gt("Edit theme") : gt("Create theme")}
       className={cn(
         "dialog-glass fixed z-[110] flex max-h-[min(42rem,calc(100dvh-6rem))] w-[min(26rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border text-popover-foreground",
         position === null && "bottom-4 right-4",
@@ -1214,20 +1203,20 @@ export function ThemeEditorPanel({
       >
         <div className="flex min-w-0 flex-1 items-baseline gap-2">
           <h2 className="shrink-0 truncate text-sm font-medium">
-            {isEditing ? t("appearance.theme.edit") : t("appearance.theme.create")}
+            {isEditing ? gt("Edit theme") : gt("Create theme")}
           </h2>
           {isMinimized ? null : (
             <p className="truncate text-xs text-muted-foreground">
               {isInspecting
-                ? t("appearance.theme.editor.selectElement")
+                ? gt("Select an element · Esc to cancel")
                 : selectedRole
-                  ? t("appearance.theme.editor.usage", {
+                  ? gt("{label} · {count, plural, one {{count} use} other {{count} uses}}", {
                       label: isAdvanced
-                        ? getThemeEditorRoleLabel(selectedRole, t)
-                        : getThemeRoleLabel(selectedRole, t),
+                        ? themeEditorRoleLabel(selectedRole, messages)
+                        : getThemeRoleLabel(selectedRole, messages),
                       count: usageCount ?? 0,
                     })
-                  : t("appearance.theme.editor.selectColor")}
+                  : gt("Select a color below")}
             </p>
           )}
         </div>
@@ -1236,9 +1225,7 @@ export function ThemeEditorPanel({
             render={
               <Button
                 aria-label={
-                  isInspecting
-                    ? t("appearance.theme.editor.cancelInspect")
-                    : t("appearance.theme.editor.inspectLabel")
+                  isInspecting ? gt("Cancel inspecting app colors") : gt("Inspect app colors")
                 }
                 aria-pressed={isInspecting}
                 size="xs"
@@ -1252,22 +1239,16 @@ export function ThemeEditorPanel({
                 }}
               >
                 <MousePointer2Icon />
-                {isInspecting ? t("common.cancel") : t("appearance.theme.editor.inspect")}
+                {isInspecting ? gt("Cancel") : gt("Inspect")}
               </Button>
             }
           />
           <TooltipPopup data-theme-editor-panel="">
-            {isInspecting
-              ? t("appearance.theme.editor.clearSelection")
-              : t("appearance.theme.editor.pickFromApp")}
+            {isInspecting ? gt("Cancel and clear the selection") : gt("Pick a color from the app")}
           </TooltipPopup>
         </Tooltip>
         <Button
-          aria-label={
-            isMinimized
-              ? t("appearance.theme.editor.expand")
-              : t("appearance.theme.editor.minimize")
-          }
+          aria-label={isMinimized ? gt("Expand the theme editor") : gt("Minimize the theme editor")}
           size="icon-xs"
           variant="ghost"
           onClick={() => setIsMinimized(!isMinimized)}
@@ -1275,7 +1256,7 @@ export function ThemeEditorPanel({
           {isMinimized ? <ChevronUpIcon /> : <ChevronDownIcon />}
         </Button>
         <Button
-          aria-label={t("appearance.theme.editor.close")}
+          aria-label={gt("Close the theme editor")}
           size="icon-xs"
           variant="ghost"
           onClick={() => onOpenChange(false)}
@@ -1290,7 +1271,7 @@ export function ThemeEditorPanel({
             {renderNameField()}
             {error ? (
               <p aria-live="polite" className="text-sm text-destructive">
-                {translateThemeError(error, t)}
+                {error}
               </p>
             ) : null}
             {renderAppearanceButtons()}
@@ -1306,13 +1287,15 @@ export function ThemeEditorPanel({
                 onClick={() => setCssOpen(!cssOpen)}
               >
                 {cssOpen ? <ChevronDownIcon /> : <ChevronRightIcon />}
-                Custom CSS
+                <T>Custom CSS</T>
               </Button>
               {cssOpen ? (
                 <>
                   <p className="text-xs text-muted-foreground">
-                    Saved with this theme and included when you export it. Web and desktop only.
-                    Rules that load remote files are ignored.
+                    <T>
+                      Saved with this theme and included when you export it. Web and desktop only.
+                      Rules that load remote files are ignored.
+                    </T>
                   </p>
                   <ThemeCssEditor value={css} onChange={setCss} />
                 </>
@@ -1321,26 +1304,24 @@ export function ThemeEditorPanel({
           </div>
           <div className="flex items-center justify-end gap-2 border-t border-border/70 px-3 py-2">
             <Button size="sm" variant="ghost" onClick={() => onOpenChange(false)}>
-              {t("common.cancel")}
+              <T>Cancel</T>
             </Button>
             <Button disabled={!name.trim()} size="sm" onClick={handleSubmit}>
               {isEditing ? (
                 mergeTarget ? (
-                  t("appearance.theme.editor.mergeInto", { name: mergeTarget.label })
+                  gt("Merge into “{label}”", { label: mergeTarget.label })
                 ) : (
-                  t("appearance.theme.editor.saveChanges")
+                  gt("Save changes")
                 )
               ) : mergeTarget ? (
                 <>
                   <PlusIcon />
-                  {t("appearance.theme.editor.addPalette", {
-                    mode: t(`appearance.${activeAppearance}`),
-                  })}
+                  {activeAppearance === "light" ? gt("Add light palette") : gt("Add dark palette")}
                 </>
               ) : (
                 <>
                   <PaintbrushIcon />
-                  {t("appearance.theme.create")}
+                  <T>Create theme</T>
                 </>
               )}
             </Button>

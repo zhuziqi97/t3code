@@ -1,3 +1,4 @@
+import { decodeMsg } from "gt-react";
 import type { TFunction } from "i18next";
 import type { SidebarThreadSummary } from "../../types";
 import {
@@ -9,7 +10,7 @@ import type { ThreadStatusPill } from "../Sidebar.logic";
 
 type Input = Parameters<typeof resolveThreadStatusPill>[0]["thread"];
 export type ProjectThreadStatus = Omit<ThreadStatusPill, "label"> & {
-  label: ThreadStatusPill["label"] | "Stopped" | "Rolled back" | "Limited";
+  label: keyof typeof ROW_STATUS;
 };
 
 const priority: Record<ProjectThreadStatus["label"], number> = {
@@ -27,6 +28,8 @@ const priority: Record<ProjectThreadStatus["label"], number> = {
   "Rolled back": 1,
 };
 
+// These labels are status keys. The row resolves them to localized display text.
+/* oxlint-disable t3code/no-untranslated-copy */
 export function resolveProjectThreadStatus(thread: Input): ProjectThreadStatus | null {
   const state = resolveSidebarThreadStatus({
     ...thread,
@@ -41,9 +44,10 @@ export function resolveProjectThreadStatus(thread: Input): ProjectThreadStatus |
     };
   }
   const status = resolveThreadStatusPill({ thread });
+  const statusLabel = status ? decodeMsg(status.label) : undefined;
   const runStatus = thread.latestRun?.status;
   if (
-    (status?.label === "Completed" && runStatus !== "completed") ||
+    (statusLabel === "Completed" && runStatus !== "completed") ||
     (status === null &&
       (runStatus === "interrupted" || runStatus === "cancelled") &&
       hasUnseenRunEnd(thread))
@@ -55,7 +59,9 @@ export function resolveProjectThreadStatus(thread: Input): ProjectThreadStatus |
       pulse: false,
     };
   }
-  if (status) return status;
+  if (status && statusLabel && Object.hasOwn(ROW_STATUS, statusLabel)) {
+    return { ...status, label: statusLabel as ProjectThreadStatus["label"] };
+  }
   if (state === "failed" || thread.latestRun?.status === "failed") {
     return {
       label: "Failed",
@@ -74,6 +80,8 @@ export function resolveProjectThreadStatus(thread: Input): ProjectThreadStatus |
   }
   return null;
 }
+
+/* oxlint-enable t3code/no-untranslated-copy */
 
 export function highestProjectThreadStatus(statuses: readonly (ProjectThreadStatus | null)[]) {
   let result: ProjectThreadStatus | null = null;

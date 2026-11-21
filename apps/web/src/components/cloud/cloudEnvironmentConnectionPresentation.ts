@@ -4,6 +4,9 @@ import {
   type EnvironmentConnectionPresentation,
 } from "@t3tools/client-runtime/connection";
 import { i18n } from "../../i18n";
+import { msg } from "gt-react";
+
+import { m, type MessageResolver } from "~/i18n/messages";
 
 export interface SavedCloudEnvironmentConnectionPresentation {
   readonly buttonLabel: string;
@@ -11,8 +14,10 @@ export interface SavedCloudEnvironmentConnectionPresentation {
   readonly tone: "connected" | "connecting" | "error" | "idle";
 }
 
+/** Components pass `useMessages()` so the label follows a language switch. */
 export function presentSavedCloudEnvironmentConnection(
   connection: EnvironmentConnectionPresentation,
+  resolve: MessageResolver = m,
   translate: TFunction = i18n.t,
 ): SavedCloudEnvironmentConnectionPresentation {
   const statusText =
@@ -57,7 +62,7 @@ export function presentSavedCloudEnvironmentConnection(
     case "reconnecting":
       return {
         buttonLabel: connection.awaitingApproval
-          ? "Waiting for approval…"
+          ? resolve(msg("Waiting for approval…"))
           : translate("connection.reconnecting"),
         statusText,
         tone: "connecting",

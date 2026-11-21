@@ -1,5 +1,6 @@
 import { formatPercent } from "@t3tools/shared/usageFormat";
 import type { ReactNode } from "react";
+import { m } from "../../i18n/messages";
 import { useTranslate } from "~/i18n";
 
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -50,7 +51,7 @@ export function UsageShareBar({
               }
             />
             <TooltipPopup>
-              {segment.label} · {format(segment.value)} · {formatPercent(segment.value / total)}
+              {m(segment.label)} · {format(segment.value)} · {formatPercent(segment.value / total)}
             </TooltipPopup>
           </Tooltip>
         ))}
@@ -63,7 +64,7 @@ export function UsageShareBar({
               className="size-2 rounded-xs"
               style={{ backgroundColor: segment.color }}
             />
-            <span className="text-muted-foreground">{segment.label}</span>{" "}
+            <span className="text-muted-foreground">{m(segment.label)}</span>{" "}
             <span className="text-foreground tabular-nums">{format(segment.value)}</span>
             <span className="sr-only">, {formatPercent(segment.value / total)}</span>
           </li>

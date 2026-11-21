@@ -161,11 +161,6 @@ export function createNewThreadHandler(router: AnyRouter) {
         candidate.id === projectRef.projectId &&
         candidate.environmentId === projectRef.environmentId,
     );
-    if (project === undefined) {
-      return Promise.reject(new Error("This project is no longer available."));
-    }
-    // Removal can land while the project file is read; a draft opened
-    // after that belongs to a project that no longer exists.
     const abandonedSinceRequest = () =>
       routeChangedSinceRequest() || (project !== undefined && readProject(projectRef) === null);
     const projectSettings = resolveProjectSettings(
@@ -238,6 +233,21 @@ export function createNewThreadHandler(router: AnyRouter) {
     const logicalProjectKey = project
       ? deriveLogicalProjectKeyFromSettings(project, projectGroupingSettings)
       : scopedProjectKey(projectRef);
+    // Another opener (home's own first-project draft) may have reached this project's draft first.
+    // Matches lag the location during a navigation, so compare against the location.
+    const resultIfAbandoned = () => {
+      const draft = getDraftSessionByLogicalProjectKey(logicalProjectKey);
+      if (draft === null || draft.promotedTo != null || readProject(projectRef) === null) {
+        return null;
+      }
+      const draftHref = router.buildLocation({
+        to: "/draft/$draftId",
+        params: { draftId: draft.draftId },
+      }).href;
+      return router.state.location.href === draftHref
+        ? { draftId: draft.draftId, threadId: draft.threadId }
+        : null;
+    };
     const hasBranchOption = options?.branch !== undefined;
     const hasWorktreePathOption = options?.worktreePath !== undefined;
     const hasEnvModeOption = options?.envMode !== undefined;
@@ -261,39 +271,6 @@ export function createNewThreadHandler(router: AnyRouter) {
       !composerDraftHasUserContent(getComposerDraft(reusableStoredDraftThread.draftId))
         ? reusableStoredDraftThread
         : null;
-    // The index landing and desktop activation can open the first project
-    // together. If the other request already opened our draft, acknowledge
-    // it without resetting its context or navigating again.
-    const openedConcurrentDraft = async () => {
-      if (
-        hasBranchOption ||
-        hasWorktreePathOption ||
-        hasEnvModeOption ||
-        hasStartFromOriginOption ||
-        readProject(projectRef) === null
-      ) {
-        return null;
-      }
-      // The location changes before lazy route loading commits its params.
-      await router.latestLoadPromise;
-      const routeTargetNow = getCurrentRouteTarget();
-      const draft = getDraftSessionByLogicalProjectKey(logicalProjectKey);
-      if (
-        routeTargetNow?.kind !== "draft" ||
-        draft === null ||
-        routeTargetNow.draftId !== draft.draftId ||
-        router.state.location.pathname !== `/draft/${draft.draftId}` ||
-        draft.environmentId !== projectRef.environmentId ||
-        draft.projectId !== projectRef.projectId ||
-        readProject(projectRef) === null ||
-        draft.promotedTo != null ||
-        readThreadShell(scopeThreadRef(draft.environmentId, draft.threadId)) !== null ||
-        (draft.draftId === storedDraftThread?.draftId && emptyStoredDraftThread === null)
-      ) {
-        return null;
-      }
-      return { draftId: draft.draftId, threadId: draft.threadId };
-    };
     const latestActiveDraftThread: DraftThreadState | null = currentRouteTarget
       ? currentRouteTarget.kind === "server"
         ? getDraftThread(currentRouteTarget.threadRef)
@@ -312,7 +289,7 @@ export function createNewThreadHandler(router: AnyRouter) {
         } else if (!isDraftAlreadyOpen) {
           const defaultEnvMode = await resolveDefaultEnvMode();
           if (abandonedSinceRequest()) {
-            return openedConcurrentDraft();
+            return resultIfAbandoned();
           }
           // Concurrent calls may change the draft; stale resets, remaps, or navigation could clobber it.
           const routeTargetNow = getCurrentRouteTarget();
@@ -328,7 +305,7 @@ export function createNewThreadHandler(router: AnyRouter) {
             getComposerDraft(emptyStoredDraftThread.draftId),
           );
           if (openedMeanwhile || promotedMeanwhile || remappedMeanwhile || investedMeanwhile) {
-            return openedMeanwhile ? openedConcurrentDraft() : null;
+            return null;
           }
           workspaceContext = {
             branch: null,
@@ -428,7 +405,7 @@ export function createNewThreadHandler(router: AnyRouter) {
     return (async () => {
       const initialEnvMode = options?.envMode ?? (await resolveDefaultEnvMode());
       if (abandonedSinceRequest()) {
-        return openedConcurrentDraft();
+        return resultIfAbandoned();
       }
       // Reuse drafts registered while awaiting so their pending navigation cannot lose them.
       const racedDraft = getDraftSessionByLogicalProjectKey(logicalProjectKey);

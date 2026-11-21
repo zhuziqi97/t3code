@@ -12,6 +12,7 @@ import {
   type UsageSummaryInput,
 } from "@t3tools/contracts";
 import { CircleAlertIcon, ChevronDownIcon, InfoIcon, SlidersHorizontalIcon } from "lucide-react";
+import { useGT, useLocale, useMessages } from "gt-react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { settlePromise } from "@t3tools/client-runtime/state/runtime";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
@@ -53,11 +54,10 @@ import {
   formatHourShort,
   formatPercent,
   formatTokens,
-  formatUsageContractMismatch,
   formatUsd,
   makeWindow,
-  usageSourceMessages,
 } from "@t3tools/shared/usageFormat";
+import { formatUsageContractMismatch, usageSourceMessages } from "@t3tools/shared/usageFormatCopy";
 import { Button, InlineButton } from "../ui/button";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import {
@@ -184,6 +184,7 @@ export function UsagePage() {
   const [preferences, setPreferences] = useState(readUsagePagePreferences);
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const hour12 = usePrimarySettings((settings) => resolveHour12(settings.timestampFormat));
+  const gt = useGT();
   const shortcutTitle = (
     option: (typeof METRIC_OPTIONS)[number] | (typeof WINDOW_OPTIONS)[number],
   ) => {
@@ -462,9 +463,7 @@ export function UsagePage() {
               variant="ghost"
               className="w-auto min-w-0"
             >
-              <SelectValue>
-                {WINDOW_OPTIONS.find((option) => option.days === windowDays)?.label}
-              </SelectValue>
+              <SelectValue>{t(`usage.window.${window}`)}</SelectValue>
             </SelectTrigger>
             <SelectPopup align="end" alignItemWithTrigger={false}>
               {WINDOW_OPTIONS.map((option) => (
@@ -521,7 +520,7 @@ export function UsagePage() {
   );
 
   return (
-    <AppRouteModal label="Usage">
+    <AppRouteModal label={gt("Usage")}>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="@container/usage-header flex min-h-12 shrink-0 items-center gap-1 border-b ps-5 pe-2">
           {topbarContent}
@@ -559,8 +558,12 @@ export function UsagePage() {
               <div className="space-y-2 py-12 text-center text-sm text-muted-foreground">
                 {selectedEnvironments.map((environment) => (
                   <p key={environment.environmentId}>
-                    {selectedEnvironments.length > 1 ? `${environment.label}: ` : null}
-                    {environment.error}
+                    {selectedEnvironments.length > 1
+                      ? gt("{environment}: {error}", {
+                          environment: environment.label,
+                          error: environment.error,
+                        })
+                      : environment.error}
                   </p>
                 ))}
               </div>
@@ -650,6 +653,8 @@ function UsageOverview({
   readonly onSelectModel: (key: string) => void;
 }) {
   const t = useTranslate();
+  const locale = useLocale();
+  const m = useMessages();
   const [breakdown, setBreakdown] = useState<"model" | "time">("model");
   const shownHourly = shownWindow.resolution === "hour";
   const loading = usageLoading(showingKept, selectedEnvironments, refreshingUsage, hiddenProviders);
@@ -675,6 +680,7 @@ function UsageOverview({
           (source) => !hiddenProviders.has(source.fingerprint.provider),
         ) ?? [],
     ),
+    m,
   );
   const breakdownPeriods: readonly (DailyTotals | HourlyTotals)[] = (
     shownHourly ? merged.hourly : merged.daily
@@ -716,7 +722,9 @@ function UsageOverview({
                 figureClass(loadingPartial),
               )}
             >
-              {metric === "cost" ? formatUsd(merged.costUsd) : formatTokens(merged.totalTokens)}
+              {metric === "cost"
+                ? formatUsd(merged.costUsd, locale)
+                : formatTokens(merged.totalTokens)}
             </p>
             <p className="inline-flex items-center gap-1 text-xs text-muted-foreground">
               <span>
@@ -809,7 +817,7 @@ function UsageOverview({
                     {awaitingData
                       ? "-"
                       : metric === "cost"
-                        ? formatUsd(totals?.costUsd ?? 0)
+                        ? formatUsd(totals?.costUsd ?? 0, locale)
                         : formatTokens(totals?.totalTokens ?? 0)}
                   </dd>
                 </dl>
@@ -901,13 +909,13 @@ function UsageOverview({
               <UsageShareBar
                 label={t("usage.costByType")}
                 segments={costTypeSegments(merged.categoryCost)}
-                format={formatUsd}
+                format={(value: number) => formatUsd(value, locale)}
               />
               {merged.speedCost.fast + merged.speedCost.ultrafast > 0 ? (
                 <UsageShareBar
                   label={t("usage.costBySpeed")}
                   segments={speedCostSegments(merged.speedCost)}
-                  format={formatUsd}
+                  format={(value: number) => formatUsd(value, locale)}
                   aside={<SpeedPremium premiumUsd={merged.speedCost.premium} />}
                 />
               ) : null}
@@ -1000,7 +1008,7 @@ function UsageOverview({
                         {isModelCostUnknown(model) ? (
                           <span className="text-muted-foreground">{t("usage.unpriced")}</span>
                         ) : (
-                          formatUsd(model.costUsd)
+                          formatUsd(model.costUsd, locale)
                         )}
                       </td>
                       <td className={cn("hidden py-2.5 pl-6 sm:table-cell", rowFigures)}>
@@ -1060,8 +1068,8 @@ function UsageOverview({
                     >
                       <td className="py-2 pl-2 text-foreground">
                         {"hourStart" in period
-                          ? formatHourShort(period.hourStart, shownWindow.timeZone, hour12)
-                          : formatDayShort(period.day)}
+                          ? formatHourShort(period.hourStart, shownWindow.timeZone, hour12, locale)
+                          : formatDayShort(period.day, locale)}
                       </td>
                       {activeProviders.map((provider) => (
                         <td
@@ -1071,7 +1079,7 @@ function UsageOverview({
                             figureClass(loadingProviders.has(provider)),
                           )}
                         >
-                          {formatUsd(period.byProvider.get(provider)?.costUsd ?? 0)}
+                          {formatUsd(period.byProvider.get(provider)?.costUsd ?? 0, locale)}
                         </td>
                       ))}
                       <td
@@ -1080,7 +1088,7 @@ function UsageOverview({
                           figureClass(loadingPartial),
                         )}
                       >
-                        {formatUsd(period.costUsd)}
+                        {formatUsd(period.costUsd, locale)}
                       </td>
                       <td
                         className={cn(
@@ -1286,6 +1294,8 @@ function UsageCoverageNotice({
   readonly contractMismatches: MergedUsage["contractMismatches"];
 }) {
   const t = useTranslate();
+  const gt = useGT();
+  const m = useMessages();
   const failed = environments.filter((environment) => environment.error !== null);
   const mismatchByEnvironment = new Map(
     contractMismatches.map((mismatch) => [mismatch.environmentId, mismatch]),
@@ -1302,12 +1312,15 @@ function UsageCoverageNotice({
     <div className="flex flex-col gap-1 border-t border-border px-2 py-2 text-xs text-muted-foreground">
       {failed.map((environment) => (
         <span key={environment.label}>
-          {environment.label}: {environment.error}
+          {gt("{environment}: {error}", {
+            environment: environment.label,
+            error: environment.error,
+          })}
         </span>
       ))}
       {incompatible.map(({ environment, mismatch }) => (
         <span key={environment.environmentId}>
-          {formatUsageContractMismatch(environment.label, mismatch)}
+          {formatUsageContractMismatch(environment.label, mismatch, m)}
         </span>
       ))}
       {duplicateSources.length > 0 ? (

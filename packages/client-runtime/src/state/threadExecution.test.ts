@@ -1,3 +1,4 @@
+import { resolveChineseMessage } from "../i18n/gtCatalog.test-utils.ts";
 import {
   TurnItemId,
   NodeId,
@@ -188,7 +189,46 @@ describe("thread execution presentation", () => {
     expect(deriveThreadRuntime(projection)).toMatchObject({
       lastError: "Plan limit reached",
       lastErrorClass: "usage_limit",
+      lastErrorSource: "limit-error@2026-07-28T10:00:00.000Z",
     });
+    // A retried run fails again through the same item, so only its failure time tells it apart.
+    const later = DateTime.makeUnsafe("2026-07-28T10:05:00.000Z");
+    const source = (input: Partial<Parameters<typeof deriveThreadRuntime>[0]>) =>
+      deriveThreadRuntime({ ...projection, ...input })?.lastErrorSource;
+    expect(source({ turnItems: [{ ...item, completedAt: later, updatedAt: later }] })).toBe(
+      "limit-error@2026-07-28T10:05:00.000Z",
+    );
+    expect(source({ turnItems: [{ ...item, updatedAt: later }] })).toBe(
+      "limit-error@2026-07-28T10:00:00.000Z",
+    );
+    const session = (lastError: string) => ({
+      id: ProviderSessionId.make("failed-session"),
+      driver: ProviderDriverKind.make("pi"),
+      providerInstanceId: v2Projection.thread.providerInstanceId,
+      status: "error" as const,
+      cwd: "/repo",
+      model: null,
+      capabilities: {} as never,
+      createdAt: now,
+      updatedAt: later,
+      lastError,
+    });
+    // A session that repeats the failure keeps its source, whatever the session's own updates.
+    expect(source({ providerSessions: [session("Plan limit reached")] })).toBe(
+      "limit-error@2026-07-28T10:00:00.000Z",
+    );
+    // Otherwise a session error belongs to the latest ended run, kept while a newer run starts.
+    const ended = { ...failed, completedAt: now };
+    const starting = [ended, run("next", 2, "starting")];
+    expect(source({ runs: [ended], providerSessions: [session("Session failed")] })).toBe(
+      "limited@2026-07-28T10:00:00.000Z",
+    );
+    expect(source({ runs: starting, providerSessions: [session("Session failed")] })).toBe(
+      "limited@2026-07-28T10:00:00.000Z",
+    );
+    expect(source({ runs: starting, providerSessions: [session("Plan limit reached")] })).toBe(
+      "limit-error@2026-07-28T10:00:00.000Z",
+    );
     expect(deriveResumableRunId(projection, deriveThreadRuntime(projection))).toBe(failed.id);
     expect(
       deriveThreadRuntime({
@@ -207,6 +247,40 @@ describe("thread execution presentation", () => {
     ).toMatchObject({ status: "running", lastError: null, lastErrorClass: null });
   });
 
+  it.each([
+    {
+      name: "a provider without native resume",
+      nativeResume: false,
+      delivered: true,
+      resumes: false,
+    },
+    { name: "an undelivered message", nativeResume: false, delivered: false, resumes: true },
+    { name: "a provider with native resume", nativeResume: true, delivered: true, resumes: true },
+    {
+      name: "a session from an older server",
+      nativeResume: undefined,
+      delivered: true,
+      resumes: true,
+    },
+  ])("offers to resume an interrupted run on $name", ({ nativeResume, delivered, resumes }) => {
+    const providerThreadId = ProviderThreadId.make("stopped-thread");
+    const sessionId = ProviderSessionId.make("stopped-session");
+    const attemptId = RunAttemptId.make("stopped-attempt");
+    const stopped = { ...run("stopped", 1, "interrupted"), providerThreadId };
+    const projection = {
+      ...v2Projection,
+      runs: [stopped],
+      attempts: [{ id: attemptId, runId: stopped.id, attemptOrdinal: 1, reason: "initial" }],
+      providerTurns: delivered ? [{ runAttemptId: attemptId }] : [],
+      providerThreads: [{ id: providerThreadId, providerSessionId: sessionId }],
+      providerSessions: [
+        { id: sessionId, capabilities: { turns: { supportsNativeResume: nativeResume } } },
+      ],
+    } as unknown as typeof v2Projection;
+    expect(deriveResumableRunId(projection, null)).toBe(resumes ? stopped.id : null);
+  });
+
+  // regression: #15029 working timers no longer reset on every background wake
   it("counts a wake run's activity from the start of the work it continues", () => {
     const workStartedAt = DateTime.makeUnsafe("2026-07-28T09:20:00.000Z");
     const wake = { ...run("wake", 2, "running"), workStartedAt };
@@ -989,7 +1063,7 @@ describe("presentPendingBackgroundWork", () => {
     ]);
 
     expect(presentation).toEqual({
-      title: "Waiting on subagent Luna Window Properties",
+      title: "Waiting · Luna Window Properties",
       items: [{ taskId: "luna", kind: "subagent", label: "Luna Window Properties", childThreadId }],
       waiting: true,
     });
@@ -1015,7 +1089,7 @@ describe("presentPendingBackgroundWork", () => {
       presentPendingBackgroundWork([
         { taskId: "a", kind: "subagent", description: "Review src/math.ts" },
       ])?.title,
-    ).toBe("Waiting on subagent Review src/math.ts");
+    ).toBe("Waiting · Review src/math.ts");
     expect(presentPendingBackgroundWork([{ taskId: "a", kind: "monitor" }])?.title).toBe(
       "Running a monitor",
     );
@@ -1033,7 +1107,7 @@ describe("presentPendingBackgroundWork", () => {
       presentPendingBackgroundWork([
         { taskId: "dev", kind: "command", description: "Start the shared dev server" },
       ]),
-    ).toMatchObject({ title: "Running: Start the shared dev server", waiting: false });
+    ).toMatchObject({ title: "Running · Start the shared dev server", waiting: false });
     expect(presentPendingBackgroundWork([{ taskId: "a", kind: "command" }])).toMatchObject({
       title: "Running a command",
       waiting: false,
@@ -1224,9 +1298,7 @@ describe("threadRuntimeCanArchive", () => {
   });
 });
 
-it("localizes execution summaries without changing goals, task identity or provider text", async () => {
-  const { createI18n } = await import("../i18n/index.ts");
-  const translator = createI18n({ lng: "zh" });
+it("localizes execution summaries without changing goals, task identity or provider text", () => {
   const goal = {
     objective: "Keep user objective 原文",
     status: "paused" as const,
@@ -1234,18 +1306,18 @@ it("localizes execution summaries without changing goals, task identity or provi
     tokenBudget: 50000,
     checks: 2,
   };
-  expect(presentProviderGoal(goal, false, translator.t)).toMatchObject({
-    title: "持续目标已暂停",
+  expect(presentProviderGoal(goal, false, resolveChineseMessage)).toMatchObject({
+    title: "目标已暂停",
     objective: goal.objective,
-    usage: "12k / 50k Token · 2 次检查",
+    usage: "12k / 50k token · 2 项检查",
     canResume: true,
   });
   const tasks = [
     { taskId: "task:one", kind: "subagent" as const, description: "Review src/math.ts 原文" },
     { taskId: "task:two", kind: "command" as const },
   ];
-  const chinese = presentPendingBackgroundWork(tasks, translator.t)!;
-  expect(chinese.title).toBe("等待1 个子智能体和1 个命令");
+  const chinese = presentPendingBackgroundWork(tasks, resolveChineseMessage)!;
+  expect(chinese.title).toBe("正在等待 1 个子智能体 和 1 条命令");
   expect(chinese.items.map((item) => [item.taskId, item.kind, item.label])).toEqual([
     ["task:one", "subagent", "Review src/math.ts 原文"],
     ["task:two", "command", "命令"],
@@ -1258,12 +1330,11 @@ it("localizes execution summaries without changing goals, task identity or provi
         completedAt: "2026-07-28T10:00:34Z",
       },
       0,
-      translator.t,
+      resolveChineseMessage,
     ),
-  ).toBe("已完成，耗时 34s");
-  await translator.changeLanguage("en");
-  expect(presentProviderGoal(goal, false, translator.t).title).toBe("Goal paused");
-  expect(presentPendingBackgroundWork(tasks, translator.t)?.items[0]?.label).toBe(
+  ).toBe("已完成，用时 34s");
+  expect(presentProviderGoal(goal, false).title).toBe("Goal paused");
+  expect(presentPendingBackgroundWork(tasks, resolveChineseMessage)?.items[0]?.label).toBe(
     "Review src/math.ts 原文",
   );
 });

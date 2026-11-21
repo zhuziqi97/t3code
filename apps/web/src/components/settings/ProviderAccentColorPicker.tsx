@@ -1,5 +1,6 @@
 import { useTranslate } from "../../i18n";
 
+import { T } from "gt-react";
 import { PlusIcon, XIcon } from "lucide-react";
 import { useRef, useState, type PointerEvent } from "react";
 
@@ -96,7 +97,7 @@ function ProviderCustomColorPanel(props: {
           <PopoverClose
             render={
               <Button type="button" size="compact" onClick={() => onCommit(currentColor)}>
-                Add color
+                <T>Add color</T>
               </Button>
             }
           />
@@ -116,7 +117,6 @@ function ProviderCustomColorPicker(props: {
 }) {
   const t = useTranslate();
   const normalized = normalizeProviderAccentColor(props.value);
-
   return (
     <Popover
       onOpenChange={(open) => {

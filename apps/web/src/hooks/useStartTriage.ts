@@ -1,3 +1,4 @@
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import {
   type AtomCommandResult,
@@ -8,9 +9,11 @@ import type { EnvironmentId } from "@t3tools/contracts";
 import { useRouter } from "@tanstack/react-router";
 import { CONVENE_DESKTOP_IDENTITY } from "@t3tools/shared/conveneDesktopIdentity";
 import { i18n } from "../i18n";
+import { msg } from "gt-react";
 
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
 import { currentClientMetadata } from "~/connection/platform";
+import { m } from "~/i18n/messages";
 import { projectEnvironment } from "~/state/projects";
 import { serverEnvironment } from "~/state/server";
 import { useAtomCommand } from "~/state/use-atom-command";
@@ -21,7 +24,11 @@ import { useScratchProject } from "./useScratchProject";
 export const TRIAGE_CLI_COMMAND = `${CONVENE_DESKTOP_IDENTITY.executableName} triage`;
 
 const copyTriageCliCommand = () =>
-  writeTextToClipboard(TRIAGE_CLI_COMMAND, "command").catch(() =>
+  writeTextToClipboard(TRIAGE_CLI_COMMAND, {
+    target: "command",
+    unavailableMessage: msg("Clipboard API is unavailable while copying command."),
+    failureMessage: msg("Failed to copy command to the clipboard."),
+  }).catch(() =>
     toastManager.add({
       type: "error",
       title: i18n.t("triage.copyFailed", { command: TRIAGE_CLI_COMMAND }),
@@ -62,7 +69,7 @@ export function useStartTriage() {
   ) => {
     if (isAtomCommandInterrupted(result)) return;
     const error = squashAtomCommandFailure(result);
-    fail(error instanceof Error ? error.message : i18n.t("triage.error"));
+    fail(thrownErrorMessage(error, m) ?? m(msg("An error occurred.")));
   };
 
   // `routeChanged` tells the steps the user went elsewhere while they waited;

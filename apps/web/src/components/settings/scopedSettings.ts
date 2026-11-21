@@ -1,5 +1,6 @@
 import { i18n } from "../../i18n";
 import type { TFunction } from "i18next";
+import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
 import {
   ClientSettingsSchema,
   type ClientSettingsPatch,
@@ -27,6 +28,9 @@ import { applyServerSettingsPatch } from "@t3tools/shared/serverSettings";
 import * as Equal from "effect/Equal";
 import * as Cause from "effect/Cause";
 import { Atom } from "effect/reactivity";
+import { msg } from "gt-react";
+
+import { m } from "../../i18n/messages";
 
 import type { ResolvedSettingsScope } from "./settingsScope";
 
@@ -665,7 +669,7 @@ async function persistScopedSettingsPlan(
       return [
         {
           ...environment,
-          message: "This environment does not support this setting. Update T3 Code on it.",
+          message: m(msg("This environment does not support this setting. Update T3 Code on it.")),
         },
       ];
     }
@@ -678,7 +682,10 @@ async function persistScopedSettingsPlan(
     return [
       {
         ...environment,
-        message: error instanceof Error ? error.message : i18n.t("settings.save.failed"),
+        message:
+          error instanceof Error
+            ? (errorDisplayMessage(error, m) ?? error.message)
+            : m(msg("The save failed. Try reconnecting and saving again.")),
       },
     ];
   });

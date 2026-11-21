@@ -39,7 +39,7 @@ export function DiffFilePathCopyButton({
         {isCopied ? <CheckIcon className="size-3 text-success" /> : <CopyIcon className="size-3" />}
       </TooltipTrigger>
       <TooltipPopup>
-        <p>{isCopied ? "Copied" : t("diff.copyPath")}</p>
+        <p>{isCopied ? t("common.copied") : t("diff.copyPath")}</p>
       </TooltipPopup>
     </Tooltip>
   );

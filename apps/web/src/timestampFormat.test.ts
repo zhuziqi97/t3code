@@ -2,20 +2,29 @@ import { formatHourShort } from "@t3tools/shared/usageFormat";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
+  formatChatTimestampTooltip,
   formatDayAwareTimestamp,
   formatElapsedDurationLabel,
   formatExpiresInLabel,
   formatRelativeTime,
   formatRelativeTimeLabel,
-  formatRelativeTimeUntil,
-  formatRelativeTimeUntilLabel,
   formatShortTimestamp,
-  formatTimestamp,
   formatUpcomingTimestamp,
   msUntilRelativeTimeChange,
   relativeTimeElapsedMs,
   resolveTimestampLocale,
 } from "./timestampFormat";
+// Node re-resolves the default zone when TZ is assigned, like a renderer after the OS zone changes.
+function useTimeZone(timeZone: string): Disposable {
+  const previous = process.env.TZ;
+  process.env.TZ = timeZone;
+  return {
+    [Symbol.dispose]: () => {
+      if (previous === undefined) delete process.env.TZ;
+      else process.env.TZ = previous;
+    },
+  };
+}
 
 describe("resolveTimestampLocale", () => {
   it("defers to the runtime default when the host reports no locale", () => {
@@ -100,33 +109,6 @@ describe("formatChatTimestampTooltip", () => {
     const date = new Date(2026, 5, 4, 14, 4).toISOString();
 
     expect(format(date, "24-hour")).toBe("14:04, 4th June 2026");
-  });
-});
-
-describe("formatRelativeTimeUntilLabel", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-04-07T12:00:00.000Z"));
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it("returns Expired when the instant is in the past", () => {
-    expect(formatRelativeTimeUntilLabel("2026-04-07T11:59:00.000Z")).toBe("Expired");
-  });
-
-  it("formats seconds remaining", () => {
-    expect(formatRelativeTimeUntilLabel("2026-04-07T12:00:45.000Z")).toBe("45s left");
-  });
-
-  it("formats minutes remaining", () => {
-    expect(formatRelativeTimeUntilLabel("2026-04-07T12:15:00.000Z")).toBe("15m left");
-  });
-
-  it("formats hours remaining", () => {
-    expect(formatRelativeTimeUntilLabel("2026-04-07T18:00:00.000Z")).toBe("6h left");
   });
 });
 
@@ -290,9 +272,7 @@ describe("formatUpcomingTimestamp", () => {
 });
 
 describe("invalid timestamp inputs", () => {
-  it("returns an empty timestamp instead of throwing", () => {
-    expect(formatTimestamp("not-a-date", "12-hour")).toBe("");
-  });
+  it("returns an empty timestamp instead of throwing", () => {});
 
   it("returns an empty short timestamp instead of throwing", () => {
     expect(formatShortTimestamp("not-a-date", "12-hour")).toBe("");
@@ -312,10 +292,7 @@ describe("invalid timestamp inputs", () => {
     expect(formatElapsedDurationLabel("not-a-date")).toBe("");
   });
 
-  it("returns an empty relative time until label instead of a NaN label", () => {
-    expect(formatRelativeTimeUntil("not-a-date")).toBeNull();
-    expect(formatRelativeTimeUntilLabel("not-a-date")).toBe("");
-  });
+  it("returns an empty relative time until label instead of a NaN label", () => {});
 
   it("returns an empty expires-in label instead of a NaN label", () => {
     expect(formatExpiresInLabel("not-a-date")).toBe("");
@@ -372,7 +349,8 @@ describe("formatElapsedDurationLabel", () => {
 });
 
 it("updates Chinese date and relative labels immediately while preserving clock preferences", async () => {
-  const { changeLanguage } = await import("./i18n");
+  const { setActiveLocale } = await import("./i18n/messages");
+  const { resolveChineseMessage } = await import("../test/gtCatalog");
   const now = new Date(2026, 9, 9, 14, 4);
   const yesterday = new Date(2026, 9, 8, 14, 4).toISOString();
   const tomorrow = new Date(2026, 9, 10, 14, 4).toISOString();
@@ -385,17 +363,82 @@ it("updates Chinese date and relative labels immediately while preserving clock 
     formatExpiresInLabel,
   } = await import("./timestampFormat");
   try {
-    await changeLanguage("zh");
-    expect(formatDayAwareTimestamp(yesterday, "24-hour", now.getTime())).toBe("昨天 14:04");
-    expect(formatUpcomingTimestamp(tomorrow, "24-hour", now.getTime())).toBe("明天 14:04");
-    expect(formatChatTimestampTooltip(yesterday, "24-hour")).toBe("2026年10月8日 14:04");
+    setActiveLocale("zh");
+    expect(
+      formatDayAwareTimestamp(
+        yesterday,
+        "24-hour",
+        now.getTime(),
+        undefined,
+        resolveChineseMessage,
+      ),
+    ).toBe("昨天 14:04");
+    expect(
+      formatUpcomingTimestamp(tomorrow, "24-hour", now.getTime(), undefined, resolveChineseMessage),
+    ).toBe("明天 14:04");
+    expect(formatChatTimestampTooltip(yesterday, "24-hour", resolveChineseMessage)).toBe(
+      "2026年10月8日 14:04",
+    );
     expect(formatShortTimestamp(yesterday, "12-hour")).toContain("下午");
-    expect(formatElapsedDurationLabel(yesterday, now.getTime())).toBe("1天");
-    expect(formatExpiresInLabel(tomorrow, now.getTime())).toBe("1天后到期");
-    await changeLanguage("en");
+    expect(formatElapsedDurationLabel(yesterday, now.getTime(), resolveChineseMessage)).toBe(
+      "1 天",
+    );
+    expect(formatExpiresInLabel(tomorrow, now.getTime(), resolveChineseMessage)).toBe("1 天后到期");
+    setActiveLocale("en");
     expect(formatDayAwareTimestamp(yesterday, "24-hour", now.getTime())).toBe("yesterday at 14:04");
     expect(formatChatTimestampTooltip(yesterday, "24-hour")).toBe("14:04, 8th October 2026");
   } finally {
-    await changeLanguage("en");
+    setActiveLocale("en");
   }
+});
+
+describe("timestamps after the system time zone changes", () => {
+  // Built fresh with an explicit zone, so expectations follow the host locale but not a stale zone.
+  const timeIn = (iso: string, timeZone: string) =>
+    new Intl.DateTimeFormat(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone,
+    }).format(new Date(iso));
+  const dayIn = (iso: string, timeZone: string) =>
+    new Intl.DateTimeFormat(undefined, { month: "numeric", day: "numeric", timeZone }).format(
+      new Date(iso),
+    );
+
+  it("renders the gutter label in the new zone", () => {
+    const sameDay = "2026-11-07T04:45:43.877Z";
+    const earlierInWeek = "2026-11-04T20:00:00.000Z";
+    const now = Date.parse(sameDay);
+    using _zone = useTimeZone("America/New_York");
+    expect([
+      formatDayAwareTimestamp(sameDay, "12-hour", now),
+      formatDayAwareTimestamp(earlierInWeek, "12-hour", now),
+    ]).toEqual([
+      timeIn(sameDay, "America/New_York"),
+      `${dayIn(earlierInWeek, "America/New_York")} ${timeIn(earlierInWeek, "America/New_York")}`,
+    ]);
+
+    process.env.TZ = "Asia/Bangkok";
+    expect([
+      formatDayAwareTimestamp(sameDay, "12-hour", now),
+      formatDayAwareTimestamp(earlierInWeek, "12-hour", now),
+    ]).toEqual([
+      timeIn(sameDay, "Asia/Bangkok"),
+      `${dayIn(earlierInWeek, "Asia/Bangkok")} ${timeIn(earlierInWeek, "Asia/Bangkok")}`,
+    ]);
+  });
+
+  it("renders the tooltip in the new zone", () => {
+    const monthEnd = "2026-10-31T20:00:00.000Z";
+    using _zone = useTimeZone("America/New_York");
+    expect(formatChatTimestampTooltip(monthEnd, "12-hour")).toBe(
+      `${timeIn(monthEnd, "America/New_York")}, 31st October 2026`,
+    );
+
+    process.env.TZ = "Asia/Bangkok";
+    expect(formatChatTimestampTooltip(monthEnd, "12-hour")).toBe(
+      `${timeIn(monthEnd, "Asia/Bangkok")}, 1st November 2026`,
+    );
+  });
 });

@@ -1,5 +1,7 @@
 import type { TFunction } from "i18next";
 import { i18n, useTranslate } from "../i18n";
+import { msg, useGT, useMessages } from "gt-react";
+import { m, type MessageResolver } from "../i18n/messages";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
@@ -19,13 +21,14 @@ import {
 import type {
   ContextMenuItem,
   EnvironmentId,
+  IssueTrackerKind,
   PreviewSessionSnapshot,
   ProjectId,
   PullRequestState,
   ResolvedKeybindingsConfig,
   ThreadId,
 } from "@t3tools/contracts";
-import { getTerminalLabel } from "@t3tools/shared/terminalLabels";
+import { getTerminalLabel } from "@t3tools/shared/terminalLabelsCopy";
 import {
   closestCenter,
   DndContext,
@@ -38,6 +41,7 @@ import { restrictToFirstScrollableAncestor, restrictToHorizontalAxis } from "@dn
 import { horizontalListSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  CircleDotIcon,
   Smartphone,
   ChevronDown,
   ChevronLeft,
@@ -66,6 +70,8 @@ import { isElectron } from "~/env";
 import type { DesktopPreviewOverlay } from "~/previewStateStore";
 import type { RightPanelSurface } from "~/rightPanelStore";
 import { cn } from "~/lib/utils";
+import { issueStatePresentation } from "~/components/issue/issuePresentation";
+import { issueEnvironment } from "~/state/issues";
 import { resolveShortcutCommand, type ShortcutMatchContext } from "~/keybindings";
 import { readLocalApi } from "~/localApi";
 import { useStableCallback } from "~/hooks/useStableCallback";
@@ -176,14 +182,14 @@ function shouldOpenDefaultBrowserProfileFromMenuClick(pointerType: string | unde
 }
 
 const SURFACE_DISABLED_REASONS = {
-  browser: "panels.disabled.browser",
-  terminal: "panels.disabled.terminal",
-  files: "panels.disabled.files",
-  diff: "panels.disabled.diff",
-  pullRequest: "panels.disabled.pullRequest",
-  pullRequests: "panels.disabled.pullRequests",
-  device: "panels.disabled.device",
-  sideChat: "panels.hint.thread",
+  browser: msg("Browser previews are only available in the T3 Code desktop app."),
+  terminal: msg("Terminal surfaces are only available from a project thread."),
+  files: msg("Files are only available when a project is open."),
+  diff: msg("Diff is only available for server threads in Git repositories."),
+  pullRequest: msg("This thread's branch has no pull request yet."),
+  pullRequests: msg("This thread has no linked items."),
+  device: msg("Devices are only available from a thread."),
+  sideChat: msg("Side chats start after the first message."),
 } as const;
 
 // Closed keepMounted popups must stop blocking shortcuts once their exit transition ends.
@@ -201,14 +207,14 @@ const LAUNCHER_SHORTCUT_BLOCKING_LAYERS = [
   .join(",");
 
 const SURFACE_UNAVAILABLE_HINTS = {
-  browser: "panels.hint.browser",
-  terminal: "panels.hint.project",
-  files: "panels.hint.project",
-  diff: "panels.hint.diff",
-  pullRequest: "panels.hint.pullRequest",
-  pullRequests: "panels.hint.pullRequests",
-  device: "panels.hint.thread",
-  sideChat: "panels.hint.thread",
+  browser: msg("Only available in the desktop app."),
+  terminal: msg("Available when a project is open."),
+  files: msg("Available when a project is open."),
+  diff: msg("Available for Git repositories."),
+  pullRequest: msg("No pull request on this branch yet."),
+  pullRequests: msg("No linked items available."),
+  device: msg("Available from a thread."),
+  sideChat: msg("Available after the first message."),
 } as const;
 
 type TabContextMenuAction =
@@ -245,11 +251,11 @@ function tabMuteMenuItem(
     overlay: DesktopPreviewOverlay | null;
     canResolveRuntimeTabId: boolean;
   },
-  t: TFunction = i18n.t,
+  resolve: MessageResolver = m,
 ): { label: string; disabled: boolean } {
   const muted = input.overlay?.audioMuted ?? false;
   return {
-    label: muted ? t("panels.unmute") : t("panels.mute"),
+    label: muted ? resolve(msg("Unmute tab")) : resolve(msg("Mute tab")),
     disabled: input.overlay === null || !input.canResolveRuntimeTabId,
   };
 }
@@ -343,6 +349,7 @@ function RightPanelEmptyState(props: {
 }) {
   const t = useTranslate();
   // -1 means no highlight: it only appears on hover or arrow use.
+  const messages = useMessages();
   const [highlight, setHighlight] = useState(-1);
 
   const actions = [
@@ -387,7 +394,7 @@ function RightPanelEmptyState(props: {
       onClick: props.onAddPullRequest,
     },
     {
-      label: t("panels.linkedPullRequests"),
+      label: msg("Linked items"),
       icon: PullRequestGlyph.link,
       shortcut: "L",
       available: props.pullRequestsAvailable,
@@ -411,7 +418,8 @@ function RightPanelEmptyState(props: {
             icon: MessagesSquare,
             shortcut: "S",
             available: props.sideChatAvailable && !props.sideChatDisabledReason,
-            disabledReason: props.sideChatDisabledReason ?? SURFACE_UNAVAILABLE_HINTS.sideChat,
+            disabledReason:
+              props.sideChatDisabledReason ?? messages(SURFACE_UNAVAILABLE_HINTS.sideChat),
             onClick: props.onAddSideChat,
           },
         ]
@@ -521,7 +529,7 @@ function RightPanelEmptyState(props: {
                       action.shortcut === "B" && props.browserProfiles.length > 1 && "pr-7",
                     )}
                   >
-                    {action.label}
+                    {messages(action.label)}
                   </span>
                   <Kbd>{action.shortcut}</Kbd>
                 </button>
@@ -568,7 +576,7 @@ function RightPanelEmptyState(props: {
                     className="flex h-8 w-full cursor-default items-center gap-2.5 rounded-(--control-radius) px-2.5 text-left text-sm opacity-50"
                   >
                     {actionIcon(action, "size-4")}
-                    <span className="min-w-0 flex-1 truncate">{action.label}</span>
+                    <span className="min-w-0 flex-1 truncate">{messages(action.label)}</span>
                     <Kbd>{action.shortcut}</Kbd>
                   </div>
                 }
@@ -585,7 +593,8 @@ function surfaceTitle(
   surface: RightPanelSurface,
   sessions: Readonly<Record<string, PreviewSessionSnapshot>>,
   terminalLabelsById: ReadonlyMap<string, string>,
-  t: TFunction,
+  resolve: MessageResolver = m,
+  t: TFunction = i18n.t,
 ): string {
   switch (surface.kind) {
     case "convene-resource":
@@ -604,12 +613,15 @@ function surfaceTitle(
     case "terminal":
       return (
         terminalLabelsById.get(surface.activeTerminalId) ??
-        getTerminalLabel(surface.activeTerminalId, t("panels.terminal"))
+        getTerminalLabel(surface.activeTerminalId, resolve)
       );
     case "pull-request":
       return `#${surface.number}`;
     case "pull-requests":
-      return t("panels.pullRequests");
+      return resolve(msg("Linked items"));
+    case "issue":
+      // A git host numbers its issues; a tracker with keys of its own, such as Linear, names them.
+      return /^\d+$/.test(surface.key) ? `#${surface.key}` : surface.key;
     case "device":
       return surface.title ?? surface.target?.name ?? t("panels.device");
     case "side-chat":
@@ -704,6 +716,8 @@ function SurfaceIcon({
       );
     case "pull-requests":
       return <PullRequestGlyph.link className="size-3 shrink-0" />;
+    case "issue":
+      return <IssueSurfaceIcon surface={surface} environmentId={environmentId} />;
     case "side-chat":
       return <SideChatTabIcon environmentId={environmentId} threadId={surface.threadId} />;
     case "device":
@@ -716,6 +730,12 @@ function SurfaceIcon({
       );
   }
 }
+
+const SIDE_CHAT_STATE_LABELS = {
+  "needs approval": msg("needs approval"),
+  "needs input": msg("needs input"),
+  running: msg("running", { $context: "side chat status" }),
+} as const;
 
 /** What a side chat tab's dot shows and its title's accessible name says. */
 function sideChatTabState(shell: EnvironmentThreadShell | null) {
@@ -774,6 +794,41 @@ export function resolvePullRequestTabLink(
     }
   }
   return newest;
+}
+
+/** The issue's own state mark, from the detail its panel already reads; a plain dot until then. */
+function IssueSurfaceIcon({
+  surface,
+  environmentId,
+}: {
+  surface: Extract<RightPanelSurface, { kind: "issue" }>;
+  environmentId: EnvironmentId | null;
+}) {
+  const resolvedEnvironmentId =
+    (surface.environmentId as EnvironmentId | undefined) ?? environmentId;
+  const detail = useEnvironmentQuery(
+    resolvedEnvironmentId === null
+      ? null
+      : issueEnvironment.detail({
+          environmentId: resolvedEnvironmentId,
+          input: {
+            projectId: surface.projectId as ProjectId,
+            tracker: surface.tracker as IssueTrackerKind,
+            ...(surface.host ? { host: surface.host } : {}),
+            scope: surface.scope,
+            key: surface.key,
+          },
+        }),
+  ).data;
+  if (detail === null) return <CircleDotIcon className="size-3 shrink-0" />;
+  const presentation = issueStatePresentation(detail.state);
+  return (
+    <presentation.Icon
+      role="img"
+      aria-label={presentation.label}
+      className={cn("size-3 shrink-0", presentation.toneClassName)}
+    />
+  );
 }
 
 function PullRequestSurfaceIcon({
@@ -903,6 +958,8 @@ function RightPanelTab(
   },
 ) {
   const t = useTranslate();
+  const gt = useGT();
+  const messages = useMessages();
   const {
     surface,
     audio,
@@ -953,7 +1010,11 @@ function RightPanelTab(
               <button
                 type="button"
                 className="cursor-pointer flex size-4 shrink-0 items-center justify-center rounded-sm hover:bg-muted"
-                aria-label={audio === "muted" ? `Unmute ${title}` : `Mute ${title}`}
+                aria-label={
+                  audio === "muted"
+                    ? gt("Unmute {title}", { title })
+                    : gt("Mute {title}", { title })
+                }
                 onClick={(event) => {
                   event.stopPropagation();
                   void previewBridge
@@ -1005,13 +1066,10 @@ function RightPanelTab(
                 aria-label={
                   sideChatState === null
                     ? undefined
-                    : `${title}, ${t(
-                        sideChatState === "needs approval"
-                          ? "chat.side.needsApproval"
-                          : sideChatState === "needs input"
-                            ? "chat.side.needsInput"
-                            : "chat.side.isRunning",
-                      )}`
+                    : gt("{title}, {state}", {
+                        title,
+                        state: messages(SIDE_CHAT_STATE_LABELS[sideChatState]),
+                      })
                 }
                 onClick={() => onActivate(surface)}
               >
@@ -1067,6 +1125,8 @@ function RightPanelTab(
 
 export function RightPanelTabs(props: RightPanelTabsProps) {
   const t = useTranslate();
+  const gt = useGT();
+  const messages = useMessages();
   const focusedSurface = props.surfaces.find((surface) => surface.id === props.activeSurfaceId);
   const ownsDesktopTitleBar = isElectron && props.mode === "inline";
   const browserProfiles = useBrowserDefaults().profiles;
@@ -1176,7 +1236,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       onClick: props.onAddPullRequest,
     },
     {
-      label: t("panels.linkedPullRequests"),
+      label: msg("Linked items"),
       icon: PullRequestGlyph.link,
       shortcut: "L",
       available: props.pullRequestsAvailable,
@@ -1198,7 +1258,8 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             icon: MessagesSquare,
             shortcut: "S",
             available: props.sideChatAvailable === true && !props.sideChatDisabledReason,
-            disabledReason: props.sideChatDisabledReason ?? SURFACE_DISABLED_REASONS.sideChat,
+            disabledReason:
+              props.sideChatDisabledReason ?? messages(SURFACE_DISABLED_REASONS.sideChat),
             onClick: props.onAddSideChat,
           },
         ]
@@ -1241,7 +1302,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             overlay: menuOverlay,
             canResolveRuntimeTabId: props.previewRuntimeTabId !== undefined,
           },
-          t,
+          messages,
         ),
       });
     }
@@ -1369,8 +1430,15 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       workspaceFocusKey={`panel:${props.environmentId}:${props.activeSurfaceId ?? "empty"}`}
       workspaceLabel={
         focusedSurface
-          ? `Workspace panel: ${surfaceTitle(focusedSurface, props.previewSessions, props.terminalLabelsById, t)}`
-          : "Workspace panel"
+          ? gt("Workspace panel: {title}", {
+              title: surfaceTitle(
+                focusedSurface,
+                props.previewSessions,
+                props.terminalLabelsById,
+                messages,
+              ),
+            })
+          : gt("Workspace panel")
       }
       mode={props.mode}
       {...(props.maximized !== undefined ? { maximized: props.maximized } : {})}
@@ -1427,7 +1495,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                       surface,
                       props.previewSessions,
                       props.terminalLabelsById,
-                      t,
+                      messages,
                     )}
                     audio={tabAudioState(
                       previewTabId ? (props.desktopByTabId[previewTabId] ?? null) : null,
@@ -1497,7 +1565,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                             }}
                           >
                             <Icon />
-                            {action.label}
+                            {messages(action.label)}
                             <MenuShortcut>{action.shortcut}</MenuShortcut>
                           </MenuSubTrigger>
                           <MenuSubPopup className="max-w-56">
@@ -1522,7 +1590,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                         onClick={action.onClick}
                       >
                         <Icon />
-                        {action.label}
+                        {messages(action.label)}
                       </SurfaceMenuItem>
                     );
                   })}

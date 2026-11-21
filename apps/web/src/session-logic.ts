@@ -1,6 +1,7 @@
 import type { TFunction } from "i18next";
 import { i18n } from "./i18n";
 import type { ThreadStructureRuntime } from "@t3tools/client-runtime/state/shell";
+import { msg } from "gt-react";
 import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
 import {
   type AssetResource,
@@ -18,12 +19,8 @@ import {
   type TurnItemId,
 } from "@t3tools/contracts";
 import { extractToolActivityPresentation } from "@t3tools/client-runtime/work-log/tool-presentation";
-import {
-  classifyToolActivity,
-  collectToolFilePaths,
-  formatReadToolLabel,
-  formatSearchToolLabel,
-} from "@t3tools/shared/toolActivity";
+import { classifyToolActivity, collectToolFilePaths } from "@t3tools/shared/toolActivity";
+import { formatReadToolLabel, formatSearchToolLabel } from "@t3tools/shared/toolActivityCopy";
 import type { HtmlRenderReference } from "@t3tools/shared/htmlRender";
 import { turnItemDetailRevision } from "@t3tools/client-runtime/work-log/item-detail";
 import type { McpAppReference } from "@t3tools/shared/mcpApp";
@@ -53,11 +50,11 @@ import {
   type SessionPhase,
   type TurnDiffSummary,
 } from "./types";
+import { m, type MessageResolver } from "./i18n/messages";
 import * as DateTime from "effect/DateTime";
 import * as Equal from "effect/Equal";
 import { shallow } from "zustand/vanilla/shallow";
 
-export { formatDuration } from "@t3tools/shared/orchestrationTiming";
 export {
   workEntryDisplayIndicatesToolFailure,
   workEntryIndicatesToolFailure,
@@ -354,7 +351,10 @@ export function providerErrorPresentation(
   };
 }
 
-function projectedWorkEntry(row: OrchestrationV2ProjectedTurnItem): WorkLogEntry {
+function projectedWorkEntry(
+  row: OrchestrationV2ProjectedTurnItem,
+  resolve: MessageResolver,
+): WorkLogEntry {
   const { item } = row;
   const title = item.title?.trim() || null;
   const common = {
@@ -373,28 +373,28 @@ function projectedWorkEntry(row: OrchestrationV2ProjectedTurnItem): WorkLogEntry
     case "thread_created":
       return {
         ...common,
-        label: "Created thread",
+        label: resolve(msg("Created thread")),
       };
     case "compaction":
       return {
         ...common,
-        label: contextCompactionLabel(item),
+        label: contextCompactionLabel(item, resolve),
         sourceActivityKind: "context-compaction",
         ...(item.summary ? { detail: item.summary } : {}),
       };
     case "reasoning":
       return {
         ...common,
-        label: title ?? "Thinking",
+        label: title ?? resolve(msg("Thinking", { $context: "status of an agent reasoning" })),
         ...(item.text ? { detail: item.text } : {}),
       };
     case "command_execution":
       return {
         ...common,
-        label: title ?? "Ran command",
+        label: title ?? resolve(msg("Ran command")),
         command: item.input,
         rawCommand: item.input,
-        toolTitle: title ?? "Command",
+        toolTitle: title ?? resolve(msg("Command", { $context: "noun, a shell command tool" })),
         toolData: item,
       };
     case "file_change": {
@@ -403,35 +403,38 @@ function projectedWorkEntry(row: OrchestrationV2ProjectedTurnItem): WorkLogEntry
         label:
           title ??
           (item.changes !== undefined && item.changes.length > 1
-            ? `Changed ${item.changes.length} files`
-            : `Changed ${item.fileName}`),
+            ? resolve(
+                msg("{count, plural, one {Changed {count} file} other {Changed {count} files}}"),
+                { count: item.changes.length },
+              )
+            : resolve(msg("Changed {fileName}", { fileName: item.fileName }))),
         changedFiles: item.changes?.length
           ? item.changes.map((change) => change.path)
           : [item.fileName],
-        toolTitle: title ?? "File change",
+        toolTitle: title ?? resolve(msg("File change", { $context: "noun, a tool title" })),
         toolData: item,
       };
     }
     case "file_search":
       return {
         ...common,
-        label: title ?? formatSearchToolLabel(item) ?? "Searched files",
+        label: title ?? formatSearchToolLabel(item, resolve) ?? resolve(msg("Searched files")),
         ...(item.pattern ? { detail: item.pattern } : {}),
-        toolTitle: title ?? "File search",
+        toolTitle: title ?? resolve(msg("File search", { $context: "noun, a tool title" })),
         toolData: item,
       };
     case "web_search":
       return {
         ...common,
-        label: title ?? "Searched the web",
+        label: title ?? resolve(msg("Searched the web")),
         ...(item.patterns?.length ? { detail: item.patterns.join(", ") } : {}),
-        toolTitle: title ?? "Web search",
+        toolTitle: title ?? resolve(msg("Web search", { $context: "noun, a tool title" })),
         toolData: item,
       };
     case "checkpoint":
       return {
         ...common,
-        label: title ?? "Checkpoint captured",
+        label: title ?? resolve(msg("Checkpoint captured")),
         changedFiles: item.files.map((file) => file.path),
         toolData: item,
       };
@@ -465,11 +468,14 @@ function projectedWorkEntry(row: OrchestrationV2ProjectedTurnItem): WorkLogEntry
         label:
           title ??
           (classified === "read"
-            ? formatReadToolLabel(readPath ?? "")
+            ? formatReadToolLabel(readPath ?? "", 0, resolve)
             : classified === "search"
-              ? (formatSearchToolLabel({ input: item.input }) ?? item.toolName ?? "Tool call")
-              : (item.toolName ?? "Tool call")),
-        toolTitle: title ?? item.toolName ?? "Tool",
+              ? (formatSearchToolLabel({ input: item.input }, resolve) ??
+                item.toolName ??
+                resolve(msg("Tool call", { $context: "noun" })))
+              : (item.toolName ?? resolve(msg("Tool call", { $context: "noun" })))),
+        toolTitle:
+          title ?? item.toolName ?? resolve(msg("Tool", { $context: "noun, a tool title" })),
         toolData: { input: item.input, output: item.output },
       };
     }
@@ -481,20 +487,30 @@ function projectedWorkEntry(row: OrchestrationV2ProjectedTurnItem): WorkLogEntry
         item.steps.find((step) => step.status === "pending");
       return {
         ...common,
-        label: `Tasks ${done}/${item.steps.length}${current ? ` · ${current.text}` : ""}`,
+        label: current
+          ? resolve(msg("Tasks {done}/{total} · {current}"), {
+              done,
+              total: item.steps.length,
+              current: current.text,
+            })
+          : resolve(msg("Tasks {done}/{total}"), { done, total: item.steps.length }),
       };
     }
     case "approval_request":
       return {
         ...common,
-        label: title ?? "Approval requested",
+        label: title ?? resolve(msg("Approval requested")),
         detail: item.prompt ?? item.requestKind,
         toolData: item,
       };
     case "user_input_request":
       return {
         ...common,
-        label: title ?? (item.questionAnswer ? "Answered questions" : "Input requested"),
+        label:
+          title ??
+          (item.questionAnswer
+            ? resolve(msg("Answered questions"))
+            : resolve(msg("Input requested"))),
         ...(item.questionAnswer ? { questionAnswer: item.questionAnswer } : {}),
         toolData: item,
       };
@@ -516,6 +532,7 @@ export interface TimelineEntriesInput {
   readonly attempts?: ReadonlyArray<OrchestrationV2RunAttempt>;
   readonly nodes?: ReadonlyArray<OrchestrationV2ExecutionNode>;
   readonly plans?: ReadonlyArray<OrchestrationV2PlanArtifact>;
+  readonly resolve?: MessageResolver;
 }
 
 export interface TimelineEntriesProjection {
@@ -707,7 +724,7 @@ export function deriveTimelineEntriesFromVisibleTurnItems(
       id: item.id,
       kind: "work",
       createdAt,
-      entry: projectedWorkEntry(row),
+      entry: projectedWorkEntry(row, input.resolve ?? m),
       ...attemptMetadata,
     });
 
@@ -942,7 +959,8 @@ function reuseTimelineEntries(
     !shallow(input.attachmentUrlById, before.attachmentUrlById) ||
     !shallow(input.attempts, before.attempts) ||
     !shallow(input.nodes, before.nodes) ||
-    !samePlanStatuses(input.plans, before.plans)
+    !samePlanStatuses(input.plans, before.plans) ||
+    input.resolve !== before.resolve
   ) {
     return null;
   }

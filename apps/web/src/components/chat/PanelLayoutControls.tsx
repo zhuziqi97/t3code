@@ -1,6 +1,11 @@
-import { useTranslate } from "../../i18n";
-import { PanelBottomIcon, PanelRightIcon, SquareMenuIcon } from "lucide-react";
-import { Maximize2Icon, Minimize2Icon } from "lucide-react";
+import {
+  PanelBottomIcon,
+  PanelRightIcon,
+  SquareMenuIcon,
+  Maximize2Icon,
+  Minimize2Icon,
+} from "lucide-react";
+import { useGT } from "gt-react";
 import { memo, type ReactNode, useLayoutEffect, useRef } from "react";
 
 import { cn } from "~/lib/utils";
@@ -53,13 +58,13 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
   onToggleThreadPanel,
   onToggleRightPanel,
 }: PanelLayoutControlsProps) {
-  const t = useTranslate();
+  const gt = useGT();
   const threadPanelToggle = (
     <Toggle
       className="relative shrink-0 [-webkit-app-region:no-drag]"
       pressed={threadPanelOpen}
       onPressedChange={threadPanelPresentation === "popover" ? undefined : onToggleThreadPanel}
-      aria-label={t("chat.panel.toggleDetails")}
+      aria-label={gt("Toggle thread details panel")}
       variant="ghost"
       size="sm"
     >
@@ -76,8 +81,9 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
         )}
       </TooltipTrigger>
       <TooltipPopup side="bottom">
-        {t("chat.panel.toggleDetailsShort")}
-        {threadPanelShortcutLabel ? ` (${threadPanelShortcutLabel})` : ""}
+        {threadPanelShortcutLabel
+          ? gt("Toggle thread details ({shortcut})", { shortcut: threadPanelShortcutLabel })
+          : gt("Toggle thread details")}
       </TooltipPopup>
     </Tooltip>
   );
@@ -95,7 +101,7 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
               className="shrink-0 [-webkit-app-region:no-drag]"
               pressed={terminalOpen}
               onPressedChange={onToggleTerminal}
-              aria-label={t("chat.panel.toggleTerminal")}
+              aria-label={gt("Toggle terminal drawer")}
               variant="ghost"
               size="sm"
               disabled={!terminalAvailable}
@@ -105,10 +111,10 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
           </TooltipTrigger>
           <TooltipPopup side="bottom">
             {terminalAvailable
-              ? t("chat.panel.toggleTerminalShortcut", {
-                  shortcut: terminalShortcutLabel ? ` (${terminalShortcutLabel})` : "",
-                })
-              : t("chat.panel.terminalUnavailable")}
+              ? terminalShortcutLabel
+                ? gt("Toggle terminal drawer ({shortcut})", { shortcut: terminalShortcutLabel })
+                : gt("Toggle terminal drawer")
+              : gt("Terminal drawer is unavailable")}
           </TooltipPopup>
         </Tooltip>
       ) : null}
@@ -119,7 +125,7 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
               className="shrink-0 [-webkit-app-region:no-drag]"
               pressed={rightPanelOpen}
               onPressedChange={onToggleRightPanel}
-              aria-label={t("chat.panel.toggleRight")}
+              aria-label={gt("Toggle right panel")}
               data-right-panel-toggle
               variant="ghost"
               size="sm"
@@ -130,10 +136,10 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
           </TooltipTrigger>
           <TooltipPopup side="bottom">
             {rightPanelAvailable
-              ? t("chat.panel.toggleRightShortcut", {
-                  shortcut: rightPanelShortcutLabel ? ` (${rightPanelShortcutLabel})` : "",
-                })
-              : rightPanelUnavailableLabel}
+              ? rightPanelShortcutLabel
+                ? gt("Toggle right panel ({shortcut})", { shortcut: rightPanelShortcutLabel })
+                : gt("Toggle right panel")
+              : (rightPanelUnavailableLabel ?? gt("Right panel is unavailable"))}
           </TooltipPopup>
         </Tooltip>
       ) : null}
@@ -148,8 +154,8 @@ export const RightPanelMaximizeControl = memo(function RightPanelMaximizeControl
   maximized: boolean;
   onToggle: () => void;
 }) {
-  const t = useTranslate();
-  const label = maximized ? t("chat.panel.restoreSize") : t("chat.panel.maximize");
+  const gt = useGT();
+  const label = maximized ? gt("Restore panel size") : gt("Maximize panel");
   return (
     <Tooltip>
       <TooltipTrigger
