@@ -142,7 +142,7 @@ it("preserves a native session during language changes and imports its original 
   expect(container.textContent).toContain("User native session");
   await click(button("删除"));
   expect(commands.confirm).toHaveBeenCalledExactlyOnceWith(
-    "永久删除原生 ACP 会话“User native session”？",
+    "永久删除原生 ACP 运行实例“User native session”？",
     { variant: "destructive" },
   );
   expect(commands.deleteAcpRegistrySession).not.toHaveBeenCalled();
@@ -178,7 +178,7 @@ it("keeps routing drafts, validates JSON in Chinese, and sends original headers 
   await type(input("raw-provider write-only headers JSON"), "{");
   await switchLanguage("zh");
   expect(input("raw-provider 基础 URL").value).toBe("https://controlled.example/changed");
-  expect(input("raw-provider 仅可写入的请求头 JSON").value).toBe("{");
+  expect(input("raw-provider 只写请求头 JSON").value).toBe("{");
   expect(commands.listAcpRegistryProviders).toHaveBeenCalledTimes(1);
   await click(button("保存"));
   expect(commands.toast).toHaveBeenLastCalledWith({
@@ -187,7 +187,7 @@ it("keeps routing drafts, validates JSON in Chinese, and sends original headers 
     description: expect.stringContaining("JSON"),
   });
   expect(commands.setAcpRegistryProvider).not.toHaveBeenCalled();
-  await type(input("raw-provider 仅可写入的请求头 JSON"), '{"Authorization":"Bearer controlled"}');
+  await type(input("raw-provider 只写请求头 JSON"), '{"Authorization":"Bearer controlled"}');
   await switchLanguage("en");
   await click(button("Save"));
   expect(commands.setAcpRegistryProvider).toHaveBeenCalledExactlyOnceWith({

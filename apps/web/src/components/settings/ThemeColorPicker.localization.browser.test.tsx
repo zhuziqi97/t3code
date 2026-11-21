@@ -42,7 +42,7 @@ it("keeps an incomplete HEX draft and the open picker across language changes, t
   )!;
   await fill(input, "#12");
   await switchLanguage();
-  expect(document.querySelector('[aria-label="背景选择器的 HEX 值"]')).toBe(input);
+  expect(document.querySelector('[aria-label="背景 选择器的十六进制值"]')).toBe(input);
   expect(input.value).toBe("#12");
   expect(changed).not.toHaveBeenCalled();
   await fill(input, "#112233");
@@ -57,7 +57,7 @@ it("preserves an RGB draft through language changes and retains alpha on a nativ
   )!;
   await fill(input, "12, 34,");
   await switchLanguage();
-  expect(document.querySelector('[aria-label="背景选择器的 RGB 值"]')).toBe(input);
+  expect(document.querySelector('[aria-label="背景 选择器的 RGB 值"]')).toBe(input);
   expect(input.value).toBe("12, 34,");
   expect(changed).not.toHaveBeenCalled();
   await fill(input, "12, 34, 56");
@@ -73,10 +73,10 @@ it("keeps a pending hue adjustment through language changes and commits it once 
   );
   expect(changed).not.toHaveBeenCalled();
   await switchLanguage();
-  expect(document.querySelector('[role="slider"][aria-label="背景色相"]')).toBe(hue);
+  expect(document.querySelector('[role="slider"][aria-label="背景 色相"]')).toBe(hue);
   expect(changed).not.toHaveBeenCalled();
   await act(() =>
-    container.querySelector<HTMLButtonElement>('[aria-label="选择背景颜色"]')!.click(),
+    container.querySelector<HTMLButtonElement>('[aria-label="选择 背景 颜色"]')!.click(),
   );
   expect(changed).toHaveBeenCalledExactlyOnceWith("canvas", "#ff040080");
 });

@@ -30,13 +30,9 @@ import { Button } from "../ui/button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "../ui/input-group";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Spinner } from "../ui/spinner";
-import { msg, T, useGT, useMessages, Var } from "gt-react";
-import { m } from "../../i18n/messages";
+import { msg, T, useGT, useLocale, useMessages, Var } from "gt-react";
+import { useTranslate } from "../../i18n";
 
-const DOWNLOAD_FORMAT = new Intl.NumberFormat(undefined, {
-  notation: "compact",
-  maximumFractionDigits: 1,
-});
 const SUGGESTED_SEARCHES = ["Dracula", "Catppuccin", "Nord", "Tokyo Night"];
 const SORT_OPTIONS: ReadonlyArray<{ value: OpenVsxThemeSort; label: string }> = [
   { value: "downloadCount", label: msg("Most downloaded") },
@@ -84,7 +80,7 @@ function ThemeExtensionIcon({ extension }: { extension: OpenVsxThemeExtension })
 
 export interface ThemeSearchView {
   readonly setResults: (results: ReadonlyArray<OpenVsxThemeExtension> | null) => void;
-  readonly setError: (error: string | null) => void;
+  readonly setError: (error: Error | string | null) => void;
   readonly setIsSearching: (isSearching: boolean) => void;
 }
 
@@ -137,11 +133,7 @@ export function createThemeSearch(
           if (controller.signal.aborted) return;
           view.setResults(null);
           shownKey = null;
-          view.setError(
-            cause instanceof Error
-              ? (thrownErrorMessage(cause, m) ?? cause.message)
-              : m(msg("Open VSX search failed.")),
-          );
+          view.setError(cause instanceof Error ? cause : msg("Open VSX search failed."));
         },
       )
       .then(() => {
@@ -243,10 +235,17 @@ export function ThemeSearchSection({
 }) {
   const messages = useMessages();
   const gt = useGT();
+  const t = useTranslate();
+  const resolve = useMessages();
+  const locale = useLocale();
+  const downloadFormat = new Intl.NumberFormat(locale, {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  });
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState<OpenVsxThemeSort>("downloadCount");
   const [results, setResults] = useState<ReadonlyArray<OpenVsxThemeExtension> | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Error | string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [installingId, setInstallingId] = useState<string | null>(null);
   const [pendingUpdate, setPendingUpdate] = useState<OpenVsxThemeExtension | null>(null);
@@ -272,11 +271,7 @@ export function ThemeSearchSection({
     try {
       installedCollection = getStoredCustomThemeCollection(extension.collectionId);
     } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? (thrownErrorMessage(cause, m) ?? cause.message)
-          : gt("Installed themes could not be read."),
-      );
+      setError(cause instanceof Error ? cause : msg("Installed themes could not be read."));
       return;
     }
     const updated = installedCollection.length > 0;
@@ -297,11 +292,7 @@ export function ThemeSearchSection({
       }
     } catch (cause) {
       if (!installSignal.aborted) {
-        setError(
-          cause instanceof Error
-            ? (thrownErrorMessage(cause, m) ?? cause.message)
-            : gt("That theme could not be added."),
-        );
+        setError(cause instanceof Error ? cause : msg("That theme could not be added."));
       }
     }
     if (themeSearch.endInstall(installSignal)) setInstallingId(null);
@@ -402,7 +393,13 @@ export function ThemeSearchSection({
 
       {error ? (
         <Alert variant="error" role="status" aria-live="polite">
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>
+            {error instanceof Error
+              ? error.message === "Open VSX search is unavailable right now."
+                ? resolve(msg("Open VSX search is unavailable right now."))
+                : (thrownErrorMessage(error, resolve) ?? error.message)
+              : resolve(error)}
+          </AlertDescription>
         </Alert>
       ) : null}
 
@@ -440,8 +437,10 @@ export function ThemeSearchSection({
                     <div className="min-w-0 flex-1">
                       <h4 className="truncate text-sm font-medium">{extension.name}</h4>
                       <p className="truncate text-muted-foreground text-xs">
-                        {extension.publisher} · {DOWNLOAD_FORMAT.format(extension.downloadCount)}{" "}
-                        downloads
+                        {t("appearance.theme.search.downloads", {
+                          publisher: extension.publisher,
+                          downloads: downloadFormat.format(extension.downloadCount),
+                        })}
                       </p>
                     </div>
                   </div>

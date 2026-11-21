@@ -104,7 +104,7 @@ it("retains a chosen collection variant when the language changes and edits that
   await using _lifecycle = await setupLifecycle();
 
   await render();
-  await click("Use Muted Dark for Dark mode");
+  await click("Use Muted Dark for dark mode");
   expect(state.setHalf).toHaveBeenCalledExactlyOnceWith("dark", "collection-muted");
   const edit = button("Edit Raw Collection Muted Dark");
   await switchLanguage();
@@ -130,8 +130,8 @@ it("preserves checked removal variants across language changes and leaves the li
   await switchLanguage();
   expect(document.querySelector("#remove-theme-collection-dark")).toBe(checkbox);
   expect(checkbox.checked).toBe(true);
-  expect(document.body.textContent).toContain("移除“Raw Collection”中的主题？");
-  expect(button("移除所选主题（1）").disabled).toBe(false);
+  expect(document.body.textContent).toContain("从“Raw Collection”中移除主题？");
+  expect(button("移除所选（1）").disabled).toBe(false);
   await click("取消");
   expect(installedIds()).toEqual([
     "personal",
@@ -152,7 +152,7 @@ it("removes only the chosen original variant after switching language", async ()
     document.querySelector<HTMLInputElement>("#remove-theme-collection-dark")!.click(),
   );
   await switchLanguage();
-  await click("移除所选主题（1）");
+  await click("移除所选（1）");
   expect(installedIds()).toEqual(["personal", "collection-light", "collection-muted"]);
   expect(state.setTheme).not.toHaveBeenCalled();
   expect(state.setHalf).not.toHaveBeenCalled();

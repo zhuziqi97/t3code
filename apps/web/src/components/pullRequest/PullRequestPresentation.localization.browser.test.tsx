@@ -103,12 +103,10 @@ it("changes lifecycle, conflict and review signals without translating branch or
   expect(container.querySelector('[aria-label="Merged"]')).not.toBeNull();
   await act(async () => changeLanguage("zh"));
   expect(container.querySelector('[aria-label="已合并"]')).not.toBeNull();
-  expect(container.querySelector('[aria-label="与 release/原文 有冲突"]')).not.toBeNull();
-  expect(container.textContent).toContain("等待审阅");
-  expect(container.textContent).toContain("要求修改");
-  expect(container.querySelector("a")?.getAttribute("aria-label")).toBe(
-    "打开 octocat-raw 的个人主页",
-  );
+  expect(container.querySelector('[aria-label="与 release/原文 冲突"]')).not.toBeNull();
+  expect(container.textContent).toContain("等待审查");
+  expect(container.textContent).toContain("已请求修改");
+  expect(container.querySelector("a")?.getAttribute("aria-label")).toBe("打开 octocat-raw 的主页");
   expect(container.querySelector("a")?.href).toBe("https://github.com/octocat-raw");
 });
 
@@ -123,7 +121,7 @@ it("keeps an expanded checks list while changing language and preserves its host
   expect(document.body.textContent).not.toContain("check-success 原文");
   await click("Show all");
   await act(async () => changeLanguage("zh"));
-  expect(document.body.textContent).toContain("3 项检查中有 1 项运行中");
+  expect(document.body.textContent).toContain("3 个中有 1 个正在运行");
   expect(document.body.textContent).toContain("check-success 原文");
   expect(document.body.textContent).toContain("已跳过");
   await click("收起");
@@ -176,7 +174,7 @@ it("translates lazy loading, empty and raw failure states through the actual pop
   expect(document.body.textContent).toContain("正在加载检查…");
   query.isPending = false;
   await act(async () => renderQueryResult(root, <PullRequestChecksPopover {...props} />));
-  expect(document.body.textContent).toContain("暂无检查结果");
+  expect(document.body.textContent).toContain("未报告任何检查");
   query.error = "Raw host failure 原文";
   await act(async () => renderQueryResult(root, <PullRequestChecksPopover {...props} />));
   expect(document.body.textContent).toContain(query.error);
@@ -204,10 +202,10 @@ it("keeps the current loading tab and copied code when their labels change", asy
   );
   await act(async () => changeLanguage("zh"));
   expect(container.querySelector('[role="status"]')?.getAttribute("aria-label")).toBe(
-    "正在加载 Pull Request",
+    "正在加载 PR",
   );
   const timeline = [...container.querySelectorAll("button")].find(
-    (button) => button.textContent === "时间线",
+    (button) => button.textContent === "动态",
   );
   expect(timeline?.getAttribute("aria-pressed")).toBe("true");
   expect(container.textContent).toContain("feature/原文");
@@ -227,13 +225,13 @@ it("distinguishes approvals, manual action and neutral results with complete bil
   );
   await changeLanguage("zh");
   expect(summarizePullRequestChecks([workflow, gate], resolveChineseMessage)).toBe(
-    "1 个工作流和 1 项检查等待处理",
+    "1 个工作流和 1 项检查等待操作",
   );
   expect(
     summarizePullRequestChecks([check("success"), check("neutral")], resolveChineseMessage),
-  ).toBe("2 项检查中有 1 项通过");
+  ).toBe("2 个中有 1 个通过");
   expect(summarizePullRequestChecks([check("failure"), workflow], resolveChineseMessage)).toBe(
-    "2 项检查中有 1 项失败",
+    "2 个中有 1 个失败",
   );
   expect(summarizePullRequestChecks([workflow], resolveChineseMessage)).toBe("1 个工作流等待批准");
 });

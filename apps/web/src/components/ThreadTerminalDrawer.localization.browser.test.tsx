@@ -25,7 +25,7 @@ vi.mock("../hooks/useSettings", async (original) => ({
 }));
 vi.mock("../editorPreferences", async (original) => ({
   ...(await original<typeof import("../editorPreferences")>()),
-  useEditorAction: () => ({ open: state.command, unavailableReason: () => null }),
+  useOpenInPreferredEditor: () => state.command,
   usePreferredEditor: () => ["vscode", vi.fn()],
   readPreferredEditor: () => "vscode",
 }));
@@ -148,7 +148,7 @@ it("updates retained native-menu callbacks after a language switch without recre
       { id: "copy", label: "复制", disabled: true },
       { id: "paste", label: "粘贴" },
       { id: "select-all", label: "全选" },
-      { id: "scroll-to-bottom", label: "跳到最新输出" },
+      { id: "scroll-to-bottom", label: "跳到最新" },
     ],
     { x: 10, y: 20 },
   );
@@ -203,10 +203,10 @@ it("retranslates initialization errors while retaining raw diagnostics and avoid
 });
 
 it.each([
-  ["copy", false, "剪贴板不可用，无法复制终端选中的内容。"],
-  ["copy", true, "无法将终端选中的内容复制到剪贴板。"],
-  ["paste", false, "此浏览器无法读取剪贴板以从菜单粘贴。"],
-  ["paste", true, "无法读取剪贴板内容。"],
+  ["copy", false, "复制终端所选内容时剪贴板 API 不可用。"],
+  ["copy", true, "无法将终端所选内容复制到剪贴板。"],
+  ["paste", false, "读取终端输入时剪贴板 API 不可用。"],
+  ["paste", true, "无法从剪贴板读取终端输入。"],
 ] as const)(
   "shows a Chinese %s clipboard failure with API availability %s",
   async (action, available, expected) => {
@@ -263,7 +263,7 @@ it("uses the completion language when a clipboard read fails after switching", a
   expect(surface.write).not.toHaveBeenCalled();
   await switchLanguage("zh");
   await act(async () => rejectRead(new Error("raw delayed clipboard denial")));
-  expect(surface.write.mock.calls.flat().join("")).toContain("无法读取剪贴板内容。");
+  expect(surface.write.mock.calls.flat().join("")).toContain("无法从剪贴板读取终端输入。");
   expect(state.command).not.toHaveBeenCalled();
   expect(surface.dispose).not.toHaveBeenCalled();
 });

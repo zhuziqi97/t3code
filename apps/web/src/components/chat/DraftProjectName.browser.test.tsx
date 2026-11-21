@@ -128,8 +128,8 @@ it("remeasures the heading across language changes and chat lane resizing", asyn
 
     await act(async () => changeLanguage("zh"));
     await document.fonts.ready;
-    await vi.waitFor(() => expect(title().innerText).toBe("接下来在"));
-    expect(host.querySelector("h1")!.innerText).toContain("中做什么？");
+    await vi.waitFor(() => expect(title().innerText).toBe("要在"));
+    expect(host.querySelector("h1")!.innerText).toContain("中构建什么？");
     expect(label().textContent).toBe("obsidian-arr");
     expect(label().getBoundingClientRect().top).toBeLessThan(
       title().getBoundingClientRect().bottom,
@@ -140,7 +140,7 @@ it("remeasures the heading across language changes and chat lane resizing", asyn
     expect(chineseInlineWidth).toBeGreaterThan(0);
     // The fit threshold follows rendered glyph widths, which differ across platform fonts.
     host.style.width = `${Math.floor(Math.min(englishInlineWidth, chineseInlineWidth)) - 32}px`;
-    await vi.waitFor(() => expect(title().innerText).toBe("接下来做什么？"));
+    await vi.waitFor(() => expect(title().innerText).toBe("我们要构建什么？"));
     expect(label().getBoundingClientRect().top).toBeGreaterThanOrEqual(
       title().getBoundingClientRect().bottom,
     );

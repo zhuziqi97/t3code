@@ -286,7 +286,7 @@ it.each(["summary", "timeline"] as const)(
       });
     }
     await act(async () => changeLanguage("zh"));
-    expect(screen.container.textContent).toContain("1天前");
+    expect(screen.container.textContent).toContain("1 天前");
     expect(screen.container.textContent).not.toContain("1d ago");
     expect(screen.container.textContent).toContain("Raw comment 原文 /tmp/raw");
     expect(screen.container.textContent).toContain("author-raw");
@@ -305,7 +305,7 @@ it("updates list dates when the language changes while retaining the raw row", a
   );
   expect(screen.container.textContent).toContain("6h ago");
   await act(async () => changeLanguage("zh"));
-  expect(screen.container.textContent).toContain("6小时前");
+  expect(screen.container.textContent).toContain("6 小时前");
   expect(screen.container.textContent).not.toContain("6h ago");
   expect(screen.container.textContent).toContain("#101Raw title 原文");
   await act(async () => changeLanguage("en"));
@@ -363,13 +363,13 @@ it("keeps separate comment and review drafts across mode and language changes", 
     "Review 原文",
   );
   await act(async () => changeLanguage("zh"));
-  expect(document.querySelector<HTMLTextAreaElement>('[aria-label="审阅摘要"]')!.value).toBe(
+  expect(document.querySelector<HTMLTextAreaElement>('[aria-label="审查总结"]')!.value).toBe(
     "Review 原文",
   );
   await click("评论");
-  expect(
-    document.querySelector<HTMLTextAreaElement>('[aria-label="评论此 Pull Request"]')!.value,
-  ).toBe("Comment 原文 /tmp/raw");
+  expect(document.querySelector<HTMLTextAreaElement>('[aria-label="评论此 PR"]')!.value).toBe(
+    "Comment 原文 /tmp/raw",
+  );
   expect(fixture.post).not.toHaveBeenCalled();
   expect(fixture.review).not.toHaveBeenCalled();
 });
@@ -386,11 +386,11 @@ it("reports a pending comment failure in the new language and keeps its input", 
     input: { ...reference, body: "Comment 原文" },
   });
   await act(async () => changeLanguage("zh"));
-  expect(button("正在发布…").disabled).toBe(true);
+  expect(button("正在发表…").disabled).toBe(true);
   await act(async () =>
     pending.finish({ _tag: "Failure", cause: Cause.fail(new Error("Raw host failure")) }),
   );
-  expect(fixture.toast).toHaveBeenCalledExactlyOnceWith({ type: "error", title: "无法发布评论" });
+  expect(fixture.toast).toHaveBeenCalledExactlyOnceWith({ type: "error", title: "无法发表评论" });
   expect(screen.container.querySelector("textarea")!.value).toBe(" Comment 原文 ");
   expect(fixture.onClose).not.toHaveBeenCalled();
 });
@@ -425,11 +425,11 @@ it("keeps a failed required review and its verdict after a language change", asy
   });
   expect(fixture.toast).toHaveBeenCalledExactlyOnceWith({
     type: "error",
-    title: "无法提交审阅",
+    title: "无法提交审查",
     description: "Raw host failure",
   });
   expect(screen.container.querySelector("textarea")!.value).toBe("Needs changes 原文");
-  expect(button("提交审阅").disabled).toBe(false);
+  expect(button("提交审查").disabled).toBe(false);
 });
 
 it("uses the settled review language and leaves summary changes made during submission", async () => {
@@ -444,7 +444,7 @@ it("uses the settled review language and leaves summary changes made during subm
   await act(async () => pending.finish({ _tag: "Success" }));
   expect(fixture.toast).toHaveBeenCalledExactlyOnceWith({
     type: "success",
-    title: "Pull Request 已获批准",
+    title: "PR 已批准",
   });
   expect(usePullRequestReviewStore.getState().summaries[pullRequestReviewKey(reference)]).toBe(
     "New draft 原文",

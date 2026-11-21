@@ -433,7 +433,7 @@ describe("sidebar thread menu", () => {
 });
 
 describe("sidebar settled pagination", () => {
-  it("keeps the viewport in place when showing more settled threads", async () => {
+  it("shows more settled threads inside the project and keeps the viewport in place", async () => {
     using stack = new DisposableStack();
     const style = document.createElement("style");
     style.textContent = appCss;
@@ -498,7 +498,8 @@ describe("sidebar settled pagination", () => {
     const shelf = screen.getByRole("button", { name: "Settled (70)", exact: true });
     await expect.element(shelf).toBeVisible();
     if (shelf.element().getAttribute("aria-expanded") === "false") await shelf.click();
-    const more = screen.getByRole("button", { name: /^Show 25 more/ });
+    expect(screen.container.querySelector('[data-sidebar-row="settled:more"]')).toBeNull();
+    const more = screen.getByRole("button", { name: "Show 25 more · 60 remaining", exact: true });
     await expect.element(more).toBeInTheDocument();
     const moreButton = more.element() as HTMLButtonElement;
     const viewport = moreButton.closest<HTMLElement>('[data-slot="scroll-area-viewport"]')!;

@@ -253,7 +253,7 @@ export async function searchOpenVsxThemes(
   url.searchParams.set("size", "16");
   const value = await withSearchTimeout(async (requestSignal) => {
     const response = await fetch(url, { signal: requestSignal });
-    if (!response.ok) throw new Error(m(msg("Open VSX search is unavailable right now.")));
+    if (!response.ok) throw new Error("Open VSX search is unavailable right now.");
     const searchBytes = await readCappedResponse(
       response,
       MAX_SEARCH_BYTES,

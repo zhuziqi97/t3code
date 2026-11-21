@@ -7,6 +7,7 @@ import {
 } from "./editorPreferences";
 import type { TFunction } from "i18next";
 import { i18n, useTranslate } from "./i18n";
+import { useMessages } from "gt-react";
 
 import { resolveDiffPathForWorkspace } from "./diffFileActions";
 import {
@@ -118,6 +119,7 @@ export function useFileContextMenu(
   workspace?: EditorWorkspace,
 ) {
   const t = useTranslate();
+  const resolve = useMessages();
   const openInEditor = useAtomCommand(shellEnvironment.openInEditor, { reportFailure: false });
   const serverConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId));
 
@@ -131,8 +133,8 @@ export function useFileContextMenu(
       serverConfig?.shellRevealInFileManager === true &&
       serverConfig.availableEditors.includes("file-manager")
         ? serverConfig.shellRevealInFileManagerKind === undefined
-          ? revealInFileExplorerLabelForOs(serverConfig.environment.platform.os)
-          : revealInFileExplorerLabelForKind(serverConfig.shellRevealInFileManagerKind)
+          ? revealInFileExplorerLabelForOs(serverConfig.environment.platform.os, resolve)
+          : revealInFileExplorerLabelForKind(serverConfig.shellRevealInFileManagerKind, resolve)
         : undefined,
     canOpenDefault: availableEditors.includes("file-manager"),
     editorIds: workspace ? ["browser", ...editorAction.editorIds] : editorAction.editorIds,

@@ -14,6 +14,7 @@ import {
 } from "@t3tools/shared/keybindings";
 import { msg } from "gt-react";
 
+import { i18n } from "../../i18n";
 import { m, type MessageResolver } from "../../i18n/messages";
 import { shortcutConflictKey, shortcutKeyFromEvent } from "../../keybindings";
 import { isMacPlatform } from "../../lib/utils";
@@ -338,11 +339,19 @@ export function filterKeybindingRows(
     return (
       row.command.toLowerCase().includes(normalizedQuery) ||
       commandLabel(row.command, resolve).toLowerCase().includes(normalizedQuery) ||
+      keybindingCommandSearchLabels(row.command).some((label) =>
+        label.toLowerCase().includes(normalizedQuery),
+      ) ||
       row.key.toLowerCase().includes(normalizedQuery) ||
       row.when.toLowerCase().includes(normalizedQuery) ||
       row.source.toLowerCase().includes(normalizedQuery)
     );
   });
+}
+
+export function keybindingCommandSearchLabels(command: KeybindingCommand): string[] {
+  const key = `keybindings.command.${command}`;
+  return ["en", "zh"].map((locale) => i18n.getFixedT(locale)(key, { defaultValue: "" }));
 }
 
 function collectWhenIdentifiersFromNode(
@@ -413,7 +422,7 @@ const COMMAND_LABELS: Partial<Record<KeybindingCommand, string>> = {
   "composer.dictation": msg("Composer: Start or Finish Dictation"),
   "thread.steerQueuedMessage": msg("Queue: Send First Queued Message"),
   "thread.editQueuedMessage": msg("Queue: Edit Last Queued Message"),
-  "thread.copyReference": msg("Pull Request: Copy Link or Thread"),
+  "thread.copyReference": msg("Pull Request: Copy Link or Thread ID"),
   "sidebar.toggle": msg("Sidebar: Toggle"),
   "navigation.back": msg("Navigation: Back"),
   "navigation.forward": msg("Navigation: Forward"),

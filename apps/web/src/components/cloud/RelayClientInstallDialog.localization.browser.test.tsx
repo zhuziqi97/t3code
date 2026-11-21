@@ -37,8 +37,8 @@ it("switches the open confirmation without losing the requested version and retu
   await act(async () => {
     await changeLanguage("zh");
   });
-  expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe("安装中继客户端？");
-  expect(document.body.textContent).toContain(`T3 Code 将在本地下载并安装 ${version} 版本。`);
+  expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe("要安装中继客户端吗？");
+  expect(document.body.textContent).toContain(`T3 Code 将在本地下载并安装版本 ${version}。`);
   expect(readRelayClientInstallDialogState()).toEqual({ status: "confirming", version });
   await act(async () => button("取消").click());
   await expect(confirmation).resolves.toBe(false);
@@ -62,7 +62,7 @@ it("keeps installation progress while changing language and finishes the same co
     await changeLanguage("zh");
   });
   expect(document.body.textContent).toContain("正在下载中继客户端");
-  expect(document.body.textContent).toContain("第 3 步，共 7 步");
+  expect(document.body.textContent).toContain("第 3/7 步");
   expect(document.querySelector("progress")?.getAttribute("aria-label")).toBe("中继客户端安装进度");
   expect(readRelayClientInstallDialogState()).toEqual({
     status: "installing",
@@ -77,7 +77,7 @@ it("keeps installation progress while changing language and finishes the same co
   await act(async () => {
     reportRelayClientInstallProgress({ type: "progress", stage: "activating" });
   });
-  expect(document.body.textContent).toContain("正在启用已安装的客户端");
+  expect(document.body.textContent).toContain("正在启用中继客户端");
   expect(document.querySelector("progress")?.value).toBe(7);
   await act(async () => {
     await changeLanguage("en");

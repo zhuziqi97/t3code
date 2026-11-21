@@ -1,3 +1,4 @@
+import { useMessages } from "gt-react";
 import type { RuntimeMode } from "@t3tools/contracts";
 import { type ReactNode, useRef, useState } from "react";
 import { expect, it, vi } from "vite-plus/test";
@@ -18,10 +19,14 @@ import { ComposerFooterModeControls, ComposerPermissionsSection } from "./Compos
 import { ComposerPickerFooter } from "./ComposerModelEffort";
 import { resolveRuntimeModeOption, runtimeModeOptions } from "./runtimeModeConfig";
 
-const options = runtimeModeOptions.map((mode) => resolveRuntimeModeOption(mode));
+function useRuntimeModeOptions() {
+  const resolve = useMessages();
+  return runtimeModeOptions.map((mode) => resolveRuntimeModeOption(mode, resolve));
+}
 
 // Mirrors the overflow menu, which holds the Permissions section.
 function OverflowMenu() {
+  const options = useRuntimeModeOptions();
   const [mode, setMode] = useState<RuntimeMode>("full-access");
   const composerMenuProps = useComposerMenuProps();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -109,6 +114,7 @@ it("returns focus to the editor after a pick", async () => {
 
 // Mirrors the model picker: a composer popover whose footer nests the Permissions menu.
 function PickerWithPermissions() {
+  const options = useRuntimeModeOptions();
   const [mode, setMode] = useState<RuntimeMode>("full-access");
   const composerMenuProps = useComposerMenuProps();
   return (
@@ -165,6 +171,7 @@ it("opens on the checked permission when composer.mode marked the trigger", asyn
 
 // Mirrors ComposerControlsBar: the chip shows only while the mode differs from the default.
 function PermissionsChip() {
+  const options = useRuntimeModeOptions();
   const [mode, setMode] = useState<RuntimeMode>("approval-required");
   return (
     <div data-slot="composer-shell">

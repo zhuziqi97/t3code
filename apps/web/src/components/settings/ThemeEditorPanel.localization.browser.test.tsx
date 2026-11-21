@@ -78,7 +78,7 @@ it("preserves a name and color draft without reapplying its preview on language 
   expect(preview).toHaveBeenCalledTimes(previewCount);
   expect(restore).not.toHaveBeenCalled();
   expect(saved).not.toHaveBeenCalled();
-  await click("保存修改");
+  await click("保存更改");
   const result = palette.getCustomThemes()[0]!;
   expect(result).toMatchObject({
     id: editing.id,
@@ -122,7 +122,7 @@ it("retranslates a palette collision without modifying either installed theme", 
   await fill(nameInput(), target.label);
   await click("Merge into “Raw Taken Name”");
   await switchLanguage();
-  expect(container.textContent).toContain("“Raw Taken Name”已有深色配色。请选择其他名称。");
+  expect(container.textContent).toContain("“Raw Taken Name”已有深色调色板。请换一个名称。");
   expect(palette.getCustomThemes()).toEqual([target, editing]);
   expect(saved).not.toHaveBeenCalled();
   expect(close).not.toHaveBeenCalled();
@@ -189,7 +189,7 @@ it("keeps a create draft after activation rolls back and allows a retry with the
   expect(saved).toHaveBeenCalledTimes(1);
   expect(close).not.toHaveBeenCalled();
   await switchLanguage();
-  expect(container.textContent).toContain("无法启用主题。请重试。");
+  expect(container.textContent).toContain("主题已保存，但无法启用，请重试。");
   expect(nameInput().value).toBe("Raw New Theme");
   expect(saved).toHaveBeenCalledTimes(1);
   saved.mockReturnValue(true);

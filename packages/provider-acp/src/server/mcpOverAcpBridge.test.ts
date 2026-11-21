@@ -291,8 +291,12 @@ describe("AcpMcpOverAcpBridge", () => {
       const deleteSignals: AbortSignal[] = [];
       let nextConnectionId = 0;
       const bridge = yield* makeAcpMcpOverAcpBridge({
-        endpoint: "http://127.0.0.1:1/mcp",
-        authorization: "Bearer bridge-test",
+        servers: {
+          "t3-code": {
+            endpoint: "http://127.0.0.1:1/mcp",
+            authorizationHeader: "Bearer bridge-test",
+          },
+        },
         allocateConnectionId: Effect.sync(() => `connection-${++nextConnectionId}`),
         fetchImplementation: (_url, init) => {
           if (init?.method === "DELETE") {

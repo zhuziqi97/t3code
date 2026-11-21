@@ -428,8 +428,6 @@ it.layer(layerTest)("CodexDriver", (it) => {
       expect(codexAppServerArgs(settings.launchArgs)).toEqual([
         "app-server",
         "-c",
-        "thread_unload_delay_secs=0",
-        "-c",
         `marketplaces.openai-bundled.source=${JSON.stringify(bundledSource)}`,
         "-c",
         "model_auto_compact_token_limit=250000",

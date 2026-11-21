@@ -1,4 +1,5 @@
-import type { TFunction } from "i18next";
+import { useMessages } from "gt-react";
+import type { MessageResolver } from "../../i18n/messages";
 import { useTranslate } from "../../i18n";
 import { Spinner } from "~/components/ui/spinner";
 import { useNavigate } from "@tanstack/react-router";
@@ -15,7 +16,7 @@ import {
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
 type LocalizedPillView = ProviderUpdateSidebarPillView & {
-  readonly resolveText: (t: TFunction) => ProviderUpdateSidebarPillView | null;
+  readonly resolveText: (resolve: MessageResolver) => ProviderUpdateSidebarPillView | null;
 };
 // Matches the pill's `duration-180` class.
 const PROVIDER_UPDATE_PILL_EXIT_MS = 180;
@@ -49,6 +50,7 @@ function latestProviderCheckedAt(
 
 export function SidebarProviderUpdatePill() {
   const t = useTranslate();
+  const resolve = useMessages();
   const navigate = useNavigate();
   const providers = useAtomValue(primaryServerProvidersAtom);
   const [dismissedKeys, setDismissedKeys] = useState<ReadonlySet<string>>(() => new Set());
@@ -58,14 +60,18 @@ export function SidebarProviderUpdatePill() {
   const [dismissAfterExitKey, setDismissAfterExitKey] = useState<string | null>(null);
   const [visibleAfterIso, setVisibleAfterIso] = useState<string | undefined>();
   const effectiveVisibleAfterIso = visibleAfterIso ?? latestProviderCheckedAt(providers);
-  const resolveText = (_translate: TFunction) =>
-    getProviderUpdateSidebarPillView(providers, {
-      ...(effectiveVisibleAfterIso !== undefined
-        ? { visibleAfterIso: effectiveVisibleAfterIso }
-        : {}),
-      dismissedKeys,
-    });
-  const baseView = resolveText(t);
+  const resolveText = (resolve: MessageResolver) =>
+    getProviderUpdateSidebarPillView(
+      providers,
+      {
+        ...(effectiveVisibleAfterIso !== undefined
+          ? { visibleAfterIso: effectiveVisibleAfterIso }
+          : {}),
+        dismissedKeys,
+      },
+      resolve,
+    );
+  const baseView = resolveText(resolve);
   const view: LocalizedPillView | null = baseView ? { ...baseView, resolveText } : null;
 
   if (visibleAfterIso === undefined && effectiveVisibleAfterIso !== undefined) {
@@ -143,7 +149,7 @@ export function SidebarProviderUpdatePill() {
     return null;
   }
 
-  const displayedText = displayedView.resolveText(t) ?? displayedView;
+  const displayedText = displayedView.resolveText(resolve) ?? displayedView;
 
   return (
     <div

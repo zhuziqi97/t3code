@@ -2211,8 +2211,6 @@
   "e3ed00af71363d39": "No threads in these projects yet",
   "981053bcf95b3d3f": "No threads in {project} yet",
   "dfcce8b35ce4fb90": "Loading",
-  "fcaffe60c85338e2": "Could not load older threads. Retry",
-  "43acfc82011a8fc2": "{count, plural, one {Show {count} more} other {Show {count} more}}",
   "6392f9e0f61ae70c": "No projects yet",
   "01059eb93804de5a": "Add project",
   "19df05d390e2c3ae": "Show all projects",
@@ -2314,8 +2312,6 @@
   "a05932899932bf3f": "Opening links is unavailable in this browser.",
   "e0fcb9eb90aa21b2": "Unable to open link",
   "5a916ca92d569ef7": "Unable to open path",
-  "77c351e5a0a29bb8": "Unable to initialize libghostty-vt",
-  "27955c5552a789d2": "{message}. Close and reopen the terminal to retry.",
   "5c78a8ae7b71af1d": "Terminal",
   "310d656152b20e71": "Single",
   "1ae13c99cdda574f": "Stacked",
@@ -6182,7 +6178,6 @@
   "f61e2c755b9f0409": "Sign in",
   "938f33718a9bf909": "Instance ID is required.",
   "3420908229acba15": "Instance ID must be 64 characters or fewer.",
-  "c7e63b336455cfe2": "Use only letters, numbers, and dashes in the instance ID.",
   "c3cf8ee8fcb7d8a1": "An instance named ''{id}'' already exists.",
   "cd42b223a4fd2d6a": "Local ACP",
   "52b42ebfa36012b3": "Could not add provider instance",
@@ -6806,7 +6801,6 @@
   "096307d9c1a87c80": "Average CPU {average}%, peak CPU {peak}%",
   "988ef9cf99d06084": "Avg {average}%, peak {peak}%",
   "5602db67733bdfd7": "Checked {time}",
-  "b5343daba436ba2a": "Unable to open logs folder.",
   "753971ab309059ad": "Could not confirm signal",
   "ead636d5ac1ea127": "Failed to send {signal}.",
   "ce61f2be38d43077": "Could not send {signal}",
@@ -6913,7 +6907,6 @@
   "d5a0a7ab5da467aa": "Open pull requests in T3 Code",
   "55087c889e8a065d": "Device settings not saved on all environments",
   "73e76ba75c8d3096": "Could not update {environments}.",
-  "b16605b8957226ea": "Update",
   "f8571b5368d6d847": "Check versions",
   "388698edad9faf0e": "Agent device access",
   "6797e82cca21dbff": "Allow agents in this project to use the shared browser. Applies when the agent session next starts.",
@@ -6942,22 +6935,6 @@
   "fedb5397301d3392": "Fill panel",
   "2fdc83ad8b55eb11": "Responsive",
   "cf05007f2ba8ad42": "Rotate",
-  "862a3e2e99dfadb6": [
-    "Open simulators and emulators in the Device panel. Hub:",
-    " ",
-    {
-      "t": "DeviceToolVersions",
-      "i": 1
-    }
-  ],
-  "151f86b6dcd56244": [
-    "New agent sessions can open and drive these devices. agent-device:",
-    " ",
-    {
-      "t": "DeviceToolVersions",
-      "i": 1
-    }
-  ],
   "093c68324c1b1280": "Add profile",
   "1f404c456e5b2a0b": "Blank profile",
   "d7671e975097e9e4": "You’ve reached the profile limit",
@@ -7017,7 +6994,7 @@
   "5e97cb4f703ff372": "Composer: Start or Finish Dictation",
   "e49ba42e8e8596d2": "Queue: Send First Queued Message",
   "7f67d035b1db66f5": "Queue: Edit Last Queued Message",
-  "4c7c2842b696ccd8": "Pull Request: Copy Link or Thread",
+  "1b861498bd5fdded": "Pull Request: Copy Link or Thread ID",
   "7b10615fe0a4953b": "Sidebar: Toggle",
   "a2402b03426ef4d0": "Navigation: Back",
   "1a4779b37526c814": "Navigation: Forward",
@@ -7617,7 +7594,6 @@
   "0f0ae2813abd70e4": "Read throughput",
   "d032b2addb6f00dc": "Write throughput",
   "910a0c5f01321f81": "CPU speed limit",
-  "0360d3113c5a74f7": "{thermalState} thermal state",
   "17ed03182ae3b3bb": "Backend + agents",
   "5e590f8911f207fb": "Monitor overhead",
   "447821f33892635d": "Host & collection",
@@ -8929,15 +8905,8 @@
   "d903af728ec7958b": "Custom CSS",
   "23f99241c3cb2efc": "Saved with this theme and included when you export it. Web and desktop only. Rules that load remote files are ignored.",
   "f2d53b88fba93904": "Create theme",
-  "d6531e880f524370": "That file is {size}. Theme files are only a few KB, so this one was not read (limit {limit}).",
   "1a98f1561561e94a": "Too many copies of \"{label}\".",
   "959b1fbc95e5d7e8": "Theme JSON",
-  "8b4b656d6d50cc52": "Could not read that file. Paste the JSON below instead.",
-  "c03ed4ecaace67a2": "not a theme file",
-  "83adb766f1491abc": "could not install",
-  "7cc57d8bf164a8f1": "failed",
-  "2ac2459672385a04": "Theme added, but it could not be selected. Try again.",
-  "db0ab251a8700984": "That theme file is invalid.",
   "a6efeb99b479990a": "Choose files",
   "78b0857ec20b0d8a": "Reading…",
   "09b4af0d2181cbbb": "Drop T3 Code or VS Code .json files",
@@ -9573,7 +9542,6 @@
   "645434b1c788cf95": "No machine can switch to {label} now.",
   "aae7db6120929d16": "Every connected machine is already on {label}. This only saves the track.",
   "49ab4bbf2971d31b": "No machine can switch to {label} now. This only saves the track.",
-  "b3659c3917b3c6b0": "This connection cannot test device hosts.",
   "89ef4eae0e856d40": "Failed to save project actions",
   "0e4cd25642a2df00": "No available machine, or another action change is saving.",
   "3eca4140f377b50b": "Actions not saved",
@@ -9946,5 +9914,6 @@
   "7c5d597ee0a16e05": "Ran",
   "1ca097af346009a8": "The environment prepared {actual} instead of {expected}. Update the server before retrying.",
   "a5cef31d838615a3": "Undid {action} of {items}",
-  "ef0414bd5af40d0b": "Context for {model} compacts automatically when needed."
+  "ef0414bd5af40d0b": "Context for {model} compacts automatically when needed.",
+  "c24de5eb69373a55": "This {build} build ignores {track} releases. Review the update track in Settings to finish the switch."
 }

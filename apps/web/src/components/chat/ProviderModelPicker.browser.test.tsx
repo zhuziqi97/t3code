@@ -291,9 +291,13 @@ it("opens on the active provider when every favorite belongs to a disabled provi
   await expect.element(page.getByRole("option", { name: /Codex model/ })).toBeVisible();
 });
 
-it.each([false, true])(
-  "lists a newly available Antigravity model without searching (locked: %s)",
-  async (locked) => {
+it.each([
+  { locked: false, status: "ready" },
+  { locked: true, status: "ready" },
+  { locked: false, status: "error" },
+] as const)(
+  "lists and selects an available Antigravity model without searching (locked: $locked, status: $status)",
+  async ({ locked, status }) => {
     const instanceId = ProviderInstanceId.make("antigravity");
     const driver = ProviderDriverKind.make("antigravity");
     const models = [
@@ -307,7 +311,8 @@ it.each([false, true])(
         enabled: true,
         installed: true,
         version: null,
-        status: "ready",
+        status,
+        ...(status === "error" ? { modelsRetained: true } : {}),
         auth: { status: "authenticated" },
         checkedAt: "2026-01-01T00:00:00.000Z",
         models,
@@ -352,6 +357,14 @@ it.each([false, true])(
     await expect
       .element(screen.getByRole("status", { name: "Selected model" }))
       .toHaveTextContent("gemini-4-neon");
+    if (status === "error") {
+      await screen.getByRole("button", { name: "Choose model" }).click();
+      await search.fill("carbon");
+      await page.getByRole("option", { name: /Gemini 4 Carbon/ }).click();
+      await expect
+        .element(screen.getByRole("status", { name: "Selected model" }))
+        .toHaveTextContent("gemini-4-carbon");
+    }
   },
 );
 

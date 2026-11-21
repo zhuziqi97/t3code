@@ -1,19 +1,27 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { AcpRegistryOperationError, ProviderInstanceId } from "@t3tools/contracts";
+import {
+  AcpRegistryOperationError,
+  ProviderInstanceId,
+  ProviderSessionId,
+  ThreadId,
+} from "@t3tools/contracts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
+import { ProviderAdapterV2RuntimePolicy } from "@t3tools/provider-core/server/ProviderAdapter";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
 import * as TestProviderHost from "@t3tools/provider-testing/TestProviderHost";
 import { toCustomModelSetting } from "@t3tools/shared/model";
 import { AcpRegistrySettings } from "../settings.ts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
 import * as AcpRegistryRuntimeCoordinator from "./AcpRegistryRuntimeCoordinator.ts";
 import * as AcpRegistrySupport from "./AcpRegistrySupport.ts";
@@ -270,35 +278,10 @@ describe("acpRegistrySnapshotReadiness", () => {
     expect(snapshot.setup?.canAuthenticate).toBe(true);
   });
 
-  it("keeps each Mistral Vibe model's own thinking levels", () => {
-    const provider = buildCheckedAcpRegistrySnapshot({
-      ...identity,
-      settings: decodeSettings({ agentId: "mistral-vibe" }),
-      checkedAt: "2026-11-18T10:00:00.000Z",
-      inspection: {
-        status: "ready",
-        agentId: "mistral-vibe",
-        version: "3.1.1",
-        distribution: "binary",
-      },
-      probe: {
-        probe: {
-          instanceId: identity.instanceId,
-          ready: true,
-          icon: null,
-          authMethods: [],
-          models: [],
-          currentModelId: null,
-          configOptions: [],
-          sessionManagement: noSessionManagement,
-        },
-        slashCommands: [],
-        skills: [],
-      },
-    });
+  it("keeps Mistral Vibe thinking levels scoped to the model selected by each probe", () => {
     // Mistral Vibe 3.1.1 sends its levels under category "thinking", for the session's model only.
-    const vibeSession = (model: string, levels: ReadonlyArray<string>) =>
-      normalizeAcpRegistryLiveConfiguration([
+    const configOptions = (model: string, levels: ReadonlyArray<string>) =>
+      [
         {
           id: "model",
           name: "Model",
@@ -318,34 +301,47 @@ describe("acpRegistrySnapshotReadiness", () => {
           currentValue: "high",
           options: levels.map((value) => ({ value, name: value })),
         },
-      ]);
+      ] as const;
+    const snapshotFor = (model: string, levels: ReadonlyArray<string>) =>
+      buildCheckedAcpRegistrySnapshot({
+        ...identity,
+        settings: decodeSettings({ agentId: "mistral-vibe" }),
+        checkedAt: "2026-11-18T10:00:00.000Z",
+        inspection: {
+          status: "ready",
+          agentId: "mistral-vibe",
+          version: "3.1.1",
+          distribution: "binary",
+        },
+        probe: {
+          probe: acpRegistryProbeResult(identity.instanceId, {
+            sessionId: "test-session",
+            initializeResult: { protocolVersion: 1 },
+            sessionSetupResult: { configOptions: configOptions(model, levels) },
+            modelConfigId: "model",
+          }),
+          slashCommands: [],
+          skills: [],
+        },
+      });
     const thinking = (levels: ReadonlyArray<string>) => ({
       id: "thinking",
       label: "Thinking",
+      category: "thinking",
       type: "select",
       options: levels.map((id) => ({ id, label: id })),
       currentValue: "high",
       role: "reasoning",
     });
-    const descriptors = (snapshot: typeof provider) =>
+    const descriptors = (snapshot: ReturnType<typeof buildCheckedAcpRegistrySnapshot>) =>
       snapshot.models.map((model) => [model.slug, model.capabilities?.optionDescriptors ?? []]);
 
-    const onLarge = applyAcpRegistryLiveConfiguration(
-      provider,
-      vibeSession("mistral-large-4-0-3", ["low", "medium", "high"]),
-      [],
-    );
-    expect(descriptors(onLarge)).toEqual([
+    expect(descriptors(snapshotFor("mistral-large-4-0-3", ["low", "medium", "high"]))).toEqual([
       ["mistral-large-4-0-3", [thinking(["low", "medium", "high"])]],
       ["mistral-medium-3.5", []],
     ]);
-    const onMedium = applyAcpRegistryLiveConfiguration(
-      onLarge,
-      vibeSession("mistral-medium-3.5", ["off", "high"]),
-      [],
-    );
-    expect(descriptors(onMedium)).toEqual([
-      ["mistral-large-4-0-3", [thinking(["low", "medium", "high"])]],
+    expect(descriptors(snapshotFor("mistral-medium-3.5", ["off", "high"]))).toEqual([
+      ["mistral-large-4-0-3", []],
       ["mistral-medium-3.5", [thinking(["off", "high"])]],
     ]);
   });
@@ -637,14 +633,26 @@ createInterface({ input: process.stdin }).on("line", (line) => {
     });
   } else if (method === "session/new") {
     const modelIds = JSON.parse(readFileSync(process.argv[2], "utf8"));
+    const levels = modelIds[0] === "model-a" ? ["low", "high"] : ["medium", "high"];
     send({
       id,
       result: {
         sessionId: "probe-session",
-        models: {
-          currentModelId: modelIds[0],
-          availableModels: modelIds.map((modelId) => ({ modelId, name: modelId })),
-        },
+        configOptions: [{
+          id: "model",
+          name: "Model",
+          category: "model",
+          type: "select",
+          currentValue: modelIds[0],
+          options: modelIds.map((value) => ({ value, name: value })),
+        }, {
+          id: "thinking",
+          name: "Thinking",
+          category: "thought_level",
+          type: "select",
+          currentValue: "high",
+          options: levels.map((value) => ({ value, name: value })),
+        }],
       },
     });
     send({
@@ -696,46 +704,104 @@ it.layer(driverLayer, { excludeTestServices: true })("AcpRegistryDriver", (it) =
     }),
   );
 
-  it.effect("keeps a local agent's reported version through the next readiness check", () =>
-    Effect.gen(function* () {
-      const fileSystem = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "acp-driver-" });
-      const agentPath = path.join(directory, "agent.mjs");
-      const modelsPath = path.join(directory, "models.json");
-      yield* fileSystem.writeFileString(agentPath, fakeAgentSource);
-      yield* fileSystem.writeFileString(modelsPath, JSON.stringify(["model-a", "model-b"]));
+  it.effect(
+    "refreshes the global model list explicitly and keeps live session models separate",
+    () =>
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "acp-driver-" });
+        const agentPath = path.join(directory, "agent.mjs");
+        const modelsPath = path.join(directory, "models.json");
+        yield* fileSystem.writeFileString(agentPath, fakeAgentSource);
+        yield* fileSystem.writeFileString(modelsPath, JSON.stringify(["model-a", "model-b"]));
 
-      const instance = yield* AcpRegistryDriver.create({
-        instanceId: identity.instanceId,
-        displayName: identity.displayName,
-        enabled: true,
-        environment: [],
-        config: decodeSettings({ source: "local", commandPath: "agent" }),
-      }).pipe(
-        Effect.provideService(AcpRegistrySupport.AcpRegistryCatalog, {
-          ...catalogWithInspection({
-            status: "ready",
-            agentId: "agent",
-            version: null,
-            distribution: "local",
-          }),
-          resolve: () =>
-            Effect.succeed({
-              distribution: "local" as const,
-              spawn: { command: process.execPath, args: [agentPath, modelsPath] },
+        const instance = yield* AcpRegistryDriver.create({
+          instanceId: identity.instanceId,
+          displayName: identity.displayName,
+          enabled: true,
+          environment: [],
+          config: decodeSettings({ source: "local", commandPath: "agent" }),
+        }).pipe(
+          Effect.provideService(AcpRegistrySupport.AcpRegistryCatalog, {
+            ...catalogWithInspection({
+              status: "ready",
+              agentId: "agent",
+              version: null,
+              distribution: "local",
             }),
-        }),
-      );
-      const ready = yield* instance.snapshot.refresh;
-      expect(ready.version).toBeNull();
-      expect(instance.refreshModels).toBeDefined();
-      yield* instance.refreshModels!();
+            resolve: () =>
+              Effect.succeed({
+                distribution: "local" as const,
+                spawn: { command: process.execPath, args: [agentPath, modelsPath] },
+              }),
+          }),
+        );
+        const ready = yield* instance.snapshot.refresh;
+        expect(ready.version).toBeNull();
+        expect(ready.models.map(({ slug }) => slug)).toEqual(["default"]);
+        const discoverModels = Effect.fnUntraced(function* () {
+          const completed = yield* instance.snapshot.streamChanges.pipe(
+            Stream.filter(
+              (snapshot) =>
+                snapshot.metadataOperations?.some(
+                  (operation) => operation.kind === "models" && operation.state !== "running",
+                ) === true,
+            ),
+            Stream.take(1),
+            Stream.runCollect,
+            Effect.forkChild({ startImmediately: true }),
+          );
+          yield* instance.snapshot.startRefresh({
+            kind: "models",
+            work: (check) =>
+              (instance.invalidateCaches ?? Effect.void).pipe(
+                Effect.andThen(check),
+                Effect.andThen(instance.refreshModels!()),
+              ),
+          });
+          const snapshot = (yield* Fiber.join(completed))[0]!;
+          expect(
+            snapshot.metadataOperations?.find(({ kind }) => kind === "models")?.state,
+            snapshot.metadata?.models?.message,
+          ).toBe("completed");
+          return snapshot;
+        });
+        const discovered = yield* discoverModels();
+        expect(discovered.models.map(({ slug }) => slug)).toEqual(["model-a", "model-b"]);
+        expect(discovered.models[0]?.capabilities?.optionDescriptors).toMatchObject([
+          { id: "thinking", options: [{ id: "low" }, { id: "high" }] },
+        ]);
 
-      yield* instance.invalidateCaches ?? Effect.void;
-      const next = yield* instance.snapshot.refresh;
-      expect(next.version).toBe("1.5.9");
-    }),
+        yield* fileSystem.writeFileString(modelsPath, JSON.stringify(["model-c", "model-d"]));
+        const threadId = ThreadId.make("test-native-thread");
+        const modelSelection = { instanceId: identity.instanceId, model: null } as const;
+        const runtimePolicy = ProviderAdapterV2RuntimePolicy.make({
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          cwd: directory,
+        });
+        const session = yield* instance.orchestrationAdapter.openSession({
+          threadId,
+          providerSessionId: ProviderSessionId.make("test-native-session"),
+          modelSelection,
+          runtimePolicy,
+        });
+        const thread = yield* session.ensureThread({ threadId, modelSelection, runtimePolicy });
+        expect(thread.nativeMetadata?.models?.map(({ id }) => id)).toEqual(["model-c", "model-d"]);
+        expect(thread.nativeMetadata?.optionDescriptors).toMatchObject([
+          { id: "thinking", options: [{ id: "medium" }, { id: "high" }] },
+        ]);
+        expect((yield* instance.snapshot.getSnapshot).models).toEqual(discovered.models);
+
+        const rediscovered = yield* discoverModels();
+        expect(rediscovered.models.map(({ slug }) => slug)).toEqual(["model-c", "model-d"]);
+        expect(rediscovered.models[0]?.capabilities?.optionDescriptors).toMatchObject([
+          { id: "thinking", options: [{ id: "medium" }, { id: "high" }] },
+        ]);
+        const next = yield* instance.snapshot.refresh;
+        expect(next.version).toBe("1.5.9");
+      }),
   );
 });
 

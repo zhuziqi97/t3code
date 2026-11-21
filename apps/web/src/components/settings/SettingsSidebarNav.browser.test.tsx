@@ -73,7 +73,7 @@ it.each(["en", "zh"] as const)(
       name: language === "en" ? "Connections" : "连接",
       exact: true,
     });
-    const menu = connections.getByRole("treeitem", { name: "Convene", exact: true });
+    const menu = connections.getByRole("button", { name: "Convene", exact: true });
     const menuElement = menu.element();
     await menu.click();
     await expect
@@ -84,12 +84,12 @@ it.each(["en", "zh"] as const)(
     expect(router.state.location.hash).toBe("");
     const nextLanguage = language === "en" ? "zh" : "en";
     await act(async () => changeLanguage(nextLanguage));
-    expect(screen.getByRole("treeitem", { name: "Convene", exact: true }).element()).toBe(
+    expect(screen.getByRole("button", { name: "Convene", exact: true }).element()).toBe(
       menuElement,
     );
     expect(router.state.location.search).toEqual({ machine: "remote-server" });
     await screen
-      .getByRole("treeitem", { name: nextLanguage === "en" ? "General" : "通用", exact: true })
+      .getByRole("button", { name: nextLanguage === "en" ? "General" : "通用", exact: true })
       .click();
     await expect
       .element(screen.getByRole("heading", { name: "General destination" }))
@@ -125,7 +125,7 @@ it.each(["en", "zh"] as const)(
     expect(router.state.location.search).toEqual({ machine: "remote-server" });
     expect(router.state.location.hash).toBe("convene-connection");
     await screen
-      .getByRole("treeitem", { name: language === "en" ? "General" : "通用", exact: true })
+      .getByRole("button", { name: language === "en" ? "General" : "通用", exact: true })
       .click();
     await expect
       .element(screen.getByRole("heading", { name: "General destination" }))

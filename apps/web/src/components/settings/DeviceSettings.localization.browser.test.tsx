@@ -272,7 +272,7 @@ it("updates all selected environments once and reports a pending partial failure
   );
   expect(api.toast).toHaveBeenCalledExactlyOnceWith({
     type: "error",
-    title: "设备设置未能保存到所有执行环境",
+    title: "部分环境未保存设备设置",
     description: "无法更新 Native B。",
   });
 });
@@ -322,7 +322,7 @@ it("preserves a pending host draft after partial save failure and closes only af
   expect(button("保存主机").disabled).toBe(false);
   expect(api.toast).toHaveBeenCalledExactlyOnceWith({
     type: "error",
-    title: "设备主机未能保存到所有执行环境",
+    title: "未能在所有环境保存设备主机",
     description: "Native A: Raw failure\nNative B: Raw failure",
   });
   const native = api.update.mock.calls[0]![0].input.patch.deviceHosts[0];
@@ -373,7 +373,7 @@ it("reports host connection results in the current language without repeating pr
   expect(api.toast).toHaveBeenCalledExactlyOnceWith({
     type: "success",
     title: "Raw host：连接检查通过",
-    description: "所有所选执行环境均已连接，或可直接在本机使用。",
+    description: "在每个选中的环境中均已连接或本机已可用。",
   });
   expect(api.test.mock.calls).toEqual(ids.map((environmentId) => [{ environmentId, input: host }]));
 });

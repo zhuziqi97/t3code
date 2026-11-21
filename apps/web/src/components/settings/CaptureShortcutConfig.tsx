@@ -6,7 +6,9 @@ import {
 } from "@t3tools/contracts";
 import { parseKeybindingShortcut } from "@t3tools/shared/keybindings";
 import { FileDiff } from "@pierre/diffs/react";
-import { T, useGT, Var } from "gt-react";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
+import { useTranslate } from "../../i18n";
+import { formatSnapShotMessage } from "./snapShotMessages";
 import { parseDiffFromFile } from "@pierre/diffs";
 import { settlePromise } from "@t3tools/client-runtime/state/runtime";
 import * as Cause from "effect/Cause";
@@ -37,6 +39,8 @@ export function CaptureShortcutConfig({
   onComplete?: () => Promise<void>;
 }) {
   const gt = useGT();
+  const resolve = useMessages();
+  const t = useTranslate();
   const bridge = getDesktopSnapShotBridge();
   const resolvedTheme = useRenderedAppearance();
   const { copyToClipboard, isCopied } = useCopyToClipboard();
@@ -107,7 +111,7 @@ export function CaptureShortcutConfig({
     } else {
       const cause = Cause.squash(previewed.cause);
       setError({
-        message: gt("Couldn't prepare the changes. Check Advanced for help."),
+        message: msg("Couldn't prepare the changes. Check Advanced for help."),
         ...(cause instanceof Error ? { detail: cause.message } : {}),
       });
     }
@@ -132,7 +136,7 @@ export function CaptureShortcutConfig({
     if (saved._tag === "Failure") {
       const cause = Cause.squash(saved.cause);
       setError({
-        message: gt("Couldn't save your shortcut. Review the changes and try again."),
+        message: msg("Couldn't save your shortcut. Review the changes and try again."),
         ...(cause instanceof Error ? { detail: cause.message } : {}),
       });
       setPreview(null);
@@ -240,7 +244,7 @@ export function CaptureShortcutConfig({
       )}
       {error ? (
         <p role="alert" className="text-destructive">
-          {error.message}
+          {resolve(error.message)}
         </p>
       ) : null}
       {state.shortcutActionRegistered === false && state.shortcutMessage ? (
@@ -260,7 +264,9 @@ export function CaptureShortcutConfig({
               <p className="font-medium text-foreground">
                 <T>Troubleshooting</T>
               </p>
-              <p className="break-words">{error?.detail ?? result?.warning}</p>
+              <p className="break-words">
+                {formatSnapShotMessage((error?.detail ?? result?.warning)!, t)}
+              </p>
             </div>
           ) : null}
           <div className="space-y-1">

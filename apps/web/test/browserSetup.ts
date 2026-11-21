@@ -1,4 +1,4 @@
-import { beforeEach } from "vite-plus/test";
+import { beforeEach, vi } from "vite-plus/test";
 import { commands } from "vite-plus/test/browser";
 
 import { initializeI18n } from "../src/i18n/initializeI18n";
@@ -16,6 +16,17 @@ declare module "vite-plus/test/browser" {
 // running and can move the mouse after its own afterEach.
 beforeEach(async () => {
   await commands.resetPointer();
+});
+
+vi.mock(import("../src/i18n"), async (original) => {
+  const legacy = await original();
+  return {
+    ...legacy,
+    async changeLanguage(language: Parameters<typeof legacy.changeLanguage>[0]) {
+      const { requestLocale } = await import("../src/i18n/runtime");
+      await Promise.all([legacy.changeLanguage(language), requestLocale(language)]);
+    },
+  };
 });
 
 // The app initializes GT at startup; components using its hooks need the same here.

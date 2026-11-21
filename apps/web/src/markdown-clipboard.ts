@@ -561,7 +561,7 @@ function cloneWithListMarkers(range: Range, container: Element): void {
   }
   const ancestor = range.commonAncestorContainer;
   const withinList = isList(ancestor);
-  container.appendChild(range.cloneContents());
+  container.appendChild(cloneMarkdownClipboardRange(range));
   if (withinList) {
     // Items copied within one list clone without the list around them.
     const list = ancestor.cloneNode(false) as Element;

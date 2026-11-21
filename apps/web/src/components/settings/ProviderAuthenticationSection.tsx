@@ -1,5 +1,4 @@
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
-import { m } from "~/i18n/messages";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -45,6 +44,7 @@ export function ProviderAuthenticationSection({
   readonly readOnly: boolean;
 }) {
   const gt = useGT();
+  const resolve = useMessages();
   const target = { environmentId, input: { instanceId } };
   const query = useEnvironmentQuery(serverEnvironment.providerAuthState(target), useMessages());
   const commands = { reportFailure: false, reportDefect: false };
@@ -55,7 +55,13 @@ export function ProviderAuthenticationSection({
   const logout = useAtomCommand(serverEnvironment.logoutProviderAuth, commands);
   const [methodId, setMethodId] = useState("");
   const [draft, setDraft] = useState({ id: "", values: {} as Record<string, string> });
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Error | string | null>(null);
+  const errorText =
+    error instanceof Error
+      ? (thrownErrorMessage(error, resolve) ?? error.message)
+      : error === null
+        ? null
+        : resolve(error);
   const [pending, setPending] = useState(false);
   const pendingRef = useRef(false);
   const terminalQueue = useRef<ProviderAuthRespondInput[]>([]);
@@ -122,14 +128,10 @@ export function ProviderAuthenticationSection({
       if (result._tag === "Success") succeeded = true;
       else if (!isAtomCommandInterrupted(result)) {
         const failure = squashAtomCommandFailure(result);
-        setError(
-          failure instanceof Error
-            ? (thrownErrorMessage(failure, m) ?? failure.message)
-            : gt("Provider sign-in failed. Try again."),
-        );
+        setError(failure instanceof Error ? failure : msg("Provider sign-in failed. Try again."));
       }
     } catch {
-      setError(gt("Provider sign-in failed. Try again."));
+      setError(msg("Provider sign-in failed. Try again."));
     }
     pendingRef.current = false;
     setPending(false);
@@ -149,7 +151,7 @@ export function ProviderAuthenticationSection({
   async function openBrowser() {
     if (!url || readOnly) return;
     if (!isWebUrl(url)) {
-      setError(gt("This sign-in link is not a web address, so it was not opened."));
+      setError(msg("This sign-in link is not a web address, so it was not opened."));
       return;
     }
     const requiresConsent = interaction?.type === "browser" && interaction.requiresConsent;
@@ -166,7 +168,7 @@ export function ProviderAuthenticationSection({
       setError(null);
     } catch {
       pending?.close();
-      setError(gt("Could not open the sign-in page. Copy the link and open it in your browser."));
+      setError(msg("Could not open the sign-in page. Copy the link and open it in your browser."));
     }
   }
 
@@ -263,7 +265,7 @@ export function ProviderAuthenticationSection({
                           await copied;
                           if (interaction?.type === "browser" && interaction.requiresConsent)
                             await send({ type: "browser", action: "accept" });
-                        })().catch(() => setError(gt("Could not copy the sign-in link.")));
+                        })().catch(() => setError(msg("Could not copy the sign-in link.")));
                       }}
                     >
                       <CopyIcon />
@@ -416,14 +418,14 @@ export function ProviderAuthenticationSection({
                         if (result._tag !== "Success") {
                           terminalQueue.current = [];
                           if (!isAtomCommandInterrupted(result))
-                            setError(gt("The provider sign-in terminal is no longer available."));
+                            setError(msg("The provider sign-in terminal is no longer available."));
                           break;
                         }
                       }
                     })()
                       .catch(() => {
                         terminalQueue.current = [];
-                        setError(gt("Could not send input to the provider sign-in terminal."));
+                        setError(msg("Could not send input to the provider sign-in terminal."));
                       })
                       .finally(() => {
                         terminalSending.current = false;
@@ -510,7 +512,7 @@ export function ProviderAuthenticationSection({
           ) : null}
           {error || query.error ? (
             <p role="alert" className="py-2 text-xs text-destructive">
-              {error ?? query.error}
+              {errorText ?? query.error}
             </p>
           ) : null}
         </>

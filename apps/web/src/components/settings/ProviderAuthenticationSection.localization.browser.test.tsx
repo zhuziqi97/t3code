@@ -119,7 +119,7 @@ it("preserves credential drafts and submits to the same environment after switch
   expect(container.querySelector<HTMLInputElement>("input")?.value).toBe(
     "Controlled-Raw-Credential",
   );
-  expect(container.textContent).toContain("在下方输入登录凭据。");
+  expect(container.textContent).toContain("在下方输入凭据。");
   expect(container.textContent).toContain("Provider supplied label");
   expect(state.respond).not.toHaveBeenCalled();
   await act(() =>
@@ -158,7 +158,7 @@ it("relocalizes a local sign-in error while keeping the draft available for retr
   await act(async () => {
     await changeLanguage("zh");
   });
-  expect(container.textContent).toContain("智能体提供方登录失败，请重试。");
+  expect(container.textContent).toContain("提供方登录失败，请重试。");
   expect(state.respond).toHaveBeenCalledTimes(1);
 });
 

@@ -67,10 +67,25 @@ function isProviderInstanceHealthy(entry: ProviderInstanceEntry): boolean {
   );
 }
 
-/** Also true after a check that only failed or ran late: an earlier check's models stay offered. */
 export function isProviderInstancePickerReady(entry: ProviderInstanceEntry): boolean {
+  const { auth, modelsRetained, subProviders } = entry.snapshot;
+  if (entry.status === "error") {
+    return (
+      entry.enabled &&
+      entry.isAvailable &&
+      entry.installed === true &&
+      auth.status !== "unauthenticated" &&
+      subProviders === undefined &&
+      modelsRetained === true &&
+      entry.models.length > 0
+    );
+  }
+  const canStart =
+    entry.isAvailable && canStartProviderSession({ ...entry.snapshot, enabled: entry.enabled });
   return (
-    entry.isAvailable && canStartProviderSession({ ...entry.snapshot, enabled: entry.enabled })
+    canStart &&
+    (entry.status !== "warning" ||
+      (entry.models.length > 0 && (subProviders === undefined || isProviderInstanceHealthy(entry))))
   );
 }
 

@@ -2,6 +2,8 @@ import { formatDesktopUpdateMessage } from "@t3tools/client-runtime/i18n";
 import type { TFunction } from "i18next";
 import { i18n } from "../i18n";
 import type { DesktopUpdateActionResult, DesktopUpdateState } from "@t3tools/contracts";
+import { desktopUpdateChannelOf } from "@t3tools/shared/cliRelease";
+import { msg } from "gt-react";
 
 import { m, type MessageResolver } from "../i18n/messages";
 
@@ -184,6 +186,18 @@ export function getDesktopUpdateButtonTooltip(
     return state.message === null
       ? translate("update.failed")
       : formatDesktopUpdateMessage(state.message, translate);
+  }
+  const build = desktopUpdateChannelOf(state.currentVersion);
+  if (state.status === "up-to-date" && build !== state.channel) {
+    return m(
+      msg(
+        "This {build} build ignores {track} releases. Review the update track in Settings to finish the switch.",
+        {
+          build: translate(build === "nightly" ? "about.nightly" : "about.stable"),
+          track: translate(state.channel === "nightly" ? "about.nightly" : "about.stable"),
+        },
+      ),
+    );
   }
   return translate("update.current");
 }

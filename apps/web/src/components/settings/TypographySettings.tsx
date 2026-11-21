@@ -13,6 +13,7 @@ import {
 } from "@t3tools/contracts/settings";
 import * as Schema from "effect/Schema";
 import { useGT } from "gt-react";
+import { useTranslate } from "../../i18n";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { useScopedSettings, useUpdateScopedSettings } from "./useScopedSettings";
 import { isMacPlatform } from "../../lib/utils";
@@ -533,6 +534,7 @@ function FontFamilySettingsRow({
         value={draft}
       />
     );
+  const t = useTranslate();
   const control = (
     <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto @min-[32rem]/settings-row:flex-nowrap">
       <div className="min-w-36 flex-1 sm:w-44 sm:flex-none">{familyControl}</div>
@@ -547,13 +549,13 @@ function FontFamilySettingsRow({
         }}
       >
         <SelectTrigger size="sm" className="w-22 shrink-0" aria-label={size.label}>
-          <SelectValue>{size.value} px</SelectValue>
+          <SelectValue>{t("appearance.font.pixels", { pixels: size.value })}</SelectValue>
         </SelectTrigger>
         <SelectPopup align="end" alignItemWithTrigger={false}>
           {Array.from({ length: size.max - size.min + 1 }, (_, index) => size.min + index).map(
             (px) => (
               <SelectItem hideIndicator key={px} value={String(px)}>
-                {px} px
+                {t("appearance.font.pixels", { pixels: px })}
               </SelectItem>
             ),
           )}

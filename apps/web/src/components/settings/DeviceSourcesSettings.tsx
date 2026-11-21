@@ -1,3 +1,5 @@
+import { useTranslate } from "../../i18n";
+import { formatDeviceMessage } from "../device/deviceMessages";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { useAtomValue } from "@effect/atom-react";
 import { Fragment, useState, type ReactNode } from "react";
@@ -163,6 +165,7 @@ export function DeviceSourcesSettings(props: {
   readonly supportsSimlock: boolean;
 }) {
   const gt = useGT();
+  const t = useTranslate();
   const m = useMessages();
   const { scope, environments, connectedEnvironments, environment: primary } = useSettingsScope();
   const projectScope = scope.kind === "project" || scope.kind === "checkout";
@@ -209,7 +212,7 @@ export function DeviceSourcesSettings(props: {
     if (unwritable.length > 0) {
       toastManager.add({
         type: "error",
-        title: failedTitle,
+        title: resolveNow(failedTitle),
         description: gt("This connection cannot change settings on {environments}.", {
           environments: unwritable.map((patch) => name(patch.environmentId)).join(", "),
         }),
@@ -230,7 +233,11 @@ export function DeviceSourcesSettings(props: {
         : [];
     });
     if (failed.length === 0) return true;
-    toastManager.add({ type: "error", title: failedTitle, description: failed.join("\n") });
+    toastManager.add({
+      type: "error",
+      title: resolveNow(failedTitle),
+      description: failed.join("\n"),
+    });
     return false;
   };
 
@@ -255,13 +262,15 @@ export function DeviceSourcesSettings(props: {
               ),
             },
           })),
-        remove ? gt("Device host not removed everywhere") : gt("Device host not saved everywhere"),
+        remove
+          ? msg("Device host not removed everywhere")
+          : msg("Device host not saved everywhere"),
       );
       if (saved) setEditing(null);
     } catch (error) {
       toastManager.add({
         type: "error",
-        title: gt("Device host not saved"),
+        title: resolveNow(msg("Device host not saved")),
         description:
           error instanceof Error
             ? (thrownErrorMessage(error, resolveNow) ?? error.message)
@@ -288,7 +297,7 @@ export function DeviceSourcesSettings(props: {
           ),
         },
       })),
-      remove ? gt("Expo host not removed everywhere") : gt("Expo host not saved everywhere"),
+      remove ? msg("Expo host not removed everywhere") : msg("Expo host not saved everywhere"),
     );
     if (saved) setEditing(null);
   };
@@ -309,7 +318,7 @@ export function DeviceSourcesSettings(props: {
         environmentId: patch.environmentId,
         patch: { simlockDeviceHosts: patch.hosts },
       })),
-      gt("Simlock host not saved everywhere"),
+      msg("Simlock host not saved everywhere"),
     );
     if (saved) setEditing(null);
   };
@@ -346,15 +355,15 @@ export function DeviceSourcesSettings(props: {
             "{count, plural, one {{host}: {count} of {total} environments failed} other {{host}: {count} of {total} environments failed}}",
             { host: host.label, count: failed.length, total: targets.length },
           )
-        : gt("{host}: connection checks passed", { host: host.label }),
+        : resolveNow(msg("{host}: connection checks passed", { host: host.label })),
       description: failed.length
         ? failed
             .map((target) => {
               const result = checked[target.environmentId];
-              return `${target.label}: ${result?.status === "failed" ? result.error : gt("failed", { $context: "connection check result" })}`;
+              return `${target.label}: ${result?.status === "failed" ? formatDeviceMessage(result.error, t) : gt("failed", { $context: "connection check result" })}`;
             })
             .join("\n")
-        : gt("Connected or already available locally on each selected environment."),
+        : resolveNow(msg("Connected or already available locally on each selected environment.")),
     });
   };
 

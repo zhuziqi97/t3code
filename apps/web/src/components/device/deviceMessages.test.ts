@@ -52,7 +52,7 @@ it("translates current host guidance while preserving SDK paths and unrecognized
     ],
   };
   expect(platformSetupStatus(withHosts, "ios", resolveChineseMessage).message).toContain(
-    "Xcode 设置 → 组件",
+    "Xcode 设置 → Components",
   );
   expect(platformSetupStatus(withHosts, "android", resolveChineseMessage)).toEqual({
     ready: false,

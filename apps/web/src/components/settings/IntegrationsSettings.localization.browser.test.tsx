@@ -222,11 +222,11 @@ it("keeps an uncommitted viewport width through a locale switch and saves native
   await click("默认浏览器外观");
   await choose("深色");
   expect(state.update).toHaveBeenLastCalledWith({ browserDefaultAppearance: "dark" });
-  await click("浏览器录制帧率");
+  await click("浏览器录屏帧率");
   await choose("60 帧/秒");
   expect(state.update).toHaveBeenLastCalledWith({ browserRecordingFrameRate: 60 });
-  await click("链接打开位置");
-  await choose("系统默认浏览器");
+  await click("链接打开方式");
+  await choose("你的默认浏览器");
   expect(state.update).toHaveBeenLastCalledWith({ browserLinkTarget: "system" });
 });
 
@@ -245,7 +245,7 @@ it("retains profile rename drafts and scans only when the add menu opens", async
   expect(state.update).toHaveBeenCalledExactlyOnceWith({
     browserProfiles: [{ id: "profile-work", name: "Raw Desk", kind: "persistent" }],
   });
-  await click("添加配置");
+  await click("添加浏览器配置");
   expect(state.scan).toHaveBeenCalledTimes(1);
   await language("en");
   expect(state.scan).toHaveBeenCalledTimes(1);
@@ -266,8 +266,8 @@ it("cancels removal without writes, then waits for native profile cleanup across
   expect(state.clearCookies).not.toHaveBeenCalled();
   expect(state.clearServer).not.toHaveBeenCalled();
   await click("Work Raw 的选项");
-  await click("移除配置及数据");
-  await click("移除配置");
+  await click("移除浏览器配置和数据");
+  await click("移除浏览器配置");
   await language("en");
   expect(button("Removing…").disabled).toBe(true);
   expect(state.update).not.toHaveBeenCalled();
@@ -297,9 +297,9 @@ it("keeps a failed removal open for retry and retranslates the stored error with
   await click("Remove profile");
   expect(document.body.textContent).toContain("Profile data could not be deleted. Try again.");
   await language("zh");
-  expect(document.body.textContent).toContain("无法删除配置数据，请重试。");
+  expect(document.body.textContent).toContain("无法删除浏览器配置数据，请重试。");
   expect(state.update).not.toHaveBeenCalled();
-  expect(button("移除配置").disabled).toBe(false);
+  expect(button("移除浏览器配置").disabled).toBe(false);
 });
 
 it("confirms clearing the built-in profile and reports completion in the current language", async () => {
@@ -311,13 +311,13 @@ it("confirms clearing the built-in profile and reports completion in the current
   await click("Default options");
   await click("Clear cookies and cache");
   await language("zh");
-  expect(document.body.textContent).toContain("清除“默认”的 Cookie 和缓存？");
+  expect(document.body.textContent).toContain("清除“Default”的 Cookie 和缓存？");
   await click("清除数据");
   expect(state.toast).not.toHaveBeenCalled();
   await act(async () => resolve());
   expect(state.toast).toHaveBeenCalledExactlyOnceWith({
     type: "success",
-    title: "已清除 默认 的 Cookie 和缓存",
+    title: "已清除 Default 的 Cookie 和缓存",
   });
   expect(state.update).not.toHaveBeenCalled();
 });

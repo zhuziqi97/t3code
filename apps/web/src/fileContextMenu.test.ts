@@ -2,6 +2,7 @@ import { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { AsyncResult } from "effect/reactivity";
+import { m } from "./i18n/messages";
 
 const state = vi.hoisted(() => ({
   preference: null as string | null,
@@ -16,6 +17,10 @@ vi.mock("@effect/atom-react", () => ({
     shellRevealInFileManagerKind: "files",
     environment: { platform: { os: "linux" } },
   }),
+}));
+vi.mock(import("gt-react"), async (original) => ({
+  ...(await original()),
+  useMessages: () => m,
 }));
 vi.mock("./state/server", () => ({ serverEnvironment: { configValueAtom: (id: unknown) => id } }));
 vi.mock("./state/shell", () => ({ shellEnvironment: { openInEditor: "openInEditor" } }));

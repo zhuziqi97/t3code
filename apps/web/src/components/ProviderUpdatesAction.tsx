@@ -118,13 +118,15 @@ export function useProviderUpdates() {
           ...view,
           title: (
             <ProviderUpdateText
-              render={() => getProviderUpdateRunToastView(runs, m)?.title ?? ""}
+              render={(resolve) => getProviderUpdateRunToastView(runs, resolve)?.title ?? ""}
             />
           ),
           description: (
             <span className="whitespace-pre-line">
               <ProviderUpdateText
-                render={() => getProviderUpdateRunToastView(runs, m)?.description ?? ""}
+                render={(resolve) =>
+                  getProviderUpdateRunToastView(runs, resolve)?.description ?? ""
+                }
               />
             </span>
           ),

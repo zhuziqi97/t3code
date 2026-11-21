@@ -1,11 +1,12 @@
+import { m } from "../../i18n/messages";
 import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { CircleIcon } from "lucide-react";
 import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-vi.mock("../../i18n", async (importOriginal) => {
-  const original = await importOriginal<typeof import("../../i18n")>();
-  return { ...original, useTranslate: () => original.i18n.t.bind(original.i18n) };
+vi.mock(import("gt-react"), async (importOriginal) => {
+  const original = await importOriginal();
+  return { ...original, useGT: () => original.gtFallback, useMessages: () => m };
 });
 
 import { PullRequestFiltersMenu, pullRequestProjectKey } from "./PullRequestListFilters";

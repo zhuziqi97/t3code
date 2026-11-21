@@ -23,7 +23,7 @@ import {
   useState,
 } from "react";
 import { flushSync } from "react-dom";
-import { T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "gt-react";
 import {
   AuthOrchestrationOperateScope,
   AuthSettingsWriteScope,
@@ -446,6 +446,8 @@ function WhenExpressionNodeEditor({
   }
 
   const operator: BooleanOperator = node.type === "or" ? "or" : "and";
+  const andLabel = gt("and", { $context: "logical operator in a when clause" });
+  const orLabel = gt("or", { $context: "logical operator in a when clause" });
   const children = flattenWhenChildren(node, operator);
   const childKeyCounts = new Map<string, number>();
   const childEntries = children.map((child) => {
@@ -517,15 +519,11 @@ function WhenExpressionNodeEditor({
       <div className="flex flex-wrap items-center gap-2">
         <Select value={operator} onValueChange={(value) => setOperator(value as BooleanOperator)}>
           <SelectTrigger size="compact" className="w-24">
-            <SelectValue />
+            <SelectValue>{operator === "and" ? andLabel : orLabel}</SelectValue>
           </SelectTrigger>
           <SelectContent alignItemWithTrigger={false} matchTriggerWidth={false}>
-            <SelectItem value="and">
-              {gt("and", { $context: "logical operator in a when clause" })}
-            </SelectItem>
-            <SelectItem value="or">
-              {gt("or", { $context: "logical operator in a when clause" })}
-            </SelectItem>
+            <SelectItem value="and">{andLabel}</SelectItem>
+            <SelectItem value="or">{orLabel}</SelectItem>
           </SelectContent>
         </Select>
         <Button type="button" variant="outline" size="compact" onClick={addCondition}>
@@ -1231,7 +1229,7 @@ function NewKeybindingCommandSelect({
       onValueChange={(value) => draft.setCommandDraft(value as KeybindingCommand)}
     >
       <SelectTrigger size="sm" className={className}>
-        <SelectValue placeholder={gt("Command")} />
+        <SelectValue placeholder={gt("Command")}>{draft.commandLabelText ?? undefined}</SelectValue>
       </SelectTrigger>
       <SelectContent alignItemWithTrigger={false} matchTriggerWidth={false} className="max-h-72">
         {commandOptions.map((command) => (
@@ -1531,11 +1529,11 @@ export function KeybindingsSettingsPanel() {
       if (!isAtomCommandInterrupted(failed)) {
         const error = squashAtomCommandFailure(failed);
         toastManager.add({
-          title: gt("Unable to save keybinding"),
+          title: resolveMessage(msg("Unable to save keybinding")),
           description:
             error instanceof Error
               ? (thrownErrorMessage(error, resolveMessage) ?? error.message)
-              : gt("The keybinding was not saved."),
+              : resolveMessage(msg("The keybinding was not saved.")),
           type: "error",
         });
       }
@@ -1565,11 +1563,11 @@ export function KeybindingsSettingsPanel() {
       if (result?._tag === "Failure" && !isAtomCommandInterrupted(result)) {
         const error = squashAtomCommandFailure(result);
         toastManager.add({
-          title: gt("Unable to remove keybinding"),
+          title: resolveMessage(msg("Unable to remove keybinding")),
           description:
             error instanceof Error
               ? (thrownErrorMessage(error, resolveMessage) ?? error.message)
-              : gt("The keybinding was not removed."),
+              : resolveMessage(msg("The keybinding was not removed.")),
           type: "error",
         });
       }

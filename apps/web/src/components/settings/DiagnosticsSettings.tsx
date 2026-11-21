@@ -852,9 +852,8 @@ function DiagnosticsSettingsBody() {
       setIsOpeningLogsDirectory(false);
       if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
         const error = squashAtomCommandFailure(result);
-        setOpenLogsDirectoryError({
-          message: thrownErrorMessage(error, resolveMessage) ?? gt("Unable to open logs folder."),
-        });
+        const message = thrownErrorMessage(error, resolveMessage);
+        setOpenLogsDirectoryError(message ? { message } : { key: "diagnostics.logs.open-failed" });
       }
     })();
   };
@@ -931,7 +930,7 @@ function DiagnosticsSettingsBody() {
         const error = squashAtomCommandFailure(result);
         toastManager.add({
           type: "error",
-          title: gt("Could not send {signal}", { signal }),
+          title: resolveMessage(msg("Could not send {signal}", { signal })),
           description:
             error instanceof Error
               ? (thrownErrorMessage(error, resolveMessage) ?? error.message)

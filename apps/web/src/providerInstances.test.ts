@@ -128,7 +128,10 @@ describe("isProviderInstancePickerReady", () => {
 
     expect(ready({ ...failed, modelsRetained: true })).toBe(true);
     expect(ready(failed)).toBe(false);
-    expect(ready({ ...failed, status: "warning", auth: { status: "unknown" } })).toBe(false);
+    expect(ready({ ...failed, modelsRetained: true, auth: { status: "unauthenticated" } })).toBe(
+      false,
+    );
+    expect(ready({ ...failed, status: "warning", auth: { status: "unknown" } })).toBe(true);
   });
 });
 

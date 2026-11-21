@@ -23,7 +23,7 @@ function setup() {
     });
   const view = {
     results: null as ReadonlyArray<OpenVsxThemeExtension> | null,
-    error: null as string | null,
+    error: null as Error | string | null,
     isSearching: false,
   };
   const sink: ThemeSearchView = {

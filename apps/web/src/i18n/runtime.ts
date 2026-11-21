@@ -1,4 +1,8 @@
-import { isLanguagePreference, resolveLanguage } from "@t3tools/client-runtime/i18n";
+import {
+  isLanguagePreference,
+  resolveLanguage,
+  type SupportedLanguage,
+} from "@t3tools/client-runtime/i18n";
 import { getTranslationsSnapshot } from "gt-react";
 
 import {
@@ -52,9 +56,13 @@ function activateLocale(locale: string): void {
   for (const listener of listeners) listener();
 }
 
+export function requestLocale(locale: SupportedLanguage): Promise<void> {
+  requestedLocale = locale;
+  return whenLocaleReady();
+}
+
 function applyLanguageSetting(): void {
-  requestedLocale = resolveLanguage(getClientSettings().languagePreference, navigator.languages);
-  void whenLocaleReady();
+  void requestLocale(resolveLanguage(getClientSettings().languagePreference, navigator.languages));
 }
 
 /** GT's own locale setters write the saved setting, which stays the only source of truth. */

@@ -121,12 +121,12 @@ it("switches preset and wake labels to Chinese while preserving the wake instant
     );
     expect(chinese.find(({ id }) => id === "at:tomorrow:09:00")).toMatchObject({
       label: "明天",
-      whenLabel: "9:00",
+      whenLabel: "09:00",
     });
     expect(chinese.find(({ id }) => id === "at:monday:09:00")?.whenLabel).toContain("周一");
     expect(
       snoozeWakeDescription(localDate(2026, 4, 9, 9).toISOString(), now, "24-hour", i18n.t),
-    ).toBe("明天 9:00");
+    ).toBe("明天 09:00");
   } finally {
     await changeLanguage("en");
   }

@@ -48,6 +48,7 @@ import { getLocalStorageItem, useLocalStorage } from "./useLocalStorage";
 import * as Schema from "effect/Schema";
 import { useAtomValue } from "@effect/atom-react";
 import { defaultProjectFallbackReadyAtom } from "../state/projects";
+import { i18n } from "../i18n";
 import { useThreadRouteTarget } from "./useThreadRouteTarget";
 import { readUnloadedThreadCount } from "../state/olderSettledShelf";
 import { resolveProjectDefaultProviderModelSelection } from "../providerInstances";
@@ -161,13 +162,12 @@ export function createNewThreadHandler(router: AnyRouter) {
         candidate.id === projectRef.projectId &&
         candidate.environmentId === projectRef.environmentId,
     );
+    if (project === undefined) {
+      return Promise.reject(new Error(i18n.t("scope.projectMissing")));
+    }
     const abandonedSinceRequest = () =>
-      routeChangedSinceRequest() || (project !== undefined && readProject(projectRef) === null);
-    const projectSettings = resolveProjectSettings(
-      targetServerSettings,
-      project?.id ?? null,
-      project,
-    );
+      routeChangedSinceRequest() || readProject(projectRef) === null;
+    const projectSettings = resolveProjectSettings(targetServerSettings, project.id, project);
     const configuredDefaultModelSelection = projectSettings.settings.defaultModelSelection ?? null;
     const fallbackResolution = resolveNewThreadModelSelection({
       defaultSelection:
@@ -201,7 +201,6 @@ export function createNewThreadHandler(router: AnyRouter) {
       // Environment queries wait for a connection, so reading the project file on an
       // offline machine would never settle and the draft would never open.
       const consultProjectFile =
-        project !== undefined &&
         projectSettings.settings.defaultThreadEnvMode === null &&
         appAtomRegistry
           .get(environmentSummaries.connectedEnvironmentIdsAtom)
@@ -230,24 +229,7 @@ export function createNewThreadHandler(router: AnyRouter) {
           ) > 0,
       });
     };
-    const logicalProjectKey = project
-      ? deriveLogicalProjectKeyFromSettings(project, projectGroupingSettings)
-      : scopedProjectKey(projectRef);
-    // Another opener (home's own first-project draft) may have reached this project's draft first.
-    // Matches lag the location during a navigation, so compare against the location.
-    const resultIfAbandoned = () => {
-      const draft = getDraftSessionByLogicalProjectKey(logicalProjectKey);
-      if (draft === null || draft.promotedTo != null || readProject(projectRef) === null) {
-        return null;
-      }
-      const draftHref = router.buildLocation({
-        to: "/draft/$draftId",
-        params: { draftId: draft.draftId },
-      }).href;
-      return router.state.location.href === draftHref
-        ? { draftId: draft.draftId, threadId: draft.threadId }
-        : null;
-    };
+    const logicalProjectKey = deriveLogicalProjectKeyFromSettings(project, projectGroupingSettings);
     const hasBranchOption = options?.branch !== undefined;
     const hasWorktreePathOption = options?.worktreePath !== undefined;
     const hasEnvModeOption = options?.envMode !== undefined;
@@ -271,6 +253,37 @@ export function createNewThreadHandler(router: AnyRouter) {
       !composerDraftHasUserContent(getComposerDraft(reusableStoredDraftThread.draftId))
         ? reusableStoredDraftThread
         : null;
+    const openedConcurrentDraft = async () => {
+      if (
+        hasBranchOption ||
+        hasWorktreePathOption ||
+        hasEnvModeOption ||
+        hasStartFromOriginOption
+      ) {
+        return null;
+      }
+      // Compare the settled location, since matches can lag and a lazy route can be abandoned.
+      await router.latestLoadPromise;
+      const draft = getDraftSessionByLogicalProjectKey(logicalProjectKey);
+      if (
+        draft === null ||
+        draft.environmentId !== projectRef.environmentId ||
+        draft.projectId !== projectRef.projectId ||
+        readProject(projectRef) === null ||
+        draft.promotedTo != null ||
+        readThreadShell(scopeThreadRef(draft.environmentId, draft.threadId)) !== null ||
+        (draft.draftId === storedDraftThread?.draftId && emptyStoredDraftThread === null)
+      ) {
+        return null;
+      }
+      const draftHref = router.buildLocation({
+        to: "/draft/$draftId",
+        params: { draftId: draft.draftId },
+      }).href;
+      return router.state.location.href === draftHref
+        ? { draftId: draft.draftId, threadId: draft.threadId }
+        : null;
+    };
     const latestActiveDraftThread: DraftThreadState | null = currentRouteTarget
       ? currentRouteTarget.kind === "server"
         ? getDraftThread(currentRouteTarget.threadRef)
@@ -289,7 +302,7 @@ export function createNewThreadHandler(router: AnyRouter) {
         } else if (!isDraftAlreadyOpen) {
           const defaultEnvMode = await resolveDefaultEnvMode();
           if (abandonedSinceRequest()) {
-            return resultIfAbandoned();
+            return openedConcurrentDraft();
           }
           // Concurrent calls may change the draft; stale resets, remaps, or navigation could clobber it.
           const routeTargetNow = getCurrentRouteTarget();
@@ -305,7 +318,7 @@ export function createNewThreadHandler(router: AnyRouter) {
             getComposerDraft(emptyStoredDraftThread.draftId),
           );
           if (openedMeanwhile || promotedMeanwhile || remappedMeanwhile || investedMeanwhile) {
-            return null;
+            return openedMeanwhile ? openedConcurrentDraft() : null;
           }
           workspaceContext = {
             branch: null,
@@ -405,7 +418,7 @@ export function createNewThreadHandler(router: AnyRouter) {
     return (async () => {
       const initialEnvMode = options?.envMode ?? (await resolveDefaultEnvMode());
       if (abandonedSinceRequest()) {
-        return resultIfAbandoned();
+        return openedConcurrentDraft();
       }
       // Reuse drafts registered while awaiting so their pending navigation cannot lose them.
       const racedDraft = getDraftSessionByLogicalProjectKey(logicalProjectKey);

@@ -47,7 +47,7 @@ it("retains source and target selections, imports native values once, and transl
   await click("Raw WorkExisting profile");
   await language("zh");
   expect(button("Source Work5,065 个 Cookie").getAttribute("aria-pressed")).toBe("true");
-  expect(button("Raw Work已有配置").getAttribute("aria-pressed")).toBe("true");
+  expect(button("Raw Work已有浏览器配置").getAttribute("aria-pressed")).toBe("true");
   expect(props.onImport).not.toHaveBeenCalled();
   await click("导入");
   await language("en");
@@ -68,7 +68,7 @@ it("retains source and target selections, imports native values once, and transl
   );
   expect(document.body.textContent).toContain("已导入 5,065 个 Cookie");
   expect(document.body.textContent).toContain(
-    "已添加到 Raw Host 的 Raw Work 配置，跳过 4 个 Cookie。",
+    "已为 Raw Host 添加到 Raw Work。已跳过 4 个 Cookie。",
   );
   expect(document.body.textContent).toContain("a.test, b.test, c.test 及另外 1 个域名");
   expect(props.onImport).toHaveBeenCalledTimes(1);
@@ -84,7 +84,7 @@ it("translates a blocked reason on render and reuses the same new profile id on 
   await click("Import");
   const first = vi.mocked(props.onImport).mock.calls[0]![0];
   await language("zh");
-  expect(document.body.textContent).toContain("无法读取该浏览器的 Cookie 数据库。");
+  expect(document.body.textContent).toContain("无法读取浏览器的 Cookie 数据库。");
   expect(props.onImport).toHaveBeenCalledTimes(1);
   await click("重试");
   expect(vi.mocked(props.onImport).mock.calls[1]![0]).toEqual(first);
@@ -102,7 +102,7 @@ it("keeps one browser recheck pending while its checking page changes language",
   );
   await render();
   await language("zh");
-  expect(document.body.textContent).toContain("退出 Helium 后导入");
+  expect(document.body.textContent).toContain("退出 Helium 以导入");
   expect(props.onRefreshSource).not.toHaveBeenCalled();
   await click("我已退出");
   await language("en");
@@ -151,7 +151,9 @@ it("retains a disappeared target selection and reports the problem without start
   props = { ...props, targetProfiles: [] };
   await render();
   await language("zh");
-  expect(document.body.textContent).toContain("此配置已不可用，请重新选择 Cookie 的导入目标。");
+  expect(document.body.textContent).toContain(
+    "此浏览器配置已不可用，请重新选择 Cookie 的导入位置。",
+  );
   expect(button("导入").disabled).toBe(true);
   expect(props.onImport).not.toHaveBeenCalled();
 });
@@ -173,13 +175,13 @@ it("translates the built-in target label while importing under its original id a
   });
   await render();
   await language("zh");
-  expect(button("默认已有配置").getAttribute("aria-pressed")).toBe("true");
+  expect(button("默认已有浏览器配置").getAttribute("aria-pressed")).toBe("true");
   await click("导入");
   expect(props.onImport).toHaveBeenCalledExactlyOnceWith({
     sourceProfileDirectory: "Default",
     target: { kind: "existing", profileId: "default", name: "Default" },
   });
-  expect(document.body.textContent).toContain("已添加到 Raw Host 的 默认 配置。");
+  expect(document.body.textContent).toContain("已添加到 Raw Host 的 默认。");
   await language("en");
   expect(document.body.textContent).toContain("Added to Default for Raw Host.");
   expect(props.onImport).toHaveBeenCalledTimes(1);

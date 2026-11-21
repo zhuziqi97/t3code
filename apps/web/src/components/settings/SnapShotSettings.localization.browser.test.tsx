@@ -260,8 +260,8 @@ it("uses native sound ids for localized choices and previews and reports asynchr
 
   await render(<SnapShotSettings />);
   await language("zh");
-  await click("快照声音：风声（默认）");
-  await click("试听快门声");
+  await click("快照音效：呼啸声（默认）");
+  await click("播放快门声");
   expect(api.sound).toHaveBeenCalledExactlyOnceWith("camera-shutter");
   expect(api.update).not.toHaveBeenCalled();
   await click("快门声");
@@ -271,7 +271,7 @@ it("uses native sound ids for localized choices and previews and reports asynchr
   });
   const save = deferred<void>();
   api.update.mockReturnValueOnce(save.promise);
-  await click("闪烁快照窗口");
+  await click("让所截取的窗口闪烁");
   const patch = api.update.mock.calls[1]![0];
   expect(patch).toEqual({ snapShotFlash: !DEFAULT_CLIENT_SETTINGS.snapShotFlash });
   await language("en");
@@ -323,7 +323,7 @@ it("keeps config review and recorded keys through language changes and applies o
   expect(recorder()).toBe(input);
   expect(api.suppress).toHaveBeenCalledExactlyOnceWith(true);
   await key(input, { key: "y", code: "KeyY", ctrlKey: true, altKey: true });
-  await click("查看修改");
+  await click("查看更改");
   expect(api.preview).toHaveBeenCalledExactlyOnceWith({
     operation: "install",
     chooseFile: false,
@@ -359,7 +359,7 @@ it("keeps config review and recorded keys through language changes and applies o
   expect(api.toast).toHaveBeenCalledExactlyOnceWith({
     type: "success",
     title: "快捷键已保存",
-    description: "在其他应用中按下 Ctrl+Alt+Y。",
+    description: "在其他应用中使用 Ctrl+Alt+Y。",
   });
   expect(document.body.textContent).toContain("/Raw Dir/backup");
   expect(api.preview).toHaveBeenCalledOnce();
@@ -375,8 +375,8 @@ it("cancels a reviewed config without applying and retranslates an owned failure
   await click("取消");
   expect(api.apply).not.toHaveBeenCalled();
   api.preview.mockRejectedValueOnce(new Error("Raw permission diagnostic"));
-  await click("查看修改");
-  expect(document.body.textContent).toContain("无法准备修改，请查看“高级”中的帮助信息。");
+  await click("查看更改");
+  expect(document.body.textContent).toContain("无法准备更改，请展开“高级”查看帮助。");
   expect(document.body.textContent).toContain("Raw permission diagnostic");
   await language("en");
   expect(document.body.textContent).toContain(

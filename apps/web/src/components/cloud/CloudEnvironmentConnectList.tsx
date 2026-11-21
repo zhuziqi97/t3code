@@ -27,7 +27,8 @@ import type {
   RelayEnvironmentStatusResponse,
 } from "@t3tools/contracts/relay";
 import * as Option from "effect/Option";
-import { T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "gt-react";
+import { m as resolveMessage } from "../../i18n/messages";
 import { type ReactNode, useEffect, useEffectEvent, useState } from "react";
 
 import { environmentCatalog } from "~/connection/catalog";
@@ -170,15 +171,19 @@ export function CloudEnvironmentConnectRows({
       toastManager.add({
         type: "success",
         title: savedWithoutRelay.has(environment.environmentId)
-          ? gt("T3 Connect route added")
-          : gt("Environment added"),
+          ? resolveMessage(msg("T3 Connect route added"))
+          : resolveMessage(msg("Environment added")),
         description: savedWithoutRelay.has(environment.environmentId)
-          ? gt("{environment} falls back to T3 Connect when its other routes are unreachable.", {
-              environment: environment.label,
-            })
-          : gt("Connecting to {environment} through T3 Connect.", {
-              environment: environment.label,
-            }),
+          ? resolveMessage(
+              msg("{environment} falls back to T3 Connect when its other routes are unreachable.", {
+                environment: environment.label,
+              }),
+            )
+          : resolveMessage(
+              msg("Connecting to {environment} through T3 Connect.", {
+                environment: environment.label,
+              }),
+            ),
       });
       return true;
     }
@@ -187,17 +192,18 @@ export function CloudEnvironmentConnectRows({
     }
     const cause = squashAtomCommandFailure(result);
     const message =
-      thrownErrorMessage(cause, m) ?? gt("Could not connect the T3 Connect environment.");
+      thrownErrorMessage(cause, resolveMessage) ??
+      resolveMessage(msg("Could not connect the T3 Connect environment."));
     const traceId = findErrorTraceId(cause);
     console.error("[t3-connect] Could not connect environment", { message, traceId, cause });
     toastManager.add({
       type: "error",
-      title: gt("Could not connect environment"),
+      title: resolveMessage(msg("Could not connect environment")),
       description: message,
       data: traceId
         ? {
             secondaryActionProps: {
-              children: gt("Copy trace ID"),
+              children: resolveMessage(msg("Copy trace ID")),
               onClick: () => void navigator.clipboard?.writeText(traceId),
             },
           }

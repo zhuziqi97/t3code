@@ -605,7 +605,7 @@ function ProjectDetail({
             resetAction={
               canResetScratchTitle ? (
                 <SettingResetButton
-                  ariaLabel={t("project.name")}
+                  ariaLabel={t("settings.resetLabel", { label: t("project.name") })}
                   disabled={!canEditGroup}
                   onClick={() =>
                     void updateAllMembers(
@@ -653,7 +653,7 @@ function ProjectDetail({
             resetAction={
               group.memberProjects.some((member) => !hasDefaultProjectIcon(member)) ? (
                 <SettingResetButton
-                  ariaLabel={t("project.settings.iconReset")}
+                  ariaLabel={t("settings.resetLabel", { label: t("project.settings.iconReset") })}
                   disabled={isSavingFavicon || !canEditGroup}
                   onClick={() => void setProjectIcon(defaultProjectIcon)}
                 />

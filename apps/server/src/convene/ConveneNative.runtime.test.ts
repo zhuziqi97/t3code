@@ -1,7 +1,10 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as CommandReceiptStore from "../orchestration-v2/CommandReceiptStore.ts";
 import * as ServerSettings from "../serverSettings.ts";
-import { materializeReplayTranscriptRuntimeInstructions } from "../orchestration-v2/testkit/ReplayRuntimeInstructions.ts";
+import {
+  materializeCodexThreadTitle,
+  materializeReplayTranscriptRuntimeInstructions,
+} from "../orchestration-v2/testkit/ReplayRuntimeInstructions.ts";
 import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
@@ -61,6 +64,7 @@ const replayLayer = Effect.fn("conveneReplayLayer")(function* (
   database: typeof SqlitePersistence.layerMemory,
   directory: string,
   policy: RuntimePolicyV2Override,
+  title: string,
 ) {
   const materialized = materializeReplayTranscriptWorkspace(
     materializeReplayTranscriptRuntimeInstructions(wire, {
@@ -75,7 +79,9 @@ const replayLayer = Effect.fn("conveneReplayLayer")(function* (
     runtimePolicyOverride: { cwd: directory, ...policy },
   };
   if (driver === "codex") {
-    const transcript = yield* CodexOrchestratorReplayHarness.decodeTranscript(materialized);
+    const transcript = yield* CodexOrchestratorReplayHarness.decodeTranscript(
+      materializeCodexThreadTitle(materialized, `Replay fixture: ${wire.scenario}`, title),
+    );
     return ProviderReplayHarness.layerProviderReplay(
       { ...options, transcript },
       CodexOrchestratorReplayHarness,
@@ -128,10 +134,18 @@ it.live.each(["codex", "claudeAgent"] as const)(
       const database = SqlitePersistence.layerMemory;
       // The replay harness's base policy omits project roots; production resolves
       // them through RuntimePolicy.layerFromProjectStore.
-      const orchestration = yield* replayLayer(driver, wire, database, checkout, {
-        ...READ_ONLY_ON_REQUEST_POLICY,
-        cwd: undefined,
-      });
+      const title = "Convene native approval";
+      const orchestration = yield* replayLayer(
+        driver,
+        wire,
+        database,
+        checkout,
+        {
+          ...READ_ONLY_ON_REQUEST_POLICY,
+          cwd: undefined,
+        },
+        title,
+      );
       const modelSelection = {
         instanceId: ProviderInstanceId.make(driver),
         model: String(wire.metadata?.model),
@@ -217,7 +231,7 @@ it.live.each(["codex", "claudeAgent"] as const)(
           operation: "CREATE",
           ...destination,
           commandId: CommandId.make("convene:create-approval"),
-          title: "Convene native approval",
+          title,
           modelSelection,
           runtimeMode: "approval-required",
           interactionMode: "default",
@@ -357,6 +371,7 @@ it.live.each([
       database,
       directory,
       driver === "codex" && fixture === "turn_interrupt" ? WORKSPACE_NEVER_POLICY : {},
+      fixture,
     );
     const modelSelection = {
       instanceId: ProviderInstanceId.make(driver),

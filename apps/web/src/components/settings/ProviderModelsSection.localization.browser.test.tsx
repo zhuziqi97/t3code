@@ -73,7 +73,9 @@ it("keeps a custom model draft and submits its original ID after switching langu
   expect(container.textContent).toContain("1 个模型");
   expect(container.textContent).toContain("Provider Model");
   await click(
-    container.querySelector<HTMLButtonElement>('button[aria-label="收藏 Provider Model"]')!,
+    container.querySelector<HTMLButtonElement>(
+      'button[aria-label="将 Provider Model 添加到收藏"]',
+    )!,
   );
   expect(onToggleFavorite).toHaveBeenCalledExactlyOnceWith("raw/builtin-model");
   await click(button("添加"));
@@ -131,7 +133,7 @@ it("keeps custom names and option values while translating validation and saving
   await click(button("Save"));
   expect(container.textContent).toContain("Option 1 needs an id.");
   await switchLanguage("zh");
-  expect(container.textContent).toContain("请为参数 1 填写 ID。");
+  expect(container.textContent).toContain("选项 1 需要 ID。");
   expect(input("参数名称").value).toBe("User option name");
   expect(input("选项值").value).toBe("raw-choice");
   expect(input("选项名称").value).toBe("User choice name");

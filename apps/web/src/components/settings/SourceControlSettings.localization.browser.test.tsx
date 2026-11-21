@@ -179,6 +179,7 @@ it("localizes discovered states and installation instructions while preserving t
       }),
       { ...gitlab, auth: { ...gitlab.auth, status: "unauthenticated" } },
       provider(SourceControlProviderKind.make("bitbucket"), "Bitbucket", {
+        installHint: "Add a Bitbucket token in Settings → Source control & issues.",
         auth: { ...gitlab.auth, status: "unauthenticated" },
       }),
     ],
@@ -188,11 +189,11 @@ it("localizes discovered states and installation instructions while preserving t
   await switchLanguage();
   expect(container.textContent).toContain("即将支持 Jujutsu。");
   expect(container.textContent).toContain("Raw-JJ-Version");
-  expect(container.textContent).toContain("此服务器尚不可用：通过 https://cli.github.com/");
+  expect(container.textContent).toContain("此服务器上不可用：请通过 https://cli.github.com/");
   expect(container.textContent).toContain("brew install gh");
-  expect(container.textContent).toContain("此服务器上的 Raw GitLab Host 尚未认证。");
+  expect(container.textContent).toContain("Raw GitLab Host 未在此服务器上认证。");
   expect([...container.querySelectorAll("code")].map((node) => node.textContent)).toContain("glab");
-  expect(container.textContent).toContain("可用。在“设置 → 版本控制”中添加 Bitbucket 令牌。");
+  expect(container.textContent).toContain("请在“设置 → 版本控制与 issue”中添加 Bitbucket token。");
   expect(state.refresh).not.toHaveBeenCalled();
 });
 
@@ -226,9 +227,9 @@ it("keeps a revealed account across languages and translates owned details while
   );
   await switchLanguage();
   expect(container.textContent).toContain("已认证账户：");
-  expect(
-    container.querySelector('button[aria-label="切换版本控制账户显示状态"]')?.textContent,
-  ).toBe("Raw-GitHub-Account");
+  expect(container.querySelector('button[aria-label="显示或隐藏版本控制账户"]')?.textContent).toBe(
+    "Raw-GitHub-Account",
+  );
   expect(container.textContent).toContain(
     "正在使用服务器环境中的 GH_ENTERPRISE_TOKEN；它会覆盖设置中选择的账户。",
   );
@@ -333,7 +334,7 @@ it("keeps provider details open across languages and submits seconds through bac
   ).toBe(String(initial));
   expect(state.update).not.toHaveBeenCalled();
   await act(async () =>
-    document.querySelector<HTMLButtonElement>('button[aria-label="延长 Git 获取间隔"]')!.click(),
+    document.querySelector<HTMLButtonElement>('button[aria-label="增大 Git 获取间隔"]')!.click(),
   );
   expect(state.update).toHaveBeenCalledTimes(1);
   const patch = state.update.mock.calls[0]![0];

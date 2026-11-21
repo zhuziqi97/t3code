@@ -10,6 +10,8 @@ import { createRoot } from "react-dom/client";
 import { vi } from "vite-plus/test";
 import { page, utils, type Locator, type LocatorSelectors } from "vite-plus/test/browser";
 
+import { I18nProvider } from "../src/i18n/I18nProvider";
+
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
 }
@@ -76,8 +78,11 @@ export async function render(
   const router = path === false ? undefined : createTestRouter(path);
   // The router element is created once so a rerender updates the tree instead of remounting it.
   const routerElement = router && <RouterProvider router={router} />;
-  const wrap = (node: ReactNode) =>
-    routerElement ? <RoutedUi value={node}>{routerElement}</RoutedUi> : node;
+  const wrap = (node: ReactNode) => (
+    <I18nProvider>
+      {routerElement ? <RoutedUi value={node}>{routerElement}</RoutedUi> : node}
+    </I18nProvider>
+  );
 
   let mounted = true;
   const unmount = async () => {

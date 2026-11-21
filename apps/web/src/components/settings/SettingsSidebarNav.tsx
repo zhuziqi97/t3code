@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import {
   lazy,
   Suspense,
@@ -144,7 +145,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
   const [compactSearchOpen, setCompactSearchOpen] = useState(false);
   const [activeResultIndex, setActiveResultIndex] = useState(0);
   const searchableItems = useAvailableSettingsSearchItems();
-  const results = searchSettings(query, searchableItems, m);
+  const results = searchSettings(query, searchableItems, m, useTranslate());
   const isSearching = query.trim().length > 0;
   const hasResults = results.length > 0;
   const maxResultIndex = Math.max(results.length - 1, 0);
@@ -355,7 +356,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
                       <SettingsSectionIcon to={item.to} />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium text-sidebar-foreground">
-                          {m(item.title)}
+                          {item.title}
                         </span>
                         <span className="block truncate text-2xs text-sidebar-muted-foreground/75">
                           {m(SETTINGS_SECTION_LABELS[item.to])}

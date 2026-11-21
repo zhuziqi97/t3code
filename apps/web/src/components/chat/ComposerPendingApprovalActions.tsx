@@ -10,6 +10,7 @@ import { Button, InlineButton } from "../ui/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { composerFloatingLayerProps } from "./composerEventScope";
+import { useTranslate } from "../../i18n";
 
 interface ComposerPendingApprovalActionsProps {
   presentation?: "composer" | "inline";
@@ -40,6 +41,17 @@ const DEFAULT_APPROVAL_OPTIONS = [
   },
 ] satisfies ReadonlyArray<ProviderApprovalOption>;
 
+const APPROVAL_LABEL_KEYS = new Map([
+  ["Cancel", "common.cancel"],
+  ["Decline", "approval.decline"],
+  ["Approve", "approval.approve"],
+  ["Always allow this session", "approval.allowSession"],
+  ["Allow all edits this session", "approval.allowEditsSession"],
+  ["Allow once", "approval.allowOnce"],
+  ["Deny", "approval.deny"],
+  ["Reject", "approval.reject"],
+]);
+
 export const ComposerPendingApprovalActions = memo(function ComposerPendingApprovalActions({
   presentation = "composer",
   requestId,
@@ -50,9 +62,13 @@ export const ComposerPendingApprovalActions = memo(function ComposerPendingAppro
   onRespondToApproval,
 }: ComposerPendingApprovalActionsProps) {
   const gt = useGT();
+  const t = useTranslate();
   const m = useMessages();
-  // Provider options carry server-authored labels; only the built-in defaults are translated.
-  const optionLabel = (label: string) => (options === DEFAULT_APPROVAL_OPTIONS ? m(label) : label);
+  const optionLabel = (label: string) => {
+    if (options === DEFAULT_APPROVAL_OPTIONS) return m(label);
+    const key = APPROVAL_LABEL_KEYS.get(label);
+    return key === undefined ? label : t(key);
+  };
   const primaryOptions = options.filter(
     (option) => option.decision === "decline" || option.decision === "accept",
   );

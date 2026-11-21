@@ -203,7 +203,7 @@ vi.mock("../state/projects", async () => {
 vi.mock("../editorPreferences", () => ({
   usePreferredEditor: () => "vscode",
   readPreferredEditor: () => "vscode",
-  useEditorAction: () => ({ open: () => {}, unavailableReason: () => null }),
+  useOpenInPreferredEditor: () => () => {},
 }));
 vi.mock("./preview/openTerminalLinkInPreview", () => ({ openTerminalLinkInPreview: () => {} }));
 vi.mock("~/localApi", () => ({ readLocalApi: () => null }));
@@ -214,6 +214,8 @@ vi.mock("../hooks/useSettings", async () => {
       select(DEFAULT_CLIENT_SETTINGS),
     ensureClientSettingsHydrated: async () => {},
     getClientSettings: () => DEFAULT_CLIENT_SETTINGS,
+    subscribeClientSettings: () => () => {},
+    updateClientSettings: async () => {},
   };
 });
 

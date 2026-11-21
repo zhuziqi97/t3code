@@ -51,6 +51,8 @@ import {
 } from "./themeInspector";
 import { msg, T, useGT, useMessages } from "gt-react";
 import { m, type MessageResolver } from "../../i18n/messages";
+import { subscribeI18n } from "../../i18n/runtime";
+import { i18n } from "../../i18n";
 
 const THEME_EDITOR_SIMPLE_ROLES: ReadonlyArray<ThemeColorRole> = ["canvas", "accent"];
 
@@ -362,7 +364,7 @@ export function ThemeEditorPanel({
   const [shouldRegenerateGuidedColors, setShouldRegenerateGuidedColors] = useState(false);
   const [css, setCss] = useState("");
   const [cssOpen, setCssOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Error | string | null>(null);
   const [isMinimized, setIsMinimized] = useState(false);
   const [roleQuery, setRoleQuery] = useState("");
   const [isInspecting, setIsInspecting] = useState(false);
@@ -730,6 +732,9 @@ export function ThemeEditorPanel({
     document.addEventListener("click", blockInspectedClick, true);
     document.addEventListener("keydown", cancelInspection, true);
     window.addEventListener("resize", refreshHover);
+    const unsubscribeLocale = subscribeI18n(() => {
+      if (hoverInspection) showInspection(hoverInspection);
+    });
     window.addEventListener("scroll", clearHoverOnScroll, true);
     return () => {
       document.removeEventListener("pointerover", handlePointerOver, true);
@@ -738,6 +743,7 @@ export function ThemeEditorPanel({
       document.removeEventListener("click", blockInspectedClick, true);
       document.removeEventListener("keydown", cancelInspection, true);
       window.removeEventListener("resize", refreshHover);
+      unsubscribeLocale();
       window.removeEventListener("scroll", clearHoverOnScroll, true);
       clearHoverTimer();
       if (hoverFrame !== null) cancelAnimationFrame(hoverFrame);
@@ -774,13 +780,13 @@ export function ThemeEditorPanel({
 
   const handleSubmit = () => {
     if (!name.trim()) {
-      setError(gt("Name your theme first."));
+      setError(msg("Name your theme first."));
       return;
     }
 
     if (mergeTarget?.css && css.trim() && mergeTarget.css !== css) {
       setError(
-        gt("“{label}” has different custom CSS. Use the same CSS or pick another name.", {
+        msg("“{label}” has different custom CSS. Use the same CSS or pick another name.", {
           label: mergeTarget.label,
         }),
       );
@@ -808,10 +814,10 @@ export function ThemeEditorPanel({
         if (collision) {
           setError(
             collision === "light"
-              ? gt("“{label}” already has a light palette. Pick another name.", {
+              ? msg("“{label}” already has a light palette. Pick another name.", {
                   label: mergeTarget.label,
                 })
-              : gt("“{label}” already has a dark palette. Pick another name.", {
+              : msg("“{label}” already has a dark palette. Pick another name.", {
                   label: mergeTarget.label,
                 }),
           );
@@ -857,7 +863,7 @@ export function ThemeEditorPanel({
       } else if (mergeTarget) {
         if (takenAppearances.includes(activeAppearance)) {
           setError(
-            gt("“{label}” already has light and dark palettes. Pick another name.", {
+            msg("“{label}” already has light and dark palettes. Pick another name.", {
               label: mergeTarget.label,
             }),
           );
@@ -908,17 +914,17 @@ export function ThemeEditorPanel({
             if (retiredTheme) installCustomTheme(retiredTheme);
           } catch {}
         }
-        setError(gt("Theme saved, but it could not be made active. Try again."));
+        setError(msg("Theme saved, but it could not be made active. Try again."));
         return;
       }
       onOpenChange(false);
     } catch (cause) {
       setError(
         cause instanceof Error
-          ? (errorDisplayMessage(cause, m) ?? cause.message)
+          ? cause
           : isEditing
-            ? gt("Could not save the theme.")
-            : gt("Could not create the theme."),
+            ? msg("Could not save the theme.")
+            : msg("Could not create the theme."),
       );
     }
   };
@@ -1049,7 +1055,15 @@ export function ThemeEditorPanel({
       families: group.families.filter(
         (family) =>
           !query ||
-          [messages(family.label), ...family.roles.map((role) => getThemeRoleLabel(role, messages))]
+          [
+            messages(family.label),
+            ...family.roles.flatMap((role) => [
+              role,
+              getThemeRoleLabel(role, messages),
+              i18n.t(`appearance.theme.role.${role}`, { lng: "en" }),
+              i18n.t(`appearance.theme.role.${role}`, { lng: "zh" }),
+            ]),
+          ]
             .join(" ")
             .toLowerCase()
             .includes(query),
@@ -1271,7 +1285,9 @@ export function ThemeEditorPanel({
             {renderNameField()}
             {error ? (
               <p aria-live="polite" className="text-sm text-destructive">
-                {error}
+                {error instanceof Error
+                  ? (errorDisplayMessage(error, messages) ?? error.message)
+                  : messages(error)}
               </p>
             ) : null}
             {renderAppearanceButtons()}

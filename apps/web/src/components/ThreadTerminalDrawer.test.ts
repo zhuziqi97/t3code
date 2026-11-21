@@ -65,10 +65,10 @@ describe("terminal selection menus", () => {
       { id: "copy", label: "复制", disabled: true },
       { id: "paste", label: "粘贴", disabled: true },
       { id: "select-all", label: "全选" },
-      { id: "scroll-to-bottom", label: "跳到最新输出" },
+      { id: "scroll-to-bottom", label: "跳到最新" },
     ]);
     expect(terminalSelectionMenuItems(undefined, resolveChineseMessage)).toEqual([
-      { id: "add-to-chat", label: "添加到聊天" },
+      { id: "add-to-chat", label: "添加到对话" },
       { id: "copy", label: "复制" },
     ]);
   });

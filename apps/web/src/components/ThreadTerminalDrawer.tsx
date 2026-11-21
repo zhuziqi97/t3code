@@ -3,6 +3,7 @@ import { workspaceAreaProps } from "../lib/workspaceFocus";
 import { useAtomMount, useAtomValue } from "@effect/atom-react";
 import { msg, T, useGT, useMessages } from "gt-react";
 import { m } from "../i18n/messages";
+import { i18n, useTranslate } from "../i18n";
 import {
   isAtomCommandInterrupted,
   executeAtomQuery,
@@ -528,9 +529,25 @@ function TerminalSessionViewport({
   visible,
   keybindings,
 }: TerminalViewportProps) {
+  const t = useTranslate();
+  const initializationFailureRef = useRef<{ error: unknown } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const autoFocusedRef = useRef(false);
   const terminalRef = useRef<GhosttyTerminalSurface | null>(null);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Ghostty owns the terminal DOM.
+  useEffect(() => {
+    terminalRef.current?.setAccessibleLabels(
+      t("terminal.inputLabel"),
+      t("terminal.scrollbackLabel"),
+    );
+    const failure = initializationFailureRef.current;
+    const mount = containerRef.current;
+    if (failure && mount) {
+      mount.textContent = t("terminal.initRetry", {
+        message: thrownErrorMessage(failure.error, m) ?? t("terminal.initFailed"),
+      });
+    }
+  }, [t]);
   const visibleRef = useRef(visible);
   const environmentId = threadRef.environmentId;
   const canOperateTerminal = useEnvironmentScope(environmentId, AuthTerminalOperateScope);
@@ -727,6 +744,7 @@ function TerminalSessionViewport({
   useEffect(() => {
     const mount = containerRef.current;
     if (!mount) return;
+    initializationFailureRef.current = null;
 
     const localApi = readLocalApi();
     let cancelled = false;
@@ -738,6 +756,10 @@ function TerminalSessionViewport({
       const setupFont = terminalFontRef.current;
       const terminalOptions = withLiveVisibility(visibleRef, {
         theme: terminalThemeFromApp(mount),
+        accessibleLabels: {
+          input: i18n.t("terminal.inputLabel"),
+          scrollback: i18n.t("terminal.scrollbackLabel"),
+        },
         font: terminalFontOptions(setupFont.family, setupFont.size),
         onData: (data) => handleData(data),
         onBinary: (data) => void sendTerminalInput(data, m(msg("Terminal write failed")), "binary"),
@@ -764,6 +786,10 @@ function TerminalSessionViewport({
       terminal.setTheme(terminalThemeFromApp(mount));
       setupTerminal = terminal;
       terminalRef.current = terminal;
+      terminal.setAccessibleLabels(
+        i18n.t("terminal.inputLabel"),
+        i18n.t("terminal.scrollbackLabel"),
+      );
       terminal.input.setAttribute("data-workspace-focus-default", "");
       terminal.input.readOnly = !hasTerminalWriteAccess();
       // Reapply font settings hydrated during loading, when terminalRef was null.
@@ -1178,11 +1204,10 @@ function TerminalSessionViewport({
         setupTerminal?.dispose();
         setupTerminal = null;
         if (cancelled) return;
-        const message =
-          thrownErrorMessage(error, m) ?? m(msg("Unable to initialize libghostty-vt"));
-        mount.textContent = m(
-          msg("{message}. Close and reopen the terminal to retry.", { message }),
-        );
+        initializationFailureRef.current = { error };
+        mount.textContent = i18n.t("terminal.initRetry", {
+          message: thrownErrorMessage(error, m) ?? i18n.t("terminal.initFailed"),
+        });
       });
 
     return () => {

@@ -1,3 +1,6 @@
+import type { TFunction } from "i18next";
+import { Trans } from "react-i18next";
+import { useTranslate } from "../../i18n";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { ChevronDownIcon } from "lucide-react";
 import { useAtomValue } from "@effect/atom-react";
@@ -156,16 +159,57 @@ function SourceControlItemMark({
   );
 }
 
+const AUTH_DETAIL_KEYS = [
+  "sourceControl.authDetail.allGithubHostsOff",
+  "sourceControl.authDetail.savedGithubToken",
+  "sourceControl.authDetail.oldGithubCli",
+  "sourceControl.authDetail.githubUnparsed",
+  "sourceControl.authDetail.gitlabUnparsed",
+  "sourceControl.authDetail.azureUnparsed",
+  "sourceControl.authDetail.forgejoStorage",
+  "sourceControl.authDetail.bitbucketAccess",
+  "sourceControl.authDetail.bitbucketApi",
+] as const;
+
+function translatedAuthDetail(detail: Option.Option<string>, t: TFunction): string | null {
+  const message = optionLabel(detail);
+  if (message === null) return null;
+  // The discovery probes mix our own messages with raw CLI diagnostics in this field.
+  const key = AUTH_DETAIL_KEYS.find((key) => t(key, { lng: "en" }) === message);
+  if (key) return t(key);
+  const override =
+    /^Using (.+) from the server environment; it overrides the account chosen in Settings\.$/.exec(
+      message,
+    );
+  if (override) return t("sourceControl.authDetail.environmentOverride", { variable: override[1] });
+  const savedTokenPrefix = "Could not check the token saved in Settings: ";
+  if (message.startsWith(savedTokenPrefix)) {
+    return t("sourceControl.authDetail.checkSavedToken", {
+      error: message.slice(savedTokenPrefix.length),
+    });
+  }
+  const environmentToken = /^Could not check the token in ([A-Z_]+): ([\s\S]+)$/.exec(message);
+  if (environmentToken) {
+    return t("sourceControl.authDetail.checkEnvironmentToken", {
+      variable: environmentToken[1],
+      error: environmentToken[2],
+    });
+  }
+  return message;
+}
+
 function itemSummary({
   item,
   auth,
   authAccount,
   resolve,
+  t,
 }: {
   readonly item: VcsDiscoveryItem | SourceControlProviderDiscoveryItem;
   readonly auth: SourceControlProviderAuth | null;
   readonly authAccount: string | null;
   readonly resolve: MessageResolver;
+  readonly t: TFunction;
 }) {
   const installHint = sourceControlInstallHintText(item.installHint, resolve);
   if (isVcsNotReady(item)) {
@@ -190,18 +234,15 @@ function itemSummary({
 
   if (auth) {
     if (auth.status === "authenticated") {
-      const authDetail = optionLabel(auth.detail);
+      const authDetail = translatedAuthDetail(auth.detail, t);
       return (
         <>
           {authAccount ? (
-            <span>
-              <T>
-                Authenticated as{" "}
-                <Var>
-                  <RedactedAccount account={authAccount} />
-                </Var>
-              </T>
-            </span>
+            <Trans
+              t={t}
+              i18nKey="sourceControl.authenticatedAccount"
+              components={{ account: <RedactedAccount account={authAccount} /> }}
+            />
           ) : (
             <span>
               <T>Authenticated</T>
@@ -248,7 +289,7 @@ function itemSummary({
         </span>
       );
     }
-    const authDetail = optionLabel(auth.detail);
+    const authDetail = translatedAuthDetail(auth.detail, t);
     return (
       <span>
         <T>
@@ -280,6 +321,7 @@ function DiscoveryItemRow({
   readonly children?: ReactNode;
 }) {
   const messages = useMessages();
+  const t = useTranslate();
   const gt = useGT();
   const version = optionLabel(item.version);
   const auth = isProviderDiscoveryItem(item) ? item.auth : null;
@@ -321,7 +363,7 @@ function DiscoveryItemRow({
               ) : null}
             </div>
             <p className="flex min-w-0 flex-wrap items-center gap-x-1 text-xs leading-normal text-muted-foreground/80">
-              {itemSummary({ item, auth, authAccount, resolve: messages })}
+              {itemSummary({ item, auth, authAccount, resolve: messages, t })}
             </p>
           </div>
           <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:justify-end">

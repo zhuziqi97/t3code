@@ -2260,13 +2260,13 @@ describe("compact reasoning math", () => {
 
 describe("localized work groups", () => {
   it("updates a mounted group without losing expansion or changing command text", async () => {
-    const { i18n } = await import("~/i18n");
+    const { changeLanguage } = await import("~/i18n");
     await using root = await renderElement(<div />);
     const container = root.container;
     const commands = ['printf "Keep command 原文"', "node scripts/raw-example.mjs"];
     try {
       await act(async () => {
-        await i18n.changeLanguage("en");
+        await changeLanguage("en");
         await root.rerender(
           <MessagesTimeline
             {...baseProps()}
@@ -2296,14 +2296,14 @@ describe("localized work groups", () => {
       expect(group.getAttribute("aria-expanded")).toBe("true");
       await expect.element(root.getByText(commands[0]!, { exact: true })).toBeVisible();
       await act(async () => {
-        await i18n.changeLanguage("zh");
+        await changeLanguage("zh");
       });
-      expect(container.querySelector('button[aria-label="运行了 2 条命令"]')).toBe(group);
+      expect(container.querySelector('button[aria-label="已运行 2 条命令"]')).toBe(group);
       expect(group.getAttribute("aria-expanded")).toBe("true");
       await expect.element(root.getByText(commands[0]!, { exact: true })).toBeVisible();
       await expect.element(root.getByText(commands[1]!, { exact: true })).toBeVisible();
       await act(async () => {
-        await i18n.changeLanguage("en");
+        await changeLanguage("en");
       });
       expect(group.getAttribute("aria-label")).toBe("Ran 2 commands");
       expect(group.getAttribute("aria-expanded")).toBe("true");
@@ -2312,14 +2312,14 @@ describe("localized work groups", () => {
     } finally {
       await act(async () => {
         await root.unmount();
-        await i18n.changeLanguage("en");
+        await changeLanguage("en");
       });
       container.remove();
       vi.unstubAllGlobals();
     }
   });
   it("retranslates a standalone T3 tool while preserving expanded data and returned failure", async () => {
-    const { i18n } = await import("~/i18n");
+    const { changeLanguage } = await import("~/i18n");
     await using root = await renderElement(<div />);
     const container = root.container;
     const args = { cwd: "/tmp/原始项目", title: "Keep project title 原文" };
@@ -2355,7 +2355,7 @@ describe("localized work groups", () => {
       );
     try {
       await act(async () => {
-        await i18n.changeLanguage("en");
+        await changeLanguage("en");
         await renderTool(false);
       });
       const header = container.querySelector<HTMLElement>(
@@ -2366,7 +2366,7 @@ describe("localized work groups", () => {
       expect(header.getAttribute("aria-expanded")).toBe("true");
       expect(container.textContent).toContain("/tmp/原始项目");
       await act(async () => {
-        await i18n.changeLanguage("zh");
+        await changeLanguage("zh");
       });
       expect(container.querySelector('[role="button"][aria-label="已注册项目"]')).toBe(header);
       expect(header.getAttribute("aria-expanded")).toBe("true");
@@ -2375,7 +2375,7 @@ describe("localized work groups", () => {
       expect(header.getAttribute("aria-label")).toBe("注册项目失败，工具调用失败");
       expect(container.textContent).toContain("Original diagnostic 原文");
       await act(async () => {
-        await i18n.changeLanguage("en");
+        await changeLanguage("en");
       });
       expect(header.getAttribute("aria-label")).toBe(
         "Failed to register a project, tool call failed",
@@ -2384,7 +2384,7 @@ describe("localized work groups", () => {
     } finally {
       await act(async () => {
         await root.unmount();
-        await i18n.changeLanguage("en");
+        await changeLanguage("en");
       });
       container.remove();
       vi.unstubAllGlobals();

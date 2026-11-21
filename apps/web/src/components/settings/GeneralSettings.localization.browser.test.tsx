@@ -107,7 +107,7 @@ it("keeps an uncommitted snooze amount and field focus while changing language",
   await expect.element(amount).toHaveValue("12");
   const input = amount.element();
   await act(() => changeLanguage("zh"));
-  const translated = screen.getByRole("textbox", { name: "时长数值" });
+  const translated = screen.getByRole("textbox", { name: "数量" });
   expect(translated.element()).toBe(input);
   await expect.element(translated).toHaveFocus();
   await expect.element(translated).toHaveValue("12");

@@ -119,11 +119,9 @@ describe("localized thread menus", () => {
       english.map(({ id, disabled }) => ({ id, disabled })),
     );
     expect(chinese.find(({ id }) => id === "new-thread-on-branch")?.label).toBe(
-      "在 feat/中文 上新建会话",
+      "在 feat/中文 分支新建会话",
     );
-    expect(chinese.find(({ id }) => id === "filter-by-project")?.label).toBe(
-      "筛选项目：My Project",
-    );
+    expect(chinese.find(({ id }) => id === "filter-by-project")?.label).toBe("按 My Project 筛选");
     const snooze = chinese.find(({ id }) => id === "snooze")!;
     expect(snooze.children?.map(({ id, disabled }) => ({ id, disabled }))).toEqual(
       english
@@ -135,7 +133,7 @@ describe("localized thread menus", () => {
       t,
     );
     expect(reversed.find(({ id }) => id === "unsettle")).toMatchObject({
-      label: "恢复为未完成",
+      label: "取消会话收尾",
       disabled: true,
     });
     expect(reversed.find(({ id }) => id === "unsnooze")).toMatchObject({

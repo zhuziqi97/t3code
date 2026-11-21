@@ -990,11 +990,13 @@ it("lists and reads world PRs in their own state, with the diff when asked", () 
   ).checks.map((check) => check.log !== null);
   assert.deepEqual(logs, [true, true, true, true, true, false]);
   assert.deepEqual(ciNames({}), ["Lint"]);
-  const read: Readonly<Record<string, unknown>> = t3Default(sample, "pull_request_read", {
+  const read = t3Default(sample, "pull_request_read", {
     number: 5,
     sections: ["summary", "diff", "conversation"],
   });
+  assert(read !== undefined && "diff" in read);
   assert.deepEqual(read.diff, { patch: "+old", truncated: false, nextCursor: null });
+  assert("summary" in read && "conversation" in read);
   assert.propertyVal(read.summary, "state", "merged");
   assert.propertyVal(read.summary, "headSha", "pr-head");
   assert.nestedPropertyVal(read.conversation, "comments[0].author", "mark");
@@ -1455,8 +1457,8 @@ it("grades triage source criteria with case-insensitive text and rejects wrong s
   const answers = [
     "zhuziqi97/t3code v0.1.5-2 zzq/software-factory/t3code",
     "UNKNOWN source; zzq/software-factory/t3code",
-    "zhuziqi97/t3code pingdotgg/t3code REVIEW and TRIAGE permission",
-    "pingdotgg/t3code v0.1.6",
+    "Prepare a draft for Convene zzq/software-factory/t3code.",
+    "pingdotgg/t3code v0.1.6 zzq/software-factory/t3code",
   ];
   for (const [index, testCase] of cases.entries()) {
     assert.isTrue(

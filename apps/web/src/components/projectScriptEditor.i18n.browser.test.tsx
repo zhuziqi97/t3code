@@ -4,7 +4,7 @@ vi.mock("~/hooks/useSettings", async (original) => ({
   ...(await original<typeof import("~/hooks/useSettings")>()),
   useClientSettings: () => undefined,
 }));
-import { i18n } from "../i18n";
+import { changeLanguage } from "../i18n";
 import { EnvironmentId } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
 import { StrictMode, type ReactNode } from "react";
@@ -136,7 +136,7 @@ describe("project action editor language switching", () => {
       command.dispatchEvent(new Event("input", { bubbles: true }));
     });
     await act(async () => {
-      await i18n.changeLanguage("zh");
+      await changeLanguage("zh");
     });
     expect(saveButton().textContent).toContain("保存更改");
     expect(container.querySelector<HTMLTextAreaElement>("#script-command")!.value).toBe(
@@ -160,7 +160,7 @@ async function setupLifecycle() {
   stack.defer(async () => {
     await act(async () => root.unmount());
     container.remove();
-    await i18n.changeLanguage("en");
+    await changeLanguage("en");
     vi.unstubAllGlobals();
   });
 

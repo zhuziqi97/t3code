@@ -258,9 +258,8 @@ describe("open in editor announcement", () => {
       state.run.mockReturnValueOnce(command);
       await pressOpenFavorite();
       expect(await spoken()).toBe("");
-      const speech = spoken();
-      resolve(result);
-      return speech;
+      await act(async () => resolve(result));
+      return spoken();
     };
 
     expect(await openAndRead(false)).toBe("");

@@ -23,8 +23,10 @@ import { Alert } from "../ui/alert";
 import { Button } from "../ui/button";
 import { Dialog, DialogHeader, DialogPanel, DialogPopup, DialogTitle } from "../ui/dialog";
 import { ThemeSearchSection } from "./ThemeSearchSection";
+import { i18n, useTranslate } from "../../i18n";
 import { msg, T, useGT } from "gt-react";
 import { m } from "../../i18n/messages";
+import { translateThemeError } from "./themeErrorMessages";
 
 /**
  * The guard runs on the size before the bytes are ever read: a large file
@@ -35,15 +37,14 @@ export const MAX_THEME_FILE_BYTES = 256 * 1024;
 
 /** Highlighting rebuilds markup per keystroke; fall back to plain text for oversized pastes. */
 const MAX_HIGHLIGHTED_JSON_LENGTH = 20_000;
+const englishThemeError = i18n.getFixedT("en");
 
 export function describeOversizedThemeFile(bytes: number): string | null {
   if (bytes <= MAX_THEME_FILE_BYTES) return null;
-  return m(
-    msg(
-      "That file is {size}. Theme files are only a few KB, so this one was not read (limit {limit}).",
-      { size: formatBytes(bytes), limit: formatBytes(MAX_THEME_FILE_BYTES) },
-    ),
-  );
+  return englishThemeError("appearance.theme.error.oversized", {
+    size: formatBytes(bytes),
+    limit: formatBytes(MAX_THEME_FILE_BYTES),
+  });
 }
 
 function isThemeIdTaken(themeId: string): boolean {
@@ -143,6 +144,7 @@ function ThemeJsonEditor({
 }
 
 type ImportableThemeFile = { name: string; size: number; text: () => Promise<string> };
+type ThemeImportFailure = { name: string; message: string | Error };
 
 interface ThemeImportCallbacks {
   onImported: (theme: ThemeDefinition) => boolean;
@@ -225,11 +227,12 @@ function ThemeImportBody({
   onClose: () => void;
 }) {
   const gt = useGT();
+  const t = useTranslate();
   const { signal } = session;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [json, setJson] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | Error | ThemeImportFailure[] | null>(null);
   const [isReading, setIsReading] = useState(false);
   const [isDropTarget, setIsDropTarget] = useState(false);
   const [conflicts, setConflicts] = useState<ReadonlyArray<ThemeDefinition> | null>(null);
@@ -237,6 +240,13 @@ function ThemeImportBody({
   const importRequestRef = useRef(0);
   const isCurrentRequest = (requestId: number) =>
     requestId === importRequestRef.current && !signal.aborted;
+  const renderError = (error: string | Error) => {
+    if (error instanceof SyntaxError) {
+      return t("appearance.theme.error.jsonSyntax", { detail: error.message });
+    }
+    if (typeof error === "string") return translateThemeError(error, t);
+    return translateThemeError(thrownErrorMessage(error, m) ?? error.message, t);
+  };
 
   const readThemeFile = async (file: ImportableThemeFile) => {
     const oversized = describeOversizedThemeFile(file.size);
@@ -251,7 +261,7 @@ function ThemeImportBody({
     if (!isCurrentRequest(requestId)) return;
     setIsReading(false);
     if (fileText._tag === "Failure") {
-      setError(gt("Could not read that file. Paste the JSON below instead."));
+      setError(englishThemeError("appearance.theme.error.readFile"));
       return;
     }
     setJson(fileText.value);
@@ -271,12 +281,15 @@ function ThemeImportBody({
     files: ReadonlyArray<ImportableThemeFile>,
     requestId: number,
   ) => {
-    const failures: string[] = [];
+    const failures: ThemeImportFailure[] = [];
     const parsed: Array<{ theme: ThemeDefinition; sourceName: string }> = [];
     for (const file of files) {
       const oversized = describeOversizedThemeFile(file.size);
       if (oversized) {
-        failures.push(`${file.name}: too large`);
+        failures.push({
+          name: file.name,
+          message: englishThemeError("appearance.theme.error.tooLarge"),
+        });
         continue;
       }
       try {
@@ -285,9 +298,11 @@ function ThemeImportBody({
           theme: parseThemeImport(await file.text()),
         });
       } catch (cause) {
-        failures.push(
-          `${file.name}: ${cause instanceof Error ? (thrownErrorMessage(cause, m) ?? cause.message) : gt("not a theme file")}`,
-        );
+        failures.push({
+          name: file.name,
+          message:
+            cause instanceof Error ? cause : englishThemeError("appearance.theme.error.notTheme"),
+        });
       }
     }
     if (!isCurrentRequest(requestId)) return;
@@ -301,13 +316,15 @@ function ThemeImportBody({
       try {
         installed.push(installCustomTheme(theme));
       } catch (cause) {
-        failures.push(
-          `${theme.label}: ${cause instanceof Error ? (thrownErrorMessage(cause, m) ?? cause.message) : gt("could not install")}`,
-        );
+        failures.push({
+          name: theme.label,
+          message:
+            cause instanceof Error ? cause : englishThemeError("appearance.theme.error.install"),
+        });
       }
     }
     if (installed.length > 0) onImportedMany(installed, { updated: false });
-    setError(failures.length > 0 ? failures.join("; ") : null);
+    setError(failures.length > 0 ? failures : null);
     if (conflicting.length > 0) {
       setConflicts(conflicting);
     } else if (installed.length > 0 && failures.length === 0) {
@@ -373,7 +390,7 @@ function ThemeImportBody({
   const resolveConflicts = (mode: "update" | "copy") => {
     if (!conflicts) return;
     const resolved: ThemeDefinition[] = [];
-    const failures: string[] = [];
+    const failures: ThemeImportFailure[] = [];
     const preferredName =
       conflicts.length === 1 && fileName
         ? humanizeThemeName(fileName.replace(/\.[^.]+$/, ""))
@@ -393,14 +410,16 @@ function ThemeImportBody({
             : installCustomTheme(versionedCopy(theme, preferredName)),
         );
       } catch (cause) {
-        failures.push(
-          `${theme.label}: ${cause instanceof Error ? (thrownErrorMessage(cause, m) ?? cause.message) : gt("failed", { $context: "theme import result" })}`,
-        );
+        failures.push({
+          name: theme.label,
+          message:
+            cause instanceof Error ? cause : englishThemeError("appearance.theme.error.failed"),
+        });
       }
     }
     if (resolved.length > 0) onImportedMany(resolved, { updated: mode === "update" });
     setConflicts(null);
-    if (failures.length > 0) setError([error, ...failures].filter(Boolean).join("; "));
+    if (failures.length > 0) setError([...(Array.isArray(error) ? error : []), ...failures]);
     else if (!error) onClose();
   };
 
@@ -422,15 +441,13 @@ function ThemeImportBody({
         try {
           removeCustomTheme(installedTheme.id);
         } catch {}
-        setError(gt("Theme added, but it could not be selected. Try again."));
+        setError(englishThemeError("appearance.theme.error.select"));
         return;
       }
       onClose();
     } catch (cause) {
       setError(
-        cause instanceof Error
-          ? (thrownErrorMessage(cause, m) ?? cause.message)
-          : gt("That theme file is invalid."),
+        cause instanceof Error ? cause : englishThemeError("appearance.theme.error.invalid"),
       );
     }
   };
@@ -559,7 +576,13 @@ function ThemeImportBody({
 
       {error ? (
         <Alert aria-live="polite" variant="error">
-          {error}
+          {Array.isArray(error)
+            ? error
+                .map(({ name, message }) =>
+                  t("appearance.theme.importFileError", { name, error: renderError(message) }),
+                )
+                .join(": ")
+            : renderError(error)}
         </Alert>
       ) : null}
     </DialogPanel>

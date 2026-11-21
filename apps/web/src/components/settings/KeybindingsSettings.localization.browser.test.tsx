@@ -147,7 +147,7 @@ it("keeps recording and draft identity across locale changes, then saves native 
   const input = capture();
   await language("zh");
   expect(capture()).toBe(input);
-  expect(input.placeholder).toBe("请按下快捷键");
+  expect(input.placeholder).toBe("按下快捷键");
   expect(search().value).toBe("sidebar.toggle");
   expect(state.upsert).not.toHaveBeenCalled();
   await key(input, { key: "K", code: "KeyK", ctrlKey: true, shiftKey: true });
@@ -247,7 +247,7 @@ it("selects a translated new command while preserving its value and cancels with
   await render();
   await language("zh");
   await click("添加快捷键");
-  await click("动作");
+  await click("命令");
   const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
     (node) => node.textContent?.trim() === "导航：后退",
   )!;
@@ -276,7 +276,7 @@ it("keeps permission checks effective when a grant is revoked after editing in C
   await key(capture(), { key: "K", code: "KeyK", ctrlKey: true });
   state.denied.add("second");
   await language("zh");
-  expect(container.textContent).toContain("此连接可查看快捷键，但无法修改。");
+  expect(container.textContent).toContain("此连接可查看快捷键，但无权修改。");
   expect(button("添加快捷键").disabled).toBe(true);
   // jsdom does not implement inert; the retained command still checks grants.
   await click("保存");
@@ -292,7 +292,7 @@ it("checks conflicts against every binding after filtering and retranslates thei
   await key(capture(), { key: "j", code: "KeyJ", ctrlKey: true });
   expect(container.querySelector('[aria-label="Conflicts with Terminal: Toggle."]')).not.toBeNull();
   await language("zh");
-  expect(container.querySelector('[aria-label="与 终端：显示或隐藏 冲突。"]')).not.toBeNull();
+  expect(container.querySelector('[aria-label="与 终端：切换显示 冲突。"]')).not.toBeNull();
   expect(search().value).toBe("sidebar.toggle");
   expect(capture().value).toBe("mod+j");
   expect(state.upsert).not.toHaveBeenCalled();

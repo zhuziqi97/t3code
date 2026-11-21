@@ -404,7 +404,7 @@ describe("ServerUpdateAction", () => {
           ? {
               type: "success",
               title: "Test server 已更新",
-              description: "已重新连接，当前版本为 t3@0.0.45-nightly.20261010.17。",
+              description: "已重新连接到 t3@0.0.45-nightly.20261010.17。",
             }
           : { type: "error", title: "Test server 更新失败", description: "Network /tmp/原文 404" },
       );

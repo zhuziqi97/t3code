@@ -74,6 +74,7 @@ function entry(overrides: Partial<EnvironmentPullRequestEntry>): EnvironmentPull
     environmentId: "env-1" as EnvironmentId,
     projectId: "project-1" as ProjectId,
     provider: "github",
+    host: "github.com",
     repository: "pingdotgg/t3code",
     number: 1,
     title: "Add the pull requests page",

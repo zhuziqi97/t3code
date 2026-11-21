@@ -2471,8 +2471,6 @@
   "a202dad5b0a0aa56": "Snoozade",
   "b9b34ce02a3a5f8b": "Klara",
   "dfcce8b35ce4fb90": "Läser in",
-  "fcaffe60c85338e2": "Kunde inte läsa in äldre trådar. Försök igen",
-  "43acfc82011a8fc2": "{count, plural, one {Visa {count} till} other {Visa {count} till}}",
   "08ff4b5e32bc46b8": "Inga matchande projekt.",
   "6392f9e0f61ae70c": "Inga projekt än",
   "19df05d390e2c3ae": "Visa alla projekt",
@@ -8215,7 +8213,6 @@
   "988ef9cf99d06084": "Snitt {average} %, topp {peak} %",
   "1bcd9fcd9866a01d": "Period för processhistorik",
   "5602db67733bdfd7": "Kontrollerad {time}",
-  "b5343daba436ba2a": "Det gick inte att öppna loggmappen.",
   "f5680d01df28a62e": "Skicka SIGKILL till process {pid}? Processen kan inte hantera den.",
   "753971ab309059ad": "Kunde inte bekräfta signalen",
   "ead636d5ac1ea127": "Kunde inte skicka {signal}.",
@@ -8404,7 +8401,6 @@
   "d5a0a7ab5da467aa": "Öppna pull requests i T3 Code",
   "55087c889e8a065d": "Enhetsinställningarna sparades inte i alla miljöer",
   "73e76ba75c8d3096": "Kunde inte uppdatera {environments}.",
-  "b16605b8957226ea": "Uppdatera",
   "f8571b5368d6d847": "Kontrollera versioner",
   "388698edad9faf0e": "Agenters enhetsåtkomst",
   "6797e82cca21dbff": "Låt agenter i det här projektet använda den delade webbläsaren. Gäller när agentsessionen startar nästa gång.",
@@ -8433,22 +8429,6 @@
   "fedb5397301d3392": "Fyll panelen",
   "2fdc83ad8b55eb11": "Responsiv",
   "cf05007f2ba8ad42": "Rotera",
-  "862a3e2e99dfadb6": [
-    "Öppna simulatorer och emulatorer i enhetspanelen. Hub:",
-    " ",
-    {
-      "t": "DeviceToolVersions",
-      "i": 1
-    }
-  ],
-  "151f86b6dcd56244": [
-    "Nya agentsessioner kan öppna och styra de här enheterna. agent-device:",
-    " ",
-    {
-      "t": "DeviceToolVersions",
-      "i": 1
-    }
-  ],
   "093c68324c1b1280": "Lägg till profil",
   "1f404c456e5b2a0b": "Tom profil",
   "d7671e975097e9e4": "Du har nått gränsen för antal profiler",
@@ -9295,7 +9275,6 @@
   "0f0ae2813abd70e4": "Läsgenomströmning",
   "d032b2addb6f00dc": "Skrivgenomströmning",
   "910a0c5f01321f81": "CPU-hastighetsgräns",
-  "0360d3113c5a74f7": "Termiskt tillstånd: {thermalState}",
   "17ed03182ae3b3bb": "Backend + agenter",
   "5e590f8911f207fb": "Övervakarens overhead",
   "447821f33892635d": "Värd och insamling",
@@ -11684,7 +11663,6 @@
   "645434b1c788cf95": "Ingen dator kan byta till {label} nu.",
   "aae7db6120929d16": "Alla anslutna datorer har redan {label}. Detta sparar bara spåret.",
   "49ab4bbf2971d31b": "Ingen dator kan byta till {label} nu. Detta sparar bara spåret.",
-  "b3659c3917b3c6b0": "Den här anslutningen kan inte testa enhetsvärdar.",
   "89ef4eae0e856d40": "Kunde inte spara projektåtgärder",
   "0e4cd25642a2df00": "Ingen tillgänglig dator, eller en annan åtgärdsändring håller på att sparas.",
   "3eca4140f377b50b": "Åtgärderna sparades inte",

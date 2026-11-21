@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from "react";
-import { T, useGT } from "gt-react";
+import { T, useGT, useLocale } from "gt-react";
 import { useNavigate } from "@tanstack/react-router";
 import { create } from "zustand";
 import {
@@ -65,6 +65,7 @@ export function CustomSnoozeDialogHost() {
 
 function CustomSnoozeDialog() {
   const gt = useGT();
+  const locale = useLocale();
   const id = useId();
   const navigate = useNavigate();
   const [initial] = useState(() => new Date(Date.now() + 3_600_000));
@@ -148,7 +149,7 @@ function CustomSnoozeDialog() {
                             />
                           }
                         >
-                          {date.toLocaleDateString(undefined, {
+                          {date.toLocaleDateString(locale === "zh" ? "zh-CN" : undefined, {
                             month: "short",
                             day: "numeric",
                             year: "numeric",

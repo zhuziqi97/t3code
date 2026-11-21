@@ -1,3 +1,4 @@
+import { useTranslate } from "../../i18n";
 import { managedCapabilityDenial } from "@t3tools/client-runtime/contract-labels";
 import { DeviceHostUpdates } from "../device/DeviceHostUpdates";
 import { DeviceToolVersions } from "../device/DeviceToolVersions";
@@ -639,6 +640,7 @@ function BrowserRecordingInputSettings({ disabled }: { readonly disabled: boolea
 }
 
 function BrowserRecordingFrameRateSetting({ disabled }: { readonly disabled: boolean }) {
+  const t = useTranslate();
   const searchableSetting = useSearchableSetting();
   const gt = useGT();
   const frameRate = useClientSettings((settings) => settings.browserRecordingFrameRate);
@@ -675,12 +677,12 @@ function BrowserRecordingFrameRateSetting({ disabled }: { readonly disabled: boo
             className="w-full sm:w-40"
             aria-label={gt("Browser recording frame rate")}
           >
-            <SelectValue>{frameRate} fps</SelectValue>
+            <SelectValue>{t("integrations.recording.fps", { rate: frameRate })}</SelectValue>
           </SelectTrigger>
           <SelectPopup align="end" alignItemWithTrigger={false}>
             {BROWSER_RECORDING_FRAME_RATES.map((rate) => (
               <SelectItem hideIndicator key={rate} value={String(rate)}>
-                {rate} fps
+                {t("integrations.recording.fps", { rate })}
               </SelectItem>
             ))}
           </SelectPopup>
@@ -947,14 +949,17 @@ function DeviceIntegrationControls({
     if (failed.length > 0) {
       toastManager.add({
         type: "error",
-        title: gt("Device settings not saved on all environments"),
-        description: gt("Could not update {environments}.", {
-          environments: failed.map((environment) => environment.label).join(", "),
-        }),
+        title: resolveNow(msg("Device settings not saved on all environments")),
+        description: resolveNow(
+          msg("Could not update {environments}.", {
+            environments: failed.map((environment) => environment.label).join(", "),
+          }),
+        ),
       });
     }
   };
 
+  const t = useTranslate();
   const [updateError, setUpdateError] = useState<{ tool: "hub" | "agent"; message: string } | null>(
     null,
   );
@@ -981,7 +986,9 @@ function DeviceIntegrationControls({
                   .finally(() => setPending(null));
               }}
             >
-              {pending === `update-${tool}` ? gt("Updating…") : gt("Update", { $context: "verb" })}
+              {pending === `update-${tool}`
+                ? gt("Updating…")
+                : t("device.tools.update-version", { version: version.requiredVersion })}
             </Button>
           ) : null}
           {state.supportsToolInspection ? (
@@ -1003,7 +1010,7 @@ function DeviceIntegrationControls({
         </div>
         {updateError?.tool === tool ? (
           <p role="alert" className="text-xs text-destructive">
-            {updateError.message}
+            {t("device.tools.update-failed")} {updateError.message}
           </p>
         ) : null}
       </div>
@@ -1017,14 +1024,10 @@ function DeviceIntegrationControls({
         serverScoped
         settingKeys={["enableDeviceSupport"]}
         description={
-          <T>
-            Open simulators and emulators in the Device panel. Hub:{" "}
-            <DeviceToolVersions
-              action={versionActions("hub")}
-              kind="hub"
-              tools={state.hosts.find((host) => host.kind === "local")?.tools}
-            />
-          </T>
+          <>
+            {t("device.settings.hub.versions")}{" "}
+            <DeviceToolVersions action={versionActions("hub")} kind="hub" tools={localTools} />
+          </>
         }
         control={
           <>
@@ -1056,14 +1059,10 @@ function DeviceIntegrationControls({
         serverScoped
         settingKeys={["enableAgentDeviceAccess"]}
         description={
-          <T>
-            New agent sessions can open and drive these devices. agent-device:{" "}
-            <DeviceToolVersions
-              action={versionActions("agent")}
-              kind="agent"
-              tools={state.hosts.find((host) => host.kind === "local")?.tools}
-            />
-          </T>
+          <>
+            {t("device.settings.agent.versions")}{" "}
+            <DeviceToolVersions action={versionActions("agent")} kind="agent" tools={localTools} />
+          </>
         }
         control={
           <>
@@ -1298,7 +1297,7 @@ function BrowserProfilesSetting({ disabled }: { readonly disabled: boolean }) {
   const removeProfile = async (id: string) => {
     if (!settingsHydrated || importInFlightRef.current) return;
     if (!removalAvailable) {
-      setProfileRemovalError(gt("Connect to an environment before removing this profile."));
+      setProfileRemovalError(msg("Connect to an environment before removing this profile."));
       return;
     }
     setProfileRemovalError(null);
@@ -1311,7 +1310,7 @@ function BrowserProfilesSetting({ disabled }: { readonly disabled: boolean }) {
         serverProfileData,
       );
     } catch {
-      setProfileRemovalError(gt("Profile data could not be deleted. Try again."));
+      setProfileRemovalError(msg("Profile data could not be deleted. Try again."));
       setProfileRemovalInFlight(false);
       return;
     }
@@ -1586,7 +1585,7 @@ function BrowserProfilesSetting({ disabled }: { readonly disabled: boolean }) {
             </AlertDialogDescription>
             {profileRemovalError ? (
               <p aria-live="polite" className="text-sm text-destructive">
-                {profileRemovalError}
+                {messages(profileRemovalError)}
               </p>
             ) : null}
             {!removalAvailable ? (

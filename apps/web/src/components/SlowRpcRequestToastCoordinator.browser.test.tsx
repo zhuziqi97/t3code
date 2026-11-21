@@ -10,7 +10,7 @@ vi.mock("@tanstack/react-router", async (importOriginal) => ({
   useParams: () => ({}),
 }));
 
-import { i18n } from "../i18n";
+import { changeLanguage } from "../i18n";
 import { AppAtomRegistryProvider } from "../rpc/atomRegistry";
 import { acknowledgeRpcRequest, trackRpcRequestSent } from "../rpc/requestLatencyState";
 import { startSlowRpcRequestToasts } from "./SlowRpcRequestToastCoordinator";
@@ -35,7 +35,7 @@ describe("slow-request notifications", () => {
     const root = renderStack.use(await renderTestUi(null, { container: container, router: false }));
     try {
       await act(async () => {
-        await i18n.changeLanguage("en");
+        await changeLanguage("en");
         await root.rerender(
           <AppAtomRegistryProvider>
             <ToastProvider>
@@ -59,20 +59,20 @@ describe("slow-request notifications", () => {
       expect(document.body.textContent).toContain("git.status · 原始环境");
       expect(document.body.textContent).toContain("Started ");
       await act(async () => {
-        await i18n.changeLanguage("zh");
+        await changeLanguage("zh");
       });
       expect(document.body.textContent).toContain("部分请求响应较慢");
-      expect(document.body.textContent).toContain("2 个请求已等待超过 15 秒。");
-      expect(document.body.textContent).toContain("开始时间：");
-      expect(disclosure.getAttribute("aria-label")).toBe("收起请求");
+      expect(document.body.textContent).toContain("2 个请求等待超过 15 秒。");
+      expect(document.body.textContent).toContain("开始于");
+      expect(disclosure.getAttribute("aria-label")).toBe("隐藏请求");
       expect(disclosure.getAttribute("aria-expanded")).toBe("true");
       expect(document.querySelector('[role="button"][aria-expanded="true"]')).toBe(disclosure);
       expect(document.body.textContent).toContain("server.getConfig · Raw host 原文");
       await act(() => acknowledgeRpcRequest("first"));
-      expect(document.body.textContent).toContain("1 个请求已等待超过 15 秒。");
+      expect(document.body.textContent).toContain("1 个请求等待超过 15 秒。");
       expect(document.body.textContent).not.toContain("git.status · 原始环境");
       await act(async () => {
-        await i18n.changeLanguage("en");
+        await changeLanguage("en");
       });
       expect(document.body.textContent).toContain("1 request waiting longer than 15s.");
       expect(disclosure.getAttribute("aria-label")).toBe("Hide requests");
@@ -84,7 +84,7 @@ describe("slow-request notifications", () => {
         await root.unmount();
         acknowledgeRpcRequest("first");
         acknowledgeRpcRequest("second");
-        await i18n.changeLanguage("en");
+        await changeLanguage("en");
       });
       container.remove();
       vi.restoreAllMocks();

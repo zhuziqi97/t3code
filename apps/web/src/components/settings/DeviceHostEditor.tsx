@@ -1,3 +1,5 @@
+import { useTranslate } from "../../i18n";
+import { formatDeviceMessage } from "../device/deviceMessages";
 import { T, useGT } from "gt-react";
 import { useState } from "react";
 import * as Option from "effect/Option";
@@ -79,6 +81,7 @@ function DeviceHostEditorForm({
   onClose: () => void;
 }) {
   const gt = useGT();
+  const t = useTranslate();
   const [draft, setDraft] = useState(host);
   const [expandedChecks, setExpandedChecks] = useState<{ key: string; open: boolean } | null>(null);
   const { checks, testConnection } = useHostConnectionChecks(targets);
@@ -284,7 +287,7 @@ function DeviceHostEditorForm({
                           <T>Show error</T>
                         </summary>
                         <p className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-words">
-                          {result.error}
+                          {formatDeviceMessage(result.error, t)}
                         </p>
                       </details>
                     ) : null}

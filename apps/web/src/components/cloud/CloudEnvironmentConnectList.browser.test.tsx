@@ -458,7 +458,7 @@ it("updates discovery and offline guidance when language changes without adding 
   const rowText = () => text();
   expect(rowText()).toContain("T3 Connect · Not added · Relay online");
   await act(async () => changeLanguage("zh"));
-  expect(rowText()).toContain("T3 Connect · 尚未添加 · 中继在线");
+  expect(rowText()).toContain("T3 Connect · 未添加 · 中继在线");
   expect(rowText()).toContain("Work laptop");
   await act(async () =>
     publish({
@@ -469,7 +469,7 @@ it("updates discovery and offline guidance when language changes without adding 
       error: Option.none(),
     }),
   );
-  expect(rowText()).toContain("你似乎已离线。");
+  expect(rowText()).toContain("你似乎处于离线状态。");
   expect(discovery.register).not.toHaveBeenCalled();
 });
 
@@ -498,7 +498,7 @@ it("uses the completion language for an add started before switching languages",
   await act(async () => finish(AsyncResult.success(undefined)));
   expect(toastManager.add).toHaveBeenCalledWith({
     type: "success",
-    title: "已添加执行环境",
+    title: "已添加环境",
     description: "正在通过 T3 Connect 连接 Work laptop。",
   });
   expect(discovery.register).toHaveBeenCalledOnce();

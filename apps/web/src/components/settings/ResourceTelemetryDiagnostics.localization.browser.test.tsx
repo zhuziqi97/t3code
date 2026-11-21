@@ -3,6 +3,7 @@ import { act, render as renderTestUi, type Screen } from "../../../test/render";
 import { useEffect, type ReactNode } from "react";
 
 import { expect, it, vi } from "vite-plus/test";
+import { page } from "vite-plus/test/browser";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 import {
@@ -170,7 +171,9 @@ it("translates monitor and host states while preserving collapsed identities, se
   const subscriptions = state.subscriptions.mock.calls.length;
   await language("zh");
   expect(button("30 分钟").getAttribute("aria-pressed")).toBe("true");
-  expect(button("展开 raw-provider")).toBeDefined();
+  await expect
+    .element(page.getByRole("button", { name: "展开 raw-provider", exact: true }))
+    .toBeInTheDocument();
   expect(buttons("发送 SIGINT")).toHaveLength(1);
   expect(state.subscriptions).toHaveBeenCalledTimes(subscriptions);
   expect(state.subscriptions).toHaveBeenLastCalledWith("history", "raw-telemetry-host", {
@@ -180,9 +183,9 @@ it("translates monitor and host states while preserving collapsed identities, se
   expect(state.refresh).not.toHaveBeenCalled();
   expect(state.refreshHistory).not.toHaveBeenCalled();
   for (const text of [
-    "每 1.5 秒 采样一次",
+    "每 1.5 秒采样一次",
     "部分异常",
-    "仅桌面端",
+    "仅限桌面端",
     "电池",
     "未锁定",
     "温度状态：过热",
@@ -248,20 +251,20 @@ it("keeps a single pending retry and reports a known access failure in the compl
   await render();
   await click("Retry monitor");
   await language("zh");
-  expect(button("重试监控").disabled).toBe(true);
+  expect(button("重试监测器").disabled).toBe(true);
   expect(state.retry).toHaveBeenCalledOnce();
   await act(async () =>
     retry.reject(new Error("This connection cannot restart the resource monitor.")),
   );
   expect(state.toast).toHaveBeenCalledExactlyOnceWith({
     type: "error",
-    title: "无法重启资源监控",
+    title: "无法重启资源监测器",
     description: "此连接无权重启资源监控。",
   });
-  expect(button("重试监控").disabled).toBe(false);
+  expect(button("重试监测器").disabled).toBe(false);
   state.maintain = false;
   await render();
-  await click("重试监控");
+  await click("重试监测器");
   expect(state.retry).toHaveBeenCalledOnce();
 });
 
@@ -322,8 +325,8 @@ it("preserves the post-confirmation permission gate and accurately shows missing
   await click("Send SIGKILL");
   state.maintain = false;
   await language("zh");
-  expect(document.body.textContent).toContain("未连接桌面主机状态");
-  expect(document.body.textContent).toContain("此浏览器会话中的进程遥测仍正常运行");
+  expect(document.body.textContent).toContain("未连接桌面主机状态信号");
+  expect(document.body.textContent).toContain("当前浏览器中的进程遥测仍正常运行");
   await act(async () => confirmation.resolve(true));
   expect(state.signal).not.toHaveBeenCalled();
   expect(button("发送 SIGINT").disabled).toBe(true);

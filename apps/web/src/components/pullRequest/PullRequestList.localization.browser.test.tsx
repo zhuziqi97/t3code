@@ -1,5 +1,6 @@
 import "~/index.css";
 import { act, render as renderTestUi, type Screen } from "../../../test/render";
+import { useGT } from "gt-react";
 import { useState } from "react";
 
 import type { PullRequestListFilters } from "@t3tools/contracts";
@@ -63,14 +64,15 @@ it("keeps a typed host query when its input switches language", async () => {
   await using _lifecycle = await setupLifecycle();
 
   function SearchHarness() {
+    const gt = useGT();
     const [query, setQuery] = useState("");
     return (
       <PullRequestSearchInput
         value={query}
         onChange={setQuery}
         onSubmit={setQuery}
-        label="Search pull requests"
-        placeholder="Search label:bug"
+        label={gt("Search pull requests")}
+        placeholder={gt("Search pull requests, or label:bug")}
       />
     );
   }
@@ -83,7 +85,7 @@ it("keeps a typed host query when its input switches language", async () => {
   });
   await act(async () => changeLanguage("zh"));
   expect(input.value).toBe(query);
-  expect(input.getAttribute("aria-label")).toBe("搜索 Pull Request");
+  expect(input.getAttribute("aria-label")).toBe("搜索 PR");
   expect(input.placeholder).toContain("label:bug");
   await act(async () => changeLanguage("en"));
   expect(input.value).toBe(query);
@@ -101,7 +103,7 @@ it("changes an open filter menu and keeps the selected raw review value", async 
   );
   expect(approved?.getAttribute("aria-checked")).toBe("true");
   expect(changed).not.toHaveBeenCalled();
-  await clickText('[role="menuitemradio"]', "要求修改");
+  await clickText('[role="menuitemradio"]', "已请求修改");
   expect(changed).toHaveBeenCalledExactlyOnceWith({ review: "changes-requested" });
   expect(container.textContent).toContain("筛选");
 });
@@ -129,7 +131,7 @@ it("keeps the actual query in an empty result and clears it through the translat
     ),
   );
   await act(async () => changeLanguage("zh"));
-  expect(container.textContent).toContain("没有匹配“label:bug 原文”的结果");
+  expect(container.textContent).toContain("没有与“label:bug 原文”匹配的内容");
   await clickText("button", "清除搜索");
   expect(clear).toHaveBeenCalledOnce();
 });
@@ -145,11 +147,11 @@ it("keeps loading controls disabled and enables the translated pagination action
   );
   await act(async () => changeLanguage("zh"));
   expect([...container.querySelectorAll("button")].every((button) => button.disabled)).toBe(true);
-  expect(container.textContent).toContain("正在加载…");
+  expect(container.textContent).toContain("加载中…");
   await act(async () =>
     root.rerender(<PullRequestListEmptyState {...emptyProps} onLoadMore={load} />),
   );
-  await clickText("button", "加载更多 Pull Request");
+  await clickText("button", "加载更多 PR");
   expect(load).toHaveBeenCalledOnce();
 });
 

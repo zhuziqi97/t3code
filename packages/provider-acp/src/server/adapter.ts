@@ -1,4 +1,3 @@
-import type { AcpSessionModeState } from "./runtimeModel.ts";
 // @effect-diagnostics nodeBuiltinImport:off
 
 import {
@@ -434,11 +433,6 @@ export interface AcpAdapterV2Flavor {
    * nor count as it starting.
    */
   readonly ignoreSessionUpdate?: (notification: EffectAcpSchema.SessionNotification) => boolean;
-  readonly onSessionConfigurationUpdate?: (
-    options: ReadonlyArray<EffectAcpSchema.SessionConfigOption>,
-    modeState: AcpSessionModeState | undefined,
-    models: AcpSessionRuntime.AcpSessionRuntimeStartResult["sessionSetupResult"]["models"],
-  ) => Effect.Effect<void>;
   readonly onAvailableCommandsUpdate?: (
     commands: ReadonlyArray<EffectAcpSchema.AvailableCommand>,
   ) => Effect.Effect<void>;
@@ -7209,10 +7203,8 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
           );
         });
 
-        // The adopted response never passes through the raw session-update
-        // handler, so this is its one catalog publication.
+        // A late session/load response does not emit a raw configuration notification.
         const adoptLateSessionSetup = Effect.fnUntraced(function* (
-          targetRuntime: AcpSessionRuntime.AcpSessionRuntime["Service"],
           result: AcpSessionRuntime.AcpSessionRuntimeStartResult,
           provisionalBuildSnapshot: AcpNativeBuildConfiguration | undefined,
         ) {
@@ -7235,13 +7227,7 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
             nativeBuildConfigurationBySessionId.delete(result.sessionId);
           }
           yield* refreshModelSwitchCapability;
-          yield* (
-            flavor.onSessionConfigurationUpdate?.(
-              yield* targetRuntime.getConfigOptions,
-              yield* targetRuntime.getModeState,
-              result.sessionSetupResult.models,
-            ) ?? Effect.void
-          );
+          yield* publishSessionConfiguration();
         });
 
         const wireAcpRuntimeHandlers = Effect.fnUntraced(function* (
@@ -7267,7 +7253,6 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                     : event._tag === "SessionSetupAdopted"
                       ? Effect.suspend(() => {
                           const adopt = adoptLateSessionSetup(
-                            targetRuntime,
                             event.result,
                             nativeBuildConfigurationBySessionId.get(event.result.sessionId),
                           );

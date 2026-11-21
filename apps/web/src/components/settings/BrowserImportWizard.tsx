@@ -2,7 +2,11 @@ import { i18n } from "../../i18n";
 import { PermissionChecklist, PermissionContinueButton } from "../permissions/PermissionChecklist";
 import { usePermissionStatus } from "../permissions/usePermissionStatus";
 import { browserImportFailureMessage } from "@t3tools/client-runtime/contract-labels";
-import type { BROWSER_IMPORT_FAILURE_COPY, BrowserImportSource } from "@t3tools/contracts";
+import {
+  DEFAULT_BROWSER_PROFILE_ID,
+  type BROWSER_IMPORT_FAILURE_COPY,
+  type BrowserImportSource,
+} from "@t3tools/contracts";
 import { ArrowDownIcon, ArrowRightIcon, CheckIcon, HardDriveIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import { msg, T, useGT, useMessages, Var } from "gt-react";
@@ -151,6 +155,9 @@ export function BrowserImportWizard({
         ) : step.step === "done" ? (
           <DoneStep
             {...step}
+            defaultTarget={
+              target.kind === "existing" && target.profileId === DEFAULT_BROWSER_PROFILE_ID
+            }
             destinationEnvironmentName={destinationEnvironmentName}
             onClose={onClose}
           />
@@ -265,6 +272,7 @@ function FullDiskAccessStep({
 }) {
   const gt = useGT();
   const [opening, setOpening] = useState(false);
+  const resolve = useMessages();
   const [openingError, setOpeningError] = useState<string | null>(null);
   const permission = usePermissionStatus(async () => ({ fullDiskAccess: await onCheck() }), {
     fullDiskAccess: false,
@@ -275,7 +283,7 @@ function FullDiskAccessStep({
     setOpeningError(null);
     void Promise.resolve()
       .then(onOpenSettings)
-      .catch(() => setOpeningError(gt("Could not open System Settings. Try Allow again.")))
+      .catch(() => setOpeningError(msg("Could not open System Settings. Try Allow again.")))
       .finally(() => setOpening(false));
   };
   return (
@@ -317,7 +325,7 @@ function FullDiskAccessStep({
         />
         {openingError || permission.error ? (
           <p role="status" className="mt-3 text-xs text-muted-foreground">
-            {openingError ?? permission.error}
+            {openingError ? resolve(openingError) : permission.error}
           </p>
         ) : null}
         {!permission.isReady(["fullDiskAccess"]) ? (
@@ -423,7 +431,7 @@ function ConfigureStep({
               <SelectableTile
                 key={profile.id}
                 selected={target.kind === "existing" && target.profileId === profile.id}
-                title={profile.name}
+                title={profile.id === DEFAULT_BROWSER_PROFILE_ID ? gt("Default") : profile.name}
                 subtitle={gt("Existing profile")}
                 onSelect={() => onTargetChange({ kind: "existing", profileId: profile.id })}
               />
@@ -556,6 +564,7 @@ function DoneStep({
   skipped,
   skippedDomains,
   targetName,
+  defaultTarget,
   destinationEnvironmentName,
   onClose,
 }: {
@@ -563,11 +572,13 @@ function DoneStep({
   readonly skipped: number;
   readonly skippedDomains: ReadonlyArray<string>;
   readonly targetName: string;
+  readonly defaultTarget: boolean;
   readonly destinationEnvironmentName: string;
   readonly onClose: () => void;
 }) {
   const gt = useGT();
   const environment = destinationEnvironmentName;
+  const displayTarget = defaultTarget ? gt("Default") : targetName;
   return (
     <>
       <DialogHeader>
@@ -592,11 +603,11 @@ function DoneStep({
                   {
                     count: skipped,
                     formatted: skipped.toLocaleString(),
-                    target: targetName,
+                    target: displayTarget,
                     environment,
                   },
                 )
-              : gt("Added to {target} for {environment}.", { target: targetName, environment })
+              : gt("Added to {target} for {environment}.", { target: displayTarget, environment })
             : skipped > 0
               ? gt("No cookies were imported for {environment}.", { environment })
               : gt("There were no cookies to import for {environment}.", { environment })}

@@ -2471,8 +2471,6 @@
   "a202dad5b0a0aa56": "Zurückgestellt",
   "b9b34ce02a3a5f8b": "Erledigt",
   "dfcce8b35ce4fb90": "Wird geladen",
-  "fcaffe60c85338e2": "Ältere Threads konnten nicht geladen werden. Erneut versuchen",
-  "43acfc82011a8fc2": "{count, plural, one {{count} weiteren anzeigen} other {{count} weitere anzeigen}}",
   "08ff4b5e32bc46b8": "Keine passenden Projekte.",
   "6392f9e0f61ae70c": "Noch keine Projekte",
   "19df05d390e2c3ae": "Alle Projekte anzeigen",
@@ -8209,7 +8207,6 @@
   "988ef9cf99d06084": "Ø {average} %, Spitze {peak} %",
   "1bcd9fcd9866a01d": "Zeitraum des Prozessverlaufs",
   "5602db67733bdfd7": "Zuletzt geprüft: {time}",
-  "b5343daba436ba2a": "Log-Ordner konnte nicht geöffnet werden.",
   "f5680d01df28a62e": "SIGKILL an Prozess {pid} senden? Der Prozess kann das nicht abfangen.",
   "753971ab309059ad": "Signal konnte nicht bestätigt werden",
   "ead636d5ac1ea127": "{signal} konnte nicht gesendet werden.",
@@ -8398,7 +8395,6 @@
   "d5a0a7ab5da467aa": "Pull Requests in T3 Code öffnen",
   "55087c889e8a065d": "Geräteeinstellungen nicht in allen Umgebungen gespeichert",
   "73e76ba75c8d3096": "{environments} konnte nicht aktualisiert werden.",
-  "b16605b8957226ea": "Aktualisieren",
   "f8571b5368d6d847": "Versionen prüfen",
   "388698edad9faf0e": "Gerätezugriff für Agenten",
   "6797e82cca21dbff": "Agenten in diesem Projekt den gemeinsamen Browser nutzen lassen. Gilt ab dem nächsten Start der Agentensitzung.",
@@ -8427,22 +8423,6 @@
   "fedb5397301d3392": "Bereich füllen",
   "2fdc83ad8b55eb11": "Responsiv",
   "cf05007f2ba8ad42": "Drehen",
-  "862a3e2e99dfadb6": [
-    "Simulatoren und Emulatoren im Gerätebereich öffnen. Hub:",
-    " ",
-    {
-      "t": "DeviceToolVersions",
-      "i": 1
-    }
-  ],
-  "151f86b6dcd56244": [
-    "Neue Agentensitzungen können diese Geräte öffnen und steuern. agent-device:",
-    " ",
-    {
-      "t": "DeviceToolVersions",
-      "i": 1
-    }
-  ],
   "093c68324c1b1280": "Profil hinzufügen",
   "1f404c456e5b2a0b": "Leeres Profil",
   "d7671e975097e9e4": "Du hast das Profillimit erreicht",
@@ -9289,7 +9269,6 @@
   "0f0ae2813abd70e4": "Lesedurchsatz",
   "d032b2addb6f00dc": "Schreibdurchsatz",
   "910a0c5f01321f81": "CPU-Taktbegrenzung",
-  "0360d3113c5a74f7": "Thermischer Zustand: {thermalState}",
   "17ed03182ae3b3bb": "Backend + Agenten",
   "5e590f8911f207fb": "Monitor-Overhead",
   "447821f33892635d": "Host & Erfassung",
@@ -11678,7 +11657,6 @@
   "645434b1c788cf95": "Kein Rechner kann jetzt zu {label} wechseln.",
   "aae7db6120929d16": "Jeder verbundene Rechner ist bereits auf {label}. Es wird nur der Kanal gespeichert.",
   "49ab4bbf2971d31b": "Kein Rechner kann jetzt zu {label} wechseln. Es wird nur der Kanal gespeichert.",
-  "b3659c3917b3c6b0": "Diese Verbindung kann keine Geräte-Hosts testen.",
   "89ef4eae0e856d40": "Projektaktionen konnten nicht gespeichert werden",
   "0e4cd25642a2df00": "Kein Rechner verfügbar, oder eine andere Aktionsänderung wird gerade gespeichert.",
   "3eca4140f377b50b": "Aktionen nicht gespeichert",

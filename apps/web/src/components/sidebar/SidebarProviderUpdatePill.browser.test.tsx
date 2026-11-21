@@ -9,7 +9,10 @@ vi.mock("@effect/atom-react", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@effect/atom-react")>()),
   useAtomValue: () => state.providers,
 }));
-vi.mock("../../state/server", () => ({ primaryServerProvidersAtom: {} }));
+vi.mock("../../state/server", async (original) => ({
+  ...(await original<typeof import("../../state/server")>()),
+  primaryServerProvidersAtom: {},
+}));
 
 const checkedAt = "2026-10-19T03:00:00.000Z";
 

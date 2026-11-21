@@ -1,6 +1,7 @@
 import { msg, T, Var } from "gt-react";
 
 import { m } from "../i18n/messages";
+import { subscribeI18n } from "../i18n/runtime";
 import { type SlowRpcAckRequest, subscribeSlowRpcAckRequests } from "../rpc/requestLatencyState";
 import { toastManager } from "./ui/toast";
 
@@ -42,7 +43,9 @@ function SlowRequestDetails({ requests }: { requests: ReadonlyArray<SlowRpcAckRe
 export function startSlowRpcRequestToasts(): () => void {
   let toastId: ReturnType<typeof toastManager.add> | null = null;
 
-  const unsubscribe = subscribeSlowRpcAckRequests((slowRequests) => {
+  let currentRequests: ReadonlyArray<SlowRpcAckRequest> = [];
+  const render = (slowRequests: ReadonlyArray<SlowRpcAckRequest>) => {
+    currentRequests = slowRequests;
     if (slowRequests.length === 0) {
       if (toastId !== null) {
         toastManager.close(toastId);
@@ -68,10 +71,13 @@ export function startSlowRpcRequestToasts(): () => void {
     } else {
       toastManager.update(toastId, nextToast);
     }
-  });
+  };
+  const unsubscribe = subscribeSlowRpcAckRequests(render);
+  const unsubscribeLanguage = subscribeI18n(() => render(currentRequests));
 
   return () => {
     unsubscribe();
+    unsubscribeLanguage();
     if (toastId !== null) toastManager.close(toastId);
   };
 }

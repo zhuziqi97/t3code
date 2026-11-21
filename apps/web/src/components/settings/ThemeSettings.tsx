@@ -54,6 +54,7 @@ import {
 } from "./ThemePreviewCircles";
 import { ThemeWireframe } from "./ThemeWireframe";
 import { T, useGT } from "gt-react";
+import { i18n } from "../../i18n";
 
 const MAINTAINER_THEMES: ReadonlyArray<ThemeDefinition> = [
   T3_CHAT_THEME,
@@ -800,7 +801,7 @@ export function ThemeLibrary({
               openThemeEditor({
                 editingThemeId: null,
                 seedThemeId: null,
-                seedName: `${standardTheme.label} copy`,
+                seedName: i18n.t("appearance.theme.copyName", { name: standardTheme.label }),
                 initialAppearance,
               })
             }
@@ -820,7 +821,7 @@ export function ThemeLibrary({
                 openThemeEditor({
                   editingThemeId: null,
                   seedThemeId: maintainerTheme.id,
-                  seedName: `${maintainerTheme.label} copy`,
+                  seedName: i18n.t("appearance.theme.copyName", { name: maintainerTheme.label }),
                   initialAppearance,
                 })
               }
@@ -844,7 +845,7 @@ export function ThemeLibrary({
                 openThemeEditor({
                   editingThemeId: null,
                   seedThemeId: environmentTheme.id,
-                  seedName: `${environmentTheme.label} copy`,
+                  seedName: i18n.t("appearance.theme.copyName", { name: environmentTheme.label }),
                   initialAppearance,
                 })
               }
@@ -868,7 +869,7 @@ export function ThemeLibrary({
               openThemeEditor({
                 editingThemeId: null,
                 seedThemeId: customTheme.id,
-                seedName: `${customTheme.label} copy`,
+                seedName: i18n.t("appearance.theme.copyName", { name: customTheme.label }),
                 initialAppearance,
               })
             }

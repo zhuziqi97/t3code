@@ -20,11 +20,19 @@ vi.mock("../../state/session", () => ({
 }));
 vi.mock("../../state/server", () => ({ serverEnvironment: { consumeResetCredit: null } }));
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => consume }));
-vi.mock("../../hooks/useSettings", () => ({ usePrimarySettings: () => "24h" }));
+vi.mock("../../hooks/useSettings", async () => {
+  const { DEFAULT_CLIENT_SETTINGS } = await import("@t3tools/contracts/settings");
+  return {
+    getClientSettings: () => DEFAULT_CLIENT_SETTINGS,
+    subscribeClientSettings: () => () => {},
+    updateClientSettings: async () => {},
+    usePrimarySettings: () => "24h",
+  };
+});
 vi.mock("../chat/ProviderInstanceIcon", () => ({ ProviderInstanceIcon: () => null }));
 vi.mock("../settings/RedactedSensitiveText", () => ({ RedactedSensitiveText: () => null }));
 
-import { i18n } from "../../i18n";
+import { changeLanguage } from "../../i18n";
 
 import { UsageLimitsPooled } from "./UsageLimitsPooled";
 
@@ -136,14 +144,13 @@ it.each([
   async ({ result, text, language }) => {
     setup();
     await using locale = new AsyncDisposableStack();
-    const previousLanguage = i18n.language;
     locale.defer(async () => {
-      await i18n.changeLanguage(previousLanguage);
+      await changeLanguage("en");
     });
-    await i18n.changeLanguage(language);
-    const useReset = language === "zh" ? "使用重置机会" : "Use reset";
-    const useCredit = language === "zh" ? "使用重置机会" : "Use credit";
-    const usingCredit = language === "zh" ? "正在使用重置机会…" : "Using reset credit…";
+    await changeLanguage(language as "en" | "zh");
+    const useReset = language === "zh" ? "使用重置" : "Use reset";
+    const useCredit = language === "zh" ? "使用额度" : "Use credit";
+    const usingCredit = language === "zh" ? "正在使用重置额度…" : "Using reset credit…";
     const using = language === "zh" ? "正在使用…" : "Using…";
     await page.viewport(1440, 900);
     await using _screen = await render(initial());

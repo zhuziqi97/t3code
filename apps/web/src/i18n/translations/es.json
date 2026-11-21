@@ -2471,8 +2471,6 @@
   "a202dad5b0a0aa56": "Pospuestos",
   "b9b34ce02a3a5f8b": "Resueltos",
   "dfcce8b35ce4fb90": "Cargando",
-  "fcaffe60c85338e2": "No se pudieron cargar los hilos anteriores. Reintentar",
-  "43acfc82011a8fc2": "{count, plural, one {Mostrar {count} más} other {Mostrar {count} más}}",
   "08ff4b5e32bc46b8": "No hay proyectos que coincidan.",
   "6392f9e0f61ae70c": "Aún no hay proyectos",
   "19df05d390e2c3ae": "Mostrar todos los proyectos",
@@ -8209,7 +8207,6 @@
   "988ef9cf99d06084": "Media {average}%, máx. {peak}%",
   "1bcd9fcd9866a01d": "Periodo del historial de procesos",
   "5602db67733bdfd7": "Comprobado {time}",
-  "b5343daba436ba2a": "No se pudo abrir la carpeta de registros.",
   "f5680d01df28a62e": "¿Enviar SIGKILL al proceso {pid}? El proceso no puede gestionarlo.",
   "753971ab309059ad": "No se pudo confirmar la señal",
   "ead636d5ac1ea127": "No se pudo enviar {signal}.",
@@ -8396,7 +8393,6 @@
   "d5a0a7ab5da467aa": "Abrir pull requests en T3 Code",
   "55087c889e8a065d": "Los ajustes de dispositivos no se guardaron en todos los entornos",
   "73e76ba75c8d3096": "No se pudo actualizar {environments}.",
-  "b16605b8957226ea": "Actualizar",
   "f8571b5368d6d847": "Comprobar versiones",
   "388698edad9faf0e": "Acceso de agentes a dispositivos",
   "6797e82cca21dbff": "Permite que los agentes de este proyecto usen el navegador compartido. Se aplica la próxima vez que se inicie la sesión del agente.",
@@ -8425,22 +8421,6 @@
   "fedb5397301d3392": "Llenar panel",
   "2fdc83ad8b55eb11": "Adaptable",
   "cf05007f2ba8ad42": "Girar",
-  "862a3e2e99dfadb6": [
-    "Abre simuladores y emuladores en el panel Dispositivo. Hub:",
-    " ",
-    {
-      "t": "DeviceToolVersions",
-      "i": 1
-    }
-  ],
-  "151f86b6dcd56244": [
-    "Las nuevas sesiones de agente pueden abrir y controlar estos dispositivos. agent-device:",
-    " ",
-    {
-      "t": "DeviceToolVersions",
-      "i": 1
-    }
-  ],
   "093c68324c1b1280": "Añadir perfil",
   "1f404c456e5b2a0b": "Perfil en blanco",
   "d7671e975097e9e4": "Has alcanzado el límite de perfiles",
@@ -9287,7 +9267,6 @@
   "0f0ae2813abd70e4": "Rendimiento de lectura",
   "d032b2addb6f00dc": "Rendimiento de escritura",
   "910a0c5f01321f81": "Límite de velocidad de la CPU",
-  "0360d3113c5a74f7": "Estado térmico {thermalState}",
   "17ed03182ae3b3bb": "Backend + agentes",
   "5e590f8911f207fb": "Sobrecarga del monitor",
   "447821f33892635d": "Host y recopilación",
@@ -11671,7 +11650,6 @@
   "645434b1c788cf95": "Ninguna máquina puede cambiar a {label} ahora.",
   "aae7db6120929d16": "Todas las máquinas conectadas ya están en {label}. Esto solo guarda el canal.",
   "49ab4bbf2971d31b": "Ninguna máquina puede cambiar a {label} ahora. Esto solo guarda el canal.",
-  "b3659c3917b3c6b0": "Esta conexión no puede probar los hosts de dispositivos.",
   "89ef4eae0e856d40": "No se pudieron guardar las acciones del proyecto",
   "0e4cd25642a2df00": "No hay ninguna máquina disponible o se está guardando otro cambio de acciones.",
   "3eca4140f377b50b": "No se guardaron las acciones",

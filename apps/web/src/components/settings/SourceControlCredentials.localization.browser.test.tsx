@@ -117,7 +117,7 @@ it("keeps GitHub host and token drafts across languages and does not repeat a pe
   expect((document.getElementById(`github-token-${environmentId}`) as HTMLInputElement).value).toBe(
     "Controlled-Raw-Token",
   );
-  expect(container.textContent).toContain("此处保存的令牌优先于 GH_TOKEN 和 gh 登录账户");
+  expect(container.textContent).toContain("此处保存的 token 优先于 GH_TOKEN 和 gh 登录使用");
   expect(state.save).not.toHaveBeenCalled();
   await submit();
   expect(state.save).toHaveBeenCalledExactlyOnceWith({
@@ -223,7 +223,7 @@ it("keeps account visibility and raw diagnostics while Chinese account choices s
   expect(container.querySelector('button[aria-label="隐藏 GitHub 账户"]')).not.toBeNull();
   expect(container.textContent).toContain("Raw-Personal");
   expect(container.textContent).toContain("无法使用：raw gh error: account expired");
-  expect(container.textContent).toContain("服务器已设置 GH_TOKEN");
+  expect(container.textContent).toContain("服务器上设置了 GH_TOKEN");
   expect(state.save).not.toHaveBeenCalled();
   const trigger = container.querySelector<HTMLButtonElement>(
     'button[aria-label="github.com 的 GitHub 账户"]',

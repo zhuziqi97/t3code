@@ -29,7 +29,8 @@ vi.mock("../../state/convene", () => ({
 vi.mock("../../state/use-atom-command", () => ({
   useAtomCommand: () => model.manage,
 }));
-vi.mock("../../hooks/useCopyToClipboard", () => ({
+vi.mock("../../hooks/useCopyToClipboard", async (original) => ({
+  ...(await original<typeof import("../../hooks/useCopyToClipboard")>()),
   writeTextToClipboard: model.copy,
 }));
 import { changeLanguage } from "../../i18n";
@@ -363,9 +364,15 @@ it("copies the code and complete link, opens the same link and completes automat
   const open = vi.spyOn(window, "open").mockImplementation(() => null);
   await pair();
   await click("Copy code");
-  expect(model.copy).toHaveBeenLastCalledWith("ABCD-EFGH-JKLM", "Copy code");
+  expect(model.copy).toHaveBeenLastCalledWith(
+    "ABCD-EFGH-JKLM",
+    expect.objectContaining({ target: "code" }),
+  );
   await click("Copy pairing link");
-  expect(model.copy).toHaveBeenLastCalledWith(pairingLink, "Copy pairing link");
+  expect(model.copy).toHaveBeenLastCalledWith(
+    pairingLink,
+    expect.objectContaining({ target: "link" }),
+  );
   await click("Open Convene");
   expect(open).toHaveBeenCalledWith(pairingLink, "_blank", "noopener,noreferrer");
   await advance(5000);

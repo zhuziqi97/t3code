@@ -230,7 +230,7 @@ it("retranslates sidebar success without restarting its dismissal timer or reviv
   expect(container.textContent).toContain(`Codex updated: v${codex.version}`);
   await act(async () => vi.advanceTimersByTime(2500));
   await language("zh");
-  expect(container.textContent).toContain(`Codex 已更新至 v${codex.version}`);
+  expect(container.textContent).toContain(`Codex 已更新：v${codex.version}`);
   const main = container.querySelector<HTMLButtonElement>("[data-provider-update-main]")!;
   expect(main.getAttribute("aria-label")).toBe("新会话将使用更新后的提供方。");
   await act(async () => vi.advanceTimersByTime(500));
@@ -264,7 +264,7 @@ it("keeps one update per machine and retranslates the partial result while retai
     first.resolve(AsyncResult.success({ providers: [terminal(codex, "succeeded")] }));
     second.resolve(AsyncResult.failure(Cause.fail(new Error("raw CLI exit: /native path"))));
   });
-  expect(container.textContent).toContain("2 项提供方更新中有 1 项失败");
+  expect(container.textContent).toContain("2 个提供方更新中有 1 个失败");
   expect(container.textContent).toContain("WSL (Ubuntu raw) · Claude: raw CLI exit: /native path");
   await language("en");
   expect(container.textContent).toContain("1 of 2 provider updates failed");

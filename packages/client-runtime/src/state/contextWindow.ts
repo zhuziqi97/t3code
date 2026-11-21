@@ -81,10 +81,10 @@ type CompactionItem = Extract<ThreadStructureTurnItem, { readonly type: "compact
 // A retired provider thread's items say nothing about the active conversation.
 function isRetiredProviderThreadItem(
   item: CompactionItem,
-  providerThread: Pick<OrchestrationV2ProviderThread, "id"> | null | undefined,
+  providerThread: Partial<Pick<OrchestrationV2ProviderThread, "id">> | null | undefined,
 ): boolean {
   return (
-    providerThread != null &&
+    providerThread?.id != null &&
     item.providerThreadId != null &&
     item.providerThreadId !== providerThread.id
   );
@@ -101,7 +101,7 @@ function compactionSnapshot(
     maxTokens !== null && maxTokens > 0 ? Math.min(100, (usedTokens / maxTokens) * 100) : null;
   return {
     usedTokens,
-    totalProcessedTokens: asFiniteNumber(item.beforeTokenCount),
+    totalProcessedTokens: null,
     maxTokens,
     remainingTokens: maxTokens !== null ? Math.max(0, Math.round(maxTokens - usedTokens)) : null,
     usedPercentage,
@@ -117,7 +117,7 @@ function compactionSnapshot(
     lastReasoningOutputTokens: null,
     toolUses: null,
     durationMs: null,
-    compactsAutomatically: true,
+    compactsAutomatically: null,
     autoCompactThreshold: null,
     cost: null,
     updatedAt,
@@ -129,7 +129,10 @@ export function deriveLatestContextWindowSnapshot(
     readonly item: ThreadStructureTurnItem;
   }>,
   liveUsage?: OrchestrationV2ProviderTurnTokenUsage | null,
-  providerThread?: Pick<OrchestrationV2ProviderThread, "id" | "contextUsage" | "updatedAt"> | null,
+  providerThread?:
+    | (Pick<OrchestrationV2ProviderThread, "contextUsage" | "updatedAt"> &
+        Partial<Pick<OrchestrationV2ProviderThread, "id">>)
+    | null,
 ): ContextWindowSnapshot | null {
   const latestCompletedCompaction = entries.findLast(
     (entry): entry is { readonly item: CompactionItem } =>
@@ -181,7 +184,7 @@ export function deriveLatestContextWindowSnapshot(
       lastReasoningOutputTokens: null,
       toolUses: null,
       durationMs: null,
-      compactsAutomatically: true,
+      compactsAutomatically: liveUsage.autoCompactThreshold != null ? true : null,
       autoCompactThreshold: liveUsage.autoCompactThreshold ?? null,
       cost: null,
       updatedAt: liveUsage.updatedAt,

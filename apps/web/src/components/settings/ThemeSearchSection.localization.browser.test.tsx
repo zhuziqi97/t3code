@@ -186,7 +186,7 @@ it("updates owned search errors in place and keeps raw network diagnostics witho
   await render();
   await search();
   await switchLanguage();
-  expect(container.textContent).toContain("Open VSX 搜索暂时不可用。");
+  expect(container.textContent).toContain("Open VSX 搜索当前不可用。");
   expect(state.search).toHaveBeenCalledTimes(1);
   await act(async () =>
     searchInput().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })),

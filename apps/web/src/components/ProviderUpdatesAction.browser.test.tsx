@@ -27,7 +27,8 @@ const state = vi.hoisted(() => ({
   sessions: new Map<EnvironmentId, Atom.Writable<AsyncResult.AsyncResult<AuthSessionState>>>(),
 }));
 
-vi.mock(import("~/state/environments"), () => ({
+vi.mock(import("~/state/environments"), async (original) => ({
+  ...(await original()),
   useEnvironments: (() => ({ environments: state.environments })) as never,
   useEnvironmentProviders: () => state.providers,
 }));
@@ -43,9 +44,17 @@ vi.mock(import("@t3tools/client-runtime/state/session"), async (original) => {
     })) as typeof actual.createEnvironmentSessionAtoms,
   };
 });
-vi.mock(import("~/state/server"), () => ({
-  serverEnvironment: { updateProvider: "update", refreshProviders: "refresh" } as never,
-}));
+vi.mock(import("~/state/server"), async (original) => {
+  const actual = await original();
+  return {
+    ...actual,
+    serverEnvironment: {
+      ...actual.serverEnvironment,
+      updateProvider: "update" as never,
+      refreshProviders: "refresh" as never,
+    },
+  };
+});
 vi.mock(import("~/state/use-atom-command"), () => ({
   useAtomCommand: ((command: string) =>
     async ({ environmentId, input }: { environmentId: EnvironmentId; input: unknown }) => {

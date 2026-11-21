@@ -914,7 +914,7 @@ export function GeneralSettingsPanel() {
           resetAction={
             settings.languagePreference !== DEFAULT_UNIFIED_SETTINGS.languagePreference ? (
               <SettingResetButton
-                ariaLabel={t("settings.language.title")}
+                ariaLabel={t("settings.resetLabel", { label: t("settings.language.title") })}
                 onClick={() =>
                   updateSettings({
                     languagePreference: DEFAULT_UNIFIED_SETTINGS.languagePreference,

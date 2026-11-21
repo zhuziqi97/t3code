@@ -26,7 +26,7 @@ it("keeps the chosen duration across a language switch and returns the same wake
   await act(async () => {
     await changeLanguage("zh");
   });
-  expect(document.body.textContent).toContain("自定义暂缓时间");
+  expect(document.body.textContent).toContain("自定义暂缓");
   expect(document.body.textContent).toContain("小时");
   await act(async () => document.querySelector("form")!.requestSubmit());
   await expect(choice).resolves.toEqual({

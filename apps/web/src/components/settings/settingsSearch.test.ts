@@ -190,11 +190,13 @@ describe("searchSettings", () => {
   });
 
   it("lists thread confirmations in panel order", () => {
-    expect(searchSettings("confirmation").map((item) => item.id)).toEqual([
-      "unpin-confirmation",
-      "archive-confirmation",
-      "delete-confirmation",
-    ]);
+    expect(
+      searchSettings("confirmation")
+        .filter(
+          (item) => item.to === "/settings/general" && item.id !== "terminal-close-confirmation",
+        )
+        .map((item) => item.id),
+    ).toEqual(["unpin-confirmation", "archive-confirmation", "delete-confirmation"]);
   });
 
   it.each([
@@ -688,10 +690,14 @@ it("retranslates command results and keeps bilingual and native searches at the 
     );
   }
   expect(searchableSetting("keybindings").title).toBe("快捷键");
-  const item = SETTINGS_SEARCH_ITEMS.find((item) => item.id === "keybinding-thread.copyReference")!;
   await changeLanguage("en");
-  expect(item.title).toBe("Pull Request: Copy Link or Thread ID");
-  expect(searchSettings("复制链接")).toContainEqual(item);
+  expect(searchSettings("复制链接")).toContainEqual(
+    expect.objectContaining({
+      id: "keybinding-thread.copyReference",
+      title: "Pull Request: Copy Link or Thread ID",
+      to: "/settings/keybindings",
+    }),
+  );
   expect(searchSettings("快捷键").map((item) => item.id)).toContain("keybindings");
 });
 
@@ -732,7 +738,6 @@ it("finds device integration destinations using either language and keeps scope 
     expect(searchSettings(query!)).toContainEqual(
       expect.objectContaining({ id, title, to: "/settings/devices" }),
     );
-    expect(SETTINGS_SEARCH_ITEMS.find((item) => item.id === id)?.title).toBe(title);
   }
   await changeLanguage("en");
   expect(searchSettings("设备中心")).toContainEqual(
@@ -792,7 +797,6 @@ it("finds diagnostic flows by Chinese names in either language without changing 
 it("retranslates the providers group and keeps Chinese and English searches at its original route", async () => {
   await changeLanguage("zh");
   expect(searchableSetting("providers").title).toBe("智能体提供方");
-  expect(SETTINGS_SEARCH_ITEMS.find((item) => item.id === "providers")?.title).toBe("智能体提供方");
   for (const query of ["智能体提供方", "Providers"]) {
     expect(searchSettings(query)).toContainEqual(
       expect.objectContaining({

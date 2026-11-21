@@ -4944,17 +4944,15 @@ describe("AcpAdapterV2", () => {
       const mockAgentPath = yield* path.fromFileUrl(
         new URL("../../../scripts/acp-mock-agent.ts", import.meta.url),
       );
-      const lateConfigOptions = yield* Deferred.make<void>();
+      const adopted = yield* Deferred.make<void>();
       let acpRuntime: AcpSessionRuntime.AcpSessionRuntime["Service"] | undefined;
-      const publishedConfigurations: Array<ReadonlyArray<EffectAcpSchema.SessionConfigOption>> = [];
       const instanceId = ProviderInstanceId.make("acp-test-late-session-load");
+      const threadId = ThreadId.make("thread-acp-late-session-load");
       const adapter = yield* makeAcpAdapterV2({
         instanceId,
         flavor: {
           driver: ACP_TEST_DRIVER,
           capabilities: AcpProviderCapabilitiesV2,
-          onSessionConfigurationUpdate: (configOptions) =>
-            Effect.sync(() => publishedConfigurations.push(configOptions)),
           makeRuntime: makeMockRuntime({
             childProcessSpawner,
             mockAgentPath,
@@ -4972,8 +4970,8 @@ describe("AcpAdapterV2", () => {
                     .getEvents()
                     .pipe(
                       Stream.tap((event) =>
-                        event._tag === "ConfigOptionsUpdated"
-                          ? Deferred.succeed(lateConfigOptions, undefined)
+                        event._tag === "SessionSetupAdopted"
+                          ? Deferred.succeed(adopted, undefined)
                           : Effect.void,
                       ),
                     ),
@@ -4983,32 +4981,36 @@ describe("AcpAdapterV2", () => {
         },
         selfInvocation,
       });
+      const modelSelection = { instanceId, model: "default" } as const;
+      const runtimePolicy = ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        cwd: process.cwd(),
+      });
       const runtime = yield* adapter.openSession({
-        threadId: ThreadId.make("thread-acp-late-session-load"),
+        threadId,
         providerSessionId: ProviderSessionId.make("provider-session-acp-late-session-load"),
-        modelSelection: { instanceId, model: "default" },
-        runtimePolicy: ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
-          runtimeMode: "full-access",
-          interactionMode: "default",
-          cwd: process.cwd(),
-        }),
+        modelSelection,
+        runtimePolicy,
         initialNativeThreadId: "mock-session-1",
       });
 
-      yield* Deferred.await(lateConfigOptions).pipe(Effect.timeoutOption("5 seconds"));
+      yield* Deferred.await(adopted);
       yield* acpRuntime!.drainEvents;
 
       assert.isTrue(
         runtime.providerSession.capabilities.sessions.supportsModelSwitchInSession,
         "model switching stays disabled after the late session/load response offered a model",
       );
-      // Registry agents fill their model picker from this callback.
-      assert.equal(
-        publishedConfigurations.filter((options) =>
-          options.some((option) => option.category === "model"),
-        ).length,
-        1,
-        "the late session/load configuration must reach the catalog exactly once",
+      const providerThread = yield* runtime.ensureThread({
+        threadId,
+        modelSelection,
+        runtimePolicy,
+      });
+      assert.include(
+        providerThread.nativeMetadata?.models?.map(({ id }) => id) ?? [],
+        "composer-2",
+        "the model list from the late native response must reach the thread",
       );
     }).pipe(Effect.provide(layerTest), Effect.scoped),
   );
@@ -5023,9 +5025,7 @@ describe("AcpAdapterV2", () => {
       );
       const protocolEvents = yield* Queue.unbounded<EffectAcpProtocol.AcpProtocolLogEvent>();
       const adoptionHandled = yield* Deferred.make<void>();
-      const adopted = yield* Deferred.make<void>();
-      const publishedConfigurations: Array<ReadonlyArray<EffectAcpSchema.SessionConfigOption>> = [];
-      let publications = 0;
+      let holdFirstModeRead = true;
       let acpRuntime: AcpSessionRuntime.AcpSessionRuntime["Service"] | undefined;
       const instanceId = ProviderInstanceId.make("acp-test-late-session-load-selection");
       const threadId = ThreadId.make("thread-acp-late-session-load-selection");
@@ -5038,17 +5038,6 @@ describe("AcpAdapterV2", () => {
             event._tag === "SessionSetupAdopted"
               ? Deferred.succeed(adoptionHandled, undefined).pipe(Effect.asVoid)
               : Effect.void,
-          // Holds openSession's own publication until the adapter has seen the
-          // late response, so adoption overlaps session configuration.
-          onSessionConfigurationUpdate: (configOptions) =>
-            (publications++ === 0 ? Deferred.await(adoptionHandled) : Effect.void).pipe(
-              Effect.andThen(Effect.sync(() => publishedConfigurations.push(configOptions))),
-              Effect.andThen(
-                configOptions.some((option) => option.category === "model")
-                  ? Deferred.succeed(adopted, undefined)
-                  : Effect.void,
-              ),
-            ),
           makeRuntime: makeMockRuntime({
             childProcessSpawner,
             mockAgentPath,
@@ -5060,7 +5049,14 @@ describe("AcpAdapterV2", () => {
             sessionLoadReplayIdleGap: "100 millis",
             wrapRuntime: (runtime) => {
               acpRuntime = runtime;
-              return runtime;
+              return {
+                ...runtime,
+                getModeState: Effect.suspend(() => {
+                  if (!holdFirstModeRead) return runtime.getModeState;
+                  holdFirstModeRead = false;
+                  return Deferred.await(adoptionHandled).pipe(Effect.andThen(runtime.getModeState));
+                }),
+              };
             },
           }),
         },
@@ -5079,14 +5075,12 @@ describe("AcpAdapterV2", () => {
         runtimePolicy,
         initialNativeThreadId: "mock-session-1",
       });
-      yield* Deferred.await(adopted).pipe(Effect.timeoutOption("5 seconds"));
       yield* acpRuntime!.drainEvents;
       const providerThread = yield* runtime.ensureThread({
         threadId,
         modelSelection,
         runtimePolicy,
       });
-      yield* Queue.clear(protocolEvents);
 
       yield* runtime.startTurn(
         makeTurnInput({
@@ -5098,22 +5092,24 @@ describe("AcpAdapterV2", () => {
           now: yield* DateTime.now,
         }),
       );
-      const methods: Array<string> = [];
-      while (!methods.includes("session/prompt")) {
+      const selectedModels: Array<unknown> = [];
+      while (true) {
         const event = yield* Queue.take(protocolEvents);
         if (event.direction !== "outgoing") continue;
         const method = rawProtocolMethod(event);
-        if (method !== undefined) methods.push(method);
+        if (method === "session/prompt") break;
+        if (
+          method === "session/set_config_option" &&
+          rawProtocolRequestParam(event, "configId") === "model"
+        ) {
+          selectedModels.push(rawProtocolRequestParam(event, "value"));
+        }
       }
 
-      assert.include(
-        methods,
-        "session/set_config_option",
+      assert.deepEqual(
+        selectedModels,
+        ["composer-2"],
         "the selected model was only applied to the provisional setup, which offered no model",
-      );
-      assert.isTrue(
-        publishedConfigurations.at(-1)?.some((option) => option.category === "model"),
-        "the provisional catalog was published over the late session/load one",
       );
     }).pipe(Effect.provide(layerTest), Effect.scoped),
   );
@@ -6495,7 +6491,7 @@ describe("AcpAdapterV2", () => {
         return yield* Effect.die("ACP runtime must register MCP-over-ACP handlers");
       }
       const { connectionId } = yield* mcpConnect(
-        { serverId: "t3-code" },
+        { serverId: "mcp-session-acp-stop-mcp-call:t3-code" },
         { requestId: "stop-mcp-connect", method: "mcp/connect" },
       );
       const call = yield* mcpMessage(

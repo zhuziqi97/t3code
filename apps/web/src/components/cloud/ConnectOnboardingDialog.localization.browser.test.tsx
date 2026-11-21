@@ -67,6 +67,8 @@ vi.mock("~/state/session", async (original) => ({
   ...(await original<typeof import("~/state/session")>()),
   environmentSession: { sessionStateAtom: () => null },
   readEnvironmentScope: () => true,
+  readEnvironmentCanConfigureRelay: () => true,
+  useEnvironmentCanConfigureRelay: () => true,
   useEnvironmentScope: () => true,
 }));
 vi.mock("./CloudEnvironmentConnectList", async (original) => ({

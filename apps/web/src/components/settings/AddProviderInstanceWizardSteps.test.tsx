@@ -1,9 +1,15 @@
+import { m } from "../../i18n/messages";
 import { Children, isValidElement, type ReactElement } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { WizardSteps } from "../ui/wizard";
 import { ADD_PROVIDER_WIZARD_STEPS } from "./AddProviderInstanceDialog.logic";
 import { AddProviderInstanceWizardSteps } from "./AddProviderInstanceWizardSteps";
+
+vi.mock(import("gt-react"), async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, useMessages: () => m };
+});
 
 vi.mock("../../i18n", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../i18n")>();

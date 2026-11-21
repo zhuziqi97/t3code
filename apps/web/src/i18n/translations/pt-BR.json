@@ -2471,8 +2471,6 @@
   "a202dad5b0a0aa56": "Adiadas",
   "b9b34ce02a3a5f8b": "Concluídas",
   "dfcce8b35ce4fb90": "Carregando",
-  "fcaffe60c85338e2": "Não foi possível carregar threads mais antigas. Tentar novamente",
-  "43acfc82011a8fc2": "{count, plural, one {Mostrar mais {count}} other {Mostrar mais {count}}}",
   "08ff4b5e32bc46b8": "Nenhum projeto correspondente.",
   "6392f9e0f61ae70c": "Nenhum projeto ainda",
   "19df05d390e2c3ae": "Mostrar todos os projetos",
@@ -8209,7 +8207,6 @@
   "988ef9cf99d06084": "Média {average}%, pico {peak}%",
   "1bcd9fcd9866a01d": "Período do histórico de processos",
   "5602db67733bdfd7": "Verificado {time}",
-  "b5343daba436ba2a": "Não foi possível abrir a pasta de logs.",
   "f5680d01df28a62e": "Enviar SIGKILL ao processo {pid}? O processo não pode tratar este sinal.",
   "753971ab309059ad": "Não foi possível confirmar o sinal",
   "ead636d5ac1ea127": "Falha ao enviar {signal}.",
@@ -8396,7 +8393,6 @@
   "d5a0a7ab5da467aa": "Abrir pull requests no T3 Code",
   "55087c889e8a065d": "Configurações de dispositivo não salvas em todos os ambientes",
   "73e76ba75c8d3096": "Não foi possível atualizar {environments}.",
-  "b16605b8957226ea": "Atualizar",
   "f8571b5368d6d847": "Verificar versões",
   "388698edad9faf0e": "Acesso dos agentes a dispositivos",
   "6797e82cca21dbff": "Permite que os agentes deste projeto usem o navegador compartilhado. Vale a partir do próximo início da sessão do agente.",
@@ -8425,22 +8421,6 @@
   "fedb5397301d3392": "Preencher painel",
   "2fdc83ad8b55eb11": "Responsivo",
   "cf05007f2ba8ad42": "Girar",
-  "862a3e2e99dfadb6": [
-    "Abra simuladores e emuladores no painel Dispositivo. Hub:",
-    " ",
-    {
-      "t": "DeviceToolVersions",
-      "i": 1
-    }
-  ],
-  "151f86b6dcd56244": [
-    "Novas sessões de agente podem abrir e controlar estes dispositivos. agent-device:",
-    " ",
-    {
-      "t": "DeviceToolVersions",
-      "i": 1
-    }
-  ],
   "093c68324c1b1280": "Adicionar perfil",
   "1f404c456e5b2a0b": "Perfil em branco",
   "d7671e975097e9e4": "Você atingiu o limite de perfis",
@@ -9288,7 +9268,6 @@
   "0f0ae2813abd70e4": "Taxa de leitura",
   "d032b2addb6f00dc": "Taxa de gravação",
   "910a0c5f01321f81": "Limite de velocidade da CPU",
-  "0360d3113c5a74f7": "Estado térmico {thermalState}",
   "17ed03182ae3b3bb": "Backend + agentes",
   "5e590f8911f207fb": "Sobrecarga do monitor",
   "447821f33892635d": "Host e coleta",
@@ -11675,7 +11654,6 @@
   "645434b1c788cf95": "Nenhuma máquina pode mudar para {label} agora.",
   "aae7db6120929d16": "Todas as máquinas conectadas já estão em {label}. Isso só salva o canal.",
   "49ab4bbf2971d31b": "Nenhuma máquina pode mudar para {label} agora. Isso só salva o canal.",
-  "b3659c3917b3c6b0": "Esta conexão não pode testar hosts de dispositivos.",
   "89ef4eae0e856d40": "Falha ao salvar as ações do projeto",
   "0e4cd25642a2df00": "Nenhuma máquina disponível, ou outra alteração de ações está sendo salva.",
   "3eca4140f377b50b": "Ações não salvas",

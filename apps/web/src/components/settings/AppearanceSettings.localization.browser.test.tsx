@@ -108,7 +108,9 @@ it("preserves an unsettled font draft across language changes and submits the or
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
   await switchLanguage();
-  const translated = container.querySelector<HTMLInputElement>('input[aria-label="界面字体家族"]')!;
+  const translated = container.querySelector<HTMLInputElement>(
+    'input[aria-label="界面字体 字体"]',
+  )!;
   expect(translated).toBe(input);
   expect(translated.value).toBe("Raw Font Family");
   expect(state.update).not.toHaveBeenCalled();
@@ -133,8 +135,8 @@ it("keeps advanced typography open and saves native pixel counts from Chinese fo
   );
   expect(container.querySelector('input[aria-label="Prompt font family"]')).not.toBeNull();
   await switchLanguage();
-  expect(container.querySelector('input[aria-label="提示词字体家族"]')).not.toBeNull();
-  expect(container.querySelector('input[aria-label="终端字体家族"]')).not.toBeNull();
+  expect(container.querySelector('input[aria-label="提示词字体 字体"]')).not.toBeNull();
+  expect(container.querySelector('input[aria-label="终端字体 字体"]')).not.toBeNull();
   expect(state.update).not.toHaveBeenCalled();
   await choose("提示词字号", "18 像素");
   expect(state.update).toHaveBeenCalledExactlyOnceWith({ fontSizePrompt: 18 });

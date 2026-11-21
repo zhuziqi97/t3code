@@ -1,4 +1,3 @@
-import { ChevronDownIcon } from "lucide-react";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { canShareWithGuestAtom } from "./chat/guestShareAvailability";
 import { ProjectEnvironmentBadge } from "./ProjectEnvironmentBadge";
@@ -425,7 +424,6 @@ function routeThreadOnly(
 
 // Separate hooks cache maps independently of later Sidebar hooks and preserve dnd-kit inputs.
 function useSidebarThreads(input: {
-  readonly projectScopeKey: string | null;
   readonly scopedProjectKeys: ReadonlySet<string> | null;
   readonly serverConfigs: ReadonlyMap<EnvironmentId, EnvironmentServerConfig>;
   readonly connectedEnvironmentIds: readonly EnvironmentId[];
@@ -435,7 +433,6 @@ function useSidebarThreads(input: {
   readonly routeRowThreadKey: string | null;
 }) {
   const {
-    projectScopeKey,
     scopedProjectKeys,
     serverConfigs,
     connectedEnvironmentIds,
@@ -480,16 +477,6 @@ function useSidebarThreads(input: {
     true,
     Schema.Boolean,
   );
-  const [settledTail, setSettledTail] = useState({
-    scopeKey: projectScopeKey,
-    count: SETTLED_TAIL_INITIAL_COUNT,
-  });
-  if (settledTail.scopeKey !== projectScopeKey) {
-    setSettledTail({ scopeKey: projectScopeKey, count: SETTLED_TAIL_INITIAL_COUNT });
-  }
-  const settledVisibleCount =
-    settledTail.scopeKey === projectScopeKey ? settledTail.count : SETTLED_TAIL_INITIAL_COUNT;
-
   const partition = partitionSidebarThreads({
     threads,
     scopedProjectKeys,
@@ -515,7 +502,7 @@ function useSidebarThreads(input: {
   const settledCount =
     settledThreads.length + olderSettledShelf.unloadedCount(partition.visibleThreads);
   const visibleSettledThreads = (() => {
-    const visible = listedSettledThreads.slice(0, settledVisibleCount);
+    const visible = listedSettledThreads.slice(0, SETTLED_TAIL_INITIAL_COUNT);
     if (
       routeRowThreadKey !== null &&
       !visible.some((thread) => threadShellKey(thread) === routeRowThreadKey)
@@ -557,15 +544,7 @@ function useSidebarThreads(input: {
       ...snoozedThreads,
       ...settledThreads,
     ],
-    settledVisibleCount,
     settledCount,
-    olderSettledShelf,
-    hiddenSettledCount: Math.max(0, settledCount - visibleSettledThreads.length),
-    showMoreSettled: () =>
-      setSettledTail((current) => ({
-        scopeKey: current.scopeKey,
-        count: current.count + SETTLED_TAIL_PAGE_COUNT,
-      })),
     settledShelfExpanded,
     toggleSettledShelf: () => setSettledShelfExpanded((value) => !value),
     snoozedShelfExpanded,
@@ -1132,7 +1111,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     findThread: (key) => threads.find((candidate) => threadShellKey(candidate) === key),
   });
   const projectScopeKeys = revealWidensScope ? [] : chosenProjectScopeKeys;
-  const projectScopeKey = projectScopeKeys.length === 0 ? null : projectScopeKeys.join("\n");
   const toggleProjectScopeKey = (key: string) =>
     setProjectScopeKeys(
       projectScopeKeys.includes(key)
@@ -1321,11 +1299,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     settledThreads,
     snoozeNow,
     searchableThreads,
-    settledVisibleCount,
     settledCount,
-    olderSettledShelf,
-    hiddenSettledCount,
-    showMoreSettled,
     settledShelfExpanded,
     snoozedShelfExpanded,
     workingShelfExpanded,
@@ -1337,7 +1311,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     pinnedKeysById,
     activeKeysById,
   } = useSidebarThreads({
-    projectScopeKey,
     scopedProjectKeys,
     serverConfigs,
     connectedEnvironmentIds,
@@ -2230,7 +2203,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     settledOrder: draggedSettledOrder,
     ...(draggedActiveOrder === undefined ? {} : { activeOrder: draggedActiveOrder }),
     settledExpanded: settledShelfExpanded,
-    settledVisibleCount,
+    settledVisibleCount: SETTLED_TAIL_INITIAL_COUNT,
     routeThreadKey: routeRowThreadKey,
     snoozedThreadCount: snoozedThreads.length,
   });
@@ -3882,35 +3855,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                         </ProjectTreeLayout>
                       );
                     })()}
-                    {settledShelfExpanded && hiddenSettledCount > 0 ? (
-                      <li className="list-none">
-                        <button
-                          type="button"
-                          data-sidebar-row="settled:more"
-                          data-sidebar-parent="shelf:settled"
-                          aria-disabled={olderSettledShelf.loading}
-                          onClick={() => {
-                            if (olderSettledShelf.loading) return;
-                            olderSettledShelf.retry();
-                            showMoreSettled();
-                          }}
-                          className="flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground aria-disabled:cursor-default"
-                        >
-                          {/* Plus means "add", so revealing more uses a chevron. */}
-                          <ChevronDownIcon aria-hidden className="size-4 shrink-0" />
-                          {olderSettledShelf.loading
-                            ? gt("Loading")
-                            : olderSettledShelf.failed
-                              ? gt("Could not load older threads. Retry")
-                              : gt(
-                                  "{count, plural, one {Show {count} more} other {Show {count} more}}",
-                                  {
-                                    count: Math.min(hiddenSettledCount, SETTLED_TAIL_PAGE_COUNT),
-                                  },
-                                )}
-                        </button>
-                      </li>
-                    ) : null}
                   </ul>
                 </SortableContext>
               </DndContext>

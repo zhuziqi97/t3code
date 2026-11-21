@@ -2471,8 +2471,6 @@
   "a202dad5b0a0aa56": "Reportés",
   "b9b34ce02a3a5f8b": "Clos",
   "dfcce8b35ce4fb90": "Chargement",
-  "fcaffe60c85338e2": "Impossible de charger les fils plus anciens. Réessayer",
-  "43acfc82011a8fc2": "{count, plural, one {Afficher {count} de plus} other {Afficher {count} de plus}}",
   "08ff4b5e32bc46b8": "Aucun projet correspondant.",
   "6392f9e0f61ae70c": "Pas encore de projet",
   "19df05d390e2c3ae": "Afficher tous les projets",
@@ -8210,7 +8208,6 @@
   "988ef9cf99d06084": "Moy. {average} %, pic {peak} %",
   "1bcd9fcd9866a01d": "Période de l’historique des processus",
   "5602db67733bdfd7": "Vérifié {time}",
-  "b5343daba436ba2a": "Impossible d’ouvrir le dossier des journaux.",
   "f5680d01df28a62e": "Envoyer SIGKILL au processus {pid} ? Le processus ne peut pas l’intercepter.",
   "753971ab309059ad": "Impossible de confirmer le signal",
   "ead636d5ac1ea127": "Échec de l’envoi de {signal}.",
@@ -8397,7 +8394,6 @@
   "d5a0a7ab5da467aa": "Ouvrir les pull requests dans T3 Code",
   "55087c889e8a065d": "Paramètres des appareils non enregistrés dans tous les environnements",
   "73e76ba75c8d3096": "Impossible de mettre à jour {environments}.",
-  "b16605b8957226ea": "Mettre à jour",
   "f8571b5368d6d847": "Vérifier les versions",
   "388698edad9faf0e": "Accès des agents aux appareils",
   "6797e82cca21dbff": "Autorise les agents de ce projet à utiliser le navigateur partagé. S’applique au prochain démarrage de la session de l’agent.",
@@ -8426,22 +8422,6 @@
   "fedb5397301d3392": "Remplir le panneau",
   "2fdc83ad8b55eb11": "Adaptatif",
   "cf05007f2ba8ad42": "Pivoter",
-  "862a3e2e99dfadb6": [
-    "Ouvrez des simulateurs et des émulateurs dans le panneau Appareils. Hub :",
-    " ",
-    {
-      "t": "DeviceToolVersions",
-      "i": 1
-    }
-  ],
-  "151f86b6dcd56244": [
-    "Les nouvelles sessions d’agent peuvent ouvrir et piloter ces appareils. agent-device :",
-    " ",
-    {
-      "t": "DeviceToolVersions",
-      "i": 1
-    }
-  ],
   "093c68324c1b1280": "Ajouter un profil",
   "1f404c456e5b2a0b": "Profil vierge",
   "d7671e975097e9e4": "Vous avez atteint la limite de profils",
@@ -9289,7 +9269,6 @@
   "0f0ae2813abd70e4": "Débit de lecture",
   "d032b2addb6f00dc": "Débit d’écriture",
   "910a0c5f01321f81": "Limite de vitesse du CPU",
-  "0360d3113c5a74f7": "État thermique {thermalState}",
   "17ed03182ae3b3bb": "Backend + agents",
   "5e590f8911f207fb": "Surcoût du moniteur",
   "447821f33892635d": "Hôte et collecte",
@@ -11676,7 +11655,6 @@
   "645434b1c788cf95": "Aucune machine ne peut passer à {label} pour l’instant.",
   "aae7db6120929d16": "Toutes les machines connectées sont déjà sur {label}. Seul le canal est enregistré.",
   "49ab4bbf2971d31b": "Aucune machine ne peut passer à {label} pour l’instant. Seul le canal est enregistré.",
-  "b3659c3917b3c6b0": "Cette connexion ne peut pas tester les hôtes d’appareils.",
   "89ef4eae0e856d40": "Échec de l’enregistrement des actions du projet",
   "0e4cd25642a2df00": "Aucune machine disponible, ou une autre modification d’action est en cours d’enregistrement.",
   "3eca4140f377b50b": "Actions non enregistrées",

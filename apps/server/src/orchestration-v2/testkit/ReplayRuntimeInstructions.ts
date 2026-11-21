@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import type { ProviderDriverKind, ProviderReplayTranscript } from "@t3tools/contracts";
 
 import {
@@ -302,3 +303,27 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function asFrame(value: unknown): ReplayFrame | undefined {
   return isRecord(value) ? value : undefined;
 }
+
+/** A transcript borrowed from another scenario names the thread after that scenario's title. */
+export const materializeCodexThreadTitle = (
+  transcript: ProviderReplayTranscript,
+  recordedTitle: string,
+  title: string,
+): ProviderReplayTranscript => ({
+  ...transcript,
+  entries: transcript.entries.map((entry) =>
+    entry.type === "expect_outbound" &&
+    Predicate.isObject(entry.frame) &&
+    entry.frame.method === "thread/name/set" &&
+    Predicate.isObject(entry.frame.params) &&
+    entry.frame.params.name === recordedTitle
+      ? {
+          ...entry,
+          frame: {
+            ...entry.frame,
+            params: { ...entry.frame.params, name: title },
+          },
+        }
+      : entry,
+  ),
+});

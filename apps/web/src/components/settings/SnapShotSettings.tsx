@@ -12,7 +12,7 @@ import { PlayIcon } from "lucide-react";
 import { settlePromise } from "@t3tools/client-runtime/state/runtime";
 import * as Cause from "effect/Cause";
 import { useContext, useRef, useState } from "react";
-import { T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages } from "gt-react";
 
 import { useClientSettings, updateClientSettings } from "../../hooks/useSettings";
 import { getDesktopSnapShotBridge } from "../../lib/desktopSnapShot";
@@ -200,7 +200,7 @@ export function SnapShotSettings() {
       await updateClientSettings(patch);
       return await refreshState();
     } catch (error) {
-      reportSetupError(gt("Couldn't save capture settings"), error);
+      reportSetupError(m(msg("Couldn't save capture settings")), error);
     }
   };
 

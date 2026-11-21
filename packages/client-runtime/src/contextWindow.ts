@@ -1,28 +1,15 @@
-import type { ThreadStructure, ThreadStructureTurnItem } from "./state/shell.ts";
+import type { ThreadStructure } from "./state/shell.ts";
 import type {
   OrchestrationV2ProviderTurn,
   OrchestrationV2ProviderTurnTokenUsage,
   OrchestrationV2ProviderThread,
-  ThreadTokenUsageSnapshot,
 } from "@t3tools/contracts";
-import * as DateTime from "effect/DateTime";
+import {
+  deriveLatestContextWindowSnapshot,
+  type ContextWindowSnapshot,
+} from "./state/contextWindow.ts";
 
-function asFiniteNumber(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-type NullableContextWindowUsage = {
-  readonly [Key in keyof ThreadTokenUsageSnapshot]: undefined extends ThreadTokenUsageSnapshot[Key]
-    ? Exclude<ThreadTokenUsageSnapshot[Key], undefined> | null
-    : ThreadTokenUsageSnapshot[Key];
-};
-
-export type ContextWindowSnapshot = NullableContextWindowUsage & {
-  readonly remainingTokens: number | null;
-  readonly usedPercentage: number | null;
-  readonly remainingPercentage: number | null;
-  readonly updatedAt: string;
-};
+export { deriveLatestContextWindowSnapshot, type ContextWindowSnapshot };
 
 export function deriveThreadContextWindowSnapshot(
   projection: ThreadStructure | null | undefined,
@@ -79,126 +66,6 @@ export function latestProviderTurnTokenUsage(
         (transfer.status === "pending" || transfer.resolution?.strategy === "native_fork"),
     )?.sourceTokenUsage ?? null
   );
-}
-
-export function deriveLatestContextWindowSnapshot(
-  entries: ReadonlyArray<{
-    readonly item: ThreadStructureTurnItem;
-  }>,
-  liveUsage?: OrchestrationV2ProviderTurnTokenUsage | null,
-  providerThread?: Pick<OrchestrationV2ProviderThread, "contextUsage" | "updatedAt"> | null,
-): ContextWindowSnapshot | null {
-  if (liveUsage != null) {
-    const usedTokens = Math.max(0, liveUsage.usedTokens);
-    const maxTokens = liveUsage.maxTokens ?? null;
-    const usedPercentage =
-      maxTokens !== null && maxTokens > 0 ? Math.min(100, (usedTokens / maxTokens) * 100) : null;
-    const remainingTokens =
-      maxTokens !== null ? Math.max(0, Math.round(maxTokens - usedTokens)) : null;
-    const remainingPercentage = usedPercentage !== null ? Math.max(0, 100 - usedPercentage) : null;
-    return {
-      usedTokens,
-      totalProcessedTokens: null,
-      maxTokens,
-      remainingTokens,
-      usedPercentage,
-      remainingPercentage,
-      inputTokens: liveUsage.inputTokens ?? null,
-      cachedInputTokens: liveUsage.cachedInputTokens ?? null,
-      outputTokens: liveUsage.outputTokens ?? null,
-      reasoningOutputTokens: liveUsage.reasoningOutputTokens ?? null,
-      lastUsedTokens: null,
-      lastInputTokens: null,
-      lastCachedInputTokens: null,
-      lastOutputTokens: null,
-      lastReasoningOutputTokens: null,
-      toolUses: null,
-      durationMs: null,
-      compactsAutomatically: liveUsage.autoCompactThreshold != null ? true : null,
-      autoCompactThreshold: liveUsage.autoCompactThreshold ?? null,
-      cost: null,
-      updatedAt: liveUsage.updatedAt,
-    };
-  }
-  const providerUsage = providerThread?.contextUsage;
-  const providerUsageUpdatedAt = providerThread?.updatedAt;
-  if (
-    providerUsage !== null &&
-    providerUsage !== undefined &&
-    providerUsageUpdatedAt !== undefined
-  ) {
-    const maxTokens = asFiniteNumber(providerUsage.maxTokens);
-    const usedTokens = providerUsage.usedTokens;
-    const usedPercentage =
-      maxTokens !== null && maxTokens > 0 ? Math.min(100, (usedTokens / maxTokens) * 100) : null;
-    return {
-      usedTokens,
-      totalProcessedTokens: asFiniteNumber(providerUsage.totalProcessedTokens),
-      maxTokens,
-      remainingTokens: maxTokens === null ? null : Math.max(0, Math.round(maxTokens - usedTokens)),
-      usedPercentage,
-      remainingPercentage: usedPercentage === null ? null : Math.max(0, 100 - usedPercentage),
-      inputTokens: asFiniteNumber(providerUsage.inputTokens),
-      cachedInputTokens: asFiniteNumber(providerUsage.cachedInputTokens),
-      outputTokens: asFiniteNumber(providerUsage.outputTokens),
-      reasoningOutputTokens: asFiniteNumber(providerUsage.reasoningOutputTokens),
-      lastUsedTokens: asFiniteNumber(providerUsage.lastUsedTokens),
-      lastInputTokens: asFiniteNumber(providerUsage.lastInputTokens),
-      lastCachedInputTokens: asFiniteNumber(providerUsage.lastCachedInputTokens),
-      lastOutputTokens: asFiniteNumber(providerUsage.lastOutputTokens),
-      lastReasoningOutputTokens: asFiniteNumber(providerUsage.lastReasoningOutputTokens),
-      toolUses: asFiniteNumber(providerUsage.toolUses),
-      durationMs: asFiniteNumber(providerUsage.durationMs),
-      compactsAutomatically: providerUsage.compactsAutomatically ?? null,
-      cost: providerUsage.cost ?? null,
-      autoCompactThreshold: providerUsage.autoCompactThreshold ?? null,
-      updatedAt: DateTime.formatIso(providerUsageUpdatedAt),
-    };
-  }
-  for (let index = entries.length - 1; index >= 0; index -= 1) {
-    const entry = entries[index];
-    if (!entry || entry.item.type !== "compaction") {
-      continue;
-    }
-    const payload = entry.item;
-    const usedTokens = asFiniteNumber(payload.afterTokenCount);
-    if (usedTokens === null || usedTokens < 0) {
-      continue;
-    }
-
-    const maxTokens = null;
-    const usedPercentage =
-      maxTokens !== null && maxTokens > 0 ? Math.min(100, (usedTokens / maxTokens) * 100) : null;
-    const remainingTokens =
-      maxTokens !== null ? Math.max(0, Math.round(maxTokens - usedTokens)) : null;
-    const remainingPercentage = usedPercentage !== null ? Math.max(0, 100 - usedPercentage) : null;
-
-    return {
-      usedTokens,
-      totalProcessedTokens: null,
-      maxTokens,
-      remainingTokens,
-      usedPercentage,
-      remainingPercentage,
-      inputTokens: null,
-      cachedInputTokens: null,
-      outputTokens: null,
-      reasoningOutputTokens: null,
-      lastUsedTokens: null,
-      lastInputTokens: null,
-      lastCachedInputTokens: null,
-      lastOutputTokens: null,
-      lastReasoningOutputTokens: null,
-      toolUses: null,
-      durationMs: null,
-      compactsAutomatically: null,
-      autoCompactThreshold: null,
-      cost: null,
-      updatedAt: DateTime.formatIso(payload.startedAt ?? payload.updatedAt),
-    };
-  }
-
-  return null;
 }
 
 export function formatContextWindowTokens(value: number | null): string {

@@ -1,7 +1,8 @@
 import { EnvironmentId, ThreadId, type ScopedThreadRef } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { RegistryContext } from "@effect/atom-react";
-import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
+import { Atom, AtomRegistry } from "effect/reactivity";
+import * as Effect from "effect/Effect";
 import { expect, it, vi } from "vite-plus/test";
 import { act, fakeTimers, render } from "../../test/render";
 
@@ -26,7 +27,7 @@ vi.mock(import("../state/threads"), async (original) => {
       ...actual.threadEnvironment,
       visit: {
         label: "visit",
-        run: (_registry: unknown, input: unknown) => state.visit(input),
+        run: (_registry: unknown, input: unknown) => Effect.sync(() => state.visit(input)),
       } as never,
     },
   };
@@ -67,7 +68,7 @@ function setup() {
   state.visible = "visible";
   state.threadId = expect.getState().currentTestName ?? "thread";
   state.registry = AtomRegistry.make();
-  state.visit.mockResolvedValue(AsyncResult.success(undefined));
+  state.visit.mockReturnValue(undefined);
   setShell("one", shell());
   const stack = new DisposableStack();
   stack.defer(() => state.registry.dispose());

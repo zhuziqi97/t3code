@@ -4,7 +4,7 @@ import { page, userEvent } from "vite-plus/test/browser";
 import { act, render } from "../../../test/render";
 import { SidebarProvider } from "../ui/sidebar";
 import { SettingsSidebarNav } from "./SettingsSidebarNav";
-import { SETTINGS_NAV_GROUPS } from "./settingsSections";
+import { SETTINGS_NAV_GROUPS } from "./settingsSearch";
 
 vi.mock("./useAvailableSettingsSearchItems", () => ({
   useAvailableSettingsSearchItems: () => [
@@ -71,14 +71,14 @@ it("opens search from the physical Slash and F keys on non-US layouts", async ()
   }
 });
 
-it("moves through the settings tree using the arrow keys", async () => {
+it("moves through the settings navigation using the arrow keys", async () => {
   await page.viewport(1280, 800);
   await using _screen = await renderNav();
-  const tree = page.getByRole("tree", { name: "Settings sections" });
-  const items = tree.getByRole("treeitem");
+  const navigation = page.getByRole("navigation", { name: "Settings sections" });
+  const items = navigation.getByRole("group").getByRole("button");
   const count = items.elements().length;
 
-  await tree.getByRole("treeitem", { name: "General", exact: true }).click();
+  await navigation.getByRole("button", { name: "General", exact: true }).click();
   await userEvent.keyboard("{Home}");
   for (let index = 0; index < count; index++) {
     await expect.element(items.nth(index)).toHaveFocus();
@@ -86,13 +86,13 @@ it("moves through the settings tree using the arrow keys", async () => {
   }
 });
 
-it.each([1280, 390])("labels the settings tree groups at %ipx wide", async (width) => {
+it.each([1280, 390])("labels the settings navigation groups at %ipx wide", async (width) => {
   await page.viewport(width, 800);
   await using _screen = await renderNav();
 
-  const tree = page.getByRole("tree", { name: "Settings sections" });
+  const navigation = page.getByRole("navigation", { name: "Settings sections" });
   for (const name of ["Agents", "Code", "Connections"]) {
-    await expect.element(tree.getByRole("group", { name })).toBeInTheDocument();
+    await expect.element(navigation.getByRole("group", { name })).toBeInTheDocument();
   }
-  expect(tree.getByRole("group").elements()).toHaveLength(SETTINGS_NAV_GROUPS.length);
+  expect(navigation.getByRole("group").elements()).toHaveLength(SETTINGS_NAV_GROUPS.length);
 });

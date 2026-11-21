@@ -80,12 +80,12 @@ describe("SidebarUpdateReleaseNotes", () => {
       await changeLanguage("zh");
     });
     expect(links().map((link) => link.textContent)).toEqual([
-      "在 GitHub 查看此版本",
-      "在 GitHub 查看另外 1 项更改",
-      "在 GitHub 查看另外 2 项更改",
+      "在 GitHub 上查看发行说明",
+      "GitHub 上还有 1 项更改",
+      "GitHub 上还有 2 项更改",
     ]);
-    expect(container.textContent).toContain("更新可供下载");
-    expect(container.textContent).toContain("0.0.36-nightly.2 的更新内容");
+    expect(container.textContent).toContain("更新已可下载");
+    expect(container.textContent).toContain("0.0.36-nightly.2 中的更改");
     expect(container.textContent).toContain("Raw change 中文原文");
     expect(document.activeElement).toBe(focused);
     expect(openExternal).not.toHaveBeenCalled();
@@ -118,7 +118,7 @@ describe("SidebarUpdateReleaseNotes", () => {
       await act(async () => {
         await changeLanguage("zh");
       });
-      expect(link.textContent).toBe(`在 GitHub 查看 ${count} 个更早版本`);
+      expect(link.textContent).toBe(`GitHub 上还有 ${count} 个旧版本`);
       await act(async () => link.click());
       expect(openExternal).toHaveBeenCalledExactlyOnceWith(`${RELEASES_URL}`);
     },

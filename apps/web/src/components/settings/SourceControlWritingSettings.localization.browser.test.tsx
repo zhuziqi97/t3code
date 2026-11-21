@@ -123,13 +123,13 @@ it("keeps custom writing drafts through a language switch and saves native writi
   await render();
   await type(
     container.querySelector<HTMLTextAreaElement>(
-      'textarea[aria-label="Custom source control writing instructions"]',
+      'textarea[aria-label="Custom commit and pull request instructions"]',
     )!,
     "  Preserve MY-PROJECT and issue #42.  ",
   );
   await switchLanguage();
   const input = container.querySelector<HTMLTextAreaElement>(
-    'textarea[aria-label="版本控制写作自定义指令"]',
+    'textarea[aria-label="自定义提交与 pull request 指令"]',
   )!;
   expect(input.value).toBe("  Preserve MY-PROJECT and issue #42.  ");
   expect(state.update).not.toHaveBeenCalled();
@@ -137,7 +137,7 @@ it("keeps custom writing drafts through a language switch and saves native writi
   expect(state.update).toHaveBeenCalledExactlyOnceWith({
     sourceControlWritingStyle: { customInstructions: "Preserve MY-PROJECT and issue #42." },
   });
-  await choose("版本控制写作风格", "约定式提交");
+  await choose("提交与 PR 文案", "约定式提交");
   expect(state.update).toHaveBeenLastCalledWith({
     sourceControlWritingStyle: {
       mode: "conventional_commits",
@@ -184,7 +184,7 @@ it("preserves custom branch instructions and uses the native semantic mode from 
   expect(state.update).toHaveBeenCalledExactlyOnceWith({
     branchNameInstructions: "Keep TEAM-42 in the branch name.",
   });
-  await choose("Git 工作树分支命名", "语义前缀");
+  await choose("工作树分支命名", "语义前缀");
   expect(state.update).toHaveBeenLastCalledWith({ branchNamingMode: "semantic" });
   expect(state.update).toHaveBeenCalledTimes(2);
 });
@@ -204,18 +204,18 @@ it("keeps an edited bulk draft without applying it until the translated action i
   expect(button("Apply instructions to all").disabled).toBe(true);
   await type(
     container.querySelector<HTMLTextAreaElement>(
-      'textarea[aria-label="Custom source control instructions for all selected environments"]',
+      'textarea[aria-label="Custom commit and pull request instructions for all selected environments"]',
     )!,
     "  Keep the raw Project-X naming.  ",
   );
   await switchLanguage();
   expect(
     container.querySelector<HTMLTextAreaElement>(
-      'textarea[aria-label="所选执行环境的版本控制自定义指令"]',
+      'textarea[aria-label="所有所选环境共用的自定义提交与 pull request 指令"]',
     )!.value,
   ).toBe("  Keep the raw Project-X naming.  ");
   expect(state.update).not.toHaveBeenCalled();
-  await act(async () => button("向所有所选环境应用指令").click());
+  await act(async () => button("将指令应用到全部环境").click());
   expect(state.update).toHaveBeenCalledExactlyOnceWith({
     sourceControlWritingStyle: {
       mode: "custom",

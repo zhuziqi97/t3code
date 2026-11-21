@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import { useTranslate } from "../../i18n";
 
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
@@ -82,11 +83,12 @@ function validateInstanceId(
   id: string,
   existing: ReadonlySet<string>,
   resolve: MessageResolver,
+  t: TFunction,
 ): string | null {
   if (id.length === 0) return resolve(msg("Instance ID is required."));
   if (id.length > 64) return resolve(msg("Instance ID must be 64 characters or fewer."));
   if (!INSTANCE_ID_PATTERN.test(id)) {
-    return resolve(msg("Use only letters, numbers, and dashes in the instance ID."));
+    return t("provider.add.idCharacters");
   }
   if (existing.has(id)) return resolve(msg("An instance named ''{id}'' already exists.", { id }));
   return null;
@@ -240,7 +242,7 @@ export function AddProviderInstanceDialog({
       existingIds,
     );
   const driverSettingsFields = deriveProviderSettingsFields(driverOption);
-  const instanceIdError = validateInstanceId(instanceId, existingIds, m);
+  const instanceIdError = validateInstanceId(instanceId, existingIds, m, t);
   const showInstanceIdError = hasAttemptedSubmit && instanceIdError !== null;
   const identityStep = 1;
   const previewLabel =

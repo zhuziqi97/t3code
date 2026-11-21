@@ -1,4 +1,6 @@
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { i18n, useTranslate } from "../../i18n";
+import { formatDiagnosticsMessage } from "./diagnosticsMessages";
 import { ProcessSignalActions } from "./ProcessSignalActions";
 import { AuthEnvironmentMaintainScope } from "@t3tools/contracts";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
@@ -67,10 +69,10 @@ import {
 import { SettingsSection } from "./settingsLayout";
 
 const HISTORY_WINDOWS = [
-  { label: "5m", windowMs: 5 * 60_000, bucketMs: 15_000 },
-  { label: "15m", windowMs: 15 * 60_000, bucketMs: 30_000 },
-  { label: "30m", windowMs: 30 * 60_000, bucketMs: 60_000 },
-  { label: "1h", windowMs: 60 * 60_000, bucketMs: 2 * 60_000 },
+  { label: "diagnostics.window.5m", windowMs: 5 * 60_000, bucketMs: 15_000 },
+  { label: "diagnostics.window.15m", windowMs: 15 * 60_000, bucketMs: 30_000 },
+  { label: "diagnostics.window.30m", windowMs: 30 * 60_000, bucketMs: 60_000 },
+  { label: "diagnostics.window.1h", windowMs: 60 * 60_000, bucketMs: 2 * 60_000 },
 ] as const;
 
 function formatRate(value: number): string {
@@ -171,6 +173,7 @@ function SourceStatusBadge({
       }
     | undefined;
 }) {
+  const t = useTranslate();
   const tone = presentation?.tone ?? sourceStatusTone(status);
   return (
     <span
@@ -191,7 +194,7 @@ function SourceStatusBadge({
           tone === "danger" && "bg-destructive",
         )}
       />
-      {label} {presentation?.label ?? status}
+      {label} {presentation?.label ?? t(`diagnostics.source.${status}`)}
     </span>
   );
 }
@@ -274,6 +277,7 @@ function AggregateCard({
   aggregate: ResourceTelemetryAggregate;
 }) {
   const gt = useGT();
+  const t = useTranslate();
   return (
     <div className="relative overflow-hidden border-t border-border/60 px-4 py-4 first:border-t-0 md:border-t-0 md:border-l md:first:border-l-0 sm:px-5">
       <span className={cn("absolute inset-x-5 top-0 h-0.5 rounded-full opacity-75", accentClass)} />
@@ -282,7 +286,7 @@ function AggregateCard({
           {label}
         </div>
         <div className="rounded-md bg-muted/55 px-1.5 py-0.5 font-mono text-3xs tabular-nums text-muted-foreground/70">
-          {aggregate.processCount} {aggregate.processCount === 1 ? "process" : "processes"}
+          {t("diagnostics.process-count", { count: aggregate.processCount })}
         </div>
       </div>
       <div className="mt-3.5 grid grid-cols-2 gap-x-4 gap-y-2.5">
@@ -310,6 +314,7 @@ function MetricPair({ label, value }: { label: string; value: string }) {
 
 function HealthSource({ label, health }: { label: string; health: ResourceTelemetrySourceHealth }) {
   const gt = useGT();
+  const t = useTranslate();
   const expectedInBrowser =
     health.status === "unavailable" &&
     Option.exists(health.lastError, (error) => error.includes("'web' mode"));
@@ -322,7 +327,7 @@ function HealthSource({ label, health }: { label: string; health: ResourceTeleme
             ? gt("Available when this page runs inside the desktop app.")
             : Option.match(health.lastError, {
                 onNone: () => gt("No reported errors"),
-                onSome: (error) => error,
+                onSome: (error) => formatDiagnosticsMessage(error, t),
               })}
         </div>
       </div>
@@ -374,6 +379,7 @@ function HistoryWindowSelector({
   onSelect: (windowMs: number) => void;
 }) {
   const gt = useGT();
+  const t = useTranslate();
   return (
     <ToggleGroup
       aria-label={gt("Resource history period")}
@@ -386,7 +392,7 @@ function HistoryWindowSelector({
     >
       {HISTORY_WINDOWS.map((option) => (
         <Toggle key={option.windowMs} value={String(option.windowMs)}>
-          {option.label}
+          {t(option.label)}
         </Toggle>
       ))}
     </ToggleGroup>
@@ -899,6 +905,7 @@ function ResourceTelemetryDiagnosticsBody({
 }) {
   const messages = useMessages();
   const gt = useGT();
+  const t = useTranslate();
   const registry = useContext(RegistryContext);
   const [windowMs, setWindowMs] = useState(15 * 60_000);
   const selectedWindow =
@@ -987,7 +994,7 @@ function ResourceTelemetryDiagnosticsBody({
         if (result.value.signaled) return;
         toastManager.add({
           type: "error",
-          title: gt("Could not send {signal}", { signal }),
+          title: m(msg("Could not send {signal}", { signal })),
           description: Option.getOrElse(result.value.message, () =>
             gt("Failed to send {signal} to process {pid}.", {
               signal,
@@ -999,7 +1006,7 @@ function ResourceTelemetryDiagnosticsBody({
       .catch((error: unknown) => {
         toastManager.add({
           type: "error",
-          title: gt("Could not send {signal}", { signal }),
+          title: m(msg("Could not send {signal}", { signal })),
           description:
             error instanceof Error
               ? (thrownErrorMessage(error, m) ?? error.message)
@@ -1034,11 +1041,11 @@ function ResourceTelemetryDiagnosticsBody({
       .catch((error: unknown) => {
         toastManager.add({
           type: "error",
-          title: gt("Could not restart resource monitor"),
+          title: m(msg("Could not restart resource monitor")),
           description:
             error instanceof Error
-              ? (thrownErrorMessage(error, m) ?? error.message)
-              : gt("The resource monitor retry failed."),
+              ? formatDiagnosticsMessage(thrownErrorMessage(error, m) ?? error.message, i18n.t)
+              : m(msg("The resource monitor retry failed.")),
         });
       })
       .finally(() => {
@@ -1185,8 +1192,8 @@ function ResourceTelemetryDiagnosticsBody({
               }
               detail={
                 snapshot
-                  ? gt("{thermalState} thermal state", {
-                      thermalState: snapshot.power.thermalState,
+                  ? t("diagnostics.thermal.detail", {
+                      state: t(`diagnostics.thermal.${snapshot.power.thermalState}`),
                     })
                   : undefined
               }
@@ -1288,7 +1295,7 @@ function ResourceTelemetryDiagnosticsBody({
                 />
                 <DetailRow
                   label={gt("Thermal")}
-                  value={snapshot.power.thermalState}
+                  value={t(`diagnostics.thermal.${snapshot.power.thermalState}`)}
                   valueClassName={
                     snapshot.power.thermalState === "serious" ||
                     snapshot.power.thermalState === "critical"
@@ -1334,7 +1341,10 @@ function ResourceTelemetryDiagnosticsBody({
                 />
                 <DetailRow
                   label={gt("Process scan")}
-                  value={`${snapshot.health.retainedProcessCount}/${snapshot.health.scannedProcessCount} retained`}
+                  value={t("diagnostics.health.retained", {
+                    retained: snapshot.health.retainedProcessCount,
+                    scanned: snapshot.health.scannedProcessCount,
+                  })}
                 />
                 <DetailRow
                   label={gt("Inaccessible")}

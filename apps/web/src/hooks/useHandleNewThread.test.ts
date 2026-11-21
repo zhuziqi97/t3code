@@ -468,6 +468,7 @@ describe.each([
     testState.registerDraft({
       draftId: "draft-home",
       environmentId: "environment-ssh",
+      projectId: "project-remote",
       promotedTo: null,
       threadId: "thread-home",
     });

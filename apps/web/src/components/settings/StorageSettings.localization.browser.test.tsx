@@ -120,7 +120,7 @@ it("preserves an uncommitted worktree directory while labels switch and writes t
     "/raw/path with spaces/worktrees",
   );
   await switchLanguage("zh");
-  const input = container.querySelector<HTMLInputElement>('input[aria-label="Git 工作树位置"]')!;
+  const input = container.querySelector<HTMLInputElement>('input[aria-label="工作树位置"]')!;
   expect(input.value).toBe("/raw/path with spaces/worktrees");
   expect(state.update).not.toHaveBeenCalled();
   await act(async () => input.blur());
@@ -136,7 +136,7 @@ it("preserves a retention draft and submits days under the original cleanup key"
   await page.getByRole("textbox", { name: "Delete old rotated logs in days" }).fill("21");
   await switchLanguage("zh");
   const input = container.querySelector<HTMLInputElement>(
-    'input[aria-label="清理旧轮转日志（天）"]',
+    'input[aria-label="删除旧轮转日志（天）"]',
   )!;
   expect(input.value).toBe("21");
   expect(state.update).not.toHaveBeenCalled();
@@ -158,7 +158,7 @@ it("uses translated project modes without translating their stored values or inh
   await render();
   await switchLanguage("zh");
   const trigger = container.querySelector<HTMLButtonElement>(
-    'button[aria-label="自动清理 Git 工作树"]',
+    'button[aria-label="自动清理工作树"]',
   )!;
   await act(async () => trigger.click());
   const choice = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
