@@ -1,16 +1,6 @@
-import {
-  isLanguagePreference,
-  resolveLanguage,
-  type SupportedLanguage,
-} from "@t3tools/client-runtime/i18n";
+import type { SupportedLanguage } from "@t3tools/client-runtime/i18n";
 import { getTranslationsSnapshot } from "gt-react";
 
-import {
-  getClientSettings,
-  subscribeClientSettings,
-  updateClientSettings,
-} from "../hooks/useSettings";
-import { initializeI18n } from "./initializeI18n";
 import { DEFAULT_LOCALE } from "./locales";
 import { setActiveLocale } from "./messages";
 
@@ -59,21 +49,6 @@ function activateLocale(locale: string): void {
 export function requestLocale(locale: SupportedLanguage): Promise<void> {
   requestedLocale = locale;
   return whenLocaleReady();
-}
-
-function applyLanguageSetting(): void {
-  void requestLocale(resolveLanguage(getClientSettings().languagePreference, navigator.languages));
-}
-
-/** GT's own locale setters write the saved setting, which stays the only source of truth. */
-export function persistGTLocale(locale: string): void {
-  if (isLanguagePreference(locale)) void updateClientSettings({ languagePreference: locale });
-}
-
-export function startI18n(): void {
-  initializeI18n(persistGTLocale);
-  subscribeClientSettings(applyLanguageSetting);
-  applyLanguageSetting();
 }
 
 /** Resolves once the requested locale's translations are ready; immediate for English. */

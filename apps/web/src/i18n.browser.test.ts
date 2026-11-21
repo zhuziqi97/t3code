@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from "vite-plus/test";
 
 import { createElement } from "react";
 
+vi.unmock("./i18n");
+
 const settings = vi.hoisted(() => ({
   languagePreference: "system" as "system" | "en" | "zh",
   hydrated: true,

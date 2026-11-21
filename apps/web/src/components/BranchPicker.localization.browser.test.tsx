@@ -127,7 +127,7 @@ it("keeps the typed Git ref and origin choice across language changes and select
   await act(async () => {
     await changeLanguage("zh");
   });
-  for (const badge of ["当前", "工作树", "远程", "默认"])
+  for (const badge of ["当前", "工作树", "远端", "默认"])
     expect(document.body.textContent).toContain(badge);
   await search("feature/原文");
   await act(async () => {

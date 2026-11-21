@@ -119,7 +119,7 @@ it("keeps queue state and provider commands intact while switching Chinese and E
       text: "保持 user prompt 原文",
       attachments: [attachment],
     });
-    await click("Send now");
+    await click("立即发送");
     expect(state.command).toHaveBeenCalledTimes(1);
     expect(state.command).toHaveBeenLastCalledWith(expect.any(Symbol), {
       environmentId: "environment:test",

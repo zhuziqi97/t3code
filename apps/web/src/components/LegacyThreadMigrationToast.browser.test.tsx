@@ -70,16 +70,16 @@ it("updates the same running toast across language and count changes and closes 
   });
   expect(state.update).toHaveBeenLastCalledWith("migration-qa", {
     type: "loading",
-    title: "正在恢复会话…",
+    title: "正在恢复你的会话…",
     timeout: 0,
-    description: "正在迁移旧版本中的 1 个会话。迁移期间可继续使用应用。",
+    description: "正在从旧版本迁移 1 个会话。迁移期间你可以继续工作。",
   });
   state.migration = { status: "running", totalThreadCount: 1234 };
   await act(async () => renderer?.rerender(<LegacyThreadMigrationToast />));
   expect(state.update).toHaveBeenLastCalledWith(
     "migration-qa",
     expect.objectContaining({
-      description: "正在迁移旧版本中的 1,234 个会话。迁移期间可继续使用应用。",
+      description: "正在从旧版本迁移 1,234 个会话。迁移期间你可以继续工作。",
     }),
   );
   await act(async () => {

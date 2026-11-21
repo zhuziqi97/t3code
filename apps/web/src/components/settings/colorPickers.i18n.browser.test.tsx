@@ -60,7 +60,7 @@ describe("shared color controls in settings", () => {
     expect(onCommit).not.toHaveBeenCalled();
     await key("强调色色相", "ArrowRight", true);
     expect(onCommit).toHaveBeenLastCalledWith("#ff5500");
-    await key("强调色亮度", "ArrowDown", true);
+    await key("强调色 亮度", "ArrowDown", true);
     expect(onCommit).toHaveBeenLastCalledWith("#e64c00");
     const clear = [...container.querySelectorAll("button")].find((node) =>
       node.textContent?.includes("清除颜色"),

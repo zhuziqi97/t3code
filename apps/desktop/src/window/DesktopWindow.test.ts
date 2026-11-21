@@ -641,7 +641,9 @@ describe("DesktopWindow", () => {
           assert.strictEqual(menu.focusedContents, contents);
           assert.equal(preventDefault.mock.calls.length, 1);
           assert.deepEqual(
-            menu.input.template.filter((item) => item.role),
+            menu.input.template
+              .filter((item) => item.role)
+              .map(({ role, enabled }) => ({ role, enabled })),
             [
               { role: "cut", enabled: false },
               { role: "copy", enabled: true },

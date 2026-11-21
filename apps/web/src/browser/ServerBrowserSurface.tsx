@@ -34,7 +34,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { T, useGT } from "gt-react";
+import { msg, T, useGT } from "gt-react";
 
 import { AgentCursorMark } from "~/components/preview/AgentBrowserCursor";
 import { CommandBlock } from "~/components/CommandBlock";
@@ -202,7 +202,7 @@ export function ServerBrowserSurface(props: {
     void uploadPreviewStreamFiles(chooser, files).catch((cause: unknown) =>
       toastManager.add({
         type: "error",
-        title: gt("Could not send the files to the page"),
+        title: m(msg("Could not send the files to the page")),
         description: thrownErrorMessage(cause, m) ?? undefined,
       }),
     );
