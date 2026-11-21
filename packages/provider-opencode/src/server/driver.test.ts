@@ -810,25 +810,22 @@ it.layer(layer)("OpenCodeDriver runtime selection", (it) => {
         { serverUrl: "http://127.0.0.1:4096", serverPassword: "secret" },
         server,
       );
+      const firstCheckPending = instance.snapshot.isAwaitingFirstCheck;
+      assert.isDefined(firstCheckPending);
       const settled = yield* instance.snapshot.streamChanges.pipe(
-        Stream.filter(
-          (snapshot) =>
-            snapshot.installed === true &&
-            (snapshot.status === "ready" || snapshot.status === "error"),
-        ),
-        Stream.take(1),
-        Stream.runCollect,
+        Stream.filterEffect(() => firstCheckPending.pipe(Effect.map((pending) => !pending))),
+        Stream.runHead,
         Effect.forkChild,
       );
-      yield* Effect.yieldNow;
       yield* TestClock.adjust("5 seconds");
-      const [snapshot] = Array.from(yield* Fiber.join(settled));
+      yield* Fiber.join(settled);
+      const snapshot = yield* instance.snapshot.getSnapshot;
       assert.deepStrictEqual(
-        { status: snapshot?.status, message: snapshot?.message },
+        { status: snapshot.status, message: snapshot.message },
         { status: "ready", message: "OpenCode 2.0.18 lists 1 model." },
       );
       assert.deepStrictEqual(
-        snapshot?.models.map((model) => [model.slug, model.subProvider]),
+        snapshot.models.map((model) => [model.slug, model.subProvider]),
         [["opencode/big-pickle", "OpenCode Zen"]],
       );
     }).pipe(Effect.scoped, Effect.provide(TestClock.layer())),

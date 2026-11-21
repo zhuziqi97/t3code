@@ -1253,7 +1253,9 @@ describe("OpenCodeAdapterV2", () => {
         event: { subscribe: async () => ({ stream: nativeEvents.stream }) },
         session: {
           create: async () => ({ data: { id: "root", time: { created: 1, updated: 1 } } }),
-          get: async () => ({ data: { id: "root", time: { created: 1, updated: 1 } } }),
+          get: async () => ({
+            data: { id: "root", directory: "/workspace", time: { created: 1, updated: 1 } },
+          }),
           promptAsync: async (input: { messageID: string }) => {
             promptId = input.messageID;
             return { data: true };
@@ -5542,20 +5544,15 @@ it.live.each([true, false])("opens an authenticated OpenCode session (external=%
 
 it.effect("refuses a session on a server version the policy rates broken", () =>
   Effect.gen(function* () {
-    const error = yield* makeOpenCodeRuntimeHarness(
-      "broken-version",
-      "ses_broken",
-      {},
-      {
-        compatibility: () =>
-          Effect.succeed({
-            status: "broken" as const,
-            message: null,
-            recommendedVersion: null,
-            recommendedRange: ">=2.0.18",
-          }),
-      },
-    ).pipe(Effect.flip);
+    const error = yield* makeOpenCodeRuntimeHarness("broken-version", "ses_broken", {}, true, {
+      compatibility: () =>
+        Effect.succeed({
+          status: "broken" as const,
+          message: null,
+          recommendedVersion: null,
+          recommendedRange: ">=2.0.18",
+        }),
+    }).pipe(Effect.flip);
     assert.include(JSON.stringify(error), "OpenCode 1.14.19 does not work");
   }).pipe(
     Effect.scoped,
