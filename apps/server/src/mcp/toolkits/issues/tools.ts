@@ -335,7 +335,7 @@ const SetIssueStateTool = Tool.make("set_issue_state", {
 
 const LinkIssueTool = Tool.make("link_issue", {
   description:
-    "Link an issue to a thread so T3 Code shows it beside the thread. Link every issue you work on or file.",
+    "Link an issue from a supported external tracker to a thread so T3 Code shows it beside the thread. Link each issue you take on or file, even via CLI. Skip issues you only read.",
   parameters: Schema.Struct({ ...IssueTargetInput.fields, ...ThreadTargetInput.fields }),
   success: LinkIssueResult,
   failure: IssueToolError,

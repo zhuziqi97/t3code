@@ -14,18 +14,27 @@ describe("buildRuntimeInstructions", () => {
     assert.notInclude(instructions, "<pull_request_linking>");
   });
 
-  it("links PRs the agent creates, takes over, or pushes to, and keeps issue linking on demand", () => {
+  it("links PRs the agent creates, takes over, or pushes to, and no others", () => {
     const instructions = buildRuntimeInstructions({ harness: "Codex" });
 
     assert.include(instructions, "Link each PR you create, take over, or push to");
     assert.include(instructions, "every stack layer");
-    assert.notInclude(instructions, "link_issue");
     assert.include(instructions, "Skip PRs you only read or review");
     assert.include(instructions, "If linking fails, say so.");
     assert.notInclude(instructions, "git log -1");
     assert.notInclude(instructions, "work on");
     // Listing linked PRs as an end-of-work check found nothing to add in audited threads.
     assert.notInclude(instructions, "list_thread_pull_requests");
+  });
+
+  it("prompts the agent to link external issues it takes on or files", () => {
+    const instructions = buildRuntimeInstructions({ harness: "Codex" });
+
+    assert.include(
+      instructions,
+      "If link_issue is available, call it for each issue you take on or file in a supported external tracker, even via CLI.",
+    );
+    assert.include(instructions, "Skip issues you only read.");
   });
 
   it("waits on a PR only with the watch, never with a poll loop", () => {
