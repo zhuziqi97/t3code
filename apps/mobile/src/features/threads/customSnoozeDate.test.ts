@@ -29,7 +29,7 @@ describe("custom snooze calendar conversion", () => {
 
   it.each([
     { language: SYSTEM_LANGUAGE, catalog: "en", dateLabel: "5 May" },
-    { language: "fr", catalog: "fr", dateLabel: "5 mai" },
+    { language: "zh", catalog: "zh", dateLabel: "5月5日" },
   ])("labels the picked date and time for the $language preference", (test) => {
     const date = new Date(2027, 4, 5, 14, 30);
     const { catalogLocale, formattingLocale } = resolveLocaleSelection(
