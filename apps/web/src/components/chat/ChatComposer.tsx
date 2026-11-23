@@ -3824,7 +3824,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             ) : null}
 
             {isComposerCollapsedMobile ? (
-              <div className="px-3 pb-2">{predictionControls}</div>
+              <div className="px-3 pb-2" data-chat-composer-collapsed-controls="true">
+                {predictionControls}
+              </div>
             ) : null}
 
             <div

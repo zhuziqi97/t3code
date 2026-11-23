@@ -46,87 +46,116 @@ vi.mock(import("~/rpc/requestLatencyState"), async (original) => ({
   trackRpcRequestSent: () => {},
 }));
 
-it("retries a cancelled native prediction once through Alt+Enter", async () => {
-  const instance = ProviderInstanceId.make("codex");
-  const driver = ProviderDriverKind.make("codex");
-  const stored = { instanceId: instance, model: "gpt-5.4" };
-  const thread = threadWithHistory("prediction-model-switch", 1, stored);
-  const at = DateTime.makeUnsafe("2026-11-19T02:00:00Z");
-  const native: OrchestrationV2ProviderThread = {
-    id: ProviderThreadId.make("prediction-native-thread"),
-    driver,
-    providerInstanceId: instance,
-    providerSessionId: null,
-    appThreadId: thread.id,
-    ownerNodeId: null,
-    nativeThreadRef: { driver, nativeId: "prediction-native", strength: "strong" },
-    nativeConversationHeadRef: null,
-    status: "idle",
-    firstRunOrdinal: 1,
-    lastRunOrdinal: 1,
-    handoffIds: [],
-    forkedFrom: null,
-    pendingBackgroundTasks: [],
-    contextUsage: null,
-    nativeMetadata: null,
-    goal: null,
-    createdAt: at,
-    updatedAt: at,
-  };
-  const requests: ComposerPredictionInput[] = [];
-  const firstReply = Promise.withResolvers<void>();
-  const fullThread = { ...thread, providerThreads: [native] };
-  using _environment = installFakeEnvironment([fullThread], {
-    acceptCommands: true,
-    providers: [CODEX_PROVIDER],
-  });
-  using _request = answerRpc(
-    WS_METHODS.composerRequestPrediction,
-    (input: ComposerPredictionInput) => {
-      requests.push(input);
-      const resultId = { requestId: input.requestId, sourceRunId: input.sourceRunId };
-      if (input.intent === "auto") {
-        return Effect.promise(() => firstReply.promise).pipe(
-          Effect.as({ ...resultId, status: "cancelled" as const }),
-        );
-      }
-      return Effect.succeed({
-        ...resultId,
-        status: "suggestion" as const,
-        text: "Verify the manual suggestion",
-      });
-    },
-  );
-  __setClientSettingsForTests({
-    ...DEFAULT_CLIENT_SETTINGS,
-    onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
-    languagePreference: "en",
-    codexNativePredictions: "auto",
-  });
-  const router = getRouter(
-    createMemoryHistory({ initialEntries: [`/${ENVIRONMENT_ID}/${thread.id}`] }),
-  );
-  await router.load();
-  await using _app = await render(<AppRoot router={router} />, { router: false });
-  try {
-    const pending = page.getByText("Requesting a prediction…", { exact: true }).first();
-    await expect.element(pending).toBeVisible();
-    expect(requests.map((request) => request.intent)).toEqual(["auto"]);
+it.each(["native", "button"] as const)(
+  "retries a prediction cancelled by %s once through Alt+Enter",
+  async (cancelledBy) => {
+    const viewport = { width: window.innerWidth, height: window.innerHeight };
+    await page.viewport(cancelledBy === "button" ? 390 : 1280, 844);
+    await using _viewport = {
+      [Symbol.asyncDispose]: () => page.viewport(viewport.width, viewport.height),
+    };
+    const instance = ProviderInstanceId.make("codex");
+    const driver = ProviderDriverKind.make("codex");
+    const stored = { instanceId: instance, model: "gpt-5.4" };
+    const thread = threadWithHistory("prediction-model-switch", 1, stored);
+    const at = DateTime.makeUnsafe("2026-11-19T02:00:00Z");
+    const native: OrchestrationV2ProviderThread = {
+      id: ProviderThreadId.make("prediction-native-thread"),
+      driver,
+      providerInstanceId: instance,
+      providerSessionId: null,
+      appThreadId: thread.id,
+      ownerNodeId: null,
+      nativeThreadRef: { driver, nativeId: "prediction-native", strength: "strong" },
+      nativeConversationHeadRef: null,
+      status: "idle",
+      firstRunOrdinal: 1,
+      lastRunOrdinal: 1,
+      handoffIds: [],
+      forkedFrom: null,
+      pendingBackgroundTasks: [],
+      contextUsage: null,
+      nativeMetadata: null,
+      goal: null,
+      createdAt: at,
+      updatedAt: at,
+    };
+    const requests: ComposerPredictionInput[] = [];
+    const firstReply = Promise.withResolvers<void>();
+    const cancellations: string[] = [];
+    const fullThread = { ...thread, providerThreads: [native] };
+    using _environment = installFakeEnvironment([fullThread], {
+      acceptCommands: true,
+      providers: [CODEX_PROVIDER],
+    });
+    using _request = answerRpc(
+      WS_METHODS.composerRequestPrediction,
+      (input: ComposerPredictionInput) => {
+        requests.push(input);
+        const resultId = { requestId: input.requestId, sourceRunId: input.sourceRunId };
+        if (input.intent === "auto") {
+          return Effect.promise(() => firstReply.promise).pipe(
+            Effect.as({ ...resultId, status: "cancelled" as const }),
+          );
+        }
+        return Effect.succeed({
+          ...resultId,
+          status: "suggestion" as const,
+          text: "Verify the manual suggestion",
+        });
+      },
+    );
+    using _cancel = answerRpc(
+      WS_METHODS.composerCancelPrediction,
+      (input: { requestId: string }) => {
+        cancellations.push(input.requestId);
+        firstReply.resolve();
+        return Effect.void;
+      },
+    );
+    __setClientSettingsForTests({
+      ...DEFAULT_CLIENT_SETTINGS,
+      onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
+      languagePreference: "en",
+      codexNativePredictions: "auto",
+    });
+    const router = getRouter(
+      createMemoryHistory({ initialEntries: [`/${ENVIRONMENT_ID}/${thread.id}`] }),
+    );
+    await router.load();
+    await using _app = await render(<AppRoot router={router} />, { router: false });
+    try {
+      const pending = page.getByText("Requesting a prediction…", { exact: true }).first();
+      await expect.element(pending).toBeVisible();
+      expect(requests.map((request) => request.intent)).toEqual(["auto"]);
 
-    firstReply.resolve();
-    await expect
-      .element(page.getByText("Suggestion cancelled.", { exact: true }).first())
-      .toBeVisible();
-    await page.getByRole("button", { name: /^GPT-5\.4(?:,|$)/ }).click();
-    await userEvent.keyboard("{Alt>}{Enter}{/Alt}");
-    await expect
-      .element(page.getByText("Verify the manual suggestion", { exact: true }).first())
-      .toBeVisible();
-    await userEvent.keyboard("{Alt>}{Enter}{/Alt}");
-    expect(requests.map((request) => request.intent)).toEqual(["auto", "manual"]);
-    expect(requests[1]?.sourceRunId).toBe(requests[0]?.sourceRunId);
-    expect(requests[1]?.requestId).not.toBe(requests[0]?.requestId);
-  } finally {
-    firstReply.resolve();
-  }
-});
+      if (cancelledBy === "button") {
+        const cancel = page.getByRole("button", { name: "Cancel suggestion", exact: true });
+        expect(
+          cancel.element().closest('[data-chat-composer-mobile-collapsed="true"]'),
+        ).not.toBeNull();
+        await cancel.click();
+        await vi.waitFor(() => expect(cancellations).toEqual([requests[0]?.requestId]));
+        await expect.element(pending).not.toBeInTheDocument();
+      } else {
+        firstReply.resolve();
+        await expect
+          .element(page.getByText("Suggestion cancelled.", { exact: true }).first())
+          .toBeVisible();
+      }
+      if (cancelledBy === "native") {
+        await page.getByRole("button", { name: /^GPT-5\.4(?:,|$)/ }).click();
+      }
+      await userEvent.keyboard("{Alt>}{Enter}{/Alt}");
+      await expect
+        .element(page.getByText("Verify the manual suggestion", { exact: true }).first())
+        .toBeVisible();
+      await userEvent.keyboard("{Alt>}{Enter}{/Alt}");
+      expect(requests.map((request) => request.intent)).toEqual(["auto", "manual"]);
+      expect(requests[1]?.sourceRunId).toBe(requests[0]?.sourceRunId);
+      expect(requests[1]?.requestId).not.toBe(requests[0]?.requestId);
+    } finally {
+      firstReply.resolve();
+    }
+  },
+);

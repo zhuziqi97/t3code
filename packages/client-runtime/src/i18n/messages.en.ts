@@ -4527,6 +4527,7 @@ export const en = {
 
   "panels.browser": "Browser",
   "fileMenu.open": "Open",
+  "fileMenu.download": "Download file",
   "fileMenu.openWith": "Open with",
   "fileMenu.reveal.finder": "Reveal in Finder",
   "fileMenu.reveal.explorer": "Reveal in File Explorer",

@@ -237,11 +237,11 @@ it.effect.each(["linux", "win32"] as const)(
         assert.equal(root.runtimeId, worktree.runtimeId);
         assert.equal(
           new URL(root.entryPath!, "http://entry/session/").searchParams.get("folder"),
-          platform === "win32" ? "C:\\用户\\项目 Work" : "/workspace/project",
+          platform === "win32" ? "/C:/用户/项目 Work" : "/workspace/project",
         );
         assert.equal(
           new URL(worktree.entryPath!, "http://entry/session/").searchParams.get("folder"),
-          platform === "win32" ? "C:\\用户\\分支 Work" : "/workspace/worktree",
+          platform === "win32" ? "/C:/用户/分支 Work" : "/workspace/worktree",
         );
         assert.deepEqual(fixture.counts(), { installations: 1, stops: 0 });
         assert.equal(fixture.commands.length, 1);

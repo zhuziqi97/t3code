@@ -31,6 +31,7 @@ import { T3_PIERRE_ICONS } from "~/pierre-icons";
 import { PIERRE_TREE_UNSAFE_CSS, pierreTreeStyle } from "~/pierre-tree-theme";
 
 import { joinHostPath } from "./filePath";
+import { FileDownloadStatus, useFileDownload } from "./useFileDownload";
 import { createFileTreeDragMentionController } from "./fileTreeDragMention";
 import {
   areAllDirectoriesExpanded,
@@ -56,6 +57,7 @@ interface FileBrowserPanelProps {
   selectedPath: string | null;
   selectedPathRevealId: number;
   onOpenFile: (relativePath: string) => void;
+  prepareFileDownload?: ((relativePath: string) => Promise<string | null>) | undefined;
   /** Host-folder entries use absolute paths. Avoid full traversal: disable expand-all and search only
    * loaded folders. */
   hostFolder?: boolean;
@@ -165,6 +167,7 @@ export default function FileBrowserPanel({
   selectedPath,
   selectedPathRevealId,
   onOpenFile,
+  prepareFileDownload,
   onRefreshSelectedFile,
   workspaceMutationId,
   hostFolder = false,
@@ -178,6 +181,7 @@ export default function FileBrowserPanel({
   const { resolvedTheme } = useTheme();
   const composerRef = useComposerHandleContext();
   const fileContextMenu = useFileContextMenu(environmentId, editorWorkspace);
+  const download = useFileDownload();
   const {
     entries: directoryEntries,
     load,
@@ -231,12 +235,17 @@ export default function FileBrowserPanel({
         isFile: entryKindsRef.current.get(relativePath) !== "directory",
       };
       const fileMenuItems = fileContextMenu.buildItems(fileTarget);
+      const canDownload =
+        prepareFileDownload !== undefined && entryKindsRef.current.get(relativePath) === "file";
       // The app menu owns focus; the tree's outside-click handler would dismiss it before click.
       context.close({ restoreFocus: !pointerIsFresh });
       void settlePromise(async () => {
         const clicked = await api.contextMenu.show(
           [
             ...fileMenuItems,
+            ...(canDownload
+              ? [{ id: "download", label: t("fileMenu.download"), disabled: download.busy }]
+              : []),
             { id: "copy-mention", label: t("fileBrowser.copyMention") },
             { id: "add-to-chat", label: t("fileBrowser.addToChat") },
           ],
@@ -248,6 +257,10 @@ export default function FileBrowserPanel({
           fileMenuItems.some((entry) => entry.id === clicked) || clicked.startsWith("editor:");
         if (isFileMenuAction) {
           await fileContextMenu.activate(clicked as FileContextMenuAction, fileTarget);
+          return;
+        }
+        if (clicked === "download" && canDownload) {
+          download.start({ name: relativePath, prepare: () => prepareFileDownload(relativePath) });
           return;
         }
         if (clicked === "copy-mention") {
@@ -627,6 +640,7 @@ export default function FileBrowserPanel({
           </Tooltip>
         ) : null}
       </div>
+      <FileDownloadStatus download={download} />
       {error || pathSearch.error ? (
         <button
           type="button"

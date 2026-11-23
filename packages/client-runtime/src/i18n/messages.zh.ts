@@ -4291,6 +4291,7 @@ export const zh: Partial<Messages> = {
   "chat.provider.state.disabled": "停用",
   "panels.browser": "浏览器",
   "fileMenu.open": "打开",
+  "fileMenu.download": "下载文件",
   "fileMenu.openWith": "打开方式",
   "fileMenu.reveal.finder": "在 Finder 中显示",
   "fileMenu.reveal.explorer": "在文件资源管理器中显示",

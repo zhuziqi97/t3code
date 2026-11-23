@@ -311,7 +311,12 @@ const make = Effect.gen(function* () {
       ? lock.withPermit(start)
       : SubscriptionRef.get(state);
     if (current.phase !== "ready" || current.runtimeId === null) return current;
-    const search = new URLSearchParams({ folder: workspace.path });
+    // VS Code interprets folder values without a leading slash as URIs.
+    const folder =
+      platform === "win32"
+        ? workspace.path.replaceAll("\\", "/").replace(/^[a-z]:\//i, "/$&")
+        : workspace.path;
+    const search = new URLSearchParams({ folder });
     if (file) {
       const line = input.file?.line ?? (input.file?.column ? 1 : undefined);
       const uri = new URL("vscode-remote://remote");

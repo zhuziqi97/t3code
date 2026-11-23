@@ -63,7 +63,7 @@ import {
 import { i18n, useTranslate } from "~/i18n";
 
 import { isBrowserPreviewFile, openFileInPreview } from "~/browser/openFileInPreview";
-import { useAssetUrlRefresh, useAssetUrlState } from "~/assets/assetUrls";
+import { resolveAssetUrl, useAssetUrlRefresh, useAssetUrlState } from "~/assets/assetUrls";
 import { FileDownloadStatus, useFileDownload } from "./useFileDownload";
 import { OpenInPicker } from "~/components/chat/OpenInPicker";
 import { MediaVideoPlayer } from "~/components/media/MediaVideoPlayer";
@@ -100,7 +100,7 @@ import { PreviewImage } from "./PreviewImage";
 import FileBrowserPanel from "./FileBrowserPanel";
 import { FileExplorerPane } from "./FileExplorerPane";
 import { FileBreadcrumbs } from "./FileBreadcrumbs";
-import { breadcrumbPathOf, retainedBreadcrumbTrail, trailChildOf } from "./filePath";
+import { breadcrumbPathOf, joinHostPath, retainedBreadcrumbTrail, trailChildOf } from "./filePath";
 import { FileMarkdownPreview } from "./FileMarkdownPreview";
 import {
   type FileCommentAnnotationEntry,
@@ -1478,6 +1478,17 @@ export default function FilePreviewPanel({
     });
   };
 
+  const prepareFileDownload = async (relativePath: string) => {
+    if (!canReadFiles || environmentHttpBaseUrl === null) return null;
+    const path = joinHostPath(hostFolderPath ?? cwd, relativePath);
+    const resource: AssetResource = draft
+      ? { _tag: "draft-workspace-file", cwd, path, disposition: "attachment" }
+      : { _tag: "media-file", threadId: threadRef.threadId, path, disposition: "attachment" };
+    const result = await createAssetUrl({ environmentId, input: { resource } });
+    if (result._tag === "Failure") throw squashAtomCommandFailure(result);
+    return resolveAssetUrl(environmentHttpBaseUrl, result.value.relativeUrl);
+  };
+
   const handleOpenInBrowser = () => {
     if (!canReadFiles || !canOperatePreview || !absolutePath || !environmentHttpBaseUrl) return;
     void (async () => {
@@ -1851,6 +1862,7 @@ export default function FilePreviewPanel({
                 }
                 selectedPathRevealId={revealRequestId}
                 onOpenFile={onOpenFile}
+                prepareFileDownload={canReadFiles ? prepareFileDownload : undefined}
                 answersPanelFind={!previewPath}
                 workspaceMutationId={workspaceMutationId}
                 {...(previewPath && !isMedia && !isPdf
