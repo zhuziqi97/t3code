@@ -32,6 +32,7 @@ export function V2EventTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
       />
     );
   }
+  if (item.type === "feedback_request") return null;
   if (item.type === "link_request") {
     return (
       <LinkRequestCard

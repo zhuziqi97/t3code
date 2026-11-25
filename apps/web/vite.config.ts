@@ -19,10 +19,7 @@ import * as Hash from "effect/Hash";
 import pkg from "./package.json" with { type: "json" };
 import pdfjsPkg from "pdfjs-dist/package.json" with { type: "json" };
 
-import {
-  DEV_PROXIED_ORIGIN_PRESERVING_PREFIXES,
-  DEV_PROXIED_PATH_PREFIXES,
-} from "@t3tools/shared/devProxy";
+import { DEV_PROXIED_PATH_PREFIXES } from "@t3tools/shared/devProxy";
 
 import { loadRepoEnv } from "../../scripts/lib/public-config";
 import { thirdPartyLicensesPlugin } from "../../scripts/lib/third-party-licenses";
@@ -63,7 +60,6 @@ const configuredDesktopUpdateRepository =
   process.env.T3CODE_DESKTOP_UPDATE_REPOSITORY?.trim() ||
   process.env.GITHUB_REPOSITORY?.trim() ||
   "";
-const configuredFeatureSecrets = process.env.T3CODE_FEATURE_SECRETS?.trim() || "";
 const configuredHostedAppUrl = (() => {
   const explicitHostedAppUrl = process.env.VITE_HOSTED_APP_URL?.trim();
   if (explicitHostedAppUrl) {
@@ -124,6 +120,8 @@ const browserTestProject = {
   optimizeDeps: {
     include: [
       "vite-plus/test/browser",
+      "react/compiler-runtime",
+      "react-i18next",
       "@base-ui/react/autocomplete",
       "@base-ui/react/preview-card",
       "@base-ui/react/toolbar",
@@ -155,7 +153,6 @@ const browserTestProject = {
       "@t3tools/shared > mdast-util-directive",
       "@t3tools/shared > micromark-extension-directive",
       "@t3tools/shared > micromark-util-character",
-      "micromark-util-combine-extensions",
       "pele/lazy",
       "@t3tools/shared > property-information",
       "@t3tools/client-runtime > unbash",
@@ -167,8 +164,9 @@ const browserTestProject = {
       "remark-math",
       "remark-parse",
       "remark-rehype",
-      "unified",
-      "vfile",
+      "@effect/vitest",
+      "@pierre/diffs/ssr",
+      "effect/testing",
       "saxes",
       "@betteroffice/docx/editor",
       "@betteroffice/docx/layout",
@@ -206,6 +204,13 @@ const browserTestProject = {
         // position starts hovered. test/browserSetup.ts parks it off the page before each test.
         resetPointer: async ({ page }) => {
           await page.mouse.move(-1, -1);
+        },
+        // A press held across a render: userEvent only offers whole clicks.
+        pointerDown: async ({ page }) => {
+          await page.mouse.down();
+        },
+        pointerUp: async ({ page }) => {
+          await page.mouse.up();
         },
       },
     },
@@ -431,7 +436,6 @@ export default defineConfig(() => {
       "import.meta.env.T3CODE_DESKTOP_UPDATE_REPOSITORY": JSON.stringify(
         configuredDesktopUpdateRepository,
       ),
-      "import.meta.env.T3CODE_FEATURE_SECRETS": JSON.stringify(configuredFeatureSecrets),
       "import.meta.env.VITE_RELEASE_CHANNEL": JSON.stringify(configuredReleaseChannel),
       "import.meta.env.APP_VERSION": JSON.stringify(configuredAppVersion),
       "import.meta.env.UPSTREAM_VERSION": JSON.stringify(CONVENE_UPSTREAM_VERSION),
@@ -471,7 +475,9 @@ export default defineConfig(() => {
                 prefix,
                 {
                   target: devProxyTarget,
-                  changeOrigin: !DEV_PROXIED_ORIGIN_PRESERVING_PREFIXES.has(prefix),
+                  // Keep the client's Host: OAuth metadata, cookie Origin checks and DPoP proofs
+                  // all compare against the URL the client used.
+                  changeOrigin: false,
                   ...(prefix === "/ws" || prefix === "/api" ? { ws: true } : {}),
                 },
               ]),

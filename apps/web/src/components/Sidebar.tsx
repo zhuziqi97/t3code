@@ -8,7 +8,11 @@ import {
   reduceSidebarProjectScopeMenuState,
 } from "./Sidebar.logic";
 import { discardComposerDraft } from "../lib/discardComposerDraft";
-import { SidebarDraftBlock } from "./sidebar/SidebarDraftBlock";
+import {
+  SidebarDraftBlock,
+  useDraftTerminalLabels,
+  useSidebarDrafts,
+} from "./sidebar/SidebarDraftBlock";
 import { SortableSidebarMarker } from "./sidebar/SidebarListMarkers";
 import { useDndAccessibility } from "../hooks/useDndAccessibility";
 import { useSidebarNewThread } from "../hooks/useSidebarNewThread";
@@ -1188,6 +1192,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       : { projectIds: scopedProjectRefs.map((projectRef) => projectRef.projectId) },
   );
   const routeDraftIdForRows = routeTarget?.kind === "draft" ? routeTarget.draftId : null;
+  const draftTerminalLabels = useDraftTerminalLabels();
+  const { draftIds, routeDraftComposer } = useSidebarDrafts(
+    scopedProjectKeys,
+    routeDraftIdForRows,
+    draftTerminalLabels,
+  );
   const visibleDraftSessionCount = useComposerDraftStore((store) => {
     let count = 0;
     for (const [draftKey, session] of Object.entries(store.draftThreadsByThreadKey)) {
@@ -2835,6 +2845,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               canSnoozeNow: canSnooze(thread, { now: new Date().toISOString() }),
               isRegeneratingTitle,
               isRunning: !threadRuntimeCanArchive(thread.runtime),
+              hasCompletedRun: thread.latestRun?.completedAt != null,
               canShareWithGuest: appAtomRegistry.get(
                 canShareWithGuestAtom(threadRef.environmentId),
               ),
@@ -3847,7 +3858,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                           <SidebarDraftBlock
                             projectByKey={projectByKey}
                             projectDisplayNameByKey={projectDisplayNameByKey}
-                            scopedProjectKeys={scopedProjectKeys}
+                            draftIds={draftIds}
+                            routeDraftComposer={routeDraftComposer}
+                            terminalLabels={draftTerminalLabels}
+                            jumpLabelByDraftId={null}
                             routeDraftId={routeDraftIdForRows}
                             onNavigateToDraft={navigateToDraft}
                             onDraftContextMenu={handleDraftContextMenu}

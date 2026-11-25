@@ -111,6 +111,10 @@ export interface UpdateEverythingMachine {
     readonly managedPolicy?: ServerConfig["managedPolicy"];
   } | null;
   readonly connected: boolean;
+  /** Why the connection is down, when it says, in the active language. */
+  readonly connectionError?: string | null;
+  /** The saved connection is switched off in Settings, so it never connects. */
+  readonly turnedOff?: boolean;
   readonly hostedByThisApp: boolean;
   readonly canMaintain: boolean;
   readonly updateState: ServerUpdateState;
@@ -151,6 +155,10 @@ export interface SkippedMachine {
   readonly reason: string;
 }
 
+// Desktop servers without the desktop control fd (older apps, WSL backends: wsl.exe cannot pass
+// fds) cannot be updated from here, and their desktop app is not necessarily the stale part.
+const UPDATE_ON_THAT_MACHINE = msg("update T3 Code on that machine");
+
 /** Skip current and app-hosted servers; the latter update with the app and would relaunch mid-run.
  * Desktop-managed servers use their own feed. Each server's updater checks that it can install the
  * release before it restarts, so no registry precheck runs here. */
@@ -176,7 +184,7 @@ export function collectServerUpdateTargets(
     }
     const skip = (reason: string) =>
       skipped.push({ environmentId: machine.environmentId, label: machine.label, reason });
-    const unavailable = unavailableReason(machine, t);
+    const unavailable = unavailableReason(machine, m);
     if (config === null || unavailable !== null) {
       skip(unavailable ?? (t ? t("update.skip.notConnected") : "not connected"));
       continue;
@@ -197,7 +205,7 @@ export function collectServerUpdateTargets(
       continue;
     }
     if (selfUpdate === "desktop-managed" && !desktopAppUpdate) {
-      skip(t ? t("update.skip.newerDesktop") : "needs a newer desktop app");
+      skip(m(UPDATE_ON_THAT_MACHINE));
       continue;
     }
     const serverChannel = cliReleaseChannelOf(config.environment.serverVersion);
@@ -227,12 +235,26 @@ export function collectServerUpdateTargets(
   return { targets, skipped };
 }
 
-function unavailableReason(machine: UpdateEverythingMachine, t?: TFunction): string | null {
-  if (machine.serverConfig === null || !machine.connected)
-    return t ? t("update.skip.notConnected") : "not connected";
-  if (!machine.canMaintain) return t ? t("update.skip.noPermission") : "no permission";
-  if (machine.updateState.status === "running")
-    return t ? t("update.skip.alreadyUpdating") : "already updating";
+function unavailableReason(
+  machine: UpdateEverythingMachine,
+  resolve: MessageResolver,
+): string | null {
+  if (machine.turnedOff === true) {
+    return resolve(
+      msg("turned off", {
+        $context: "why a server update was skipped: its saved connection is off",
+      }),
+    );
+  }
+  if (!machine.connected) return machine.connectionError ?? resolve(msg("not connected"));
+  if (machine.serverConfig === null)
+    return resolve(
+      msg("still loading", {
+        $context: "why a server update was skipped: its settings have not arrived yet",
+      }),
+    );
+  if (!machine.canMaintain) return resolve(msg("no permission"));
+  if (machine.updateState.status === "running") return resolve(msg("already updating"));
   return null;
 }
 
@@ -379,14 +401,14 @@ export function collectChannelSwitchTargets(
       if (
         !("skip" in move) &&
         move.selfUpdate === "desktop-managed" &&
-        unavailableReason(machine, t) === null &&
+        unavailableReason(machine, m) === null &&
         managedMachineUpdateDenial(config, release.version, m) === undefined
       ) {
         targets.push({ ...target(move.selfUpdate, serverVersion), trackOnly: true });
       }
       continue;
     }
-    const unavailable = unavailableReason(machine, t);
+    const unavailable = unavailableReason(machine, m);
     if (config === null || serverVersion === undefined || unavailable !== null) {
       skip(unavailable ?? (t ? t("update.skip.notConnected") : "not connected"));
       continue;
@@ -456,7 +478,9 @@ function trackSwitchMove(
   if (selfUpdate === null) return { skip: t ? t("update.skip.manual") : "needs a manual update" };
   if (selfUpdate !== "desktop-managed") return { selfUpdate };
   if (config.environment.capabilities.desktopAppChannelSwitch !== true) {
-    return { skip: t ? t("update.skip.newerDesktop") : "needs a newer desktop app" };
+    return {
+      skip: m(sameTrack ? UPDATE_ON_THAT_MACHINE : msg("change the update track on that machine")),
+    };
   }
   // Squirrel.Mac renames the bundle for the new track and then cannot relaunch it.
   if (!sameTrack && config.environment.platform.os === "darwin") {
@@ -539,6 +563,30 @@ export function resolveUpdateRunMachineStatus(
   return "waiting";
 }
 
+/** "current": the server already runs the target, so retrying it only settles the row. */
+export type RestoredRetry = ServerUpdateTarget | "current";
+
+/** A row restored after this app relaunched keeps only its target version, so its retry is
+ * rebuilt from the server as it is now, as the dialog would. Null when there is nothing to retry. */
+export function resolveRestoredRetry(
+  machine: UpdateRunMachine,
+  machines: ReadonlyArray<UpdateEverythingMachine>,
+): RestoredRetry | null {
+  const targetVersion = machine.handedOffVersion;
+  if (machine.result !== "failed" || machine.server !== null || targetVersion === null) return null;
+  const current = machines.find(({ environmentId }) => environmentId === machine.environmentId);
+  if (current === undefined) return null;
+  const config = current.serverConfig;
+  if (
+    current.connected &&
+    config !== null &&
+    resolveVersionMismatch(config.environment.serverVersion, targetVersion) === null
+  ) {
+    return "current";
+  }
+  return collectServerUpdateTargets([current], targetVersion).targets[0] ?? null;
+}
+
 export function isServerUpdateHandedOff(state: ServerUpdateState): boolean {
   return state.status === "running" && state.stage === "resuming";
 }
@@ -565,6 +613,7 @@ export function formatUpdateElapsed(ms: number, resolve: MessageResolver = m): s
 export interface UpdateRunMachineView {
   readonly machine: UpdateRunMachine;
   readonly status: UpdateRunMachineStatus;
+  readonly restoredRetry: RestoredRetry | null;
 }
 
 export type UpdateRunLocalState =
@@ -638,7 +687,10 @@ export function describeUpdateCapsule(
           ? translate("update.run.machineFailed", { name: failed[0]!.machine.label })
           : translate("update.run.failedCount", { count: failed.length }),
       action:
-        !run.trackSwitch && failed.some(({ machine }) => machine.server !== null)
+        !run.trackSwitch &&
+        failed.some(
+          ({ machine, restoredRetry }) => machine.server !== null || restoredRetry !== null,
+        )
           ? "retry"
           : "dismiss",
     };

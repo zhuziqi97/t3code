@@ -1,7 +1,11 @@
 import { GTProvider } from "gt-react";
 import { useSyncExternalStore, type ReactNode } from "react";
 
-import { getI18nSnapshot, subscribeI18n } from "./runtime";
+import { getFormattingLocale, getI18nSnapshot, subscribeI18n } from "./runtime";
+
+export function useFormattingLocale(): string | undefined {
+  return useSyncExternalStore(subscribeI18n, getFormattingLocale);
+}
 
 export function I18nProvider({
   children,

@@ -222,6 +222,7 @@ export interface SnoozePresetOptions {
   readonly formatTime?: (date: Date) => string;
   readonly formatWeekday?: (date: Date) => string;
   readonly t?: TFunction;
+  readonly locale?: string | undefined;
 }
 
 function snoozeTimeOfDayLabel(date: Date): string {
@@ -339,6 +340,7 @@ export function resolveSnoozePreset(
   formatWeekday?: (date: Date) => string,
   t?: TFunction,
   resolve: MFunctionType = mFallback,
+  locale?: string,
 ): SnoozePreset | null {
   let wake: Date;
   let daysAhead = 0;
@@ -359,7 +361,7 @@ export function resolveSnoozePreset(
     formatWeekday?.(wake) ??
     (t
       ? t(`scheduled.weekday.${["sun", "mon", "tue", "wed", "thu", "fri", "sat"][wake.getDay()]}`)
-      : wake.toLocaleDateString(undefined, { weekday: "short" }));
+      : wake.toLocaleDateString(locale, { weekday: "short" }));
   return {
     id: snoozePresetId(setting),
     label,
@@ -390,6 +392,7 @@ export function resolveSnoozePresets(
             options.formatWeekday,
             options.t,
             resolve,
+            options.locale,
           ) ?? [],
       )
       // flatMap returned a new array; Hermes has no `toSorted`.
@@ -414,6 +417,7 @@ export function pickSnoozePreset(input: {
   readonly formatTime?: (date: Date) => string;
   readonly formatWeekday?: (date: Date) => string;
   readonly t?: TFunction;
+  readonly locale?: string | undefined;
   readonly resolve?: MFunctionType;
 }): SnoozePreset | undefined {
   const original = input.shown.find((preset) => preset.id === input.id);
@@ -431,6 +435,7 @@ export function pickSnoozePreset(input: {
         input.formatWeekday,
         input.t,
         input.resolve,
+        input.locale,
       )) ??
     ahead
   );

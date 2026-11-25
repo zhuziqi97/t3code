@@ -41,6 +41,7 @@ import {
 import { makeManagedServerProvider } from "@t3tools/provider-core/server/managedProvider";
 import { makeProviderInstallationProbe } from "@t3tools/provider-core/server/snapshotProbe";
 import * as ModelCatalog from "@t3tools/provider-core/server/ModelCatalog";
+import { scopeClaudeUpgradeMessageToChannel } from "../ClaudeModelCatalog.ts";
 import {
   resolveClaudeModelCatalog,
   scopeClaudeModelCatalog,
@@ -366,6 +367,13 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv, Path.
             enrichProviderSnapshotWithVersionAdvisory(snapshot, maintenanceCapabilities, {
               enableProviderUpdateChecks: settings.enableProviderUpdateChecks,
             }),
+          ),
+          Effect.flatMap((enrichedSnapshot) =>
+            modelCatalog.pipe(
+              Effect.map((catalog) =>
+                scopeClaudeUpgradeMessageToChannel(catalog, enrichedSnapshot),
+              ),
+            ),
           ),
           Effect.provideService(HttpClient.HttpClient, httpClient),
           Effect.provideService(ProviderLatestVersions.ProviderLatestVersions, latestVersions),

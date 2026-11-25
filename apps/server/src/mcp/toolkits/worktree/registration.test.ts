@@ -1,3 +1,7 @@
+import * as FeedbackStore from "../../../feedback/FeedbackStore.ts";
+import * as MilestoneHub from "../../../milestones/MilestoneHub.ts";
+import * as Workflows from "../../../workflows/Workflows.ts";
+import * as TaskFolders from "../../../workspace/TaskFolders.ts";
 import * as GitManager from "../../../git/GitManager.ts";
 import * as IssueService from "../../../issue/IssueService.ts";
 import * as ThreadIssueService from "../../../orchestration-v2/ThreadIssueService.ts";
@@ -55,6 +59,10 @@ import * as PreviewBrowser from "../../../preview/PreviewBrowser.ts";
 import * as AssetSigner from "../../../assets/AssetSigner.ts";
 
 const layerStubServices = Layer.mergeAll(
+  Layer.mock(FeedbackStore.FeedbackStore)({}),
+  MilestoneHub.layer,
+  Layer.mock(Workflows.Workflows)({}),
+  Layer.mock(TaskFolders.TaskFolders)({}),
   Layer.mock(AssetSigner.AssetSigner)({}),
   Layer.mock(PeerLinks.PeerLinks)({}),
   Layer.mock(PeerLinkRequests.PeerLinkRequests)({}),

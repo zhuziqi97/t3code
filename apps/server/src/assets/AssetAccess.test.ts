@@ -1,3 +1,4 @@
+import * as WorkspacePreviewRevisions from "./WorkspacePreviewRevisions.ts";
 // @effect-diagnostics nodeBuiltinImport:off - tests inject swaps at the native open boundary.
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -117,6 +118,7 @@ const layerTest = Layer.mergeAll(
   }),
   layerConfig,
   WorkspacePaths.layer,
+  WorkspacePreviewRevisions.layer,
   ProjectFaviconResolver.layer.pipe(
     Layer.provide(WorkspacePaths.layer),
     Layer.provide(T3ProjectFileLoader.layer),

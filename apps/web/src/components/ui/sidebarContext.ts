@@ -16,6 +16,7 @@ export type SidebarContextProps = {
 };
 
 export type SidebarResolvedResizableOptions = {
+  collapseOnResize: boolean;
   maxWidth: number;
   minWidth: number;
   onResize?: (width: number) => void;

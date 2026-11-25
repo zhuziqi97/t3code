@@ -1,3 +1,6 @@
+import * as ProjectionMaintenance from "./ProjectionMaintenance.ts";
+import { layerNoTaskFolders } from "./ProviderTurnStartService.testkit.ts";
+import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
 import {
   serializeAssistantCitation,
@@ -106,6 +109,7 @@ const layerWorktreeLocation = (worktreesDir = managedWorktreesDir) =>
     Path.layer,
     Layer.mock(ServerConfig.ServerConfig)({ worktreesDir } as ServerConfig.ServerConfig["Service"]),
     ServerSettings.layerTest(),
+    layerNoTaskFolders,
   );
 
 function startWithMissingWorktree(
@@ -178,6 +182,10 @@ function startWithMissingWorktree(
         Layer.mock(EventSink.EventSinkV2)({ writeIfRunCurrent }),
         IdAllocator.layer,
         Layer.mock(TurnItemPositionStore.TurnItemPositionStoreV2)({}),
+        Layer.mock(ThreadWorktreeRestore)({ takeRecreated: () => Effect.undefined }),
+        Layer.mock(ProjectSetupScriptRunner.ProjectSetupScriptRunner)({
+          runForThread: () => Effect.succeed({ status: "not-configured" } as never),
+        }),
         Layer.succeed(FileSystem.FileSystem, {
           exists: () => Effect.succeed(false),
           stat: () =>
@@ -471,6 +479,7 @@ it.each([
               worktreesDir: managedWorktreesDir,
             } as ServerConfig.ServerConfig["Service"]),
             ServerSettings.layerTest(),
+            layerNoTaskFolders,
             Layer.mock(GitWorkflow.GitWorkflowService)({}),
             Layer.mock(ProjectService.ProjectService)({
               getById: () =>
@@ -1402,6 +1411,10 @@ function makeLocalCommandHarness(input: {
         }),
         IdAllocator.layer,
         Layer.mock(TurnItemPositionStore.TurnItemPositionStoreV2)({}),
+        Layer.mock(ThreadWorktreeRestore)({ takeRecreated: () => Effect.undefined }),
+        Layer.mock(ProjectSetupScriptRunner.ProjectSetupScriptRunner)({
+          runForThread: () => Effect.succeed({ status: "not-configured" } as never),
+        }),
         layerWorktreeLocation(input.worktreesDir),
         input.fileSystem === undefined
           ? FileSystem.layerNoop({
@@ -1528,6 +1541,7 @@ function layerStartEffectWorker(
         Layer.mock(ThreadTitleRegenerationService.ThreadTitleRegenerationService)({}),
         Layer.mock(ThreadManagementService.ThreadManagementService)({}),
         Layer.mock(ProjectionStore.ProjectionStoreV2)({}),
+        Layer.mock(ProjectionMaintenance.ProjectionMaintenanceV2)({}),
         ServerSettings.layerTest(),
       ),
     ),
@@ -1834,6 +1848,10 @@ effectIt.effect("preserves a replacement committed before exhausted start settle
           PreviewAgentActivity.layer,
           Layer.mock(CheckpointService.CheckpointServiceV2)({ captureBaseline: () => Effect.void }),
           Layer.mock(TurnItemPositionStore.TurnItemPositionStoreV2)({}),
+          Layer.mock(ThreadWorktreeRestore)({ takeRecreated: () => Effect.undefined }),
+          Layer.mock(ProjectSetupScriptRunner.ProjectSetupScriptRunner)({
+            runForThread: () => Effect.succeed({ status: "not-configured" } as never),
+          }),
           Layer.mock(EventSink.EventSinkV2)({
             consumeProviderEvents: (source, process, after) =>
               source.pipe(

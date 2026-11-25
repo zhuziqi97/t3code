@@ -15,7 +15,10 @@ import {
 import { useAtomValue } from "@effect/atom-react";
 import { Atom } from "effect/reactivity";
 import { resolveProvidersForCwd } from "@t3tools/client-runtime/providerSkills";
-import { formatProviderUpdateRequiredNotice } from "@t3tools/client-runtime/providerUpdateRequiredModels";
+import {
+  formatProviderUpdateRequiredNotice,
+  providerUpdateChannelLags,
+} from "@t3tools/client-runtime/providerUpdateRequiredModels";
 import { groupModelsBySubProvider } from "@t3tools/client-runtime/providerSubProviders";
 import { useNavigate } from "@tanstack/react-router";
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
@@ -238,7 +241,11 @@ function ModelPickerProviderNotices({
 }: {
   setupEntries: ReadonlyArray<ProviderInstanceEntry>;
   emptyLabel: string;
-  updateRequiredNotices: ReadonlyArray<{ instanceId: ProviderInstanceId; notice: string }>;
+  updateRequiredNotices: ReadonlyArray<{
+    instanceId: ProviderInstanceId;
+    notice: string;
+    canUpdateInSettings: boolean;
+  }>;
   onRequestClose: (() => void) | undefined;
   onOpenProviderSetup: ((instanceId: ProviderInstanceId) => void) | undefined;
 }) {
@@ -270,20 +277,25 @@ function ModelPickerProviderNotices({
       ) : (
         <ComboboxEmpty className="empty:h-0">{emptyLabel}</ComboboxEmpty>
       )}
-      {updateRequiredNotices.map(({ instanceId, notice }) => (
+      {updateRequiredNotices.map(({ instanceId, notice, canUpdateInSettings }) => (
         <p
           key={instanceId}
           className="shrink-0 border-t border-border/70 px-3 py-2 text-xs leading-snug text-muted-foreground"
         >
-          {notice}{" "}
-          <InlineButton
-            onClick={() => {
-              onRequestClose?.();
-              void navigate({ to: "/settings/providers" });
-            }}
-          >
-            {t("chat.provider.settings")}
-          </InlineButton>
+          {notice}
+          {canUpdateInSettings ? (
+            <>
+              {" "}
+              <InlineButton
+                onClick={() => {
+                  onRequestClose?.();
+                  void navigate({ to: "/settings/providers" });
+                }}
+              >
+                {t("chat.provider.settings")}
+              </InlineButton>
+            </>
+          ) : null}
         </p>
       ))}
     </>
@@ -894,7 +906,15 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     const notice = shown
       ? formatProviderUpdateRequiredNotice(entry.snapshot, searchQuery, messages, locale)
       : null;
-    return notice ? [{ instanceId: entry.instanceId, notice }] : [];
+    return notice
+      ? [
+          {
+            instanceId: entry.instanceId,
+            notice,
+            canUpdateInSettings: !providerUpdateChannelLags(entry.snapshot, searchQuery),
+          },
+        ]
+      : [];
   });
 
   const modelJumpModelKeys = visibleModels

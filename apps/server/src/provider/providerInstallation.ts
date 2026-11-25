@@ -37,7 +37,7 @@ export class ProviderInstallation extends Context.Service<
   ProviderInstallation,
   {
     readonly discover: Effect.Effect<ReadonlyArray<ServerProviderInstallation>>;
-    readonly migrateLegacyAntigravity: Effect.Effect<void, ProviderSetupError>;
+    readonly migrateLegacyAntigravity: Effect.Effect<void>;
     readonly start: (
       input: ProviderSetupInput,
     ) => Effect.Effect<ProviderInstallState, ProviderSetupError>;
@@ -231,15 +231,19 @@ const make = Effect.fn("makeProviderInstallation")(function* () {
         (instance) => instance.driverKind === ANTIGRAVITY && instance.enabled,
       );
       for (const { instanceId } of candidates) {
-        const entry = (yield* readEntries(instanceId, "install"))[instanceId];
-        const config = yield* decodeAntigravitySettings(entry?.config ?? {}).pipe(Effect.option);
-        if (Option.isNone(config)) continue;
-        const environment = yield* mergeProviderInstanceEnvironment(entry?.environment);
-        const migration = yield* antigravityInstallation
-          .checkLegacyRuntime(config.value.binaryPath, environment)
-          .pipe(Effect.mapError(failure(instanceId)));
-        if (migration === "reused") yield* providers.refreshInstance(instanceId);
-        if (migration === "install") yield* start({ instanceId });
+        yield* Effect.gen(function* () {
+          const entry = (yield* readEntries(instanceId, "install"))[instanceId];
+          const config = yield* decodeAntigravitySettings(entry?.config ?? {}).pipe(Effect.option);
+          if (Option.isNone(config)) return;
+          const environment = yield* mergeProviderInstanceEnvironment(entry?.environment);
+          const migration = yield* antigravityInstallation
+            .checkLegacyRuntime(config.value.binaryPath, environment)
+            .pipe(Effect.mapError(failure(instanceId)));
+          if (migration === "reused") yield* providers.refreshInstance(instanceId);
+          if (migration === "install") yield* start({ instanceId });
+        }).pipe(
+          Effect.catch((error) => Effect.logWarning("Antigravity startup migration failed", error)),
+        );
       }
     },
   );

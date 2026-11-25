@@ -24,8 +24,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { isSecretsFeatureEnabled } from "~/env";
-
 export type SettingsSearchScope =
   | "environment"
   | "environment-defaults"
@@ -211,9 +209,5 @@ export type SettingsPath = (typeof SETTINGS_SECTIONS)[number]["path"];
 
 export const SETTINGS_NAV_GROUPS = NAV_GROUPS.map((group) => ({
   ...group,
-  sections: SETTINGS_SECTIONS.filter(
-    (section) =>
-      section.group === group.id &&
-      (section.path !== "/settings/secrets" || isSecretsFeatureEnabled),
-  ),
+  sections: SETTINGS_SECTIONS.filter((section) => section.group === group.id),
 }));

@@ -23,6 +23,7 @@ import * as ConveneMcp from "../convene/ConveneMcp.ts";
 import * as RunFinalizationService from "./RunFinalizationService.ts";
 import * as ResourceCleanupService from "./ResourceCleanupService.ts";
 import * as EffectOutbox from "./EffectOutbox.ts";
+import * as ProjectionMaintenance from "./ProjectionMaintenance.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as CheckpointRollbackService from "./CheckpointRollbackService.ts";
 import * as ProviderSessionManager from "./ProviderSessionManager.ts";
@@ -102,6 +103,7 @@ export const layerExecutor: Layer.Layer<
   | ThreadTitleRegenerationService.ThreadTitleRegenerationService
   | ThreadManagementService.ThreadManagementService
   | ProjectionStore.ProjectionStoreV2
+  | ProjectionMaintenance.ProjectionMaintenanceV2
   | ServerSettings.ServerSettingsService
 > = Layer.effect(
   OrchestrationEffectExecutorV2,
@@ -117,6 +119,7 @@ export const layerExecutor: Layer.Layer<
       yield* ThreadTitleRegenerationService.ThreadTitleRegenerationService;
     const threads = yield* ThreadManagementService.ThreadManagementService;
     const projectionStore = yield* ProjectionStore.ProjectionStoreV2;
+    const projectionMaintenance = yield* ProjectionMaintenance.ProjectionMaintenanceV2;
     const settings = yield* ServerSettings.ServerSettingsService;
     const convene = yield* Effect.serviceOption(ConveneMcp.ConveneMcp);
     const startRun = (
@@ -168,6 +171,7 @@ export const layerExecutor: Layer.Layer<
               ...(effect.request.processLossCount === undefined
                 ? {}
                 : { processLossCount: effect.request.processLossCount }),
+              ...(effect.request.cause === undefined ? {} : { cause: effect.request.cause }),
             }).pipe(
               Effect.provideService(ThreadManagementService.ThreadManagementService, threads),
               Effect.provideService(ServerSettings.ServerSettingsService, settings),
@@ -406,8 +410,7 @@ export const layerExecutor: Layer.Layer<
                         threadId: effect.threadId,
                         messageId: message.id,
                         ...(error.steerDeclined ? { steerFollowUpOfRunId: run.id } : {}),
-                        ...(error.steerDeclined &&
-                        effect.request.steerFollowUpAfterRunOrdinal !== undefined
+                        ...(effect.request.steerFollowUpAfterRunOrdinal !== undefined
                           ? {
                               steerFollowUpAfterRunOrdinal:
                                 effect.request.steerFollowUpAfterRunOrdinal,
@@ -566,6 +569,7 @@ export const layerExecutor: Layer.Layer<
                 providerThreadId: effect.request.providerThreadId,
                 checkpointId: effect.request.checkpointId,
                 scopeId: effect.request.scopeId,
+                requestId: effect.commandId,
                 ...(effect.request.restoreFiles === undefined
                   ? {}
                   : { restoreFiles: effect.request.restoreFiles }),
@@ -695,6 +699,18 @@ export const layerExecutor: Layer.Layer<
               ),
             );
           }
+          case "thread-content.purge":
+            return projectionMaintenance.purgeDeletedThread(effect.threadId).pipe(
+              Effect.asVoid,
+              Effect.mapError(
+                (cause) =>
+                  new OrchestrationEffectExecutionError({
+                    effectId: effect.id,
+                    effectType: effect.request.type,
+                    cause,
+                  }),
+              ),
+            );
           case "thread-title.generate":
             return threadTitleRegeneration
               .execute({

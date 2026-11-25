@@ -1,5 +1,5 @@
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
-import type { ContextMenuItem } from "@t3tools/contracts";
+import type { ContextMenuItem, ContextMenuSource } from "@t3tools/contracts";
 import {
   type SourceControlDefinition,
   UNKNOWN_SOURCE_CONTROL_CLIENT,
@@ -16,10 +16,7 @@ import { toastManager } from "../ui/toast";
 
 export type PullRequestLinkContextMenuAction = "copy-link" | "open-external";
 
-export const openOnHostLabel = (
-  host: SourceControlDefinition,
-  resolve?: MessageResolver,
-): string =>
+export const openOnHostLabel = (host: SourceControlDefinition, resolve?: MessageResolver): string =>
   host === UNKNOWN_SOURCE_CONTROL_CLIENT
     ? (resolve?.(msg("Open on host")) ?? i18n.t("pullRequest.link.openOnUnknownHost"))
     : (resolve?.(msg("Open on {host}", { host: host.label })) ??
@@ -38,16 +35,22 @@ export async function showPullRequestLinkContextMenu({
   url,
   openLabel,
   position,
+  source,
 }: {
   readonly url: string;
   readonly openLabel: string;
   readonly position: { readonly x: number; readonly y: number };
+  readonly source: ContextMenuSource;
 }): Promise<void> {
   const api = readLocalApi();
   if (!api) return;
   let action: PullRequestLinkContextMenuAction | null = null;
   try {
-    action = await api.contextMenu.show(pullRequestLinkContextMenuItems(openLabel), position);
+    action = await api.contextMenu.show(
+      pullRequestLinkContextMenuItems(openLabel),
+      position,
+      source,
+    );
   } catch {
     return;
   }

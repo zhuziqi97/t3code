@@ -77,6 +77,8 @@ vi.mock("../state/session", async (original) => ({
   environmentSession: { sessionStateAtom: "session" },
   readEnvironmentScope: (environmentId: string, scope: string) =>
     state.scopes.get(environmentId)?.has(scope) === true,
+  readEnvironmentScopeDenied: (environmentId: string, scope: string) =>
+    state.scopes.get(environmentId)?.has(scope) !== true,
 }));
 
 vi.mock("../state/use-atom-command", async (original) => ({

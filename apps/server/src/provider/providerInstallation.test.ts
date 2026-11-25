@@ -65,6 +65,7 @@ const makeHarness = Effect.fn("providerInstallation.test.makeHarness")(function*
     instances?: ReadonlyArray<ProviderInstance>;
     others?: ReadonlyArray<ProviderInstance>;
     settings?: Parameters<typeof ServerSettings.layerTest>[0];
+    installFailure?: AntigravityInstallation.AntigravityInstallationError;
   } = {},
 ) {
   const calls: string[] = [];
@@ -122,11 +123,22 @@ const makeHarness = Effect.fn("providerInstallation.test.makeHarness")(function*
       managedDirectory: "/unused-managed-runtime",
       checkForUpdate: Effect.void,
       checkLegacyRuntime: (binaryPath) =>
-        Effect.succeed(binaryPath === "C:\\old\\agy_acp_server.exe" ? "install" : "current"),
+        Effect.succeed(
+          binaryPath === "C:\\old\\agy_acp_server.exe"
+            ? "install"
+            : binaryPath === "D:\\old\\agy_acp_server.exe"
+              ? "reused"
+              : "current",
+        ),
       start: Effect.sync(() => {
         calls.push("start");
         return { ...state, operationId: "install-1", phase: "downloading" as const };
-      }).pipe(Effect.tap((started) => SubscriptionRef.set(installationState, started))),
+      }).pipe(
+        Effect.andThen((started) =>
+          input.installFailure ? Effect.fail(input.installFailure) : Effect.succeed(started),
+        ),
+        Effect.tap((started) => SubscriptionRef.set(installationState, started)),
+      ),
       cancel: () =>
         Effect.sync(() => {
           calls.push("cancel");
@@ -188,6 +200,28 @@ describe("provider installation routing", () => {
       });
       yield* router.migrateLegacyAntigravity;
       assert.deepEqual(calls, ["start"]);
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("continues migrating the other instance when an Antigravity install fails", () =>
+    Effect.gen(function* () {
+      const otherId = ProviderInstanceId.make("antigravity-local-cli");
+      const { router, calls, refreshedInstances } = yield* makeHarness({
+        instances: [instance(driver, instanceId, true), instance(driver, otherId, true)],
+        settings: {
+          providerInstances: {
+            [instanceId]: { driver, config: { binaryPath: "C:\\old\\agy_acp_server.exe" } },
+            [otherId]: { driver, config: { binaryPath: "D:\\old\\agy_acp_server.exe" } },
+          },
+        },
+        installFailure: new AntigravityInstallation.AntigravityInstallationError({
+          operation: "start",
+          detail: "Could not reach the release server.",
+        }),
+      });
+      yield* router.migrateLegacyAntigravity;
+      assert.deepEqual(calls, ["start", "refresh"]);
+      assert.deepEqual(refreshedInstances, [otherId]);
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 

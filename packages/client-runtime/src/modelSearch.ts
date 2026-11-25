@@ -22,6 +22,7 @@ function getModelPickerSearchFields(model: ModelPickerSearchableModel): string[]
     normalizeSearchQuery(model.driverKind),
     normalizeSearchQuery(model.providerDisplayName),
     buildModelPickerSearchText(model),
+    ...(model.slug ? [normalizeSearchQuery(model.slug)] : []),
   ];
 }
 

@@ -29,6 +29,7 @@ it("names the provider in the active language and sends the original URL to the 
   await showPullRequestLinkContextMenu({
     url,
     openLabel: openOnHostLabel(sourceControlClients.get(SourceControlProviderKind.make("gitlab"))),
+    source: "mouse",
     position: { x: 8, y: 12 },
   });
   expect(api.contextMenu.show).toHaveBeenCalledWith(
@@ -59,6 +60,7 @@ it("reports a pending native link failure in the language selected while it was 
   const pending = showPullRequestLinkContextMenu({
     url: "https://github.com/acme/raw/pull/3",
     openLabel: openOnHostLabel(sourceControlClients.get(SourceControlProviderKind.make("github"))),
+    source: "mouse",
     position: { x: 0, y: 0 },
   });
   await opening;
@@ -77,6 +79,7 @@ it("leaves a dismissed native menu without a clipboard or browser action", async
   await showPullRequestLinkContextMenu({
     url: "https://github.com/acme/raw/pull/3",
     openLabel: openOnHostLabel(sourceControlClients.get(SourceControlProviderKind.make("github"))),
+    source: "mouse",
     position: { x: 0, y: 0 },
   });
   expect(api.shell.openExternal).not.toHaveBeenCalled();

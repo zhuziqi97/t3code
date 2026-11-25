@@ -30,8 +30,13 @@ export const olderSettledThreads = createOlderSettledThreadAtoms(
   environmentShell.stateAtom,
 );
 export const threadEnvironment: ReturnType<typeof createThreadEnvironmentAtoms> =
-  createThreadEnvironmentAtoms(connectionAtomRuntime, threadFamilies.snapshotAtom);
+  createThreadEnvironmentAtoms(
+    connectionAtomRuntime,
+    threadFamilies.snapshotAtom,
+    environmentShell.statusAtom,
+  );
 const environmentThreads = createEnvironmentThreadStateAtoms(connectionAtomRuntime);
+export const environmentThreadStateAtom = environmentThreads.stateAtom;
 export const environmentThreadDetails = createEnvironmentThreadDetailAtoms(
   environmentThreads.stateAtom,
 );

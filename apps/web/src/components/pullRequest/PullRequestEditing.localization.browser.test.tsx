@@ -209,12 +209,14 @@ function Review({ approve = false }: { approve?: boolean }) {
       term="pr"
       environmentId={environmentId}
       reference={reference}
+      headSha={undefined}
       verdicts={approve ? ["approve"] : ["request-changes"]}
       requestChangesSummaryRequired
       textareaRef={ref}
       pending={pending}
       onPendingChange={setPending}
       onSubmitted={fixture.onSubmitted}
+      onRefused={() => {}}
     />
   );
 }
@@ -261,6 +263,7 @@ it.each(["summary", "timeline"] as const)(
           scrollerRef={() => {}}
           environmentId={environmentId}
           threadRef={null}
+          observedAt={undefined}
           reference={reference}
           detail={value}
           activityPending={false}
@@ -346,6 +349,7 @@ it("keeps separate comment and review drafts across mode and language changes", 
       environmentId={environmentId}
       reference={reference}
       detail={detail}
+      shownHeadSha={undefined}
       actionPending={false}
       onCommentAction={fixture.onCommentAction}
       onCommented={fixture.onCommented}

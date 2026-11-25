@@ -14,6 +14,16 @@ const documentActivityAtom = Atom.make((get) => {
   return getDocumentActivity();
 });
 
+const isDocumentViewed = () => {
+  const activity = getDocumentActivity();
+  return activity.visible && activity.focused;
+};
+
+const documentViewedAtom = Atom.make((get) => {
+  get.addFinalizer(subscribeDocumentActivity(() => get.setSelf(isDocumentViewed())));
+  return isDocumentViewed();
+}).pipe(Atom.withLabel("document-viewed"));
+
 const threadVisitTracker = createThreadVisitTracker({
   threadShellAtom: (ref) =>
     Atom.make((get) => {
@@ -26,6 +36,7 @@ const threadVisitTracker = createThreadVisitTracker({
   visit: threadEnvironment.visit,
   markLocalVisit: (ref, visitedAt) =>
     useUiStateStore.getState().markThreadVisited(scopedThreadKey(ref), visitedAt),
+  viewingAtom: documentViewedAtom,
 });
 
 // The visit watermark is the one part of the chat view that follows the

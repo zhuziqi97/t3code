@@ -4,7 +4,7 @@ import { serverEnvironment } from "../../state/server";
 import { Switch } from "../ui/switch";
 import { useTranslate } from "../../i18n";
 import type { EnvironmentId, UnifiedSettings } from "@t3tools/contracts";
-import { useGT } from "gt-react";
+import { T, Var, useGT } from "gt-react";
 import { PlusIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -50,8 +50,8 @@ export function UsageProviderSettings({
   });
   const platform = useAtomValue(serverEnvironment.configValueAtom(environmentId))?.environment
     .platform;
-  const [adding, setAdding] = useState(false);
   const [updatingCursor, setUpdatingCursor] = useState(false);
+  const [adding, setAdding] = useState<"cliproxy" | "http" | null>(null);
   const entries = Object.entries(sources);
 
   const setCursorUsageEnabled = async (enabled: boolean) => {
@@ -72,10 +72,16 @@ export function UsageProviderSettings({
         {...searchableSetting("usage-providers")}
         headerAction={
           !readOnly ? (
-            <Button size="xs" variant="outline" onClick={() => setAdding(true)}>
-              <PlusIcon className="size-3" aria-hidden />
-              {t("usageSettings.add")}
-            </Button>
+            <div className="flex gap-2">
+              <Button size="xs" variant="outline" onClick={() => setAdding("cliproxy")}>
+                <PlusIcon className="size-3" aria-hidden />
+                <T>Add hub</T>
+              </Button>
+              <Button size="xs" variant="outline" onClick={() => setAdding("http")}>
+                <PlusIcon className="size-3" aria-hidden />
+                <T>Add HTTP source</T>
+              </Button>
+            </div>
           ) : null
         }
       >
@@ -98,6 +104,7 @@ export function UsageProviderSettings({
           <SettingsRow title={t("usageSettings.empty")} />
         ) : (
           entries.map(([id, source]) => {
+            const kindLabel = source.kind === "http" ? gt("HTTP quota source") : CLI_PROXY_NAME;
             const label = source.label?.trim() || source.url;
             return (
               <SettingsRow
@@ -105,9 +112,7 @@ export function UsageProviderSettings({
                 title={label}
                 description={
                   <span className="break-all">
-                    {source.enabled
-                      ? CLI_PROXY_NAME
-                      : gt("{name} · Disabled", { name: CLI_PROXY_NAME })}
+                    {source.enabled ? kindLabel : gt("{name} · Disabled", { name: kindLabel })}
                     {label !== source.url ? ` · ${source.url}` : ""}
                   </span>
                 }
@@ -127,7 +132,10 @@ export function UsageProviderSettings({
       {adding && !readOnly ? (
         <AddUsageLimitSourceDialog
           open
-          onOpenChange={setAdding}
+          kind={adding}
+          onOpenChange={(open) => {
+            if (!open) setAdding(null);
+          }}
           environmentId={environmentId}
           environmentLabel={environmentLabel}
           sources={sources}
@@ -154,8 +162,14 @@ function RemoveUsageProviderButton({
       <AlertDialog open={open} onOpenChange={setOpen}>
         <AlertDialogPopup>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t("usageSettings.removeTitle", { label })}</AlertDialogTitle>
-            <AlertDialogDescription>{t("usageSettings.removeDescription")}</AlertDialogDescription>
+            <AlertDialogTitle>
+              <T>
+                Remove <Var>{label}</Var>?
+              </T>
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              <T>The saved connection and its credentials are removed from this environment.</T>
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogClose render={<Button variant="outline" />}>

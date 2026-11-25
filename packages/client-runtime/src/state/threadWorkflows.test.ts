@@ -7,6 +7,7 @@ import {
   hasCompactableConversation,
   getUserQueuedThreadRuns,
   resolveLatestMergeBackRun,
+  threadCanSteer,
   threadSupportsProviderHandoff,
 } from "./threadWorkflows.ts";
 
@@ -14,6 +15,7 @@ const capabilities = (input?: {
   readonly queued?: boolean;
   readonly steer?: boolean;
   readonly restartSteer?: boolean;
+  readonly interrupt?: boolean;
   readonly nativeFork?: boolean;
   readonly portableFork?: boolean;
 }) =>
@@ -22,6 +24,7 @@ const capabilities = (input?: {
       supportsQueuedMessages: input?.queued ?? false,
       supportsActiveSteering: input?.steer ?? false,
       supportsSteeringByInterruptRestart: input?.restartSteer ?? false,
+      supportsInterrupt: input?.interrupt ?? false,
     },
     threads: {
       canForkThread: input?.nativeFork ?? false,
@@ -32,55 +35,35 @@ const capabilities = (input?: {
   }) as never;
 
 describe("thread workflows", () => {
-  it("uses complete local conversation metadata independently of the loaded window", () => {
+  it.each([
+    ["queue only", { queued: true }, false, false],
+    ["session still attaching", undefined, false, true],
+    ["native steering", { steer: true }, false, true],
+    ["interrupt and restart", { interrupt: true, restartSteer: true }, false, true],
+    ["restart without interrupt", { restartSteer: true }, false, false],
+    ["explicit compaction", { steer: true }, true, false],
+  ] as const)("gates composer steering for %s", (_, turns, compactCommandIsActive, expected) => {
     const projection = {
-      thread: { id: "thread", forkedFrom: null },
-      visibleTurnItems: [],
-      contextTransfers: [],
-      contextHandoffs: [],
+      thread: { id: "thread", activeProviderThreadId: "provider-thread" },
+      runs: [{ id: "active", status: "running", providerThreadId: "provider-thread" }],
+      providerThreads: [{ id: "provider-thread", providerSessionId: "session" }],
+      providerSessions: [
+        ...(turns === undefined
+          ? []
+          : [{ id: "session", status: "running", capabilities: capabilities(turns) }]),
+        { id: "other", status: "ready", capabilities: capabilities({ steer: true }) },
+      ],
+      messages: [],
     } as unknown as OrchestrationV2ThreadProjection;
-    expect(hasCompactableConversation({ ...projection, hasLocalConversation: true })).toBe(true);
-    expect(hasCompactableConversation({ ...projection, hasLocalConversation: false })).toBe(false);
-    const windowWithUser = {
-      ...projection,
-      visibleTurnItems: [{ item: { type: "user_message", text: "hello", attachments: [] } }],
-    } as unknown as OrchestrationV2ThreadProjection;
-    expect(hasCompactableConversation(windowWithUser)).toBe(true);
-    expect(hasCompactableConversation({ ...windowWithUser, hasLocalConversation: false })).toBe(
-      false,
-    );
-    for (const attachments of [[], [{ id: "file" }]]) {
-      const compact = {
-        ...projection,
-        visibleTurnItems: [{ item: { type: "user_message", text: "\t/COMPACT\n", attachments } }],
-      } as unknown as OrchestrationV2ThreadProjection;
-      expect(hasCompactableConversation(compact)).toBe(attachments.length > 0);
-    }
-    const fork = {
-      ...projection,
-      hasLocalConversation: false,
-      thread: {
-        ...projection.thread,
-        forkedFrom: { type: "run", threadId: "source", runId: "run" },
-      },
-    } as unknown as OrchestrationV2ThreadProjection;
-    expect(hasCompactableConversation(fork)).toBe(true);
-    for (const messages of [[], [{ text: "inherited" }]]) {
-      const portable = {
-        ...fork,
-        contextTransfers: [
-          {
-            type: "fork",
-            targetThreadId: "thread",
-            resolution: { strategy: "portable_context", contextHandoffId: "handoff" },
-          },
-        ],
-        contextHandoffs: [{ id: "handoff", history: { messages } }],
-      } as unknown as OrchestrationV2ThreadProjection;
-      expect(hasCompactableConversation(portable)).toBe(messages.length > 0);
-      expect(portable.hasLocalConversation).toBe(false);
-    }
+    expect(
+      threadCanSteer(projection, {
+        compactCommandIsActive,
+        compactionRunning: false,
+        activeRunId: projection.runs[0]!.id,
+      }),
+    ).toBe(expected);
   });
+
   it("skips message history classification when no runs are queued", () => {
     let metadataReads = 0;
     const message = {
@@ -189,7 +172,7 @@ describe("thread workflows", () => {
         {
           id: "provider-session",
           status: "running",
-          capabilities: capabilities({ queued: true, restartSteer: true }),
+          capabilities: capabilities({ queued: true, interrupt: true, restartSteer: true }),
         },
       ],
     } as never);

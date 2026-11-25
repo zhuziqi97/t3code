@@ -1,12 +1,11 @@
 import { useTranslate } from "../../i18n";
-import { RunEndStateFeedback, type RunEndFeedback } from "./RunEndStateFeedback";
-import { shouldPreserveAssistantLineBreaks } from "@t3tools/shared/markdownPipeline";
-import { MessageId, type RunId, type TurnItemId } from "@t3tools/contracts";
+import { shouldPreserveAssistantLineBreaks } from "@t3tools/shared/assistantInsights";
+import { MessageId, type TurnItemId } from "@t3tools/contracts";
 import { canForkProjectedAssistantItem } from "@t3tools/client-runtime/state/thread-workflows";
 import { agentWorkingDirectories } from "@t3tools/client-runtime/workspace-basename-lookup";
-import { useGT, useMessages } from "gt-react";
-import { memo, use, useState } from "react";
-import { type ChatMessage, type TurnDiffSummary } from "../../types";
+import { T, useGT, useMessages } from "gt-react";
+import { use, useState } from "react";
+import { type ChatMessage } from "../../types";
 import ChatMarkdown from "../ChatMarkdown";
 import { GitForkIcon, ReplyIcon } from "lucide-react";
 import { captureAssistantMessageOpening } from "~/lib/assistantTextSelection";
@@ -15,31 +14,17 @@ import { Button } from "../ui/button";
 import { ProposedPlanCard } from "./ProposedPlanCard";
 import { HtmlRenderFrame } from "./HtmlRenderFrame";
 import { McpAppFrame } from "./McpAppFrame";
-import { checkpointFileTotals } from "@t3tools/client-runtime/state/thread-checkpoints";
-import { ChangedFilesCard } from "./ChangedFilesTree";
-import { useFileContextMenuHandler } from "../../fileContextMenu";
-import {
-  readResponseSubagents,
-  useAssistantMessageText,
-  useProject,
-  useQuietThreadShell,
-} from "../../state/entities";
+import { readResponseSubagents, useAssistantMessageText } from "../../state/entities";
 import { MessageCopyButton } from "./MessageCopyButton";
 import { AssistantCitationSource } from "./AssistantCitationSource";
 import { resolveAssistantMessageCopyState } from "./MessagesTimeline.logic";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { cn } from "~/lib/utils";
-import { useUiStateStore } from "~/uiStateStore";
 import { formatChatTimestampTooltip, formatDayAwareTimestamp } from "../../timestampFormat";
 import { readThreadTurnItems } from "../../state/entities";
 import { useV2ItemSupport } from "../../state/v2ItemSupport";
 import { TimelineRowCtx, TimelineRowActivityCtx, type TimelineRow } from "./timelineRowContext";
 import { MESSAGE_HEADING_LEVEL, MessageAuthorHeading } from "./TimelineRowParts";
-import { useAtomValue } from "@effect/atom-react";
-import { AsyncResult, Atom } from "effect/reactivity";
-import { vcsEnvironment } from "../../state/vcs";
-
-const NO_VCS_STATUS = Atom.make(AsyncResult.initial());
 
 export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const t = useTranslate();
@@ -86,14 +71,6 @@ export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind
             />
           </AssistantCitationSource>
         </div>
-        {ctx.onOpenTurnDiff ? (
-          <AssistantChangedFilesSection
-            turnSummary={row.assistantTurnDiffSummary}
-            routeThreadKey={ctx.routeThreadKey}
-            resolvedTheme={ctx.resolvedTheme}
-            onOpenTurnDiff={ctx.onOpenTurnDiff}
-          />
-        ) : null}
         {!row.showAssistantMeta && row.projectedItem?.item.status === "interrupted" ? (
           <div className="mt-1.5 flex">
             <AssistantStatusBadge status="interrupted" />
@@ -106,8 +83,6 @@ export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind
             message={row.message}
             showCopyButton={row.showAssistantCopyButton}
             copyStreaming={row.assistantCopyStreaming}
-            alwaysVisible={!row.message.streaming && !row.assistantCopyStreaming}
-            end={ctx.runEndFeedback?.rowId === row.id ? ctx.runEndFeedback.end : null}
           />
         ) : null}
       </div>
@@ -121,11 +96,12 @@ export function SentMessageTimelineRow({
 }: {
   row: Extract<TimelineRow, { kind: "sent-message" }>;
 }) {
+  const t = useTranslate();
   const ctx = use(TimelineRowCtx);
 
   return (
     <div className="min-w-0 px-1 py-0.5">
-      <MessageAuthorHeading>T3 Code</MessageAuthorHeading>
+      <MessageAuthorHeading>{t("integrations.links.app")}</MessageAuthorHeading>
       {/* Sent messages have no message id; citations name their turn item instead. */}
       <AssistantCitationSource
         messageId={MessageId.make(row.id)}
@@ -155,8 +131,8 @@ function AssistantForkButton({
 }: {
   readonly projectedItem: NonNullable<Extract<TimelineRow, { kind: "message" }>["projectedItem"]>;
 }) {
-  const t = useTranslate();
   const ctx = use(TimelineRowCtx);
+  const gt = useGT();
   const [busy, setBusy] = useState(false);
   const support = useV2ItemSupport({
     environmentId: ctx.activeThreadEnvironmentId,
@@ -187,13 +163,15 @@ function AssistantForkButton({
                 () => setBusy(false),
               );
             }}
-            aria-label={t("chat.timeline.forkResponse")}
+            aria-label={gt("Fork from this response")}
           />
         }
       >
         <GitForkIcon className={cn("size-3", busy && "animate-pulse")} />
       </TooltipTrigger>
-      <TooltipPopup side="top">{t("chat.timeline.forkResponse")}</TooltipPopup>
+      <TooltipPopup side="top">
+        <T>Fork from this response</T>
+      </TooltipPopup>
     </Tooltip>
   );
 }
@@ -203,7 +181,6 @@ export function AssistantMetaTimelineRow({
 }: {
   row: Extract<TimelineRow, { kind: "assistant-meta" }>;
 }) {
-  const ctx = use(TimelineRowCtx);
   return (
     <div className="px-1">
       <AssistantMessageMeta
@@ -213,7 +190,6 @@ export function AssistantMetaTimelineRow({
         showCopyButton={row.showAssistantCopyButton}
         copyStreaming={row.assistantCopyStreaming}
         alwaysVisible
-        end={ctx.runEndFeedback?.rowId === row.id ? ctx.runEndFeedback.end : null}
       />
     </div>
   );
@@ -226,7 +202,6 @@ function AssistantMessageMeta({
   showCopyButton,
   copyStreaming,
   alwaysVisible = false,
-  end = null,
 }: {
   className?: string;
   projectedItem?: Extract<TimelineRow, { kind: "message" }>["projectedItem"];
@@ -234,24 +209,21 @@ function AssistantMessageMeta({
   showCopyButton: boolean;
   copyStreaming: boolean;
   alwaysVisible?: boolean;
-  end?: RunEndFeedback | null;
 }) {
   const ctx = use(TimelineRowCtx);
   const m = useMessages();
 
-  const timestamp = end?.completedAt ?? message.updatedAt;
   return (
     <div
-      data-testid={end ? "latest-run-end-state" : undefined}
       className={cn(
-        "flex flex-wrap items-center gap-x-2 gap-y-1 text-xs tabular-nums transition-opacity duration-200",
+        "flex items-center gap-2 text-xs tabular-nums transition-opacity duration-200",
         alwaysVisible
           ? "opacity-100"
           : "opacity-0 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/assistant:opacity-100",
         className,
       )}
     >
-      {!end && projectedItem && projectedItem.item.status !== "completed" ? (
+      {projectedItem && projectedItem.item.status !== "completed" ? (
         <AssistantStatusBadge status={projectedItem.item.status} />
       ) : null}
       <AssistantCopyButton
@@ -267,24 +239,27 @@ function AssistantMessageMeta({
       ) : null}
       {!message.streaming && (
         <Tooltip>
-          <TooltipTrigger
-            render={
-              <time dateTime={timestamp} className="text-muted-foreground text-xs tabular-nums" />
-            }
-          >
-            {formatDayAwareTimestamp(timestamp, ctx.timestampFormat, undefined, undefined, m)}
+          <TooltipTrigger render={<p className="text-muted-foreground text-xs tabular-nums" />}>
+            {formatDayAwareTimestamp(
+              message.updatedAt,
+              ctx.timestampFormat,
+              undefined,
+              undefined,
+              m,
+            )}
           </TooltipTrigger>
-          <TooltipPopup>{formatChatTimestampTooltip(timestamp, ctx.timestampFormat)}</TooltipPopup>
+          <TooltipPopup>
+            {formatChatTimestampTooltip(message.updatedAt, ctx.timestampFormat, m)}
+          </TooltipPopup>
         </Tooltip>
       )}
-      {end ? <RunEndStateFeedback end={end} timestampFormat={ctx.timestampFormat} inline /> : null}
     </div>
   );
 }
 
 function AssistantReplyButton({ message, itemId }: { message: ChatMessage; itemId: TurnItemId }) {
-  const t = useTranslate();
   const ctx = use(TimelineRowCtx);
+  const gt = useGT();
   const { threadRef, onReplyToResponse } = ctx;
   if (!threadRef || !onReplyToResponse || !message.text.trim()) return null;
 
@@ -318,13 +293,15 @@ function AssistantReplyButton({ message, itemId }: { message: ChatMessage; itemI
             size="xs"
             variant="ghost-muted"
             onClick={reply}
-            aria-label={t("chat.reply.action")}
+            aria-label={gt("Reply to this response")}
           />
         }
       >
         <ReplyIcon className="size-3" />
       </TooltipTrigger>
-      <TooltipPopup side="top">{t("chat.reply.action")}</TooltipPopup>
+      <TooltipPopup side="top">
+        <T>Reply to this response</T>
+      </TooltipPopup>
     </Tooltip>
   );
 }
@@ -393,7 +370,7 @@ export function HtmlRenderTimelineRow({
     return <div className="min-w-0 px-1">{ctx.renderHtmlRender(row)}</div>;
   }
   return (
-    <div className="min-w-0 px-1">
+    <div className="html-preview-lane min-w-0 px-1">
       <HtmlRenderFrame
         key={row.htmlRender.attachmentId}
         environmentId={ctx.activeThreadEnvironmentId}
@@ -424,106 +401,5 @@ export function McpAppTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "
         onFullscreenChange={(fullscreen) => ctx.onAppFullscreenChange(row.id, fullscreen)}
       />
     </div>
-  );
-}
-
-/** Subscribes directly to the UI state store for expand/collapse state,
- *  so toggling re-renders only this component — not the entire list. */
-const AssistantChangedFilesSection = memo(function AssistantChangedFilesSection({
-  turnSummary,
-  routeThreadKey,
-  resolvedTheme,
-  onOpenTurnDiff,
-}: {
-  turnSummary: TurnDiffSummary | undefined;
-  routeThreadKey: string;
-  resolvedTheme: "light" | "dark";
-  displayThreadKey?: string;
-  onOpenTurnDiff: (runId: RunId, filePath?: string) => void;
-}) {
-  if (!turnSummary) return null;
-  const checkpointFiles = turnSummary.files;
-  if (checkpointFiles.length === 0) return null;
-
-  return (
-    <AssistantChangedFilesSectionInner
-      turnSummary={turnSummary}
-      checkpointFiles={checkpointFiles}
-      routeThreadKey={routeThreadKey}
-      resolvedTheme={resolvedTheme}
-      onOpenTurnDiff={onOpenTurnDiff}
-    />
-  );
-});
-
-function AssistantChangedFilesSectionInner({
-  turnSummary,
-  checkpointFiles,
-  routeThreadKey,
-  resolvedTheme,
-  onOpenTurnDiff,
-}: {
-  turnSummary: TurnDiffSummary;
-  checkpointFiles: TurnDiffSummary["files"];
-  routeThreadKey: string;
-  resolvedTheme: "light" | "dark";
-  displayThreadKey?: string;
-  onOpenTurnDiff: (runId: RunId, filePath?: string) => void;
-}) {
-  const ctx = use(TimelineRowCtx);
-  const persistedExpanded = useUiStateStore(
-    (store) => store.threadChangedFilesExpandedById[routeThreadKey]?.[turnSummary.runId],
-  );
-  const setExpanded = useUiStateStore((store) => store.setThreadChangedFilesExpanded);
-  const allDirectoriesExpanded = persistedExpanded ?? false;
-
-  const thread = useQuietThreadShell(ctx.threadRef);
-  const activeProject = useProject(
-    thread && thread.projectId
-      ? { environmentId: thread.environmentId, projectId: thread.projectId }
-      : null,
-  );
-  const onFileContextMenu = useFileContextMenuHandler(ctx.activeThreadEnvironmentId, {
-    projectId: thread?.projectId,
-    ...(ctx.threadRef ? { threadId: ctx.threadRef.threadId } : {}),
-    workspacePath: ctx.workspaceRoot ?? null,
-  });
-  const repositoryRoot = useAtomValue(
-    ctx.workspaceRoot
-      ? vcsEnvironment.status({
-          environmentId: ctx.activeThreadEnvironmentId,
-          input: { cwd: ctx.workspaceRoot },
-        })
-      : NO_VCS_STATUS,
-    (status) => AsyncResult.getOrElse(status, () => null)?.workingTree.rootPath,
-  );
-
-  return (
-    <ChangedFilesCard
-      runId={turnSummary.runId}
-      files={checkpointFiles}
-      totals={checkpointFileTotals(turnSummary)}
-      allDirectoriesExpanded={allDirectoriesExpanded}
-      resolvedTheme={resolvedTheme}
-      onToggleAllDirectories={() =>
-        setExpanded(routeThreadKey, turnSummary.runId, !allDirectoriesExpanded)
-      }
-      onOpenTurnDiff={onOpenTurnDiff}
-      onFileContextMenu={(filePath, event) =>
-        onFileContextMenu(
-          {
-            environmentId: ctx.activeThreadEnvironmentId,
-            filePath,
-            workspaceRoot: ctx.workspaceRoot,
-            repositoryRoot:
-              repositoryRoot ??
-              (thread?.worktreePath == null
-                ? activeProject?.repositoryIdentity?.rootPath
-                : undefined),
-          },
-          event,
-        )
-      }
-    />
   );
 }

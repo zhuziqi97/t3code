@@ -4,6 +4,7 @@ import DiffsWorker from "@pierre/diffs/worker/worker.js?worker";
 import * as Schema from "effect/Schema";
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { getRenderedAppearance, subscribeRenderedAppearance } from "../hooks/useTheme";
+import { T } from "gt-react";
 import { useTranslate } from "../i18n";
 import { resolveDiffThemeName } from "../lib/diffRendering";
 import { PREFERRED_HIGHLIGHTER } from "../lib/syntaxHighlighting";
@@ -90,7 +91,20 @@ function acquireDiffWorkerPool(poolSize: number) {
 // Plain-text views do not queue a highlight task that could retry a blank first render.
 function DiffWorkerReady({ children }: { children?: ReactNode }) {
   const t = useTranslate();
-  const workerPool = useWorkerPool();
+  const ready = useDiffWorkerPoolReady(useWorkerPool());
+  return ready ? (
+    children
+  ) : (
+    <div
+      role="status"
+      className="flex min-h-0 flex-1 items-center justify-center p-4 text-xs text-muted-foreground"
+    >
+      <T>Loading code...</T>
+    </div>
+  );
+}
+
+export function useDiffWorkerPoolReady(workerPool: WorkerPoolManager | undefined) {
   const [readyPool, setReadyPool] = useState<WorkerPoolManager>();
   const ready = workerPool
     ? readyPool === workerPool || workerPool.isInitialized() || !workerPool.isWorkingPool()
@@ -110,16 +124,7 @@ function DiffWorkerReady({ children }: { children?: ReactNode }) {
     };
   }, [ready, workerPool]);
 
-  return ready ? (
-    children
-  ) : (
-    <div
-      role="status"
-      className="flex min-h-0 flex-1 items-center justify-center p-4 text-xs text-muted-foreground"
-    >
-      {t("filePreview.loadingCode")}
-    </div>
-  );
+  return ready;
 }
 
 // Module-level so the subscribe identity is stable: a new one would release and reacquire

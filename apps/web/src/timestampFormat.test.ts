@@ -26,6 +26,20 @@ function useTimeZone(timeZone: string): Disposable {
   };
 }
 
+it("localizes the day period while honoring the system clock and explicit 24-hour mode", async () => {
+  using _zone = useTimeZone("UTC");
+  vi.stubGlobal("window", { desktopBridge: { getSystemLocale: () => "en-US" } });
+  vi.resetModules();
+  try {
+    const { formatShortTimestamp } = await import("./timestampFormat");
+    const date = "2026-11-19T18:05:00.000Z";
+    expect(formatShortTimestamp(date, "locale", "zh")).toBe("下午6:05");
+    expect(formatShortTimestamp(date, "24-hour", "zh")).toBe("18:05");
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
 describe("resolveTimestampLocale", () => {
   it("defers to the runtime default when the host reports no locale", () => {
     expect(resolveTimestampLocale(null)).toBeUndefined();

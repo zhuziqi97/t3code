@@ -1079,6 +1079,10 @@ export class GhosttyTerminalSurface {
     return this.core.isViewportActive();
   }
 
+  isAlternateScreen(): boolean {
+    return this.core.isAlternateScreen();
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
@@ -1192,6 +1196,15 @@ export class GhosttyTerminalSurface {
           });
         }
       }
+      return;
+    }
+    const copyChord =
+      primaryModifier &&
+      !event.altKey &&
+      (mac ? !event.shiftKey : event.shiftKey || event.key.toLowerCase() === "insert");
+    if (copyChord && isTerminalCopyShortcut(event)) {
+      event.preventDefault();
+      event.stopPropagation();
       return;
     }
     if (isTerminalPasteShortcut(event)) {

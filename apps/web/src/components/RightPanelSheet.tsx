@@ -15,20 +15,13 @@ export function RightPanelSheet(props: {
       // The retained native browser lives outside this popup's DOM tree.
       // Keep it focusable, and dismiss only from the sheet's own empty layer.
       modal={false}
-      onOpenChange={(open, details) => {
-        if (details.reason === "focus-out") return;
-        if (
-          details.reason === "outside-press" &&
-          (!(details.event.target instanceof Element) ||
-            !details.event.target.matches(
-              '[data-slot="sheet-backdrop"], [data-slot="sheet-viewport"]',
-            ))
-        ) {
-          return;
+      onOpenChange={(open, eventDetails) => {
+        if (open) return;
+        // Base UI's dismiss handler fires on held Esc repeats after a nested popup closes.
+        if (eventDetails.reason === "escape-key" && eventDetails.event.repeat) {
+          return eventDetails.cancel();
         }
-        if (!open) {
-          props.onClose();
-        }
+        props.onClose();
       }}
     >
       <SheetPopup

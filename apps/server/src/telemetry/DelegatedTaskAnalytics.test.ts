@@ -90,7 +90,10 @@ it.effect("records each delegated task's final outcome once, without ids or prom
               AnalyticsService.AnalyticsService,
               AnalyticsService.AnalyticsService.of({
                 record: (event, properties) =>
-                  Effect.sync(() => void recorded.push({ event, properties })),
+                  Effect.sync(() => {
+                    recorded.push({ event, properties });
+                    return true;
+                  }),
                 flush: Effect.void,
                 recordOwners: () => Effect.void,
               }),

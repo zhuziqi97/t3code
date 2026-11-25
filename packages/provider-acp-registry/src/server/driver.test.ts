@@ -76,6 +76,8 @@ function catalogWithInspection(
 ): AcpRegistrySupport.AcpRegistryCatalog["Service"] {
   return {
     refresh: () => Effect.die("unused refresh"),
+    refreshIndex: () => Effect.die("unused index refresh"),
+    invalidateIndex: () => Effect.die("unused index invalidation"),
     search: () => Effect.die("unused search"),
     prepare: () => Effect.die("unused prepare"),
     inspectInstallation: () => Effect.die("unused installation inspection"),
@@ -632,8 +634,9 @@ createInterface({ input: process.stdin }).on("line", (line) => {
       result: { protocolVersion: 1, agentCapabilities: {}, authMethods: [], agentInfo: { name: "fake", version: "1.5.9" } },
     });
   } else if (method === "session/new") {
-    const modelIds = JSON.parse(readFileSync(process.argv[2], "utf8"));
-    const levels = modelIds[0] === "model-a" ? ["low", "high"] : ["medium", "high"];
+    const contents = JSON.parse(readFileSync(process.argv[2], "utf8"));
+    const modelIds = Array.isArray(contents) ? contents : contents.models;
+    const levels = Array.isArray(contents) ? ["low", "high"] : contents.levels;
     send({
       id,
       result: {
@@ -721,7 +724,13 @@ it.layer(driverLayer, { excludeTestServices: true })("AcpRegistryDriver", (it) =
           displayName: identity.displayName,
           enabled: true,
           environment: [],
-          config: decodeSettings({ source: "local", commandPath: "agent" }),
+          config: decodeSettings({
+            source: "local",
+            commandPath: "agent",
+            customModels: [
+              toCustomModelSetting({ slug: "retained-model", name: "Retained model" }),
+            ],
+          }),
         }).pipe(
           Effect.provideService(AcpRegistrySupport.AcpRegistryCatalog, {
             ...catalogWithInspection({
@@ -739,7 +748,7 @@ it.layer(driverLayer, { excludeTestServices: true })("AcpRegistryDriver", (it) =
         );
         const ready = yield* instance.snapshot.refresh;
         expect(ready.version).toBeNull();
-        expect(ready.models.map(({ slug }) => slug)).toEqual(["default"]);
+        expect(ready.models.map(({ slug }) => slug)).toContain("retained-model");
         const discoverModels = Effect.fnUntraced(function* () {
           const completed = yield* instance.snapshot.streamChanges.pipe(
             Stream.filter(
@@ -768,36 +777,55 @@ it.layer(driverLayer, { excludeTestServices: true })("AcpRegistryDriver", (it) =
           return snapshot;
         });
         const discovered = yield* discoverModels();
-        expect(discovered.models.map(({ slug }) => slug)).toEqual(["model-a", "model-b"]);
+        expect(discovered.models.map(({ slug }) => slug)).toEqual([
+          "model-a",
+          "model-b",
+          "retained-model",
+        ]);
         expect(discovered.models[0]?.capabilities?.optionDescriptors).toMatchObject([
           { id: "thinking", options: [{ id: "low" }, { id: "high" }] },
         ]);
 
-        yield* fileSystem.writeFileString(modelsPath, JSON.stringify(["model-c", "model-d"]));
-        const threadId = ThreadId.make("test-native-thread");
-        const modelSelection = { instanceId: identity.instanceId, model: null } as const;
-        const runtimePolicy = ProviderAdapterV2RuntimePolicy.make({
-          runtimeMode: "full-access",
-          interactionMode: "default",
-          cwd: directory,
+        const launch = Effect.fnUntraced(function* (name: string, levels: string[]) {
+          yield* fileSystem.writeFileString(
+            modelsPath,
+            JSON.stringify({ models: ["model-a", "model-c"], levels }),
+          );
+          const threadId = ThreadId.make(name);
+          const modelSelection = { instanceId: identity.instanceId, model: "model-a" } as const;
+          const runtimePolicy = ProviderAdapterV2RuntimePolicy.make({
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            cwd: directory,
+          });
+          const session = yield* instance.orchestrationAdapter.openSession({
+            threadId,
+            providerSessionId: ProviderSessionId.make(name),
+            modelSelection,
+            runtimePolicy,
+          });
+          return yield* session.ensureThread({ threadId, modelSelection, runtimePolicy });
         });
-        const session = yield* instance.orchestrationAdapter.openSession({
-          threadId,
-          providerSessionId: ProviderSessionId.make("test-native-session"),
-          modelSelection,
-          runtimePolicy,
-        });
-        const thread = yield* session.ensureThread({ threadId, modelSelection, runtimePolicy });
-        expect(thread.nativeMetadata?.models?.map(({ id }) => id)).toEqual(["model-c", "model-d"]);
-        expect(thread.nativeMetadata?.optionDescriptors).toMatchObject([
+        const a = yield* launch("native-session-a", ["medium", "high"]);
+        const b = yield* launch("native-session-b", ["minimal", "high"]);
+        expect(a.nativeMetadata?.models?.map(({ id }) => id)).toEqual(["model-a", "model-c"]);
+        expect(b.nativeMetadata?.models?.map(({ id }) => id)).toEqual(["model-a", "model-c"]);
+        expect(a.nativeMetadata?.optionDescriptors).toMatchObject([
           { id: "thinking", options: [{ id: "medium" }, { id: "high" }] },
+        ]);
+        expect(b.nativeMetadata?.optionDescriptors).toMatchObject([
+          { id: "thinking", options: [{ id: "minimal" }, { id: "high" }] },
         ]);
         expect((yield* instance.snapshot.getSnapshot).models).toEqual(discovered.models);
 
         const rediscovered = yield* discoverModels();
-        expect(rediscovered.models.map(({ slug }) => slug)).toEqual(["model-c", "model-d"]);
+        expect(rediscovered.models.map(({ slug }) => slug)).toEqual([
+          "model-a",
+          "model-c",
+          "retained-model",
+        ]);
         expect(rediscovered.models[0]?.capabilities?.optionDescriptors).toMatchObject([
-          { id: "thinking", options: [{ id: "medium" }, { id: "high" }] },
+          { id: "thinking", options: [{ id: "minimal" }, { id: "high" }] },
         ]);
         const next = yield* instance.snapshot.refresh;
         expect(next.version).toBe("1.5.9");

@@ -8,9 +8,8 @@ Local diagnostic logs and resource monitoring remain available for troubleshooti
 not change requests sent to the agents and model providers you configure, or to a Convene
 platform you choose to connect to.
 
-The web app in a browser, including one the `t3` CLI opens, does not read these environment
-variables. When its build has relay tracing configured, it sends its own connection traces even
-if the server has opted out. The browser app has no relay tracing toggle.
+A browser opened from a T3 Code server sends relay traces only while connected and allowed by that
+server's policy. The hosted web app sends relay traces when configured and has no tracing toggle.
 
 ## Mobile app diagnostics
 
@@ -23,9 +22,10 @@ but an error message can quote a value the app was handling.
 To stop sending them, turn off **Send crash reports** in **Settings > About T3 Code > Diagnostics**.
 
 The mobile app also sends relay connection traces when its build has tracing configured. These
-carry an identifier for the current app session. **Send crash reports** does not control these
-traces, and the mobile app has no separate relay tracing toggle. Server environment variables and
-managed policy do not disable mobile tracing.
+carry an identifier for the current app session. To stop them, turn off **Send connection traces**
+in **Settings > About T3 Code > Diagnostics**, or on the T3 Connect setup sheet shown after you
+sign in. This is separate from crash reports. Server environment variables and managed policy do
+not disable mobile tracing.
 
 ## Agent activity for mobile notifications
 

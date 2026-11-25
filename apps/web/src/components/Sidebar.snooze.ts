@@ -10,6 +10,7 @@ import {
 } from "@t3tools/client-runtime/state/thread-settled";
 
 import { m, type MessageResolver } from "../i18n/messages";
+import { getFormattingLocale } from "../i18n/runtime";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { serverEnvironment } from "../state/server";
 import { parseTimestampDate, formatShortTimestamp } from "../timestampFormat";
@@ -80,17 +81,19 @@ function snoozeOptions(
   environmentId: EnvironmentId,
   t: TFunction = i18n.t,
 ) {
+  const locale = getFormattingLocale();
   const presets = appAtomRegistry.get(
     serverEnvironment.settingsValueAtom(environmentId),
   )?.snoozePresets;
   return {
     t,
     ...(presets ? { presets } : {}),
-    formatTime: (date: Date) => formatShortTimestamp(date.toISOString(), timestampFormat),
+    formatTime: (date: Date) => formatShortTimestamp(date.toISOString(), timestampFormat, locale),
     formatWeekday: (date: Date) =>
       date.toLocaleDateString(i18n.resolvedLanguage === "zh" ? "zh-CN" : undefined, {
         weekday: "short",
       }),
+    locale,
   };
 }
 

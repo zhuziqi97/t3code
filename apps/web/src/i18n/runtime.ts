@@ -8,14 +8,22 @@ type LocaleTranslations = Awaited<ReturnType<typeof getTranslationsSnapshot>>;
 
 export interface I18nSnapshot {
   readonly locale: string;
+  readonly formattingLocale: string | undefined;
   readonly translations: LocaleTranslations;
 }
 
 const loadedTranslations: LocaleTranslations = { [DEFAULT_LOCALE]: {} };
 const pendingLoads = new Map<string, Promise<void>>();
 const listeners = new Set<() => void>();
-let snapshot: I18nSnapshot = { locale: DEFAULT_LOCALE, translations: { ...loadedTranslations } };
-let requestedLocale = DEFAULT_LOCALE;
+let snapshot: I18nSnapshot = {
+  locale: DEFAULT_LOCALE,
+  formattingLocale: undefined,
+  translations: { ...loadedTranslations },
+};
+let requestedLocale: { catalogLocale: SupportedLanguage; formattingLocale: string | undefined } = {
+  catalogLocale: DEFAULT_LOCALE,
+  formattingLocale: undefined,
+};
 
 function loadLocale(locale: string): Promise<void> {
   if (locale in loadedTranslations) return Promise.resolve();
@@ -36,24 +44,32 @@ function loadLocale(locale: string): Promise<void> {
 }
 
 function activateLocale(locale: string): void {
-  if (requestedLocale !== locale) return;
-  if (snapshot.locale === locale && snapshot.translations[locale] === loadedTranslations[locale]) {
+  if (requestedLocale.catalogLocale !== locale) return;
+  const { formattingLocale } = requestedLocale;
+  if (
+    snapshot.locale === locale &&
+    snapshot.formattingLocale === formattingLocale &&
+    snapshot.translations[locale] === loadedTranslations[locale]
+  ) {
     return;
   }
-  snapshot = { locale, translations: { ...loadedTranslations } };
+  snapshot = { locale, formattingLocale, translations: { ...loadedTranslations } };
   setActiveLocale(locale);
   document.documentElement.lang = locale;
   for (const listener of listeners) listener();
 }
 
 export function requestLocale(locale: SupportedLanguage): Promise<void> {
-  requestedLocale = locale;
+  requestedLocale = {
+    catalogLocale: locale,
+    formattingLocale: locale === "zh" ? "zh-CN" : undefined,
+  };
   return whenLocaleReady();
 }
 
 /** Resolves once the requested locale's translations are ready; immediate for English. */
 export function whenLocaleReady(): Promise<void> {
-  const locale = requestedLocale;
+  const locale = requestedLocale.catalogLocale;
   return loadLocale(locale).then(() => activateLocale(locale));
 }
 
@@ -66,4 +82,8 @@ export function subscribeI18n(listener: () => void): () => void {
 
 export function getI18nSnapshot(): I18nSnapshot {
   return snapshot;
+}
+
+export function getFormattingLocale(): string | undefined {
+  return snapshot.formattingLocale;
 }

@@ -355,7 +355,7 @@ it.effect(
             ...settings,
             thread: {
               ...expected,
-              latestUserAuthoredMessageAt: candidate.latestUserAuthoredMessageAt,
+              latestResumingMessageAt: candidate.latestResumingMessageAt,
             },
           }),
         );
@@ -371,7 +371,7 @@ it.effect(
     }).pipe(Effect.provide(layerSql)),
 );
 
-it.effect("sql: the user-authored message time ignores agent notifications", () =>
+it.effect("sql: the resuming message time counts MCP sends and ignores agent notifications", () =>
   Effect.gen(function* () {
     const store = yield* ProjectionStore.ProjectionStoreV2;
     const threadId = yield* createThread("agent-woken");
@@ -410,6 +410,7 @@ it.effect("sql: the user-authored message time ignores agent notifications", () 
         },
       });
     const written = DateTime.subtract(now, { hours: 2 });
+    const sent = DateTime.subtract(now, { hours: 1 });
     yield* message("written", "user", "web", written);
     const dispatched = DateTime.subtract(now, { hours: 1 });
     yield* message("dispatched", "agent", "mcp", dispatched);
@@ -421,7 +422,7 @@ it.effect("sql: the user-authored message time ignores agent notifications", () 
       DateTime.formatIso(dispatched),
     );
     assert.equal(
-      DateTime.formatIso(dispatchedShell!.latestUserAuthoredMessageAt!),
+      DateTime.formatIso(dispatchedShell!.latestUserMessageAt!),
       DateTime.formatIso(written),
     );
     assert.deepInclude(dispatchedShell, { latestSentMessageAt: dispatched });
@@ -432,19 +433,18 @@ it.effect("sql: the user-authored message time ignores agent notifications", () 
         summary: "Background activity updated",
       },
     });
+    yield* message("sent", "agent", "mcp", sent);
+    yield* message("notification", "agent", "provider", now);
 
     const [candidate] = yield* store.getSettlementCandidates(threadId);
     assert.isDefined(candidate);
     assert.equal(DateTime.formatIso(candidate.latestUserMessageAt!), DateTime.formatIso(now));
-    assert.equal(
-      DateTime.formatIso(candidate.latestUserAuthoredMessageAt!),
-      DateTime.formatIso(written),
-    );
+    assert.equal(DateTime.formatIso(candidate.latestResumingMessageAt!), DateTime.formatIso(sent));
     const shellThread = (yield* store.getShellSnapshot()).threads.find(
       (thread) => thread.id === threadId,
     );
     assert.equal(
-      DateTime.formatIso(shellThread!.latestUserAuthoredMessageAt!),
+      DateTime.formatIso(shellThread!.latestUserMessageAt!),
       DateTime.formatIso(written),
     );
     assert.deepInclude(shellThread, { latestSentMessageAt: dispatched });
@@ -468,7 +468,7 @@ it.effect("sql: the user-authored message time ignores agent notifications", () 
     );
     assert.deepInclude(afterAutomatic, { latestSentMessageAt: dispatched });
     assert.equal(
-      DateTime.formatIso(afterAutomatic!.latestUserAuthoredMessageAt!),
+      DateTime.formatIso(afterAutomatic!.latestUserMessageAt!),
       DateTime.formatIso(scheduledUser),
     );
     const encoded = encodeShellJson(afterAutomatic!);
@@ -478,10 +478,10 @@ it.effect("sql: the user-authored message time ignores agent notifications", () 
       yield* store.getThreadProjection(threadId),
     );
     assert.deepInclude(memoryShell, { latestSentMessageAt: dispatched });
-    assert.deepInclude(memoryShell, { latestUserAuthoredMessageAt: scheduledUser });
+    assert.deepInclude(memoryShell, { latestUserMessageAt: scheduledUser });
     const [afterCandidate] = yield* store.getSettlementCandidates(threadId);
     assert.equal(
-      DateTime.formatIso(afterCandidate!.latestUserAuthoredMessageAt!),
+      DateTime.formatIso(afterCandidate!.latestUserMessageAt!),
       DateTime.formatIso(scheduledUser),
     );
   }).pipe(Effect.provide(layerSql)),
@@ -503,7 +503,7 @@ it.effect("sql: lists only active threads with pull request links, oldest first"
     const store = yield* ProjectionStore.ProjectionStoreV2;
     yield* createThread("no-links");
     yield* createThread("empty-links", { pullRequests: [] });
-    yield* createThread("archived-link", {
+    const archived = yield* createThread("archived-link", {
       archivedAt: old,
       pullRequests: [pullRequestLink(1)],
     });
@@ -528,6 +528,12 @@ it.effect("sql: lists only active threads with pull request links, oldest first"
     assert.deepEqual(
       (yield* store.getThreadsWithPullRequests(open)).map((thread) => thread.id),
       [open],
+    );
+    assert.deepEqual(
+      (yield* store.getThreadsWithPullRequests(undefined, { includeArchived: true })).map(
+        (thread) => thread.id,
+      ),
+      [settled, archived, open],
     );
   }).pipe(Effect.provide(layerSql)),
 );

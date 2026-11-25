@@ -7,7 +7,7 @@ import {
   type ServerProvider,
 } from "@t3tools/contracts";
 import type { LimitPresentations } from "@t3tools/shared/usageLimits";
-import { expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 
 // Real pointer clicks need the dialog's stacking styles to land above Base UI's modal overlay.
@@ -33,6 +33,8 @@ vi.mock("../chat/ProviderInstanceIcon", () => ({ ProviderInstanceIcon: () => nul
 vi.mock("../settings/RedactedSensitiveText", () => ({ RedactedSensitiveText: () => null }));
 
 import { changeLanguage } from "../../i18n";
+
+import "~/index.css";
 
 import { UsageLimitsPooled } from "./UsageLimitsPooled";
 
@@ -397,4 +399,67 @@ it("closes an open source-account popover when reset availability replaces its t
   await expect.poll(() => popup()?.textContent).toContain("Use reset");
   await click("Use reset");
   await expect.poll(() => document.querySelector('[role="alertdialog"]')).not.toBeNull();
+});
+
+const checkedAt = "2026-10-25T16:00:00.000Z";
+
+function managedChatGpt(instanceId: string, displayName: string): ServerProvider {
+  return {
+    instanceId: ProviderInstanceId.make(instanceId),
+    driver: ProviderDriverKind.make("codex"),
+    displayName,
+    enabled: true,
+    installed: true,
+    version: "0.164.0",
+    status: "ready",
+    auth: { status: "authenticated" },
+    checkedAt,
+    models: [],
+    slashCommands: [],
+    skills: [],
+    usageLimits: {
+      checkedAt,
+      windows: [],
+      unavailable: { reason: "unsupported", message: "Track usage in ChatGPT." },
+      externalUsage: { label: "ChatGPT usage", url: "https://chatgpt.com/codex/settings/usage" },
+    },
+  };
+}
+
+describe("UsageLimitsPooled next refill", () => {
+  it("skips elapsed resets while waiting for refreshed account data", async () => {
+    function account(instanceId: string, usedPercent: number, resetsAt: string): ServerProvider {
+      return {
+        ...managedChatGpt(instanceId, instanceId),
+        usageLimits: {
+          checkedAt,
+          windows: [{ id: "weekly", label: "Weekly", kind: "weekly", usedPercent, resetsAt }],
+        },
+      };
+    }
+    const presentations = new Map([
+      [
+        EnvironmentId.make("desk"),
+        {
+          entry: { target: { label: "Desk" } },
+          serverConfig: {
+            providers: [
+              account("Work", 20, "2026-10-25T17:00:00.000Z"),
+              account("Personal", 60, "2026-10-25T18:00:00.000Z"),
+            ],
+          },
+        },
+      ],
+    ]);
+    await using screen = await render(
+      <UsageLimitsPooled presentations={presentations} now={Date.parse("2026-10-25T17:30:00Z")} />,
+    );
+    await expect.element(screen.getByText("↻ +30%", { exact: true })).toBeVisible();
+    await expect.element(screen.getByText("↻ +30% in 30m")).toBeVisible();
+
+    await screen.rerender(
+      <UsageLimitsPooled presentations={presentations} now={Date.parse("2026-10-25T18:00:00Z")} />,
+    );
+    await expect.element(screen.getByText(/^↻ \+\d+%$/)).not.toBeInTheDocument();
+  });
 });

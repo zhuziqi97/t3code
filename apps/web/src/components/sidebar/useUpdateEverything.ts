@@ -1,6 +1,8 @@
 import { i18n, useTranslate } from "~/i18n";
+import { m } from "~/i18n/messages";
 import { formatDesktopUpdateMessage } from "@t3tools/client-runtime/i18n";
 import { useAtomValue } from "@effect/atom-react";
+import { connectionErrorText } from "@t3tools/client-runtime/connection";
 import { PROVIDER_DISPLAY_NAMES } from "@t3tools/contracts";
 
 import { APP_VERSION } from "~/branding";
@@ -66,6 +68,8 @@ export function useUpdateEverything(
     label: environment.label,
     serverConfig: environment.serverConfig,
     connected: environment.connection.phase === "connected",
+    connectionError: connectionErrorText(environment.connection, m),
+    turnedOff: !environment.entry.enabled,
     hostedByThisApp: isHostedByThisApp(environment),
     canMaintain: canUpdateServer(sessionStates[index]!),
     updateState: updateStates[index]!,
@@ -103,6 +107,7 @@ export function useUpdateEverything(
 
   return {
     hasUpdates: servers.length > 0 || providers.machines.length > 0,
+    machines,
     ...view,
     restarts,
     run: async ({

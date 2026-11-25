@@ -10,7 +10,8 @@ export class AnalyticsService extends Context.Service<
     readonly record: (
       event: string,
       properties?: Readonly<Record<string, unknown>>,
-    ) => Effect.Effect<void>;
+      options?: { readonly anonymous?: boolean },
+    ) => Effect.Effect<boolean>;
     readonly flush: Effect.Effect<void>;
     readonly recordOwners: (
       owners: ReadonlyArray<TelemetryOwner>,
@@ -23,7 +24,7 @@ export class AnalyticsService extends Context.Service<
 export const layer = Layer.succeed(
   AnalyticsService,
   AnalyticsService.of({
-    record: Effect.fn("AnalyticsService.record")(() => Effect.void),
+    record: Effect.fn("AnalyticsService.record")(() => Effect.succeed(false)),
     flush: Effect.void,
     recordOwners: Effect.fn("AnalyticsService.recordOwners")(() => Effect.void),
   }),
