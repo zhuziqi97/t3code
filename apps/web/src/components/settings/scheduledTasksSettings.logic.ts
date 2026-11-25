@@ -24,6 +24,8 @@ import {
   webhookFilterDraftsChanged,
   type WebhookFilterDraft,
 } from "@t3tools/client-runtime/scheduled-task-webhook";
+import type { TimestampFormat } from "@t3tools/contracts/settings";
+import { formatDateTimeTimestamp, formatTimeOfDay } from "../../timestampFormat";
 import { scheduleTimeZoneLabel } from "@t3tools/client-runtime/scheduled-task-time-zone";
 import { msg } from "gt-react";
 import { m, type MessageResolver } from "../../i18n/messages";
@@ -38,20 +40,18 @@ import type { ResolvedSettingsScope } from "./settingsScope";
 
 const WEEKDAY_LABELS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 
-const ONCE_FORMATTER = new Intl.DateTimeFormat(undefined, {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
-
 export function scheduleLabel(
   schedule: ScheduledTaskSchedule,
+  timestampFormat: TimestampFormat,
   timeZone?: string,
   runAt?: string | null,
   t = i18n.t,
 ): string {
   if (schedule.type === "webhook") return t("scheduled.onWebhook");
   if (schedule.type === "once")
-    return t("scheduled.onceAt", { time: ONCE_FORMATTER.format(new Date(schedule.runAt)) });
+    return t("scheduled.onceAt", {
+      time: formatDateTimeTimestamp(schedule.runAt, timestampFormat),
+    });
   if (schedule.type === "interval") {
     const minutes = schedule.everyMs / 60_000;
     return Number.isInteger(minutes)
@@ -66,7 +66,10 @@ export function scheduleLabel(
         ? t("scheduled.weekdays")
         : weekdays.map((day) => t(`scheduled.weekday.${WEEKDAY_LABELS[day]}`)).join(", ");
   const zone = scheduleTimeZoneLabel(timeZone, runAt);
-  const localTime = t("scheduled.atTime", { days, time: schedule.timeOfDay });
+  const localTime = t("scheduled.atTime", {
+    days,
+    time: formatTimeOfDay(schedule.timeOfDay, timestampFormat),
+  });
   return zone === undefined ? localTime : `${localTime} ${zone}`;
 }
 
@@ -113,16 +116,15 @@ export interface DraftState {
   readonly weekdays: ReadonlySet<number>;
   readonly projectId: string;
   readonly threadId: string;
+  readonly savedThreadId: string;
   readonly threadMode: ScheduledTaskThreadMode;
   readonly workspaceMode: WorkspaceMode;
   readonly baseRef: string;
   readonly startFromOrigin: boolean;
   readonly existingWorktreePath: string;
-  readonly modelKey: string;
+  readonly modelSelection: ModelSelection | null;
   readonly runtimeMode: RuntimeMode;
   readonly interactionMode: ProviderInteractionMode;
-  /** Retain the source selection's provider options when the picker leaves instanceId:model unchanged. */
-  readonly baseModelSelection: ModelSelection | null;
   readonly signatureEnabled: boolean;
   readonly signatureHeader: string;
   readonly signatureEncoding: "hex" | "base64";
@@ -314,6 +316,7 @@ export function taskToDraft(task: ScheduledTask): DraftState {
     weekdays,
     projectId: task.projectId,
     threadId: task.threadId ?? "",
+    savedThreadId: task.threadId ?? "",
     threadMode: scheduledTaskThreadMode(task),
     workspaceMode: task.workspaceStrategy.type,
     baseRef: task.workspaceStrategy.type === "worktree" ? task.workspaceStrategy.baseRef : "",
@@ -325,10 +328,9 @@ export function taskToDraft(task: ScheduledTask): DraftState {
       task.workspaceStrategy.type === "existing_worktree"
         ? task.workspaceStrategy.worktreePath
         : "",
-    modelKey: `${task.modelSelection.instanceId}:${task.modelSelection.model ?? ""}`,
+    modelSelection: task.modelSelection,
     runtimeMode: task.runtimeMode,
     interactionMode: task.interactionMode,
-    baseModelSelection: task.modelSelection,
     ...(schedule.type === "webhook" && schedule.signature !== null
       ? {
           signatureEnabled: true,

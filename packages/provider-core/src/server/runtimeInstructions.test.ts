@@ -1,7 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 
 import {
-  AGENT_FEEDBACK_INSTRUCTIONS,
   buildRuntimeInstructions,
   PULL_REQUEST_LINKING_INSTRUCTIONS,
 } from "./runtimeInstructions.ts";
@@ -67,17 +66,13 @@ describe("buildRuntimeInstructions", () => {
     assert.include(instructions, "call unwatch_pull_request");
   });
 
-  it("carries the feedback line of the agent feedback mode, and none while it is off", () => {
+  it("omits agent feedback instructions for every stored setting in Convene", () => {
     assert.notInclude(buildRuntimeInstructions({ harness: "Codex" }), "t3_feedback");
-    assert.notInclude(
-      buildRuntimeInstructions({ harness: "Codex", agentFeedback: "off" }),
-      "t3_feedback",
-    );
-    for (const agentFeedback of ["on-request", "auto"] as const) {
+    for (const agentFeedback of ["off", "on-request", "auto"] as const) {
       for (const pullRequestLinking of [true, false]) {
-        assert.include(
+        assert.notInclude(
           buildRuntimeInstructions({ harness: "Codex", agentFeedback, pullRequestLinking }),
-          AGENT_FEEDBACK_INSTRUCTIONS[agentFeedback],
+          "t3_feedback",
         );
       }
     }
