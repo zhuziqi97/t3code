@@ -40,11 +40,11 @@ const state: ProviderInstallState = {
   message: null,
 };
 
-function instance(kind = driver, id = instanceId): ProviderInstance {
+function instance(kind = driver, id = instanceId, enabled = false): ProviderInstance {
   return {
     instanceId: id,
     driverKind: kind,
-    enabled: false,
+    enabled,
     displayName: undefined,
     continuationIdentity: { driverKind: kind, continuationKey: instanceId },
     get orchestrationAdapter(): never {
@@ -121,6 +121,8 @@ const makeHarness = Effect.fn("providerInstallation.test.makeHarness")(function*
     Layer.mock(AntigravityInstallation.AntigravityInstallation)({
       managedDirectory: "/unused-managed-runtime",
       checkForUpdate: Effect.void,
+      checkLegacyRuntime: (binaryPath) =>
+        Effect.succeed(binaryPath === "C:\\old\\agy_acp_server.exe" ? "install" : "current"),
       start: Effect.sync(() => {
         calls.push("start");
         return { ...state, operationId: "install-1", phase: "downloading" as const };
@@ -170,6 +172,25 @@ const makeHarness = Effect.fn("providerInstallation.test.makeHarness")(function*
 });
 
 describe("provider installation routing", () => {
+  it.effect("starts migration through the existing Antigravity instance", () =>
+    Effect.gen(function* () {
+      const configured = instance(driver, instanceId, true);
+      const { router, calls } = yield* makeHarness({
+        instance: configured,
+        settings: {
+          providerInstances: {
+            [configured.instanceId]: {
+              driver: configured.driverKind,
+              config: { binaryPath: "C:\\old\\agy_acp_server.exe" },
+            },
+          },
+        },
+      });
+      yield* router.migrateLegacyAntigravity;
+      assert.deepEqual(calls, ["start"]);
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("discovers disabled installations without starting health, auth, or installation", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

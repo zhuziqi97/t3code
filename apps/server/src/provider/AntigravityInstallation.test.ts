@@ -172,9 +172,11 @@ const makeHarness = Effect.fn("test.makeAntigravityInstallation")(function* (
     ...(options.useDefaultValidation
       ? {}
       : {
-          validate: (executable: AntigravityInstallation.AntigravityExecutable, version: string) =>
-            Effect.sync(() => validations.push({ executable, version })).pipe(
-              Effect.andThen(options.validate?.(executable, version) ?? Effect.void),
+          validate: (executable, version, environment) =>
+            Effect.sync(() => {
+              if (version !== undefined) validations.push({ executable, version });
+            }).pipe(
+              Effect.andThen(options.validate?.(executable, version, environment) ?? Effect.void),
             ),
         }),
   }).pipe(
@@ -264,6 +266,99 @@ const expectPreviousRelease = Effect.fn("test.expectPreviousAntigravityRelease")
 });
 
 it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("Antigravity installation", (it) => {
+  it.effect("uses the verified managed CLI for an obsolete Windows ACP path", () =>
+    Effect.gen(function* () {
+      const { installation, baseDir, fs, path } = yield* makeHarness({
+        platform: "win32",
+        previous: true,
+      });
+      const legacyPath = path.join(baseDir, "agy_acp_server.exe");
+      const unknownPath = path.join(baseDir, "my-custom-agent.exe");
+      const customPath = path.join(baseDir, "agy.exe");
+      yield* fs.writeFileString(customPath, serverContents, { mode: 0o755 });
+
+      expect(yield* installation.resolve(legacyPath)).toMatchObject({
+        source: "managed",
+        version: previousVersion,
+      });
+      expect(yield* installation.resolve(customPath)).toMatchObject({
+        source: "override",
+        executablePath: customPath,
+      });
+      expect(yield* installation.resolve(unknownPath).pipe(Effect.flip)).toMatchObject({
+        operation: "resolve",
+        detail: expect.stringContaining("custom Antigravity executable"),
+      });
+    }),
+  );
+
+  it.effect("can retry a failed migration with the same Windows provider path", () =>
+    Effect.gen(function* () {
+      let failValidation = true;
+      const { installation, baseDir, path, stagingReleased } = yield* makeHarness({
+        platform: "win32",
+        archive: Buffer.from(serverContents),
+        validate: () =>
+          failValidation
+            ? Effect.fail(
+                new AntigravityInstallation.AntigravityInstallationError({
+                  operation: "verify",
+                  detail: "Fixture runtime could not start.",
+                }),
+              )
+            : Effect.void,
+      });
+      const legacyPath = path.join(baseDir, "agy_acp_server.exe");
+      expect(yield* installation.checkLegacyRuntime(legacyPath, { PATH: "" })).toBe("install");
+      yield* installation.start;
+      expect(yield* terminalState(installation)).toMatchObject({
+        phase: "failed",
+        message: "Fixture runtime could not start.",
+      });
+      yield* Deferred.await(stagingReleased);
+      expect((yield* installation.resolve(legacyPath).pipe(Effect.flip)).detail).toContain(
+        "standalone Antigravity ACP runtime",
+      );
+      failValidation = false;
+      yield* installation.start;
+      expect((yield* terminalState(installation)).phase).toBe("succeeded");
+      expect(yield* installation.resolve(legacyPath)).toMatchObject({
+        source: "managed",
+        version: assetVersion,
+      });
+    }),
+  );
+
+  it.effect.each(["1.5.5", "1.4.5"])(
+    "reuses a Windows PATH CLI only with a verified eligible version (%s)",
+    (version) =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const directory = yield* fs.makeTempDirectoryScoped();
+        const external = path.join(directory, "agy.exe");
+        yield* fs.writeFileString(external, serverContents, { mode: 0o755 });
+        const { installation, requests } = yield* makeHarness({
+          platform: "win32",
+          path: directory,
+          validate: () => Effect.succeed(version),
+        });
+        const previous = path.join(directory, "agy_acp_server.exe");
+        const eligible = version === "1.5.5";
+        expect(yield* installation.checkLegacyRuntime(previous, { PATH: directory })).toBe(
+          eligible ? "reused" : "install",
+        );
+        if (eligible) {
+          expect(yield* installation.resolve(previous)).toMatchObject({
+            executablePath: external,
+            source: "path",
+            version,
+          });
+        }
+        expect(requests).toEqual([]);
+      }),
+  );
+
   it.effect.each([...new Set(["win32", hostPlatform])] as NodeJS.Platform[])(
     "replaces a managed runtime from before the Antigravity CLI on %s",
     (platform) =>
@@ -274,21 +369,20 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("Antigravity inst
         // A 1.4.x install recorded agy_acp_server with its localharness_external sibling.
         const legacyId = "2".repeat(64);
         const legacyDirectory = path.join(installation.managedDirectory, "versions", legacyId);
+        const legacyName = platform === "win32" ? "agy_acp_server.exe" : "agy_acp_server.par";
+        const harnessName =
+          platform === "win32" ? "localharness_external.exe" : "localharness_external";
+        const legacyPath = path.join(legacyDirectory, legacyName);
         yield* fs.makeDirectory(legacyDirectory, { recursive: true });
-        yield* fs.writeFileString(
-          path.join(legacyDirectory, "agy_acp_server.par"),
-          serverContents,
-          {
-            mode: 0o755,
-          },
-        );
+        yield* fs.writeFileString(legacyPath, serverContents, { mode: 0o755 });
+        yield* fs.writeFileString(path.join(legacyDirectory, harnessName), "x", { mode: 0o755 });
         yield* fs.writeFileString(
           path.join(legacyDirectory, ".install-complete.json"),
           encodeJsonString({
             releaseId: legacyId,
             version: "1.4.5",
-            executable: { name: "agy_acp_server.par", bytes: Buffer.byteLength(serverContents) },
-            harness: { name: "localharness_external", bytes: 1 },
+            executable: { name: legacyName, bytes: Buffer.byteLength(serverContents) },
+            harness: { name: harnessName, bytes: 1 },
           }),
         );
         yield* fs.writeFileString(
@@ -299,6 +393,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("Antigravity inst
           operation: "resolve",
           detail: expect.stringContaining("Antigravity 1.4.5 predates the Antigravity CLI"),
         });
+        expect(yield* installation.checkLegacyRuntime(undefined, { PATH: "" })).toBe("install");
+        expect(yield* installation.checkLegacyRuntime(legacyPath, { PATH: "" })).toBe("install");
         yield* installation.start;
         expect(yield* terminalState(installation)).toMatchObject({
           phase: "succeeded",
@@ -307,6 +403,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("Antigravity inst
         yield* Deferred.await(stagingReleased);
         const resolved = yield* installation.resolve();
         expect(resolved).toMatchObject({ source: "managed", version: "1.5.7" });
+        expect(yield* installation.resolve(legacyPath)).toEqual(resolved);
         expect(validations).toHaveLength(1);
         expect(yield* fs.exists(legacyDirectory)).toBe(false);
         expect(yield* fs.readFileString(resolved.executablePath)).toBe(serverContents);
@@ -318,6 +415,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("Antigravity inst
           platform,
           nativeVersion: "1.5.6",
         });
+        expect(yield* restarted.installation.checkLegacyRuntime(legacyPath, { PATH: "" })).toBe(
+          "current",
+        );
+        expect(restarted.requests).toEqual([]);
         expect(yield* restarted.installation.start).toMatchObject({
           phase: "verifying",
           message: "Checking the installed runtime.",

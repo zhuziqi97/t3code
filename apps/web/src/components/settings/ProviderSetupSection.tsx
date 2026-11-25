@@ -10,6 +10,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import {
   ANTIGRAVITY_AUTH_METHODS,
+  isLegacyAntigravityBinaryPath,
   type AntigravityAuthMethod,
   type EnvironmentId,
   type ProviderInstanceId,
@@ -140,7 +141,8 @@ function ProviderSetupActions({
     installation?.phase === "downloading" ||
     installation?.phase === "extracting" ||
     installation?.phase === "verifying";
-  const usesCustomBinary = Boolean(binaryPath?.trim());
+  const usesCustomBinary =
+    Boolean(binaryPath?.trim()) && !isLegacyAntigravityBinaryPath(binaryPath);
   const installed =
     provider.installed || (!usesCustomBinary && installation?.installedVersion != null);
   const queryError = authQuery.error ?? installQuery.error;

@@ -1,6 +1,7 @@
 import {
   AntigravitySettings,
   CodexSettings,
+  isLegacyAntigravityBinaryPath,
   ProviderDriverKind,
   type ProviderInstallCancelInput,
   type ProviderInstallState,
@@ -36,6 +37,7 @@ export class ProviderInstallation extends Context.Service<
   ProviderInstallation,
   {
     readonly discover: Effect.Effect<ReadonlyArray<ServerProviderInstallation>>;
+    readonly migrateLegacyAntigravity: Effect.Effect<void, ProviderSetupError>;
     readonly start: (
       input: ProviderSetupInput,
     ) => Effect.Effect<ProviderInstallState, ProviderSetupError>;
@@ -143,7 +145,11 @@ const make = Effect.fn("makeProviderInstallation")(function* () {
         detail: "Choose managed setup to install Codex in T3 Code.",
       });
     }
-    if (managedOnly && config.binaryPath && (!isCodex || config.binaryPath !== "codex")) {
+    if (
+      managedOnly &&
+      config.binaryPath &&
+      (isCodex ? config.binaryPath !== "codex" : !isLegacyAntigravityBinaryPath(config.binaryPath))
+    ) {
       return yield* new ProviderSetupError({
         instanceId,
         operation,
@@ -176,7 +182,11 @@ const make = Effect.fn("makeProviderInstallation")(function* () {
       const config = yield* decodeAntigravitySettings(
         entries[instance.instanceId]?.config ?? {},
       ).pipe(Effect.option);
-      if (Option.isNone(config) || config.value.binaryPath) continue;
+      if (
+        Option.isNone(config) ||
+        (config.value.binaryPath && !isLegacyAntigravityBinaryPath(config.value.binaryPath))
+      )
+        continue;
       yield* instance.refreshModels().pipe(Effect.ignore({ log: true }));
       yield* providers.refreshInstance(instance.instanceId);
     }
@@ -214,6 +224,25 @@ const make = Effect.fn("makeProviderInstallation")(function* () {
     }
     return started;
   });
+
+  const migrateLegacyAntigravity = Effect.fn("ProviderInstallation.migrateLegacyAntigravity")(
+    function* () {
+      const candidates = (yield* instances.listInstances).filter(
+        (instance) => instance.driverKind === ANTIGRAVITY && instance.enabled,
+      );
+      for (const { instanceId } of candidates) {
+        const entry = (yield* readEntries(instanceId, "install"))[instanceId];
+        const config = yield* decodeAntigravitySettings(entry?.config ?? {}).pipe(Effect.option);
+        if (Option.isNone(config)) continue;
+        const environment = yield* mergeProviderInstanceEnvironment(entry?.environment);
+        const migration = yield* antigravityInstallation
+          .checkLegacyRuntime(config.value.binaryPath, environment)
+          .pipe(Effect.mapError(failure(instanceId)));
+        if (migration === "reused") yield* providers.refreshInstance(instanceId);
+        if (migration === "install") yield* start({ instanceId });
+      }
+    },
+  );
 
   const cancel = Effect.fn("ProviderInstallation.cancel")(function* (
     input: ProviderInstallCancelInput,
@@ -253,7 +282,11 @@ const make = Effect.fn("makeProviderInstallation")(function* () {
     const protectedPaths = yield* Effect.forEach(
       Object.values(entries),
       Effect.fnUntraced(function* (entry) {
-        if (!hasBinaryPath(entry.config) || !entry.config.binaryPath.trim()) {
+        if (
+          !hasBinaryPath(entry.config) ||
+          !entry.config.binaryPath.trim() ||
+          (entry.driver === ANTIGRAVITY && isLegacyAntigravityBinaryPath(entry.config.binaryPath))
+        ) {
           return [];
         }
         const binaryPath = entry.config.binaryPath.trim();
@@ -278,7 +311,14 @@ const make = Effect.fn("makeProviderInstallation")(function* () {
     return yield* installation.state;
   });
 
-  return { discover: discover(), start, cancel, subscribe, remove };
+  return {
+    discover: discover(),
+    migrateLegacyAntigravity: migrateLegacyAntigravity(),
+    start,
+    cancel,
+    subscribe,
+    remove,
+  };
 });
 
 export const layer = Layer.effect(ProviderInstallation, make());

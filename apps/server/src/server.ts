@@ -761,7 +761,15 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   ).pipe(Layer.provide(DelegatedTaskQuestionReactor.layer), Layer.provide(ProjectionStoreV2.layer)),
   ProviderUsageLimitsIngestion.layer,
   layerProviderInstallationRefresh,
-  ProviderInstallation.layer,
+  Layer.effectDiscard(
+    Effect.gen(function* () {
+      const installation = yield* ProviderInstallation.ProviderInstallation;
+      yield* installation.migrateLegacyAntigravity.pipe(
+        Effect.ignore({ log: true }),
+        Effect.forkScoped,
+      );
+    }),
+  ).pipe(Layer.provideMerge(ProviderInstallation.layer)),
   ReplayMarkers.layer,
   Layer.effectDiscard(ProjectSettingsOverrideSweep.sweep),
 ).pipe(

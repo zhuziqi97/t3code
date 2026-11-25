@@ -927,6 +927,10 @@ export const AntigravityAuthMethod = Schema.Literals(
 );
 export type AntigravityAuthMethod = typeof AntigravityAuthMethod.Type;
 
+export function isLegacyAntigravityBinaryPath(binaryPath: string | undefined): boolean {
+  return /(?:^|[\\/])agy_acp_server\.(?:exe|par)$/iu.test(binaryPath?.trim() ?? "");
+}
+
 export const AntigravitySettings = makeProviderSettingsSchema(
   {
     enabled: Schema.Boolean.pipe(
