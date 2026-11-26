@@ -1,4 +1,5 @@
 import { BRAND_ASSET_PATHS } from "./lib/brand-assets.ts";
+import { glibcElfFixture } from "./linux-glibc.fixture.ts";
 import {
   createStageWorkspaceConfig,
   validateLinuxDebArtifact,
@@ -350,7 +351,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       for (const [name, mode] of Object.entries(modes)) {
         const payloadPath = path.join(appOutDir, name);
         if (name === "t3code-convene") {
-          yield* fs.copyFile(process.execPath, payloadPath);
+          yield* fs.writeFile(payloadPath, glibcElfFixture(62, "2.34"));
         } else {
           yield* fs.writeFileString(payloadPath, "fixture");
         }
@@ -390,7 +391,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       yield* Effect.promise(() =>
         hook({ appOutDir, electronPlatformName: "linux", targets: [{ name: "AppImage" }, deb] }),
       );
-      assert.match(deb.options.depends[1] ?? "", /^libc6 \(>= \d+\.\d+\)$/);
+      assert.deepStrictEqual(deb.options.depends, ["libsecret-1-0", "libc6 (>= 2.34)"]);
       for (const [name, mode] of Object.entries(modes)) {
         const info = yield* Effect.promise(() => NodeFSP.stat(path.join(appOutDir, name)));
         assert.equal(info.mode & 0o7777, mode & ~0o022, name);
@@ -1043,7 +1044,10 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.deepStrictEqual(win.asarUnpack, [WINDOWS_NATIVE_ASAR_UNPACK_GLOB]);
       assert.deepStrictEqual(winWithoutWslRuntime.asar, win.asar);
       assert.deepStrictEqual(winWithoutWslRuntime.asarUnpack, win.asarUnpack);
-      assert.deepStrictEqual(mac.extraResources, DESKTOP_EXTRA_RESOURCES);
+      assert.deepStrictEqual(mac.extraResources, [
+        ...DESKTOP_EXTRA_RESOURCES,
+        ...MAC_APPLE_SPEECH_EXTRA_RESOURCES,
+      ]);
       assert.deepStrictEqual(linux.extraResources, [
         ...DESKTOP_EXTRA_RESOURCES,
         ...LINUX_CAPTURE_EXTRA_RESOURCES,

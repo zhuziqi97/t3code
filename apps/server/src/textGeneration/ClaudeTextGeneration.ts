@@ -65,6 +65,8 @@ function investigationSettings(
 
 const NO_SESSION_PERSISTENCE = "--no-session-persistence";
 const NO_SESSION_PERSISTENCE_REJECTED = `error: unknown option '${NO_SESSION_PERSISTENCE}'`;
+const IMAGES_UNSUPPORTED =
+  /image[^\n]*(?:not support|unsupported)|(?:not support|unsupported)[^\n]*image/i;
 
 const ClaudeOutputEnvelope = Schema.Struct({
   structured_output: Schema.Unknown,
@@ -118,6 +120,7 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
   const path = yield* Path.Path;
   const serverConfig = yield* ServerConfig.ServerConfig;
   const claudeEnvironment = yield* makeClaudeEnvironment(claudeSettings, environment);
+  const textOnlyModels = new Set<string>();
 
   const readStreamAsString = <E>(
     operation: string,
@@ -200,6 +203,7 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
     );
     const runClaudeCommand = Effect.fn("runClaudeJson.runClaudeCommand")(function* (
       noSessionPersistence: boolean,
+      withImages: boolean,
     ) {
       const workingDirectory =
         operation === "generateThreadTitle"
@@ -271,7 +275,11 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
         : settingsJson;
 
       // `claude -p` accepts images only as content blocks of a stream-json user message.
-      const imageBlocks = yield* readImageBlocks(attachments);
+      const imageBlocks =
+        withImages &&
+        (compiled.apiModelId === undefined || !textOnlyModels.has(compiled.apiModelId))
+          ? yield* readImageBlocks(attachments)
+          : [];
       const streamJson = imageBlocks.length > 0;
       const stdin = streamJson
         ? `${yield* encodeJsonForOperation(
@@ -354,14 +362,38 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
         stdout: streamJson ? (stdout.trim().split("\n").at(-1) ?? "") : stdout,
         stderr,
         exitCode,
+        sentImages: streamJson,
+        apiModelId: compiled.apiModelId,
       };
     });
 
-    const rawStdout = yield* runClaudeCommand(true).pipe(
+    const runClaudeAttempt = (withImages: boolean) =>
+      runClaudeCommand(true, withImages).pipe(
+        Effect.filterOrElse(
+          (result) =>
+            result.exitCode === 0 || !result.stderr.includes(NO_SESSION_PERSISTENCE_REJECTED),
+          () => runClaudeCommand(false, withImages),
+        ),
+      );
+    const rawStdout = yield* runClaudeAttempt(true).pipe(
       Effect.filterOrElse(
-        (result) =>
-          result.exitCode === 0 || !result.stderr.includes(NO_SESSION_PERSISTENCE_REJECTED),
-        () => runClaudeCommand(false),
+        (result) => result.exitCode === 0 || !result.sentImages,
+        (imageResult) =>
+          runClaudeAttempt(false).pipe(
+            Effect.tap((result) =>
+              Effect.sync(() => {
+                // A size or count limit leaves future image attempts enabled.
+                if (
+                  result.exitCode === 0 &&
+                  imageResult.apiModelId !== undefined &&
+                  imageResult.apiModelId === result.apiModelId &&
+                  IMAGES_UNSUPPORTED.test(`${imageResult.stdout}\n${imageResult.stderr}`)
+                ) {
+                  textOnlyModels.add(imageResult.apiModelId);
+                }
+              }),
+            ),
+          ),
       ),
       Effect.flatMap(({ stdout, stderr, exitCode }) => {
         if (exitCode === 0) return Effect.succeed(stdout);

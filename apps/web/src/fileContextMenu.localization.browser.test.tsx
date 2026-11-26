@@ -17,6 +17,9 @@ vi.mock("@effect/atom-react", async (original) => ({
 vi.mock("./browserEditorAction", () => ({
   useBrowserEditorAction: () => ({ unavailableReason: "workspace required", open: vi.fn() }),
 }));
+vi.mock("./editorMenuIcons", () => ({
+  useEditorMenuIcons: () => new Map([["vscode", "data:image/png,fixture"]]),
+}));
 vi.mock("./remoteOpen", async (original) => ({
   ...(await original<typeof import("./remoteOpen")>()),
   useRemoteOpenResolution: () => ({ state: { mode: "local-exec" }, isResolved: true }),
@@ -79,7 +82,9 @@ it("reopens in the current language while retaining server-selected WSL wording 
     "在文件资源管理器中显示",
     "打开方式",
   ]);
-  expect(items[2].children).toEqual([{ id: "editor:vscode", label: "VS Code" }]);
+  expect(items[2].children).toEqual([
+    { id: "editor:vscode", label: "VS Code", iconImage: "data:image/png,fixture" },
+  ]);
   expect(state.command).toHaveBeenCalledExactlyOnceWith({
     environmentId,
     input: { cwd: "/workspace/原始项目/原始文件.ts", editor: "vscode" },

@@ -475,8 +475,9 @@ describe("source file scroll", () => {
       const startRect = startRow!.getBoundingClientRect();
       const scrollerRect = scroller.getBoundingClientRect();
       const nearEdgeY = direction === "down" ? scrollerRect.bottom - 5 : scrollerRect.top + 5;
-      const outsideEdgeY = direction === "down" ? scrollerRect.bottom + 60 : scrollerRect.top - 60;
+      const outsideBottomY = scrollerRect.bottom + 60;
       const frame = window.frameElement?.getBoundingClientRect();
+      const dragX = startRect.left + 80;
       const mouse = (type: "mousePressed" | "mouseMoved" | "mouseReleased", x: number, y: number) =>
         cdp().send("Input.dispatchMouseEvent", {
           type,
@@ -494,8 +495,20 @@ describe("source file scroll", () => {
       );
       await mouse("mousePressed", startX, startRect.top + 5);
       await anchored;
-      await mouse("mouseMoved", startRect.left + 80, nearEdgeY);
-      await mouse("mouseMoved", startRect.left + 80, outsideEdgeY);
+      await mouse("mouseMoved", dragX, nearEdgeY);
+      if (direction === "up") {
+        // Scroll the editor while the pointer is held, then let it extend into the new rows.
+        await cdp().send("Input.dispatchMouseEvent", {
+          type: "mouseWheel",
+          x: dragX + (frame?.left ?? 0),
+          y: nearEdgeY + (frame?.top ?? 0),
+          deltaX: 0,
+          deltaY: (expectedIncludedLine - startLine) * startRect.height,
+          buttons: 1,
+        });
+      } else {
+        await mouse("mouseMoved", dragX, outsideBottomY);
+      }
       await vi.waitFor(() => {
         const firstMounted = Number(rows()[0]?.getAttribute("data-line"));
         if (direction === "down") {
@@ -504,7 +517,11 @@ describe("source file scroll", () => {
           expect(firstMounted).toBeLessThanOrEqual(targetFirstMounted);
         }
       });
-      await mouse("mouseReleased", startRect.left + 80, outsideEdgeY);
+      if (direction === "up") {
+        expect(shadowRoot()?.querySelector(`[data-line="${startLine}"]`)).toBeNull();
+        await mouse("mouseMoved", dragX + 1, nearEdgeY);
+      }
+      await mouse("mouseReleased", dragX, direction === "up" ? nearEdgeY : outsideBottomY);
 
       const overlayRanges = shadowRoot()!.querySelectorAll("[data-selection-range]");
       expect(overlayRanges.length).toBeGreaterThan(0);
