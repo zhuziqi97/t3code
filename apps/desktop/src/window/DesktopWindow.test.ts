@@ -1,4 +1,3 @@
-import * as Queue from "effect/Queue";
 import * as NodeEvents from "node:events";
 import { WINDOW_FULLSCREEN_STATE_CHANNEL } from "../ipc/channels.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";

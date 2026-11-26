@@ -56,7 +56,7 @@ const makeDebuggee = (
     readonly deferFocus?: boolean;
     /** The guest is still loading its first page. */
     readonly loading?: boolean;
-    /** Like a guest of a hidden window: it answers a capture only once Electron captures it. */
+    /** Like a guest of a hidden window: it answers frame waits after Electron captures it. */
     readonly drawsOnlyWhenCaptured?: () => boolean;
     /** Electron's capture of this guest never settles. */
     readonly capturesStall?: () => boolean;
@@ -111,21 +111,25 @@ const makeDebuggee = (
   let destroyed = false;
   let nativeCaptures = 0;
   const webContents = Object.assign(new NodeEvents.EventEmitter(), {
-    capturePage: () => {
-      nativeCaptures += 1;
-      if (options.capturesStall?.()) return new Promise(() => {});
-      if (options.drawsOnlyWhenCaptured?.()) pending.splice(0).forEach((resolve) => resolve());
-      return Promise.resolve({});
+    capturePage: (
+      _rect?: Electron.Rectangle,
+      captureOptions?: Parameters<Electron.WebContents["capturePage"]>[1],
+    ) => {
+      if (captureOptions === undefined) {
+        nativeCaptures += 1;
+        if (options.capturesStall?.()) return new Promise(() => {});
+        if (options.drawsOnlyWhenCaptured?.()) pending.splice(0).forEach((resolve) => resolve());
+        return Promise.resolve({});
+      }
+      return new Promise((resolve) => {
+        sent.push("capturePage");
+        sendWaiters.shift()?.();
+        pending.push(() => resolve({ isEmpty: () => false, toPNG: () => Buffer.from("frame") }));
+      });
     },
     getURL: () => "http://localhost/",
     getTitle: () => "Page",
     getUserAgent: () => "Electron",
-    capturePage: () =>
-      new Promise((resolve) => {
-        sent.push("capturePage");
-        sendWaiters.shift()?.();
-        pending.push(() => resolve({ isEmpty: () => false, toPNG: () => Buffer.from("frame") }));
-      }),
     isLoadingMainFrame: () => options.loading === true,
     isDestroyed: () => destroyed,
   });
@@ -413,7 +417,7 @@ describe("DesktopBrowserHost", () => {
       const replies = yield* watchReplies(host);
       const painting = yield* watchPainting(host);
 
-      yield* command(host, 1, "Page.captureScreenshot");
+      yield* command(host, 1, "Runtime.evaluate");
       yield* settle;
       expect(debuggee.sent).toEqual([1]);
       yield* TestClock.adjust("250 millis");
@@ -421,7 +425,7 @@ describe("DesktopBrowserHost", () => {
       expect(debuggee.nativeCaptures()).toBe(1);
 
       // A wait that settles within a frame is never prodded.
-      yield* command(host, 3, "Page.captureScreenshot");
+      yield* command(host, 3, "Runtime.evaluate");
       yield* settle;
       debuggee.releaseFirst();
       expect(yield* Queue.take(replies)).toBe(3);
@@ -430,7 +434,7 @@ describe("DesktopBrowserHost", () => {
 
       // A long wait is prodded less often as it goes on, once per tick though it holds focus too.
       drawsWhenCaptured = false;
-      yield* command(host, 4, "Page.captureScreenshot");
+      yield* command(host, 4, "Runtime.evaluate");
       yield* settle;
       for (const [wait, prods] of [
         ["250 millis", 2],

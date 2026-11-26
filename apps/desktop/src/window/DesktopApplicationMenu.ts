@@ -13,12 +13,13 @@ import * as Schema from "effect/Schema";
 
 import type { DesktopUpdateChannel } from "@t3tools/contracts";
 import * as Electron from "electron";
+import { msg } from "gt-i18n";
 
 import { makeComponentLogger } from "../app/DesktopObservability.ts";
 import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronDialog from "../electron/ElectronDialog.ts";
 import * as ElectronMenu from "../electron/ElectronMenu.ts";
-import { applyLanguage } from "../i18n/messages.ts";
+import { applyLanguage, m } from "../i18n/messages.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
 import * as DesktopUpdates from "../updates/DesktopUpdates.ts";
