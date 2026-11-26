@@ -16,6 +16,7 @@ import * as TestProviderHost from "@t3tools/provider-testing/TestProviderHost";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -23,7 +24,6 @@ import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
-import * as TestClock from "effect/testing/TestClock";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import { makePiAdapterV2, PI_PROVIDER } from "./adapter.ts";
 
@@ -72,7 +72,7 @@ it.effect.each([
   "checkpoint inherited by a prior fork",
   "repeated rollback after a handoff",
   "handoff prompt left in the source",
-  "switch timed out after attaching",
+  "switch cancelled after attaching",
 ] as const)("restores exactly the retained Pi history for %s", (scenario) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -135,7 +135,7 @@ it.effect.each([
             if (request.sessionPath !== undefined && sessions.has(request.sessionPath)) {
               liveFile = request.sessionPath;
               sessionRequests.push({ type: "switch_session", file: liveFile });
-              if (scenario === "switch timed out after attaching") {
+              if (scenario === "switch cancelled after attaching") {
                 yield* Deferred.succeed(switchApplied, undefined);
                 continue;
               }
@@ -243,12 +243,12 @@ it.effect.each([
       },
       providerThreadTurns: turns,
     });
-    if (scenario === "switch timed out after attaching") {
-      const attempt = yield* rollback.pipe(Effect.result, Effect.forkChild);
+    if (scenario === "switch cancelled after attaching") {
+      const attempt = yield* rollback.pipe(Effect.forkChild);
       yield* Deferred.await(switchApplied);
       assert.equal(liveFile, oldFile);
-      yield* TestClock.adjust("61 seconds");
-      assert.equal((yield* Fiber.join(attempt))._tag, "Failure");
+      yield* Fiber.interrupt(attempt);
+      assert.isTrue(Exit.hasInterrupts(yield* Fiber.await(attempt)));
       yield* Fiber.join(events);
       assert.include(["error", "stopped"], runtime.providerSession.status);
       assert.deepEqual(sessionRequests, [{ type: "switch_session", file: oldFile }]);

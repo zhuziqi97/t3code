@@ -1953,7 +1953,11 @@ it.layer(
                     : [defaultModel, customModel, currentModel, removedModel],
                 );
 
-                yield* registry.refreshInstance(instance.instanceId);
+                const afterRefresh = yield* registry.refreshInstance(instance.instanceId);
+                assert.deepStrictEqual(
+                  afterRefresh[0]?.models,
+                  restarted ? retainedModels : refreshedProvider.models,
+                );
                 assert.deepStrictEqual(
                   (yield* readProviderStatusCache(filePath))?.models,
                   restarted ? retainedModels : refreshedProvider.models,
@@ -1973,6 +1977,7 @@ it.layer(
                     Layer.provide(layerUnusedMutator),
                   ),
                 ),
+                Effect.provideService(HostProcess.Platform, "freebsd"),
                 Effect.scoped,
               );
             }

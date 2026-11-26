@@ -285,7 +285,7 @@ it.live.each(["codex", "claudeAgent"] as const)(
           const params = (inbound as { frame: { params: { cwd: string; reason: string } } }).frame
             .params;
           assert.include(approval.prompt, params.cwd);
-          assert.include(approval.prompt, params.reason);
+          assert.equal(approval.reason, params.reason);
         }
         const command = {
           operation: "RESPOND" as const,
@@ -465,6 +465,8 @@ it.live.each([
               : TURN_INTERRUPT_PROMPT,
       });
       assert.isTrue(sent.type === "receipt" && sent.accepted);
+      if (sent.type !== "receipt" || sent.runId === null)
+        return yield* Effect.die("Native SEND did not identify the first run");
       const initial = fixture === "multi_turn" ? "completed" : "running";
       yield* events.streamApplicationEvents().pipe(
         Stream.filter(
@@ -472,6 +474,7 @@ it.live.each([
             "event" in event &&
             event.event.threadId === threadId &&
             event.event.type === "run.updated" &&
+            event.event.payload.id === sent.runId &&
             (event.event.payload.status === initial || event.event.payload.status === "failed"),
         ),
         Stream.runHead,
@@ -493,15 +496,23 @@ it.live.each([
         );
       }
       const beforeNext = yield* events.latestApplicationSequence;
+      let terminalRunId = sent.runId;
       if (fixture === "multi_turn") {
         yield* (yield* EffectWorker.OrchestrationEffectWorkerV2).drain();
-        yield* native.handle({
+        const continuation = yield* native.handle({
           operation: "SEND",
           ...destination,
           commandId: CommandId.make(`convene:${fixture}-send-2`),
           messageId: MessageId.make(`convene:${fixture}-message-2`),
           message: MULTI_TURN_SECOND_PROMPT,
         });
+        if (
+          continuation.type !== "receipt" ||
+          !continuation.accepted ||
+          continuation.runId === null
+        )
+          return yield* Effect.die("Native SEND did not identify the continuation run");
+        terminalRunId = continuation.runId;
       } else {
         const cancellation = yield* native.handle({
           operation: "CANCEL",
@@ -517,6 +528,7 @@ it.live.each([
             "event" in event &&
             event.event.threadId === threadId &&
             event.event.type === "run.updated" &&
+            event.event.payload.id === terminalRunId &&
             (event.event.payload.status === terminal || event.event.payload.status === "failed"),
         ),
         Stream.runHead,
@@ -526,7 +538,10 @@ it.live.each([
       assert.equal(result.type, "snapshot");
       if (result.type !== "snapshot") return;
       assert.equal(result.runs.length, fixture === "multi_turn" ? 2 : 1);
-      assert.isTrue(result.runs.every((run) => run.status === terminal));
+      assert.deepEqual(
+        result.runs.map((run) => run.status),
+        fixture === "multi_turn" ? [terminal, terminal] : [terminal],
+      );
       if (fixture === "multi_turn")
         assert.equal(
           result.items.filter((entry) => entry.item.type === "assistant_message").length,
