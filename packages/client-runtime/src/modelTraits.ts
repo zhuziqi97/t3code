@@ -9,6 +9,7 @@ import type {
   ModelSelection,
   ProviderDriverKind,
   ProviderOptionDescriptor,
+  ProviderOptionSelection,
 } from "@t3tools/contracts";
 import {
   buildProviderOptionSelectionsFromDescriptors,
@@ -38,7 +39,7 @@ export function isReasoningSelect(
   return descriptor.type === "select" && isReasoningControl(descriptor);
 }
 
-export function replaceDescriptorCurrentValue(
+function replaceDescriptorCurrentValue(
   descriptors: ReadonlyArray<ProviderOptionDescriptor>,
   descriptorId: string,
   currentValue: string | boolean | undefined,
@@ -102,6 +103,7 @@ export function getTraitSelectChange(
   descriptor: Extract<ProviderOptionDescriptor, { type: "select" }>,
   prompt: string,
   value: string,
+  context?: TraitOptionContext,
 ) {
   if (!value || descriptor.promptInjectedValues?.includes(value)) return null;
   const isPrimary = descriptor.id === selected.primarySelectDescriptor?.id;
@@ -111,10 +113,32 @@ export function getTraitSelectChange(
       isPrimary && selected.ultrathinkPromptControlled
         ? prompt.replace(/^Ultrathink:\s*/i, "")
         : prompt,
-    modelOptions: buildProviderOptionSelectionsFromDescriptors(
-      replaceDescriptorCurrentValue(selected.descriptors, descriptor.id, value),
-    ),
+    modelOptions: changeTraitOptions(selected.descriptors, { id: descriptor.id, value }, context),
   };
+}
+
+export interface TraitOptionContext {
+  readonly driver?: string | undefined;
+  readonly selections?: ModelSelection["options"] | null;
+}
+
+export function changeTraitOptions(
+  descriptors: ReadonlyArray<ProviderOptionDescriptor>,
+  change: ProviderOptionSelection,
+  context?: TraitOptionContext,
+) {
+  // The Codex default follows native config until the user chooses a program.
+  const keepProgram =
+    context?.driver !== "codex" ||
+    change.id === "cyberAccessProgram" ||
+    context.selections?.some((selection) => selection.id === "cyberAccessProgram");
+  return buildProviderOptionSelectionsFromDescriptors(
+    replaceDescriptorCurrentValue(
+      keepProgram ? descriptors : descriptors.filter(({ id }) => id !== "cyberAccessProgram"),
+      change.id,
+      change.value,
+    ),
+  );
 }
 
 export function buildTraitsTriggerDisplay(

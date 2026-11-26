@@ -22,6 +22,7 @@ import { classifyCodexManagedError } from "../../provider/CodexManagedErrors.ts"
 import {
   buildCodexInitializeParams,
   codexAppServerEnvironment,
+  resolveCodexCyberAccessProgram,
 } from "../../provider/CodexProvider.ts";
 import {
   codexRateLimitsToUpdate,
@@ -43,6 +44,7 @@ import {
   ProviderMcpSignInError,
   ProviderSetupError,
   type ServerProviderCompatibilityAdvisory,
+  type ServerProviderModel,
   isDelegatedAppThread,
   ThreadId,
   type TurnItemId,
@@ -915,6 +917,7 @@ export const buildCodexTurnStartParams = Effect.fn("CodexAdapterV2.buildCodexTur
     readonly resolvedReasoningEffort?: string;
     readonly configuredReasoningSummary?: CodexSchema.V2TurnStartParams__ReasoningSummary;
     readonly resolvedServiceTier?: string;
+    readonly cyberAccessProgram?: typeof CodexClient.CodexCyberAccessProgram.Type;
     readonly resetUnspecifiedOptions?: boolean;
     readonly codexInput: ReadonlyArray<CodexSchema.V2TurnStartParams__UserInput>;
     readonly runtimePolicy: ProviderAdapter.ProviderAdapterV2RuntimePolicy;
@@ -1021,6 +1024,9 @@ export const buildCodexTurnStartParams = Effect.fn("CodexAdapterV2.buildCodexTur
       ...(sandboxPolicy === undefined ? {} : { sandboxPolicy }),
       ...(effort === undefined ? {} : { effort }),
       ...(serviceTier === undefined ? {} : { serviceTier }),
+      ...(input.cyberAccessProgram === undefined
+        ? {}
+        : { cyberAccessProgram: input.cyberAccessProgram }),
       // Codex supplies its own mode instructions; send both modes to clear Plan on exit.
       collaborationMode: {
         mode: input.runtimePolicy.interactionMode,
@@ -2102,7 +2108,10 @@ export type CodexAdapterV2DriverEnv =
 
 export const createCodexAdapterV2 = Effect.fn("CodexAdapterV2.createCodexAdapterV2")(function* (
   { instanceId, environment, enabled, config }: ProviderAdapterDriverCreateInput<CodexSettings>,
-  hooks: Pick<CodexAdapterV2Options, "onUsageLimits" | "resolveRuntime" | "compatibility"> = {},
+  hooks: Pick<
+    CodexAdapterV2Options,
+    "onUsageLimits" | "models" | "resolveRuntime" | "compatibility"
+  > = {},
 ) {
   const clientFactory = yield* CodexAppServerClientFactory;
   const continuationRequests = yield* ProviderContinuationRequests.ProviderContinuationRequests;
@@ -2156,6 +2165,7 @@ export interface CodexAdapterV2Options {
   readonly clientFactory: CodexAppServerClientFactoryShape;
   readonly onUsageLimits?: ManagedServerProvider["applyUsageLimits"];
   /** The provider's published models, read per turn for catalog defaults. */
+  readonly models?: Effect.Effect<ReadonlyArray<ServerProviderModel>>;
   readonly resolveRuntime?: Effect.Effect<CodexEffectiveRuntime, ProviderSetupError, Scope.Scope>;
   readonly compatibility?: (
     version: string,
@@ -8171,6 +8181,14 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
             const nativeServiceTier = selectionChanged
               ? (configuration?.config.service_tier ?? undefined)
               : undefined;
+            const cyberAccessProgram =
+              turnInput.modelSelection.model === null || adapterOptions.models === undefined
+                ? undefined
+                : resolveCodexCyberAccessProgram(
+                    yield* adapterOptions.models,
+                    turnInput.modelSelection,
+                    configuration?.config,
+                  );
             const turnStartParams = yield* buildCodexTurnStartParams({
               ...(configuration?.config.model_reasoning_summary == null
                 ? {}
@@ -8180,6 +8198,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               ...(nativeServiceTier === undefined
                 ? {}
                 : { resolvedServiceTier: nativeServiceTier }),
+              ...(cyberAccessProgram === undefined ? {} : { cyberAccessProgram }),
               resetUnspecifiedOptions: selectionChanged,
               nativeThreadId: threadId,
               codexInput,

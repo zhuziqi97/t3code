@@ -33,6 +33,7 @@ import {
   ProviderTurnId,
   RunAttemptId,
   RunId,
+  type ServerProviderModel,
   ThreadId,
   TurnItemId,
 } from "@t3tools/contracts";
@@ -167,6 +168,24 @@ describe("CodexAdapterV2 assistant message streaming", () => {
 });
 
 describe("CodexAdapterV2 runtime policy", () => {
+  it.effect("leaves the native model and its program to Codex for a null selection", () =>
+    Effect.gen(function* () {
+      const params = yield* CodexAdapterV2.buildCodexTurnStartParams({
+        nativeThreadId: "native-default",
+        resolvedModel: "resolved-by-codex",
+        codexInput: [{ type: "text", text: "Follow the fixture default." }],
+        runtimePolicy: { runtimeMode: "full-access", interactionMode: "default", cwd: null },
+        modelSelection: {
+          instanceId: ProviderInstanceId.make("codex"),
+          model: null,
+        },
+      });
+      assert.notProperty(params, "model");
+      assert.notProperty(params, "cyberAccessProgram");
+      assert.equal(params.collaborationMode?.settings.model, "resolved-by-codex");
+    }),
+  );
+
   it.effect.each([undefined, false, true])(
     "selects native collaboration modes without prompt overrides with hasT3Mcp=%s",
     (hasT3Mcp) =>
@@ -692,7 +711,7 @@ function codexReplayPreamble(input: {
   readonly effort?: string;
   readonly turnPolicy?: Pick<
     typeof CodexClient.V2TurnStartParams.Type,
-    "approvalPolicy" | "sandboxPolicy"
+    "approvalPolicy" | "sandboxPolicy" | "cyberAccessProgram"
   >;
 }): Array<CodexReplay.CodexAppServerReplayEntry> {
   return [
@@ -834,6 +853,7 @@ function codexReplayPreamble(input: {
 function withConfigReadBeforeTurnStart(
   entries: ReadonlyArray<CodexReplay.CodexAppServerReplayEntry>,
   threadName = CODEX_TEST_THREAD_TITLE,
+  turnConfig: Record<string, unknown> | null = {},
 ): Array<CodexReplay.CodexAppServerReplayEntry> {
   const result: Array<CodexReplay.CodexAppServerReplayEntry> = [];
   let offset = 0;
@@ -877,7 +897,7 @@ function withConfigReadBeforeTurnStart(
         exchanges.push([
           "config/read",
           { cwd: params.cwd, includeLayers: false },
-          { config: {}, origins: {} },
+          turnConfig === null ? null : { config: turnConfig, origins: {} },
         ]);
       }
       for (const [method, requestParams, response] of exchanges) {
@@ -888,7 +908,14 @@ function withConfigReadBeforeTurnStart(
             label: method,
             frame: { id, method, params: requestParams },
           },
-          { type: "emit_inbound", label: method, frame: { id, result: response } },
+          {
+            type: "emit_inbound",
+            label: method,
+            frame:
+              response === null
+                ? { id, error: { code: -32603, message: "Fixture config read failed" } }
+                : { id, result: response },
+          },
         );
         offset += 1;
       }
@@ -910,8 +937,12 @@ function withConfigReadBeforeTurnStart(
 function withConfigReads(
   transcript: CodexReplay.CodexAppServerReplayTranscript,
   threadName?: string,
+  turnConfig?: Record<string, unknown> | null,
 ): CodexReplay.CodexAppServerReplayTranscript {
-  return { ...transcript, entries: withConfigReadBeforeTurnStart(transcript.entries, threadName) };
+  return {
+    ...transcript,
+    entries: withConfigReadBeforeTurnStart(transcript.entries, threadName, turnConfig),
+  };
 }
 
 function makeCodexReplayTranscript(input: {
@@ -1632,6 +1663,10 @@ describe("CodexAdapterV2 post-settle continuation", () => {
     onUsageLimits?: CodexAdapterV2.CodexAdapterV2Options["onUsageLimits"],
     promptSuggestions: Effect.Effect<boolean> = Effect.succeed(false),
     onNotification: (method: string) => Effect.Effect<void> = () => Effect.void,
+    access?: {
+      readonly models: ReadonlyArray<ServerProviderModel>;
+      readonly turnConfig: Record<string, unknown> | null;
+    },
   ) =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
@@ -1644,7 +1679,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         [];
       const commandStopWatchers: Array<PortScanner.AgentCommandStopWatcher> = [];
       const driver = yield* CodexReplay.makeReplayDriver(
-        withConfigReads(transcript),
+        withConfigReads(transcript, undefined, access?.turnConfig),
         beforeEmitInbound === undefined ? {} : { beforeEmitInbound },
       );
       const clientFactory: CodexAdapterV2.CodexAppServerClientFactoryShape = {
@@ -1694,6 +1729,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         settings: DEFAULT_CODEX_SETTINGS,
         environment: {},
         clientFactory,
+        ...(access === undefined ? {} : { models: Effect.succeed(access.models) }),
         ...(onUsageLimits ? { onUsageLimits } : {}),
         digest: yield* Digest.Digest,
         fileSystem,
@@ -1777,6 +1813,128 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         awaitTerminal: (count: number) => changes.until(() => terminalEvents().length >= count),
       };
     });
+
+  it.effect.each([
+    {
+      name: "an existing thread with an ordinary catalog",
+      descriptor: false,
+      turnConfig: {},
+      expected: undefined,
+    },
+    {
+      name: "a new thread with an ordinary catalog",
+      newThread: true,
+      descriptor: false,
+      turnConfig: {},
+      expected: undefined,
+    },
+    { name: "Standard by default", turnConfig: {}, expected: "standard" },
+    { name: "explicit Blue", selected: "daybreakBlue", turnConfig: {}, expected: "daybreakBlue" },
+    { name: "native Blue", turnConfig: { daybreak: true }, expected: "daybreakBlue" },
+    {
+      name: "native opt-out with a cached Blue default",
+      turnConfig: { daybreak: false },
+      expected: "standard",
+    },
+    { name: "unreadable config with a cached Blue default", turnConfig: null, expected: undefined },
+    {
+      name: "explicit choice outside the supported programs",
+      selected: "daybreakRed",
+      turnConfig: { daybreak: true },
+      expected: undefined,
+    },
+    {
+      name: "custom model",
+      custom: true,
+      selected: "daybreakBlue",
+      turnConfig: { daybreak: true },
+      expected: undefined,
+    },
+  ] as const)("sends a native turn using $name", (fixture) =>
+    Effect.gen(function* () {
+      const nativeThreadId = "codex-program-thread";
+      const nativeTurnId = "codex-program-turn";
+      const prompt = "Continue the fixture.";
+      const model = {
+        slug: CODEX_TEST_MODEL_SELECTION.model,
+        name: "Test model",
+        isCustom: "custom" in fixture,
+        capabilities:
+          "descriptor" in fixture
+            ? null
+            : {
+                optionDescriptors: [
+                  {
+                    id: "cyberAccessProgram",
+                    label: "Cyber Access",
+                    type: "select",
+                    currentValue: "daybreakBlue",
+                    options: [
+                      { id: "standard", label: "Standard" },
+                      { id: "daybreakBlue", label: "Daybreak Blue", isDefault: true },
+                    ],
+                  },
+                ],
+              },
+      } satisfies ServerProviderModel;
+      const harness = yield* makeCodexReplayHarness(
+        makeCodexReplayTranscript({
+          scenario: "codex-program",
+          entries: codexReplayPreamble({
+            nativeThreadId,
+            nativeTurnId,
+            prompt,
+            ...(fixture.expected === undefined
+              ? {}
+              : { turnPolicy: { cyberAccessProgram: fixture.expected } }),
+          }),
+        }),
+        undefined,
+        (method, params) =>
+          method === "turn/start"
+            ? Effect.sync(() => {
+                if (fixture.expected === undefined)
+                  assert.notProperty(params, "cyberAccessProgram");
+                else assert.propertyVal(params, "cyberAccessProgram", fixture.expected);
+              })
+            : Effect.void,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { models: [model], turnConfig: fixture.turnConfig },
+      );
+      const selection: ModelSelection =
+        "selected" in fixture
+          ? {
+              ...CODEX_TEST_MODEL_SELECTION,
+              options: [{ id: "cyberAccessProgram", value: fixture.selected }],
+            }
+          : CODEX_TEST_MODEL_SELECTION;
+      yield* harness.runtime.startTurn({
+        ...makeCodexTestTurnInput({
+          threadId: harness.threadId,
+          providerThread: harness.providerThread,
+          now: yield* DateTime.now,
+          attemptId: RunAttemptId.make("codex-program-attempt"),
+          text: prompt,
+        }),
+        modelSelection: selection,
+        ...("newThread" in fixture ? {} : { previousModelSelection: selection }),
+      });
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.mergeAll(
+          IdAllocator.layer,
+          McpProviderSessions.layer,
+          NodeServices.layer,
+          NodeCrypto.layer,
+        ),
+      ),
+    ),
+  );
 
   it.effect.each([
     { runtimeMode: "full-access", turnIdKind: "present" },

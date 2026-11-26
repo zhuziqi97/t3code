@@ -6,11 +6,8 @@ import type {
   ProviderOptionSelection,
   ServerProviderModel,
 } from "@t3tools/contracts";
-import {
-  buildProviderOptionSelectionsFromDescriptors,
-  getProviderOptionDescriptors,
-  withImplicitFastModeDefault,
-} from "@t3tools/shared/model";
+import { changeTraitOptions, type TraitOptionContext } from "@t3tools/client-runtime/model-traits";
+import { getProviderOptionDescriptors, withImplicitFastModeDefault } from "@t3tools/shared/model";
 
 export function resolveProviderOptionDescriptors(input: {
   readonly capabilities: ModelCapabilities | null | undefined;
@@ -45,6 +42,7 @@ export function withImplicitFastModeSelection(
 export function applyProviderOptionSelection(
   descriptors: ReadonlyArray<ProviderOptionDescriptor>,
   change: ProviderOptionSelection,
+  context?: TraitOptionContext,
 ): ReadonlyArray<ProviderOptionSelection> | null {
   const descriptor = descriptors.find((candidate) => candidate.id === change.id);
   if (!descriptor) {
@@ -59,14 +57,5 @@ export function applyProviderOptionSelection(
     return null;
   }
 
-  const nextDescriptors = descriptors.map((candidate) =>
-    candidate.id === descriptor.id
-      ? {
-          ...candidate,
-          currentValue: change.value,
-        }
-      : candidate,
-  ) as ReadonlyArray<ProviderOptionDescriptor>;
-
-  return buildProviderOptionSelectionsFromDescriptors(nextDescriptors) ?? [];
+  return changeTraitOptions(descriptors, change, context) ?? [];
 }

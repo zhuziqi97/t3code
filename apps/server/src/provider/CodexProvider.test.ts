@@ -213,6 +213,16 @@ it("maps current Codex model capability fields", () => {
       ],
       currentValue: "flex",
     },
+    {
+      id: "cyberAccessProgram",
+      label: "Cyber Access",
+      type: "select",
+      options: [
+        { id: "standard", label: "Standard", isDefault: true },
+        { id: "daybreakBlue", label: "Daybreak Blue" },
+      ],
+      currentValue: "standard",
+    },
   ]);
 });
 
@@ -345,6 +355,11 @@ it.live("retains subprocess diagnostics and exit code in the provider probe fail
 const startProbe = Effect.fn("startProbe")(function* (
   hang: ReadonlyArray<string>,
   requiresOpenaiAuth = false,
+  access?: {
+    readonly programs: ReadonlyArray<string>;
+    readonly config: Record<string, unknown> | null;
+    readonly apiKey?: boolean;
+  },
 ) {
   const fs = yield* FileSystem.FileSystem;
   const homePath = yield* fs.makeTempDirectoryScoped();
@@ -418,6 +433,7 @@ const startProbe = Effect.fn("startProbe")(function* (
                         isDefault: true,
                         defaultReasoningEffort: "high",
                         supportedReasoningEfforts: [],
+                        ...(access ? { availableAccessPrograms: { cyber: access.programs } } : {}),
                       },
                     ],
                     nextCursor: null,
@@ -429,7 +445,16 @@ const startProbe = Effect.fn("startProbe")(function* (
                     rateLimits: { primary: null, secondary: null, credits: null, planType: "pro" },
                   });
                 } else if (method === "config/read") {
-                  yield* reply(id, { config: {}, origins: {}, layers: null });
+                  if (access?.config === null) {
+                    yield* Queue.offer(
+                      output,
+                      new TextEncoder().encode(
+                        `${JSON.stringify({ id, error: { code: -32603, message: "Fixture read failed" } })}\n`,
+                      ),
+                    );
+                  } else {
+                    yield* reply(id, { config: access?.config ?? {}, origins: {}, layers: null });
+                  }
                 }
               }),
             { discard: true },
@@ -444,14 +469,41 @@ const startProbe = Effect.fn("startProbe")(function* (
     }),
   );
   const fiber = yield* checkCodexProviderStatus(
-    decodeCodexSettings({ homePath, customModels: [{ slug: "custom-model" }] }),
+    decodeCodexSettings({
+      homePath,
+      customModels: [
+        {
+          slug: "custom-model",
+          ...(access
+            ? {
+                capabilities: {
+                  optionDescriptors: [
+                    {
+                      id: "cyberAccessProgram",
+                      type: "select",
+                      label: "Stored custom option",
+                      options: [{ id: "daybreakBlue", label: "Daybreak Blue" }],
+                    },
+                  ],
+                },
+              }
+            : {}),
+        },
+      ],
+    }),
   ).pipe(Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner), Effect.forkChild);
   const requested = (method: string) => Deferred.await(requests.get(method)!);
   return {
     fiber,
     requested,
     authenticate: requested("account/read").pipe(
-      Effect.flatMap((id) => reply(id, { ...account, requiresOpenaiAuth })),
+      Effect.flatMap((id) =>
+        reply(id, {
+          ...account,
+          ...(access?.apiKey ? { account: { type: "apiKey" } } : {}),
+          requiresOpenaiAuth,
+        }),
+      ),
     ),
     finishSkills: requested("skills/list").pipe(Effect.flatMap((id) => reply(id, { data: [] }))),
     stopped,
@@ -459,6 +511,86 @@ const startProbe = Effect.fn("startProbe")(function* (
 });
 
 it.layer(NodeServices.layer)("Codex probe budget", (it) => {
+  it.effect.each([
+    {
+      name: "ordinary",
+      programs: ["standard"],
+      config: {},
+      options: ["standard"],
+      value: "standard",
+    },
+    {
+      name: "standard plus Blue",
+      programs: ["standard", "daybreakBlue"],
+      config: {},
+      options: ["standard", "daybreakBlue"],
+      value: "standard",
+    },
+    {
+      name: "native Blue",
+      programs: ["standard", "daybreakBlue", "daybreakRed"],
+      config: { daybreak: true },
+      options: ["standard", "daybreakBlue"],
+      value: "daybreakBlue",
+    },
+    {
+      name: "Blue is the only supported program",
+      programs: ["daybreakBlue"],
+      config: {},
+      options: ["daybreakBlue", "standard"],
+      value: "daybreakBlue",
+    },
+    {
+      name: "out of scope only",
+      programs: ["daybreakRed"],
+      config: { daybreak: true },
+      options: undefined,
+      value: undefined,
+    },
+    {
+      name: "unreadable configuration",
+      programs: ["standard", "daybreakBlue"],
+      config: null,
+      options: ["standard", "daybreakBlue"],
+      value: undefined,
+    },
+    {
+      name: "API key with programs disabled",
+      programs: ["standard", "daybreakBlue"],
+      config: { features: { api_key_cyber_access_programs: false } },
+      apiKey: true,
+      options: undefined,
+      value: undefined,
+    },
+    {
+      name: "API key with unreadable configuration",
+      programs: ["standard", "daybreakBlue"],
+      config: null,
+      apiKey: true,
+      options: undefined,
+      value: undefined,
+    },
+  ])("publishes the supported Codex options for $name", (fixture) =>
+    Effect.gen(function* () {
+      const probe = yield* startProbe([], false, fixture);
+      yield* probe.authenticate;
+      const provider = yield* Fiber.join(probe.fiber);
+      const descriptor = provider.models[0]?.capabilities?.optionDescriptors?.find(
+        (option) => option.id === "cyberAccessProgram",
+      );
+      assert.deepStrictEqual(
+        descriptor?.type === "select" ? descriptor.options.map((option) => option.id) : undefined,
+        fixture.options,
+      );
+      assert.strictEqual(descriptor?.currentValue, fixture.value);
+      assert.isFalse(
+        provider.models[1]?.capabilities?.optionDescriptors?.some(
+          (option) => option.id === "cyberAccessProgram",
+        ) ?? false,
+      );
+    }).pipe(Effect.scoped),
+  );
+
   it.effect("keeps the first complete catalog when its refresh never answers", () =>
     Effect.gen(function* () {
       const probe = yield* startProbe(["model/list/2"]);

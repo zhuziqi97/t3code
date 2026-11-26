@@ -3,7 +3,55 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { createI18n } from "./i18n/index.ts";
 
-import { buildTraitsTriggerDisplay, getDescriptorStringValue } from "./modelTraits.ts";
+import {
+  buildTraitsTriggerDisplay,
+  getDescriptorStringValue,
+  getPromptControlledTraits,
+  getTraitSelectChange,
+} from "./modelTraits.ts";
+
+it("persists Codex access only when chosen in the shared model options", () => {
+  const access = {
+    id: "cyberAccessProgram",
+    type: "select",
+    label: "Cyber Access",
+    currentValue: "daybreakBlue",
+    options: [
+      { id: "standard", label: "Standard" },
+      { id: "daybreakBlue", label: "Daybreak Blue", isDefault: true },
+    ],
+  } satisfies ProviderOptionDescriptor;
+  const effort = {
+    id: "reasoningEffort",
+    type: "select",
+    label: "Reasoning",
+    options: [
+      { id: "low", label: "Low" },
+      { id: "high", label: "High" },
+    ],
+  } satisfies ProviderOptionDescriptor;
+  const descriptors = [effort, access];
+  const traits = { descriptors, ...getPromptControlledTraits(descriptors, "") };
+  const context = { driver: "codex" };
+  expect(getTraitSelectChange(traits, effort, "", "high", context)?.modelOptions).toEqual([
+    { id: "reasoningEffort", value: "high" },
+  ]);
+  const explicit = getTraitSelectChange(traits, access, "", "daybreakBlue", context)?.modelOptions;
+  expect(explicit).toEqual([{ id: "cyberAccessProgram", value: "daybreakBlue" }]);
+  expect(
+    getTraitSelectChange(traits, effort, "", "high", { ...context, selections: explicit })
+      ?.modelOptions,
+  ).toEqual([
+    { id: "reasoningEffort", value: "high" },
+    { id: "cyberAccessProgram", value: "daybreakBlue" },
+  ]);
+  expect(
+    getTraitSelectChange(traits, effort, "", "high", { driver: "acpRegistry" })?.modelOptions,
+  ).toEqual([
+    { id: "reasoningEffort", value: "high" },
+    { id: "cyberAccessProgram", value: "daybreakBlue" },
+  ]);
+});
 
 describe("buildTraitsTriggerDisplay", () => {
   it.each([

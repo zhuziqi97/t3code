@@ -167,6 +167,28 @@ it("preserves the native Ultrathink prefix and removes it only when the user cha
   expect(state.save).toHaveBeenCalledExactlyOnceWith([{ id: "effort", value: "high" }]);
 });
 
+it("offers Codex access in the existing model options menu", async () => {
+  await setup();
+  const access: ProviderOptionDescriptor = {
+    id: "cyberAccessProgram",
+    label: "Cyber Access",
+    type: "select",
+    currentValue: "standard",
+    options: [
+      { id: "standard", label: "Standard", isDefault: true },
+      { id: "daybreakBlue", label: "Daybreak Blue" },
+    ],
+  };
+  await using screen = await render(<Harness models={[model([access])]} />);
+  await click(trigger("Standard"));
+  await expect.element(screen.getByRole("menuitemradio", { name: "Daybreak Blue" })).toBeVisible();
+  expect(state.save).not.toHaveBeenCalled();
+  await click(radio("Daybreak Blue"));
+  expect(state.save).toHaveBeenCalledExactlyOnceWith([
+    { id: "cyberAccessProgram", value: "daybreakBlue" },
+  ]);
+});
+
 it("translates known titles while preserving native strength and custom metadata", async () => {
   await setup();
 

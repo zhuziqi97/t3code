@@ -29,6 +29,7 @@ import type {
   ServerProvider,
   ServerProviderState,
   ModelCapabilities,
+  ModelSelection,
   ProviderOptionDescriptor,
   ServerProviderModel,
   ServerProviderSkill,
@@ -38,6 +39,7 @@ import { ServerSettingsError } from "@t3tools/contracts";
 import {
   createModelCapabilities,
   formatCodexModelName,
+  getModelSelectionStringOptionValue,
   mergeCustomModels,
 } from "@t3tools/shared/model";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
@@ -87,6 +89,54 @@ const CodexRoutingConfig = Schema.Struct({
   ),
 });
 const decodeCodexRoutingConfig = Schema.decodeUnknownOption(CodexRoutingConfig);
+
+const decodeCodexCyberAccessConfig = Schema.decodeUnknownOption(
+  Schema.Struct({
+    daybreak: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
+    features: Schema.optionalKey(
+      Schema.NullOr(
+        Schema.Struct({
+          api_key_cyber_access_programs: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
+        }),
+      ),
+    ),
+  }),
+);
+const CYBER_ACCESS_PROGRAM_ID = "cyberAccessProgram";
+const isCodexCyberAccessProgram = Schema.is(CodexClient.CodexCyberAccessProgram);
+
+function codexCyberAccessDefault(
+  options: ReadonlyArray<{ readonly id: string }>,
+  daybreak: boolean,
+) {
+  if (daybreak && options.some((option) => option.id === "daybreakBlue")) return "daybreakBlue";
+  const catalogDefault = options[0]?.id;
+  return isCodexCyberAccessProgram(catalogDefault) ? catalogDefault : undefined;
+}
+
+export function resolveCodexCyberAccessProgram(
+  models: ReadonlyArray<ServerProviderModel>,
+  selection: ModelSelection,
+  configuration: unknown,
+) {
+  const model = models.find((candidate) => candidate.slug === selection.model);
+  if (!model || model.isCustom) return undefined;
+  const descriptor = model.capabilities?.optionDescriptors?.find(
+    (option) => option.id === CYBER_ACCESS_PROGRAM_ID,
+  );
+  if (descriptor?.type !== "select") return undefined;
+  const options = descriptor.options.filter((option) => isCodexCyberAccessProgram(option.id));
+  const explicit = getModelSelectionStringOptionValue(selection, CYBER_ACCESS_PROGRAM_ID);
+  if (explicit !== undefined) {
+    return isCodexCyberAccessProgram(explicit) && options.some((option) => option.id === explicit)
+      ? explicit
+      : undefined;
+  }
+  const config = Option.getOrUndefined(decodeCodexCyberAccessConfig(configuration));
+  return config === undefined
+    ? undefined
+    : codexCyberAccessDefault(options, config.daybreak === true);
+}
 
 // Null is Codex's auth-dependent OpenAI default; undefined is a route that cannot be read.
 function codexRouteBaseUrl(config: unknown): string | null | undefined {
@@ -296,6 +346,24 @@ export function mapCodexModelCapabilities(
       currentValue: defaultServiceTier,
     });
   }
+  const programs = (model.availableAccessPrograms?.cyber ?? []).filter(isCodexCyberAccessProgram);
+  const defaultProgram = programs.includes("standard") ? "standard" : programs[0];
+  if (defaultProgram !== undefined) {
+    const alternatives = programs.filter((id) => id !== defaultProgram);
+    // Keep the catalog default first, and put an unadvertised Standard opt-out last.
+    if (defaultProgram === "daybreakBlue") alternatives.push("standard");
+    optionDescriptors.push({
+      id: CYBER_ACCESS_PROGRAM_ID,
+      label: "Cyber Access",
+      type: "select",
+      options: [defaultProgram, ...alternatives].map((id) => ({
+        id,
+        label: id === "standard" ? "Standard" : "Daybreak Blue",
+        ...(id === defaultProgram ? { isDefault: true } : {}),
+      })),
+      currentValue: defaultProgram,
+    });
+  }
   return createModelCapabilities({
     optionDescriptors,
   });
@@ -397,7 +465,59 @@ function appendCustomCodexModels(
   models: ReadonlyArray<ServerProviderModel>,
   customModels: ReadonlyArray<CustomModelSetting>,
 ): ReadonlyArray<ServerProviderModel> {
-  return mergeCustomModels(models, customModels);
+  return mergeCustomModels(
+    models,
+    customModels.map((custom) =>
+      typeof custom !== "string" &&
+      custom.capabilities?.optionDescriptors?.some(
+        (descriptor) => descriptor.id === CYBER_ACCESS_PROGRAM_ID,
+      )
+        ? {
+            ...custom,
+            capabilities: {
+              ...custom.capabilities,
+              optionDescriptors: custom.capabilities.optionDescriptors.filter(
+                (descriptor) => descriptor.id !== CYBER_ACCESS_PROGRAM_ID,
+              ),
+            },
+          }
+        : custom,
+    ),
+  );
+}
+
+function applyConfiguredCodexCyberAccess(
+  models: ReadonlyArray<ServerProviderModel>,
+  account: CodexSchema.V2GetAccountResponse,
+  configuration: unknown,
+): ReadonlyArray<ServerProviderModel> {
+  const config = Option.getOrUndefined(decodeCodexCyberAccessConfig(configuration));
+  if (
+    account.account?.type === "apiKey" &&
+    (config === undefined || config.features?.api_key_cyber_access_programs === false)
+  ) {
+    return mapCodexOptionDescriptors(models, (descriptors) =>
+      descriptors.filter((descriptor) => descriptor.id !== CYBER_ACCESS_PROGRAM_ID),
+    );
+  }
+  if (config === undefined) {
+    return mapCodexOptionDescriptors(models, (descriptors) =>
+      descriptors.map((descriptor) => {
+        if (descriptor.id !== CYBER_ACCESS_PROGRAM_ID || descriptor.type !== "select")
+          return descriptor;
+        const { currentValue: _currentValue, ...withoutDefault } = descriptor;
+        return {
+          ...withoutDefault,
+          options: descriptor.options.map(({ isDefault: _isDefault, ...option }) => option),
+        };
+      }),
+    );
+  }
+  return config.daybreak === true
+    ? withConfiguredSelectDefault(models, CYBER_ACCESS_PROGRAM_ID, (options) =>
+        codexCyberAccessDefault(options, true),
+      )
+    : models;
 }
 
 function parseCodexSkillsListResponse(
@@ -704,8 +824,21 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
     },
   });
   let reportedModels: ReadonlyArray<ServerProviderModel> = [];
-  let reportedDefault: string | null | undefined;
-  let configurationRead = false;
+  let reportedConfig: CodexSchema.V2ConfigReadResponse__Config | undefined;
+  const publishableModels = (
+    models: ReadonlyArray<ServerProviderModel>,
+    config: typeof reportedConfig,
+  ) =>
+    applyConfiguredCodexCyberAccess(
+      appendCustomCodexModels(
+        config === undefined
+          ? models.map((model) => ({ ...model, isDefault: false }))
+          : applyNativeCodexDefaultModel(models, config.model),
+        input.customModels ?? [],
+      ),
+      accountResponse,
+      config,
+    );
   const [skillsResponse, models, { config, nativeUsage, rateLimits }] = yield* Effect.all(
     [
       client
@@ -739,12 +872,7 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
             return reportProviderProgress({ metadata: { models: { state: "failed" } } });
           reportedModels = models;
           return reportProviderProgress({
-            models: appendCustomCodexModels(
-              configurationRead
-                ? applyNativeCodexDefaultModel(models, reportedDefault)
-                : models.map((model) => ({ ...model, isDefault: false })),
-              input.customModels ?? [],
-            ),
+            models: publishableModels(models, reportedConfig),
             metadata: { models: { state: "ready" } },
           });
         }),
@@ -756,15 +884,11 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
         Effect.timeout(CODEX_CONFIG_PROBE_TIMEOUT_MS),
         Effect.map((response) => response.config),
         Effect.tap((configuration) => {
-          reportedDefault = configuration.model;
-          configurationRead = true;
+          reportedConfig = configuration;
           return reportProviderProgress({
             ...(reportedModels.length
               ? {
-                  models: appendCustomCodexModels(
-                    applyNativeCodexDefaultModel(reportedModels, reportedDefault),
-                    input.customModels ?? [],
-                  ),
+                  models: publishableModels(reportedModels, configuration),
                 }
               : {}),
             metadata: { defaultModel: { state: "ready" } },
@@ -806,15 +930,7 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
     nativeUsage,
     ...(rateLimits ? { rateLimits } : {}),
     version,
-    models:
-      models === undefined
-        ? undefined
-        : appendCustomCodexModels(
-            config === undefined
-              ? models.map((model) => ({ ...model, isDefault: false }))
-              : applyNativeCodexDefaultModel(models, config.model),
-            input.customModels ?? [],
-          ),
+    models: models === undefined ? undefined : publishableModels(models, config),
     skills: parseCodexSkillsListResponse(skillsResponse, input.cwd),
     serviceTier: config?.service_tier ?? undefined,
   } satisfies CodexAppServerProviderSnapshot;

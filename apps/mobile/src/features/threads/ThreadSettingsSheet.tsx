@@ -576,6 +576,10 @@ function ThreadSettingsSessionProvider(
 
   const applyOptionChange = (id: string, value: string | boolean) => {
     const descriptor = displayedDescriptors.find((entry) => entry.id === id);
+    const optionContext = {
+      driver: displayedModel?.providerDriver,
+      selections: (pendingModel?.selection ?? props.selectedModel)?.options,
+    };
     const change =
       descriptor?.type === "select" && typeof value === "string"
         ? getTraitSelectChange(
@@ -583,6 +587,7 @@ function ThreadSettingsSessionProvider(
             descriptor,
             displayedPrompt,
             value,
+            optionContext,
           )
         : null;
     if (descriptor?.type === "select") {
@@ -597,7 +602,7 @@ function ThreadSettingsSessionProvider(
     }
     const next = change
       ? (change.modelOptions ?? [])
-      : applyProviderOptionSelection(displayedDescriptors, { id, value });
+      : applyProviderOptionSelection(displayedDescriptors, { id, value }, optionContext);
     if (!next) {
       return;
     }

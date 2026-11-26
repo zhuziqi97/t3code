@@ -86,6 +86,8 @@ type ServerNotificationHandler = (
   payload: unknown,
 ) => Effect.Effect<void, CodexError.CodexAppServerError>;
 
+export const CodexCyberAccessProgram = Schema.Literals(["standard", "daybreakBlue"]);
+
 /** The generated `turn/start` schema omits these fields; this is what the wire accepts. */
 export const V2TurnStartParams = CodexSchema.V2TurnStartParams.pipe(
   Schema.fieldsAssign({
@@ -93,7 +95,7 @@ export const V2TurnStartParams = CodexSchema.V2TurnStartParams.pipe(
     additionalContext: Schema.optionalKey(
       Schema.Record(Schema.String, CodexSchema.V2TurnStartParams__AdditionalContextEntry),
     ),
-    cyberAccessProgram: Schema.optionalKey(CodexSchema.V2TurnStartParams__CyberAccessProgram),
+    cyberAccessProgram: Schema.optionalKey(CodexCyberAccessProgram),
   }),
 );
 

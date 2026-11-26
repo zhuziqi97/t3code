@@ -2,9 +2,9 @@ import { getSelectedTraits, getTraitsSectionVisibility } from "./TraitsPicker.lo
 import { resolveModelForCapabilities } from "../../providerModels";
 import {
   buildTraitsTriggerDisplay,
+  changeTraitOptions,
   getDescriptorStringValue,
   getTraitSelectChange,
-  replaceDescriptorCurrentValue,
   selectableProviderOptionChoices,
   isReasoningSelect,
 } from "@t3tools/client-runtime/model-traits";
@@ -24,11 +24,7 @@ import {
   type ScopedThreadRef,
   type ServerProviderModel,
 } from "@t3tools/contracts";
-import {
-  buildProviderOptionSelectionsFromDescriptors,
-  getProviderOptionCurrentValue,
-  isClaudeUltrathinkPrompt,
-} from "@t3tools/shared/model";
+import { getProviderOptionCurrentValue, isClaudeUltrathinkPrompt } from "@t3tools/shared/model";
 import { T } from "gt-react";
 import { memo } from "react";
 import { GaugeIcon } from "lucide-react";
@@ -111,6 +107,7 @@ export function getReasoningTraitStep(input: {
     input.includePlanAgent,
   );
   if (selected.modelIsUnavailable || selected.ultrathinkInBodyText) return null;
+  const optionContext = { driver: input.provider, selections: input.modelOptions };
   const descriptor = selected.selectDescriptors.find(isReasoningSelect);
   if (!descriptor && selected.thinkingDescriptor) {
     const thinking = selected.thinkingDescriptor;
@@ -119,8 +116,10 @@ export function getReasoningTraitStep(input: {
       { instanceId: input.instanceId, model: input.model, options: input.modelOptions ?? [] },
       input.reportedModelSelection,
     );
-    const modelOptions = buildProviderOptionSelectionsFromDescriptors(
-      replaceDescriptorCurrentValue(selected.descriptors, thinking.id, current !== true),
+    const modelOptions = changeTraitOptions(
+      selected.descriptors,
+      { id: thinking.id, value: current !== true },
+      optionContext,
     );
     return modelOptions ? { prompt: input.prompt, modelOptions } : null;
   }
@@ -144,7 +143,13 @@ export function getReasoningTraitStep(input: {
     ...ordered.slice(position + 1),
     ...ordered.slice(0, Math.max(position, 0)),
   ]) {
-    const change = getTraitSelectChange(selected, descriptor, input.prompt, option.id);
+    const change = getTraitSelectChange(
+      selected,
+      descriptor,
+      input.prompt,
+      option.id,
+      optionContext,
+    );
     if (!change) continue;
     return change.modelOptions
       ? { prompt: change.prompt, modelOptions: change.modelOptions }
@@ -186,6 +191,7 @@ export function useTraitsSelection({
   ...persistence
 }: TraitsSelectionInput) {
   const t = useTranslate();
+  const optionContext = { driver: provider, selections: modelOptions };
   const modelSelection =
     instanceId && model ? { instanceId, model, options: modelOptions ?? [] } : null;
   const setProviderModelOptions = useComposerDraftStore((store) => store.setProviderModelOptions);
@@ -230,18 +236,18 @@ export function useTraitsSelection({
       value: string,
     ) => {
       // Whether a pick applies, and the options it writes, do not depend on the prompt text.
-      const change = getTraitSelectChange(selected, descriptor, "", value);
+      const change = getTraitSelectChange(selected, descriptor, "", value, optionContext);
       if (!change) return;
       onPromptEdit?.(
-        (prompt) => getTraitSelectChange(selected, descriptor, prompt, value)?.prompt ?? prompt,
+        (prompt) =>
+          getTraitSelectChange(selected, descriptor, prompt, value, optionContext)?.prompt ??
+          prompt,
       );
       updateModelOptions(change.modelOptions);
     },
     changeBoolean: (descriptorId: string, value: boolean) => {
       updateModelOptions(
-        buildProviderOptionSelectionsFromDescriptors(
-          replaceDescriptorCurrentValue(selected.descriptors, descriptorId, value),
-        ),
+        changeTraitOptions(selected.descriptors, { id: descriptorId, value }, optionContext),
       );
     },
   };
