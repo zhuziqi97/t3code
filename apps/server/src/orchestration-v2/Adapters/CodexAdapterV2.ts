@@ -8753,6 +8753,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
             },
             (effect, threadInput) =>
               effect.pipe(
+                withAppServerDeadline("thread/start"),
                 Effect.mapError(
                   (cause) =>
                     new ProviderAdapter.ProviderAdapterEnsureThreadError({
@@ -8770,6 +8771,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               return yield* nativeThreadTransitions.withLock(
                 nativeThreadId,
                 Effect.gen(function* () {
+                  yield* rejectIfRetired;
                   yield* ensureInitialized;
                   const appThreadId =
                     threadInput.threadId ?? threadInput.providerThread.appThreadId;
@@ -8863,7 +8865,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                   rootProviderThreads.set(nativeThreadId, threadInput.providerThread);
                   goalUpdatesHeld.add(nativeThreadId);
                   return yield* Effect.gen(function* () {
-                    const response = yield* resume(reuseConfiguration).pipe(
+                    const resumeRequest = resume(reuseConfiguration).pipe(
                       Effect.catchTags({
                         CodexAppServerRequestError: Effect.fnUntraced(function* (cause) {
                           if (/\bthread \S+ is closing\b/i.test(cause.errorMessage)) {
@@ -8895,6 +8897,12 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                             .pipe(Effect.andThen(resume(reuseConfiguration)));
                         }),
                       }),
+                    );
+                    const response = yield* (
+                      appThreadId == null
+                        ? resumeRequest
+                        : reportingResume(appThreadId, resumeRequest)
+                    ).pipe(
                       Effect.flatMap(decodeCodexResumeMetadata),
                       Effect.onError(() =>
                         Effect.sync(() => {
@@ -8962,7 +8970,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                     ),
                     Effect.map((resumed) => rootProviderThreads.get(nativeThreadId) ?? resumed),
                   );
-                }),
+                }).pipe(withAppServerDeadline("thread/resume")),
               );
             },
             (effect, threadInput) =>
