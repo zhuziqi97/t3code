@@ -44,18 +44,10 @@ const SnapShotIcon = createLucideIcon("snap-shot", [
   ["circle", { cx: "12", cy: "12", r: "1.5", key: "lens" }],
 ]);
 
-const NAV_GROUPS = [
-  { id: "general" },
-  { id: "agents" },
-  { id: "code" },
-  { id: "connections" },
-  { id: "other" },
-] as const;
-
 interface SettingsSectionDefinition {
   readonly path: `/settings/${string}`;
   readonly icon: LucideIcon;
-  readonly group: (typeof NAV_GROUPS)[number]["id"] | null;
+  readonly group: "general" | "agents" | "code" | "connections" | "other" | null;
   readonly searchScope?: SettingsSearchScope;
   readonly search?: ReadonlyArray<{
     readonly id: string;
@@ -206,8 +198,3 @@ export const SETTINGS_SECTIONS = [
 ] as const satisfies ReadonlyArray<SettingsSectionDefinition>;
 
 export type SettingsPath = (typeof SETTINGS_SECTIONS)[number]["path"];
-
-export const SETTINGS_NAV_GROUPS = NAV_GROUPS.map((group) => ({
-  ...group,
-  sections: SETTINGS_SECTIONS.filter((section) => section.group === group.id),
-}));
