@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from "react";
-import { T, useGT, useLocale } from "gt-react";
+import { T, useGT } from "gt-react";
 import { useNavigate } from "@tanstack/react-router";
 import { create } from "zustand";
 import {

@@ -109,23 +109,31 @@ it("opens search from the physical Slash and F keys on non-US layouts", async ()
   }
 });
 
-it("moves through the settings navigation using the arrow keys", async () => {
+it("moves focus through the settings navigation using Tab and the arrow keys", async () => {
   await page.viewport(1280, 800);
-  await using _screen = await renderNav();
+  await using screen = await renderNav();
   const navigation = page.getByRole("navigation", { name: "Settings sections" });
   const items = navigation.getByRole("group").getByRole("button");
-  const count = items.elements().length;
-
   const sections = settingsNavGroups(false)
     .flatMap((group) => group.paths)
     .map((to) => SETTINGS_SECTION_LABELS[to]);
-  const tabbed: string[] = [];
-  for (let step = 0; step < sections.length; step += 1) {
+
+  expect(items.elements()).toHaveLength(sections.length);
+  await page.getByRole("combobox", { name: "Search settings" }).click();
+  for (const name of sections) {
     await userEvent.tab();
-    const section = document.activeElement?.closest("[data-settings-section]");
-    if (!section) break;
-    tabbed.push(section.textContent ?? "");
+    await expect.element(navigation.getByRole("button", { name, exact: true })).toHaveFocus();
   }
+
+  await userEvent.keyboard("{Home}");
+  await expect.element(items.nth(0)).toHaveFocus();
+  await userEvent.keyboard("{ArrowDown}");
+  await expect.element(items.nth(1)).toHaveFocus();
+  await userEvent.keyboard("{End}");
+  await expect.element(items.nth(sections.length - 1)).toHaveFocus();
+  await userEvent.keyboard("{ArrowUp}");
+  await expect.element(items.nth(sections.length - 2)).toHaveFocus();
+  expect(screen.router?.state.location.pathname).toBe("/settings/general");
 });
 
 it.each([1280, 390])("labels the settings navigation groups at %ipx wide", async (width) => {

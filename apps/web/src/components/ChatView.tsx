@@ -114,6 +114,7 @@ import {
 } from "@t3tools/client-runtime/state/subagentRuntime";
 import {
   getUserQueuedThreadRuns,
+  hasCompactableConversation as hasProjectedCompactableConversation,
   threadCanSteer,
   threadSupportsProviderHandoff,
 } from "@t3tools/client-runtime/state/thread-workflows";
@@ -2636,11 +2637,14 @@ export default function ChatView(props: ChatViewProps) {
     scrollToEnd,
     persistThreadSettingsForNextTurn,
   });
-  const activeThreadHasCompactableConversation = hasCompactableConversation({
-    visibleTurnItems: serverVisibleTurnItems,
-    hasMoreHistory: serverThreadHistory.hasMoreHistory,
-    latestUserMessageAt: serverThread?.latestUserMessageAt ?? null,
-  });
+  const activeThreadHasCompactableConversation =
+    (serverProjection !== null && hasProjectedCompactableConversation(serverProjection)) ||
+    (serverProjection?.hasLocalConversation === undefined &&
+      hasCompactableConversation({
+        visibleTurnItems: serverVisibleTurnItems,
+        hasMoreHistory: serverThreadHistory.hasMoreHistory,
+        latestUserMessageAt: serverThread?.latestUserMessageAt ?? null,
+      }));
   const pendingHandoffSelection =
     (composerModelSelectionApplies ? composerSelectedModelSelection : null) ??
     activeThread?.modelSelection;

@@ -317,7 +317,7 @@ import {
 import { HELD_COMPOSER_SEND_BANNER_ID } from "./ComposerHeldSendBanner";
 import { ComposerControlsBar } from "./ComposerControlsBar";
 import { composerCommandKeyHandler } from "./composerCommandKey";
-import { promptSuggestionToAccept, usePromptSuggestion } from "./usePromptSuggestion";
+import { usePromptSuggestion } from "./usePromptSuggestion";
 import { useFreshSessionArmed } from "./freshSessionArms";
 
 function consumePasteAsTextShortcut(deadline: { current: number }): boolean {

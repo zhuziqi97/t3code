@@ -18,7 +18,7 @@ import { Input } from "../ui/input";
 import { StandalonePage, StandalonePageHeader } from "../ui/standalone-page";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useTranslate } from "../../i18n";
-import { m, type MessageResolver } from "../../i18n/messages";
+import type { MessageResolver } from "../../i18n/messages";
 
 export function PairingPendingSurface() {
   const gt = useGT();

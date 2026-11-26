@@ -85,6 +85,7 @@ it("sends a Codex follow-up on a cold Claude thread without compacting first", a
   });
   __setClientSettingsForTests({
     ...DEFAULT_CLIENT_SETTINGS,
+    languagePreference: "en",
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
   });
   const router = getRouter(
@@ -136,6 +137,7 @@ it("drops the compact offer on a cold Claude thread while /clear is armed", asyn
   using _environment = installFakeEnvironment([thread], { providers: [CLAUDE_PROVIDER] });
   __setClientSettingsForTests({
     ...DEFAULT_CLIENT_SETTINGS,
+    languagePreference: "en",
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
   });
   const router = getRouter(
@@ -164,4 +166,27 @@ it("drops the compact offer on a cold Claude thread while /clear is armed", asyn
   await page.getByRole("button", { name: "Keep the current session" }).click();
   await expect.element(chip).toBeVisible();
   await expect.element(compactAndSend).toBeVisible();
+});
+
+it("offers compaction when the host reports history outside the visible items", async () => {
+  const cold = coldClaudeThread("thread-claude-retained");
+  const thread = {
+    ...cold,
+    items: cold.items.filter((item) => item.type !== "user_message"),
+    hasLocalConversation: true,
+  };
+  using _environment = installFakeEnvironment([thread], { providers: [CLAUDE_PROVIDER] });
+  __setClientSettingsForTests({
+    ...DEFAULT_CLIENT_SETTINGS,
+    languagePreference: "en",
+    onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
+  });
+  const router = getRouter(
+    createMemoryHistory({ initialEntries: [`/${ENVIRONMENT_ID}/${thread.id}`] }),
+  );
+  await router.load();
+  await using _app = await render(<AppRoot router={router} />, { router: false });
+
+  await expect.element(page.getByText(`Answer 2 for ${thread.id}.`)).toBeVisible();
+  await expect.element(page.getByRole("button", { name: "Compact and send" })).toBeVisible();
 });

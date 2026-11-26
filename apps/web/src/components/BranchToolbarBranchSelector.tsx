@@ -1,5 +1,4 @@
 import { useTranslate } from "../i18n";
-import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { ThreadDetailsControl } from "./chat/ThreadDetailsControl";
 import { contextMenuSourceOf } from "../contextMenuSource";
 import { ComposerContextLabel } from "./ComposerContextLabel";

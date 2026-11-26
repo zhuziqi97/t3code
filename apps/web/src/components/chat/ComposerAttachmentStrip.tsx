@@ -745,7 +745,6 @@ export function ComposerAttachInput({
   readonly addComposerAttachments: (files: File[]) => Promise<boolean>;
   readonly focusComposer: () => void;
 }) {
-  const t = useTranslate();
   return (
     <input
       ref={ref}

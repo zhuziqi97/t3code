@@ -5,7 +5,6 @@ import * as Schema from "effect/Schema";
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { getRenderedAppearance, subscribeRenderedAppearance } from "../hooks/useTheme";
 import { T } from "gt-react";
-import { useTranslate } from "../i18n";
 import { resolveDiffThemeName } from "../lib/diffRendering";
 import { PREFERRED_HIGHLIGHTER } from "../lib/syntaxHighlighting";
 
@@ -90,7 +89,6 @@ function acquireDiffWorkerPool(poolSize: number) {
 
 // Plain-text views do not queue a highlight task that could retry a blank first render.
 function DiffWorkerReady({ children }: { children?: ReactNode }) {
-  const t = useTranslate();
   const ready = useDiffWorkerPoolReady(useWorkerPool());
   return ready ? (
     children

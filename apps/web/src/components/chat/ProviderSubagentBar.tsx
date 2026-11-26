@@ -1,4 +1,3 @@
-import { useTranslate } from "../../i18n";
 import {
   formatProviderSubagentStatus,
   type ProviderSubagentStatus,
@@ -27,7 +26,6 @@ export function ProviderSubagentBar(props: {
   readonly onOpenParent: (() => void) | null;
   readonly actions?: ReactNode;
 }) {
-  const t = useTranslate();
   const gt = useGT();
   const { status } = props;
   const messages = useMessages();

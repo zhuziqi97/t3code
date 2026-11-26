@@ -174,7 +174,6 @@ export function useComposerSelection(input: ComposerSelectionInput) {
       model,
       { preserveUnavailableSelection: true },
     );
-    const threadRef = { environmentId: activeThread.environmentId, threadId: activeThread.id };
     const storedDraft = useComposerDraftStore.getState().getComposerDraft(composerDraftTarget);
     const draft = draftModelSelectionApplies(storedDraft, threadHasStarted(activeThread))
       ? storedDraft

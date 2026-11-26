@@ -1,4 +1,3 @@
-import { SETTINGS_NAV_GROUPS } from "./settingsSections";
 import { searchableSetting } from "./settingsSearch";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import {

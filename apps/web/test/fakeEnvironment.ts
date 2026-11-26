@@ -246,6 +246,7 @@ export interface FakeThread {
   readonly pullRequests?: OrchestrationV2ThreadShell["pullRequests"];
   readonly runs: ReadonlyArray<OrchestrationV2Run>;
   readonly items: ReadonlyArray<OrchestrationV2TurnItem>;
+  readonly hasLocalConversation?: boolean;
   readonly runtimeRequests?: OrchestrationV2ThreadProjection["runtimeRequests"];
 }
 
@@ -415,6 +416,9 @@ function projectionOf(thread: FakeThread): OrchestrationV2ThreadProjection {
     contextHandoffs: [],
     contextTransfers: [],
     visibleTurnItems,
+    ...(thread.hasLocalConversation === undefined
+      ? {}
+      : { hasLocalConversation: thread.hasLocalConversation }),
     updatedAt: AT,
   };
 }

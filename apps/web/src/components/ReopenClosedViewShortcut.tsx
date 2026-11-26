@@ -8,7 +8,7 @@ import {
 } from "@t3tools/client-runtime/environment";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import { linkOptions, useNavigate, useParams, useRouter } from "@tanstack/react-router";
-import { msg, useGT } from "gt-react";
+import { msg } from "gt-react";
 import { useEffect, useEffectEvent, useRef } from "react";
 
 import { isCommandPaletteOpen } from "../commandPaletteBus";

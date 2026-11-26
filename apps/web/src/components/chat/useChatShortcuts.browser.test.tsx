@@ -1,4 +1,3 @@
-import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
 import type { KeybindingCommand, ResolvedKeybindingsConfig } from "@t3tools/contracts";
 import { useEffect, useState } from "react";
 import { expect, it } from "vite-plus/test";
