@@ -10742,5 +10742,11 @@
   "4ff72c2acc7f6656": "Loading…",
   "0684698b49273da5": "waiting",
   "3ba4cf953dd20f22": "failed",
-  "5d4558578f4dadd6": "Copy path"
+  "5d4558578f4dadd6": "Copy path",
+  "4d113031758f5d38": "Used workflow runs",
+  "3331998c4c4b3937": "Tried to use workflow runs",
+  "2832b8e00f866c04": "Submitted results",
+  "8ef71bd0d407df16": "Tried to submit results",
+  "22b3a974f8162651": "{status, select, inProgress {Using workflow runs} completed {Used workflow runs} failed {Failed to use workflow runs} declined {Declined to use workflow runs} stopped {Stopped using workflow runs} other {Using workflow runs}}",
+  "1fcabc8a972e7f10": "{status, select, inProgress {Submitting the result} completed {Submitted the result} failed {Failed to submit the result} declined {Declined to submit the result} stopped {Stopped submitting the result} other {Submitting the result}}"
 }

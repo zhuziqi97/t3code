@@ -546,6 +546,22 @@ const T3_TOOL_SENTENCES: ReadonlyMap<string, T3ToolSentence> = new Map<string, T
     },
   ],
   [
+    "Use\nUsing\nUsed\nworkflow runs",
+    {
+      detail: msg(
+        "{status, select, inProgress {Using workflow runs} completed {Used workflow runs} failed {Failed to use workflow runs} declined {Declined to use workflow runs} stopped {Stopped using workflow runs} other {Using workflow runs}}",
+      ),
+    },
+  ],
+  [
+    "Submit\nSubmitting\nSubmitted\nthe result",
+    {
+      detail: msg(
+        "{status, select, inProgress {Submitting the result} completed {Submitted the result} failed {Failed to submit the result} declined {Declined to submit the result} stopped {Stopped submitting the result} other {Submitting the result}}",
+      ),
+    },
+  ],
+  [
     "List\nListing\nListed\nqueued messages",
     {
       detail: msg(

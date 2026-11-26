@@ -21,7 +21,9 @@ export type T3McpToolSummaryAction =
   | "thread-send"
   | "thread-wait"
   | "thread-interrupt"
+  | "workflow"
   | "workflow-stop"
+  | "submit-output"
   | "background-wait"
   | "thread-configuration"
   | "thread-configure"
@@ -359,8 +361,8 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
     ["Handle", "Handling", "Handled", "pending questions"],
     "question-respond",
   ),
-  t3_workflow: tool(["Use", "Using", "Used", "workflow runs"], "thread-send"),
-  t3_submit_output: tool(["Submit", "Submitting", "Submitted", "the result"], "thread-send"),
+  t3_workflow: tool(["Use", "Using", "Used", "workflow runs"], "workflow"),
+  t3_submit_output: tool(["Submit", "Submitting", "Submitted", "the result"], "submit-output"),
   t3_queue_list: tool(["List", "Listing", "Listed", "queued messages"], "queue-list"),
   t3_queue_read: tool(["Read", "Reading", "Read", "a queued message"], "queue-read"),
   t3_queue_edit: tool(["Edit", "Editing", "Edited", "a queued message"], "queue-edit"),

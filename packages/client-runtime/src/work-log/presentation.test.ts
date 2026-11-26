@@ -238,6 +238,23 @@ describe("summarizeToolGroup", () => {
     },
   );
 
+  it.each([
+    ["t3_workflow", "已操作工作流"],
+    ["t3_submit_output", "已提交结果"],
+  ])("summarizes %s by the actual operation", (tool, summary) => {
+    expect(
+      summarizeToolGroup(
+        [
+          entry(tool, {
+            toolData: { server: "t3-code", tool },
+            toolLifecycleStatus: "completed",
+          }),
+        ],
+        resolveChineseMessage,
+      ).summary,
+    ).toBe(summary);
+  });
+
   it("omits the integration suffix for special browser and computer sources", () => {
     expect(
       summarizeToolGroup([
@@ -333,6 +350,8 @@ describe("resolveWorkEntryToolPresentation", () => {
     ["t3_thread_interrupt", "已请求中断 T3 会话"],
     ["t3_thread_fork", "已请求派生当前会话"],
     ["t3_project_create", "已注册项目"],
+    ["t3_workflow", "已操作工作流"],
+    ["t3_submit_output", "已提交结果"],
   ])("keeps Chinese %s labels faithful to requested versus completed operations", (tool, label) => {
     expect(
       resolveWorkEntryToolPresentation(

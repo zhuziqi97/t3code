@@ -5527,5 +5527,11 @@
   "e9e8d926d08e8794": "无法安装浏览器组件。",
   "d9b1ea0021460430": "此主机无法使用浏览器。",
   "d80a6bd58a8af4ab": "无法启动浏览器。",
-  "1ca097af346009a8": "环境准备了 {actual}，预期为 {expected}。请更新服务端后重试。"
+  "1ca097af346009a8": "环境准备了 {actual}，预期为 {expected}。请更新服务端后重试。",
+  "4d113031758f5d38": "已操作工作流",
+  "3331998c4c4b3937": "尝试操作工作流",
+  "2832b8e00f866c04": "已提交结果",
+  "8ef71bd0d407df16": "尝试提交结果",
+  "22b3a974f8162651": "{status, select, inProgress {正在操作工作流} completed {已操作工作流} failed {工作流操作失败} declined {已拒绝操作工作流} stopped {已停止工作流操作} other {正在操作工作流}}",
+  "1fcabc8a972e7f10": "{status, select, inProgress {正在提交结果} completed {已提交结果} failed {提交结果失败} declined {已拒绝提交结果} stopped {已停止提交结果} other {正在提交结果}}"
 }

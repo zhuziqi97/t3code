@@ -389,7 +389,9 @@ export function formatModelSelectionEffort(
   const descriptors = caps.optionDescriptors ?? [];
   const reasoning = descriptors.filter(
     (descriptor) =>
-      isReasoningOption(descriptor) || REASONING_EFFORT_OPTION_IDS.includes(descriptor.id),
+      (descriptor.type === "select" && descriptor.role === "reasoning") ||
+      isReasoningOption(descriptor) ||
+      REASONING_EFFORT_OPTION_IDS.includes(descriptor.id),
   );
   for (const descriptor of reasoning) {
     const id = descriptor.id;

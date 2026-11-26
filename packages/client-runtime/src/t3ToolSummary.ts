@@ -159,6 +159,16 @@ export function summarizeT3ToolCalls(
           );
       break;
     }
+    case "workflow": {
+      label = done
+        ? resolve(msg("Used workflow runs"))
+        : resolve(msg("Tried to use workflow runs"));
+      break;
+    }
+    case "submit-output": {
+      label = done ? resolve(msg("Submitted results")) : resolve(msg("Tried to submit results"));
+      break;
+    }
     case "workflow-stop": {
       const count = countEntities(entityIds("subagentId"));
       label = done
