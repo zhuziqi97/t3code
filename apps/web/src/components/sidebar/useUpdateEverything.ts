@@ -1,5 +1,5 @@
 import { i18n, useTranslate } from "~/i18n";
-import { m } from "~/i18n/messages";
+import { useMessages } from "gt-react";
 import { formatDesktopUpdateMessage } from "@t3tools/client-runtime/i18n";
 import { useAtomValue } from "@effect/atom-react";
 import { connectionErrorText } from "@t3tools/client-runtime/connection";
@@ -58,6 +58,7 @@ export function useUpdateEverything(
   channelSwitch?: ChannelSwitchRelease,
 ) {
   const t = useTranslate();
+  const resolve = useMessages();
   const targetVersion = localUpdateVersion ?? APP_VERSION;
   const { environments } = useEnvironments();
   const environmentIds = environmentIdsKey(environments.map(({ environmentId }) => environmentId));
@@ -68,15 +69,15 @@ export function useUpdateEverything(
     label: environment.label,
     serverConfig: environment.serverConfig,
     connected: environment.connection.phase === "connected",
-    connectionError: connectionErrorText(environment.connection, m),
+    connectionError: connectionErrorText(environment.connection, resolve),
     turnedOff: !environment.entry.enabled,
     hostedByThisApp: isHostedByThisApp(environment),
     canMaintain: canUpdateServer(sessionStates[index]!),
     updateState: updateStates[index]!,
   }));
   const { targets: servers, skipped } = channelSwitch
-    ? collectChannelSwitchTargets(machines, channelSwitch, t)
-    : collectServerUpdateTargets(machines, targetVersion, localUpdateVersion !== null, t);
+    ? collectChannelSwitchTargets(machines, channelSwitch, t, resolve)
+    : collectServerUpdateTargets(machines, targetVersion, localUpdateVersion !== null, t, resolve);
   // Track-only hosts save a setting and restart nothing, so they are neither listed nor counted.
   const moving = servers.filter((server) => server.trackOnly !== true);
   const restarts = collectRestartingMachines(machines, moving, localUpdateVersion !== null);

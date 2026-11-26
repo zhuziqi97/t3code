@@ -57,6 +57,8 @@ import {
 } from "../../test/fakeEnvironment";
 import { act, fakeTimers, render } from "../../test/render";
 
+const ENGLISH_CLIENT_SETTINGS = { ...DEFAULT_CLIENT_SETTINGS, languagePreference: "en" } as const;
+
 const PNG = Uint8Array.from(
   atob(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
@@ -248,7 +250,8 @@ it("opens a linked Linear issue from an inactive thread's sidebar badge", async 
     } satisfies IssueDetail);
   });
   __setClientSettingsForTests({
-    ...DEFAULT_CLIENT_SETTINGS,
+    ...ENGLISH_CLIENT_SETTINGS,
+    boringSidebarMultilineRows: true,
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
   });
   await page.viewport(1400, 900);
@@ -316,7 +319,7 @@ it("a machine chip stashed in one thread restores with its machine in another", 
   const asking = threadWithQuestion("thread-stash-question", "Which file should change?");
   using _environment = installFakeEnvironment([other, asking]);
   __setClientSettingsForTests({
-    ...DEFAULT_CLIENT_SETTINGS,
+    ...ENGLISH_CLIENT_SETTINGS,
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
   });
   const draftId = DraftId.make("draft-stash-machine");
@@ -377,7 +380,7 @@ it("a question that opens while a stashed file is checked keeps a machine stash"
   if (!request || !question) throw new Error("threadWithQuestion has no question");
   using _environment = installFakeEnvironment([thread]);
   __setClientSettingsForTests({
-    ...DEFAULT_CLIENT_SETTINGS,
+    ...ENGLISH_CLIENT_SETTINGS,
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
   });
   usePromptStashStore.getState().stashEntry({
@@ -428,7 +431,7 @@ it("a new draft does not load its reserved thread before the server lists it", a
   using _environment = installFakeEnvironment([]);
   using fetchSpy = vi.spyOn(globalThis, "fetch");
   __setClientSettingsForTests({
-    ...DEFAULT_CLIENT_SETTINGS,
+    ...ENGLISH_CLIENT_SETTINGS,
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
   });
   const draftId = DraftId.make("draft-27443");
@@ -457,7 +460,7 @@ it("a new draft does not load its reserved thread before the server lists it", a
 it("a failed image-only first send of a new thread keeps the new draft", async () => {
   using _environment = installFakeEnvironment([]);
   __setClientSettingsForTests({
-    ...DEFAULT_CLIENT_SETTINGS,
+    ...ENGLISH_CLIENT_SETTINGS,
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
   });
   const draftId = DraftId.make("draft-image-only-interrupted");
@@ -511,7 +514,7 @@ it.each(["new", "existing"] as const)(
       acceptCommands: true,
     });
     __setClientSettingsForTests({
-      ...DEFAULT_CLIENT_SETTINGS,
+      ...ENGLISH_CLIENT_SETTINGS,
       onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
     });
     const draftId = DraftId.make(`draft-upload-wait-${kind}`);
@@ -597,7 +600,7 @@ it("a file picked after the phone composer collapses still attaches", async () =
   using _environment = installFakeEnvironment([thread]);
   await page.viewport(390, 844);
   __setClientSettingsForTests({
-    ...DEFAULT_CLIENT_SETTINGS,
+    ...ENGLISH_CLIENT_SETTINGS,
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
   });
   const router = getRouter(
@@ -611,7 +614,7 @@ it("a file picked after the phone composer collapses still attaches", async () =
   using _uploads = acceptAttachmentUploads();
   const editor = page.getByTestId("composer-editor");
   await expect.element(page.getByText(`Answer 0 for ${thread.id}.`)).toBeVisible();
-  await userEvent.click(editor);
+  await userEvent.click(page.getByRole("button", { name: "Expand composer" }));
   await expect.element(page.getByRole("button", { name: "Attach files" })).toBeVisible();
   const input = document.querySelector<HTMLInputElement>(
     'form[data-chat-composer-form] input[type="file"]',
@@ -626,15 +629,14 @@ it("a file picked after the phone composer collapses still attaches", async () =
   input!.files = files.files;
   input!.dispatchEvent(new Event("change", { bubbles: true }));
 
-  await expect.element(page.getByRole("img", { name: "picked.png" })).toBeVisible();
+  await expect.element(page.getByRole("button", { name: "Preview picked.png" })).toBeVisible();
 });
 
 it("opens the thread actions menu for an older settled thread the shell leaves out", async () => {
   const thread = { ...threadWithHistory("older-settled", 1), olderSettled: true as const };
   using _environment = installFakeEnvironment([thread]);
   __setClientSettingsForTests({
-    ...DEFAULT_CLIENT_SETTINGS,
-    languagePreference: "en",
+    ...ENGLISH_CLIENT_SETTINGS,
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
   });
 
@@ -660,7 +662,7 @@ it("retains each thread's diff selection when returning from another thread or S
   const b = threadWithHistory("diff-selection-b", 1);
   using _environment = installFakeEnvironment([a, b]);
   __setClientSettingsForTests({
-    ...DEFAULT_CLIENT_SETTINGS,
+    ...ENGLISH_CLIENT_SETTINGS,
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
   });
   const aRef = scopeThreadRef(ENVIRONMENT_ID, a.id);
@@ -723,7 +725,7 @@ it("a stashed prompt ending in a file chip restores with the chip", async () => 
   using _stash = isolatePromptStash();
   using _environment = installFakeEnvironment([]);
   __setClientSettingsForTests({
-    ...DEFAULT_CLIENT_SETTINGS,
+    ...ENGLISH_CLIENT_SETTINGS,
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
   });
   const draftId = DraftId.make("draft-28338");
@@ -756,13 +758,14 @@ it("a stashed prompt ending in a file chip restores with the chip", async () => 
 });
 
 it("a rejected send leaves the timeline when a new draft was typed meanwhile", async () => {
+  await page.viewport(1400, 900);
   const thread = threadWithHistory("rejected-send", 1);
   using _environment = installFakeEnvironment([thread], {
     acceptCommands: true,
     holdCommand: (command) => command.type === "message.dispatch",
   });
   __setClientSettingsForTests({
-    ...DEFAULT_CLIENT_SETTINGS,
+    ...ENGLISH_CLIENT_SETTINGS,
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
   });
   const router = getRouter(
@@ -792,12 +795,13 @@ it("a rejected send leaves the timeline when a new draft was typed meanwhile", a
 });
 
 it("Enter on an empty prompt resumes an interrupted thread", async () => {
+  await page.viewport(1400, 900);
   const history = threadWithHistory("interrupted", 1);
   const interruptedRun = { ...history.runs[0]!, status: "interrupted" as const };
   const thread = { ...history, runs: [interruptedRun] };
   using _environment = installFakeEnvironment([thread], { acceptCommands: true });
   __setClientSettingsForTests({
-    ...DEFAULT_CLIENT_SETTINGS,
+    ...ENGLISH_CLIENT_SETTINGS,
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
   });
   const router = getRouter(
@@ -831,7 +835,7 @@ it("opening a thread or returning to the window on a touch tablet does not focus
   // iPad Pro 11 in landscape: the desktop layout, above max-sm.
   await page.viewport(1194, 834);
   __setClientSettingsForTests({
-    ...DEFAULT_CLIENT_SETTINGS,
+    ...ENGLISH_CLIENT_SETTINGS,
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
   });
   const router = getRouter(
@@ -873,7 +877,7 @@ it("a mounted thread view lets go of the thread structures it has replaced", asy
   const other = threadWithHistory("other", 3);
   using _environment = installFakeEnvironment([updated, other]);
   __setClientSettingsForTests({
-    ...DEFAULT_CLIENT_SETTINGS,
+    ...ENGLISH_CLIENT_SETTINGS,
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
   });
   const router = getRouter(createMemoryHistory({ initialEntries: ["/"] }));
@@ -929,7 +933,7 @@ it("a shortcut conditioned on rightPanelOpen sees the thread's open right panel"
     ),
   });
   __setClientSettingsForTests({
-    ...DEFAULT_CLIENT_SETTINGS,
+    ...ENGLISH_CLIENT_SETTINGS,
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
   });
   const router = getRouter(
@@ -964,7 +968,7 @@ it("selecting a side-chat tab focuses that side chat's composer", async () => {
   await page.viewport(1400, 900);
   using _environment = installFakeEnvironment([parent, side, otherSide]);
   __setClientSettingsForTests({
-    ...DEFAULT_CLIENT_SETTINGS,
+    ...ENGLISH_CLIENT_SETTINGS,
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
   });
   const parentRef = scopeThreadRef(ENVIRONMENT_ID, parent.id);
@@ -1009,7 +1013,7 @@ it("a subagent tab shows its read-only bar under no header of its own", async ()
   await page.viewport(1400, 900);
   using _environment = installFakeEnvironment([parent, subagent]);
   __setClientSettingsForTests({
-    ...DEFAULT_CLIENT_SETTINGS,
+    ...ENGLISH_CLIENT_SETTINGS,
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
   });
   const parentRef = scopeThreadRef(ENVIRONMENT_ID, parent.id);
@@ -1044,7 +1048,7 @@ it("/side sends the draft's attachments and context, and keeps them when it does
     holdCommand: (command) => holdFork && command.type === "thread.fork",
   });
   __setClientSettingsForTests({
-    ...DEFAULT_CLIENT_SETTINGS,
+    ...ENGLISH_CLIENT_SETTINGS,
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
   });
   const router = getRouter(
@@ -1134,7 +1138,7 @@ it("/side sends the draft's attachments and context, and keeps them when it does
 it("opening Settings without a page event closes the composer model picker and permissions menu", async () => {
   using _environment = installFakeEnvironment([]);
   __setClientSettingsForTests({
-    ...DEFAULT_CLIENT_SETTINGS,
+    ...ENGLISH_CLIENT_SETTINGS,
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
   });
   const draftId = DraftId.make("draft-29219");

@@ -564,38 +564,44 @@ describe("PreviewView navigation", () => {
       await act(() =>
         history.recordVisitForThread(TEST_THREAD_REF, "http://localhost:3000/hydrated", 124),
       );
-      expect(
-        history.useBrowserHistoryStore.getState().byProjectKey[
-          "environment-1:/workspace/project-a"
-        ],
-      ).toEqual([
-        { url: "http://localhost:3000/hydrated", lastVisitedAt: 124 },
-        { url: "http://localhost:3000/one", lastVisitedAt: 123 },
-      ]);
+      await vi.waitFor(() =>
+        expect(
+          history.useBrowserHistoryStore.getState().byProjectKey[
+            "environment-1:/workspace/project-a"
+          ],
+        ).toEqual([
+          { url: "http://localhost:3000/hydrated", lastVisitedAt: 124 },
+          { url: "http://localhost:3000/one", lastVisitedAt: 123 },
+        ]),
+      );
       await act(() =>
         root.rerender(<PreviewView threadRef={secondThread} tabId="tab-1" visible />),
       );
       await act(() => history.recordVisitForThread(secondThread, "http://localhost:3000/two", 125));
-      expect(
-        history.useBrowserHistoryStore
-          .getState()
-          .byProjectKey["environment-1:/workspace/project-a"]?.map((entry) => entry.url),
-      ).toEqual([
-        "http://localhost:3000/two",
-        "http://localhost:3000/hydrated",
-        "http://localhost:3000/one",
-      ]);
+      await vi.waitFor(() =>
+        expect(
+          history.useBrowserHistoryStore
+            .getState()
+            .byProjectKey["environment-1:/workspace/project-a"]?.map((entry) => entry.url),
+        ).toEqual([
+          "http://localhost:3000/two",
+          "http://localhost:3000/hydrated",
+          "http://localhost:3000/one",
+        ]),
+      );
       await act(() =>
         root.rerender(<PreviewView threadRef={remoteThread} tabId="tab-1" visible />),
       );
       await act(() =>
         history.recordVisitForThread(remoteThread, "http://localhost:3000/remote", 126),
       );
-      expect(
-        history.useBrowserHistoryStore.getState().byProjectKey[
-          "other-environment:/workspace/project-a"
-        ],
-      ).toEqual([{ url: "http://localhost:3000/remote", lastVisitedAt: 126 }]);
+      await vi.waitFor(() =>
+        expect(
+          history.useBrowserHistoryStore.getState().byProjectKey[
+            "other-environment:/workspace/project-a"
+          ],
+        ).toEqual([{ url: "http://localhost:3000/remote", lastVisitedAt: 126 }]),
+      );
       expect(
         history.useBrowserHistoryStore.getState().byProjectKey[
           "environment-1:/workspace/project-a"
@@ -632,11 +638,13 @@ describe("PreviewView navigation", () => {
       await act(() =>
         history.recordVisitForThread(TEST_THREAD_REF, "http://localhost:3000/draft", 126),
       );
-      expect(
-        history.useBrowserHistoryStore.getState().byProjectKey[
-          "environment-1:/workspace/draft-project"
-        ],
-      ).toEqual([{ url: "http://localhost:3000/draft", lastVisitedAt: 126 }]);
+      await vi.waitFor(() =>
+        expect(
+          history.useBrowserHistoryStore.getState().byProjectKey[
+            "environment-1:/workspace/draft-project"
+          ],
+        ).toEqual([{ url: "http://localhost:3000/draft", lastVisitedAt: 126 }]),
+      );
     } finally {
       await act(() => root.unmount());
       history.resetBrowserHistoryForTests();

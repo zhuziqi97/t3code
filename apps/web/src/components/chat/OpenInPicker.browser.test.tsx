@@ -117,7 +117,8 @@ async function setup() {
           environmentId={selected}
           keybindings={DEFAULT_RESOLVED_KEYBINDINGS}
           availableEditors={availableEditors}
-          openInCwd={openInCwd}
+          openInCwd={fileManagerAction === "unavailable" ? null : openInCwd}
+          openInCwdIsFile={fileManagerAction === "reveal"}
           revealFileManager={fileManagerAction === "reveal"}
           displayMode={panel ? "panel" : "toolbar"}
           compact={!panel}
@@ -204,6 +205,7 @@ describe("file manager", () => {
     await using fixture = await setup();
     const { renderPicker, primaryButton, click, pressOpenFavorite } = fixture;
     state.allowed.add(selected);
+    window.localStorage.setItem("t3code:last-editor", JSON.stringify("file-manager"));
     const openInCwd = "/work/project/notes.md";
     await renderPicker(["file-manager"], false, { openInCwd, fileManagerAction: "unavailable" });
 

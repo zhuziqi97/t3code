@@ -151,6 +151,7 @@ it("updates retained native-menu callbacks after a language switch without recre
       { id: "scroll-to-bottom", label: "跳到最新" },
     ],
     { x: 10, y: 20 },
+    "mouse",
   );
   await act(async () => options.onData?.("literal input\n"));
   expect(state.command).toHaveBeenLastCalledWith({

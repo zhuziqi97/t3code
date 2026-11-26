@@ -28,7 +28,10 @@ vi.mock("../state/query", async (original) => ({
 }));
 vi.mock("../state/vcs", async (original) => ({
   ...(await original<typeof import("../state/vcs")>()),
-  vcsEnvironment: { listRefs: () => null },
+  vcsEnvironment: {
+    ...(await original<typeof import("../state/vcs")>()).vcsEnvironment,
+    listRefs: () => null,
+  },
 }));
 
 // Layout is exercised in the real clients; keep DOM interactions independent of virtual measurements.

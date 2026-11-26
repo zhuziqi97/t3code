@@ -38,6 +38,7 @@ it("names the provider in the active language and sends the original URL to the 
       { id: "open-external", label: "在 GitLab 上打开" },
     ],
     { x: 8, y: 12 },
+    "mouse",
   );
   expect(api.shell.openExternal).toHaveBeenCalledExactlyOnceWith(url);
 });

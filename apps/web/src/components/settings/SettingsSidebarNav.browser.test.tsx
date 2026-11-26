@@ -19,6 +19,7 @@ import { retainSettingsScope, validateSettingsRouteSearch } from "./settingsScop
 
 vi.mock("./useAvailableSettingsSearchItems", () => ({
   useAvailableSettingsSearchItems: () => SETTINGS_SEARCH_ITEMS,
+  useHasSecretProvidersEnvironment: () => false,
 }));
 vi.mock("../clerk/T3ConnectSidebarSignIn", () => ({
   T3ConnectSidebarSignIn: () => null,

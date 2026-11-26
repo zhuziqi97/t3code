@@ -3,6 +3,7 @@ import { act, render as renderTestUi, type Screen } from "../../../test/render";
 import { type ReactNode } from "react";
 
 import { expect, it, vi } from "vite-plus/test";
+import { page } from "vite-plus/test/browser";
 import { AsyncResult } from "effect/reactivity";
 import * as Cause from "effect/Cause";
 
@@ -117,7 +118,7 @@ const type = async (input: HTMLInputElement, value: string) =>
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 function search() {
-  return container.querySelector<HTMLInputElement>('input[type="search"]')!;
+  return container.querySelector<HTMLInputElement>('input[role="searchbox"]')!;
 }
 function capture() {
   return container.querySelector<HTMLInputElement>("input[data-keybinding-capture]")!;
@@ -247,11 +248,7 @@ it("selects a translated new command while preserving its value and cancels with
   await render();
   await language("zh");
   await click("添加快捷键");
-  await click("命令");
-  const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
-    (node) => node.textContent?.trim() === "导航：后退",
-  )!;
-  await act(async () => option.click());
+  await page.getByRole("option", { name: /^导航：后退/ }).click();
   expect(button("导航：后退")).toBeDefined();
   await act(async () => capture().focus());
   await language("en");

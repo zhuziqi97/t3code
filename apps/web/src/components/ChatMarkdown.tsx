@@ -202,6 +202,7 @@ import { PullRequestLinkPreview } from "./pullRequest/PullRequestLinkPreview";
 import { IssueLinkPreview, IssueLinkPreviewFallback } from "./issue/IssueLinkPreview";
 import { MarkdownCodeBlock, SuspenseShikiCodeBlock } from "./chat/MarkdownCodeBlock";
 import { createMarkdownRenderer } from "./chat/markdownRenderer";
+import { MarkdownMath } from "./chat/MarkdownMath";
 import type { MarkdownExtensions, WordsHastOptions } from "../markdown/wordsHast";
 import {
   type MarkdownIslandOptions,
@@ -1637,6 +1638,18 @@ const CHAT_MARKDOWN_COMPONENTS = {
       </span>
     );
   },
+  span: function MarkdownSpan({ node, ...props }) {
+    const kind = node?.properties.dataMarkdownMath;
+    const formula = node?.children[0];
+    if ((kind === "inline" || kind === "display") && formula?.type === "element") {
+      const tex = formula.properties.ariaLabel;
+      if (typeof tex === "string") {
+        const { inline } = use(ChatMarkdownRendererContext);
+        return <MarkdownMath tex={tex} display={kind === "display"} focusable={!inline} />;
+      }
+    }
+    return <span {...props} />;
+  },
   code: function MarkdownCode({ node, children, className, ...props }) {
     const { cwd, imageBaseDir, inlineCodeFileLinkMetaByText, fileLinkChip } = use(
       ChatMarkdownRendererContext,
@@ -2022,6 +2035,8 @@ function markdownIslandOptions(state: ChatMarkdownComponentState): MarkdownIslan
           return GITHUB_ALERT_PRESENTATIONS[String(node.properties.dataAlert ?? "")] !== undefined;
         case "div":
           return artifactTemplateFromHastProperties(node.properties) !== null;
+        case "span":
+          return node.properties.dataMarkdownMath !== undefined;
         case "input":
           return node.properties.type === "checkbox" && onTaskListChange !== undefined;
         case "code": {

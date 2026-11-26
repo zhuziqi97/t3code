@@ -186,11 +186,7 @@ export function persistState(state: UiState): void {
         threadLastVisitedAtById: state.threadLastVisitedAtById,
         defaultAdvertisedEndpointKey: state.defaultAdvertisedEndpointKey,
         sidebarProjectScopeKeys: state.sidebarProjectScopeKeys,
-        // Older clients read only this field.
-        sidebarProjectScopeKey:
-          state.sidebarProjectScopeKeys.length === 1
-            ? (state.sidebarProjectScopeKeys[0] ?? null)
-            : null,
+        sidebarProjectScopeKey: state.sidebarProjectScopeKey,
         pullRequestMergeMethod: state.pullRequestMergeMethod,
       } satisfies PersistedUiState),
     );

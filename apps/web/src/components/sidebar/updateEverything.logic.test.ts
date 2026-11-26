@@ -6,6 +6,7 @@ import {
 import { describe, expect, it } from "vite-plus/test";
 import { claimDesktopUpdateNotice } from "../desktopUpdate.logic";
 import { i18n } from "../../i18n";
+import { resolveChineseMessage } from "../../../test/gtCatalog";
 
 import {
   collectChannelSwitchTargets,
@@ -334,6 +335,7 @@ describe("collectServerUpdateTargets", () => {
       "0.0.50",
       true,
       i18n.getFixedT("zh"),
+      resolveChineseMessage,
     );
     expect(
       translated.targets.map(({ serverLabel, targetVersion }) => [serverLabel, targetVersion]),

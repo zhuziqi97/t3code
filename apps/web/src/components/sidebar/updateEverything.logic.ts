@@ -167,6 +167,7 @@ export function collectServerUpdateTargets(
   targetVersion: string,
   releaseArchivesPublished = false,
   t?: TFunction,
+  resolve: MessageResolver = m,
 ): {
   readonly targets: ServerUpdateTarget[];
   readonly skipped: SkippedMachine[];
@@ -184,7 +185,7 @@ export function collectServerUpdateTargets(
     }
     const skip = (reason: string) =>
       skipped.push({ environmentId: machine.environmentId, label: machine.label, reason });
-    const unavailable = unavailableReason(machine, m);
+    const unavailable = unavailableReason(machine, resolve);
     if (config === null || unavailable !== null) {
       skip(unavailable ?? (t ? t("update.skip.notConnected") : "not connected"));
       continue;
@@ -193,7 +194,7 @@ export function collectServerUpdateTargets(
     const managedDenial = managedMachineUpdateDenial(
       config,
       selfUpdate === "desktop-managed" ? undefined : targetVersion,
-      m,
+      resolve,
     );
     if (managedDenial !== undefined) {
       skip(managedDenial);
@@ -205,7 +206,7 @@ export function collectServerUpdateTargets(
       continue;
     }
     if (selfUpdate === "desktop-managed" && !desktopAppUpdate) {
-      skip(m(UPDATE_ON_THAT_MACHINE));
+      skip(resolve(UPDATE_ON_THAT_MACHINE));
       continue;
     }
     const serverChannel = cliReleaseChannelOf(config.environment.serverVersion);
@@ -367,6 +368,7 @@ export function collectChannelSwitchTargets(
   machines: ReadonlyArray<UpdateEverythingMachine>,
   release: ChannelSwitchRelease,
   t?: TFunction,
+  resolve: MessageResolver = m,
 ): { readonly targets: ServerUpdateTarget[]; readonly skipped: SkippedMachine[] } {
   const targets: ServerUpdateTarget[] = [];
   const skipped: SkippedMachine[] = [];
@@ -401,19 +403,19 @@ export function collectChannelSwitchTargets(
       if (
         !("skip" in move) &&
         move.selfUpdate === "desktop-managed" &&
-        unavailableReason(machine, m) === null &&
-        managedMachineUpdateDenial(config, release.version, m) === undefined
+        unavailableReason(machine, resolve) === null &&
+        managedMachineUpdateDenial(config, release.version, resolve) === undefined
       ) {
         targets.push({ ...target(move.selfUpdate, serverVersion), trackOnly: true });
       }
       continue;
     }
-    const unavailable = unavailableReason(machine, m);
+    const unavailable = unavailableReason(machine, resolve);
     if (config === null || serverVersion === undefined || unavailable !== null) {
       skip(unavailable ?? (t ? t("update.skip.notConnected") : "not connected"));
       continue;
     }
-    const managedDenial = managedMachineUpdateDenial(config, release.version, m);
+    const managedDenial = managedMachineUpdateDenial(config, release.version, resolve);
     if (managedDenial !== undefined) {
       skip(managedDenial);
       continue;

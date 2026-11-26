@@ -57,7 +57,7 @@ async function render() {
   );
 }
 function searchInput() {
-  return container.querySelector<HTMLInputElement>('input[type="search"]')!;
+  return container.querySelector<HTMLInputElement>('input[role="searchbox"]')!;
 }
 async function search() {
   await act(async () => {

@@ -107,10 +107,15 @@ function getTimestampFormatter(
   return formatter;
 }
 
+function uiTimestampLocale(): string | undefined {
+  return getActiveLocale() === "zh" ? "zh-CN" : timestampLocale;
+}
+
 function formatTime(date: Date, timestampFormat: TimestampFormat, timeZone?: string): string {
+  const locale = uiTimestampLocale();
   return timeZone
-    ? getTimestampFormatter(timestampFormat, false, timeZone).format(date)
-    : getTimestampFormatter(timestampFormat, false).format(wallClockAsUtc(date));
+    ? getTimestampFormatter(timestampFormat, false, timeZone, locale).format(date)
+    : getTimestampFormatter(timestampFormat, false, "UTC", locale).format(wallClockAsUtc(date));
 }
 
 export function resolveHour12(timestampFormat: TimestampFormat): boolean {
@@ -186,7 +191,7 @@ export function formatFullTimestamp(isoDate: string, timestampFormat: TimestampF
 export function formatShortTimestamp(
   isoDate: string,
   timestampFormat: TimestampFormat,
-  locale?: string,
+  locale = uiTimestampLocale(),
 ): string {
   const date = parseTimestampDate(isoDate);
   if (!date) return "";

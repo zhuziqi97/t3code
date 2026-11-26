@@ -696,47 +696,48 @@ export default function FileBrowserPanel({
           {t("fileBrowser.loading")}
         </div>
       )}
-      {hasNoSearchMatches ? (
-        ready && !isPending && !pathSearch.isPending && !error && !pathSearch.error ? (
-          <div role="status" className="px-3 py-4 text-xs text-muted-foreground">
-            <T>No matching files.</T>
-          </div>
-        ) : null
-      ) : (
-        <FileTree
-          model={model}
-          aria-label={gt("{projectName} files", { projectName })}
-          className="min-h-0 flex-1 overflow-hidden"
-          onClickCapture={(event) => {
-            if (
-              event.defaultPrevented ||
-              event.button !== 0 ||
-              event.ctrlKey ||
-              event.metaKey ||
-              event.shiftKey ||
-              event.altKey ||
-              dragMention.isDragInProgress()
-            ) {
-              return;
-            }
-            // Pierre emits no change for its sole selected row; read before the click to avoid double opens.
-            const selected = model.getSelectedPaths();
-            const path = selected.length === 1 ? selected[0] : undefined;
-            if (!path || entryKindsRef.current.get(path) !== "file") return;
-            const clickedSelectedRow = event.nativeEvent
-              .composedPath()
-              .some(
-                (node) =>
-                  node instanceof HTMLElement && node.getAttribute("data-item-path") === path,
-              );
-            if (!clickedSelectedRow) return;
-            treeSelectionPathRef.current = path;
-            onOpenFile(panelPath(path));
-          }}
-          style={pierreTreeStyle(resolvedTheme)}
-          onPointerOver={titleClippedPierreTreeRow}
-        />
-      )}
+      {hasNoSearchMatches &&
+      ready &&
+      !isPending &&
+      !pathSearch.isPending &&
+      !error &&
+      !pathSearch.error ? (
+        <div role="status" className="px-3 py-4 text-xs text-muted-foreground">
+          <T>No matching files or folders.</T>
+        </div>
+      ) : null}
+      <FileTree
+        model={model}
+        aria-label={gt("{projectName} files", { projectName })}
+        className="min-h-0 flex-1 overflow-hidden"
+        onClickCapture={(event) => {
+          if (
+            event.defaultPrevented ||
+            event.button !== 0 ||
+            event.ctrlKey ||
+            event.metaKey ||
+            event.shiftKey ||
+            event.altKey ||
+            dragMention.isDragInProgress()
+          ) {
+            return;
+          }
+          // Pierre emits no change for its sole selected row; read before the click to avoid double opens.
+          const selected = model.getSelectedPaths();
+          const path = selected.length === 1 ? selected[0] : undefined;
+          if (!path || entryKindsRef.current.get(path) !== "file") return;
+          const clickedSelectedRow = event.nativeEvent
+            .composedPath()
+            .some(
+              (node) => node instanceof HTMLElement && node.getAttribute("data-item-path") === path,
+            );
+          if (!clickedSelectedRow) return;
+          treeSelectionPathRef.current = path;
+          onOpenFile(panelPath(path));
+        }}
+        style={{ ...pierreTreeStyle(resolvedTheme), display: hasNoSearchMatches ? "none" : "flex" }}
+        onPointerOver={titleClippedPierreTreeRow}
+      />
     </div>
   );
 }

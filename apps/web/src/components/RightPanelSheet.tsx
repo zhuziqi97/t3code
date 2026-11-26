@@ -17,6 +17,16 @@ export function RightPanelSheet(props: {
       modal={false}
       onOpenChange={(open, eventDetails) => {
         if (open) return;
+        if (eventDetails.reason === "focus-out") return eventDetails.cancel();
+        if (
+          eventDetails.reason === "outside-press" &&
+          (!(eventDetails.event.target instanceof Element) ||
+            !eventDetails.event.target.matches(
+              '[data-slot="sheet-backdrop"], [data-slot="sheet-viewport"]',
+            ))
+        ) {
+          return eventDetails.cancel();
+        }
         // Base UI's dismiss handler fires on held Esc repeats after a nested popup closes.
         if (eventDetails.reason === "escape-key" && eventDetails.event.repeat) {
           return eventDetails.cancel();

@@ -157,6 +157,7 @@ describe("root reopen shortcut", () => {
     useClosedViewStore
       .getState()
       .remember({ kind: "panel-tab", threadRef: ref, surface: { kind: "diff", id: "diff" } });
+    const reopenedViewId = useClosedViewStore.getState().entries[0]!.id;
     await using _view = await renderShortcut();
     await act(() => {
       expect(press().defaultPrevented).toBe(true);
@@ -164,7 +165,11 @@ describe("root reopen shortcut", () => {
     expect(
       selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, ref).activeSurfaceId,
     ).toBe("diff");
-    expect(state.navigate).toHaveBeenCalledWith({ to: "/$environmentId/$threadId", params: ref });
+    expect(state.navigate).toHaveBeenCalledWith({
+      to: "/$environmentId/$threadId",
+      params: ref,
+      state: { reopenedViewId },
+    });
     expect(useClosedViewStore.getState().entries).toEqual([]);
   });
 
@@ -368,6 +373,7 @@ describe("root reopen shortcut", () => {
       }),
       expect.objectContaining({ command: "sidebar.toggle" }),
       expect.objectContaining({ command: "rightPanel.toggle" }),
+      expect.objectContaining({ command: "rightPanel.new" }),
       expect.objectContaining({ command: "rightPanel.close" }),
       expect.objectContaining({ command: "preview.focusUrl" }),
       expect.objectContaining({ command: "preview.zoomIn" }),

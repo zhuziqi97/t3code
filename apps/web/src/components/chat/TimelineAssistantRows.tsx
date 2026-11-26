@@ -25,6 +25,7 @@ import { readThreadTurnItems } from "../../state/entities";
 import { useV2ItemSupport } from "../../state/v2ItemSupport";
 import { TimelineRowCtx, TimelineRowActivityCtx, type TimelineRow } from "./timelineRowContext";
 import { MESSAGE_HEADING_LEVEL, MessageAuthorHeading } from "./TimelineRowParts";
+import { RunEndStateFeedback, type RunEndFeedback } from "./RunEndStateFeedback";
 
 export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const t = useTranslate();
@@ -83,6 +84,7 @@ export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind
             message={row.message}
             showCopyButton={row.showAssistantCopyButton}
             copyStreaming={row.assistantCopyStreaming}
+            end={ctx.runEndFeedback?.rowId === row.id ? ctx.runEndFeedback.end : null}
           />
         ) : null}
       </div>
@@ -181,6 +183,7 @@ export function AssistantMetaTimelineRow({
 }: {
   row: Extract<TimelineRow, { kind: "assistant-meta" }>;
 }) {
+  const ctx = use(TimelineRowCtx);
   return (
     <div className="px-1">
       <AssistantMessageMeta
@@ -189,6 +192,7 @@ export function AssistantMetaTimelineRow({
         message={row.message}
         showCopyButton={row.showAssistantCopyButton}
         copyStreaming={row.assistantCopyStreaming}
+        end={ctx.runEndFeedback?.rowId === row.id ? ctx.runEndFeedback.end : null}
         alwaysVisible
       />
     </div>
@@ -202,6 +206,7 @@ function AssistantMessageMeta({
   showCopyButton,
   copyStreaming,
   alwaysVisible = false,
+  end = null,
 }: {
   className?: string;
   projectedItem?: Extract<TimelineRow, { kind: "message" }>["projectedItem"];
@@ -209,21 +214,24 @@ function AssistantMessageMeta({
   showCopyButton: boolean;
   copyStreaming: boolean;
   alwaysVisible?: boolean;
+  end?: RunEndFeedback | null;
 }) {
   const ctx = use(TimelineRowCtx);
   const m = useMessages();
+  const timestamp = end?.completedAt ?? message.updatedAt;
 
   return (
     <div
+      data-testid={end ? "latest-run-end-state" : undefined}
       className={cn(
-        "flex items-center gap-2 text-xs tabular-nums transition-opacity duration-200",
-        alwaysVisible
+        "flex flex-wrap items-center gap-x-2 gap-y-1 text-xs tabular-nums transition-opacity duration-200",
+        alwaysVisible || end !== null
           ? "opacity-100"
           : "opacity-0 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/assistant:opacity-100",
         className,
       )}
     >
-      {projectedItem && projectedItem.item.status !== "completed" ? (
+      {!end && projectedItem && projectedItem.item.status !== "completed" ? (
         <AssistantStatusBadge status={projectedItem.item.status} />
       ) : null}
       <AssistantCopyButton
@@ -239,20 +247,19 @@ function AssistantMessageMeta({
       ) : null}
       {!message.streaming && (
         <Tooltip>
-          <TooltipTrigger render={<p className="text-muted-foreground text-xs tabular-nums" />}>
-            {formatDayAwareTimestamp(
-              message.updatedAt,
-              ctx.timestampFormat,
-              undefined,
-              undefined,
-              m,
-            )}
+          <TooltipTrigger
+            render={
+              <time dateTime={timestamp} className="text-muted-foreground text-xs tabular-nums" />
+            }
+          >
+            {formatDayAwareTimestamp(timestamp, ctx.timestampFormat, undefined, undefined, m)}
           </TooltipTrigger>
           <TooltipPopup>
-            {formatChatTimestampTooltip(message.updatedAt, ctx.timestampFormat, m)}
+            {formatChatTimestampTooltip(timestamp, ctx.timestampFormat, m)}
           </TooltipPopup>
         </Tooltip>
       )}
+      {end ? <RunEndStateFeedback end={end} timestampFormat={ctx.timestampFormat} inline /> : null}
     </div>
   );
 }
