@@ -1789,6 +1789,7 @@ it.effect("saves a new secret file for each request and tells the shell simulato
       name: "mcp__t3-code__request_secret",
       input: {
         label: "Login",
+        reason: "Fixture login",
         fields: [
           { name: "email", label: "Email", secret: false },
           { name: "password", label: "Password" },
