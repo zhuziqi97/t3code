@@ -65,7 +65,7 @@ export const FeedbackAwaitingApproval = Schema.Struct({
 });
 export type FeedbackAwaitingApproval = typeof FeedbackAwaitingApproval.Type;
 
-export const FEEDBACK_OFF_MESSAGE =
+const FEEDBACK_OFF_MESSAGE =
   "Agent feedback is off. Turn it on in T3 Code under Settings > Labs, then try again.";
 
 export class FeedbackOffError extends Schema.TaggedError<FeedbackOffError>()(
@@ -120,11 +120,8 @@ export class FeedbackStorageError extends Schema.TaggedError<FeedbackStorageErro
   }
 }
 
-/** The MCP client label `t3 feedback` signs in with, so its reports count as `cli`. */
-export const FEEDBACK_CLI_CLIENT_LABEL = "t3 feedback cli";
-
 /** Listed `t3` command paths a report may name. A CLI test keeps this in step with binCli. */
-export const T3_CLI_COMMANDS: ReadonlyArray<string> = [
+const T3_CLI_COMMANDS: ReadonlyArray<string> = [
   "t3",
   "t3 help",
   "t3 serve",

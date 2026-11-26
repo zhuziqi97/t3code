@@ -137,6 +137,13 @@ const layerAdvertisedTools = McpHttpServer.layerTools.pipe(
   Layer.provide(toolHandlerServices),
 );
 
+it.effect("does not register the upstream agent feedback tool", () =>
+  Effect.gen(function* () {
+    const mcp = yield* McpServer.McpServer;
+    expect(mcp.tools.map(({ tool }) => tool.name)).not.toContain("t3_feedback");
+  }).pipe(Effect.provide(layerAdvertisedTools)),
+);
+
 // Claude Code loads these tools up front instead of behind ToolSearch, outside this budget.
 it.effect("only request_secret and send_to_user ask Claude Code to load them up front", () =>
   Effect.gen(function* () {

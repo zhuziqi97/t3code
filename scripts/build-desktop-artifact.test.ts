@@ -17,6 +17,7 @@ import {
   stageLinuxCaptureHelper,
   WINDOWS_NATIVE_ASAR_UNPACK_GLOB,
   WINDOWS_SERVER_EXTRA_RESOURCES,
+  MAC_APPLE_SPEECH_EXTRA_RESOURCES,
   WINDOWS_SERVER_RESOURCE_SOURCE_DIR,
   WSL_RUNTIME_EXTRA_RESOURCES,
 } from "./build-desktop-artifact.ts";
@@ -953,6 +954,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     for (const resource of [
       ...WSL_RUNTIME_EXTRA_RESOURCES,
       ...LINUX_BROWSER_SECRET_EXTRA_RESOURCES,
+      ...MAC_APPLE_SPEECH_EXTRA_RESOURCES,
     ]) {
       assert.include(
         DESKTOP_FILE_EXCLUSIONS,
@@ -972,6 +974,8 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       "!apps/desktop/resources/browser-secret/**/*",
       "!apps/desktop/prod-resources/browser-secret",
       "!apps/desktop/prod-resources/browser-secret/**/*",
+      "!apps/desktop/prod-resources/apple-speech",
+      "!apps/desktop/prod-resources/apple-speech/**/*",
       "!apps/desktop/prod-resources/windows-server",
       "!apps/desktop/prod-resources/windows-server/**/*",
       "!apps/desktop/prod-resources/wsl-runtime.tar.gz",

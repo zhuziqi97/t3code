@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { cdp, userEvent } from "vite-plus/test/browser";
 import { act, fakeTimers, render } from "../../../test/render";
 import appCss from "~/index.css?inline";
+import { DraftId } from "~/composerDraftStore";
 import { isMacPlatform } from "~/lib/utils";
 import {
   createWorkspaceFocusController,
@@ -200,6 +201,7 @@ function markdownPreview(
   truncated: boolean,
   contents = "- [ ] Keep the rest of this file\n",
   relativePath = "tasks.md",
+  draft = false,
 ) {
   state.file = {
     relativePath,
@@ -207,10 +209,14 @@ function markdownPreview(
     byteLength: truncated ? 1_200_000 : contents.length,
     truncated,
   };
-  return filePreview(relativePath);
+  return filePreview(relativePath, null, draft);
 }
 
-function filePreview(relativePath: string, workspaceMutationId: string | null = null) {
+function filePreview(
+  relativePath: string,
+  workspaceMutationId: string | null = null,
+  draft = false,
+) {
   return (
     <FilePreviewPanel
       environmentId={environmentId}
@@ -218,7 +224,7 @@ function filePreview(relativePath: string, workspaceMutationId: string | null = 
       projectName="Project"
       relativePath={relativePath}
       threadRef={threadRef}
-      composerDraftTarget={threadRef}
+      composerDraftTarget={draft ? DraftId.make("file-preview-draft") : threadRef}
       keybindings={[]}
       availableEditors={[]}
       openInShortcutEnabled={false}
@@ -574,7 +580,7 @@ describe("source file scroll", () => {
 });
 
 describe("rendered Markdown task saves", () => {
-  it("renders the whole file of a truncated read, read-only", async () => {
+  it.each([false, true])("renders the whole truncated file read-only (draft=%s)", async (draft) => {
     using _settings = setup();
     state.assetUrl = {
       _tag: "Success",
@@ -591,8 +597,23 @@ describe("rendered Markdown task saves", () => {
             )
           : realFetch(input, init),
       );
-    await using screen = await render(markdownPreview(true));
+    await using screen = await render(markdownPreview(true, undefined, undefined, draft));
     await expect.element(screen.getByText("Past the first megabyte")).toBeVisible();
+    expect(state.assetResources).toContainEqual(
+      draft
+        ? {
+            _tag: "draft-workspace-file",
+            cwd: "/workspace",
+            path: "/workspace/tasks.md",
+            disposition: "attachment",
+          }
+        : {
+            _tag: "media-file",
+            threadId: threadRef.threadId,
+            path: "/workspace/tasks.md",
+            disposition: "attachment",
+          },
+    );
     const checkbox = screen.container.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
     expect(checkbox.disabled).toBe(true);
     await act(async () => checkbox.click());

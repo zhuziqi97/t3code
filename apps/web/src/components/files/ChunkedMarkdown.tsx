@@ -1,4 +1,4 @@
-import type { ScopedThreadRef } from "@t3tools/contracts";
+import type { EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
 import { LegendList } from "@legendapp/list/react";
 import type { KeyboardEventHandler } from "react";
 
@@ -27,7 +27,8 @@ export function ChunkedMarkdown(props: {
   readonly loading?: boolean;
   readonly cwd: string;
   readonly relativePath: string;
-  readonly threadRef: ScopedThreadRef;
+  readonly environmentId: EnvironmentId;
+  readonly threadRef: ScopedThreadRef | undefined;
   readonly workspaceMutationId: string | null;
   readonly onKeyDown?: KeyboardEventHandler<HTMLDivElement>;
   readonly onTaskListChange?:
@@ -85,6 +86,7 @@ export function ChunkedMarkdown(props: {
                 text={withMarkdownDefinitions(item.chunk.text, props.definitions)}
                 cwd={props.cwd}
                 relativePath={props.relativePath}
+                environmentId={props.environmentId}
                 threadRef={props.threadRef}
                 workspaceMutationId={props.workspaceMutationId}
                 className="mx-auto max-w-4xl px-6"

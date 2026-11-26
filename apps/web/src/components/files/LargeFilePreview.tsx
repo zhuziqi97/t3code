@@ -1,4 +1,4 @@
-import type { ScopedThreadRef } from "@t3tools/contracts";
+import type { EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
 import { DEFAULT_TOKENIZE_MAX_LENGTH } from "@pierre/diffs";
 import type { FileOptions } from "@pierre/diffs/react";
 import { useGT } from "gt-react";
@@ -25,11 +25,12 @@ export default function LargeFilePreview(props: {
   readonly delimiter: "," | "\t" | null;
   /** Renders the file as Markdown resolving links against this workspace; null shows source. */
   readonly markdownCwd: string | null;
-  readonly threadRef: ScopedThreadRef;
+  readonly environmentId: EnvironmentId;
+  readonly threadRef: ScopedThreadRef | undefined;
   readonly workspaceMutationId: string | null;
   readonly copyContents: RefObject<(() => Promise<string>) | null>;
   readonly onRetry: () => void;
-  readonly onPostRender?: FileOptions<unknown, undefined>["onPostRender"];
+  readonly onPostRender: FileOptions<unknown, undefined>["onPostRender"];
   readonly revealLine: number | null;
   readonly revealRequestId: number;
   readonly wordWrap: boolean;
@@ -84,6 +85,7 @@ function MarkdownText(
       loading={!props.file.done}
       cwd={props.markdownCwd}
       relativePath={props.name}
+      environmentId={props.environmentId}
       threadRef={props.threadRef}
       workspaceMutationId={props.workspaceMutationId}
     />

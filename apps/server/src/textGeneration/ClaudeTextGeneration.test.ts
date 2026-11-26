@@ -166,6 +166,7 @@ it.layer(layerClaudeTextGenerationTest)("ClaudeTextGeneration", (it) => {
       expect(JSON.parse(yield* fs.readFileString(settingsLog))).toEqual({
         env: { ORIGIN: "project" },
         disableAllHooks: true,
+        fastMode: false,
       });
     }),
   );
@@ -210,6 +211,7 @@ it.layer(layerClaudeTextGenerationTest)("ClaudeTextGeneration", (it) => {
         env: { ENDPOINT: "user", SHARED: "launch" },
         permissions: { deny: ["Read(./private/**)", "Read(./keys/**)"] },
         disableAllHooks: true,
+        fastMode: false,
       });
     }),
   );

@@ -36,16 +36,6 @@ export function feedbackRequestDisplay(
   }
 }
 
-/** Exactly what Send sends: the outline, or with the conversation included, its text too. */
-export function feedbackCardPreview(
-  item: Pick<FeedbackRequestItem, "preview" | "conversationTrace">,
-  includeConversation: boolean,
-): AgentFeedbackPreview {
-  return includeConversation && item.conversationTrace !== undefined
-    ? { ...item.preview, trace: item.conversationTrace }
-    : item.preview;
-}
-
 const KIND_LABELS: Record<AgentFeedbackPreview["kind"], string> = {
   bug: msg("Bug"),
   confusing: msg("Confusing"),
@@ -127,19 +117,4 @@ export function feedbackConversationHint(trace: Trace, resolve: MFunctionType = 
       { textTurns: textSpan(trace) },
     ),
   );
-}
-
-/** The server's own message for a failed answer, else a generic one. */
-export function feedbackRequestFailureMessage(
-  failure: unknown,
-  resolve: MFunctionType = mFallback,
-): string {
-  return typeof failure === "object" &&
-    failure !== null &&
-    "_tag" in failure &&
-    failure._tag === "AgentFeedbackRequestError" &&
-    "message" in failure &&
-    typeof failure.message === "string"
-    ? failure.message
-    : resolve(msg("Could not send your answer. Try again."));
 }

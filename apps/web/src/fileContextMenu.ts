@@ -1,4 +1,9 @@
-import { EDITORS, type ContextMenuItem, type EnvironmentId } from "@t3tools/contracts";
+import {
+  EDITORS,
+  type ContextMenuItem,
+  type EditorId,
+  type EnvironmentId,
+} from "@t3tools/contracts";
 import {
   useEditorAction,
   usePreferredEditor,
@@ -15,6 +20,7 @@ import {
   revealInFileExplorerLabelForOs,
 } from "~/components/preview/fileExplorerLabel";
 import { readLocalApi } from "./localApi";
+import { useEditorMenuIcons } from "./editorMenuIcons";
 import { serverEnvironment } from "./state/server";
 import { shellEnvironment } from "./state/shell";
 import { useAtomCommand } from "./state/use-atom-command";
@@ -74,6 +80,7 @@ function buildFileContextMenuItems(
   input: {
     readonly hasAbsolutePath: boolean;
     readonly capabilities: FileContextMenuCapabilities;
+    readonly editorIcons: ReadonlyMap<EditorId, string>;
   },
   t: TFunction = i18n.t,
 ): readonly ContextMenuItem<FileContextMenuAction>[] {
@@ -99,6 +106,7 @@ function buildFileContextMenuItems(
       label: t("fileMenu.openWith"),
       children: editorIds.map((editorId) => {
         const reason = input.capabilities.editorUnavailableReason?.(editorId);
+        const iconImage = editorId === "browser" ? undefined : input.editorIcons.get(editorId);
         const label =
           editorId === "browser"
             ? t("chat.editor.browser")
@@ -107,6 +115,7 @@ function buildFileContextMenuItems(
           id: `editor:${editorId}` as FileContextMenuAction,
           label: reason ? `${label}: ${reason}` : label,
           ...(reason ? { disabled: true } : {}),
+          ...(iconImage === undefined ? {} : { iconImage }),
         };
       }),
     });
@@ -125,6 +134,7 @@ export function useFileContextMenu(
 
   const availableEditors = serverConfig?.availableEditors ?? [];
   const editorAction = useEditorAction(environmentId, availableEditors, workspace);
+  const editorIcons = useEditorMenuIcons(editorAction.editorIds);
   const [, setPreferredEditor] = usePreferredEditor();
   const capabilities: FileContextMenuCapabilities = {
     // WSL can reveal in Windows Explorer despite reporting Linux; use server wording.
@@ -210,6 +220,7 @@ export function useFileContextMenu(
       {
         hasAbsolutePath: resolveFileContextMenuAbsolutePath(target) !== null,
         capabilities,
+        editorIcons,
       },
       t,
     );
@@ -225,6 +236,7 @@ export function useFileContextMenu(
         {
           hasAbsolutePath: resolveFileContextMenuAbsolutePath(target) !== null,
           capabilities,
+          editorIcons,
         },
         t,
       ),

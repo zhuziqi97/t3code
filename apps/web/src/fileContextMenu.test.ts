@@ -32,6 +32,9 @@ vi.mock("./state/session", () => ({
 vi.mock("./browserEditorAction", () => ({
   useBrowserEditorAction: () => ({ unavailableReason: null, open: state.browser }),
 }));
+vi.mock("./editorMenuIcons", () => ({
+  useEditorMenuIcons: () => new Map([["vscode", "data:image/png,fixture"]]),
+}));
 vi.mock("./remoteOpen", () => ({
   useRemoteOpenState: () => ({ mode: "local-exec" }),
   useRemoteOpenResolution: () => ({ state: { mode: "local-exec" }, isResolved: true }),
@@ -106,11 +109,16 @@ it("uses browser by default, remembers explicit editors and keeps system open an
     projectId: ProjectId.make("project"),
     workspacePath: BASE_TARGET.workspaceRoot,
   });
-  expect(menu.buildItems(BASE_TARGET).map((item) => item.id)).toEqual([
+  const items = menu.buildItems(BASE_TARGET);
+  expect(items.map((item) => item.id)).toEqual([
     "open-editor",
     "open",
     "reveal-in-folder",
     "open-with",
+  ]);
+  expect(items.find((item) => item.id === "open-with")?.children).toEqual([
+    expect.objectContaining({ id: "editor:browser" }),
+    expect.objectContaining({ id: "editor:vscode", iconImage: "data:image/png,fixture" }),
   ]);
   await menu.activate("open-editor", { ...BASE_TARGET, filePath: "src/index.ts:10:3" });
   expect(state.browser).toHaveBeenCalledExactlyOnceWith(
