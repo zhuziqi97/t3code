@@ -805,6 +805,46 @@ it("rebuilds the template from this checkout and sends a child T3's task prompt"
   assert.notEqual(prompt?.text, childCase.prompt);
 });
 
+it.effect("does not advertise or simulate upstream agent feedback in Convene", () =>
+  Effect.gen(function* () {
+    const name = "mcp__t3-code__t3_feedback";
+    const base = buildBase(
+      {
+        ...template,
+        tools: [...template.tools, { name, input_schema: { type: "object" } }],
+      },
+      { model: "claude-sonnet-5-5", keepUserInstructions: false },
+    );
+    assert.notInclude(
+      base.t3.map((tool) => tool.name),
+      name,
+    );
+    assert.notInclude(
+      base.deferred.map((tool) => tool.name),
+      name,
+    );
+    assert.notInclude(JSON.stringify(base.system), "t3_feedback");
+    const sample = makeSample(
+      {
+        ...childCase,
+        setup: {
+          ...childCase.setup,
+          world: { ...childCase.setup.world, agentFeedback: "auto" },
+          mocks: { t3_feedback: { sent: true } },
+        },
+      },
+      base,
+    );
+    const result = yield* answerToolCall(
+      sample,
+      { apiKey: "", model: "gpt-6-luna", effort: "low", maxSteps: 1, shellModel: "gpt-6-luna" },
+      { type: "tool_use", id: "attempt-feedback", name, input: {} },
+    );
+    assert.isTrue(result.is_error);
+    assert.equal(result.content, "Tool 't3_feedback' not found");
+  }).pipe(Effect.provide(FetchHttpClient.layer)),
+);
+
 it("lists link tools only while a case turns the beta on, and sends chips as T3 projects them", () => {
   const off = buildBase(template, { model: "claude-sonnet-5-5", keepUserInstructions: false });
   const on = buildBase(template, {
@@ -1010,19 +1050,25 @@ it("lists and reads world PRs in their own state, with the diff when asked", () 
   ).checks.map((check) => check.log !== null);
   assert.deepEqual(logs, [true, true, true, true, true, false]);
   assert.deepEqual(ciNames({}), ["Lint"]);
-  const ciRead: Readonly<Record<string, unknown>> = t3Default(ciSample, "pull_request_read", {
+  const ciRead = t3Default(ciSample, "pull_request_read", {
     number: 7,
   });
+  assert(ciRead !== undefined && "checks" in ciRead);
   assert.deepEqual(ciRead.checks, { passed: 1, pending: 1, failed: ["Lint"] });
-  const read: Readonly<Record<string, unknown>> = t3Default(sample, "pull_request_read", {
+  const read = t3Default(sample, "pull_request_read", {
     number: 5,
     include: ["diff", "comments"],
   });
-  assert(read !== undefined && "diff" in read);
+  assert(
+    read !== undefined &&
+      "diff" in read &&
+      "state" in read &&
+      "headSha" in read &&
+      "conversation" in read,
+  );
   assert.deepEqual(read.diff, { patch: "+old", truncated: false, nextCursor: null });
-  assert("summary" in read && "conversation" in read);
-  assert.propertyVal(read.summary, "state", "merged");
-  assert.propertyVal(read.summary, "headSha", "pr-head");
+  assert.equal(read.state, "merged");
+  assert.equal(read.headSha, "pr-head");
   assert.nestedPropertyVal(read.conversation, "comments[0].author", "mark");
 });
 
