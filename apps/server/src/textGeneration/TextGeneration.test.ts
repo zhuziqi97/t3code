@@ -6,7 +6,7 @@ import * as Result from "effect/Result";
 import * as Stream from "effect/Stream";
 import { describe, expect } from "vite-plus/test";
 
-import { ProviderInstanceId, ProviderDriverKind } from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId, ProviderDriverKind } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 
 import type { ProviderInstance } from "@t3tools/provider-core/server/driver";
@@ -40,12 +40,13 @@ const makeStubTextGeneration = (
 const makeStubInstance = (
   instanceId: ProviderInstanceId,
   textGeneration: TextGeneration.TextGeneration["Service"],
+  driverKind = ProviderDriverKind.make(instanceId),
 ): ProviderInstance =>
   ({
     instanceId,
-    driverKind: instanceId as unknown as ProviderInstance["driverKind"],
+    driverKind,
     continuationIdentity: {
-      driverKind: instanceId as unknown as ProviderInstance["driverKind"],
+      driverKind,
       continuationKey: `${instanceId}:test`,
     },
     displayName: undefined,
@@ -53,7 +54,7 @@ const makeStubInstance = (
     snapshot: {
       getSnapshot: Effect.succeed({
         instanceId,
-        driver: ProviderDriverKind.make(String(instanceId)),
+        driver: driverKind,
         enabled: true,
         installed: true,
         version: null,
@@ -94,6 +95,97 @@ const makeStubRegistry = (
 };
 
 describe("TextGeneration.make", () => {
+  it.effect.each([true, false])(
+    "uses an explicitly selected ACP model only when the project allows it (fallback ready=%s)",
+    (fallbackReady) =>
+      Effect.gen(function* () {
+        const instanceId = ProviderInstanceId.make("acpRegistry_local");
+        const projectId = ProjectId.make("project-without-acp");
+        const acpDriver = ProviderDriverKind.make("acpRegistry");
+        const acp = makeStubInstance(
+          instanceId,
+          makeStubTextGeneration({
+            generateBranchName: ({ modelSelection }) =>
+              Effect.succeed({ branch: modelSelection.model ?? "unexpected-default" }),
+          }),
+          acpDriver,
+        );
+        const claude = makeStubInstance(
+          ProviderInstanceId.make("claudeAgent"),
+          makeStubTextGeneration({
+            generateBranchName: () => Effect.succeed({ branch: "claude-fallback" }),
+            generateReviewGuide: () => Effect.succeed({ stops: [] }),
+          }),
+        );
+        // The live snapshot may differ from the settings snapshot; ACP is still explicit-only.
+        const heldAsCodex = makeStubInstance(
+          ProviderInstanceId.make("codex"),
+          makeStubTextGeneration({}),
+          acpDriver,
+        );
+        const modelSelection = createModelSelection(instanceId, "explicit-model");
+        const settings = ServerSettings.layerTest({
+          providerInstances: { [instanceId]: { driver: acpDriver, enabled: true, config: {} } },
+          textGenerationModelSelection: modelSelection,
+          projectSettingsOverrides: {
+            [projectId]: { providerInstances: { [instanceId]: { enabled: false } } },
+          },
+        });
+        const generation = yield* TextGeneration.make.pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              settings,
+              layerTextGenerators,
+              ProviderInstallationGate.layer,
+              Layer.succeed(
+                ProviderInstanceRegistry.ProviderInstanceRegistry,
+                makeStubRegistry([acp, heldAsCodex, ...(fallbackReady ? [claude] : [])]),
+              ),
+              Layer.mock(SourceControlProviderRegistry.SourceControlProviderRegistry)({
+                resolveLink: () => Effect.die("No link lookup expected"),
+              }),
+            ),
+          ),
+        );
+        const input = { cwd: process.cwd(), message: "Outline branch work", modelSelection };
+        expect(yield* generation.generateBranchName(input)).toEqual({ branch: "explicit-model" });
+        const disabled = yield* generation
+          .generateBranchName({ ...input, projectId })
+          .pipe(Effect.result);
+        expect(disabled).toMatchObject(
+          fallbackReady
+            ? { _tag: "Success", success: { branch: "claude-fallback" } }
+            : {
+                _tag: "Failure",
+                failure: {
+                  detail: "The selected text generation provider is disabled for this project.",
+                },
+              },
+        );
+        const review = yield* generation
+          .generateReviewGuide({
+            cwd: process.cwd(),
+            projectCwd: process.cwd(),
+            number: 12,
+            title: "Review a change",
+            description: "",
+            baseBranch: "main",
+            baseCommit: "base",
+            settledReview: "",
+            modelSelection,
+          })
+          .pipe(Effect.result);
+        expect(review).toMatchObject(
+          fallbackReady
+            ? { _tag: "Success", success: { stops: [] } }
+            : {
+                _tag: "Failure",
+                failure: { detail: expect.stringContaining("Review guides need a coding agent") },
+              },
+        );
+      }),
+  );
+
   it.effect("retains supplied subject context in the provider prompt", () =>
     Effect.gen(function* () {
       const instanceId = ProviderInstanceId.make("codex");

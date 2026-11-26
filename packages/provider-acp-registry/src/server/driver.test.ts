@@ -379,7 +379,7 @@ describe("acpRegistrySnapshotReadiness", () => {
     });
 
     expect(snapshot.auth).toEqual({ status: "unknown", canLogout: false });
-    expect(snapshot.supportsTextGeneration).toBe(false);
+    expect(snapshot.supportsTextGeneration).toBeUndefined();
     expect(
       snapshot.models.map(({ slug, name, isCustom, isDefault }) => ({
         slug,
@@ -728,7 +728,11 @@ it.layer(driverLayer, { excludeTestServices: true })("AcpRegistryDriver", (it) =
             source: "local",
             commandPath: "agent",
             customModels: [
-              toCustomModelSetting({ slug: "retained-model", name: "Retained model" }),
+              toCustomModelSetting({
+                slug: "retained-model",
+                name: "Retained model",
+                capabilities: null,
+              }),
             ],
           }),
         }).pipe(

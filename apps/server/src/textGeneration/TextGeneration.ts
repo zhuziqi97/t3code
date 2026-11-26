@@ -88,7 +88,7 @@ export const make = Effect.gen(function* () {
   ) {
     const textGenerator = yield* textGenerators.runner(selection.instanceId);
     // A review guide reaches a text generator only through a fallback; it needs an agent instead.
-    const textGeneratorId = selection.instanceId;
+    const requestedInstanceId = selection.instanceId;
     const textGeneratorCannotRun =
       textGenerator !== undefined && operation === "generateReviewGuide";
     if (textGenerator !== undefined && !textGeneratorCannotRun) {
@@ -105,10 +105,32 @@ export const make = Effect.gen(function* () {
     const now = DateTime.toEpochMillis(yield* DateTime.now);
     const selected = snapshots.find((provider) => provider.instanceId === selection.instanceId);
     const selectedDisabled = selected?.enabled === false;
+    const readSettings = serverSettings.getSettings.pipe(
+      Effect.mapError(
+        (cause) =>
+          new TextGenerationError({
+            operation,
+            detail: "Could not read text generation settings.",
+            cause,
+          }),
+      ),
+    );
+    const selectedAcp = selected?.driver === "acpRegistry";
+    const projectSettings = selectedAcp && projectId != null ? yield* readSettings : undefined;
+    const disabledInProject =
+      projectSettings !== undefined &&
+      !resolveProjectProviderInstanceEnabled(
+        projectSettings,
+        projectId ?? null,
+        selection.instanceId,
+      );
+    const acpCannotInvestigate = selectedAcp && operation === "generateReviewGuide";
     // Only a failed probe counts: a pending one is also not installed yet.
     const unusable =
       textGeneratorCannotRun ||
       selectedDisabled ||
+      disabledInProject ||
+      acpCannotInvestigate ||
       (selected?.enabled === true &&
         (!isProviderTextGenerationCapable(selected) ||
           selected.models.find((model) => model.slug === selection.model)
@@ -116,25 +138,17 @@ export const make = Effect.gen(function* () {
           (selected.status === "error" &&
             (!selected.installed || selected.auth.status === "unauthenticated"))));
     if (unusable || exhaustedUsageWindow(selected, now, selection.model)) {
-      const settings = yield* serverSettings.getSettings.pipe(
-        Effect.mapError(
-          (cause) =>
-            new TextGenerationError({
-              operation,
-              detail: "Could not read fallback model settings.",
-              cause,
-            }),
-        ),
-      );
+      const settings = projectSettings ?? (yield* readSettings);
       const rejected = selection;
       const fallbackWhere = (sameInstance: boolean) =>
         fallbackTextGenerationModelSelection(
           settings.providerInstances,
-          (instanceId, driver, model) => {
+          (instanceId, _driver, model) => {
             const provider = snapshots.find((candidate) => candidate.instanceId === instanceId);
             return (
               (sameInstance ? model !== rejected.model : instanceId !== rejected.instanceId) &&
               provider?.enabled === true &&
+              provider.driver !== "acpRegistry" &&
               resolveProjectProviderInstanceEnabled(settings, projectId ?? null, instanceId) &&
               provider.installed === true &&
               provider.auth.status !== "unauthenticated" &&
@@ -143,7 +157,7 @@ export const make = Effect.gen(function* () {
               isProviderTextGenerationCapable(provider) &&
               provider.models.find((candidate) => candidate.slug === model)
                 ?.supportsTextGeneration !== false &&
-              (operation !== "generateReviewGuide" || INVESTIGATING_DRIVERS.has(driver)) &&
+              (operation !== "generateReviewGuide" || INVESTIGATING_DRIVERS.has(provider.driver)) &&
               !exhaustedUsageWindow(provider, now, model)
             );
           },
@@ -152,7 +166,10 @@ export const make = Effect.gen(function* () {
       // Another instance first; the rejected instance's other models only when none qualifies.
       selection = fallbackWhere(false) ?? fallbackWhere(true) ?? selection;
     }
-    if (textGeneratorCannotRun && selection.instanceId === textGeneratorId) {
+    if (
+      (textGeneratorCannotRun || acpCannotInvestigate) &&
+      selection.instanceId === requestedInstanceId
+    ) {
       return yield* new TextGenerationError({
         operation,
         detail:
@@ -164,6 +181,12 @@ export const make = Effect.gen(function* () {
         operation,
         detail:
           "No text generation provider is available. Enable a provider that can generate text in Settings → Providers.",
+      });
+    }
+    if (disabledInProject && selection.instanceId === requestedInstanceId) {
+      return yield* new TextGenerationError({
+        operation,
+        detail: "The selected text generation provider is disabled for this project.",
       });
     }
     return yield* installationGate.execute(

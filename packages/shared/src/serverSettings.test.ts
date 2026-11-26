@@ -88,6 +88,18 @@ describe("fallbackTextGenerationModelSelection", () => {
     );
     expect(fallback?.instanceId).toBe(configured);
   });
+
+  it("excludes ACP Registry from automatic fallback even under a built-in instance ID", () => {
+    const providerInstances = {
+      codex: { driver: ProviderDriverKind.make("acpRegistry"), config: {} },
+    };
+    expect(
+      fallbackTextGenerationModelSelection(
+        providerInstances,
+        (instanceId) => instanceId === "codex" || instanceId === "claudeAgent",
+      )?.instanceId,
+    ).toBe("claudeAgent");
+  });
 });
 
 describe("serverSettings helpers", () => {

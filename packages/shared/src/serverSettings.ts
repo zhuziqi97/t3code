@@ -101,6 +101,12 @@ export function fallbackTextGenerationModelSelection(
     ),
   ];
   for (const [instanceId, driver] of candidates) {
+    const configuredDriver = providerInstances[instanceId]?.driver;
+    if (
+      configuredDriver !== undefined &&
+      !TEXT_GENERATION_FALLBACK_DRIVERS.includes(configuredDriver)
+    )
+      continue;
     for (const selection of selectionsFor(instanceId, driver)) {
       if (selection.model !== null && isEnabled(instanceId, driver, selection.model))
         return selection;
