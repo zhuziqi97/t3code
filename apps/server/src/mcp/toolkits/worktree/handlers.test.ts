@@ -20,7 +20,6 @@ import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Stream from "effect/Stream";
 
-import * as SqlitePersistence from "../../../persistence/Sqlite.ts";
 import * as EffectOutbox from "../../../orchestration-v2/EffectOutbox.ts";
 import * as ServerConfig from "../../../config.ts";
 import * as GitWorkflowService from "../../../git/GitWorkflowService.ts";
@@ -112,6 +111,11 @@ const handoffFrom = <A, E>(
             Effect.succeed(McpToolAccessTestkit.idleThreadProjection(shell())),
           dispatch: () => Effect.succeed({ sequence: 1, storedEvents: [] }),
         }),
+        Layer.mock(EffectOutbox.EffectOutboxV2)({
+          awaitSettled: () => Effect.void,
+          get: (id) =>
+            Effect.succeedSome({ id, status: "succeeded" } as EffectOutbox.OrchestrationEffectV2),
+        }),
         Layer.mock(ProjectService.ProjectService)({
           getById: () =>
             Effect.succeedSome({
@@ -166,9 +170,7 @@ const handoffFrom = <A, E>(
     ),
   );
   const dependencies = Layer.mergeAll(
-    service.pipe(
-      Layer.provide(EffectOutbox.layer.pipe(Layer.provide(SqlitePersistence.layerMemory))),
-    ),
+    service,
     Layer.succeed(McpInvocationContext.McpInvocationContext, scope),
     Layer.mock(ThreadManagementService.ThreadManagementService)({
       getThreadShell: () => Effect.succeed(shell()),

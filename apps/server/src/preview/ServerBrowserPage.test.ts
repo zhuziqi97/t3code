@@ -1029,7 +1029,7 @@ describe("server browser type", () => {
         evaluate: focusAnswer,
         evaluateHandle: async () => ({ asElement: () => null, dispose: async () => {} }),
       }),
-      keyboard: { insertText: async (text: string) => void typed.push(text) },
+      keyboard: { type: async (text: string) => void typed.push(text) },
     }) as unknown as Page;
 
   it("types into the focused field when Playwright's utility world never answers", async () => {

@@ -1242,12 +1242,14 @@ export const layer: Layer.Layer<
           records: providerMessage.context?.records ?? [],
         }),
       );
-      const slashCommand = isSlashCommandMessage(providerMessage);
       const goalDriver =
         session.driver === "codex" ||
         session.driver === "claudeAgent" ||
         session.providerSession.capabilities.turns.supportsNativeGoals === true;
-      const goalCommand = goalDriver && parseGoalCommand(providerMessage) !== null;
+      const parsedGoal = parseGoalCommand(providerMessage);
+      const goalCommand = goalDriver && parsedGoal !== null;
+      const slashCommand =
+        isSlashCommandMessage(providerMessage) && (parsedGoal === null || goalCommand);
       // Part of the user text, so every way a turn starts carries it, after the user's own words.
       const userText =
         run.outputSchema === undefined || goalCommand || isProviderCommand(providerMessage)

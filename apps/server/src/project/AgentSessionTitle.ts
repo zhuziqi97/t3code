@@ -1,3 +1,5 @@
+import { splitsSurrogatePair } from "@t3tools/shared/assistantCitations";
+
 /** Find the first code-unit offset after context envelopes injected into a Codex message. */
 function skipLeadingCodexContext(text: string): number {
   const contextTags = [
@@ -64,6 +66,12 @@ function skipLeadingCodexContext(text: string): number {
   return offset;
 }
 
+export function truncateImportedThreadTitle(text: string): string {
+  const lineEnd = text.indexOf("\n");
+  const end = lineEnd === -1 ? 100 : Math.min(lineEnd, 100);
+  return text.slice(0, splitsSurrogatePair(text, end) ? end - 1 : end).trim();
+}
+
 /** Derive a visible title without mistaking Codex-injected context for the user request. */
 export function deriveImportedThreadTitle(
   text: string,
@@ -73,11 +81,7 @@ export function deriveImportedThreadTitle(
   const visibleText = request
     .replace(/^\s*<wake(?:\s[^>]*)?>([\s\S]*?)(?:<\/wake>|$)/, "$1")
     .trimStart();
-  const lineEnd = visibleText.indexOf("\n");
-  const firstLine = visibleText
-    .slice(0, lineEnd === -1 ? visibleText.length : lineEnd)
-    .slice(0, 100)
-    .trim();
+  const firstLine = truncateImportedThreadTitle(visibleText);
   return firstLine && firstLine.length > 0 ? firstLine : null;
 }
 

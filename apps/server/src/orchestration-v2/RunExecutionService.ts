@@ -1359,6 +1359,9 @@ export const layer: Layer.Layer<
                 ...(input.loadRunInterruptReason === undefined
                   ? {}
                   : { loadRunInterruptReason: input.loadRunInterruptReason }),
+                ...(input.interruptMessage === undefined
+                  ? {}
+                  : { interruptMessage: input.interruptMessage }),
                 openRunOwnedSubagents: openSubagents,
                 openRunOwnedSubagentsTerminal: terminal,
                 ...(abandonedProviderTurn === undefined ? {} : { abandonedProviderTurn }),

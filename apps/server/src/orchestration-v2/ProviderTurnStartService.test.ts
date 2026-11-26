@@ -161,7 +161,14 @@ function startWithMissingWorktree(
     contextTransfers: [],
     turnItems: [],
   } as unknown as OrchestrationV2ThreadProjection;
-  let projectionReadCount = 0;
+  const readRecovery = vi.fn(() =>
+    Effect.fail(
+      new ProjectionStore.ProjectionStoreReadError({
+        threadId,
+        cause: "simulated inherited-background projection failure",
+      }),
+    ),
+  );
   const writeIfRunCurrent = vi.fn(() =>
     Effect.succeed({ committed: true, storedEvents: [] } as never),
   );
@@ -223,30 +230,17 @@ function startWithMissingWorktree(
             Effect.succeedSome({ workspaceRoot: "/tmp/provider-turn-start-project" } as never),
         }),
         Layer.mock(ProjectionStore.ProjectionStoreV2)({
-          getThreadRecords: () => {
-            projectionReadCount += 1;
-            return Effect.succeed(projection);
-          },
-          getTurnStartContext: () => {
-            projectionReadCount += 1;
-            return Effect.succeed({
+          getThreadRecords: () => Effect.succeed(projection),
+          getTurnStartContext: () =>
+            Effect.succeed({
               ...projection,
               hasConversation: projection.messages.some(
                 (m) =>
                   m.role === "user" &&
                   (m.text.trim().toLowerCase() !== "/compact" || m.attachments.length > 0),
               ),
-            });
-          },
-          getRuntimeRecoveryProjection: () => {
-            projectionReadCount += 1;
-            return Effect.fail(
-              new ProjectionStore.ProjectionStoreReadError({
-                threadId,
-                cause: "simulated inherited-background projection failure",
-              }),
-            );
-          },
+            }),
+          getRuntimeRecoveryProjection: readRecovery,
         }),
         Layer.mock(ProviderSessionManager.ProviderSessionManagerV2)({}),
         Layer.mock(ProviderAuthService.ProviderAuthService)({
@@ -269,7 +263,7 @@ function startWithMissingWorktree(
     createWorktree,
     writeIfRunCurrent,
     startRootRun,
-    projectionReads: () => projectionReadCount,
+    readRecovery,
   };
 }
 
@@ -279,7 +273,7 @@ it("does not commit running state when inherited background routing cannot be re
   const error = await harness.start;
 
   expect(error._tag).toBe("Failure");
-  expect(harness.projectionReads()).toBe(3);
+  expect(harness.readRecovery).toHaveBeenCalledWith(expect.any(String));
   expect(harness.pruneWorktrees).toHaveBeenCalledWith({ cwd: "/tmp/provider-turn-start-project" });
   expect(harness.createWorktree).toHaveBeenCalledWith({
     cwd: "/tmp/provider-turn-start-project",
@@ -628,6 +622,8 @@ function makeLocalCommandHarness(input: {
       projectId: ProjectId.make("project-native-account-command"),
       branch: input.worktreePath === undefined ? null : "feature/restore",
       worktreePath: input.worktreePath ?? null,
+      runtimeMode: "full-access",
+      interactionMode: "default",
       lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
     } as OrchestrationV2ThreadProjection["thread"],
     runs: [
@@ -1443,14 +1439,14 @@ function makeLocalCommandHarness(input: {
           getRuntimeRecoveryProjection,
           getRun,
           getTurnStartHistory: () =>
-            input.sideChat !== undefined
-              ? Effect.succeed([])
-              : Effect.fail(
+            "historyReadFailureAfterFallback" in input
+              ? Effect.fail(
                   new ProjectionStore.ProjectionStoreReadError({
                     threadId,
                     cause: input.historyReadFailureAfterFallback,
                   }),
-                ),
+                )
+              : Effect.succeed([]),
         }),
         Layer.mock(ProviderSessionManager.ProviderSessionManagerV2)({
           open,

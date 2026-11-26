@@ -1,4 +1,4 @@
-import { deriveImportedThreadTitle } from "./AgentSessionTitle.ts";
+import { deriveImportedThreadTitle, truncateImportedThreadTitle } from "./AgentSessionTitle.ts";
 /** Reads transcript cwd values for onboarding. Malformed or unavailable sessions are skipped; project creation stays with the client. */
 import * as NodeOS from "node:os";
 import * as NodeSqlite from "node:sqlite";
@@ -31,7 +31,6 @@ import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
-import { splitsSurrogatePair } from "@t3tools/shared/assistantCitations";
 import { isBareGitConfig, parseOriginUrlFromGitConfig } from "@t3tools/shared/git";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
@@ -93,7 +92,6 @@ const MAX_IMPORT_TRANSCRIPTS = 100;
 const MAX_IMPORT_RECORDS = 100_000;
 const MAX_CODEX_SESSION_INDEX_BYTES = 16 * 1024 * 1024;
 const MAX_CODEX_SESSION_INDEX_ENTRIES = MAX_TRANSCRIPTS_PER_SOURCE;
-const MAX_IMPORTED_THREAD_TITLE_CHARS = 100;
 
 /**
  * open() of a file under macOS privacy protection waits on a consent prompt
@@ -303,12 +301,7 @@ export function parseCodexSessionIndex(contents: string): ReadonlyMap<string, st
     const decoded = decodeCodexSessionIndexEntry(line);
     if (Option.isNone(decoded)) continue;
     const id = decoded.value.id.trim();
-    const normalizedTitle = decoded.value.thread_name.trim();
-    const titleLineEnd = normalizedTitle.indexOf("\n");
-    const title = normalizedTitle
-      .slice(0, titleLineEnd === -1 ? normalizedTitle.length : titleLineEnd)
-      .slice(0, MAX_IMPORTED_THREAD_TITLE_CHARS)
-      .trim();
+    const title = truncateImportedThreadTitle(decoded.value.thread_name.trim());
     if (id.length > 0 && title.length > 0 && !titles.has(id)) titles.set(id, title);
   }
   return new Map(Array.from(titles).toReversed());
@@ -780,7 +773,7 @@ function parseAgentSessionRecords(
     providerSessionId,
     title:
       claudeFields.customTitle ||
-      (input.source === "codex" ? title?.split("\n")[0]?.slice(0, 100).trim() : title) ||
+      (input.source === "codex" && title !== null ? truncateImportedThreadTitle(title) : title) ||
       canonicalDerivedTitle ||
       firstDerivedTitle ||
       bareCommandTitle ||

@@ -422,7 +422,7 @@ it.effect("sql: the resuming message time counts MCP sends and ignores agent not
       DateTime.formatIso(dispatched),
     );
     assert.equal(
-      DateTime.formatIso(dispatchedShell!.latestUserMessageAt!),
+      DateTime.formatIso(dispatchedShell!.latestUserAuthoredMessageAt!),
       DateTime.formatIso(written),
     );
     assert.deepInclude(dispatchedShell, { latestSentMessageAt: dispatched });
@@ -444,7 +444,7 @@ it.effect("sql: the resuming message time counts MCP sends and ignores agent not
       (thread) => thread.id === threadId,
     );
     assert.equal(
-      DateTime.formatIso(shellThread!.latestUserMessageAt!),
+      DateTime.formatIso(shellThread!.latestUserAuthoredMessageAt!),
       DateTime.formatIso(written),
     );
     assert.deepInclude(shellThread, { latestSentMessageAt: dispatched });
@@ -453,7 +453,8 @@ it.effect("sql: the resuming message time counts MCP sends and ignores agent not
     yield* message("scheduled-user", "user", "web", scheduledUser, {
       scheduledTaskId: ScheduledTaskId.make("scheduled-user"),
     });
-    yield* message("scheduled-agent", "agent", "mcp", DateTime.add(now, { minutes: 2 }), {
+    const scheduledAgent = DateTime.add(now, { minutes: 2 });
+    yield* message("scheduled-agent", "agent", "mcp", scheduledAgent, {
       scheduledTaskId: ScheduledTaskId.make("scheduled-agent"),
     });
     yield* message("assistant", "agent", "provider", DateTime.add(now, { minutes: 3 }), {
@@ -468,9 +469,10 @@ it.effect("sql: the resuming message time counts MCP sends and ignores agent not
     );
     assert.deepInclude(afterAutomatic, { latestSentMessageAt: dispatched });
     assert.equal(
-      DateTime.formatIso(afterAutomatic!.latestUserMessageAt!),
+      DateTime.formatIso(afterAutomatic!.latestUserAuthoredMessageAt!),
       DateTime.formatIso(scheduledUser),
     );
+    assert.deepInclude(afterAutomatic, { latestUserMessageAt: scheduledAgent });
     const encoded = encodeShellJson(afterAutomatic!);
     assert.equal(encoded.latestSentMessageAt, DateTime.formatIso(dispatched));
     assert.deepInclude(decodeShellJson(encoded), { latestSentMessageAt: dispatched });
@@ -478,11 +480,14 @@ it.effect("sql: the resuming message time counts MCP sends and ignores agent not
       yield* store.getThreadProjection(threadId),
     );
     assert.deepInclude(memoryShell, { latestSentMessageAt: dispatched });
-    assert.deepInclude(memoryShell, { latestUserMessageAt: scheduledUser });
+    assert.deepInclude(memoryShell, {
+      latestUserMessageAt: scheduledAgent,
+      latestUserAuthoredMessageAt: scheduledUser,
+    });
     const [afterCandidate] = yield* store.getSettlementCandidates(threadId);
     assert.equal(
       DateTime.formatIso(afterCandidate!.latestUserMessageAt!),
-      DateTime.formatIso(scheduledUser),
+      DateTime.formatIso(scheduledAgent),
     );
   }).pipe(Effect.provide(layerSql)),
 );

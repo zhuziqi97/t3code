@@ -7430,7 +7430,6 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                 notification.update.sessionUpdate === "current_mode_update"
               ) {
                 if (notification.sessionId === (yield* Ref.get(activeSessionId))) {
-                  yield* Ref.set(activeSelection, null);
                   yield* publishSessionConfiguration(
                     notification.update.sessionUpdate === "config_option_update"
                       ? notification.update.configOptions

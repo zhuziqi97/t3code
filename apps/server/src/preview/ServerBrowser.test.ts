@@ -1810,6 +1810,9 @@ it.effect("stops typing long text at the request's deadline and says how far it 
       const { broker, tabId } = yield* ready;
       const page = contexts[0]!.page;
       page.evaluate.mockImplementation(async () => true as never);
+      Object.assign(page, {
+        evaluateHandle: async () => ({ asElement: () => null, dispose: async () => {} }),
+      });
       let now = 1_700_000_000_000;
       const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
       yield* Effect.addFinalizer(() => Effect.sync(() => clock.mockRestore()));
