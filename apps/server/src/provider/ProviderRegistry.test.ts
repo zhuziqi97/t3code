@@ -143,6 +143,9 @@ const withBundledCompatibility = (snapshot: ServerProvider) =>
     ModelManifest.BUNDLED_MODEL_MANIFEST.compatibility,
   );
 
+// Registry fixtures provide probe results without consulting the host login shell.
+const layerRegistryPlatform = Layer.succeed(HostProcess.Platform, "freebsd");
+
 const layerProviderRegistryUnderTest = ProviderRegistry.layer.pipe(
   Layer.provide(PortScanner.layerTest),
   Layer.provide(ProviderLatestVersions.layer),
@@ -1102,7 +1105,7 @@ it.layer(
     );
   });
 
-  describe("layerProviderRegistryUnderTest", () => {
+  it.layer(layerRegistryPlatform)("layerProviderRegistryUnderTest", (it) => {
     it("marks folder catalogs pending when a machine refresh changes the machine models", () => {
       const machineModel = {
         slug: "opencode/big-pickle",
@@ -1977,7 +1980,6 @@ it.layer(
                     Layer.provide(layerUnusedMutator),
                   ),
                 ),
-                Effect.provideService(HostProcess.Platform, "freebsd"),
                 Effect.scoped,
               );
             }
@@ -2157,7 +2159,6 @@ it.layer(
                   Layer.provide(layerUnusedMutator),
                 ),
               ),
-              Effect.provideService(HostProcess.Platform, "freebsd"),
               Effect.scoped,
             );
           }
