@@ -6,7 +6,7 @@ export function formatDiagnosticsDuration(value: number): string {
   return `${(value / 1_000).toFixed(value >= 10_000 ? 1 : 2).replace(/\.0+$/, "")} s`;
 }
 
-export function formatProcessName(command: string): string {
+function formatProcessName(command: string): string {
   const firstToken = command.trim().split(/\s+/)[0];
   if (!firstToken) return command;
   const normalized = firstToken.replace(/^['"]|['"]$/g, "");

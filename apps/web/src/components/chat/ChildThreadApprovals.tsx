@@ -33,9 +33,14 @@ function ChildApproval({ entry }: { entry: ChildThreadApproval }) {
       className="rounded-lg border border-border bg-background p-3 text-xs"
     >
       <p className="mb-2 font-medium">{t("approval.neededFromThread", { title: entry.title })}</p>
-      <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono">
-        {approval.detail || approval.requestKind}
-      </pre>
+      {approval.pushHooks ? (
+        <>
+          <p className="mb-1">{messages(PUSH_HOOKS_APPROVAL_QUESTION)}</p>
+          <PushHooksApprovalDetails pushHooks={approval.pushHooks} />
+        </>
+      ) : (
+        <ApprovalText text={approval.detail || approval.requestKind} />
+      )}
       {approval.appName ? <p className="mt-2 text-muted-foreground">{approval.appName}</p> : null}
       {approval.responseCapability !== "live" ? (
         <p className="mt-2 text-warning">{t("approval.childNotResumable")}</p>

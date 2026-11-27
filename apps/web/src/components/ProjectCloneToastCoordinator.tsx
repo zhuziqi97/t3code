@@ -237,6 +237,7 @@ function EnvironmentCloneToasts({ environmentId }: { environmentId: EnvironmentI
     removeClonedProject,
     retryClone,
     t,
+    toastHolds,
   ]);
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- closes every tracked clone toast in toastManager when the coordinator unmounts

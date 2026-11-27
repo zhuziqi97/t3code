@@ -254,7 +254,10 @@ import {
   sourceControlHostIcon,
 } from "./CommandPaletteAddProject";
 import { useCommandPaletteThreadActions } from "./CommandPaletteThreadActions";
-import { useCommandPaletteThreadItems } from "./CommandPaletteThreadItems";
+import {
+  CommandPaletteThreadQueryContext,
+  useCommandPaletteThreadItems,
+} from "./CommandPaletteThreadItems";
 import { useCommandPaletteSettingsItems } from "./CommandPaletteSettingsItems";
 import { useCommandPaletteThemeItems } from "./CommandPaletteThemeItems";
 import {
@@ -3206,34 +3209,36 @@ function OpenCommandPaletteDialog(props: {
           {t("project.browse.loading")}
         </div>
       ) : null}
-      <CommandPaletteVirtualizedResults
-        rows={resultRows.rows}
-        listRef={resultListRef}
-        highlightedItemValue={highlightedItemValue}
-        isActionsOnly={isActionsOnly}
-        keybindings={keybindings}
-        onExecuteItem={executeItem}
-        {...(addProjectCloneFlow?.step === "repository"
-          ? {
-              emptyStateMessage:
-                addProjectCloneFlow.source === "url"
-                  ? t("project.clone.urlInstructions")
-                  : t("project.clone.repositoryInstructions"),
-            }
-          : addProjectCloneFlow?.step === "confirm"
-            ? { emptyStateMessage: t("project.clone.destinationInstructions") }
-            : relativePathNeedsActiveProject
-              ? { emptyStateMessage: t("project.path.relativeRequiresProject") }
-              : willCreateProjectPath
-                ? {
-                    emptyStateMessage: t("project.browse.createInstructions"),
-                  }
-                : isThreadSearchPending
-                  ? { emptyStateMessage: gt("Searching thread messages…") }
-                  : isThreadSearchFailed
-                    ? { emptyStateMessage: gt("Couldn't search thread messages.") }
-                    : {})}
-      />
+      <CommandPaletteThreadQueryContext value={threadSearchQuery}>
+        <CommandPaletteVirtualizedResults
+          rows={resultRows.rows}
+          listRef={resultListRef}
+          highlightedItemValue={highlightedItemValue}
+          isActionsOnly={isActionsOnly}
+          keybindings={keybindings}
+          onExecuteItem={executeItem}
+          {...(addProjectCloneFlow?.step === "repository"
+            ? {
+                emptyStateMessage:
+                  addProjectCloneFlow.source === "url"
+                    ? t("project.clone.urlInstructions")
+                    : t("project.clone.repositoryInstructions"),
+              }
+            : addProjectCloneFlow?.step === "confirm"
+              ? { emptyStateMessage: t("project.clone.destinationInstructions") }
+              : relativePathNeedsActiveProject
+                ? { emptyStateMessage: t("project.path.relativeRequiresProject") }
+                : willCreateProjectPath
+                  ? {
+                      emptyStateMessage: t("project.browse.createInstructions"),
+                    }
+                  : isThreadSearchPending
+                    ? { emptyStateMessage: gt("Searching thread messages…") }
+                    : isThreadSearchFailed
+                      ? { emptyStateMessage: gt("Couldn't search thread messages.") }
+                      : {})}
+        />
+      </CommandPaletteThreadQueryContext>
     </CommandPaletteContent>
   );
 }

@@ -11,9 +11,12 @@ export function OutdatedServerUpdateSection({ label }: { readonly label: string 
       <View className="gap-1 p-4">
         <Text className="text-base text-foreground">{gt("Update required")}</Text>
         <Text className="text-sm text-foreground-muted">
-          {gt("Update T3 Code for Convene on {environment} using its installation source, then reconnect.", {
-            environment: label,
-          })}
+          {gt(
+            "Update T3 Code for Convene on {environment} using its installation source, then reconnect.",
+            {
+              environment: label,
+            },
+          )}
         </Text>
       </View>
     </SettingsSection>

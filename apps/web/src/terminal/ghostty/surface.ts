@@ -748,7 +748,10 @@ export class GhosttyTerminalSurface {
     scrollbar.append(scrollbarThumb);
     const updateAccessibleNames = () => {
       input.setAttribute("aria-label", options.accessibleLabels?.input ?? m(msg("Terminal input")));
-      scrollbar.setAttribute("aria-label", options.accessibleLabels?.scrollback ?? m(msg("Terminal scrollback")));
+      scrollbar.setAttribute(
+        "aria-label",
+        options.accessibleLabels?.scrollback ?? m(msg("Terminal scrollback")),
+      );
     };
     updateAccessibleNames();
     mount.replaceChildren(canvas, input, scrollbar);

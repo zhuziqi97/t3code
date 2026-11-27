@@ -16,8 +16,7 @@ test(
   "A pending send does not submit text typed while workspace defaults load",
   WEB,
   async ({ t3, app, browser, screen }) => {
-    const project = await t3.project("demo", { "t3.json": '{"defaultThreadEnvMode":"local"}' });
-    await t3.thread({ project, title: "Earlier work", messages: ["first"] });
+    await t3.project("demo", { "t3.json": '{"defaultThreadEnvMode":"worktree"}' });
 
     await browser.addInitScript(() => {
       const requested = Promise.withResolvers<void>();

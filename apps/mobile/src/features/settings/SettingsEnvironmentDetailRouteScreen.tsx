@@ -228,9 +228,7 @@ function EnvironmentDetail({ environmentId }: { readonly environmentId: Environm
               }
             />
             {outdated ? (
-              <OutdatedServerUpdateSection
-                label={environment.environmentLabel}
-              />
+              <OutdatedServerUpdateSection label={environment.environmentLabel} />
             ) : !connected ? (
               <Text className="px-2 text-sm text-foreground-muted">
                 <T>Connect this environment to manage it.</T>
@@ -275,7 +273,9 @@ function EnvironmentDetail({ environmentId }: { readonly environmentId: Environm
                     ) : null}
                     {!updatesDenial && capabilities?.cliArchiveReleaseLookup !== true ? (
                       <Text className="text-sm text-foreground-muted">
-                        {gt("Update T3 Code for Convene on the host using its installation source.")}
+                        {gt(
+                          "Update T3 Code for Convene on the host using its installation source.",
+                        )}
                       </Text>
                     ) : null}
                     {running ? (

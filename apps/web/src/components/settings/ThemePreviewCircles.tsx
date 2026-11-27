@@ -13,7 +13,6 @@ import {
   type ThemeAppearance,
   type ThemeDefinition,
 } from "../../themePalette";
-import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 
 const THEME_PREVIEW_ROLES = [
   "sidebar",

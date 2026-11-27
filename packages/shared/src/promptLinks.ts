@@ -76,7 +76,7 @@ function repositoryOf(owner: string, name: string): PromptLinkRepository | null 
   return { owner, name: trimmedName };
 }
 
-export function parsePromptLinkRepository(value: string): PromptLinkRepository | null {
+function parsePromptLinkRepository(value: string): PromptLinkRepository | null {
   const trimmed = value.trim();
   const url = /^https?:\/\/(?:www\.)?github\.com\/([^/?#]+)\/([^/?#]+)\/?$/i.exec(trimmed);
   const short = /^([^/\s]+)\/([^/\s]+)$/.exec(trimmed);

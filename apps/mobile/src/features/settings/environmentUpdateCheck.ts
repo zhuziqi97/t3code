@@ -38,9 +38,8 @@ export const environmentReleaseCheckAtom = Atom.family((environmentId: Environme
   Atom.fn((fromVersion: string) =>
     Effect.tryPromise({
       try: async (signal) => {
-        const capabilities = appAtomRegistry.get(
-          serverEnvironment.configValueAtom(environmentId),
-        )?.environment.capabilities;
+        const capabilities = appAtomRegistry.get(serverEnvironment.configValueAtom(environmentId))
+          ?.environment.capabilities;
         if (capabilities?.cliArchiveReleaseLookup !== true) {
           throw new Error(CONVENE_CLI_INSTALL_GUIDANCE);
         }
@@ -54,7 +53,8 @@ export const environmentReleaseCheckAtom = Atom.family((environmentId: Environme
         const version = release.value?.version;
         return {
           fromVersion,
-          targetVersion: version && compareSemverVersions(version, fromVersion) > 0 ? version : null,
+          targetVersion:
+            version && compareSemverVersions(version, fromVersion) > 0 ? version : null,
         } satisfies EnvironmentReleaseCheck;
       },
       catch: asError,
