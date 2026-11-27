@@ -66,6 +66,7 @@ describe("acpProviderOptionDescriptors", () => {
       },
       {
         id: "permission_mode",
+        category: "mode",
         label: "Permission mode",
         type: "select",
         options: [
