@@ -204,6 +204,7 @@ export default function FileBrowserPanel({
     entries: directoryEntries,
     load,
     refresh,
+    revalidate,
     ready,
     error,
     isPending,
@@ -270,6 +271,7 @@ export default function FileBrowserPanel({
             ...(canDownload
               ? [{ id: "download", label: t("fileMenu.download"), disabled: download.busy }]
               : []),
+            { id: "copy-path", label: gt("Copy path") },
             { id: "copy-mention", label: t("fileBrowser.copyMention") },
             { id: "add-to-chat", label: t("fileBrowser.addToChat") },
           ],
@@ -288,9 +290,11 @@ export default function FileBrowserPanel({
           download.start({ name: relativePath, prepare: () => prepareFileDownload(relativePath) });
           return;
         }
-        if (clicked === "copy-mention") {
+        if (clicked === "copy-path" || clicked === "copy-mention") {
+          const copyingPath = clicked === "copy-path";
           try {
-            await writeTextToClipboard(mention);
+            await writeTextToClipboard(copyingPath ? joinHostPath(cwd, relativePath) : mention);
+            if (copyingPath) return;
             toastManager.add({
               type: "success",
               title: i18n.t("fileBrowser.mentionCopied"),
@@ -299,7 +303,7 @@ export default function FileBrowserPanel({
           } catch (error) {
             toastManager.add({
               type: "error",
-              title: t("fileBrowser.mentionCopyFailed", { defaultValue: "Failed to copy mention" }),
+              title: copyingPath ? gt("Failed to copy path") : gt("Failed to copy mention"),
               description: thrownErrorMessage(error, m) ?? gt("An error occurred."),
             });
           }
@@ -331,6 +335,7 @@ export default function FileBrowserPanel({
   );
 
   const loadingDirectoriesRef = useRef(loadingDirectories);
+  const revalidateDirectory = useStableCallback(revalidate);
   const loadingDirectoryTitleRef = useRef(t("fileBrowser.loadingDirectory"));
   const dragMention = createFileTreeDragMentionController(
     hostFolder ? { mentionPath: (path: string) => joinHostPath(cwd, path) } : {},
@@ -364,12 +369,14 @@ export default function FileBrowserPanel({
       }
     },
     paths: [],
-    renderRowDecoration: ({ item, row }) =>
-      row.kind === "directory" &&
-      row.isExpanded &&
-      loadingDirectoriesRef.current.has(item.path.replace(/\/$/, ""))
+    renderRowDecoration: ({ item, row }) => {
+      const path = item.path.replace(/\/$/, "");
+      const open = row.kind === "directory" && row.isExpanded;
+      revalidateDirectory(open ? path : path.slice(0, Math.max(0, path.lastIndexOf("/"))));
+      return open && loadingDirectoriesRef.current.has(path)
         ? { icon: "t3-tree-icon-loading", title: loadingDirectoryTitleRef.current }
-        : null,
+        : null;
+    },
     search: false,
     onSearchChange: (value) => setQuery(value ?? ""),
     unsafeCSS: PIERRE_TREE_UNSAFE_CSS,

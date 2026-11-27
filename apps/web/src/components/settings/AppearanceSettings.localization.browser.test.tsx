@@ -26,6 +26,8 @@ vi.mock("./SettingsScopeContext", async (original) => ({
 }));
 vi.mock("@tanstack/react-router", async (original) => ({
   ...(await original<typeof import("@tanstack/react-router")>()),
+  useMatches: ({ select }: { select: (matches: unknown) => unknown }) =>
+    select([{ pathname: "/settings/appearance" }]),
   useNavigate: () => vi.fn(),
   useLocation: ({ select }: { select: (location: unknown) => unknown }) =>
     select({ pathname: "/settings/appearance", hash: "", state: {}, search: {} }),

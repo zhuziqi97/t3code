@@ -5,7 +5,7 @@ import { ExternalLinkIcon } from "lucide-react";
 
 import { Button } from "../ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
-import { openPullRequestExternal } from "./pullRequestLinkContextMenu";
+import { useOpenLink } from "~/browser/useOpenLink";
 import { PullRequestGlyph } from "./pullRequestIcons";
 
 export function PullRequestsUnavailableState({
@@ -26,6 +26,7 @@ export function PullRequestsUnavailableState({
   };
 }) {
   const t = useTranslate();
+  const openLink = useOpenLink(host?.threadRef);
   return (
     <Empty className="scrollbar-gutter-both min-h-0 justify-center-safe overflow-y-auto [&>*]:shrink-0">
       <EmptyMedia variant="icon">
@@ -56,7 +57,7 @@ export function PullRequestsUnavailableState({
               render={<a href={host.url} target="_blank" rel="noopener noreferrer" />}
               onClick={(event) => {
                 event.preventDefault();
-                void openPullRequestExternal(host.url);
+                void openLink(host.url, { event }).catch(console.error);
               }}
             >
               <ExternalLinkIcon aria-hidden className="size-3.5" />

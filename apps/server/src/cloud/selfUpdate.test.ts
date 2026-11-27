@@ -2,6 +2,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import type { ManagedPolicyDocument } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
+import * as ConfigProvider from "effect/ConfigProvider";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -35,6 +36,7 @@ interface HarnessOptions {
   readonly requestUpdate?: ServiceLauncherClient.ServiceLauncherClient["Service"]["requestUpdate"];
   readonly desktopAppUpdate?: DesktopAppUpdate.DesktopAppUpdate["Service"];
   readonly policy?: ManagedPolicyDocument;
+  readonly noMirror?: boolean;
 }
 
 const archiveBytes = new TextEncoder().encode("not really a tarball");
@@ -167,9 +169,16 @@ const makeHarness = Effect.fn("test.make_self_update_harness")(function* (
     Effect.provideService(HostProcess.Platform, "linux"),
     Effect.provideService(HostProcess.Architecture, "x64"),
     Effect.provide(
-      Layer.merge(
+      Layer.mergeAll(
         ServerConfig.layer({ ...config, mode: options.mode ?? "web" }),
         ManagedPolicy.layerTest(options.policy),
+        ConfigProvider.layer(
+          ConfigProvider.fromEnv({
+            env: options.noMirror
+              ? {}
+              : { T3CODE_RELEASE_BASE_URL: "https://archives.example.test/releases" },
+          }),
+        ),
       ),
     ),
   );
@@ -252,6 +261,15 @@ it.layer(NodeServices.layer)("server self update", (it) => {
         (yield* desktop.selfUpdate.update({ targetVersion: "1.1.0" }).pipe(Effect.flip)).reason,
       ).toContain("desktop app");
       expect([...web.order, ...desktop.order]).toEqual([]);
+    }),
+  );
+
+  it.effect("returns manual installation guidance without contacting a release source", () =>
+    Effect.gen(function* () {
+      const { selfUpdate, urls } = yield* makeHarness({ noMirror: true });
+      const failure = yield* selfUpdate.update({ targetVersion: "1.1.0" }).pipe(Effect.flip);
+      expect(failure.message).toContain("Install the matching T3 Code for Convene");
+      expect(urls).toEqual([]);
     }),
   );
 

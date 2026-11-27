@@ -49,6 +49,8 @@ vi.mock("../../hooks/useSettings", async (original) => ({
 vi.mock("@tanstack/react-router", async (original) => ({
   ...(await original<typeof import("@tanstack/react-router")>()),
   useNavigate: () => vi.fn(),
+  useMatches: ({ select }: { select: (matches: unknown) => unknown }) =>
+    select([{ pathname: "/settings/general" }]),
   useLocation: ({ select }: { select: (location: unknown) => unknown }) =>
     select({ pathname: "/settings/general", hash: "", state: {}, search: {} }),
   Link: ({ children, to }: { children: React.ReactNode; to: string }) => (

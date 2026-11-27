@@ -4,6 +4,7 @@ import { EnvironmentId } from "@t3tools/contracts";
 import { RELAY_MINT_REQUEST_TYP, signRelayJwt } from "@t3tools/shared/relayJwt";
 import { assert, it } from "@effect/vitest";
 import * as DateTime from "effect/DateTime";
+import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
@@ -167,6 +168,13 @@ const withService = <A, E>(
         ),
       ),
       Effect.provideService(FetchHttpClient.Fetch, fetch),
+      Effect.provide(
+        ConfigProvider.layer(
+          ConfigProvider.fromEnv({
+            env: { T3CODE_RELAY_URL: "https://relay.test" },
+          }),
+        ),
+      ),
     );
   });
 

@@ -2060,13 +2060,6 @@
   "0bafdf01b3799538": "Commit",
   "2d786f6466f42ba1": "Abort",
   "809d74fd98dd8b0f": "Check out feature branch & continue",
-  "88b4d905ceab8dd2": "Starring…",
-  "a3b65ac8567c151f": "Thanks for the star!",
-  "eaaab38a83bf32cf": "It really helps T3 Code grow.",
-  "627b9319f42ac2d5": "Open GitHub",
-  "a76da92cec318964": "Enjoying T3 Code?",
-  "7ffe3705e7b0ed0b": "Give us a star on GitHub to let us know!",
-  "4c58cf06d9a4496c": "Star on GitHub",
   "5bbf199afe39d5e1": "Dismiss",
   "6df5a5badc04a75a": "This computer is off",
   "ae659281075cedc6": "No computer connected",
@@ -2080,23 +2073,6 @@
   "c65de112b48a66ed": "Add pairing link",
   "bc8ab792af1d656f": "Run on your computer:",
   "0ba14e4e920cfa00": "Or download the desktop app",
-  "0e79b7a6508a6286": "Then",
-  "363b9991fa23d36b": [
-    "Skip the install if you already have ",
-    {
-      "t": "code",
-      "i": 1,
-      "c": "t3"
-    },
-    ". If",
-    " ",
-    {
-      "t": "code",
-      "i": 2,
-      "c": "t3"
-    },
-    " is not found after installing, add the folder the installer names to your PATH."
-  ],
   "87b24d00c08f54bb": "Unable to open keybindings file",
   "0ee16208cbfcdbf4": "Unknown error opening file.",
   "9e20856550715c74": [
@@ -2762,8 +2738,6 @@
   "b08d105dd2553f8d": "The project did not appear in the desktop app.",
   "d85822b18e9475df": "Managed by {organization}.",
   "a6dd531d58080010": "Connect to this server to check releases.",
-  "314cdccee9c14774": "This server does not support registry lookups. Update it before switching tracks.",
-  "22da1d00403ab2fd": "Could not check this environment's npm registry. Check the connection and registry settings.",
   "2fc0f7a698c95c90": "Connect to a server to check releases.",
   "922269f8691aa3ba": "Could not tell whether this environment runs on this computer.",
   "35cade9cc8a01363": "Port forwarding needs the desktop app.",
@@ -5465,7 +5439,6 @@
   "904fe8fd1930af4f": "Open it again",
   "7e9bfc5116140d9e": "Use without project",
   "9ec1d1c17de50baa": "Could not open the linked prompt",
-  "cf59c61341f8616c": "Could not copy the prompt link",
   "5fc35a986223cdba": "This prompt had hidden characters, it may be malicious",
   "22a9320dc3c097a9": "Prompt added from a link",
   "53e806c10e9fc9fc": "Read it before you send.",
@@ -9414,7 +9387,6 @@
   "404f92786aa9a22f": "Code blocks, diffs, file previews, and the terminal.",
   "5897f301f96f8abe": "Typography",
   "eb72dbf46620a039": "{title} family",
-  "9f3126cbc5f8231f": "Could not find the latest {label} release in this environment's npm registry.",
   "ddc1bd4973399c8d": "Checking releases…",
   "9ddd2f9f1c9367bc": "Could not switch to {label}",
   "3d71fc8318449b6c": "This app downloaded nothing, not {version} or newer.",
@@ -10749,7 +10721,6 @@
   "027b0d65c7a67af6": "Hook file",
   "ade585910165bb52": "Configured hook",
   "69150fe436b3a0c2": "{count, plural, one {{count} malformed or inconsistent usage record was skipped; usage may be incomplete.} other {{count} malformed or inconsistent usage records were skipped; usage may be incomplete.}}",
-  "71ed7c0da0b93c77": "Your next message restarts the agent. This conversation is kept.",
   "c7f5c98f1e79cc6c": "{count, plural, one {Show {count} more image attachment} other {Show {count} more image attachments}}",
   "f3c70064a22a0c76": "{terminalLabel} line {lineStart}",
   "8ba6febaabeb6f14": "{terminalLabel} lines {lineStart}-{lineEnd}",
@@ -10757,13 +10728,10 @@
   "31a71fec6b5f2bf3": "Android Devices",
   "dbc3908dc1f730ab": "The Android SDK is installed, but no Android device was found. Connect a phone with USB debugging on, or create a virtual device in Android Studio → Device Manager.",
   "2d99f80191b88ee4": "The Android SDK is available.",
-  "d3170aa2bb08efbd": "Save it to open in an app that supports this format.",
   "a766a8ac2670096c": "{count, plural, one {{count} merge loaded} other {{count} merges loaded}}",
   "6394fa415ab91b34": "Terminal: Previous",
   "2f766180f9d12615": "Terminal: Next",
   "9610fb9f4d9849ec": "Google account and Gemini Enterprise use your existing plan. Gemini API key and Agent Platform charge per use to your key or Google Cloud project.",
-  "9fd31461cee8ff82": "{count, plural, one {{count} process} other {{count} processes}}",
-  "36d52134b8b8d455": "{count, plural, one {{count} route} other {{count} routes}}",
   "d9e33a2a8d404a96": "{omitted, plural, one {{environment}: {count} more result.} other {{environment}: {count} more results.}}",
   "a2bbf464a3be4882": "{count, selectordinal, one {{count}st try} two {{count}nd try} few {{count}rd try} other {{count}th try}}",
   "7150557773b3818b": "Queued",
@@ -10794,5 +10762,22 @@
       "v": "v"
     },
     " more in Linked items"
-  ]
+  ],
+  "60e47b3da5901619": "Settings · {section}",
+  "f8deda29a1d50972": [
+    "On the host, install T3 Code for Convene from the platform's desktop client downloads or use a matching CLI provided by your organization. Add the installed",
+    {
+      "t": "code",
+      "i": 1,
+      "c": " t3 "
+    },
+    " command to PATH, then run:"
+  ],
+  "d91e7eda2555536d": "Install a matching Convene release on this server or add a CLI archive mirror.",
+  "2aa798314d5818f6": "Could not check this environment's CLI mirror. Check the connection and mirror settings.",
+  "ee3ea4351c88e7d7": "This project is no longer available.",
+  "2703e1eca8c287b6": "Loading scheduled tasks…",
+  "8795c17874538d2f": "Could not find the latest {label} release in this environment's CLI archive mirror.",
+  "0d4403a9abad9877": "Save it to open in an app that supports this format.",
+  "320e07712f1bf5b4": "Chat: Request Prediction"
 }

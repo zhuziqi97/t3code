@@ -358,7 +358,16 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("ServerEnvironmen
         yield* secrets.set(PUBLISH_AGENT_ACTIVITY_SECRET, encode("false"));
         const disabled = yield* serverEnvironment.getDescriptor;
         expect(disabled.capabilities.agentActivityPublishing).toBe(false);
-      }).pipe(Effect.provide(layerTest));
+      }).pipe(
+        Effect.provide(
+          Layer.merge(
+            layerTest,
+            ConfigProvider.layer(
+              ConfigProvider.fromEnv({ env: { T3CODE_RELAY_URL: "https://relay.example" } }),
+            ),
+          ),
+        ),
+      );
     }),
   );
 

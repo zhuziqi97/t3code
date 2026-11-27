@@ -1,26 +1,27 @@
-import { getTranslationsSnapshot, GTProvider } from "gt-react";
 import { expect, it } from "vite-plus/test";
 
-import { initializeI18n } from "~/i18n/initializeI18n";
+import { changeLanguage } from "~/i18n";
 import { render } from "../../../test/render";
 import { TerminalContextInlineChip } from "./TerminalContextInlineChip";
 
 it.each([
-  { lineEnd: 7, label: "ターミナル 2 7 行目" },
-  { lineEnd: 9, label: "ターミナル 2 7–9 行目" },
-])("shows the exact Japanese line label $label", async ({ lineEnd, label }) => {
-  initializeI18n(() => {});
-  const translations = await getTranslationsSnapshot("ja");
+  { lineEnd: 7, label: "终端 2 第 7 行" },
+  { lineEnd: 9, label: "终端 2 第 7–9 行" },
+])("shows the exact Chinese line label $label", async ({ lineEnd, label }) => {
+  await changeLanguage("zh");
+  await using _language = {
+    [Symbol.asyncDispose]: async () => {
+      await changeLanguage("en");
+    },
+  };
   await using screen = await render(
-    <GTProvider locale="ja" translations={translations}>
-      <TerminalContextInlineChip
-        terminalLabel="ターミナル 2"
-        lineStart={7}
-        lineEnd={lineEnd}
-        text="terminal output"
-        detailsMode="popover"
-      />
-    </GTProvider>,
+    <TerminalContextInlineChip
+      terminalLabel="终端 2"
+      lineStart={7}
+      lineEnd={lineEnd}
+      text="terminal output"
+      detailsMode="popover"
+    />,
   );
 
   await expect.element(screen.getByText(label, { exact: true })).toBeVisible();

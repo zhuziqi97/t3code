@@ -362,7 +362,7 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
               props.item.label
             )}
           </span>
-          <Tooltip open={descriptionTruncated}>
+          <Tooltip open={descriptionTruncated && !props.descriptionDismissed}>
             <TooltipTrigger
               tabIndex={-1}
               render={

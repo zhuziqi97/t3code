@@ -247,8 +247,11 @@ export function createNewThreadHandler(router: AnyRouter) {
           projectRef,
           { envMode, startFromOrigin: startFromOriginFor(envMode) },
           projectFileRead.then((projectFile) => {
-            const envMode = envModeFor(projectFile);
-            return { envMode, startFromOrigin: startFromOriginFor(envMode) };
+            if (readProject(projectRef) === null) {
+              return { envMode, startFromOrigin: startFromOriginFor(envMode) };
+            }
+            const resolvedMode = envModeFor(projectFile);
+            return { envMode: resolvedMode, startFromOrigin: startFromOriginFor(resolvedMode) };
           }),
         );
       };

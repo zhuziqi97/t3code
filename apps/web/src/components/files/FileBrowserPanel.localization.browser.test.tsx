@@ -25,6 +25,7 @@ vi.mock("./useDirectoryEntries", async (original) => ({
     entries: state.entries,
     load: state.load,
     refresh: state.refresh,
+    revalidate: () => {},
     ready: true,
     error: state.error,
     isPending: false,

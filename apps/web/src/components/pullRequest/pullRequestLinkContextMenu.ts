@@ -71,7 +71,7 @@ export async function showPullRequestLinkContextMenu({
   }
 }
 
-export async function openPullRequestExternal(url: string): Promise<void> {
+async function openPullRequestExternal(url: string): Promise<void> {
   const api = readLocalApi();
   if (!api) return;
   try {

@@ -12,6 +12,7 @@ import { memo, use } from "react";
 import { type PendingApproval } from "../../session-logic";
 import { InlineButton } from "../ui/button";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
+import { ApprovalText } from "./ApprovalText";
 import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions";
 import { PushHooksApprovalDetails } from "./PushHooksApprovalDetails";
 import { ToolActivityIconView, type WorkEntryIconName } from "./TimelineToolActivityIcon";
@@ -84,18 +85,20 @@ export const TimelinePendingApprovalRow = memo(function TimelinePendingApprovalR
         />
       }
       label={
-        <code
-          aria-label={m(presentation.detailLabel)}
-          className="block max-h-40 min-w-0 overflow-auto whitespace-pre-wrap font-mono text-xs leading-5 text-foreground select-text! wrap-anywhere [scrollbar-width:thin] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
-          data-approval-detail="complete"
-          tabIndex={0}
-        >
-          {approval.responseCapability === "not_resumable"
-            ? t("approval.notResumable")
-            : pushHooks
-              ? m(PUSH_HOOKS_APPROVAL_QUESTION)
-              : approval.detail || presentation.label}
-        </code>
+        pushHooks ? (
+          <span className="block min-w-0 text-foreground select-text! wrap-anywhere">
+            {m(PUSH_HOOKS_APPROVAL_QUESTION)}
+          </span>
+        ) : (
+          <ApprovalText
+            text={
+              approval.responseCapability === "not_resumable"
+                ? t("approval.notResumable")
+                : approval.detail || presentation.label
+            }
+            label={presentation.detailLabel}
+          />
+        )
       }
     >
       <div className="ms-7.5 flex min-w-0 flex-col gap-1 pb-1 text-xs">

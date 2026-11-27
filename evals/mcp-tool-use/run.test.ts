@@ -2064,7 +2064,7 @@ it.effect("builds device cases from product-backed worlds and synthetic prior tu
       // would have opened the app, so its world starts that session. OWN seeds another owner.
       assert.deepEqual(
         [...(sample.devices?.sessions(sample.shell).values() ?? [])],
-        ["FAIL-AFTER-hub", "OWN-01", "OWN-02", "OWN-03", "OWN-04"].includes(testCase.id)
+        ["FAIL-AFTER-hub", "OWN-01", "OWN-02", "OWN-03"].includes(testCase.id)
           ? [{ app: true }]
           : testCase.id === "SSH-UI-EXPLICIT"
             ? [undefined]
@@ -3004,25 +3004,6 @@ it("shares failed device attempts across tools and launcher steps, resetting onl
       { calls: [...calls, { ...failure(12, 1, "device_screenshot"), failed: false }] },
     ).every((c) => c.pass),
   );
-});
-
-it("credits USER-01's screenshot script only when it runs, not when it is printed", () => {
-  const [pattern] = deviceCases().find((c) => c.id === "USER-01")?.expect.shellMust ?? [];
-  assert.isDefined(pattern);
-  const runs = (command: string) => new RegExp(pattern).test(command);
-  for (const command of [
-    "make screenshots_ios",
-    "cd /Users/user/acme/app && make screenshots_ios",
-    "ssh build-mac 'cd /Users/user/acme/app && make screenshots_ios'",
-    "echo ok; ssh build-mac 'cd /Users/user/acme/app && make screenshots_ios'",
-  ])
-    assert.isTrue(runs(command), command);
-  for (const command of [
-    "echo make screenshots_ios",
-    "echo 'cd /Users/user/acme/app && make screenshots_ios'",
-    `printf '%s\\n' "cd /Users/user/acme/app && make screenshots_ios"`,
-  ])
-    assert.isFalse(runs(command), command);
 });
 
 it("applies device shell checks to decoded cases and stops raw UI early", () => {

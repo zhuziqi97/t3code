@@ -6,10 +6,6 @@
   "2f015e6d5459dce9": "Update to {version}",
   "ca9838012a0eb084": "Downloading {version}. T3 Code restarts when the download is done.",
   "c38cbed9acc5b0d1": "Downloading {version} ({percent}%). T3 Code restarts when the download is done.",
-  "4b4cf6843a4e0aba": "Version {version} started correctly on this computer. Download it and install it to go back.",
-  "b57c6134d74c0848": "Download {version}",
-  "1eeed583c2254507": "Get a different version from the releases page.",
-  "4cd5b64eeb26e1ee": "Open releases",
   "7e21da2485a8e0bb": "Your organization's managed policy stopped T3 Code from starting. Send the details below to your IT administrator.",
   "55a19ca527948aaa": "T3 Code could not start",
   "4825d2a18a5fc093": "Copy details",
@@ -76,5 +72,8 @@
   "9c1b20fbc881de5d": "Desktop config",
   "1b14230874f19eb9": "Images",
   "b6e5b31255e011c5": "OK",
-  "573a9e6b17f4e9e3": "Reload"
+  "573a9e6b17f4e9e3": "Reload",
+  "bfe64059404e2106": "Version {version} started correctly on this computer. To go back, reinstall your saved copy of that version.",
+  "c409e5f2f42bb9ba": "Open platform downloads",
+  "645329fd071bc255": "Open Help → Desktop client in Convene and download the package for this computer."
 }

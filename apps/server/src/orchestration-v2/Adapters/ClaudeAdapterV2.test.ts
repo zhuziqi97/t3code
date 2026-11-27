@@ -541,22 +541,25 @@ describe("ClaudeAdapterV2 runtime query policy", () => {
     );
   });
 
-  it("lets Claude Code resolve a selected native alias", () => {
-    const options = ClaudeAdapterV2.makeClaudeQueryOptions({
-      modelSelection: { instanceId: CLAUDE_TEST_MODEL_SELECTION.instanceId, model: "opus" },
-      modelCatalog: scopeClaudeModelCatalog(
-        BUNDLED_CLAUDE_MODEL_CATALOG,
-        CUSTOM_MODEL_CLAUDE_SETTINGS.customModels,
-      ),
-      nativeThreadId: "native-custom-alias",
-      resume: false,
-      cwd: "/workspace",
-      settings: CUSTOM_MODEL_CLAUDE_SETTINGS,
-    });
-    assert.equal(options.model, "opus");
-    const settingsEnv = typeof options.settings === "object" ? options.settings?.env : undefined;
-    assert.isUndefined(settingsEnv?.ANTHROPIC_DEFAULT_OPUS_MODEL);
-  });
+  it.each([
+    { settings: DEFAULT_CLAUDE_SETTINGS, pinnedAlias: undefined },
+    { settings: CUSTOM_MODEL_CLAUDE_SETTINGS, pinnedAlias: "opus" },
+  ])(
+    "pins the selected alias only when it is a custom model ($pinnedAlias)",
+    ({ settings, pinnedAlias }) => {
+      const options = ClaudeAdapterV2.makeClaudeQueryOptions({
+        modelSelection: { instanceId: CLAUDE_TEST_MODEL_SELECTION.instanceId, model: "opus" },
+        modelCatalog: scopeClaudeModelCatalog(BUNDLED_CLAUDE_MODEL_CATALOG, settings.customModels),
+        nativeThreadId: "native-alias",
+        resume: false,
+        cwd: "/workspace",
+        settings,
+      });
+      assert.equal(options.model, "opus");
+      const settingsEnv = typeof options.settings === "object" ? options.settings?.env : undefined;
+      assert.equal(settingsEnv?.ANTHROPIC_DEFAULT_OPUS_MODEL, pinnedAlias);
+    },
+  );
 
   it("projects AskUserQuestion input with question text as the answer key", () => {
     const preview = "\n  **Proposed change**\n\n```ts\n\tconst enabled = true;\n```\n  ";

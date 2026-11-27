@@ -86,17 +86,18 @@ const decodeThreadSearchResult = Schema.decodeUnknownEffect(
   ThreadToolkit.tools.t3_thread_search.successSchema,
 );
 
-const layerThreadToolkit = McpHttpServer.layerThreadToolkit.pipe(
-  Layer.provide(Layer.mock(ThreadSearch.ThreadSearch)({})),
-  Layer.provide(Layer.mock(ScheduledTaskService.ScheduledTaskService)({})),
-  Layer.provide(Layer.mock(PeerForwarding.PeerForwarding)({})),
-  Layer.provide(Layer.mock(PeerLinkRequests.PeerLinkRequests)({})),
-  Layer.provide(Layer.mock(PeerLinks.PeerLinks)({})),
-  // Tool analytics read the registry whenever one is present.
-  Layer.provide(
-    Layer.mock(ProviderRegistry.ProviderRegistry)({ getProviders: Effect.succeed([]) }),
-  ),
-);
+const makeLayerThreadToolkit = (
+  registry = Layer.mock(ProviderRegistry.ProviderRegistry)({ getProviders: Effect.succeed([]) }),
+) =>
+  McpHttpServer.layerThreadToolkit.pipe(
+    Layer.provide(Layer.mock(ThreadSearch.ThreadSearch)({})),
+    Layer.provide(Layer.mock(ScheduledTaskService.ScheduledTaskService)({})),
+    Layer.provide(Layer.mock(PeerForwarding.PeerForwarding)({})),
+    Layer.provide(Layer.mock(PeerLinkRequests.PeerLinkRequests)({})),
+    Layer.provide(Layer.mock(PeerLinks.PeerLinks)({})),
+    Layer.provide(registry),
+  );
+const layerThreadToolkit = makeLayerThreadToolkit();
 
 const threadId = ThreadId.make("mcp-core-thread");
 const scope: McpInvocationContext.McpInvocationScope = {
@@ -797,7 +798,22 @@ it.effect("records the calling agent and the agent a tool acted on", () => {
     });
   }).pipe(
     Effect.provide(
-      layerThreadToolkit.pipe(
+      makeLayerThreadToolkit(
+        Layer.mock(ProviderRegistry.ProviderRegistry)({
+          getProviders: Effect.succeed([
+            {
+              instanceId: ProviderInstanceId.make("codex"),
+              driver: "codex",
+              models: [{ slug: "gpt-5.5", isCustom: false }],
+            } as never,
+            {
+              instanceId: ProviderInstanceId.make("claudeAgent"),
+              driver: "claudeAgent",
+              models: [{ slug: "claude-opus-5-5", isCustom: false }],
+            } as never,
+          ]),
+        }),
+      ).pipe(
         Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
         Layer.provide(NodeCrypto.layer),
         Layer.provide(
@@ -812,22 +828,6 @@ it.effect("records the calling agent and the agent a tool acted on", () => {
             getProjectThreadRecords: () =>
               Effect.succeed({ thread: shell(threadId, "codex", "gpt-5.5") } as never),
             dispatch: () => Effect.succeed({ sequence: 1 } as never),
-          }),
-        ),
-        Layer.provide(
-          Layer.mock(ProviderRegistry.ProviderRegistry)({
-            getProviders: Effect.succeed([
-              {
-                instanceId: ProviderInstanceId.make("codex"),
-                driver: "codex",
-                models: [{ slug: "gpt-5.5", isCustom: false }],
-              } as never,
-              {
-                instanceId: ProviderInstanceId.make("claudeAgent"),
-                driver: "claudeAgent",
-                models: [{ slug: "claude-opus-5-5", isCustom: false }],
-              } as never,
-            ]),
           }),
         ),
         Layer.provide(

@@ -10,10 +10,10 @@ import * as Schema from "effect/Schema";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
-import { getTranslationsSnapshot, GTProvider } from "gt-react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { changeLanguage } from "../i18n";
 import { initializeI18n } from "../i18n/initializeI18n";
 import { act, render } from "../../test/render";
 
@@ -75,7 +75,6 @@ const startError = "The resource monitor is not available.";
 const historyError = "Resource history could not start.";
 
 function setup({ retryFails = false, holdRetry = false } = {}) {
-  // GTProvider leaves its locale in a cookie; this sets it back to English.
   initializeI18n(() => {});
   const readAt = DateTime.makeUnsafe(0);
   const aggregate = {
@@ -316,7 +315,7 @@ describe("resource monitor retry", () => {
   });
 });
 
-it("shows each group's process count in German", async () => {
+it("shows each group's process count in Chinese", async () => {
   using fixture = setup();
   const { groups } = fixture.snapshot;
   const liveTelemetry = Atom.make<AsyncResult.AsyncResult<ResourceTelemetrySnapshot, MonitorError>>(
@@ -330,15 +329,18 @@ it("shows each group's process count in German", async () => {
     }),
   ).pipe(Atom.keepAlive);
   monitor.telemetry.mockImplementation(() => liveTelemetry);
-  const translations = await getTranslationsSnapshot("de");
+  await changeLanguage("zh");
+  await using _language = {
+    [Symbol.asyncDispose]: async () => {
+      await changeLanguage("en");
+    },
+  };
 
   await using screen = await render(
-    <GTProvider locale="de" translations={translations}>
-      <RegistryContext.Provider value={fixture.registry}>
-        <ResourceTelemetryDiagnostics environmentId={environmentId} />
-      </RegistryContext.Provider>
-    </GTProvider>,
+    <RegistryContext.Provider value={fixture.registry}>
+      <ResourceTelemetryDiagnostics environmentId={environmentId} />
+    </RegistryContext.Provider>,
   );
-  await expect.element(screen.getByText("3 Prozesse", { exact: true })).toBeVisible();
-  await expect.element(screen.getByText("1 Prozess", { exact: true })).toBeVisible();
+  await expect.element(screen.getByText("3 个进程", { exact: true })).toBeVisible();
+  await expect.element(screen.getByText("1 个进程", { exact: true })).toBeVisible();
 });

@@ -783,7 +783,7 @@ export function ThemeLibrary({
             openThemeEditor({
               editingThemeId: null,
               seedThemeId: null,
-              seedName: `${standardTheme.label} copy`,
+              seedName: i18n.t("appearance.theme.copyName", { name: standardTheme.label }),
               initialAppearance,
             })
           }
@@ -851,7 +851,7 @@ export function ThemeLibrary({
             openThemeEditor({
               editingThemeId: null,
               seedThemeId: customTheme.id,
-              seedName: `${customTheme.label} copy`,
+              seedName: i18n.t("appearance.theme.copyName", { name: customTheme.label }),
               initialAppearance,
             })
           }

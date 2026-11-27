@@ -2,7 +2,6 @@ import type { ScopedProjectRef } from "@t3tools/contracts";
 import { flushSync } from "react-dom";
 
 import { type DraftId, type DraftSessionState, useComposerDraftStore } from "../composerDraftStore";
-import { readProject } from "../state/entities";
 
 type DraftWorkspaceDefault = Pick<DraftSessionState, "envMode" | "startFromOrigin">;
 
@@ -24,7 +23,6 @@ function acceptsWorkspaceDefault(
     draft.promotedTo == null &&
     draft.environmentId === pending.projectRef.environmentId &&
     draft.projectId === pending.projectRef.projectId &&
-    readProject(pending.projectRef) !== null &&
     draft.envMode === pending.workspace.envMode &&
     !draft.workspaceExplicit &&
     draft.worktreePath === null &&

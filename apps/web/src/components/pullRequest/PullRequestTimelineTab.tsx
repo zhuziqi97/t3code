@@ -28,7 +28,7 @@ import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { m } from "~/i18n/messages";
 import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
 
-import { openPullRequestExternal } from "./pullRequestLinkContextMenu";
+import { useOpenLink } from "~/browser/useOpenLink";
 import { cn } from "~/lib/utils";
 import { pullRequestEnvironment } from "~/state/pullRequests";
 import { RelativeTime } from "~/components/RelativeTime";
@@ -915,8 +915,9 @@ export function PullRequestTimelineTab({
   }, [revealUrl, targetIndex]);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- the hold observes DOM outside React and must end with the tab
   useEffect(() => () => stopHolding.current?.(), []);
-  const openOnHost = (url: string) => {
-    void openPullRequestExternal(url);
+  const openLink = useOpenLink(threadRef);
+  const openOnHost: OpenOnHost = (url, event) => {
+    void openLink(url, { event }).catch(console.error);
   };
 
   const rowKey = (row: PullRequestTimelineRow) => {
