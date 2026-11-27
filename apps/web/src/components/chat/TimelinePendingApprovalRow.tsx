@@ -3,6 +3,8 @@ import { useTranslate } from "../../i18n";
 import {
   FULL_ACCESS_OVERRIDE_QUESTION,
   fullAccessOverrideExplanation,
+  PUSH_HOOKS_APPROVAL_LABEL,
+  PUSH_HOOKS_APPROVAL_QUESTION,
 } from "@t3tools/client-runtime/state/thread-requests";
 import { msg } from "gt-react";
 import { ShieldIcon } from "lucide-react";
@@ -11,6 +13,7 @@ import { type PendingApproval } from "../../session-logic";
 import { InlineButton } from "../ui/button";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions";
+import { PushHooksApprovalDetails } from "./PushHooksApprovalDetails";
 import { ToolActivityIconView, type WorkEntryIconName } from "./TimelineToolActivityIcon";
 import { TimelineRowCtx } from "./timelineRowContext";
 import { WorkLogRow } from "./WorkLog";
@@ -64,17 +67,18 @@ export const TimelinePendingApprovalRow = memo(function TimelinePendingApprovalR
     label: t(`approval.kind.${kind}`),
     detailLabel: t(`approval.detail.${kind}`),
   };
+  const { pushHooks } = approval;
   const canRespond = approval.responseCapability === "live";
   return (
     <WorkLogRow
       role="group"
-      aria-label={presentation.label}
+      aria-label={pushHooks ? m(PUSH_HOOKS_APPROVAL_LABEL) : presentation.label}
       data-v2-item-type="approval_request"
       wrapLabel
       icon={
         <ToolActivityIconView
           icon={undefined}
-          fallbackName={presentation.icon}
+          fallbackName={pushHooks ? "terminal" : presentation.icon}
           className="block size-4 shrink-0 stroke-2 text-icon-muted"
           muted
         />
@@ -88,11 +92,14 @@ export const TimelinePendingApprovalRow = memo(function TimelinePendingApprovalR
         >
           {approval.responseCapability === "not_resumable"
             ? t("approval.notResumable")
-            : approval.detail || presentation.label}
+            : pushHooks
+              ? m(PUSH_HOOKS_APPROVAL_QUESTION)
+              : approval.detail || presentation.label}
         </code>
       }
     >
       <div className="ms-7.5 flex min-w-0 flex-col gap-1 pb-1 text-xs">
+        {pushHooks ? <PushHooksApprovalDetails pushHooks={pushHooks} /> : null}
         {approval.appName ? (
           <span className="text-muted-foreground wrap-anywhere">{approval.appName}</span>
         ) : null}

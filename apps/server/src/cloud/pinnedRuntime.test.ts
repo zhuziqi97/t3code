@@ -75,6 +75,29 @@ const extractingRunner = (fs: FileSystem.FileSystem, path: Path.Path, commands: 
   });
 
 it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
+  it.effect("does not fetch or remove an incomplete runtime without a configured source", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-pinned-no-source-" });
+      const runtime = pinnedRuntimePaths(path, baseDir, version, "linux");
+      yield* fs.makeDirectory(runtime.versionDir, { recursive: true });
+      const error = yield* ensurePinnedRuntimeInstalled({
+        baseDir,
+        version,
+        fs,
+        path,
+        platform: "linux",
+        arch: "x64",
+        httpClient: HttpClient.make(() => Effect.die("unexpected archive request")),
+        runner: extractingRunner(fs, path),
+        validate: () => Effect.die("must not validate an incomplete runtime"),
+      }).pipe(Effect.flip);
+      assert.include(error.message, "configure a CLI archive mirror");
+      assert.isTrue(yield* fs.exists(runtime.versionDir));
+    }),
+  );
+
   it.effect("installs the verified release archive as the runtime executable", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -139,6 +162,7 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
       );
       const firstChunk = yield* Deferred.make<void>();
       const install = yield* ensurePinnedRuntimeInstalled({
+        releaseBaseUrl: "https://releases.example/download",
         baseDir,
         version,
         fs,
@@ -199,46 +223,49 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
     }),
   );
 
-  it.effect("retries a release download that GitHub answers with a gateway timeout", () =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-pinned-retry-" });
-      const checksums = yield* validChecksums;
-      const requests: string[] = [];
-      const gatewayTimeoutServed = yield* Deferred.make<void>();
-      const install = yield* ensurePinnedRuntimeInstalled({
-        baseDir,
-        version,
-        fs,
-        path,
-        platform: "linux",
-        arch: "x64",
-        httpClient: HttpClient.make((request) => {
-          requests.push(request.url);
-          const isChecksums = request.url.endsWith("/SHA256SUMS");
-          if (requests.length === 1) {
-            Deferred.doneUnsafe(gatewayTimeoutServed, Effect.void);
+  it.effect(
+    "retries a release download that the configured mirror answers with a gateway timeout",
+    () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-pinned-retry-" });
+        const checksums = yield* validChecksums;
+        const requests: string[] = [];
+        const gatewayTimeoutServed = yield* Deferred.make<void>();
+        const install = yield* ensurePinnedRuntimeInstalled({
+          releaseBaseUrl: "https://releases.example/download",
+          baseDir,
+          version,
+          fs,
+          path,
+          platform: "linux",
+          arch: "x64",
+          httpClient: HttpClient.make((request) => {
+            requests.push(request.url);
+            const isChecksums = request.url.endsWith("/SHA256SUMS");
+            if (requests.length === 1) {
+              Deferred.doneUnsafe(gatewayTimeoutServed, Effect.void);
+              return Effect.succeed(
+                HttpClientResponse.fromWeb(request, new Response("", { status: 504 })),
+              );
+            }
             return Effect.succeed(
-              HttpClientResponse.fromWeb(request, new Response("", { status: 504 })),
+              HttpClientResponse.fromWeb(
+                request,
+                new Response(isChecksums ? checksums : archiveBytes),
+              ),
             );
-          }
-          return Effect.succeed(
-            HttpClientResponse.fromWeb(
-              request,
-              new Response(isChecksums ? checksums : archiveBytes),
-            ),
-          );
-        }),
-        runner: extractingRunner(fs, path),
-        validate: () => Effect.void,
-      }).pipe(Effect.forkScoped);
-      yield* Deferred.await(gatewayTimeoutServed);
-      yield* TestClock.adjust(Duration.seconds(2));
-      const paths = yield* Fiber.join(install);
-      assert.equal(yield* fs.readFileString(paths.sentinelPath), `${version}\n`);
-      assert.equal(requests.filter((url) => url.endsWith("/SHA256SUMS")).length, 2);
-    }),
+          }),
+          runner: extractingRunner(fs, path),
+          validate: () => Effect.void,
+        }).pipe(Effect.forkScoped);
+        yield* Deferred.await(gatewayTimeoutServed);
+        yield* TestClock.adjust(Duration.seconds(2));
+        const paths = yield* Fiber.join(install);
+        assert.equal(yield* fs.readFileString(paths.sentinelPath), `${version}\n`);
+        assert.equal(requests.filter((url) => url.endsWith("/SHA256SUMS")).length, 2);
+      }),
   );
 
   it.effect.each([
@@ -274,6 +301,7 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
       const total = archiveBytes.length;
       const heldBytes = "wholeArchive" in row ? archiveBytes : archiveBytes.slice(0, 4);
       const install = yield* ensurePinnedRuntimeInstalled({
+        releaseBaseUrl: "https://releases.example/download",
         baseDir,
         version,
         fs,
@@ -394,6 +422,7 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
       const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-pinned-offline-" });
       let requests = 0;
       const error = yield* ensurePinnedRuntimeInstalled({
+        releaseBaseUrl: "https://releases.example/download",
         baseDir,
         version,
         fs,
@@ -423,6 +452,7 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
       const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-pinned-archive-bad-" });
       const commands: string[] = [];
       const error = yield* ensurePinnedRuntimeInstalled({
+        releaseBaseUrl: "https://releases.example/download",
         baseDir,
         version,
         fs,
@@ -449,6 +479,7 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
       let validatedDirectory = "";
 
       const installed = yield* ensurePinnedRuntimeInstalled({
+        releaseBaseUrl: "https://releases.example/download",
         baseDir,
         version,
         fs,
@@ -480,6 +511,7 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
       const finalPaths = pinnedRuntimePaths(path, baseDir, version, "linux");
 
       yield* ensurePinnedRuntimeInstalled({
+        releaseBaseUrl: "https://releases.example/download",
         baseDir,
         version,
         fs,
@@ -512,6 +544,7 @@ it.layer(NodeServices.layer)("ensurePinnedRuntimeInstalled", (it) => {
       yield* fs.writeFileString(path.join(finalPaths.versionDir, "partial"), "incomplete\n");
 
       yield* ensurePinnedRuntimeInstalled({
+        releaseBaseUrl: "https://releases.example/download",
         baseDir,
         version,
         fs,

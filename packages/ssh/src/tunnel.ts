@@ -7,7 +7,11 @@ import type {
   DesktopSshEnvironmentTarget,
 } from "@t3tools/contracts";
 import { waitForHttpReady as waitForHttpReadyShared } from "@t3tools/shared/httpReadiness";
-import { cliReleaseDownloadBaseUrl } from "@t3tools/shared/cliRelease";
+import {
+  CONVENE_CLI_INSTALL_GUIDANCE,
+  configuredCliReleaseBaseUrl,
+  releaseAssetUrl,
+} from "@t3tools/shared/cliRelease";
 import * as KeyedLock from "@t3tools/shared/KeyedLock";
 import * as NetService from "@t3tools/shared/Net";
 import { extractJsonObject, fromLenientJson } from "@t3tools/shared/schemaJson";
@@ -486,6 +490,29 @@ if [ -z "$T3_ARCHIVE_VERSION" ]; then
   exit 1
 fi
 T3_SYSTEM_EXECUTABLE="$(command -v t3 2>/dev/null || true)"
+T3_RELEASE_VERSION_URL=@@T3_RELEASE_VERSION_URL@@
+T3_RUNTIME_DIR="$HOME/.t3/runtime/versions/$T3_ARCHIVE_VERSION"
+find_running_t3() {
+  for T3_EXISTING in "$T3_SYSTEM_EXECUTABLE" "$HOME/.t3/runtime/versions"/*/t3; do
+    [ -x "$T3_EXISTING" ] || continue
+    if [ "$T3_EXISTING" != "$T3_SYSTEM_EXECUTABLE" ]; then
+      T3_EXISTING_DIR="\${T3_EXISTING%/t3}"
+      [ "$(cat "$T3_EXISTING_DIR/.install-complete" 2>/dev/null)" = "\${T3_EXISTING_DIR##*/}" ] || continue
+    fi
+    T3_RUNTIME_INFO="$("$T3_EXISTING" __ssh-helper runtime-port "$HOME/.t3/userdata/server-runtime.json" 2>/dev/null)" || continue
+    T3_EXISTING_PORT="\${T3_RUNTIME_INFO#* }"
+    case "$T3_EXISTING_PORT" in ''|*[!0-9]*) continue ;; esac
+    if "$T3_EXISTING" __ssh-helper wait-ready "$T3_EXISTING_PORT" "@@T3_REUSE_READY_TIMEOUT_MS@@" "@@T3_READY_PROBE_TIMEOUT_MS@@" >/dev/null 2>&1; then
+      return 0
+    fi
+  done
+  return 1
+}
+if [ "\${1:-}" = "--existing-port" ]; then
+  [ -z "$T3_RELEASE_VERSION_URL" ] && find_running_t3 || exit 1
+  printf '%s\\n' "$T3_EXISTING_PORT"
+  exit 0
+fi
 if [ -n "$T3_SYSTEM_EXECUTABLE" ] && T3_SYSTEM_VERSION="$("$T3_SYSTEM_EXECUTABLE" --version 2>/dev/null)" && [ "$T3_SYSTEM_VERSION" = "t3 v$T3_ARCHIVE_VERSION" ]; then
   # A matching host-provided runtime supports platforms such as musl Linux,
   # where the portable release archive cannot run.
@@ -493,12 +520,17 @@ if [ -n "$T3_SYSTEM_EXECUTABLE" ] && T3_SYSTEM_VERSION="$("$T3_SYSTEM_EXECUTABLE
 fi
 # Self-contained release archive: no Node, npm, or compiler on the remote.
 # Unpacked into the pinned-runtime layout so \`t3 service install\` reuses it.
-T3_RELEASE_BASE_URL=@@T3_RELEASE_BASE_URL@@
-T3_RUNTIME_DIR="$HOME/.t3/runtime/versions/$T3_ARCHIVE_VERSION"
 t3_runtime_ready() {
   [ -x "$T3_RUNTIME_DIR/t3" ] && [ "$(cat "$T3_RUNTIME_DIR/.install-complete" 2>/dev/null)" = "$T3_ARCHIVE_VERSION" ]
 }
 if ! t3_runtime_ready; then
+  if [ -z "$T3_RELEASE_VERSION_URL" ]; then
+    if [ "\${1:-}" = "auth" ] && [ "\${2:-}" = "pairing" ] && [ "\${3:-}" = "create" ] && find_running_t3; then
+      exec "$T3_EXISTING" "$@"
+    fi
+    printf '%s\\n' @@T3_CLI_INSTALL_GUIDANCE@@ >&2
+    exit 1
+  fi
   mkdir -p "$HOME/.t3/runtime/versions"
   T3_LOCK="$HOME/.t3/runtime/versions/.$T3_ARCHIVE_VERSION.install.lock"
   # uutils mkdir can report success on EEXIST, so use shell noclobber.
@@ -549,12 +581,13 @@ if ! t3_runtime_ready; then
     elif command -v wget >/dev/null 2>&1; then wget -q --timeout=30 --tries=1 "$1" -O "$2"
     else printf 'Remote host needs curl or wget to download %s.\\n' "$T3_ARCHIVE" >&2; exit 1
     fi || {
-      printf 'Could not download t3 %s from %s. If this host cannot reach it, install t3 %s on it with https://t3.codes/install.sh (T3CODE_VERSION=%s; T3CODE_RELEASE_BASE_URL selects a mirror).\\n' "$T3_ARCHIVE_VERSION" "$1" "$T3_ARCHIVE_VERSION" "$T3_ARCHIVE_VERSION" >&2
+      printf 'Could not download t3 %s from the configured CLI archive mirror. %s\\n' "$T3_ARCHIVE_VERSION" @@T3_CLI_INSTALL_GUIDANCE@@ >&2
       exit 1
     }
   }
-  t3_fetch "$T3_RELEASE_BASE_URL/v$T3_ARCHIVE_VERSION/SHA256SUMS" "$T3_STAGING/SHA256SUMS" @@T3_ARCHIVE_CHECKSUMS_SECONDS@@
-  t3_fetch "$T3_RELEASE_BASE_URL/v$T3_ARCHIVE_VERSION/$T3_ARCHIVE" "$T3_STAGING/$T3_ARCHIVE" @@T3_ARCHIVE_DOWNLOAD_SECONDS@@
+  T3_RELEASE_QUERY=@@T3_RELEASE_QUERY@@
+  t3_fetch "$T3_RELEASE_VERSION_URL/SHA256SUMS$T3_RELEASE_QUERY" "$T3_STAGING/SHA256SUMS" @@T3_ARCHIVE_CHECKSUMS_SECONDS@@
+  t3_fetch "$T3_RELEASE_VERSION_URL/$T3_ARCHIVE$T3_RELEASE_QUERY" "$T3_STAGING/$T3_ARCHIVE" @@T3_ARCHIVE_DOWNLOAD_SECONDS@@
   T3_EXPECTED="$(grep " \\*\\{0,1\\}$T3_ARCHIVE$" "$T3_STAGING/SHA256SUMS" | cut -d' ' -f1)"
   if command -v sha256sum >/dev/null 2>&1; then
     T3_ACTUAL="$(sha256sum < "$T3_STAGING/$T3_ARCHIVE" | cut -d' ' -f1)"
@@ -648,7 +681,15 @@ if [ "$T3_ARCHIVE_MODE" = "1" ]; then
   # The archive ships the helpers below inside the executable; the remote
   # needs no Node at all. Resolving the runner once here also downloads the
   # archive before the port and readiness probes rely on it.
-  "$RUNNER_NEXT" --version >/dev/null
+  if ! RUNNER_ERROR="$("$RUNNER_NEXT" --version 2>&1 >/dev/null)"; then
+    # With no archive source, borrow a ready server without replacing its runner or ownership.
+    if EXISTING_PORT="$("$RUNNER_NEXT" --existing-port)"; then
+      printf '{"remotePort":%s,"serverKind":"external"}\\n' "$EXISTING_PORT"
+      exit 0
+    fi
+    printf '%s\\n' "$RUNNER_ERROR" >&2
+    exit 1
+  fi
 elif ! ensure_remote_node_path; then
   if ! command -v node >/dev/null 2>&1; then
     printf 'Remote host is missing node on PATH. Install Node or configure a supported version manager for non-interactive shells.\\n' >&2
@@ -1079,9 +1120,10 @@ printf '{"remotePort":%s,"serverKind":"%s"}\\n' "$REMOTE_PORT" "\${REMOTE_MANAGE
 const REMOTE_PAIRING_SCRIPT = `set -eu
 STATE_DIR="$HOME/.t3/ssh-launch/@@T3_STATE_KEY@@"
 DEFAULT_SERVER_HOME="$HOME/.t3"
-RUNNER_FILE="$STATE_DIR/run-t3.sh"
 @@T3_ENSURE_T3_HOME_SCRIPT@@
 mkdir -p "$STATE_DIR"
+RUNNER_FILE="$(mktemp "$STATE_DIR/pair-t3.XXXXXX")"
+trap 'rm -f "$RUNNER_FILE"' EXIT
 cat >"$RUNNER_FILE" <<'SH'
 @@T3_RUNNER_SCRIPT@@
 SH
@@ -1162,15 +1204,24 @@ export function buildRemoteT3RunnerScript(input?: RemoteT3RunnerOptions): string
   if (archiveVersion !== "" && !EXACT_ARCHIVE_VERSION.test(archiveVersion)) {
     throw new SshInvalidArchiveVersionError({ archiveVersion });
   }
-  const releaseBaseUrl = cliReleaseDownloadBaseUrl("", input?.releaseBaseUrl ?? undefined).replace(
-    /\/v$/u,
-    "",
-  );
+  const releaseBaseUrl = configuredCliReleaseBaseUrl(input?.releaseBaseUrl);
+  const releaseVersionUrl = releaseBaseUrl
+    ? new URL(releaseAssetUrl(releaseBaseUrl, `v${archiveVersion}`))
+    : undefined;
+  const releaseQuery = releaseVersionUrl?.search ?? "";
+  if (releaseVersionUrl) {
+    releaseVersionUrl.search = "";
+    releaseVersionUrl.hash = "";
+  }
   return stripTrailingNewlines(
     applyScriptPlaceholders(REMOTE_RUNNER_SCRIPT, {
       T3_NODE_SCRIPT_PATH: shellSingleQuote(nodeScriptPath),
       T3_ARCHIVE_VERSION: shellSingleQuote(archiveVersion),
-      T3_RELEASE_BASE_URL: shellSingleQuote(releaseBaseUrl),
+      T3_RELEASE_VERSION_URL: shellSingleQuote(releaseVersionUrl?.href ?? ""),
+      T3_RELEASE_QUERY: shellSingleQuote(releaseQuery),
+      T3_REUSE_READY_TIMEOUT_MS: String(REMOTE_REUSE_READY_TIMEOUT_MS),
+      T3_READY_PROBE_TIMEOUT_MS: String(SSH_READY_PROBE_TIMEOUT_MS),
+      T3_CLI_INSTALL_GUIDANCE: shellSingleQuote(CONVENE_CLI_INSTALL_GUIDANCE),
       T3_ARCHIVE_LOCK_WAIT_SECONDS: String(REMOTE_ARCHIVE_LOCK_WAIT_SECONDS),
       T3_ARCHIVE_DOWNLOAD_SECONDS: String(REMOTE_ARCHIVE_DOWNLOAD_SECONDS),
       T3_ARCHIVE_CHECKSUMS_SECONDS: String(REMOTE_ARCHIVE_CHECKSUMS_SECONDS),

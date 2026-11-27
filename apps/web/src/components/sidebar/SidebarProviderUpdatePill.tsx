@@ -1,3 +1,4 @@
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { useMessages } from "gt-react";
 import type { MessageResolver } from "../../i18n/messages";
 import { useTranslate } from "../../i18n";
@@ -13,7 +14,7 @@ import {
   getProviderUpdateSidebarPillView,
   type ProviderUpdateSidebarPillView,
 } from "../ProviderUpdateLaunchNotification.logic";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 
 type LocalizedPillView = ProviderUpdateSidebarPillView & {
   readonly resolveText: (resolve: MessageResolver) => ProviderUpdateSidebarPillView | null;
@@ -182,31 +183,29 @@ export function SidebarProviderUpdatePill() {
         />
       ) : null}
       <div className="pointer-events-none absolute inset-0 rounded-lg transition-colors" />
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <button
-              type="button"
-              aria-label={displayedText.description}
-              data-provider-update-main
-              className="relative z-[1] flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
-              onClick={openProviderSettings}
-            >
-              {displayedView.tone === "loading" ? (
-                <Spinner size="sm" className="shrink-0" />
-              ) : displayedView.tone === "success" ? (
-                <CircleCheckIcon className="size-3.5 shrink-0" />
-              ) : displayedView.tone === "error" ? (
-                <TriangleAlertIcon className="size-3.5 shrink-0" />
-              ) : (
-                <DownloadIcon className="size-3.5 shrink-0" />
-              )}
-              <span className="min-w-0 wrap-break-word">{displayedText.title}</span>
-            </button>
-          }
-        />
-        <TooltipPopup side="top">{displayedText.description}</TooltipPopup>
-      </Tooltip>
+      <SharedTooltipTrigger
+        render={
+          <button
+            type="button"
+            aria-label={displayedText.description}
+            data-provider-update-main
+            className="relative z-[1] flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
+            onClick={openProviderSettings}
+          >
+            {displayedView.tone === "loading" ? (
+              <Spinner size="sm" className="shrink-0" />
+            ) : displayedView.tone === "success" ? (
+              <CircleCheckIcon className="size-3.5 shrink-0" />
+            ) : displayedView.tone === "error" ? (
+              <TriangleAlertIcon className="size-3.5 shrink-0" />
+            ) : (
+              <DownloadIcon className="size-3.5 shrink-0" />
+            )}
+            <span className="min-w-0 wrap-break-word">{displayedText.title}</span>
+          </button>
+        }
+        label={displayedText.description}
+      />
       {displayedView.dismissible && (
         <Tooltip>
           <TooltipTrigger

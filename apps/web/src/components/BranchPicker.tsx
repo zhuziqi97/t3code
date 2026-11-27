@@ -1,3 +1,4 @@
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { useLegendListRef } from "~/hooks/useLegendListRef";
 import type { VcsRef } from "@t3tools/contracts";
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
@@ -19,7 +20,6 @@ import {
   ComboboxPopup,
   ComboboxStatus,
 } from "./ui/combobox";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 
 export function BranchPicker({
   items,

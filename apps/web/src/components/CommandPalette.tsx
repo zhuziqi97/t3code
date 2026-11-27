@@ -1,3 +1,4 @@
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { useEditorAction } from "../editorPreferences";
 import { openConveneProjectConfiguration } from "./convene/ConveneProjectDialog";
 import { useTranslate } from "../i18n";
@@ -62,7 +63,9 @@ import {
   SourceControlProviderKind,
   PRIMARY_LOCAL_ENVIRONMENT_ID,
   resolveEnvironmentMachineKind,
+  type ScopedProjectRef,
 } from "@t3tools/contracts";
+import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
@@ -111,15 +114,11 @@ import { useDesktopLocalBootstraps } from "../connection/useDesktopLocalBootstra
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
 import { copyThreadReference } from "../lib/copyThreadReference";
+import { moveDraftToProject } from "../lib/moveDraftToProject";
 import {
   queueWorkspaceFocusFromPalette,
   restoreWorkspaceFocusFromPalette,
 } from "../lib/workspaceFocus";
-import {
-  composerPromptLink,
-  copyPromptLink,
-  promptLinkRepositoryOf,
-} from "./promptLinks/copyPromptLink";
 import { useClientSettings } from "../hooks/useSettings";
 import { useStableCallback } from "../hooks/useStableCallback";
 import { readLocalApi } from "../localApi";
@@ -141,11 +140,7 @@ import { pickTriageEnvironment } from "../lib/triageTarget";
 import { useNewProject } from "../hooks/useNewProject";
 import { useOrderWhileOpen } from "../hooks/useOrderWhileOpen";
 import { reportProjectFailure, useProjectPin } from "../hooks/useProjectGroupUpdate";
-import {
-  useEnvironmentProviders,
-  useEnvironments,
-  usePrimaryEnvironmentId,
-} from "../state/environments";
+import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import {
   useAnyEnvironmentHiding,
   useDelegatedUnderParent,
@@ -157,11 +152,7 @@ import {
   waitForProject,
 } from "../state/entities";
 import { isShownUnderParent, visibleLinkedThreads } from "@t3tools/client-runtime/state/threads";
-import {
-  resolveThreadActionProjectRef,
-  startNewThreadFromContext,
-  threadHasStarted,
-} from "../lib/chatThreadActions";
+import { resolveThreadActionProjectRef, startNewThreadFromContext } from "../lib/chatThreadActions";
 import {
   appendBrowsePathSegment,
   findProjectByPath,
@@ -197,7 +188,6 @@ import {
   newProjectId,
 } from "../lib/utils";
 import { buildThreadRouteParams } from "../threadRoutes";
-import { useAvailableSettingsSearchItems } from "./settings/useAvailableSettingsSearchItems";
 import {
   applyWslEnvironmentConfiguration,
   parseWslUncPath,
@@ -265,6 +255,7 @@ import {
 } from "./CommandPaletteAddProject";
 import { useCommandPaletteThreadActions } from "./CommandPaletteThreadActions";
 import { useCommandPaletteThreadItems } from "./CommandPaletteThreadItems";
+import { useCommandPaletteSettingsItems } from "./CommandPaletteSettingsItems";
 import { useCommandPaletteThemeItems } from "./CommandPaletteThemeItems";
 import {
   PORT_FORWARD_GROUP_PREFIX,
@@ -282,14 +273,12 @@ import { canShareWithGuestAtom } from "./chat/guestShareAvailability";
 import { openGuestShareDialog } from "./chat/guestShareDialogState";
 import { openUseInAnotherApp } from "./mcp/UseInAnotherAppDialog";
 import { ProjectContentSearchDialog } from "./search/ProjectContentSearchDialog";
-import { settingsForThisPlatform, settingsSectionLabel } from "./settings/settingsSearch";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import { resolveShortcutCommand, threadJumpIndexFromCommand } from "../keybindings";
 import { CommandDialog, CommandDialogPopup, CommandFooterAction } from "./ui/command";
 import { Button } from "./ui/button";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { suggestAppAccessForRemote } from "./sourceControlAppAccessToast";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { ComposerHandleContext, useComposerHandleContext } from "../composerHandleContext";
 import type { ChatComposerHandle } from "./chat/ChatComposer";
 import {
@@ -516,7 +505,7 @@ function OpenCommandPaletteDialog(props: {
   const { environments } = useEnvironments();
   const desktopLocalBootstraps = useDesktopLocalBootstraps();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const availableSettingsSearchItems = useAvailableSettingsSearchItems();
+  const settingsSearchItems = useCommandPaletteSettingsItems(deferredQuery.trim().length > 0);
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread } =
     useHandleNewThread();
   const paletteRouteTarget = useThreadRouteTarget();
@@ -567,7 +556,6 @@ function OpenCommandPaletteDialog(props: {
       ),
   );
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
-  const providersByEnvironment = useEnvironmentProviders();
   const { changeThemeItem, changeAppearanceItem, themeEditorItem } = useCommandPaletteThemeItems();
   const portForwardItem = useCommandPalettePortForwardItem({
     activeThread: activeThread ?? null,
@@ -592,7 +580,25 @@ function OpenCommandPaletteDialog(props: {
   const [isCreatingNewProject, setIsCreatingNewProject] = useState(false);
   // State lags a render behind, so a repeated Enter could start a second create.
   const newProjectSubmittingRef = useRef(false);
-  const createNewProject = useNewProject();
+  // "Add project" from a draft's project picker picks the new project for that draft.
+  const [addProjectDraftId] = useState(() =>
+    props.openIntent?.kind === "add-project" ? (props.openIntent.draftId ?? null) : null,
+  );
+  const moveDraftToAddedProject = async (project: EnvironmentProject): Promise<boolean> => {
+    if (addProjectDraftId === null || !moveDraftToProject(addProjectDraftId, project)) {
+      return false;
+    }
+    await navigate({ to: "/draft/$draftId", params: { draftId: addProjectDraftId } });
+    return true;
+  };
+  const openAddedProject = async (projectRef: ScopedProjectRef): Promise<void> => {
+    // A moved draft is keyed from the project record, so wait for it to reach this client.
+    const project =
+      addProjectDraftId === null ? null : await waitForProject(projectRef, 3_000).catch(() => null);
+    if (project !== null && (await moveDraftToAddedProject(project))) return;
+    await handleNewThread(projectRef);
+  };
+  const createNewProject = useNewProject(openAddedProject);
   const cloneLookupGeneration = useRef(0);
   const [isRemoteProjectLookingUp, setIsRemoteProjectLookingUp] = useState(false);
   const [isRemoteProjectCloning, setIsRemoteProjectCloning] = useState(false);
@@ -1048,8 +1054,10 @@ function OpenCommandPaletteDialog(props: {
     setHighlightedItemValue(null);
   });
 
-  function popView(): void {
+  const popView = useStableCallback((): void => {
     browseNavigation.invalidate();
+    cloneLookupGeneration.current += 1;
+    setIsRemoteProjectLookingUp(false);
     setAddProjectCloneFlow(null);
     setNewProjectFlow(null);
     if (viewStack.length <= 1) {
@@ -1059,7 +1067,7 @@ function OpenCommandPaletteDialog(props: {
     }
     dispatchSearch({ type: "back" });
     setHighlightedItemValue(null);
-  }
+  });
 
   function handleQueryChange(nextQuery: string, source: EventTarget | null): void {
     browseNavigation.invalidate();
@@ -1519,56 +1527,6 @@ function OpenCommandPaletteDialog(props: {
 
   if (portForwardItem) actionItems.push(portForwardItem);
 
-  const promptLinkTarget = paletteRouteTarget
-    ? paletteRouteTarget.kind === "server"
-      ? paletteRouteTarget.threadRef
-      : paletteRouteTarget.draftId
-    : null;
-  const promptLinkProjectRef = activeThread ?? activeDraftThread;
-  const promptLinkInput =
-    promptLinkTarget === null
-      ? null
-      : {
-          target: promptLinkTarget,
-          project: projects.find(
-            (project) =>
-              project.environmentId === promptLinkProjectRef?.environmentId &&
-              project.id === promptLinkProjectRef.projectId,
-          ),
-          providers:
-            (promptLinkProjectRef
-              ? providersByEnvironment.get(promptLinkProjectRef.environmentId)
-              : undefined) ?? [],
-          threadModelSelection: activeThread?.modelSelection ?? null,
-          threadStarted: threadHasStarted(activeThread),
-        };
-  const plainPromptLink = promptLinkInput
-    ? composerPromptLink({ ...promptLinkInput, withContext: false })
-    : null;
-  if (promptLinkInput !== null && plainPromptLink !== null) {
-    actionItems.push({
-      kind: "action",
-      value: "action:copy-prompt-link",
-      searchTerms: ["copy", "share", "prompt", "link"],
-      title: t("chat.copy.promptLink"),
-      icon: <LinkIcon className={ITEM_ICON_CLASS} />,
-      run: () => copyPromptLink(plainPromptLink),
-    });
-    if (promptLinkRepositoryOf(promptLinkInput.project) !== null) {
-      const contextLink = composerPromptLink({ ...promptLinkInput, withContext: true });
-      if (contextLink !== null) {
-        actionItems.push({
-          kind: "action",
-          value: "action:copy-prompt-link-with-context",
-          searchTerms: ["copy", "share", "prompt", "link", "repository", "model"],
-          title: t("chat.copy.promptLinkWithContext"),
-          icon: <LinkIcon className={ITEM_ICON_CLASS} />,
-          run: () => copyPromptLink(contextLink),
-        });
-      }
-    }
-  }
-
   if (activeThreadReferenceCopyTarget !== null) {
     actionItems.push({
       kind: "action",
@@ -1945,25 +1903,6 @@ function OpenCommandPaletteDialog(props: {
   const rootGroups = buildRootGroups({ actionItems, recentThreadItems }, messages);
   // Every setting goes to the palette's own matcher, so settings get the same
   // word starts and typo tolerance as threads.
-  const settingsSearchItems: CommandPaletteActionItem[] = settingsForThisPlatform(
-    availableSettingsSearchItems,
-  ).map((item) => ({
-    kind: "action",
-    value: `setting:${item.id}`,
-    searchTerms: [item.title, settingsSectionLabel(item.to, t), ...(item.searchTerms ?? [])],
-    title: item.title,
-    description: t("command.settingsSection", { section: settingsSectionLabel(item.to, t) }),
-    ...(item.secondary ? { secondary: true } : {}),
-    icon: <SettingsIcon className={ITEM_ICON_CLASS} />,
-    run: async () => {
-      await navigate({
-        to: item.to,
-        hash: item.targetId ?? item.id,
-        replace: pathname === item.to,
-        hashScrollIntoView: false,
-      });
-    },
-  }));
   const sourceSelectionViewValue =
     addProjectEnvironmentId === null ? null : `sources:${addProjectEnvironmentId}`;
   const activeGroups =
@@ -2115,6 +2054,10 @@ function OpenCommandPaletteDialog(props: {
           input: { projectId: existing.id, archived: false },
         }).then((result) => reportProjectFailure(t("project.unarchive.failed"), result));
       }
+      if (await moveDraftToAddedProject(existing)) {
+        setOpen(false);
+        return;
+      }
       const latestThread = getLatestThreadForProject(
         threads.filter((thread) => thread.environmentId === existing.environmentId),
         existing.id,
@@ -2182,12 +2125,8 @@ function OpenCommandPaletteDialog(props: {
       return;
     }
 
-    openConveneProjectConfiguration({ environmentId: input.environmentId, projectId });
     const projectRef = scopeProjectRef(input.environmentId, projectId);
-    const navigationResult = await settlePromise(async () => {
-      await waitForProject(projectRef);
-      return handleNewThread(projectRef);
-    });
+    const navigationResult = await settlePromise(() => openAddedProject(projectRef));
     if (navigationResult._tag === "Failure") {
       const error = squashAtomCommandFailure(navigationResult);
       toastManager.add(
@@ -2456,7 +2395,7 @@ function OpenCommandPaletteDialog(props: {
     // stream a moment so the draft opens with its project resolved instead of
     // flashing the project picker.
     await waitForProject(projectRef, 3_000).catch(() => null);
-    const navigationResult = await settlePromise(() => handleNewThread(projectRef));
+    const navigationResult = await settlePromise(() => openAddedProject(projectRef));
     if (navigationResult._tag === "Failure") {
       const error = squashAtomCommandFailure(navigationResult);
       toastManager.add(

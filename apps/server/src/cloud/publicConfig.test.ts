@@ -13,20 +13,24 @@ import {
 const provideEnv = (env: Readonly<Record<string, string>>) =>
   Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env })));
 
-it.effect("rejects an insecure runtime relay URL override", () =>
-  makeRelayUrlConfig("https://embedded.example.test").pipe(
-    provideEnv({ T3CODE_RELAY_URL: "http://runtime.example.test" }),
-    Effect.flip,
-  ),
+it.effect.each(["http://runtime.example.test", "https://relay.t3.codes"])(
+  "rejects an insecure or upstream runtime relay override %s",
+  (url) =>
+    makeRelayUrlConfig("https://embedded.example.test").pipe(
+      provideEnv({ T3CODE_RELAY_URL: url }),
+      Effect.flip,
+    ),
 );
 
-it.effect("rejects malformed or insecure hosted app URLs", () =>
+it.effect("requires a configured Convene hosted app URL", () =>
   Effect.gen(function* () {
     for (const value of [
+      "",
       "app.t3.codes",
-      "http://app.t3.codes",
-      "https://app.t3.codes/nested",
-      "https://app.t3.codes?alias=true",
+      "https://app.t3.codes",
+      "http://hosted.example.test",
+      "https://hosted.example.test/nested",
+      "https://hosted.example.test?alias=true",
     ]) {
       const result = yield* hostedAppUrlConfig.pipe(
         provideEnv({ T3CODE_HOSTED_APP_URL: value }),
@@ -34,6 +38,10 @@ it.effect("rejects malformed or insecure hosted app URLs", () =>
       );
       assert.isTrue(Result.isFailure(result), value);
     }
+    const origin = yield* hostedAppUrlConfig.pipe(
+      provideEnv({ T3CODE_HOSTED_APP_URL: "https://hosted.example.test/" }),
+    );
+    assert.equal(origin, "https://hosted.example.test");
   }),
 );
 

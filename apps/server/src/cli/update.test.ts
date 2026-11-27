@@ -28,12 +28,7 @@ import {
 } from "../cloud/pinnedRuntime.ts";
 import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
 import * as ProcessRunner from "../processRunner.ts";
-import {
-  repointLauncher,
-  resolveMirrorVersion,
-  resolveNewestVersion,
-  runUpdate,
-} from "./update.ts";
+import { repointLauncher, resolveMirrorVersion, runUpdate } from "./update.ts";
 
 // lsof listing one process, so prune sees a process list in which no runtime is running.
 const unrelatedLsof = ProcessRunner.ProcessRunner.of({
@@ -51,29 +46,6 @@ const unrelatedLsof = ProcessRunner.ProcessRunner.of({
 });
 
 afterEach(() => vi.restoreAllMocks());
-
-it.effect("authenticates each release page until the requested channel is found", () =>
-  Effect.gen(function* () {
-    const pages: string[] = [];
-    const httpClient = HttpClient.make((request) => {
-      const url = new URL(request.url);
-      assert.equal(url.origin, "https://api.github.com");
-      assert.equal(url.pathname, "/repos/pingdotgg/t3code/releases");
-      assert.equal(request.headers.accept, "application/vnd.github+json");
-      assert.equal(request.headers.authorization, "Bearer gh-token");
-      const page = url.searchParams.get("page") ?? "";
-      pages.push(page);
-      const tag_name = page === "1" ? "v1.2.4-preview.20260101.1" : "v1.2.3";
-      return Effect.succeed(HttpClientResponse.fromWeb(request, Response.json([{ tag_name }])));
-    });
-    const version = yield* resolveNewestVersion("stable").pipe(
-      Effect.provideService(HostProcess.Environment, { GH_TOKEN: "gh-token" }),
-      Effect.provideService(HttpClient.HttpClient, httpClient),
-    );
-    assert.equal(version, "1.2.3");
-    assert.deepStrictEqual(pages, ["1", "2"]);
-  }),
-);
 
 it.effect("reads the newest version from the update feed file a mirror publishes", () =>
   Effect.gen(function* () {
@@ -154,6 +126,17 @@ it.layer(NodeServices.layer)("t3 update under a managed policy", (it) => {
         ),
       ),
     );
+
+  it.effect(
+    "stops before checking an update when no Convene CLI archive source is configured",
+    () =>
+      Effect.gen(function* () {
+        const error = yield* runWithPolicy({ mode: "auto" }).pipe(
+          Effect.provideService(HostProcess.Environment, { GH_TOKEN: "untouched" }),
+        );
+        assert.include(error.message, "configure a CLI archive mirror");
+      }),
+  );
 
   it.effect("refuses to update when updates are off", () =>
     Effect.gen(function* () {

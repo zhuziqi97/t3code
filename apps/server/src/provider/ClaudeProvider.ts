@@ -931,7 +931,7 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
     parsedVersion
       ? yield* resolveResetCredits(parsedVersion)
       : undefined;
-  return buildServerProvider({
+  const provider = buildServerProvider({
     presentation: CLAUDE_PRESENTATION,
     enabled: claudeSettings.enabled,
     checkedAt,
@@ -953,6 +953,9 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
       usageLimits: resetCredits ? { ...usageLimits, resetCredits } : usageLimits,
     },
   });
+  // Claude Code lists gateway models only while its one gateway cache holds this base URL, and
+  // then all of them, so a list without any may lack this gateway's models.
+  return capabilities.models?.length ? provider : { ...provider, modelsIncomplete: true };
 });
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);

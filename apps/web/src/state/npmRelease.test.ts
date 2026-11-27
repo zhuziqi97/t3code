@@ -36,7 +36,7 @@ const configFor = (environmentId: EnvironmentId | null, supported = true) =>
       serverVersion: version,
       capabilities: {
         repositoryIdentity: true,
-        ...(supported ? { npmReleaseLookup: true } : {}),
+        ...(supported ? { cliArchiveReleaseLookup: true } : {}),
       },
     },
     auth: {
@@ -147,9 +147,7 @@ it.effect("does not call an unsupported RPC or fetch public npm for an older pri
     const unmount = registry.mount(release);
     try {
       const error = yield* AtomRegistry.getResult(registry, release).pipe(Effect.flip);
-      expect(npmReleaseFailureMessage(Cause.fail(error))).toContain(
-        "Update it before switching tracks",
-      );
+      expect(npmReleaseFailureMessage(Cause.fail(error))).toContain("add a CLI archive mirror");
       expect(query).not.toHaveBeenCalled();
       expect(fetch).not.toHaveBeenCalled();
     } finally {

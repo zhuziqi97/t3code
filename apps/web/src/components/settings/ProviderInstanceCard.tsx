@@ -1,3 +1,4 @@
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { ProviderOperationActions } from "../ProviderOperationActions";
 import { Trans } from "react-i18next";
 import { useTranslate } from "../../i18n";
@@ -55,7 +56,6 @@ import { ManagedControl, ManagedNotice } from "../ManagedPolicy";
 import { managedInstanceLocks, useManagedPolicy } from "../../state/managedPolicy";
 import { disallowedProviderMessage, isManagedDriverAllowed } from "@t3tools/contracts";
 import { stackedThreadToast, toastManager } from "../ui/toast";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import type {
   ProviderClientDefinition,
   ProviderEnvironmentField,
@@ -89,6 +89,7 @@ import {
   formatProviderAuthLabel,
   getProviderVersionLabel,
 } from "./providerStatus";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 
 const ENVIRONMENT_VARIABLE_NAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
@@ -100,12 +101,7 @@ function ProviderStatusDiagnostic({
   children: ReactElement;
 }) {
   if (!detail) return children;
-  return (
-    <Tooltip>
-      <TooltipTrigger render={children} />
-      <TooltipPopup side="top">{detail}</TooltipPopup>
-    </Tooltip>
-  );
+  return <SharedTooltipTrigger render={children} label={detail} />;
 }
 
 const ENVIRONMENT_VARIABLE_NAME_PLACEHOLDER = "VARIABLE_NAME";
@@ -491,40 +487,36 @@ export function ProviderEnvironmentSection(props: {
             );
             const sensitiveToggle =
               typeof variable.value === "string" ? (
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Button
-                        type="button"
-                        size="icon-micro"
-                        variant="ghost-muted"
-                        disabled={variable.valueRedacted === true}
-                        onClick={() => {
-                          const sensitive = !variable.sensitive;
-                          updateVariable(variable.id, {
-                            sensitive,
-                            ...(sensitive && variable.valueRedacted === undefined
-                              ? {}
-                              : { valueRedacted: sensitive ? variable.valueRedacted : false }),
-                          });
-                        }}
-                        aria-pressed={variable.sensitive}
-                        aria-label={gt("Mark environment variable {name} as sensitive", {
-                          name: variable.name || index + 1,
-                        })}
-                      >
-                        {variable.sensitive ? (
-                          <LockIcon className="size-3" />
-                        ) : (
-                          <LockOpenIcon className="size-3" />
-                        )}
-                      </Button>
-                    }
-                  />
-                  <TooltipPopup side="top">
-                    {variable.sensitive ? gt("Sensitive, stored separately") : gt("Plain text")}
-                  </TooltipPopup>
-                </Tooltip>
+                <SharedTooltipTrigger
+                  render={
+                    <Button
+                      type="button"
+                      size="icon-micro"
+                      variant="ghost-muted"
+                      disabled={variable.valueRedacted === true}
+                      onClick={() => {
+                        const sensitive = !variable.sensitive;
+                        updateVariable(variable.id, {
+                          sensitive,
+                          ...(sensitive && variable.valueRedacted === undefined
+                            ? {}
+                            : { valueRedacted: sensitive ? variable.valueRedacted : false }),
+                        });
+                      }}
+                      aria-pressed={variable.sensitive}
+                      aria-label={gt("Mark environment variable {name} as sensitive", {
+                        name: variable.name || index + 1,
+                      })}
+                    >
+                      {variable.sensitive ? (
+                        <LockIcon className="size-3" />
+                      ) : (
+                        <LockOpenIcon className="size-3" />
+                      )}
+                    </Button>
+                  }
+                  label={variable.sensitive ? gt("Sensitive, stored separately") : gt("Plain text")}
+                />
               ) : null;
             const layout = (source: ReactNode, value: ReactNode) => (
               <div className="flex min-w-0 flex-col gap-1.5 rounded-lg border p-2">

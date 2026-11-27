@@ -1,3 +1,4 @@
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { useTranslate } from "../../i18n";
 import type { EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
 import {
@@ -16,7 +17,6 @@ import { useLongLivedAssetUrl } from "~/assets/longLivedAssetUrls";
 import { HtmlRenderDocument } from "../files/BrowserDocumentFrame";
 import { Button } from "../ui/button";
 import { toastManager } from "../ui/toast";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { HtmlRenderDialog } from "./HtmlRenderDialog";
 import { observeResize } from "~/lib/observeResize";
 

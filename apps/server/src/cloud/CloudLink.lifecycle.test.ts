@@ -393,6 +393,33 @@ describe("releaseManagedTunnelOnShutdown", () => {
     }).pipe(provideReleaseHarness({ store, applyConfigCalls, requests }));
   });
 
+  it.effect("leaves a stored upstream tunnel inactive during startup and recovery", () => {
+    const upstreamRelay = "https://relay.t3.codes";
+    const { store, values } = makeMemorySecretStore([
+      ...managedLinkSecrets.filter(([name]) => name !== RELAY_URL_SECRET),
+      [RELAY_URL_SECRET, upstreamRelay],
+      [CLOUD_LINKED_USER_ID, "previous-user"],
+      [RELAY_ENVIRONMENT_CREDENTIAL_SECRET, "previous-credential"],
+    ]);
+    const applyConfigCalls: Array<unknown> = [];
+    const requests: Array<HttpClientRequest.HttpClientRequest> = [];
+
+    return Effect.gen(function* () {
+      const link = yield* CloudLink.CloudLink;
+      const origin = "http://127.0.0.1:3773";
+      expect(
+        yield* link.startManagedTunnelIfOriginConfirmed(origin, {
+          requireConfirmedOrigin: false,
+        }),
+      ).toBe(false);
+      expect(yield* link.registerManagedTunnelRecovery(origin)).toEqual({ status: "not_linked" });
+      expect(yield* link.recoverManagedTunnel(origin)).toBe(false);
+      expect(requests).toEqual([]);
+      expect(applyConfigCalls).toEqual([]);
+      expect(values.has(RELAY_ENVIRONMENT_CREDENTIAL_SECRET)).toBe(true);
+    }).pipe(provideReleaseHarness({ store, applyConfigCalls, requests }));
+  });
+
   it.effect("leaves the tunnel of a web/mobile-installed link untouched", () => {
     const { store, values } = makeMemorySecretStore([
       [CLOUD_ENDPOINT_RUNTIME_CONFIG, "runtime-config"],
@@ -833,6 +860,7 @@ describe("releaseManagedTunnelOnShutdown", () => {
       };
       const { store } = makeMemorySecretStore([
         [CLOUD_ENDPOINT_RUNTIME_CONFIG, configJson],
+        [RELAY_URL_SECRET, "https://relay.example.test"],
         [
           CLOUD_ENDPOINT_CONFIRMED_ORIGIN,
           `{"config":${configJson},"origin":{"localHttpHost":"127.0.0.1","localHttpPort":3773}}`,
@@ -889,6 +917,7 @@ describe("releaseManagedTunnelOnShutdown", () => {
       };
       const { store } = makeMemorySecretStore([
         [CLOUD_ENDPOINT_RUNTIME_CONFIG, JSON.stringify(config)],
+        [RELAY_URL_SECRET, "https://relay.example.test"],
       ]);
       const applyConfigCalls: Array<unknown> = [];
       const requests: Array<HttpClientRequest.HttpClientRequest> = [];

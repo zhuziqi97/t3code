@@ -1,3 +1,4 @@
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { authScopePresentation } from "./authScopePresentation";
 import { i18n, useTranslate } from "../../i18n";
 import { formatConnectionErrorMessage } from "@t3tools/client-runtime/connection";
@@ -54,7 +55,6 @@ import {
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { QRCodeSvg } from "../ui/qr-code";
 import { stackedThreadToast, toastManager } from "../ui/toast";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import {
@@ -79,6 +79,7 @@ import {
   isHostedAppPairingUrl,
   endpointShareHint,
 } from "./ConnectionsSettings.logic";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 
 function AccessScopeSummary({
   scopes,
@@ -459,16 +460,14 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
               </div>
             ) : null}
             <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/30 px-2.5 py-1.5">
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <code className="min-w-0 flex-1 truncate font-mono text-2xs text-muted-foreground">
-                      {qrPairingUrl}
-                    </code>
-                  }
-                />
-                <TooltipPopup side="top">{qrPairingUrl}</TooltipPopup>
-              </Tooltip>
+              <SharedTooltipTrigger
+                render={
+                  <code className="min-w-0 flex-1 truncate font-mono text-2xs text-muted-foreground">
+                    {qrPairingUrl}
+                  </code>
+                }
+                label={qrPairingUrl}
+              />
               <Button
                 size="xs"
                 variant="ghost"
@@ -953,16 +952,14 @@ export const AdvertisedEndpointListRow = memo(function AdvertisedEndpointListRow
             {endpoint.label}
           </h3>
           {shouldShowEndpointUrl ? (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <p className="min-w-0 truncate text-xs leading-5 text-muted-foreground">
-                    {endpoint.httpBaseUrl}
-                  </p>
-                }
-              />
-              <TooltipPopup side="top">{endpoint.httpBaseUrl}</TooltipPopup>
-            </Tooltip>
+            <SharedTooltipTrigger
+              render={
+                <p className="min-w-0 truncate text-xs leading-5 text-muted-foreground">
+                  {endpoint.httpBaseUrl}
+                </p>
+              }
+              label={endpoint.httpBaseUrl}
+            />
           ) : null}
           {!isAvailable ? (
             <span className="inline-flex h-6 shrink-0 items-center rounded-md border border-border/70 px-1.5 text-3xs text-muted-foreground">

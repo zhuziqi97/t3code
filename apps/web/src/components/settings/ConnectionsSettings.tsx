@@ -87,6 +87,7 @@ import { Menu, MenuPopup, MenuTrigger } from "../ui/menu";
 import { Switch } from "../ui/switch";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 import { Button } from "../ui/button";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import { type ServerClientSessionRecord } from "~/environments/primary";

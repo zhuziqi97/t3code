@@ -968,7 +968,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const { handleNewThread } = newThreadContext;
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const clearSelection = useThreadSelectionStore((s) => s.clearSelection);
-  const setSelectionAnchor = useThreadSelectionStore((s) => s.setAnchor);
   const toggleThreadSelection = useThreadSelectionStore((s) => s.toggleThread);
   const rangeSelectTo = useThreadSelectionStore((s) => s.rangeSelectTo);
   const acknowledgeWoke = useAcknowledgeThreadWoke();
@@ -1621,7 +1620,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     if (useThreadSelectionStore.getState().selectedThreadKeys.size > 0) {
       clearSelection();
     }
-    setSelectionAnchor(scopedThreadKey(threadRef));
     const thread = readThreadShell(threadRef);
     const group =
       thread &&
@@ -1748,14 +1746,18 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     const isMac = isMacPlatform(navigator.platform);
     const isModClick = isMac ? event.metaKey : event.ctrlKey;
     const threadKey = scopedThreadKey(threadRef);
+    const openThreadKey =
+      routeRowThreadKey !== null && orderedThreadKeysRef.current.includes(routeRowThreadKey)
+        ? routeRowThreadKey
+        : null;
     if (isModClick) {
       event.preventDefault();
-      toggleThreadSelection(threadKey);
+      toggleThreadSelection(threadKey, openThreadKey);
       return;
     }
     if (event.shiftKey) {
       event.preventDefault();
-      rangeSelectTo(threadKey, orderedThreadKeysRef.current);
+      rangeSelectTo(threadKey, orderedThreadKeysRef.current, openThreadKey);
       return;
     }
     if (isTrailingDoubleClick(event.detail)) {
@@ -3380,74 +3382,67 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         <SidebarGroup className="flex-1" role="presentation">
           {isSearchingThreads ? (
             threadSearchResults.length > 0 ? (
-              <TooltipProvider
-                key="sidebar-thread-search-tooltips-150"
-                delay={150}
-                closeDelay={0}
-                timeout={400}
+              <DndContext
+                sensors={dndSensors}
+                autoScroll={false}
+                onDragStart={(event) => {
+                  contextDragKeyRef.current = String(event.active.id);
+                }}
               >
-                <DndContext
-                  sensors={dndSensors}
-                  autoScroll={false}
-                  onDragStart={(event) => {
-                    contextDragKeyRef.current = String(event.active.id);
-                  }}
+                <ul
+                  ref={searchResultsListRef}
+                  id="sidebar-thread-search-results"
+                  role="listbox"
+                  aria-label={gt("Thread search results")}
+                  className="flex flex-col gap-px"
                 >
-                  <ul
-                    ref={searchResultsListRef}
-                    id="sidebar-thread-search-results"
-                    role="listbox"
-                    aria-label={gt("Thread search results")}
-                    className="flex flex-col gap-px"
-                  >
-                    {threadSearchResults.map((thread, index) => {
-                      const threadKey = scopedThreadKey(
-                        scopeThreadRef(thread.environmentId, thread.id),
-                      );
-                      return (
-                        <SidebarSearchResultRow
-                          isSettled={settledThreadKeys.has(threadKey)}
-                          key={threadKey}
-                          thread={thread}
-                          project={
-                            projectByKey.get(`${thread.environmentId}:${thread.projectId}`) ?? null
-                          }
-                          projectDisplayName={
-                            projectDisplayNameByKey.get(
-                              `${thread.environmentId}:${thread.projectId}`,
-                            ) ?? null
-                          }
-                          environmentLabel={environmentLabelById.get(thread.environmentId) ?? null}
-                          environmentMachine={
-                            environmentMachineById.get(thread.environmentId) ?? "server"
-                          }
-                          providerEntryByInstanceId={
-                            providerEntriesByEnvironment.get(thread.environmentId) ??
-                            EMPTY_PROVIDER_ENTRIES
-                          }
-                          isHighlighted={activeSearchResultIndex === index}
-                          isRouteActive={routeRowThreadKey === threadKey}
-                          resultId={threadSearchResultId(index)}
-                          searchMatch={
-                            threadSearchMatchByKey.get(
-                              threadSearchMatchKey({
-                                environmentId: thread.environmentId,
-                                threadId: thread.id,
-                              }),
-                            ) ?? null
-                          }
-                          searchQuery={threadSearchQuery}
-                          searchMatchQuery={threadSearch.query}
-                          onHighlight={() => setActiveSearchResultIndex(index)}
-                          onSelect={() => selectThreadSearchResult(thread)}
-                          onContextMenu={handleSearchResultContextMenu}
-                          onFileDropThreads={handleThreadFileDrop}
-                        />
-                      );
-                    })}
-                  </ul>
-                </DndContext>
-              </TooltipProvider>
+                  {threadSearchResults.map((thread, index) => {
+                    const threadKey = scopedThreadKey(
+                      scopeThreadRef(thread.environmentId, thread.id),
+                    );
+                    return (
+                      <SidebarSearchResultRow
+                        isSettled={settledThreadKeys.has(threadKey)}
+                        key={threadKey}
+                        thread={thread}
+                        project={
+                          projectByKey.get(`${thread.environmentId}:${thread.projectId}`) ?? null
+                        }
+                        projectDisplayName={
+                          projectDisplayNameByKey.get(
+                            `${thread.environmentId}:${thread.projectId}`,
+                          ) ?? null
+                        }
+                        environmentLabel={environmentLabelById.get(thread.environmentId) ?? null}
+                        environmentMachine={
+                          environmentMachineById.get(thread.environmentId) ?? "server"
+                        }
+                        providerEntryByInstanceId={
+                          providerEntriesByEnvironment.get(thread.environmentId) ??
+                          EMPTY_PROVIDER_ENTRIES
+                        }
+                        isHighlighted={activeSearchResultIndex === index}
+                        isRouteActive={routeRowThreadKey === threadKey}
+                        resultId={threadSearchResultId(index)}
+                        searchMatch={
+                          threadSearchMatchByKey.get(
+                            threadSearchMatchKey({
+                              environmentId: thread.environmentId,
+                              threadId: thread.id,
+                            }),
+                          ) ?? null
+                        }
+                        searchQuery={threadSearchQuery}
+                        searchMatchQuery={threadSearch.query}
+                        onHighlight={() => setActiveSearchResultIndex(index)}
+                        onSelect={() => selectThreadSearchResult(thread)}
+                        onContextMenu={handleSearchResultContextMenu}
+                        onFileDropThreads={handleThreadFileDrop}
+                      />
+                    );
+                  })}
+                </ul>
+              </DndContext>
             ) : (
               <p
                 role="status"
@@ -3514,12 +3509,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             </div>
           ) : null}
           {!isSearchingThreads ? (
-            <TooltipProvider
-              key="sidebar-thread-tooltips-150"
-              delay={150}
-              closeDelay={0}
-              timeout={400}
-            >
+            <TooltipProvider>
               <DndContext
                 accessibility={dndAccessibility}
                 sensors={dndSensors}

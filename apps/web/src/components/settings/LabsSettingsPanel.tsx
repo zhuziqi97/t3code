@@ -57,6 +57,7 @@ function BoringSidebarRow() {
   return (
     <SettingsRow
       {...searchableSetting("boring-sidebar")}
+      devicePreference
       description={t("settings.boringSidebar.description")}
       control={
         <Switch
@@ -86,6 +87,7 @@ function BoringSidebarMultilineRow() {
   return (
     <SettingsRow
       {...searchableSetting("boring-sidebar-multiline")}
+      devicePreference
       className="px-0 py-2 sm:px-0"
       description={t("settings.boringSidebar.multilineDescription")}
       control={

@@ -5,7 +5,7 @@ import { useSettingsScope } from "./SettingsScopeContext";
 import { useEnvironments } from "../../state/environments";
 import type { SettingsScopeSearch } from "./settingsScope";
 import { resolveEnvironmentMachineKind, type EnvironmentId } from "@t3tools/contracts";
-import { useLocation, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { useGT } from "gt-react";
 import { ChevronRightIcon, LayersIcon } from "lucide-react";
 import type { ReactNode } from "react";
@@ -15,7 +15,6 @@ import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
 import { type EnvironmentPresentation } from "../../state/environments";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import { ProjectFavicon } from "../ProjectFavicon";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { ITEM_ROW_CLASSNAME } from "./itemRows";
 import { SettingsGroup } from "./SettingsGroup";
 import { SettingsSection } from "./settingsLayout";
@@ -26,6 +25,8 @@ import {
   settingsScopeEnvironmentLabels,
   settingsScopeProjectMachines,
 } from "./settingsScopeAxis";
+import { useRenderedSettingsPathname } from "./useRenderedSettingsPathname";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 
 interface ScopeChoice {
   label: string;
@@ -52,7 +53,7 @@ export function SettingsScopeNotice({
   const gt = useGT();
   const { selectScope, search, groups } = useSettingsScope();
   const navigate = useNavigate({ from: "/settings" });
-  const pathname = useLocation({ select: (location) => location.pathname });
+  const pathname = useRenderedSettingsPathname();
   const { environments } = useEnvironments();
   const environmentIcon = (environment: EnvironmentPresentation | undefined) =>
     environment ? (
@@ -156,14 +157,12 @@ export function SettingsScopeNotice({
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium">{choice.label}</span>
           {choice.secondary ? (
-            <Tooltip>
-              <TooltipTrigger
-                render={<span className="block truncate text-xs text-muted-foreground" />}
-              >
-                {choice.secondary}
-              </TooltipTrigger>
-              <TooltipPopup>{choice.secondary}</TooltipPopup>
-            </Tooltip>
+            <SharedTooltipTrigger
+              render={<span className="block truncate text-xs text-muted-foreground" />}
+              label={choice.secondary}
+            >
+              {choice.secondary}
+            </SharedTooltipTrigger>
           ) : null}
         </span>
         <ChevronRightIcon aria-hidden className="size-4 shrink-0 text-muted-foreground" />

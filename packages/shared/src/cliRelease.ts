@@ -3,8 +3,6 @@ import * as Schema from "effect/Schema";
 
 import { compareSemverVersions } from "./semver.ts";
 
-const CLI_RELEASE_REPOSITORY = "pingdotgg/t3code";
-export const CLI_RELEASES_PAGE_URL = `https://github.com/${CLI_RELEASE_REPOSITORY}/releases`;
 export const CLI_RELEASE_CHECKSUMS_FILE = "SHA256SUMS";
 export const CLI_RELEASE_BASE_URL_ENV = "T3CODE_RELEASE_BASE_URL";
 
@@ -42,13 +40,24 @@ export function cliArchiveFileName(version: string, platformKey: CliArchivePlatf
   return `t3-${version}-${platformKey}.${platformKey.startsWith("win32") ? "zip" : "tar.gz"}`;
 }
 
-const CLI_RELEASE_DEFAULT_BASE_URL = `https://github.com/${CLI_RELEASE_REPOSITORY}/releases/download`;
+export const CONVENE_CLI_INSTALL_GUIDANCE =
+  "Install the matching T3 Code for Convene on the host and add its t3 command to PATH, or configure a CLI archive mirror provided by your organization with T3CODE_RELEASE_BASE_URL.";
 
-export function cliReleaseDownloadBaseUrl(
-  version: string,
-  baseUrl: string | undefined = CLI_RELEASE_DEFAULT_BASE_URL,
-): string {
-  return `${(baseUrl?.trim() || CLI_RELEASE_DEFAULT_BASE_URL).replace(/\/+$/, "")}/v${version}`;
+export function configuredCliReleaseBaseUrl(value: string | null | undefined): string | undefined {
+  const text = value?.trim();
+  if (!text) return undefined;
+  const url = URL.parse(text);
+  if (
+    url === null ||
+    (url.protocol !== "https:" && url.protocol !== "http:") ||
+    url.hostname === "t3.codes" ||
+    url.hostname.endsWith(".t3.codes") ||
+    (["github.com", "api.github.com"].includes(url.hostname) &&
+      /(?:^|\/)pingdotgg\/t3code(?:\/|$)/i.test(url.pathname))
+  ) {
+    return undefined;
+  }
+  return text;
 }
 
 /** `segments` added to `baseUrl`'s path, keeping its query, such as a signed mirror URL's token. */
@@ -59,12 +68,8 @@ export function releaseAssetUrl(baseUrl: string, ...segments: ReadonlyArray<stri
 }
 
 /** A file of release `version`, from `baseUrl` laid out as GitHub's release downloads. */
-export function cliReleaseAssetUrl(
-  version: string,
-  fileName: string,
-  baseUrl: string | undefined = CLI_RELEASE_DEFAULT_BASE_URL,
-): string {
-  return releaseAssetUrl(baseUrl?.trim() || CLI_RELEASE_DEFAULT_BASE_URL, `v${version}`, fileName);
+export function cliReleaseAssetUrl(version: string, fileName: string, baseUrl: string): string {
+  return releaseAssetUrl(baseUrl, `v${version}`, fileName);
 }
 
 export function parseChecksums(text: string): ReadonlyMap<string, string> {
@@ -132,11 +137,6 @@ export function acceptsTrackSwitchRelease(
 }
 
 /** Page until the channel matches; nightlies can push preview/stable releases past the first page. */
-export function cliReleaseIndexPageUrl(page: number): string {
-  return `https://api.github.com/repos/${CLI_RELEASE_REPOSITORY}/releases?per_page=100&page=${page}`;
-}
-
-/** Draft assets are not downloadable. */
 export function newestCliReleaseVersion(
   releases: ReadonlyArray<{
     readonly tag_name: string;

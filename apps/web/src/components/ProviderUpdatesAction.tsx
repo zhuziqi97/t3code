@@ -1,3 +1,4 @@
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { useTranslate } from "../i18n";
 import { ProviderUpdateText } from "./ProviderUpdateText";
 import { m } from "../i18n/messages";
@@ -23,7 +24,6 @@ import {
 } from "./ProviderUpdateLaunchNotification.logic";
 import { Button } from "./ui/button";
 import { stackedThreadToast, toastManager } from "./ui/toast";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 
 // `refreshModels` always drops the server's hour-long latest-version cache. `modelCatalogOnly`
 // drops it only when the model manifest changed.

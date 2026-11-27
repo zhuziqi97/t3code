@@ -1,3 +1,4 @@
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { useTranslate } from "../i18n";
 import { formatFilePathForClipboard } from "@t3tools/client-runtime/media-actions";
 import { CheckIcon, CopyIcon } from "lucide-react";
@@ -5,7 +6,6 @@ import { useRef } from "react";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { ANCHORED_COPY_TOAST_TIMEOUT_MS, showAnchoredCopyErrorToast } from "./ui/anchoredCopyToast";
 import { Button } from "./ui/button";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 
 export function DiffFilePathCopyButton({
   filePath,

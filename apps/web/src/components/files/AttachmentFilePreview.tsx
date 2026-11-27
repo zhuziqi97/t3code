@@ -251,6 +251,11 @@ export function AttachmentFilePreview(props: {
     download.start({ name: props.name, file: props.file, prepare: prepareDownload });
   };
 
+  const basename = props.name.split(/[\\/]/).at(-1) ?? "";
+  const dotIndex = basename.lastIndexOf(".");
+  const extension =
+    dotIndex > 0 && dotIndex < basename.length - 1 ? basename.slice(dotIndex + 1) : null;
+
   const body = failure ? (
     <FileSurfaceFailure
       message={formatFilePreviewErrorMessage(failure, t)}
@@ -367,7 +372,7 @@ export function AttachmentFilePreview(props: {
       <p className="text-sm font-medium">{t("filePreview.noPreview")}</p>
       <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">
         {t("filePreview.openSupportedApp", {
-          format: props.name.split(".").at(-1) || t("filePreview.thisFormat"),
+          format: extension ?? t("filePreview.thisFormat"),
         })}
       </p>
     </div>

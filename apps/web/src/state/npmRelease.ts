@@ -20,11 +20,11 @@ function unsupportedLookup(config: ServerConfig | null): ServerNpmReleaseError |
       reason: m(msg("Connect to this server to check releases.")),
     });
   }
-  return config.environment.capabilities.npmReleaseLookup === true
+  return config.environment.capabilities.cliArchiveReleaseLookup === true
     ? null
     : new ServerNpmReleaseError({
         reason: m(
-          msg("This server does not support registry lookups. Update it before switching tracks."),
+          msg("Install a matching Convene release on this server or add a CLI archive mirror."),
         ),
       });
 }
@@ -38,7 +38,7 @@ export function npmReleaseFailureMessage(
     ? error.message
     : resolve(
         msg(
-          "Could not check this environment's npm registry. Check the connection and registry settings.",
+          "Could not check this environment's CLI mirror. Check the connection and mirror settings.",
         ),
       );
 }

@@ -291,6 +291,7 @@ export const make = Effect.gen(function* () {
       freshContext: true,
       scheduledTaskThreadModes: true,
       npmReleaseLookup: true,
+      cliArchiveReleaseLookup: true,
       voiceTranscription: isSpeechPlatformSupported(hostPlatform, hostArchitecture, hostLibc),
       cloudVoiceTranscription: true,
       ...(serverSelfUpdate === null ? {} : { serverSelfUpdate }),

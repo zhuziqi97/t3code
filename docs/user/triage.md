@@ -9,21 +9,11 @@ matched, the diagnosis says so.
 
 ## In the app
 
-Open the command palette and choose **Triage an issue**. A new thread with no
-project opens, with the triage playbook linked in the message. Choose any
-provider, describe what went wrong after the link, and send. T3 Code gets the
-source for the server's version while you write.
-
-Triage runs on the machine of the thread or draft that you have open. With
-nothing open, it uses your primary machine if that supports triage, or else the
-first connected machine that does. The new thread shows the machine name, and on
-mobile the palette row shows it before you start. If you change the machine
-before you send, triage moves to that machine. The agent runs inside that T3
-Code server, so it gives you any restart steps and does not do them itself.
+Open the command palette (`Cmd/Ctrl+K`) and run **Triage an issue**. A no-project thread opens on the active machine with the triage playbook attached—pick any provider, describe the problem, and send.
 
 ## In a terminal
 
-If the app does not start, or triage does not work in the app, run:
+If the app won't start or in-app triage fails, run:
 
 ```sh
 t3code-convene triage
@@ -35,10 +25,6 @@ choose explicitly:
 
 ```sh
 npx t3 triage --agent antigravity
-npx t3 triage --agent codex
 ```
 
-Antigravity needs Google's standalone `agy` CLI on your `PATH` and its own sign-in.
-The ACP runtime installed through T3 Code does not include this terminal CLI.
-Install it using [Google's CLI setup guide](https://antigravity.google/docs/cli-getting-started).
-Pass `--model <model-id>` to choose a model, or leave it out to use the CLI's default.
+Supports Claude Code, Codex, and standalone Antigravity (`agy` on `PATH` with its own sign-in; T3's managed ACP runtime does not include the standalone terminal CLI).

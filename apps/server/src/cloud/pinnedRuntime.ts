@@ -18,6 +18,8 @@ import {
   cliArchivePlatformKey,
   cliArchiveTarCommand,
   cliReleaseAssetUrl,
+  CONVENE_CLI_INSTALL_GUIDANCE,
+  configuredCliReleaseBaseUrl,
   type CliArchivePlatformKey,
   parseChecksums,
 } from "@t3tools/shared/cliRelease";
@@ -263,6 +265,7 @@ const fetchReleaseAsset = Effect.fn("cloud.pinned_runtime.fetch_release_asset")(
 
 const downloadArchive = Effect.fn("cloud.pinned_runtime.download_archive")(function* (
   input: PinnedRuntimeInstallInput,
+  releaseBaseUrl: string,
 ) {
   const platformKey = cliArchivePlatformKey(input.platform, input.arch);
   if (platformKey === undefined) {
@@ -272,10 +275,10 @@ const downloadArchive = Effect.fn("cloud.pinned_runtime.download_archive")(funct
   }
   const httpClient = input.httpClient;
   input.onProgress?.({ stage: "download", received: 0, total: undefined });
-  const { fileName, expected } = yield* publishedArchive(input, platformKey);
+  const { fileName, expected } = yield* publishedArchive(input, platformKey, releaseBaseUrl);
   const archive = yield* fetchReleaseAsset(
     httpClient,
-    cliReleaseAssetUrl(input.version, fileName, input.releaseBaseUrl),
+    cliReleaseAssetUrl(input.version, fileName, releaseBaseUrl),
     "downloading the t3 release archive",
     true,
     input.onProgress,
@@ -337,13 +340,14 @@ const installFromArchive = Effect.fn("cloud.pinned_runtime.install_archive")(fun
 const publishedArchive = Effect.fn("cloud.pinned_runtime.published_archive")(function* (
   input: PinnedRuntimeInstallInput,
   platformKey: CliArchivePlatformKey,
+  releaseBaseUrl: string,
 ) {
   const fileName = cliArchiveFileName(input.version, platformKey);
   const checksums = parseChecksums(
     new TextDecoder().decode(
       yield* fetchReleaseAsset(
         input.httpClient,
-        cliReleaseAssetUrl(input.version, CLI_RELEASE_CHECKSUMS_FILE, input.releaseBaseUrl),
+        cliReleaseAssetUrl(input.version, CLI_RELEASE_CHECKSUMS_FILE, releaseBaseUrl),
         "downloading the t3 release checksums",
         false,
       ),
@@ -384,20 +388,27 @@ const installPinnedRuntime = Effect.fn("cloud.pinned_runtime.ensure_installed")(
   );
   const alreadyPinned =
     entryExists && Option.isSome(sentinel) && sentinel.value.trim() === input.version;
+  const releaseBaseUrl = configuredCliReleaseBaseUrl(input.releaseBaseUrl);
+  const missingSource = () =>
+    new PinnedRuntimeInstallError({
+      step: `selecting a CLI archive source. ${CONVENE_CLI_INSTALL_GUIDANCE}`,
+    });
   if (alreadyPinned) {
     if (input.requirePublishedRelease === true) {
+      if (releaseBaseUrl === undefined) return yield* missingSource();
       const platformKey = cliArchivePlatformKey(input.platform, input.arch);
       if (platformKey === undefined) {
         return yield* new PinnedRuntimeInstallError({
           step: `selecting a t3 release archive for ${input.platform}-${input.arch}`,
         });
       }
-      yield* publishedArchive(input, platformKey);
+      yield* publishedArchive(input, platformKey, releaseBaseUrl);
     }
     input.onProgress?.({ stage: "cached" });
     yield* input.validate(paths);
     return paths;
   }
+  if (releaseBaseUrl === undefined) return yield* missingSource();
   if (versionDirExists) {
     yield* fs.remove(paths.versionDir, { recursive: true, force: true }).pipe(
       Effect.mapError(
@@ -422,7 +433,7 @@ const installPinnedRuntime = Effect.fn("cloud.pinned_runtime.ensure_installed")(
   );
   // Downloads are buffered in memory and can take hours; staging only once they finish keeps a
   // staging directory's age a sign of abandonment for prunes in other processes.
-  const archive = yield* downloadArchive(input);
+  const archive = yield* downloadArchive(input, releaseBaseUrl);
   const stagingDir = yield* fs
     .makeTempDirectory({
       directory: versionsDir,

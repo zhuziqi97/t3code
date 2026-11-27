@@ -49,7 +49,7 @@ export function UpdateTrackSwitchDialog({
 }) {
   const gt = useGT();
   const m = useMessages();
-  // npm dist-tags match the desktop channel names.
+  // The release lookup uses the connected server's CLI archive mirror.
   const release = useAtomValue(npmReleaseAtom(channel));
   if (AsyncResult.isSuccess(release) && release.value !== null) {
     return <SwitchPlan release={{ channel, ...release.value }} onClose={onClose} />;
@@ -69,7 +69,7 @@ export function UpdateTrackSwitchDialog({
               ? npmReleaseFailureMessage(release.cause, m)
               : AsyncResult.isSuccess(release)
                 ? gt(
-                    "Could not find the latest {label} release in this environment's npm registry.",
+                    "Could not find the latest {label} release in this environment's CLI archive mirror.",
                     {
                       label,
                     },

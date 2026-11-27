@@ -229,7 +229,6 @@ function EnvironmentDetail({ environmentId }: { readonly environmentId: Environm
             />
             {outdated ? (
               <OutdatedServerUpdateSection
-                environmentId={environmentId}
                 label={environment.environmentLabel}
               />
             ) : !connected ? (
@@ -274,6 +273,11 @@ function EnvironmentDetail({ environmentId }: { readonly environmentId: Environm
                     {updatesDenial ? (
                       <Text className="text-sm text-foreground-muted">{updatesDenial}</Text>
                     ) : null}
+                    {!updatesDenial && capabilities?.cliArchiveReleaseLookup !== true ? (
+                      <Text className="text-sm text-foreground-muted">
+                        {gt("Update T3 Code for Convene on the host using its installation source.")}
+                      </Text>
+                    ) : null}
                     {running ? (
                       <Text className="text-sm text-foreground-muted">
                         {updateState.stage === "resuming"
@@ -313,7 +317,7 @@ function EnvironmentDetail({ environmentId }: { readonly environmentId: Environm
                       onPress={() => void tryOpenExternalUrl(supportUrl)}
                     />
                   ) : null}
-                  {updatesDenial ? null : (
+                  {updatesDenial || capabilities?.cliArchiveReleaseLookup !== true ? null : (
                     <SettingsActionRow
                       icon="arrow.clockwise"
                       label={gt("Check for updates")}
@@ -323,7 +327,7 @@ function EnvironmentDetail({ environmentId }: { readonly environmentId: Environm
                         if (disabled) return;
                         const fromVersion = config.environment.serverVersion;
                         void run("check", async () => {
-                          const exit = await checkRelease(async () => fromVersion);
+                          const exit = await checkRelease(fromVersion);
                           // `run` owns the error message, so a failed lookup rethrows to it.
                           if (Exit.isFailure(exit)) throw Cause.squash(exit.cause);
                         });

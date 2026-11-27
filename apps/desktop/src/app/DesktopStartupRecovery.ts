@@ -20,7 +20,6 @@ import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import * as DesktopObservability from "./DesktopObservability.ts";
 import * as DesktopState from "./DesktopState.ts";
 
-const RELEASES_URL = "https://github.com/pingdotgg/t3code/releases";
 const LAST_STARTED_VERSION_FILE = "desktop-last-started-version";
 // Buttons are plain links to this host; will-navigate cancels them and runs the action.
 const ACTION_ORIGIN = "https://startup-recovery.invalid";
@@ -37,7 +36,7 @@ export type StartupRecoveryOffer =
   | { readonly _tag: "Releases" }
   | { readonly _tag: "ManagedPolicy" };
 
-const STARTUP_RECOVERY_ACTIONS = ["update", "reinstall", "releases", "copy", "quit"] as const;
+const STARTUP_RECOVERY_ACTIONS = ["update", "releases", "copy", "quit"] as const;
 type StartupRecoveryAction = (typeof STARTUP_RECOVERY_ACTIONS)[number];
 
 /** Prefer a newer build, then the last build that started on this machine, then the releases page. */
@@ -80,7 +79,10 @@ const escapeHtml = (value: string) =>
 const actionLink = (action: StartupRecoveryAction, label: string, primary = false) =>
   `<a class="button${primary ? " primary" : ""}" href="${ACTION_ORIGIN}/${action}">${escapeHtml(label)}</a>`;
 
-function describeOffer(offer: StartupRecoveryOffer): { text: string; action: string } {
+function describeOffer(
+  offer: StartupRecoveryOffer,
+  hasDownloadsPage: boolean,
+): { text: string; action: string } {
   switch (offer._tag) {
     case "Checking":
       return { text: m(msg("Checking for a newer version…")), action: "" };
@@ -114,20 +116,22 @@ function describeOffer(offer: StartupRecoveryOffer): { text: string; action: str
       return {
         text: m(
           msg(
-            "Version {version} started correctly on this computer. Download it and install it to go back.",
+            "Version {version} started correctly on this computer. To go back, reinstall your saved copy of that version.",
           ),
           { version: offer.version },
         ),
-        action: actionLink(
-          "reinstall",
-          m(msg("Download {version}"), { version: offer.version }),
-          true,
-        ),
+        action: hasDownloadsPage
+          ? actionLink("releases", m(msg("Open platform downloads")), true)
+          : "",
       };
     case "Releases":
       return {
-        text: m(msg("Get a different version from the releases page.")),
-        action: actionLink("releases", m(msg("Open releases")), true),
+        text: m(
+          msg("Open Help → Desktop client in Convene and download the package for this computer."),
+        ),
+        action: hasDownloadsPage
+          ? actionLink("releases", m(msg("Open platform downloads")), true)
+          : "",
       };
     case "ManagedPolicy":
       return {
@@ -145,9 +149,10 @@ function buildStartupRecoveryHtml(input: {
   readonly appVersion: string;
   readonly failure: BackendStartupFailure;
   readonly offer: StartupRecoveryOffer;
+  readonly hasDownloadsPage: boolean;
   readonly logDir: string;
 }): string {
-  const offer = describeOffer(input.offer);
+  const offer = describeOffer(input.offer, input.hasDownloadsPage);
   const output = input.failure.output.trim();
   const title = escapeHtml(m(msg("T3 Code could not start")));
   return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><title>${title}</title><style>
@@ -230,6 +235,7 @@ export const listen: Effect.Effect<
       appVersion: environment.appVersion,
       failure: failure.value,
       offer: yield* offer,
+      hasDownloadsPage: Boolean((yield* Ref.get(updateStateRef)).convene?.downloadsUrl),
       logDir: environment.logDir,
     });
     if ((yield* Ref.getAndSet(renderedHtmlRef, html)) === html) return;
@@ -255,14 +261,11 @@ export const listen: Effect.Effect<
         yield* updates.installPrepared(downloadedVersion);
         return;
       }
-      case "reinstall":
-        if (current._tag === "Reinstall") {
-          yield* electronShell.openExternal(`${RELEASES_URL}/tag/v${current.version}`);
-        }
+      case "releases": {
+        const url = (yield* Ref.get(updateStateRef)).convene?.downloadsUrl;
+        if (url) yield* electronShell.openExternal(url);
         return;
-      case "releases":
-        yield* electronShell.openExternal(RELEASES_URL);
-        return;
+      }
       case "copy": {
         const failure = yield* Ref.get(failureRef);
         if (Option.isNone(failure)) return;

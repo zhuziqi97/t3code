@@ -16,6 +16,7 @@ import {
   TurnItemId,
 } from "@t3tools/contracts";
 import { RelayAgentActivityState } from "@t3tools/contracts/relay";
+import * as ConfigProvider from "effect/ConfigProvider";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -339,7 +340,11 @@ const makeTestRelay = Effect.fnUntraced(function* (
   return { relay, secrets, secretReads, currentShell, shellReads, publications, catchUp };
 });
 
-describe("AgentAwarenessRelay", () => {
+it.layer(
+  ConfigProvider.layer(
+    ConfigProvider.fromEnv({ env: { T3CODE_RELAY_URL: "https://relay.example.test" } }),
+  ),
+)("AgentAwarenessRelay", (it) => {
   it.effect("publishes the parent as needing approval while its subagent waits", () =>
     Effect.gen(function* () {
       const shells = yield* Ref.make(
@@ -664,26 +669,24 @@ describe("AgentAwarenessRelay", () => {
     }),
   );
 
-  it.effect("republishes unchanged state with fresh credentials after relinking", () =>
-    Effect.gen(function* () {
-      const { relay, secrets, publications } = yield* makeTestRelay();
-      yield* relay.publishThread(THREAD_ID);
-      yield* secrets.set(
-        RELAY_ENVIRONMENT_CREDENTIAL_SECRET,
-        new TextEncoder().encode("credential-2"),
-      );
-      yield* relay.publishThread(THREAD_ID);
-      assert.equal(publications.length, 2);
-      assert.equal(publications[0]?.authorization, "Bearer credential-1");
-      assert.equal(publications[1]?.authorization, "Bearer credential-2");
-      yield* secrets.set(
-        RELAY_URL_SECRET,
-        new TextEncoder().encode("https://new-relay.example.test"),
-      );
-      yield* relay.publishThread(THREAD_ID);
-      assert.equal(publications.length, 3);
-      assert.isTrue(publications[2]?.url.startsWith("https://new-relay.example.test/") ?? false);
-    }),
+  it.effect(
+    "republishes with fresh credentials and ignores a stored relay outside the configured origin",
+    () =>
+      Effect.gen(function* () {
+        const { relay, secrets, publications } = yield* makeTestRelay();
+        yield* relay.publishThread(THREAD_ID);
+        yield* secrets.set(
+          RELAY_ENVIRONMENT_CREDENTIAL_SECRET,
+          new TextEncoder().encode("credential-2"),
+        );
+        yield* relay.publishThread(THREAD_ID);
+        assert.equal(publications.length, 2);
+        assert.equal(publications[0]?.authorization, "Bearer credential-1");
+        assert.equal(publications[1]?.authorization, "Bearer credential-2");
+        yield* secrets.set(RELAY_URL_SECRET, new TextEncoder().encode("https://relay.t3.codes"));
+        yield* relay.publishThread(THREAD_ID);
+        assert.equal(publications.length, 2);
+      }),
   );
 
   it.effect.each(["completed", "failed"] as const)(
@@ -1245,5 +1248,11 @@ it.effect("catches up after startup without polling after success", () =>
     assert.equal(catchUp.activitySnapshotReads, 3);
     assert.equal(publications.length, 2);
     assert.equal(publications[1]?.state?.threadId, THREAD_ID);
-  }),
+  }).pipe(
+    Effect.provide(
+      ConfigProvider.layer(
+        ConfigProvider.fromEnv({ env: { T3CODE_RELAY_URL: "https://relay.example.test" } }),
+      ),
+    ),
+  ),
 );

@@ -71,7 +71,9 @@ as a newer version. Decide whether to download that revision yourself.
 The app and the server running your agents can be on different machines. A
 version mismatch notice names the machine that needs an update. Updating this
 desktop also replaces its bundled server. A separately installed server must be
-updated on its own host using its installation method.
+updated on its own host using its installation method. To let a standalone
+`t3 update` download an archive, configure your organization's CLI archive
+mirror with `T3CODE_RELEASE_BASE_URL` on that host.
 
 The sidebar's **Update everything** can update providers and servers that support
 that operation. Convene desktop packages require manual installation and are not
@@ -96,133 +98,20 @@ of an unfinished turn, the thread waits for your next message, even when crashes
 are more than five minutes apart. A completed turn or a planned shutdown resets
 that limit.
 
-Updates from the previous orchestration system preserve conversation transcripts but cannot carry
-every kind of runtime history forward. Read [Threads from older T3 Code versions](./thread-migration.md)
-before continuing an important older thread.
-
-## When versions don't match
-
-A client and server must speak the same orchestration protocol. If they do not, the connection is
-refused rather than running half-upgraded:
-
-- An app newer than the server is blocked before connecting, with a notice telling you to update
-  T3 Code on the machine named in the notice.
-- A server newer than your app refuses the connection with an update message.
-
-Update the side the notice names, then reconnect.
-
-## Update a connected server
-
-The offered action depends on how the server runs:
-
-| Action                     | What to do                                                                                                                                                                                      |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Update server**          | Keep the client open while it installs and reconnects. Supported background services update remotely. For a desktop-hosted server, this also closes and relaunches the desktop app on the host. |
-| **Update the desktop app** | Update the desktop app on the machine running the server, then reopen it if needed.                                                                                                             |
-| **Copy update command**    | Run the command on the named host to update the detected global npm install or installed `t3` command, then restart the server with your usual options.                                         |
-| **Copy relaunch command**  | Stop the command-line server on its host and relaunch with the copied command, keeping your usual subcommand and options. This does not update an installed `t3` command.                       |
-
-On the host, run:
-
-```sh
-t3 update <client-version>
-```
-
-Replace `<client-version>` with the version shown in the notice. The command
-asks before restarting the background service; if you decline, run
-`t3 service restart` when you are ready. For a server you started by hand,
-stop it and start it again afterwards with your usual options such as `--host`
-or `--tailscale-serve`.
-
-If you decline the restart for a background service installed by an older
-release, the service can stay down after a crash or reboot until you run
-`t3 service restart`.
-
-If you run the server with `npx` rather than an installed `t3`, there is
-nothing to update on the host: stop the server and relaunch it as
-`npx t3@<client-version>` with the same subcommand and options.
-
-## If an update fails
-
-Keep the client open until it reconnects or reports a failure. A failed service
-update can roll back to the previous version. If the update still fails:
-
-1. Retry the offered action once.
-2. Check that you updated the server's machine, not only the device you are using.
-3. For a command-line server, stop it and relaunch the exact version shown in the notice.
-
-Only one server can use a T3 home directory at a time. If startup reports that
-another server owns it, stop that server before retrying, or use a separate home
-directory and pair with the running server.
-
-### macOS app does not reopen after an Alpha update
-
-Updating an older **T3 Code (Alpha)** installation can replace it with
-**T3 Code (Beta)** without reopening the app. Open **T3 Code (Beta)** from
-Applications, or run:
-
-```sh
-open "/Applications/T3 Code (Beta).app"
-```
-
-If an old Dock shortcut no longer opens the app, remove it and add the Beta app
-from Applications again.
-
-## If the desktop app does not start
-
-If the desktop app's server keeps failing at startup, T3 Code shows a "T3 Code
-could not start" window instead of the app. If a newer version is available,
-choose **Update** to install it. If not, the window links to the last version
-that started on your computer. Download and install it to go back. Use **Copy
-details** to include the error in a bug report.
-
-## Registries and proxies
-
-Each server checks T3 Code releases, and providers installed with npm, through
-its own npm, so the checks use npm's configured registry, authentication, and
-proxy settings. Providers installed with Homebrew or pnpm check through those
-tools.
-Configure npm on the server's machine. If that registry cannot be reached, the
-release shows as unavailable; T3 Code does not try the public registry instead.
-Machines without npm check the public npm registry directly.
+Each server checks npm/Homebrew/pnpm using its own local registry and proxy settings.
 
 ## Update providers
 
-**Settings → Providers** shows provider updates for the selected environment.
-**Update all** updates every outdated provider on every connected environment
-at once. Hover it to see which providers it will update. A provider is left out
-when any of its enabled, outdated instances offers only a manual update command,
-or when its instances use different update commands, such as two instances that
-run different CLI installs. Update those by hand, or point every instance of the
-provider at the same CLI.
-
-After a successful provider CLI update, T3 Code refreshes model discovery for
-every enabled instance of that provider using its own configuration. Connected
-clients receive the refreshed catalogs automatically. Provider update checks
-must be enabled to download the latest T3 Code model catalog.
-
-Provider updates do not restart running chats. An existing session can keep
-using the previous CLI until it ends. If discovery fails, check the provider
-status and refresh it again.
+Open **Settings → Providers** and click **Update now** on individual providers or **Update all** across connected environments. Running chats keep using their current CLI until they end; new sessions and model catalogs refresh automatically. (Provider update checks in **Settings → Maintenance** must be enabled to fetch model catalog updates.)
 
 ## Mobile updates
 
-To update an environment from your phone, open **Settings → Environments** and
-select it. **Check for updates** finds the latest release on that environment's
-current release channel. Keep the app open while the environment updates and
-reconnects. Hosts that cannot update remotely show instructions for updating on
-the machine instead.
+- Update connected environments and providers from **Settings → Environments** on mobile.
+- Update the mobile app via the App Store or Google Play (background over-the-air updates apply on next app switch and preserve drafts/queued messages).
 
-The same page lets you refresh provider status and update supported providers.
-These controls require a connected environment and permission to operate it.
-Provider update checks and restart continuation preferences are in
-**Settings → Maintenance**. If provider update checks are disabled, enable them
-there before refreshing to find newer versions. The same setting controls whether
-T3 Code downloads model catalog updates, so with it off new models may not appear
-until you enable it and refresh provider status.
+## Troubleshooting
 
-Install App Store or Google Play releases as usual. The mobile app can also
-download updates in the background and apply them when you next leave the app.
-It saves drafts and queued messages before restarting. If you keep the app open
-for a long time, it may ask to install immediately; choosing **Later** leaves the
-update queued for the next suitable moment.
+- **Version mismatch**: Update whichever side (app or server) the connection notice names.
+- **Failed update**: Retry once; confirm you updated the host machine (not just the client) and that only one server owns the T3 home directory.
+- **macOS Alpha → Beta**: Open `/Applications/T3 Code (Beta).app` manually and re-pin it to the Dock.
+- **Desktop won't start**: Use the recovery window's **Update** button, install the linked last-working version, or **Copy details** for a bug report.

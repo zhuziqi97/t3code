@@ -7,6 +7,7 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
+import { usableStoredRelayUrl } from "./publicConfig.ts";
 
 export const CLOUD_MINT_PUBLIC_KEY = "cloud-mint-ed25519-public-key";
 export const CLOUD_ENDPOINT_RUNTIME_CONFIG = "cloud-endpoint-runtime-config";
@@ -62,7 +63,7 @@ export const readAgentActivityPublishingActive: (
         );
     const [enabled, url, environmentCredential] = yield* Effect.all([
       readSecretString(PUBLISH_AGENT_ACTIVITY_SECRET),
-      readSecretString(RELAY_URL_SECRET),
+      readSecretString(RELAY_URL_SECRET).pipe(Effect.flatMap(usableStoredRelayUrl)),
       readSecretString(RELAY_ENVIRONMENT_CREDENTIAL_SECRET),
     ]);
     // Match the publisher, which treats empty strings as unconfigured.
@@ -87,7 +88,7 @@ const readSecretString = (name: string) =>
   );
 
 export const readRelayConnection = Effect.all([
-  readSecretString(RELAY_URL_SECRET),
+  readSecretString(RELAY_URL_SECRET).pipe(Effect.flatMap(usableStoredRelayUrl)),
   readSecretString(RELAY_ENVIRONMENT_CREDENTIAL_SECRET),
 ]).pipe(
   Effect.map(([url, environmentCredential]) =>

@@ -1,8 +1,4 @@
-import {
-  connectLoopbackRedirectUri,
-  CONNECT_OAUTH_SCOPES,
-  DEFAULT_HOSTED_APP_URL,
-} from "@t3tools/shared/connectAuth";
+import { connectLoopbackRedirectUri, CONNECT_OAUTH_SCOPES } from "@t3tools/shared/connectAuth";
 import { clerkFrontendApiUrlFromPublishableKey } from "@t3tools/shared/relayAuth";
 import { isRelayTracingEnabled } from "@t3tools/shared/otelEnvironment";
 import { normalizeSecureRelayUrl } from "@t3tools/shared/relayUrl";
@@ -13,7 +9,6 @@ import * as Schema from "effect/Schema";
 import * as SchemaIssue from "effect/SchemaIssue";
 
 declare const __T3CODE_BUILD_RELAY_URL__: string | undefined;
-declare const __T3CODE_BUILD_CHANNEL__: "nightly" | "latest" | undefined;
 declare const __T3CODE_BUILD_CLERK_PUBLISHABLE_KEY__: string | undefined;
 declare const __T3CODE_BUILD_CLERK_CLI_OAUTH_CLIENT_ID__: string | undefined;
 declare const __T3CODE_BUILD_RELAY_CLIENT_OTLP_TRACES_URL__: string | undefined;
@@ -23,14 +18,21 @@ declare const __T3CODE_BUILD_RELAY_CLIENT_OTLP_TRACES_TOKEN__: string | undefine
 const CLOUD_CLI_OAUTH_LOOPBACK_PORT = 34338;
 const CLOUD_CLI_OAUTH_SCOPES = CONNECT_OAUTH_SCOPES;
 
+function ownRelayUrl(value: string): string | null {
+  const url = normalizeSecureRelayUrl(value);
+  if (url === null) return null;
+  const { hostname } = new URL(url);
+  return hostname === "t3.codes" || hostname.endsWith(".t3.codes") ? null : url;
+}
+
 function validateRelayUrl(value: string) {
-  const relayUrl = normalizeSecureRelayUrl(value);
+  const relayUrl = ownRelayUrl(value);
   return relayUrl === null
     ? Effect.fail(
         new Config.ConfigError(
           new Schema.SchemaError(
             new SchemaIssue.InvalidValue({
-              message: "Relay URL must be a secure absolute HTTPS origin.",
+              message: "Relay URL must be a secure HTTPS origin configured for Convene.",
             }),
           ),
         ),
@@ -54,7 +56,7 @@ function normalizeSecureUrl(value: string): string | null {
 const buildTimeRelayUrl =
   typeof __T3CODE_BUILD_RELAY_URL__ === "undefined"
     ? ""
-    : (normalizeSecureRelayUrl(__T3CODE_BUILD_RELAY_URL__) ?? "");
+    : (ownRelayUrl(__T3CODE_BUILD_RELAY_URL__) ?? "");
 const buildTimeClerkPublishableKey = readBuildTimeValue(
   typeof __T3CODE_BUILD_CLERK_PUBLISHABLE_KEY__ === "undefined"
     ? undefined
@@ -110,23 +112,17 @@ export function makeRelayUrlConfig(fallback = buildTimeRelayUrl) {
 
 export const relayUrlConfig = makeRelayUrlConfig();
 
-export const hostedAppUrlConfig = makePublicValueConfig(
-  "T3CODE_HOSTED_APP_URL",
-  DEFAULT_HOSTED_APP_URL,
-).pipe(Config.mapEffect(validateHostedAppUrl));
+export const usableStoredRelayUrl = Effect.fn("cloud.usableStoredRelayUrl")(function* (
+  storedUrl: string | null,
+) {
+  if (storedUrl === null) return null;
+  const configured = yield* relayUrlConfig.pipe(Effect.orElseSucceed(() => null));
+  return configured !== null && ownRelayUrl(storedUrl) === configured ? configured : null;
+});
 
-const NIGHTLY_HOSTED_APP_URL = "https://nightly.app.t3.codes";
-
-/**
- * Where agent sign-ins on the T3 Connect address are approved. A nightly build defaults to the
- * nightly hosted app, which ships the same approval page; app.t3.codes serves stable.
- */
-export const agentApprovalAppUrlConfig = makePublicValueConfig(
-  "T3CODE_HOSTED_APP_URL",
-  typeof __T3CODE_BUILD_CHANNEL__ !== "undefined" && __T3CODE_BUILD_CHANNEL__ === "nightly"
-    ? NIGHTLY_HOSTED_APP_URL
-    : DEFAULT_HOSTED_APP_URL,
-).pipe(Config.mapEffect(validateHostedAppUrl));
+export const hostedAppUrlConfig = Config.NonEmptyString("T3CODE_HOSTED_APP_URL").pipe(
+  Config.mapEffect(validateHostedAppUrl),
+);
 
 function validateHostedAppUrl(value: string) {
   try {
@@ -136,6 +132,8 @@ function validateHostedAppUrl(value: string) {
       (url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]");
     if (
       (url.protocol !== "https:" && !isLoopbackHttp) ||
+      url.hostname === "t3.codes" ||
+      url.hostname.endsWith(".t3.codes") ||
       url.pathname !== "/" ||
       url.search !== "" ||
       url.hash !== ""
@@ -219,7 +217,7 @@ export function makeCloudCliOAuthConfig({
 export const cloudCliOAuthConfig = makeCloudCliOAuthConfig();
 
 export const hasCloudPublicConfig = Boolean(
-  (normalizeSecureRelayUrl(process.env.T3CODE_RELAY_URL ?? "") ?? buildTimeRelayUrl) &&
+  ownRelayUrl(process.env.T3CODE_RELAY_URL ?? buildTimeRelayUrl) &&
   (process.env.T3CODE_CLERK_PUBLISHABLE_KEY?.trim() || buildTimeClerkPublishableKey) &&
   (process.env.T3CODE_CLERK_CLI_OAUTH_CLIENT_ID?.trim() || buildTimeClerkCliOAuthClientId),
 );

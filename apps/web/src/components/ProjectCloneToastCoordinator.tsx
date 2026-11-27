@@ -2,7 +2,7 @@ import { localizedProjectCloneProgressSummary } from "../lib/projectClonePresent
 import { i18n, useTranslate } from "../i18n";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { useParams } from "@tanstack/react-router";
-import { scopeProjectRef } from "@t3tools/client-runtime/environment";
+import { scopedProjectKey, scopeProjectRef } from "@t3tools/client-runtime/environment";
 import {
   type AtomCommandResult,
   isAtomCommandInterrupted,
@@ -25,6 +25,7 @@ import {
   isProjectCloneToastSilenced,
   silenceProjectCloneToasts,
   useEnvironmentProjectClones,
+  useProjectCloneToastHolds,
 } from "../state/projectClones";
 import { sourceControlEnvironment } from "../state/sourceControl";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -74,6 +75,7 @@ async function runCloneAction(
 function EnvironmentCloneToasts({ environmentId }: { environmentId: EnvironmentId }) {
   const t = useTranslate();
   const clones = useEnvironmentProjectClones(environmentId);
+  const toastHolds = useProjectCloneToastHolds();
   const handleNewThread = useNewThreadHandler();
   const { draftId: routeDraftId } = useParams({ strict: false });
   const cancelClone = useAtomCommand(sourceControlEnvironment.cancelProjectClone, {
@@ -116,14 +118,14 @@ function EnvironmentCloneToasts({ environmentId }: { environmentId: EnvironmentI
         closeToast();
         continue;
       }
-      if (sameAttempt && tracked.renderedKey === key) continue;
       if (
-        isProjectCloneToastSilenced(ref) &&
+        (isProjectCloneToastSilenced(ref) || toastHolds.has(scopedProjectKey(ref))) &&
         (clone.phase === "running" || clone.phase === "done")
       ) {
         closeToast();
         continue;
       }
+      if (sameAttempt && tracked.renderedKey === key) continue;
       if (
         sameAttempt &&
         tracked.closed &&

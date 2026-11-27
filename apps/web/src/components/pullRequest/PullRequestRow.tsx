@@ -1,3 +1,4 @@
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { useTranslate } from "../../i18n";
 import type { PullRequestAction } from "@t3tools/contracts";
 import { contextMenuSourceOf } from "../../contextMenuSource";
@@ -14,7 +15,6 @@ import { memo, type RefCallback } from "react";
 import { cn } from "~/lib/utils";
 import { getSourceControlPresentationForKind } from "~/sourceControlPresentation";
 
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { PullRequestChecksPopover } from "./PullRequestChecksPopover";
 import { pullRequestPanelReference } from "./usePullRequestDetail";
 import type { EnvironmentPullRequestEntry } from "./pullRequestList.logic";
@@ -28,6 +28,7 @@ import {
 } from "./PullRequestListRow";
 import { PullRequestPrivateMark } from "./PullRequestDetailLayout";
 import { PullRequestLabelChip, PullRequestReviewDecisionGlyph } from "./pullRequestPresentation";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 
 const LABEL_SLOTS = [
   { overflow: "@xl/pr-row-meta:hidden" },
@@ -236,12 +237,12 @@ function PullRequestRowImpl({
                 </Tooltip>
               ) : null}
               {showProvider ? (
-                <Tooltip>
-                  <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
-                    <Icon aria-label={providerName} className="size-3" />
-                  </TooltipTrigger>
-                  <TooltipPopup>{providerName}</TooltipPopup>
-                </Tooltip>
+                <SharedTooltipTrigger
+                  render={<span className="inline-flex shrink-0" />}
+                  label={providerName}
+                >
+                  <Icon aria-label={providerName} className="size-3" />
+                </SharedTooltipTrigger>
               ) : null}
               <PullRequestRowAuthor
                 actor={entry.author}

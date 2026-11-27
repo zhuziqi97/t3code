@@ -1,3 +1,4 @@
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { useTranslate } from "../../i18n";
 import { cloneMarkdownClipboardRange } from "../../markdown-clipboard";
 import { copySnapshot as copySnapshotToClipboard } from "./copySnapshot";
@@ -42,7 +43,6 @@ import {
   MessagesSquareIcon,
   Redo2Icon,
   PencilIcon,
-  LinkIcon,
 } from "lucide-react";
 import { Button, InlineButton } from "../ui/button";
 import { FreshSessionRow, ModelSwitchRow } from "./V2LifecycleRow";
@@ -60,10 +60,8 @@ import {
 } from "./SnapShotAttachmentDetails";
 import { GuestMessageName, guestBubbleClassName } from "./guestMessageStyle";
 import { MessageCopyButton } from "./MessageCopyButton";
-import { promptLinkFor } from "../promptLinks/copyPromptLink";
 import { PierreEntryIcon } from "./PierreEntryIcon";
 import { formatBytes } from "../../lib/formatBytes";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   asKnownContextRecord,
   resolveUserMessageContext,
@@ -97,6 +95,7 @@ import {
   resolvePreviewAnnotationImage,
   userMessageFileLabel,
 } from "./TimelineUserMessageRow.logic";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 
 // Drawn inside the media so dark screenshots keep an edge on the dark background.
 const MEDIA_EDGE_CLASS_NAME =
@@ -169,25 +168,25 @@ function UserFileCard({
           >
             {identity}
           </button>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  size="icon-xs"
-                  variant="ghost-muted"
-                  aria-label={gt("Download {label}", { label })}
-                  onClick={() => ctx.onFileDownload(file)}
-                />
-              }
-            >
-              <DownloadIcon />
-            </TooltipTrigger>
-            <TooltipPopup side="top">
-              <T>
-                Download <Var>{label}</Var>
-              </T>
-            </TooltipPopup>
-          </Tooltip>
+          <SharedTooltipTrigger
+            render={
+              <Button
+                size="icon-xs"
+                variant="ghost-muted"
+                aria-label={gt("Download {label}", { label })}
+                onClick={() => ctx.onFileDownload(file)}
+              />
+            }
+            label={
+              <>
+                <T>
+                  Download <Var>{label}</Var>
+                </T>
+              </>
+            }
+          >
+            <DownloadIcon />
+          </SharedTooltipTrigger>
         </>
       )}
     </div>
@@ -300,7 +299,6 @@ function UserMessageContent({ row }: { row: Extract<TimelineRow, { kind: "messag
 
 /** Automation prompts are long, repeated runbooks; a folded bubble keeps them out of the way. */
 function AutomationMessageRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
-  const t = useTranslate();
   const ctx = use(TimelineRowCtx);
   const gt = useGT();
   const [expanded, setExpanded] = useState(false);
@@ -312,7 +310,6 @@ function AutomationMessageRow({ row }: { row: Extract<TimelineRow, { kind: "mess
     "";
 
   const revertTurnCount = row.revertTurnCount;
-  const promptLink = promptLinkFor(text);
   // Find reads the DOM, so a folded prompt stays mounted but hidden while find is open.
   const bodyMounted = expanded || ctx.findActive;
 
@@ -377,14 +374,6 @@ function AutomationMessageRow({ row }: { row: Extract<TimelineRow, { kind: "mess
                 <RevertUserMessageButton turnCount={revertTurnCount} messageId={row.message.id} />
               )}
               <MessageCopyButton text={text} variant="ghost" />
-              {promptLink !== null && (
-                <MessageCopyButton
-                  text={promptLink}
-                  label={t("chat.copy.promptLink")}
-                  icon={LinkIcon}
-                  variant="ghost"
-                />
-              )}
             </div>
           </div>
         </div>
@@ -599,7 +588,6 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
     resolvedContext.text,
     (reference) => reference.label,
   );
-  const promptLink = promptLinkFor(plainText);
   const foldSummary =
     plainText
       .split(/\r?\n/)
@@ -862,20 +850,18 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
           <T>Open thread</T>
         </InlineButton>
       ) : null}
-      <Tooltip>
-        <TooltipTrigger render={<p className="text-muted-foreground text-xs tabular-nums" />}>
-          {formatDayAwareTimestamp(
-            row.message.createdAt,
-            ctx.timestampFormat,
-            undefined,
-            undefined,
-            m,
-          )}
-        </TooltipTrigger>
-        <TooltipPopup>
-          {formatChatTimestampTooltip(row.message.createdAt, ctx.timestampFormat, m)}
-        </TooltipPopup>
-      </Tooltip>
+      <SharedTooltipTrigger
+        render={<p className="text-muted-foreground text-xs tabular-nums" />}
+        label={formatChatTimestampTooltip(row.message.createdAt, ctx.timestampFormat, m)}
+      >
+        {formatDayAwareTimestamp(
+          row.message.createdAt,
+          ctx.timestampFormat,
+          undefined,
+          undefined,
+          m,
+        )}
+      </SharedTooltipTrigger>
       <div className={cn("flex items-center gap-0.5", floatActions && "flex-wrap justify-end")}>
         {typeof revertTurnCount === "number" && (
           <RevertUserMessageButton turnCount={revertTurnCount} messageId={row.message.id} />
@@ -890,14 +876,6 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
                   },
                 }
               : {})}
-            variant="ghost"
-          />
-        )}
-        {promptLink !== null && (
-          <MessageCopyButton
-            text={promptLink}
-            label={t("chat.copy.promptLink")}
-            icon={LinkIcon}
             variant="ghost"
           />
         )}
@@ -1058,25 +1036,25 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
                           {fileIdentity}
                           <EyeIcon className="size-4 shrink-0" />
                         </button>
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <Button
-                                size="icon-xs"
-                                variant="ghost-muted"
-                                aria-label={gt("Download {label}", { label })}
-                                onClick={() => ctx.onFileDownload(file)}
-                              />
-                            }
-                          >
-                            <DownloadIcon />
-                          </TooltipTrigger>
-                          <TooltipPopup side="top">
-                            <T>
-                              Download <Var>{label}</Var>
-                            </T>
-                          </TooltipPopup>
-                        </Tooltip>
+                        <SharedTooltipTrigger
+                          render={
+                            <Button
+                              size="icon-xs"
+                              variant="ghost-muted"
+                              aria-label={gt("Download {label}", { label })}
+                              onClick={() => ctx.onFileDownload(file)}
+                            />
+                          }
+                          label={
+                            <>
+                              <T>
+                                Download <Var>{label}</Var>
+                              </T>
+                            </>
+                          }
+                        >
+                          <DownloadIcon />
+                        </SharedTooltipTrigger>
                       </div>
                     );
                   }

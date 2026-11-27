@@ -49,6 +49,7 @@ import {
   RELAY_URL_SECRET,
 } from "../cloud/config.ts";
 import { EnvironmentSigningKey } from "../cloud/environmentKeys.ts";
+import { usableStoredRelayUrl } from "../cloud/publicConfig.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import { isSnoozed } from "../orchestration-v2/ThreadSettlementService.ts";
@@ -449,9 +450,13 @@ export const make = Effect.gen(function* () {
         ),
       );
 
+  const readUsableRelayUrl = readSecretString(RELAY_URL_SECRET).pipe(
+    Effect.flatMap(usableStoredRelayUrl),
+  );
+
   const readRelayConfig = Effect.gen(function* () {
     const [url, issuer, environmentCredential] = yield* Effect.all([
-      readSecretString(RELAY_URL_SECRET),
+      readUsableRelayUrl,
       readSecretString(RELAY_ISSUER_SECRET),
       readSecretString(RELAY_ENVIRONMENT_CREDENTIAL_SECRET),
     ]);
@@ -856,9 +861,7 @@ export const make = Effect.gen(function* () {
   });
 
   const publishActiveThreadsUnsafe = Effect.gen(function* () {
-    const relayUrl = yield* readSecretString(RELAY_URL_SECRET).pipe(
-      Effect.orElseSucceed(() => null),
-    );
+    const relayUrl = yield* readUsableRelayUrl.pipe(Effect.orElseSucceed(() => null));
     if (!relayUrl) {
       yield* Effect.logDebug("agent activity snapshot skipped; relay link credentials unavailable");
       return "unlinked" as const;

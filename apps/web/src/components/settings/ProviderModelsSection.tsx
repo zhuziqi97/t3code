@@ -1,3 +1,4 @@
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { useTranslate } from "../../i18n";
 
 import type { TFunction } from "i18next";
@@ -20,8 +21,8 @@ import { MAX_CUSTOM_MODEL_LENGTH } from "../../modelSelection";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Switch } from "../ui/switch";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { CustomModelEditor } from "./CustomModelEditor";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 
 const CUSTOM_MODEL_PLACEHOLDER_BY_KIND: Partial<Record<ProviderDriverKind, string>> = {
   [ProviderDriverKind.make("codex")]: "gpt-6.7-codex-ultra-preview",
@@ -590,26 +591,27 @@ const ProviderModelRow = memo(function ProviderModelRow({
         </TooltipPopup>
       </Tooltip>
       <span className="flex min-w-0 items-baseline gap-2">
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <span tabIndex={0} className="flex min-w-0 items-baseline gap-2 overflow-hidden" />
-            }
-          >
-            <span className={cn(nameClassName, "max-w-full shrink-0 truncate")}>{model.name}</span>
-            {model.name !== model.slug ? (
-              <code className="truncate font-mono text-2xs text-muted-foreground/70">
-                {model.slug}
-              </code>
-            ) : null}
-          </TooltipTrigger>
-          <TooltipPopup side="top" align="start">
-            <div>{model.name}</div>
-            {model.name !== model.slug ? (
-              <code className="font-mono text-2xs text-muted-foreground">{model.slug}</code>
-            ) : null}
-          </TooltipPopup>
-        </Tooltip>
+        <SharedTooltipTrigger
+          render={
+            <span tabIndex={0} className="flex min-w-0 items-baseline gap-2 overflow-hidden" />
+          }
+          label={
+            <>
+              <div>{model.name}</div>
+              {model.name !== model.slug ? (
+                <code className="font-mono text-2xs text-muted-foreground">{model.slug}</code>
+              ) : null}
+            </>
+          }
+          align="start"
+        >
+          <span className={cn(nameClassName, "max-w-full shrink-0 truncate")}>{model.name}</span>
+          {model.name !== model.slug ? (
+            <code className="truncate font-mono text-2xs text-muted-foreground/70">
+              {model.slug}
+            </code>
+          ) : null}
+        </SharedTooltipTrigger>
         {model.isCustom ? (
           <span className="shrink-0 text-2xs text-muted-foreground/70">
             {t("provider.models.custom")}

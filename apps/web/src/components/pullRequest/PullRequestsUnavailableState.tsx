@@ -1,9 +1,11 @@
+import type { ScopedThreadRef } from "@t3tools/contracts";
 import { useTranslate } from "../../i18n";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { ExternalLinkIcon } from "lucide-react";
 
 import { Button } from "../ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
+import { openPullRequestExternal } from "./pullRequestLinkContextMenu";
 import { PullRequestGlyph } from "./pullRequestIcons";
 
 export function PullRequestsUnavailableState({
@@ -17,7 +19,11 @@ export function PullRequestsUnavailableState({
   error: string;
   onRetry?: () => void;
   refreshing?: boolean;
-  host?: { readonly url: string; readonly openLabel: string };
+  host?: {
+    readonly url: string;
+    readonly openLabel: string;
+    readonly threadRef?: ScopedThreadRef | null;
+  };
 }) {
   const t = useTranslate();
   return (
@@ -48,6 +54,10 @@ export function PullRequestsUnavailableState({
               size="sm"
               variant="outline"
               render={<a href={host.url} target="_blank" rel="noopener noreferrer" />}
+              onClick={(event) => {
+                event.preventDefault();
+                void openPullRequestExternal(host.url);
+              }}
             >
               <ExternalLinkIcon aria-hidden className="size-3.5" />
               {host.openLabel}

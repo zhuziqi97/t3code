@@ -1,3 +1,4 @@
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { useTranslate } from "../../i18n";
 import {
   AuthOrchestrationOperateScope,
@@ -25,7 +26,6 @@ import {
 import { isTrailingDoubleClick } from "../Sidebar.logic";
 import { Badge } from "../ui/badge";
 import { MiddleTruncate } from "../ui/middle-truncate";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
 import { useThreadActionMenu } from "~/hooks/useThreadActionMenu";
 import { readLocalApi } from "~/localApi";
@@ -46,6 +46,7 @@ import { cn } from "~/lib/utils";
 import { textDirection } from "~/textDirection";
 import { useClientSettings } from "../../hooks/useSettings";
 import { GuestShareIndicator } from "./GuestShareControls";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
@@ -300,33 +301,19 @@ export const ChatHeader = memo(function ChatHeader({
         {parentThreadLink ? (
           <>
             <WorkspaceBreadcrumbItem>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <button
-                      type="button"
-                      aria-label={t("chat.side.openParent", {
-                        title: parentThreadLink.title,
-                      })}
-                      onClick={() => onOpenThread(parentThreadLink.threadId)}
-                      className="inline-flex min-w-0 max-w-full cursor-pointer items-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                    />
-                  }
-                >
-                  <WorkspaceBreadcrumbText
-                    aria-hidden
-                    className={collapseParentTitle ? "w-0" : undefined}
-                  >
-                    {parentThreadLink.title}
-                  </WorkspaceBreadcrumbText>
-                  {collapseParentTitle ? (
-                    <span aria-hidden data-parent-breadcrumb-ellipsis>
-                      ...
-                    </span>
-                  ) : null}
-                </TooltipTrigger>
-                <TooltipPopup side="top">{parentThreadLink.title}</TooltipPopup>
-              </Tooltip>
+              <SharedTooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label={t("chat.side.openParent", { title: parentThreadLink.title })}
+                    onClick={() => onOpenThread(parentThreadLink.threadId)}
+                    className="inline-flex min-w-0 max-w-full cursor-pointer items-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  />
+                }
+                label={parentThreadLink.title}
+              >
+                {collapseParentTitle ? "..." : parentThreadLink.title}
+              </SharedTooltipTrigger>
             </WorkspaceBreadcrumbItem>
             <WorkspaceBreadcrumbSeparator>
               <WorkspaceBreadcrumbText>/</WorkspaceBreadcrumbText>
@@ -397,19 +384,21 @@ export const ChatHeader = memo(function ChatHeader({
             </Tooltip>
           )}
           {renamingTitle === null && activeThreadLinkOrigin ? (
-            <Tooltip>
-              <TooltipTrigger render={<Badge variant="info" size="sm" />}>
-                <T>
-                  From <Var>{activeThreadLinkOrigin}</Var>
-                </T>
-              </TooltipTrigger>
-              <TooltipPopup side="top">
-                <T>
-                  Started by an agent on <Var>{activeThreadLinkOrigin}</Var> through a linked
-                  environment.
-                </T>
-              </TooltipPopup>
-            </Tooltip>
+            <SharedTooltipTrigger
+              render={<Badge variant="info" size="sm" />}
+              label={
+                <>
+                  <T>
+                    Started by an agent on <Var>{activeThreadLinkOrigin}</Var> through a linked
+                    environment.
+                  </T>
+                </>
+              }
+            >
+              <T>
+                From <Var>{activeThreadLinkOrigin}</Var>
+              </T>
+            </SharedTooltipTrigger>
           ) : null}
         </WorkspaceBreadcrumbItem>
       </WorkspaceBreadcrumb>

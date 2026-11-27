@@ -206,6 +206,7 @@ import * as ProviderAuthService from "./provider/ProviderAuthService.ts";
 import * as ProviderInstallation from "./provider/providerInstallation.ts";
 import * as ServerSelfUpdate from "./cloud/selfUpdate.ts";
 import * as NpmRelease from "./cloud/npmRelease.ts";
+import * as ManagedPolicy from "./policy/ManagedPolicy.ts";
 import * as RelayTracing from "./cloud/relayTracing.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
@@ -2428,6 +2429,8 @@ const makeWsRpcLayer = (
         [WS_METHODS.workflowsCounts]: (_input) => workflows.counts,
         [WS_METHODS.workflowsGet]: (input) =>
           workflows.get(input.runId).pipe(Effect.mapError(toWorkflowRequestError)),
+        [WS_METHODS.workflowsAbout]: (input) =>
+          workflows.about(input).pipe(Effect.mapError(toWorkflowRequestError)),
         [WS_METHODS.workflowsAnswer]: (input) =>
           serverAuth.listClientSessions(currentSessionId).pipe(
             Effect.map((sessions) =>
@@ -2718,6 +2721,14 @@ const makeWsRpcLayer = (
           providerRegistry
             .cancelRefresh(input.instanceId, input.operationId)
             .pipe(Effect.map((providers) => ({ providers }))),
+        [WS_METHODS.serverGetProviderRuntimeModeLimits]: Effect.fnUntraced(function* (input) {
+          return {
+            limits: yield* providerRegistry.runtimeModeLimits({
+              instanceId: input.instanceId,
+              scanCwd: yield* projectService.workspaceScanDirectory(input.cwd),
+            }),
+          };
+        }),
         [WS_METHODS.mcpAppsCallTool]: (input) => mcpAppRequests.callTool(input),
         [WS_METHODS.mcpAppsToolInfo]: (input) => mcpAppRequests.toolInfo(input),
         [WS_METHODS.mcpAppsUpdateModelContext]: (input) => mcpAppRequests.updateModelContext(input),
@@ -4174,4 +4185,5 @@ export const layer: Layer.Layer<
   | HttpRouter.Request<"Requires", ProviderLatestVersions.ProviderLatestVersions>
   | HttpRouter.Request<"Requires", import("./vcs/VcsProcess.ts").VcsProcess>
   | HttpRouter.Request<"Error", import("effect/Config").ConfigError>
+  | ManagedPolicy.ManagedPolicy
 > = Layer.unwrap(makeWsRoutes).pipe(Layer.provide(NpmRelease.layer));

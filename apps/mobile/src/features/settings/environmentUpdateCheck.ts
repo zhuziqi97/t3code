@@ -1,13 +1,16 @@
 import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
+import { executeAtomQuery, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import { CONVENE_CLI_INSTALL_GUIDANCE, cliReleaseChannelOf } from "@t3tools/shared/cliRelease";
+import { compareSemverVersions } from "@t3tools/shared/semver";
 import type { EnvironmentId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { msg } from "gt-react-native";
 
 import { m } from "../../i18n/messages";
-import { findEnvironmentUpdate } from "./environment-maintenance";
+import { appAtomRegistry } from "../../state/atom-registry";
+import { serverEnvironment } from "../../state/server";
 
 export interface EnvironmentReleaseCheck {
   readonly fromVersion: string;
@@ -31,31 +34,30 @@ const asError = (cause: unknown) =>
     cause,
   });
 
-/**
- * Looks up the newest T3 Code release for one environment. The atom is not
- * kept alive, so leaving the screen interrupts the lookup and aborts its fetch.
- * The argument reads the server version, which an outdated server only
- * reports through a separate description request.
- */
 export const environmentReleaseCheckAtom = Atom.family((environmentId: EnvironmentId) =>
-  Atom.fn((readServerVersion: () => Promise<string>) =>
-    Effect.gen(function* () {
-      const fromVersion = yield* Effect.tryPromise({ try: readServerVersion, catch: asError });
-      const targetVersion = yield* Effect.tryPromise({
-        try: (signal) => findEnvironmentUpdate(fromVersion, signal),
-        catch: asError,
-      }).pipe(
-        Effect.timeoutOrElse({
-          duration: "20 seconds",
-          orElse: () =>
-            Effect.fail(
-              new EnvironmentUpdateCheckError({
-                message: m(msg("Checking for updates timed out. Try again.")),
-              }),
-            ),
-        }),
-      );
-      return { fromVersion, targetVersion } satisfies EnvironmentReleaseCheck;
+  Atom.fn((fromVersion: string) =>
+    Effect.tryPromise({
+      try: async (signal) => {
+        const capabilities = appAtomRegistry.get(
+          serverEnvironment.configValueAtom(environmentId),
+        )?.environment.capabilities;
+        if (capabilities?.cliArchiveReleaseLookup !== true) {
+          throw new Error(CONVENE_CLI_INSTALL_GUIDANCE);
+        }
+        const spec = cliReleaseChannelOf(fromVersion) === "nightly" ? "nightly" : "latest";
+        const release = await executeAtomQuery(
+          appAtomRegistry,
+          serverEnvironment.npmRelease({ environmentId, input: { spec } }),
+          { reportDefect: false, reportFailure: false, signal },
+        );
+        if (release._tag === "Failure") throw squashAtomCommandFailure(release);
+        const version = release.value?.version;
+        return {
+          fromVersion,
+          targetVersion: version && compareSemverVersions(version, fromVersion) > 0 ? version : null,
+        } satisfies EnvironmentReleaseCheck;
+      },
+      catch: asError,
     }),
   ).pipe(Atom.withLabel(`mobile:environment-release-check:${environmentId}`)),
 );
@@ -64,11 +66,4 @@ export function releaseCheckValue(
   result: AsyncResult.AsyncResult<EnvironmentReleaseCheck, Error>,
 ): EnvironmentReleaseCheck | null {
   return AsyncResult.getOrElse(result, () => null);
-}
-
-export function releaseCheckError(
-  result: AsyncResult.AsyncResult<EnvironmentReleaseCheck, Error>,
-): string | null {
-  if (!AsyncResult.isFailure(result) || result.waiting) return null;
-  return Option.getOrNull(AsyncResult.error(result))?.message ?? null;
 }

@@ -95,7 +95,6 @@ import {
   parseThreadLinkHref,
   threadLinkRefs,
 } from "@t3tools/shared/threadLinks";
-import { PROMPT_LINK_MAX_PROMPT_LENGTH } from "@t3tools/shared/promptLinks";
 import {
   parseComposerContextHref,
   collectComposerContextReferences,
@@ -222,10 +221,8 @@ import {
   type MediaVideoPreviewSource,
 } from "../../lib/videoPreviewSource";
 import { CopyTextButton } from "./CopyTextButton";
-import { Menu } from "../../components/ui/Menu";
 import { useAndroidControlSizing } from "../../components/ui/useAndroidControlSizing";
 import { useBarInset, useContentTopInset } from "../../components/ui/useBarInset";
-import { copyPromptLink } from "../prompt-links/prompt-link-actions";
 import { parseReviewCommentMessageSegments } from "../review/reviewCommentSelection";
 
 import {
@@ -355,6 +352,7 @@ import {
   THREAD_FEED_MAINTAIN_SCROLL_AT_END_THRESHOLD,
 } from "./threadFeedEndFollow";
 import { useMessageTimeFormatter } from "./useMessageTimeFormatter";
+import { perfProbe, type PerfProbe } from "../development/perf-probe-hooks";
 
 const linkedThreadEnvironmentIds = (markdown: string, environmentId: EnvironmentId) =>
   hasThreadLinks(markdown)
@@ -433,18 +431,13 @@ export interface ThreadFeedProps {
   readonly onCiteAssistantText?: (citation: AssistantCitation) => void;
 }
 
-const USER_MESSAGE_COPY_MENU_ACTIONS = [
-  { id: "copy-prompt-link", title: msg("Copy prompt link"), image: "link" },
-];
-
 function UserMessageCopyButton(props: {
   readonly text: string;
   readonly onCopy: (() => Promise<void>) | undefined;
   readonly tintColor: ColorValue;
 }) {
   const t = useTranslate();
-  const m = useMessages();
-  const button = (
+  return (
     <CopyTextButton
       accessibilityLabel={t("chat.copy.message")}
       text={props.text}
@@ -453,22 +446,6 @@ function UserMessageCopyButton(props: {
       buttonSize={28}
       iconSize={13}
     />
-  );
-  const linkText = replaceComposerContextReferences(props.text, (reference) => reference.label);
-  if (linkText.length > PROMPT_LINK_MAX_PROMPT_LENGTH) return button;
-  return (
-    <Menu
-      actions={USER_MESSAGE_COPY_MENU_ACTIONS.map((action) => ({
-        ...action,
-        title: m(action.title),
-      }))}
-      onPressAction={({ nativeEvent }) => {
-        if (nativeEvent.event === "copy-prompt-link") void copyPromptLink(linkText);
-      }}
-      shouldOpenOnLongPress
-    >
-      {button}
-    </Menu>
   );
 }
 
@@ -2155,9 +2132,20 @@ function renderFeedEntry(
     const thumbnailWidth = Math.floor((props.contentWidth - VIEWED_IMAGE_GAP) / 2);
     return (
       <View className="flex-row flex-wrap pb-2" style={{ gap: VIEWED_IMAGE_GAP }}>
-        {entry.paths.map((path) => (
+        {entry.images.map(({ path, pending }) => (
           <View key={path} style={{ width: thumbnailWidth }}>
-            {props.renderViewedImage({ href: path, alt: null, title: null })}
+            {pending ? (
+              // The running Read may not have written the file yet, so hold its frame unrequested.
+              <ThreadMarkdownImageView
+                uri={null}
+                sourceKey={path}
+                unavailable={false}
+                alt={null}
+                onPressPreview={props.onPressPreview}
+              />
+            ) : (
+              props.renderViewedImage({ href: path, alt: null, title: null })
+            )}
           </View>
         ))}
       </View>
@@ -3097,6 +3085,14 @@ function DisclosureRow(props: {
 // A thread switch remounts the feed. Starting from the last split pane's size lays rows out once,
 // instead of at width 0 and again when the new feed's own layout reports the same width.
 let lastSplitViewport: { windowWidth: number; width: number; height: number } | null = null;
+
+/** Tells mobile:metrics' probe the commit that first showed this thread's rows. */
+function PerfContentMark(props: { readonly probe: PerfProbe; readonly thread: string }) {
+  const { probe, thread } = props;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reports the visible commit to the dev-only perf probe
+  useLayoutEffect(() => probe.contentShown(thread), [probe, thread]);
+  return null;
+}
 
 export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   const t = useTranslate();
@@ -4362,6 +4358,9 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
           className="flex-1"
           style={splitLayout && viewportWidth > 0 ? { width: viewportWidth } : undefined}
         >
+          {perfProbe && !settling && props.feed.length > 0 ? (
+            <PerfContentMark key={feedThreadKey} probe={perfProbe} thread={feedThreadKey} />
+          ) : null}
           {/* oxlint-disable-next-line t3code/require-registered-list-scroll -- ThreadFeedScrollView is passed through the iOS-only spread below; the prop rejects undefined. */}
           <KeyboardAwareLegendList
             ref={attachList}

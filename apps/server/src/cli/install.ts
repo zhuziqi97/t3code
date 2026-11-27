@@ -1,4 +1,5 @@
 import * as HostProcess from "@t3tools/shared/HostProcess";
+import { CONVENE_CLI_INSTALL_GUIDANCE } from "@t3tools/shared/cliRelease";
 import { pathSetupCommand, resolveCommandPath } from "@t3tools/shared/shell";
 import * as Console from "effect/Console";
 import * as Duration from "effect/Duration";
@@ -51,11 +52,8 @@ export const installCli = Effect.fn("cli.install.install")(function* () {
   const runtime = yield* standaloneRuntime;
   const windows = platform === "win32";
   if (Option.isNone(runtime)) {
-    const script = windows
-      ? "irm https://t3.codes/install.ps1 | iex"
-      : "curl -fsSL https://t3.codes/install.sh | sh";
     return yield* new CliInstallError({
-      reason: `Only the standalone t3 can install itself. Use \`${script}\`, or Settings in the desktop app.`,
+      reason: CONVENE_CLI_INSTALL_GUIDANCE,
     });
   }
   const { executable, versionsDir, runtimeDir } = runtime.value;

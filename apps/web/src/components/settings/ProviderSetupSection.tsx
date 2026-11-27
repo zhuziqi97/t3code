@@ -1,3 +1,4 @@
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import type { TFunction } from "i18next";
 import { i18n, useTranslate } from "../../i18n";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
@@ -25,7 +26,6 @@ import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { SettingsRow } from "./settingsLayout";
 import { ProviderAuthenticationSection } from "./ProviderAuthenticationSection";
 

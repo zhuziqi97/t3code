@@ -88,6 +88,7 @@ const hangingHttpClient = HttpClient.make(() => Effect.never);
 
 const testNetService = NetService.NetService.of({
   canListenOnHost: () => Effect.succeed(true),
+  probeListenOnHost: () => Effect.succeed(true),
   isPortAvailableOnLoopback: () => Effect.succeed(true),
   hasListenerOnHost: () => Effect.succeed(true),
   reserveLoopbackPort: () => Effect.succeed(41_773),
@@ -323,21 +324,30 @@ describe("ssh tunnel scripts", () => {
         );
         NodeFS.writeFileSync(
           NodePath.join(bin, "curl"),
-          "#!/bin/sh\necho 'download attempt' >&2\necho 'curl: (6) Could not resolve host: github.com' >&2\nexit 6\n",
+          "#!/bin/sh\necho 'download attempt' \"$6\" >&2\nexit 6\n",
           { mode: 0o755 },
         );
         const runner = NodePath.join(root, "run-t3.sh");
-        NodeFS.writeFileSync(runner, SshTunnel.buildRemoteT3RunnerScript(ARCHIVE));
+        NodeFS.writeFileSync(
+          runner,
+          SshTunnel.buildRemoteT3RunnerScript({
+            ...ARCHIVE,
+            releaseBaseUrl: "https://archive.example.test/releases/?token=fixture",
+          }),
+        );
         const result = NodeChildProcess.spawnSync("sh", [runner, "--version"], {
           encoding: "utf8",
           env: { HOME: NodePath.join(root, "home"), PATH: `${bin}:${process.env.PATH ?? ""}` },
         });
         assert.notEqual(result.status, 0);
         if (downloads) {
-          assert.include(result.stderr, "download attempt");
+          assert.include(
+            result.stderr,
+            `download attempt https://archive.example.test/releases/v${ARCHIVE.archiveVersion}/SHA256SUMS?token=fixture`,
+          );
           // A bare curl error does not tell the user that t3 itself could not be downloaded.
           assert.include(result.stderr, ARCHIVE.archiveVersion);
-          assert.include(result.stderr, "https://github.com/pingdotgg/t3code/releases/download");
+          assert.include(result.stderr, "configured CLI archive mirror");
         } else {
           assert.notInclude(result.stderr, "download attempt");
           assert.include(result.stderr, "has no t3 release archive.");
@@ -352,9 +362,15 @@ describe("ssh tunnel scripts", () => {
     { installed: ARCHIVE.archiveVersion, status: 0, reuses: true },
     { installed: ARCHIVE.archiveVersion, status: 1, reuses: false },
     { installed: "9.9.9", status: 0, reuses: false },
+    {
+      installed: "9.9.9",
+      status: 0,
+      reuses: false,
+      releaseBaseUrl: "https://github.com/pingdotgg/t3code/releases/download",
+    },
   ])(
-    "reuses a host t3 only at exactly the requested version: installed $installed, status $status",
-    ({ installed, status, reuses }) => {
+    "reuses a matching t3 or gives guidance: installed $installed, status $status, source $releaseBaseUrl",
+    ({ installed, status, reuses, releaseBaseUrl }) => {
       const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-ssh-runner-"));
       try {
         const bin = NodePath.join(root, "bin");
@@ -372,7 +388,13 @@ describe("ssh tunnel scripts", () => {
           { mode: 0o755 },
         );
         const runner = NodePath.join(root, "run-t3.sh");
-        NodeFS.writeFileSync(runner, SshTunnel.buildRemoteT3RunnerScript(ARCHIVE));
+        NodeFS.writeFileSync(
+          runner,
+          SshTunnel.buildRemoteT3RunnerScript({
+            ...ARCHIVE,
+            ...(releaseBaseUrl === undefined ? {} : { releaseBaseUrl }),
+          }),
+        );
         const result = NodeChildProcess.spawnSync("sh", [runner, "serve"], {
           encoding: "utf8",
           env: { HOME: NodePath.join(root, "home"), PATH: `${bin}:${process.env.PATH ?? ""}` },
@@ -382,7 +404,7 @@ describe("ssh tunnel scripts", () => {
           assert.equal(result.stdout, "host t3 serve\n");
         } else {
           assert.notEqual(result.status, 0);
-          assert.include(result.stderr, "has no t3 release archive.");
+          assert.include(result.stderr, "configure a CLI archive mirror");
         }
       } finally {
         NodeFS.rmSync(root, { recursive: true, force: true });
@@ -442,7 +464,13 @@ describe("ssh tunnel scripts", () => {
         { mode: 0o755 },
       );
       const runner = NodePath.join(root, "run-t3.sh");
-      NodeFS.writeFileSync(runner, SshTunnel.buildRemoteT3RunnerScript(ARCHIVE));
+      NodeFS.writeFileSync(
+        runner,
+        SshTunnel.buildRemoteT3RunnerScript({
+          ...ARCHIVE,
+          releaseBaseUrl: "https://archive.example.test/releases",
+        }),
+      );
       const result = NodeChildProcess.spawnSync(NodePath.join(bin, "sh"), [runner, "--version"], {
         encoding: "utf8",
         env: { HOME: home, PATH: bin },
@@ -481,7 +509,13 @@ describe("ssh tunnel scripts", () => {
         { mode: 0o755 },
       );
       const runner = NodePath.join(root, "run-t3.sh");
-      NodeFS.writeFileSync(runner, SshTunnel.buildRemoteT3RunnerScript(ARCHIVE));
+      NodeFS.writeFileSync(
+        runner,
+        SshTunnel.buildRemoteT3RunnerScript({
+          ...ARCHIVE,
+          releaseBaseUrl: "https://archive.example.test/releases",
+        }),
+      );
       const result = NodeChildProcess.spawnSync(NodePath.join(bin, "sh"), [runner, "--version"], {
         encoding: "utf8",
         env: { HOME: home, PATH: bin },
@@ -1744,6 +1778,9 @@ const canBind = (port) =>
     });
     return;
   }
+  if (args[0] === "auth" && args[1] === "pairing" && args[2] === "create") {
+    return console.log(JSON.stringify({ credential: "fixture-pairing" }));
+  }
   const [helper, a, b, c] = args.slice(1);
   if (helper === "pick-port") {
     const start = Number(fs.existsSync(a) ? fs.readFileSync(a, "utf8") : b);
@@ -1808,12 +1845,12 @@ const canBind = (port) =>
   // Installs a fake runtime per version so the runner never downloads. The
   // seeded remembered port keeps the test off the default 3773, which a live
   // T3 on this machine may own.
-  const prepareLaunch = (versions: ReadonlyArray<string>) =>
+  const prepareLaunch = (versions: ReadonlyArray<string>, stateKey = "test-state") =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-archive-launch-" });
       const home = `${root}/home`;
-      const stateDir = `${home}/.t3/ssh-launch/test-state`;
+      const stateDir = `${home}/.t3/ssh-launch/${stateKey}`;
       const fakeT3 = `${root}/fake-t3.cjs`;
       yield* fs.makeDirectory(stateDir, { recursive: true });
       yield* fs.writeFileString(`${stateDir}/port`, `${yield* freeLoopbackPort}\n`);
@@ -1852,13 +1889,13 @@ const canBind = (port) =>
         Effect.gen(function* () {
           const launch = `${root}/launch-${archiveVersion}.sh`;
           yield* fs.writeFileString(launch, SshTunnel.buildRemoteLaunchScript({ archiveVersion }));
-          const result = yield* runScript(home, [launch, "test-state"]);
+          const result = yield* runScript(home, [launch, stateKey]);
           assert.equal(result.exitCode, 0, result.stderr);
           const pid = yield* readManagedPid;
           launchedPids.add(pid);
           return pid;
         });
-      return { connect, readManagedPid, readServerVersion };
+      return { connect, home, root, stateDir, readManagedPid, readServerVersion };
     });
 
   it.live.skipIf(windowsHost)(
@@ -1900,6 +1937,58 @@ const canBind = (port) =>
       assert.notInclude(result.stderr, "File exists");
       assert.isTrue(yield* fs.exists(`${target}/ssh-launch/test-state`), result.stderr);
     }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.live.skipIf(windowsHost)(
+    "reconnects and pairs through an existing server without a mirror or matching archive",
+    () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const target = {
+          alias: "devbox",
+          hostname: "devbox.example.test",
+          username: null,
+          port: null,
+        };
+        const stateKey = yield* remoteStateKey(target);
+        const { connect, home, root, stateDir, readManagedPid } = yield* prepareLaunch(
+          ["0.1.12-1"],
+          stateKey,
+        );
+        const pid = yield* connect("0.1.12-1");
+        const runnerBefore = yield* fs.readFileString(`${stateDir}/run-t3.sh`);
+        const port = Number((yield* fs.readFileString(`${stateDir}/port`)).trim());
+        const archiveVersion = "0.1.13-1";
+        const launch = `${root}/new-launch.sh`;
+        yield* fs.writeFileString(launch, SshTunnel.buildRemoteLaunchScript({ archiveVersion }));
+        const connection = yield* runScript(home, [launch, stateKey]);
+        assert.equal(connection.exitCode, 0, connection.stderr);
+        assert.deepEqual(JSON.parse(connection.stdout.trim()), {
+          remotePort: port,
+          serverKind: "external",
+        });
+        assert.equal(yield* readManagedPid, pid);
+        assert.equal(yield* fs.readFileString(`${stateDir}/run-t3.sh`), runnerBefore);
+
+        const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+        const remoteShell = ChildProcessSpawner.make((command) =>
+          command._tag === "StandardCommand"
+            ? spawner.spawn(
+                ChildProcess.make("sh", ["-s"], {
+                  ...command.options,
+                  env: { HOME: home },
+                }),
+              )
+            : spawner.spawn(command),
+        );
+        const pairing = yield* SshTunnel.issueRemotePairingToken(target, undefined, {
+          archiveVersion,
+        }).pipe(Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, remoteShell));
+        assert.equal(pairing.credential, "fixture-pairing");
+        assert.equal(yield* fs.readFileString(`${stateDir}/run-t3.sh`), runnerBefore);
+        assert.isFalse(yield* fs.exists(`${home}/.t3/runtime/versions/${archiveVersion}`));
+        assert.isTrue(isAlive(pid));
+      }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
 
   it.live.skipIf(windowsHost)("a newer client still replaces an older managed server", () =>

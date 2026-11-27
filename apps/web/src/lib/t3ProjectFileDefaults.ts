@@ -6,6 +6,7 @@ import {
 } from "@t3tools/contracts";
 import { parseT3ProjectFile } from "@t3tools/shared/t3ProjectFile";
 import { executeAtomQuery } from "@t3tools/client-runtime/state/runtime";
+import { AsyncResult } from "effect/reactivity";
 
 import {
   getProjectFileQueryAtom,
@@ -31,15 +32,29 @@ function toT3ProjectFile(
 export async function readT3ProjectFile(
   environmentId: EnvironmentId,
   workspaceRoot: string,
+  signal?: AbortSignal,
 ): Promise<T3ProjectFile | null> {
   const result = await executeAtomQuery(
     appAtomRegistry,
     getProjectFileQueryAtom(environmentId, workspaceRoot, T3_PROJECT_FILE_NAME),
-    { reportDefect: false, reportFailure: false },
+    { reportDefect: false, reportFailure: false, signal },
   );
   return toT3ProjectFile(
     environmentId,
     workspaceRoot,
     result._tag === "Success" ? result.value : null,
   );
+}
+
+/** The project's t3.json from an earlier read, or `undefined` when none has loaded yet. */
+export function peekT3ProjectFile(
+  environmentId: EnvironmentId,
+  workspaceRoot: string,
+): T3ProjectFile | null | undefined {
+  const result = appAtomRegistry.get(
+    getProjectFileQueryAtom(environmentId, workspaceRoot, T3_PROJECT_FILE_NAME),
+  );
+  return AsyncResult.isSuccess(result)
+    ? toT3ProjectFile(environmentId, workspaceRoot, result.value)
+    : undefined;
 }

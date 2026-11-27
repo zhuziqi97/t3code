@@ -98,7 +98,7 @@ import * as ManagedEndpointRuntime from "./ManagedEndpointRuntime.ts";
 import * as ManagedLimits from "../policy/managedLimits.ts";
 import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
 import * as ServerSettings from "../serverSettings.ts";
-import { relayUrlConfig } from "./publicConfig.ts";
+import { relayUrlConfig, usableStoredRelayUrl } from "./publicConfig.ts";
 import {
   filterRelayResponse,
   relayRequestError,
@@ -538,6 +538,10 @@ const make = Effect.gen(function* () {
   });
 
   const withSecrets = Effect.provideService(ServerSecretStore.ServerSecretStore, secrets);
+  const readUsableRelayUrl = secrets.get(RELAY_URL_SECRET).pipe(
+    Effect.map((bytes) => (Option.isSome(bytes) ? bytesToString(bytes.value) : null)),
+    Effect.flatMap(usableStoredRelayUrl),
+  );
   const withRuntimeFiles = <A, E>(
     effect: Effect.Effect<A, E, ServerConfig.ServerConfig | FileSystem.FileSystem | Path.Path>,
   ) =>
@@ -723,11 +727,12 @@ const make = Effect.gen(function* () {
     });
     return yield* endpointRuntime.withLinkStateLock(
       Effect.gen(function* () {
-        const [runtimeBytes, markerBytes] = yield* Effect.all([
+        const [runtimeBytes, markerBytes, relayUrl] = yield* Effect.all([
           secrets.get(CLOUD_ENDPOINT_RUNTIME_CONFIG),
           secrets.get(CLOUD_ENDPOINT_CONFIRMED_ORIGIN),
+          readUsableRelayUrl,
         ]);
-        if (Option.isNone(runtimeBytes)) return false;
+        if (relayUrl === null || Option.isNone(runtimeBytes)) return false;
         const config = Option.getOrNull(decodeRuntimeConfig(bytesToString(runtimeBytes.value)));
         if (config === null || config.providerKind !== "cloudflare_tunnel") return false;
         // Require the relay-confirmed port unless falling back after the relay stayed unreachable.
@@ -870,6 +875,7 @@ const make = Effect.gen(function* () {
         try: () => parseManagedEndpointLocalOrigin(localOrigin),
         catch: () => new CloudLinkOriginInvalidError({ origin: "local" }),
       });
+      const relayUrl = yield* requireRelayUrl;
       const token = yield* cliTokenManager.getExisting.pipe(
         Effect.flatMap(
           Option.match({
@@ -880,7 +886,6 @@ const make = Effect.gen(function* () {
       );
       const mode = yield* readCliDesiredLinkMode.pipe(withSecrets);
       const managedTunnelsEnabled = mode !== "publish_only";
-      const relayUrl = yield* requireRelayUrl;
       const challenge = yield* relayClientRequest({
         url: `${relayUrl}/v1/client/environment-link-challenges`,
         token: token.accessToken,
@@ -1008,13 +1013,13 @@ const make = Effect.gen(function* () {
   )(function* (localOrigin: string, options?: { readonly retryRuntimeFailures?: boolean }) {
     const [runtimeConfig, relayUrl, cloudUserId, environmentCredential] = yield* Effect.all([
       secrets.get(CLOUD_ENDPOINT_RUNTIME_CONFIG),
-      secrets.get(RELAY_URL_SECRET),
+      readUsableRelayUrl,
       secrets.get(CLOUD_LINKED_USER_ID),
       secrets.get(RELAY_ENVIRONMENT_CREDENTIAL_SECRET),
     ]);
     if (
       Option.isNone(runtimeConfig) ||
-      Option.isNone(relayUrl) ||
+      relayUrl === null ||
       Option.isNone(cloudUserId) ||
       Option.isNone(environmentCredential)
     ) {
@@ -1035,7 +1040,7 @@ const make = Effect.gen(function* () {
     }
     const origin = parsedOrigin.origin;
     const environmentId = yield* environment.getEnvironmentId;
-    const relayUrlValue = bytesToString(relayUrl.value);
+    const relayUrlValue = relayUrl;
     const cloudUserIdValue = bytesToString(cloudUserId.value);
     const proof = yield* makeManagedTunnelRecoveryProof({
       action: "register",
@@ -1093,13 +1098,13 @@ const make = Effect.gen(function* () {
   ) {
     const [runtimeConfig, relayUrl, cloudUserId, environmentCredential] = yield* Effect.all([
       secrets.get(CLOUD_ENDPOINT_RUNTIME_CONFIG),
-      secrets.get(RELAY_URL_SECRET),
+      readUsableRelayUrl,
       secrets.get(CLOUD_LINKED_USER_ID),
       secrets.get(RELAY_ENVIRONMENT_CREDENTIAL_SECRET),
     ]);
     if (
       Option.isNone(runtimeConfig) ||
-      Option.isNone(relayUrl) ||
+      relayUrl === null ||
       Option.isNone(cloudUserId) ||
       Option.isNone(environmentCredential)
     ) {
@@ -1124,7 +1129,7 @@ const make = Effect.gen(function* () {
     });
 
     const environmentId = yield* environment.getEnvironmentId;
-    const relayUrlValue = bytesToString(relayUrl.value);
+    const relayUrlValue = relayUrl;
     const cloudUserIdValue = bytesToString(cloudUserId.value);
     const origin = parsedOrigin.origin;
     const proof = yield* makeManagedTunnelRecoveryProof({

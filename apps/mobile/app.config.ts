@@ -177,6 +177,8 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
         android: {
           minWidth: 250,
           minHeight: 180,
+          minResizeWidth: 180,
+          minResizeHeight: 130,
           targetCellWidth: 4,
           targetCellHeight: 3,
           resizeMode: "both",
@@ -231,7 +233,7 @@ const config: ExpoConfig = {
   slug: "t3-code",
   platforms: ["ios", "android"],
   scheme: variant.scheme,
-  version: repoEnv.T3CODE_MOBILE_VERSION ?? "2.3.0",
+  version: repoEnv.T3CODE_MOBILE_VERSION ?? "2.4.0",
   runtimeVersion: {
     // Skip costly fingerprinting on dev launches; preview and production OTAs require matching native projects.
     policy: runtimeVersionPolicy,
@@ -239,12 +241,7 @@ const config: ExpoConfig = {
   orientation: "portrait",
   icon: variant.assets.appIcon,
   userInterfaceStyle: "automatic",
-  updates: {
-    enabled: repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0",
-    url: "https://u.expo.dev/d763fcb8-d37c-41ea-a773-b54a0ab4a454",
-    checkAutomatically: "ON_LOAD",
-    fallbackToCacheTimeout: 0,
-  },
+  updates: { enabled: false },
   ios: {
     icon: variant.assets.iosIcon,
     supportsTablet: true,
@@ -479,7 +476,7 @@ const config: ExpoConfig = {
     EXPO_PUBLIC_CLERK_GOOGLE_ANDROID_CLIENT_ID: repoEnv.EXPO_PUBLIC_CLERK_GOOGLE_ANDROID_CLIENT_ID,
     EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME: repoEnv.EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME,
     observability: {
-      tracesUrl: repoEnv.EXPO_PUBLIC_OTLP_TRACES_URL ?? "https://api.axiom.co/v1/traces",
+      tracesUrl: repoEnv.EXPO_PUBLIC_OTLP_TRACES_URL ?? null,
       tracesDataset: repoEnv.EXPO_PUBLIC_OTLP_TRACES_DATASET ?? null,
       tracesToken: repoEnv.EXPO_PUBLIC_OTLP_TRACES_TOKEN ?? null,
     },

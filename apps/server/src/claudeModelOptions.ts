@@ -53,7 +53,8 @@ export function compileClaudeModelSelection(
   const fastMode =
     getModelSelectionBooleanOptionValue(selection, "fastMode") ??
     (selection.model !== null && supportsBoolean("fastMode") ? false : undefined);
-  const inCatalog = resolveClaudeCatalogModel(catalog, selection.model) !== undefined;
+  const selectedEntry = resolveClaudeCatalogModel(catalog, selection.model);
+  const inCatalog = selectedEntry !== undefined;
   const thinking =
     !inCatalog || supportsBoolean("thinking")
       ? getModelSelectionBooleanOptionValue(selection, "thinking")
@@ -77,8 +78,14 @@ export function compileClaudeModelSelection(
       "contextWindowTokens applies only to non-Claude custom model IDs; Claude models and native aliases use Claude Code's native context window.",
     );
   }
-  const environment =
-    allowance === undefined ? {} : { CLAUDE_CODE_MAX_CONTEXT_TOKENS: String(allowance) };
+  const pinAlias =
+    selectedEntry?.model.isCustom === true &&
+    apiModelId !== undefined &&
+    /^(?:opus|sonnet|haiku|fable)$/.test(apiModelId);
+  const environment = {
+    ...(allowance === undefined ? {} : { CLAUDE_CODE_MAX_CONTEXT_TOKENS: String(allowance) }),
+    ...(pinAlias ? { [`ANTHROPIC_DEFAULT_${apiModelId.toUpperCase()}_MODEL`]: apiModelId } : {}),
+  };
   return {
     apiModelId,
     effort,

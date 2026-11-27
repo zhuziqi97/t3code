@@ -1,3 +1,4 @@
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { useTranslate } from "../../i18n";
 import type { GitStatusEntry } from "@pierre/trees";
 import { FileTree, useFileTree } from "@pierre/trees/react";
@@ -19,7 +20,6 @@ import {
   subscribeOncePerTask,
 } from "../files/fileTreeExpansion";
 import { Button } from "../ui/button";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   buildDiffFileTreeUpdates,
   compareDiffFileTreeEntries,

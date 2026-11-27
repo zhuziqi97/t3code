@@ -839,6 +839,7 @@ it.effect("shell snapshots omit idle children and older settled threads only on 
 
 // Build the production RPC layer; unrelated capabilities fail if this test calls them.
 const layerUnusedConfigRpcServices = Layer.mergeAll(
+  ManagedPolicy.layerTest(),
   Layer.mock(ConveneConfiguration.ConveneConfiguration)({}),
   Layer.mock(ConveneResources.ConveneResources)({}),
   Layer.mock(ConveneConnection.ConveneConnection)({}),
