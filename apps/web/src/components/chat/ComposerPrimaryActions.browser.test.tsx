@@ -17,7 +17,7 @@ vi.mock("../SidebarStageBackdrop", () => ({
   useSidebarStageBackdropVariant: () => null,
 }));
 
-import { fakeTimers, render } from "../../../test/render";
+import { act, fakeTimers, render } from "../../../test/render";
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
 
 function actionProps(
@@ -137,15 +137,17 @@ describe.each([true, false])("composer collapsed=%s", (collapsed) => {
     });
     await using screen = await render(<ComposerPrimaryActions {...props} />);
     using _timers = fakeTimers();
-    await userEvent.click(screen.getByRole("button", { name: "Stop generation", exact: true }));
+    const stop = screen.getByRole("button", { name: "Stop generation", exact: true });
+    await act(() => (stop.element() as HTMLButtonElement).click());
     expect(onInterrupt).toHaveBeenCalledOnce();
     await screen.rerender(<ComposerPrimaryActions {...props} canInterrupt={false} canResume />);
     const resume = screen.getByRole("button", { name: "Resume thread", exact: true });
     await expect.element(resume).toBeEnabled();
-    await userEvent.click(resume);
+    await act(() => (resume.element() as HTMLButtonElement).click());
     expect(onResume).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(500);
-    await userEvent.click(resume);
+
+    await act(() => vi.advanceTimersByTimeAsync(500));
+    await act(() => (resume.element() as HTMLButtonElement).click());
     expect(onResume).toHaveBeenCalledOnce();
     await screen.rerender(<ComposerPrimaryActions {...props} isPreparingWorktree isSendBusy />);
     await expect
